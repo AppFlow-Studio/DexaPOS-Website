@@ -1,6 +1,3 @@
-
-
-
 SET statement_timeout = 0;
 SET lock_timeout = 0;
 SET idle_in_transaction_session_timeout = 0;
@@ -11,105 +8,27 @@ SET check_function_bodies = false;
 SET xmloption = content;
 SET client_min_messages = warning;
 SET row_security = off;
-
-
 CREATE SCHEMA IF NOT EXISTS "analytics";
-
-
 ALTER SCHEMA "analytics" OWNER TO "postgres";
-
-
 CREATE EXTENSION IF NOT EXISTS "pg_cron" WITH SCHEMA "pg_catalog";
-
-
-
-
-
-
 CREATE EXTENSION IF NOT EXISTS "pg_net" WITH SCHEMA "extensions";
-
-
-
-
-
-
 COMMENT ON SCHEMA "public" IS 'standard public schema';
-
-
-
 CREATE EXTENSION IF NOT EXISTS "hypopg" WITH SCHEMA "extensions";
-
-
-
-
-
-
 CREATE EXTENSION IF NOT EXISTS "index_advisor" WITH SCHEMA "extensions";
-
-
-
-
-
-
 CREATE EXTENSION IF NOT EXISTS "moddatetime" WITH SCHEMA "public";
-
-
-
-
-
-
 CREATE EXTENSION IF NOT EXISTS "pg_graphql" WITH SCHEMA "graphql";
-
-
-
-
-
-
 CREATE EXTENSION IF NOT EXISTS "pg_stat_statements" WITH SCHEMA "extensions";
-
-
-
-
-
-
 CREATE EXTENSION IF NOT EXISTS "pg_trgm" WITH SCHEMA "public";
-
-
-
-
-
-
 CREATE EXTENSION IF NOT EXISTS "pgcrypto" WITH SCHEMA "extensions";
-
-
-
-
-
-
 CREATE EXTENSION IF NOT EXISTS "supabase_vault" WITH SCHEMA "vault";
-
-
-
-
-
-
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA "extensions";
-
-
-
-
-
-
-DO $$ BEGIN
-    CREATE TYPE "analytics"."aggregation_period" AS ENUM ('hourly', 'daily', 'weekly', 'monthly');
-EXCEPTION
-    WHEN duplicate_object THEN NULL;
-END $$;
-
-
+CREATE TYPE "analytics"."aggregation_period" AS ENUM (
+    'hourly',
+    'daily',
+    'weekly',
+    'monthly'
+);
 ALTER TYPE "analytics"."aggregation_period" OWNER TO "postgres";
-
-
 CREATE TYPE "analytics"."metric_type" AS ENUM (
     'gross_sales',
     'net_sales',
@@ -128,11 +47,7 @@ CREATE TYPE "analytics"."metric_type" AS ENUM (
     'void_count',
     'void_amount'
 );
-
-
 ALTER TYPE "analytics"."metric_type" OWNER TO "postgres";
-
-
 CREATE TYPE "public"."device_lifecycle_status" AS ENUM (
     'in_warehouse',
     'allocated',
@@ -144,41 +59,25 @@ CREATE TYPE "public"."device_lifecycle_status" AS ENUM (
     'lost',
     'rma'
 );
-
-
 ALTER TYPE "public"."device_lifecycle_status" OWNER TO "postgres";
-
-
 CREATE TYPE "public"."discount_scope" AS ENUM (
     'item',
     'order',
     'both'
 );
-
-
 ALTER TYPE "public"."discount_scope" OWNER TO "postgres";
-
-
 CREATE TYPE "public"."discount_source" AS ENUM (
     'preset',
     'open',
     'promo_code',
     'loyalty'
 );
-
-
 ALTER TYPE "public"."discount_source" OWNER TO "postgres";
-
-
 CREATE TYPE "public"."discount_type" AS ENUM (
     'percentage',
     'fixed_amount'
 );
-
-
 ALTER TYPE "public"."discount_type" OWNER TO "postgres";
-
-
 CREATE TYPE "public"."floor_object_category" AS ENUM (
     'table',
     'booth',
@@ -187,21 +86,13 @@ CREATE TYPE "public"."floor_object_category" AS ENUM (
     'decor',
     'zone'
 );
-
-
 ALTER TYPE "public"."floor_object_category" OWNER TO "postgres";
-
-
 CREATE TYPE "public"."inventory_stock_mode" AS ENUM (
     'in_stock',
     'stock_tracking',
     'out_of_stock'
 );
-
-
 ALTER TYPE "public"."inventory_stock_mode" OWNER TO "postgres";
-
-
 CREATE TYPE "public"."online_order_provider" AS ENUM (
     'orderout',
     'doordash',
@@ -211,21 +102,13 @@ CREATE TYPE "public"."online_order_provider" AS ENUM (
     'app',
     'other'
 );
-
-
 ALTER TYPE "public"."online_order_provider" OWNER TO "postgres";
-
-
 CREATE TYPE "public"."order_channel" AS ENUM (
     'pickup',
     'dine_in',
     'delivery'
 );
-
-
 ALTER TYPE "public"."order_channel" OWNER TO "postgres";
-
-
 CREATE TYPE "public"."order_status" AS ENUM (
     'draft',
     'pending',
@@ -239,11 +122,7 @@ CREATE TYPE "public"."order_status" AS ENUM (
     'accepted',
     'declined'
 );
-
-
 ALTER TYPE "public"."order_status" OWNER TO "postgres";
-
-
 CREATE TYPE "public"."order_type" AS ENUM (
     'dine_in',
     'takeout',
@@ -251,21 +130,13 @@ CREATE TYPE "public"."order_type" AS ENUM (
     'online',
     'catering'
 );
-
-
 ALTER TYPE "public"."order_type" OWNER TO "postgres";
-
-
 CREATE TYPE "public"."organization_type" AS ENUM (
     'hq',
     'carrier',
     'merchant'
 );
-
-
 ALTER TYPE "public"."organization_type" OWNER TO "postgres";
-
-
 CREATE TYPE "public"."payment_method" AS ENUM (
     'cash',
     'card_spinapi',
@@ -276,11 +147,7 @@ CREATE TYPE "public"."payment_method" AS ENUM (
     'external',
     'card'
 );
-
-
 ALTER TYPE "public"."payment_method" OWNER TO "postgres";
-
-
 CREATE TYPE "public"."payment_status" AS ENUM (
     'pending',
     'processing',
@@ -294,21 +161,13 @@ CREATE TYPE "public"."payment_status" AS ENUM (
     'paid',
     'partial'
 );
-
-
 ALTER TYPE "public"."payment_status" OWNER TO "postgres";
-
-
 CREATE TYPE "public"."pricing_mode" AS ENUM (
     'card',
     'cash',
     'mixed'
 );
-
-
 ALTER TYPE "public"."pricing_mode" OWNER TO "postgres";
-
-
 CREATE TYPE "public"."refund_reason_type" AS ENUM (
     'customer_request',
     'item_quality',
@@ -321,11 +180,7 @@ CREATE TYPE "public"."refund_reason_type" AS ENUM (
     'manager_comp',
     'other'
 );
-
-
 ALTER TYPE "public"."refund_reason_type" OWNER TO "postgres";
-
-
 CREATE TYPE "public"."reservation_status" AS ENUM (
     'pending',
     'confirmed',
@@ -336,32 +191,20 @@ CREATE TYPE "public"."reservation_status" AS ENUM (
     'no_show',
     'cancelled'
 );
-
-
 ALTER TYPE "public"."reservation_status" OWNER TO "postgres";
-
-
 CREATE TYPE "public"."reversal_status_type" AS ENUM (
     'pending',
     'completed',
     'failed'
 );
-
-
 ALTER TYPE "public"."reversal_status_type" OWNER TO "postgres";
-
-
 CREATE TYPE "public"."reversal_type" AS ENUM (
     'void',
     'refund',
     'partial_refund',
     'item_return'
 );
-
-
 ALTER TYPE "public"."reversal_type" OWNER TO "postgres";
-
-
 CREATE TYPE "public"."session_event_type" AS ENUM (
     'seated',
     'order_placed',
@@ -385,22 +228,14 @@ CREATE TYPE "public"."session_event_type" AS ENUM (
     'comped',
     'custom'
 );
-
-
 ALTER TYPE "public"."session_event_type" OWNER TO "postgres";
-
-
 CREATE TYPE "public"."split_payment_path_enum" AS ENUM (
     'split-by-item',
     'split-evenly',
     'split-custom-amount',
     'pay-for-items'
 );
-
-
 ALTER TYPE "public"."split_payment_path_enum" OWNER TO "postgres";
-
-
 CREATE TYPE "public"."table_status" AS ENUM (
     'available',
     'reserved',
@@ -413,11 +248,7 @@ CREATE TYPE "public"."table_status" AS ENUM (
     'blocked',
     'not_in_service'
 );
-
-
 ALTER TYPE "public"."table_status" OWNER TO "postgres";
-
-
 CREATE TYPE "public"."terminal_type" AS ENUM (
     'dejavoo_spinapi',
     'dejavoo_p18',
@@ -427,11 +258,7 @@ CREATE TYPE "public"."terminal_type" AS ENUM (
     'cash_drawer',
     'castles'
 );
-
-
 ALTER TYPE "public"."terminal_type" OWNER TO "postgres";
-
-
 CREATE TYPE "public"."waitlist_status" AS ENUM (
     'waiting',
     'notified',
@@ -441,11 +268,7 @@ CREATE TYPE "public"."waitlist_status" AS ENUM (
     'cancelled',
     'expired'
 );
-
-
 ALTER TYPE "public"."waitlist_status" OWNER TO "postgres";
-
-
 CREATE OR REPLACE FUNCTION "analytics"."aggregate_daily_stats"("p_location_id" "uuid", "p_business_date" "date") RETURNS "void"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'analytics', 'public', 'pg_temp'
@@ -729,11 +552,7 @@ BEGIN
         updated_at = NOW();
 END;
 $$;
-
-
 ALTER FUNCTION "analytics"."aggregate_daily_stats"("p_location_id" "uuid", "p_business_date" "date") OWNER TO "postgres";
-
-
 CREATE OR REPLACE FUNCTION "analytics"."aggregate_hourly_stats"("p_location_id" "uuid", "p_hour_start" timestamp with time zone) RETURNS "void"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'analytics', 'public', 'pg_temp'
@@ -906,11 +725,7 @@ BEGIN
     WHERE lhs.location_id = p_location_id AND lhs.hour_start = p_hour_start;
 END;
 $$;
-
-
 ALTER FUNCTION "analytics"."aggregate_hourly_stats"("p_location_id" "uuid", "p_hour_start" timestamp with time zone) OWNER TO "postgres";
-
-
 CREATE OR REPLACE FUNCTION "analytics"."backfill_stats"("p_merchant_id" "uuid", "p_start_date" "date", "p_end_date" "date") RETURNS TABLE("location_id" "uuid", "days_processed" integer)
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'analytics', 'public', 'pg_temp'
@@ -947,11 +762,7 @@ BEGIN
     END LOOP;
 END;
 $$;
-
-
 ALTER FUNCTION "analytics"."backfill_stats"("p_merchant_id" "uuid", "p_start_date" "date", "p_end_date" "date") OWNER TO "postgres";
-
-
 CREATE OR REPLACE FUNCTION "analytics"."get_comparison_summary"("p_merchant_id" "uuid", "p_location_ids" "uuid"[], "p_start_date" "date", "p_end_date" "date") RETURNS TABLE("location_id" "uuid", "location_name" "text", "total_gross_sales" numeric, "total_net_sales" numeric, "total_orders" integer, "avg_daily_sales" numeric, "avg_ticket" numeric, "total_tips" numeric, "labor_cost_pct" numeric, "best_day" "date", "best_day_sales" numeric, "worst_day" "date", "worst_day_sales" numeric)
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'analytics', 'public', 'pg_temp'
@@ -1025,11 +836,7 @@ BEGIN
     ORDER BY a.total_gross_sales DESC;
 END;
 $$;
-
-
 ALTER FUNCTION "analytics"."get_comparison_summary"("p_merchant_id" "uuid", "p_location_ids" "uuid"[], "p_start_date" "date", "p_end_date" "date") OWNER TO "postgres";
-
-
 CREATE OR REPLACE FUNCTION "analytics"."get_daypart_comparison"("p_merchant_id" "uuid", "p_location_ids" "uuid"[], "p_start_date" "date", "p_end_date" "date") RETURNS TABLE("location_id" "uuid", "location_name" "text", "daypart" "text", "total_sales" numeric, "order_count" integer, "pct_of_daily_sales" numeric)
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'analytics', 'public', 'pg_temp'
@@ -1078,11 +885,7 @@ BEGIN
     ORDER BY hd.location_name, hd.daypart;
 END;
 $$;
-
-
 ALTER FUNCTION "analytics"."get_daypart_comparison"("p_merchant_id" "uuid", "p_location_ids" "uuid"[], "p_start_date" "date", "p_end_date" "date") OWNER TO "postgres";
-
-
 CREATE OR REPLACE FUNCTION "analytics"."get_hourly_comparison"("p_merchant_id" "uuid", "p_location_ids" "uuid"[], "p_start_date" "date", "p_end_date" "date" DEFAULT NULL::"date") RETURNS TABLE("location_id" "uuid", "location_name" "text", "business_date" "date", "hour_of_day" integer, "gross_sales" numeric, "order_count" integer, "avg_ticket" numeric)
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'analytics', 'public', 'pg_temp'
@@ -1105,11 +908,7 @@ BEGIN
     ORDER BY lhs.business_date, lhs.hour_of_day, l.name;
 END;
 $$;
-
-
 ALTER FUNCTION "analytics"."get_hourly_comparison"("p_merchant_id" "uuid", "p_location_ids" "uuid"[], "p_start_date" "date", "p_end_date" "date") OWNER TO "postgres";
-
-
 CREATE OR REPLACE FUNCTION "analytics"."get_location_comparison"("p_merchant_id" "uuid", "p_location_ids" "uuid"[], "p_start_date" "date", "p_end_date" "date", "p_metrics" "text"[] DEFAULT ARRAY['gross_sales'::"text", 'net_sales'::"text", 'order_count'::"text", 'avg_ticket'::"text"]) RETURNS TABLE("location_id" "uuid", "location_name" "text", "business_date" "date", "gross_sales" numeric, "net_sales" numeric, "order_count" integer, "avg_ticket" numeric, "tips_total" numeric, "discounts_total" numeric, "labor_cost_percentage" numeric, "items_sold" integer)
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'analytics', 'public', 'pg_temp'
@@ -1147,11 +946,7 @@ BEGIN
     ORDER BY lds.business_date, l.name;
 END;
 $$;
-
-
 ALTER FUNCTION "analytics"."get_location_comparison"("p_merchant_id" "uuid", "p_location_ids" "uuid"[], "p_start_date" "date", "p_end_date" "date", "p_metrics" "text"[]) OWNER TO "postgres";
-
-
 CREATE OR REPLACE FUNCTION "analytics"."get_location_rankings"("p_merchant_id" "uuid", "p_start_date" "date", "p_end_date" "date", "p_metric" "text" DEFAULT 'gross_sales'::"text", "p_limit" integer DEFAULT 10) RETURNS TABLE("rank" integer, "location_id" "uuid", "location_name" "text", "metric_value" numeric, "metric_vs_avg_pct" numeric, "trend_pct" numeric)
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'analytics', 'public', 'pg_temp'
@@ -1240,11 +1035,7 @@ BEGIN
     LIMIT p_limit;
 END;
 $$;
-
-
 ALTER FUNCTION "analytics"."get_location_rankings"("p_merchant_id" "uuid", "p_start_date" "date", "p_end_date" "date", "p_metric" "text", "p_limit" integer) OWNER TO "postgres";
-
-
 CREATE OR REPLACE FUNCTION "analytics"."trigger_update_hourly_stats"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'analytics', 'public', 'pg_temp'
@@ -1261,11 +1052,7 @@ BEGIN
     RETURN NEW;
 END;
 $$;
-
-
 ALTER FUNCTION "analytics"."trigger_update_hourly_stats"() OWNER TO "postgres";
-
-
 CREATE OR REPLACE FUNCTION "public"."accept_online_order"("p_order_id" "uuid") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public', 'public', 'pg_temp'
@@ -1320,15 +1107,8 @@ BEGIN
   );
 END;
 $$;
-
-
 ALTER FUNCTION "public"."accept_online_order"("p_order_id" "uuid") OWNER TO "postgres";
-
-
 COMMENT ON FUNCTION "public"."accept_online_order"("p_order_id" "uuid") IS 'Merchant accepts a pending online order. Transitions to accepted and fires to kitchen.';
-
-
-
 CREATE OR REPLACE FUNCTION "public"."add_category_to_menu"("p_menu_id" "uuid", "p_category_id" "uuid", "p_display_order" integer DEFAULT 0, "p_custom_title" "text" DEFAULT NULL::"text") RETURNS json
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public', 'public', 'pg_temp'
@@ -1357,11 +1137,7 @@ BEGIN
     );
 END;
 $$;
-
-
 ALTER FUNCTION "public"."add_category_to_menu"("p_menu_id" "uuid", "p_category_id" "uuid", "p_display_order" integer, "p_custom_title" "text") OWNER TO "postgres";
-
-
 CREATE OR REPLACE FUNCTION "public"."add_floor_plan_object"("p_floor_plan_id" "uuid", "p_name" "text", "p_shape_id" "text", "p_category" "public"."floor_object_category", "p_x" numeric DEFAULT 100, "p_y" numeric DEFAULT 100, "p_rotation" numeric DEFAULT 0, "p_capacity" integer DEFAULT NULL::integer, "p_width" numeric DEFAULT NULL::numeric, "p_height" numeric DEFAULT NULL::numeric) RETURNS json
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public', 'public', 'pg_temp'
@@ -1407,11 +1183,7 @@ BEGIN
     'shape_id', p_shape_id
   );
 END;$$;
-
-
 ALTER FUNCTION "public"."add_floor_plan_object"("p_floor_plan_id" "uuid", "p_name" "text", "p_shape_id" "text", "p_category" "public"."floor_object_category", "p_x" numeric, "p_y" numeric, "p_rotation" numeric, "p_capacity" integer, "p_width" numeric, "p_height" numeric) OWNER TO "postgres";
-
-
 CREATE OR REPLACE FUNCTION "public"."add_item_to_category"("p_category_id" "uuid", "p_menu_item_id" "uuid", "p_display_order" integer DEFAULT 0, "p_custom_price" numeric DEFAULT NULL::numeric, "p_is_featured" boolean DEFAULT false) RETURNS json
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public', 'public', 'pg_temp'
@@ -1440,11 +1212,7 @@ BEGIN
     );
 END;
 $$;
-
-
 ALTER FUNCTION "public"."add_item_to_category"("p_category_id" "uuid", "p_menu_item_id" "uuid", "p_display_order" integer, "p_custom_price" numeric, "p_is_featured" boolean) OWNER TO "postgres";
-
-
 CREATE OR REPLACE FUNCTION "public"."add_open_item_v2"("p_order_id" "uuid", "p_item_name" "text", "p_unit_price" numeric, "p_quantity" integer DEFAULT 1, "p_special_instructions" "text" DEFAULT NULL::"text", "p_is_tax_exempt" boolean DEFAULT false, "p_seat_number" integer DEFAULT NULL::integer) RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public', 'public', 'pg_temp'
@@ -1499,11 +1267,7 @@ BEGIN
     );
 END;
 $$;
-
-
 ALTER FUNCTION "public"."add_open_item_v2"("p_order_id" "uuid", "p_item_name" "text", "p_unit_price" numeric, "p_quantity" integer, "p_special_instructions" "text", "p_is_tax_exempt" boolean, "p_seat_number" integer) OWNER TO "postgres";
-
-
 CREATE OR REPLACE FUNCTION "public"."add_open_item_v2_dep"("p_order_id" "uuid", "p_item_name" "text", "p_unit_price" numeric, "p_quantity" integer DEFAULT 1, "p_special_instructions" "text" DEFAULT NULL::"text", "p_is_tax_exempt" boolean DEFAULT false) RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public', 'public', 'pg_temp'
@@ -1642,11 +1406,7 @@ BEGIN
         'discount_applied', v_has_active_discount
     );
 END;$$;
-
-
 ALTER FUNCTION "public"."add_open_item_v2_dep"("p_order_id" "uuid", "p_item_name" "text", "p_unit_price" numeric, "p_quantity" integer, "p_special_instructions" "text", "p_is_tax_exempt" boolean) OWNER TO "postgres";
-
-
 CREATE OR REPLACE FUNCTION "public"."add_order_item"("p_order_id" "uuid", "p_item_name" "text", "p_unit_price" numeric, "p_menu_item_id" "uuid" DEFAULT NULL::"uuid", "p_location_exclusive_item_id" "uuid" DEFAULT NULL::"uuid", "p_item_description" "text" DEFAULT NULL::"text", "p_category_name" "text" DEFAULT NULL::"text", "p_cash_price" numeric DEFAULT NULL::numeric, "p_use_cash_price" boolean DEFAULT true, "p_quantity" integer DEFAULT 1, "p_selected_size_id" "uuid" DEFAULT NULL::"uuid", "p_selected_size_name" "text" DEFAULT NULL::"text", "p_size_price_modifier" numeric DEFAULT 0, "p_special_instructions" "text" DEFAULT NULL::"text", "p_modifiers" "jsonb" DEFAULT '[]'::"jsonb", "p_prep_station" "text" DEFAULT NULL::"text", "p_course_number" integer DEFAULT NULL::integer) RETURNS json
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public', 'public', 'pg_temp'
@@ -1803,15 +1563,8 @@ BEGIN
   RETURN v_result;
 END;
 $$;
-
-
 ALTER FUNCTION "public"."add_order_item"("p_order_id" "uuid", "p_item_name" "text", "p_unit_price" numeric, "p_menu_item_id" "uuid", "p_location_exclusive_item_id" "uuid", "p_item_description" "text", "p_category_name" "text", "p_cash_price" numeric, "p_use_cash_price" boolean, "p_quantity" integer, "p_selected_size_id" "uuid", "p_selected_size_name" "text", "p_size_price_modifier" numeric, "p_special_instructions" "text", "p_modifiers" "jsonb", "p_prep_station" "text", "p_course_number" integer) OWNER TO "postgres";
-
-
 COMMENT ON FUNCTION "public"."add_order_item"("p_order_id" "uuid", "p_item_name" "text", "p_unit_price" numeric, "p_menu_item_id" "uuid", "p_location_exclusive_item_id" "uuid", "p_item_description" "text", "p_category_name" "text", "p_cash_price" numeric, "p_use_cash_price" boolean, "p_quantity" integer, "p_selected_size_id" "uuid", "p_selected_size_name" "text", "p_size_price_modifier" numeric, "p_special_instructions" "text", "p_modifiers" "jsonb", "p_prep_station" "text", "p_course_number" integer) IS 'Adds an item to an order using pre-calculated prices from POS. Accepts effective_price and effective_cash_price from get_menu_with_categories.';
-
-
-
 CREATE OR REPLACE FUNCTION "public"."add_order_item_modifier"("p_order_item_id" "uuid", "p_modifier_group_id" "uuid", "p_modifier_item_id" "uuid", "p_modifier_group_name" "text", "p_modifier_name" "text", "p_price_modifier" numeric, "p_quantity" integer DEFAULT 1) RETURNS json
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public', 'public', 'pg_temp'
@@ -1897,11 +1650,7 @@ BEGIN
   RETURN v_result;
 END;
 $$;
-
-
 ALTER FUNCTION "public"."add_order_item_modifier"("p_order_item_id" "uuid", "p_modifier_group_id" "uuid", "p_modifier_item_id" "uuid", "p_modifier_group_name" "text", "p_modifier_name" "text", "p_price_modifier" numeric, "p_quantity" integer) OWNER TO "postgres";
-
-
 CREATE OR REPLACE FUNCTION "public"."add_order_item_v2"("p_order_id" "uuid", "p_menu_item_id" "uuid" DEFAULT NULL::"uuid", "p_quantity" integer DEFAULT 1, "p_unit_price" numeric DEFAULT 0, "p_cash_unit_price" numeric DEFAULT NULL::numeric, "p_item_name" "text" DEFAULT NULL::"text", "p_category_name" "text" DEFAULT NULL::"text", "p_location_exclusive_item_id" "uuid" DEFAULT NULL::"uuid", "p_selected_size_id" "uuid" DEFAULT NULL::"uuid", "p_selected_size_name" "text" DEFAULT NULL::"text", "p_size_price_modifier" numeric DEFAULT 0, "p_modifiers" "jsonb" DEFAULT NULL::"jsonb", "p_special_instructions" "text" DEFAULT NULL::"text", "p_course_number" integer DEFAULT 1, "p_seat_number" integer DEFAULT NULL::integer, "p_menu_id" "uuid" DEFAULT NULL::"uuid", "p_menu_name" "text" DEFAULT NULL::"text", "p_category_id" "uuid" DEFAULT NULL::"uuid") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public', 'public', 'pg_temp'
@@ -2169,11 +1918,7 @@ BEGIN
         'sync_version', v_new_sync_version
     );
 END$$;
-
-
 ALTER FUNCTION "public"."add_order_item_v2"("p_order_id" "uuid", "p_menu_item_id" "uuid", "p_quantity" integer, "p_unit_price" numeric, "p_cash_unit_price" numeric, "p_item_name" "text", "p_category_name" "text", "p_location_exclusive_item_id" "uuid", "p_selected_size_id" "uuid", "p_selected_size_name" "text", "p_size_price_modifier" numeric, "p_modifiers" "jsonb", "p_special_instructions" "text", "p_course_number" integer, "p_seat_number" integer, "p_menu_id" "uuid", "p_menu_name" "text", "p_category_id" "uuid") OWNER TO "postgres";
-
-
 CREATE OR REPLACE FUNCTION "public"."add_order_item_v2_dep"("p_order_id" "uuid", "p_item_name" "text", "p_unit_price" numeric, "p_quantity" integer DEFAULT 1, "p_cash_unit_price" numeric DEFAULT NULL::numeric, "p_menu_item_id" "uuid" DEFAULT NULL::"uuid", "p_location_exclusive_item_id" "uuid" DEFAULT NULL::"uuid", "p_category_name" "text" DEFAULT 'Uncategorized'::"text", "p_selected_size_id" "uuid" DEFAULT NULL::"uuid", "p_selected_size_name" "text" DEFAULT NULL::"text", "p_size_price_modifier" numeric DEFAULT 0, "p_modifiers" "jsonb" DEFAULT '[]'::"jsonb", "p_special_instructions" "text" DEFAULT NULL::"text", "p_course_number" integer DEFAULT 1) RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public', 'public', 'pg_temp'
@@ -2429,11 +2174,7 @@ BEGIN
         'sync_version', v_new_sync_version
     );
 END;$$;
-
-
 ALTER FUNCTION "public"."add_order_item_v2_dep"("p_order_id" "uuid", "p_item_name" "text", "p_unit_price" numeric, "p_quantity" integer, "p_cash_unit_price" numeric, "p_menu_item_id" "uuid", "p_location_exclusive_item_id" "uuid", "p_category_name" "text", "p_selected_size_id" "uuid", "p_selected_size_name" "text", "p_size_price_modifier" numeric, "p_modifiers" "jsonb", "p_special_instructions" "text", "p_course_number" integer) OWNER TO "postgres";
-
-
 CREATE OR REPLACE FUNCTION "public"."add_order_item_v3"("p_order_id" "uuid", "p_menu_item_id" "uuid", "p_location_exclusive_item_id" "uuid", "p_item_name" "text", "p_category_name" "text", "p_quantity" integer, "p_unit_price" numeric, "p_cash_unit_price" numeric DEFAULT NULL::numeric, "p_selected_size_id" "uuid" DEFAULT NULL::"uuid", "p_selected_size_name" "text" DEFAULT NULL::"text", "p_size_price_modifier" numeric DEFAULT 0, "p_modifiers" "jsonb" DEFAULT NULL::"jsonb", "p_special_instructions" "text" DEFAULT NULL::"text", "p_course_number" integer DEFAULT 1) RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public', 'public', 'pg_temp'
@@ -2566,11 +2307,7 @@ BEGIN
     );
 END;
 $$;
-
-
 ALTER FUNCTION "public"."add_order_item_v3"("p_order_id" "uuid", "p_menu_item_id" "uuid", "p_location_exclusive_item_id" "uuid", "p_item_name" "text", "p_category_name" "text", "p_quantity" integer, "p_unit_price" numeric, "p_cash_unit_price" numeric, "p_selected_size_id" "uuid", "p_selected_size_name" "text", "p_size_price_modifier" numeric, "p_modifiers" "jsonb", "p_special_instructions" "text", "p_course_number" integer) OWNER TO "postgres";
-
-
 CREATE OR REPLACE FUNCTION "public"."add_order_item_with_course"("p_order_id" "uuid", "p_item_name" "text", "p_unit_price" numeric, "p_quantity" integer DEFAULT 1, "p_course_number" integer DEFAULT NULL::integer, "p_menu_item_id" "uuid" DEFAULT NULL::"uuid", "p_location_exclusive_item_id" "uuid" DEFAULT NULL::"uuid", "p_item_description" "text" DEFAULT NULL::"text", "p_category_name" "text" DEFAULT NULL::"text", "p_cash_price" numeric DEFAULT NULL::numeric, "p_use_cash_price" boolean DEFAULT false, "p_selected_size_id" "uuid" DEFAULT NULL::"uuid", "p_selected_size_name" "text" DEFAULT NULL::"text", "p_size_price_modifier" numeric DEFAULT 0, "p_special_instructions" "text" DEFAULT NULL::"text", "p_modifiers" "jsonb" DEFAULT '[]'::"jsonb", "p_prep_station" "text" DEFAULT NULL::"text") RETURNS json
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public', 'public', 'pg_temp'
@@ -2680,11 +2417,7 @@ BEGIN
   );
 END;
 $$;
-
-
 ALTER FUNCTION "public"."add_order_item_with_course"("p_order_id" "uuid", "p_item_name" "text", "p_unit_price" numeric, "p_quantity" integer, "p_course_number" integer, "p_menu_item_id" "uuid", "p_location_exclusive_item_id" "uuid", "p_item_description" "text", "p_category_name" "text", "p_cash_price" numeric, "p_use_cash_price" boolean, "p_selected_size_id" "uuid", "p_selected_size_name" "text", "p_size_price_modifier" numeric, "p_special_instructions" "text", "p_modifiers" "jsonb", "p_prep_station" "text") OWNER TO "postgres";
-
-
 CREATE OR REPLACE FUNCTION "public"."add_order_items_batch"("p_order_id" "uuid", "p_items" "jsonb") RETURNS json
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public', 'public', 'pg_temp'
@@ -2829,15 +2562,8 @@ BEGIN
   RETURN v_result;
 END;
 $$;
-
-
 ALTER FUNCTION "public"."add_order_items_batch"("p_order_id" "uuid", "p_items" "jsonb") OWNER TO "postgres";
-
-
 COMMENT ON FUNCTION "public"."add_order_items_batch"("p_order_id" "uuid", "p_items" "jsonb") IS 'Adds multiple items to an order in a single call for better performance';
-
-
-
 CREATE OR REPLACE FUNCTION "public"."add_ticket_message"("p_ticket_id" "uuid", "p_sender_id" "text", "p_sender_name" "text", "p_sender_role" "text", "p_message" "text", "p_is_internal" boolean DEFAULT false) RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public', 'public', 'pg_temp'
@@ -2882,11 +2608,7 @@ BEGIN
   RETURN jsonb_build_object('message_id', v_message_id);
 END;
 $$;
-
-
 ALTER FUNCTION "public"."add_ticket_message"("p_ticket_id" "uuid", "p_sender_id" "text", "p_sender_name" "text", "p_sender_role" "text", "p_message" "text", "p_is_internal" boolean) OWNER TO "postgres";
-
-
 CREATE OR REPLACE FUNCTION "public"."add_ticket_message_with_attachments"("p_ticket_id" "uuid", "p_sender_id" "text", "p_sender_name" "text", "p_sender_role" "text", "p_message" "text", "p_is_internal" boolean DEFAULT false, "p_attachments" "jsonb" DEFAULT '[]'::"jsonb") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public', 'public', 'pg_temp'
@@ -2946,11 +2668,7 @@ BEGIN
   RETURN jsonb_build_object('message_id', v_message_id);
 END;
 $$;
-
-
 ALTER FUNCTION "public"."add_ticket_message_with_attachments"("p_ticket_id" "uuid", "p_sender_id" "text", "p_sender_name" "text", "p_sender_role" "text", "p_message" "text", "p_is_internal" boolean, "p_attachments" "jsonb") OWNER TO "postgres";
-
-
 CREATE OR REPLACE FUNCTION "public"."add_to_waitlist"("p_location_id" "uuid", "p_party_name" "text", "p_party_size" integer, "p_phone" "text" DEFAULT NULL::"text", "p_email" "text" DEFAULT NULL::"text", "p_preferred_section" "text" DEFAULT NULL::"text", "p_seating_preference" "text" DEFAULT NULL::"text", "p_notes" "text" DEFAULT NULL::"text", "p_quoted_wait_minutes" integer DEFAULT NULL::integer) RETURNS json
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public', 'public', 'pg_temp'
@@ -3012,11 +2730,7 @@ BEGIN
     'party_name', p_party_name
   );
 END;$$;
-
-
 ALTER FUNCTION "public"."add_to_waitlist"("p_location_id" "uuid", "p_party_name" "text", "p_party_size" integer, "p_phone" "text", "p_email" "text", "p_preferred_section" "text", "p_seating_preference" "text", "p_notes" "text", "p_quoted_wait_minutes" integer) OWNER TO "postgres";
-
-
 CREATE OR REPLACE FUNCTION "public"."adjust_tips"("p_order_id" "uuid", "p_adjustments" "jsonb", "p_staff_id" "uuid" DEFAULT NULL::"uuid") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public', 'public', 'pg_temp'
@@ -3148,11 +2862,7 @@ EXCEPTION WHEN OTHERS THEN
     );
 END;
 $$;
-
-
 ALTER FUNCTION "public"."adjust_tips"("p_order_id" "uuid", "p_adjustments" "jsonb", "p_staff_id" "uuid") OWNER TO "postgres";
-
-
 CREATE OR REPLACE FUNCTION "public"."admin_bulk_reset_pins"("p_merchant_id" "uuid", "p_location_id" "uuid" DEFAULT NULL::"uuid") RETURNS TABLE("staff_profile_id" "uuid", "staff_name" "text", "new_pin" "text")
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public', 'public', 'pg_temp'
@@ -3248,11 +2958,7 @@ BEGIN
   );
 END;
 $$;
-
-
 ALTER FUNCTION "public"."admin_bulk_reset_pins"("p_merchant_id" "uuid", "p_location_id" "uuid") OWNER TO "postgres";
-
-
 CREATE OR REPLACE FUNCTION "public"."admin_get_unified_staff_view"("p_merchant_id" "uuid", "p_location_id" "uuid" DEFAULT NULL::"uuid") RETURNS TABLE("member_id" "text", "staff_profile_id" "uuid", "user_id" "text", "clerk_user_id" "text", "email" "text", "first_name" "text", "last_name" "text", "display_name" "text", "avatar_url" "text", "phone" "text", "account_type" "text", "is_clerk_user" boolean, "location_assignments" "jsonb", "total_locations" bigint, "primary_location_id" "uuid", "primary_location_name" "text", "overall_is_active" boolean, "member_created_at" timestamp with time zone, "last_updated_at" timestamp with time zone)
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public', 'public', 'pg_temp'
@@ -3341,11 +3047,7 @@ BEGIN
   ORDER BY sd.last_name, sd.first_name;
 END;
 $$;
-
-
 ALTER FUNCTION "public"."admin_get_unified_staff_view"("p_merchant_id" "uuid", "p_location_id" "uuid") OWNER TO "postgres";
-
-
 CREATE OR REPLACE FUNCTION "public"."admin_reset_staff_pin"("p_staff_profile_id" "uuid", "p_location_id" "uuid", "p_custom_pin" "text" DEFAULT NULL::"text") RETURNS TABLE("success" boolean, "new_pin" "text", "error_message" "text")
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public', 'public', 'pg_temp'
@@ -3434,11 +3136,7 @@ BEGIN
   RETURN QUERY SELECT true, v_pin, NULL::text;
 END;
 $_$;
-
-
 ALTER FUNCTION "public"."admin_reset_staff_pin"("p_staff_profile_id" "uuid", "p_location_id" "uuid", "p_custom_pin" "text") OWNER TO "postgres";
-
-
 CREATE OR REPLACE FUNCTION "public"."admin_toggle_staff_status"("p_staff_profile_id" "uuid", "p_location_id" "uuid", "p_new_status" boolean) RETURNS TABLE("success" boolean, "staff_name" "text", "error_message" "text")
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public', 'public', 'pg_temp'
@@ -3481,11 +3179,7 @@ BEGIN
   RETURN QUERY SELECT true, v_staff_name, NULL::text;
 END;
 $$;
-
-
 ALTER FUNCTION "public"."admin_toggle_staff_status"("p_staff_profile_id" "uuid", "p_location_id" "uuid", "p_new_status" boolean) OWNER TO "postgres";
-
-
 CREATE OR REPLACE FUNCTION "public"."advance_course"("p_session_id" "uuid", "p_fire_course" boolean DEFAULT true, "p_notes" "text" DEFAULT NULL::"text") RETURNS json
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public', 'public', 'pg_temp'
@@ -3543,11 +3237,7 @@ BEGIN
   );
 END;
 $$;
-
-
 ALTER FUNCTION "public"."advance_course"("p_session_id" "uuid", "p_fire_course" boolean, "p_notes" "text") OWNER TO "postgres";
-
-
 CREATE OR REPLACE FUNCTION "public"."advance_course"("p_session_id" "uuid", "p_fire_course" boolean DEFAULT true, "p_notes" "text" DEFAULT NULL::"text", "p_staff_id" "uuid" DEFAULT NULL::"uuid") RETURNS json
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public', 'public', 'pg_temp'
@@ -3605,11 +3295,7 @@ BEGIN
   );
 END;
 $$;
-
-
 ALTER FUNCTION "public"."advance_course"("p_session_id" "uuid", "p_fire_course" boolean, "p_notes" "text", "p_staff_id" "uuid") OWNER TO "postgres";
-
-
 CREATE OR REPLACE FUNCTION "public"."app_set_location_price"("p_location_id" "uuid", "p_vendor_id" "uuid", "p_inventory_item_id" "uuid", "p_price" numeric) RETURNS "void"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public', 'public', 'pg_temp'
@@ -3627,11 +3313,7 @@ BEGIN
     DO UPDATE SET unit_cost = EXCLUDED.unit_cost, last_updated = NOW();
 END;
 $$;
-
-
 ALTER FUNCTION "public"."app_set_location_price"("p_location_id" "uuid", "p_vendor_id" "uuid", "p_inventory_item_id" "uuid", "p_price" numeric) OWNER TO "postgres";
-
-
 CREATE OR REPLACE FUNCTION "public"."app_set_location_stock"("p_inventory_item_id" "uuid", "p_location_id" "uuid", "p_quantity" numeric) RETURNS "void"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public', 'public', 'pg_temp'
@@ -3640,11 +3322,7 @@ BEGIN
     PERFORM public.set_location_stock(p_inventory_item_id, p_location_id, p_quantity);
 END;
 $$;
-
-
 ALTER FUNCTION "public"."app_set_location_stock"("p_inventory_item_id" "uuid", "p_location_id" "uuid", "p_quantity" numeric) OWNER TO "postgres";
-
-
 CREATE OR REPLACE FUNCTION "public"."app_upsert_inventory_item"("p_location_id" "uuid", "p_item_id" "uuid", "p_name" "text", "p_sku" "text", "p_category" "text", "p_unit_type" "text", "p_cost" numeric, "p_is_global" boolean DEFAULT false) RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public', 'public', 'pg_temp'
@@ -3685,11 +3363,7 @@ BEGIN
     RETURN jsonb_build_object('id', v_new_item_id, 'success', true);
 END;
 $$;
-
-
 ALTER FUNCTION "public"."app_upsert_inventory_item"("p_location_id" "uuid", "p_item_id" "uuid", "p_name" "text", "p_sku" "text", "p_category" "text", "p_unit_type" "text", "p_cost" numeric, "p_is_global" boolean) OWNER TO "postgres";
-
-
 CREATE OR REPLACE FUNCTION "public"."app_upsert_vendor"("p_location_id" "uuid", "p_vendor_id" "uuid", "p_name" "text", "p_phone" "text", "p_email" "text") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public', 'public', 'pg_temp'
@@ -3722,11 +3396,7 @@ BEGIN
     RETURN jsonb_build_object('id', v_new_vendor_id, 'success', true);
 END;
 $$;
-
-
 ALTER FUNCTION "public"."app_upsert_vendor"("p_location_id" "uuid", "p_vendor_id" "uuid", "p_name" "text", "p_phone" "text", "p_email" "text") OWNER TO "postgres";
-
-
 CREATE OR REPLACE FUNCTION "public"."apply_order_discount_to_item"("p_order_id" "uuid", "p_order_item_id" "uuid") RETURNS "void"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public', 'public', 'pg_temp'
@@ -3814,11 +3484,7 @@ BEGIN
     
 END;
 $$;
-
-
 ALTER FUNCTION "public"."apply_order_discount_to_item"("p_order_id" "uuid", "p_order_item_id" "uuid") OWNER TO "postgres";
-
-
 CREATE OR REPLACE FUNCTION "public"."apply_refund_to_payment"("p_payment_id" "uuid", "p_refund_amount" numeric, "p_reversal_type" "public"."reversal_type", "p_return_rrn" "text" DEFAULT NULL::"text", "p_return_auth_code" "text" DEFAULT NULL::"text", "p_return_reference_id" "text" DEFAULT NULL::"text", "p_return_number" "text" DEFAULT NULL::"text", "p_return_reason" "text" DEFAULT NULL::"text", "p_initiated_by" "uuid" DEFAULT NULL::"uuid") RETURNS "void"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public', 'public', 'pg_temp'
@@ -3867,11 +3533,7 @@ BEGIN
   WHERE id = p_payment_id;
 END;
 $$;
-
-
 ALTER FUNCTION "public"."apply_refund_to_payment"("p_payment_id" "uuid", "p_refund_amount" numeric, "p_reversal_type" "public"."reversal_type", "p_return_rrn" "text", "p_return_auth_code" "text", "p_return_reference_id" "text", "p_return_number" "text", "p_return_reason" "text", "p_initiated_by" "uuid") OWNER TO "postgres";
-
-
 CREATE OR REPLACE FUNCTION "public"."approve_shift_swap"("p_request_id" "uuid", "p_manager_id" "uuid") RETURNS boolean
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public', 'public', 'pg_temp'
@@ -3904,11 +3566,7 @@ BEGIN
     RETURN true;
 END;
 $$;
-
-
 ALTER FUNCTION "public"."approve_shift_swap"("p_request_id" "uuid", "p_manager_id" "uuid") OWNER TO "postgres";
-
-
 CREATE OR REPLACE FUNCTION "public"."approve_tip_distribution"("p_session_id" "uuid", "p_approved_by" "uuid") RETURNS json
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public', 'public', 'pg_temp'
@@ -3939,11 +3597,7 @@ RETURN json_build_object(
 
 END;
 $$;
-
-
 ALTER FUNCTION "public"."approve_tip_distribution"("p_session_id" "uuid", "p_approved_by" "uuid") OWNER TO "postgres";
-
-
 CREATE OR REPLACE FUNCTION "public"."assign_device"("p_device_id" "uuid", "p_new_status" "public"."device_lifecycle_status", "p_to_merchant_id" "uuid" DEFAULT NULL::"uuid", "p_to_location_id" "uuid" DEFAULT NULL::"uuid", "p_tracking_number" "text" DEFAULT NULL::"text", "p_reason" "text" DEFAULT NULL::"text", "p_notes" "text" DEFAULT NULL::"text") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public', 'public', 'pg_temp'
@@ -4143,15 +3797,8 @@ BEGIN
   );
 END;
 $$;
-
-
 ALTER FUNCTION "public"."assign_device"("p_device_id" "uuid", "p_new_status" "public"."device_lifecycle_status", "p_to_merchant_id" "uuid", "p_to_location_id" "uuid", "p_tracking_number" "text", "p_reason" "text", "p_notes" "text") OWNER TO "postgres";
-
-
 COMMENT ON FUNCTION "public"."assign_device"("p_device_id" "uuid", "p_new_status" "public"."device_lifecycle_status", "p_to_merchant_id" "uuid", "p_to_location_id" "uuid", "p_tracking_number" "text", "p_reason" "text", "p_notes" "text") IS 'Primary state-transition RPC for the device registry. Validates lifecycle moves, logs the assignment, and updates current ownership atomically.';
-
-
-
 CREATE OR REPLACE FUNCTION "public"."assign_reservation_tables"("p_reservation_id" "uuid", "p_table_ids" "uuid"[]) RETURNS json
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public', 'public', 'pg_temp'
@@ -4172,11 +3819,7 @@ CREATE OR REPLACE FUNCTION "public"."assign_reservation_tables"("p_reservation_i
     'assigned_table_ids', p_table_ids
   );
 END;$$;
-
-
 ALTER FUNCTION "public"."assign_reservation_tables"("p_reservation_id" "uuid", "p_table_ids" "uuid"[]) OWNER TO "postgres";
-
-
 CREATE OR REPLACE FUNCTION "public"."authorize_location_access"("p_location_id" "uuid") RETURNS "void"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public', 'public', 'pg_temp'
@@ -4205,15 +3848,8 @@ BEGIN
     END IF;
 END;
 $$;
-
-
 ALTER FUNCTION "public"."authorize_location_access"("p_location_id" "uuid") OWNER TO "postgres";
-
-
 COMMENT ON FUNCTION "public"."authorize_location_access"("p_location_id" "uuid") IS 'Security check for SECURITY DEFINER RPCs. Raises 42501 if caller (auth.jwt()->sub) is not merchant admin or location member. Service role (null JWT sub) is allowed through unconditionally.';
-
-
-
 CREATE OR REPLACE FUNCTION "public"."authorize_merchant_access"("p_merchant_id" "uuid") RETURNS "void"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public', 'public', 'pg_temp'
@@ -4229,15 +3865,8 @@ BEGIN
     END IF;
 END;
 $$;
-
-
 ALTER FUNCTION "public"."authorize_merchant_access"("p_merchant_id" "uuid") OWNER TO "postgres";
-
-
 COMMENT ON FUNCTION "public"."authorize_merchant_access"("p_merchant_id" "uuid") IS 'Security check for merchant-scoped SECURITY DEFINER RPCs. Raises 42501 if caller is not a merchant admin.';
-
-
-
 CREATE OR REPLACE FUNCTION "public"."auto_activate_merchant_on_first_successful_payment"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public', 'public', 'pg_temp'
@@ -4298,11 +3927,7 @@ begin
 
   return new;
 end;$$;
-
-
 ALTER FUNCTION "public"."auto_activate_merchant_on_first_successful_payment"() OWNER TO "postgres";
-
-
 CREATE OR REPLACE FUNCTION "public"."auto_create_kds_display"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public', 'public', 'pg_temp'
@@ -4349,11 +3974,7 @@ BEGIN
   RETURN NEW;
 END;
 $$;
-
-
 ALTER FUNCTION "public"."auto_create_kds_display"() OWNER TO "postgres";
-
-
 CREATE OR REPLACE FUNCTION "public"."broadcast_order_changes"() RETURNS "trigger"
     LANGUAGE "plpgsql"
     SET "search_path" TO 'public', 'pg_temp'
@@ -4611,7 +4232,6 @@ EXCEPTION WHEN OTHERS THEN
   RAISE WARNING 'broadcast_order_changes failed: %', SQLERRM;
   RETURN NULL;
 END;
-$$;
 
 
 
@@ -4625,30 +4245,26 @@ COMMENT ON FUNCTION "public"."broadcast_order_changes"() IS 'Broadcasts order ch
 CREATE OR REPLACE FUNCTION "public"."broadcast_order_item_changes"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public', 'public', 'pg_temp'
-    AS $$
-  DECLARE
+    AS $$DECLARE
   v_order_id UUID;
 BEGIN
   -- Get the order ID from the changed item
   v_order_id := COALESCE(NEW.order_id, OLD.order_id);
-
-  IF v_order_id IS NULL THEN
+IF v_order_id IS NULL THEN
     RETURN COALESCE(NEW, OLD);
-  END IF;
-
-  -- Touch the parent order to trigger its broadcast
+END IF;
+-- Touch the parent order to trigger its broadcast
   -- This causes broadcast_order_changes() to fire with fresh item data
   
   UPDATE orders
   SET updated_at = NOW()
   WHERE id = v_order_id;
-
-  RETURN COALESCE(NEW, OLD);
-
+RETURN COALESCE(NEW, OLD);
 EXCEPTION WHEN OTHERS THEN
   RAISE WARNING 'broadcast_order_item_changes failed: %', SQLERRM;
-  RETURN COALESCE(NEW, OLD);
-END;$$;
+RETURN COALESCE(NEW, OLD);
+END;
+$$;
 
 
 ALTER FUNCTION "public"."broadcast_order_item_changes"() OWNER TO "postgres";
@@ -4669,19 +4285,16 @@ BEGIN
   SELECT oi.order_id INTO v_order_id
   FROM order_items oi
   WHERE oi.id = COALESCE(NEW.order_item_id, OLD.order_item_id);
-
-  -- Touch the parent order to trigger its broadcast
+-- Touch the parent order to trigger its broadcast
   IF v_order_id IS NOT NULL THEN
     UPDATE orders
     SET updated_at = NOW()
     WHERE id = v_order_id;
-  END IF;
-
-  RETURN COALESCE(NEW, OLD);
-
+END IF;
+RETURN COALESCE(NEW, OLD);
 EXCEPTION WHEN OTHERS THEN
   RAISE WARNING 'broadcast_order_item_modifier_changes failed: %', SQLERRM;
-  RETURN COALESCE(NEW, OLD);
+RETURN COALESCE(NEW, OLD);
 END;
 $$;
 
@@ -4699,19 +4312,17 @@ CREATE OR REPLACE FUNCTION "public"."broadcast_session_events"() RETURNS "trigge
     AS $$
 DECLARE
   session_record RECORD;
-  payload jsonb;
+payload jsonb;
 BEGIN
   -- Get session details
   SELECT ts.location_id, ts.id as session_id
   INTO session_record
   FROM public.table_sessions ts
   WHERE ts.id = NEW.session_id;
-
-  IF session_record IS NULL THEN
+IF session_record IS NULL THEN
     RETURN NULL;
-  END IF;
-
-  payload := jsonb_build_object(
+END IF;
+payload := jsonb_build_object(
     'id', NEW.id,
     'session_id', NEW.session_id,
     'event_type', NEW.event_type,
@@ -4722,24 +4333,21 @@ BEGIN
     'minutes_since_previous', NEW.minutes_since_previous,
     'notes', NEW.notes
   );
-
-  -- Broadcast to location channel (all staff see events)
+-- Broadcast to location channel (all staff see events)
   PERFORM realtime.send(
       payload,
       'SESSION_EVENT',
       'location:' || session_record.location_id::text || ':tables',
       true
   );
-
-  -- Also broadcast to session-specific channel for detail views
+-- Also broadcast to session-specific channel for detail views
   PERFORM realtime.send(
      payload,
      NEW.event_type::text,
      'session:' || session_record.session_id::text || ':events',
      true
   );
-
-  RETURN NULL;
+RETURN NULL;
 END;
 $$;
 
@@ -4752,19 +4360,17 @@ CREATE OR REPLACE FUNCTION "public"."broadcast_table_assignment_changes"() RETUR
     SET "search_path" TO 'public', 'public', 'pg_temp'
     AS $$DECLARE
   session_record RECORD;
-  payload jsonb;
+payload jsonb;
 BEGIN
   -- Get session details
   SELECT ts.*, ts.location_id 
   INTO session_record
   FROM public.table_sessions ts
   WHERE ts.id = COALESCE(NEW.session_id, OLD.session_id);
-
-  IF session_record IS NULL THEN
+IF session_record IS NULL THEN
     RETURN NULL;
-  END IF;
-
-  payload := jsonb_build_object(
+END IF;
+payload := jsonb_build_object(
     'operation', TG_OP,
     'timestamp', now(),
     'session_id', COALESCE(NEW.session_id, OLD.session_id),
@@ -4772,8 +4378,7 @@ BEGIN
     'is_primary', COALESCE(NEW.is_primary, OLD.is_primary),
     'is_active', COALESCE(NEW.is_active, OLD.is_active)
   );
-
-  -- Broadcast to location channel
+-- Broadcast to location channel
   -- PERFORM realtime.send(
   --   jsonb_build_object(
   --     'topic', 'location:' || session_record.location_id::text || ':tables',
@@ -4789,9 +4394,9 @@ BEGIN
     'location:' || session_record.location_id::text || ':tables',           -- topic (text)
      true               -- private (boolean)
   );
-
-  RETURN NULL;
-END;$$;
+RETURN NULL;
+END;
+$$;
 
 
 ALTER FUNCTION "public"."broadcast_table_assignment_changes"() OWNER TO "postgres";
@@ -4802,13 +4407,12 @@ CREATE OR REPLACE FUNCTION "public"."broadcast_table_session_changes"() RETURNS 
     SET "search_path" TO 'public', 'public', 'pg_temp'
     AS $$DECLARE
   payload jsonb;
-  session_data jsonb;
-  v_topic text;
+session_data jsonb;
+v_topic text;
 BEGIN
  -- Build the topic string
   v_topic := 'location:' || COALESCE(NEW.location_id, OLD.location_id)::text || ':tables';
-
-  -- Build enriched session payload with related data
+-- Build enriched session payload with related data
   SELECT jsonb_build_object(
     'session', jsonb_build_object(
       'id', ts.id,
@@ -4853,15 +4457,13 @@ BEGIN
   ) INTO session_data
   FROM public.table_sessions ts
   WHERE ts.id = COALESCE(NEW.id, OLD.id);
-
-  -- Build final payload
+-- Build final payload
   payload := jsonb_build_object(
     'operation', TG_OP,
     'timestamp', now(),
     'data', session_data
   );
-
-  -- Broadcast to location channel
+-- Broadcast to location channel
   -- PERFORM realtime.send(
   --   jsonb_build_object(
   --     'topic', 'location:' || COALESCE(NEW.location_id, OLD.location_id)::text || ':tables',
@@ -4876,9 +4478,9 @@ BEGIN
     v_topic,           -- topic (text)
     true               -- private (boolean)
   );
-
-  RETURN NULL;
-END;$$;
+RETURN NULL;
+END;
+$$;
 
 
 ALTER FUNCTION "public"."broadcast_table_session_changes"() OWNER TO "postgres";
@@ -4889,7 +4491,7 @@ CREATE OR REPLACE FUNCTION "public"."bulk_update_order_item_status"("p_order_ite
     SET "search_path" TO 'public', 'public', 'pg_temp'
     AS $$DECLARE
   v_affected_order_ids UUID[];
-  v_result JSONB;
+v_result JSONB;
 BEGIN
   -- Update order items with appropriate timestamps
   UPDATE order_items
@@ -4921,16 +4523,14 @@ BEGIN
       ELSE completed_at
     END
   WHERE id = ANY(p_order_item_ids);
-
-  -- Sync kds_item_status when items progress
+-- Sync kds_item_status when items progress
   IF p_status = 'preparing' THEN
     UPDATE kds_item_status
     SET started_at = COALESCE(started_at, NOW())
     WHERE order_item_id = ANY(p_order_item_ids)
       AND status = 'pending';
-  END IF;
-
-  -- IF p_status IN ('ready', 'served') THEN
+END IF;
+-- IF p_status IN ('ready', 'served') THEN
   --   UPDATE kds_item_status
   --   SET status = 'completed',
   --       completed_at = COALESCE(completed_at, NOW()),
@@ -4947,9 +4547,8 @@ BEGIN
     SET completed_at = COALESCE(completed_at, NOW())
     WHERE order_item_id = ANY(p_order_item_ids)
       AND status NOT IN ('cancelled', 'completed');
-  END IF;
-
-  -- 'served' = picked up, remove from KDS displays
+END IF;
+-- 'served' = picked up, remove from KDS displays
   IF p_status = 'served' THEN
     UPDATE kds_item_status
     SET status = 'completed',
@@ -4958,15 +4557,12 @@ BEGIN
         bumped_by = p_staff_id
     WHERE order_item_id = ANY(p_order_item_ids)
       AND status NOT IN ('cancelled', 'completed');
-  END IF;
-
-
-  -- Get affected order IDs
+END IF;
+-- Get affected order IDs
   SELECT ARRAY_AGG(DISTINCT order_id) INTO v_affected_order_ids
   FROM order_items
   WHERE id = ANY(p_order_item_ids);
-
-  -- Single atomic UPDATE: timestamps + status derivation + sync_version
+-- Single atomic UPDATE: timestamps + status derivation + sync_version
   -- Only auto-transition orders in kitchen-related statuses (sent_to_kitchen, preparing).
   -- Never auto-set 'completed' (payment-gated).
   IF v_affected_order_ids IS NOT NULL THEN
@@ -5009,15 +4605,14 @@ BEGIN
       GROUP BY oi.order_id
     ) agg
     WHERE o.id = agg.order_id;
-  END IF;
-
-  v_result := jsonb_build_object(
+END IF;
+v_result := jsonb_build_object(
     'updated_count', array_length(p_order_item_ids, 1),
     'affected_order_ids', to_jsonb(v_affected_order_ids)
   );
-
-  RETURN v_result;
-END;$$;
+RETURN v_result;
+END;
+$$;
 
 
 ALTER FUNCTION "public"."bulk_update_order_item_status"("p_order_item_ids" "uuid"[], "p_status" "text", "p_staff_id" "uuid") OWNER TO "postgres";
@@ -5036,12 +4631,10 @@ BEGIN
     AND occurred_at < NEW.occurred_at
   ORDER BY occurred_at DESC
   LIMIT 1;
-  
-  IF last_event_time IS NOT NULL THEN
+IF last_event_time IS NOT NULL THEN
     NEW.minutes_since_previous := EXTRACT(EPOCH FROM (NEW.occurred_at - last_event_time)) / 60;
-  END IF;
-  
-  RETURN NEW;
+END IF;
+RETURN NEW;
 END;
 $$;
 
@@ -5109,40 +4702,40 @@ CREATE OR REPLACE FUNCTION "public"."calculate_order_dual_totals"("p_order_id" "
     SET "search_path" TO 'public', 'public', 'pg_temp'
     AS $$
 DECLARE
-    v_location_id uuid; v_merchant_id uuid;
-    v_card_subtotal numeric := 0; v_cash_subtotal numeric := 0;
-    v_card_tax numeric := 0; v_cash_tax numeric := 0;
-    v_item_discount_total numeric := 0; v_service_charge numeric := 0;
-    v_tax_rate numeric := 0.08;
-    v_cash_discount_rate numeric;
+    v_location_id uuid;
+v_merchant_id uuid;
+v_card_subtotal numeric := 0;
+v_cash_subtotal numeric := 0;
+v_card_tax numeric := 0;
+v_cash_tax numeric := 0;
+v_item_discount_total numeric := 0;
+v_service_charge numeric := 0;
+v_tax_rate numeric := 0.08;
+v_cash_discount_rate numeric;
 BEGIN
     SELECT location_id, merchant_id, COALESCE(service_charge, 0)
     INTO v_location_id, v_merchant_id, v_service_charge
     FROM public.orders WHERE id = p_order_id;
-    IF NOT FOUND THEN RAISE EXCEPTION 'Order not found: %', p_order_id; END IF;
-
-    SELECT COALESCE(l.dual_pricing_percentage / 100.0, 0.04) INTO v_cash_discount_rate
+IF NOT FOUND THEN RAISE EXCEPTION 'Order not found: %', p_order_id;
+END IF;
+SELECT COALESCE(l.dual_pricing_percentage / 100.0, 0.04) INTO v_cash_discount_rate
     FROM public.locations l WHERE l.id = v_location_id;
-
-    SELECT
+SELECT
         COALESCE(SUM((oi.unit_price * oi.quantity) - COALESCE(oi.discount_amount, 0)), 0),
         COALESCE(SUM((COALESCE(oi.cash_price, oi.unit_price * (1 - v_cash_discount_rate)) * oi.quantity) - COALESCE(oi.discount_amount, 0)), 0),
         COALESCE(SUM(oi.discount_amount), 0)
     INTO v_card_subtotal, v_cash_subtotal, v_item_discount_total
     FROM public.order_items oi WHERE oi.order_id = p_order_id AND oi.is_voided = false;
-
-    v_card_tax := ROUND(v_card_subtotal * v_tax_rate, 2);
-    v_cash_tax := ROUND(v_cash_subtotal * v_tax_rate, 2);
-
-    UPDATE public.orders SET
+v_card_tax := ROUND(v_card_subtotal * v_tax_rate, 2);
+v_cash_tax := ROUND(v_cash_subtotal * v_tax_rate, 2);
+UPDATE public.orders SET
         subtotal = v_card_subtotal, tax_amount = v_card_tax,
         total_amount = v_card_subtotal + v_card_tax + v_service_charge,
         discount_amount = v_item_discount_total,
         amount_due = (v_card_subtotal + v_card_tax + v_service_charge) - COALESCE(amount_paid, 0),
         updated_at = now()
     WHERE id = p_order_id;
-
-    RETURN jsonb_build_object(
+RETURN jsonb_build_object(
         'success', true,
         'card', jsonb_build_object('subtotal', v_card_subtotal, 'tax', v_card_tax, 'service_charge', v_service_charge, 'total', v_card_subtotal + v_card_tax + v_service_charge),
         'cash', jsonb_build_object('subtotal', v_cash_subtotal, 'tax', v_cash_tax, 'service_charge', v_service_charge, 'total', v_cash_subtotal + v_cash_tax + v_service_charge),
@@ -5161,18 +4754,17 @@ CREATE OR REPLACE FUNCTION "public"."calculate_order_tax"("p_order_id" "uuid") R
     SET "search_path" TO 'public', 'public', 'pg_temp'
     AS $$DECLARE
   v_location_id uuid;
-  v_subtotal NUMERIC(10, 2);
-  v_calculated_tax NUMERIC(10, 2);
-  v_result JSON;
+v_subtotal NUMERIC(10, 2);
+v_calculated_tax NUMERIC(10, 2);
+v_result JSON;
 BEGIN
   -- Verify context
   SELECT location_id, subtotal INTO v_location_id, v_subtotal
   FROM public.orders
   WHERE id = p_order_id AND merchant_id = user_merchant_id() AND location_id = ANY(user_location_ids());
-  
-  IF NOT FOUND THEN RAISE EXCEPTION 'Order not found'; END IF;
-
-  -- Smart Calculation
+IF NOT FOUND THEN RAISE EXCEPTION 'Order not found';
+END IF;
+-- Smart Calculation
   SELECT COALESCE(SUM(
     CASE 
         -- 1. Exemption Check (L2 Override -> L1 Global)
@@ -5188,18 +4780,17 @@ BEGIN
       AND tr.tax_category = COALESCE(lio.tax_category, mi.tax_category, 'standard') 
       AND tr.is_active = true
   WHERE oi.order_id = p_order_id AND oi.is_voided != TRUE;
-
-  -- Update Order
+-- Update Order
   UPDATE public.orders
   SET tax_amount = v_calculated_tax,
       total_amount = subtotal + v_calculated_tax + COALESCE(service_charge, 0) - COALESCE(discount_amount, 0),
       amount_due = (subtotal + v_calculated_tax + COALESCE(service_charge, 0) - COALESCE(discount_amount, 0)) - COALESCE(amount_paid, 0),
       updated_at = NOW()
   WHERE id = p_order_id;
-  
-  SELECT json_build_object('success', true, 'tax_amount', v_calculated_tax) INTO v_result;
-  RETURN v_result;
-END;$$;
+SELECT json_build_object('success', true, 'tax_amount', v_calculated_tax) INTO v_result;
+RETURN v_result;
+END;
+$$;
 
 
 ALTER FUNCTION "public"."calculate_order_tax"("p_order_id" "uuid") OWNER TO "postgres";
@@ -5235,7 +4826,6 @@ SELECT
 INTO v_original_card_subtotal, v_original_cash_subtotal, v_discount
 FROM public.order_items
 WHERE order_id = p_order_id AND is_voided = false;
-
 SELECT 
     COALESCE(SUM(subtotal), 0),
     COALESCE(SUM(cash_subtotal), 0),
@@ -5244,14 +4834,11 @@ SELECT
 INTO v_card_subtotal, v_cash_subtotal, v_card_tax, v_cash_tax
 FROM public.order_items
 WHERE order_id = p_order_id AND is_voided = false;
-
 SELECT *
 INTO v_order
 FROM public.orders WHERE id = p_order_id;
-
 v_service_charge := COALESCE(v_order.service_charge, 0);
 v_amount_paid := COALESCE(v_order.amount_paid, 0);
-
 SELECT
     COALESCE(SUM(
         ROUND(subtotal * (quantity - COALESCE(paid_quantity, 0) + COALESCE(refunded_quantity, 0))::NUMERIC / NULLIF(quantity, 0), 2) +
@@ -5266,7 +4853,6 @@ FROM public.order_items
 WHERE order_id = p_order_id
     AND is_voided = false
     AND (quantity - COALESCE(paid_quantity, 0) + COALESCE(refunded_quantity, 0)) > 0;
-
 SELECT
     COALESCE(SUM(
         COALESCE(original_amount, amount)
@@ -5278,28 +4864,21 @@ FROM public.order_payments
 WHERE order_id = p_order_id
     AND status IN ('captured', 'partially_refunded', 'refunded')
     AND is_voided = false;
-
 SELECT COALESCE(SUM(COALESCE(original_amount, amount)), 0)
 INTO v_payment_voided
 FROM public.order_payments
 WHERE order_id = p_order_id
   AND (status = 'void' OR is_voided = true);
-
-
 v_card_total_calc := v_card_subtotal + v_card_tax + v_service_charge;
-
 v_payment_based_due := GREATEST(v_card_total_calc - v_effective_paid, 0);
-
 v_custom_refund_balance := GREATEST(v_payment_based_due - v_unpaid_card_total, 0);
-
 IF v_order.payment_status = 'paid' AND v_payment_refunded = 0 AND v_payment_voided = 0 THEN
     v_unpaid_card_total := 0;
-    v_unpaid_cash_total := 0;
+v_unpaid_cash_total := 0;
 ELSE
     v_unpaid_card_total := v_unpaid_card_total + v_custom_refund_balance;
-    v_unpaid_cash_total := v_unpaid_cash_total + v_custom_refund_balance;
+v_unpaid_cash_total := v_unpaid_cash_total + v_custom_refund_balance;
 END IF;
-
 UPDATE public.orders SET
     -- Original subtotals (pre-discount) for reference
     card_subtotal = v_original_card_subtotal,
@@ -5332,7 +4911,6 @@ UPDATE public.orders SET
     
     updated_at = now()
 WHERE id = p_order_id;
-
 RETURN jsonb_build_object(
     'success', true,
     'card_subtotal', v_original_card_subtotal,
@@ -5344,7 +4922,8 @@ RETURN jsonb_build_object(
     'amount_due', v_unpaid_card_total,
     'cash_amount_due', v_unpaid_cash_total
 );
-END;$$;
+END;
+$$;
 
 
 ALTER FUNCTION "public"."calculate_order_totals_fast"("p_order_id" "uuid") OWNER TO "postgres";
@@ -5356,28 +4935,27 @@ CREATE OR REPLACE FUNCTION "public"."calculate_tip_distribution"("p_location_id"
     AS $$
 DECLARE
   v_session_id       UUID;
-  v_total_collected   NUMERIC;
-  v_total_distributed NUMERIC;
-  v_total_pooled      NUMERIC;
-  v_total_tipouts     NUMERIC;
-  v_pool              RECORD;
-  v_rule              RECORD;
-  v_role_share        RECORD;
-  v_pool_total        NUMERIC;
-  v_role_count        INTEGER;
-  v_total_hours       NUMERIC;
-  v_total_points      NUMERIC;
-  v_tipout_total      NUMERIC;
-  v_giver_count       INTEGER;
-  v_receiver_count    INTEGER;
+v_total_collected   NUMERIC;
+v_total_distributed NUMERIC;
+v_total_pooled      NUMERIC;
+v_total_tipouts     NUMERIC;
+v_pool              RECORD;
+v_rule              RECORD;
+v_role_share        RECORD;
+v_pool_total        NUMERIC;
+v_role_count        INTEGER;
+v_total_hours       NUMERIC;
+v_total_points      NUMERIC;
+v_tipout_total      NUMERIC;
+v_giver_count       INTEGER;
+v_receiver_count    INTEGER;
 BEGIN
 
   -- Advisory lock to prevent concurrent runs for same location/date
   PERFORM pg_advisory_xact_lock(
     hashtext(p_location_id::text || p_session_date::text)
   );
-
-  -- =========================================================
+-- =========================================================
   -- STEP 1: CREATE OR RESET SESSION
   -- =========================================================
   INSERT INTO tip_distribution_sessions(
@@ -5387,10 +4965,8 @@ BEGIN
   ON CONFLICT(location_id, session_date, shift_period)
   DO UPDATE SET updated_at = now(), status = 'draft'
   RETURNING id INTO v_session_id;
-
-  DELETE FROM tip_distribution_details WHERE session_id = v_session_id;
-
-  -- =========================================================
+DELETE FROM tip_distribution_details WHERE session_id = v_session_id;
+-- =========================================================
   -- STEP 2: POPULATE EMPLOYEE DATA FROM DAILY TIPS
   -- =========================================================
   INSERT INTO tip_distribution_details(
@@ -5413,16 +4989,14 @@ BEGIN
     AND lm.location_id = edt.location_id
   WHERE edt.location_id = p_location_id
     AND edt.shift_date = p_session_date;
-
-  -- =========================================================
+-- =========================================================
   -- STEP 3: CALCULATE TOTAL COLLECTED
   -- =========================================================
   SELECT COALESCE(SUM(individual_tips_earned), 0)
   INTO v_total_collected
   FROM tip_distribution_details
   WHERE session_id = v_session_id;
-
-  -- =========================================================
+-- =========================================================
   -- STEP 4: CREATE TEMP TABLE FOR PER‑POOL CONTRIBUTIONS
   -- =========================================================
   CREATE TEMP TABLE temp_pool_contrib (
@@ -5430,8 +5004,7 @@ BEGIN
     staff_profile_id UUID,
     amount NUMERIC
   ) ON COMMIT DROP;
-
-  -- =========================================================
+-- =========================================================
   -- STEP 5: PROCESS EACH ACTIVE TIP POOL – CONTRIBUTIONS
   -- =========================================================
   FOR v_pool IN
@@ -5449,26 +5022,23 @@ BEGIN
       FROM tip_distribution_details dd
       WHERE dd.session_id = v_session_id
         AND dd.role_code = ANY(v_pool.contributing_role_codes);
-
-    ELSIF v_pool.tip_source = 'all_tips' THEN
+ELSIF v_pool.tip_source = 'all_tips' THEN
       INSERT INTO temp_pool_contrib (pool_id, staff_profile_id, amount)
       SELECT v_pool.id, dd.staff_profile_id,
              ROUND(dd.individual_tips_earned * (v_pool.source_percentage / 100.0), 2)
       FROM tip_distribution_details dd
       WHERE dd.session_id = v_session_id
         AND dd.role_code = ANY(v_pool.contributing_role_codes);
-
-    ELSIF v_pool.tip_source = 'cash_only' THEN
+ELSIF v_pool.tip_source = 'cash_only' THEN
       INSERT INTO temp_pool_contrib (pool_id, staff_profile_id, amount)
       SELECT v_pool.id, dd.staff_profile_id,
              ROUND(dd.cash_tips * (v_pool.source_percentage / 100.0), 2)
       FROM tip_distribution_details dd
       WHERE dd.session_id = v_session_id
         AND dd.role_code = ANY(v_pool.contributing_role_codes);
-    END IF;
-  END LOOP;
-
-  -- =========================================================
+END IF;
+END LOOP;
+-- =========================================================
   -- STEP 6: UPDATE tip_pool_contributed FROM TEMP TABLE
   -- =========================================================
   UPDATE tip_distribution_details dd
@@ -5477,8 +5047,7 @@ BEGIN
     WHERE t.staff_profile_id = dd.staff_profile_id
   ), 0)
   WHERE session_id = v_session_id;
-
-  -- =========================================================
+-- =========================================================
   -- STEP 7: REDISTRIBUTE EACH POOL (accumulate receipts)
   -- =========================================================
   FOR v_pool IN
@@ -5492,13 +5061,11 @@ BEGIN
     SELECT COALESCE(SUM(amount), 0) INTO v_pool_total
     FROM temp_pool_contrib
     WHERE pool_id = v_pool.id;
-
-    -- Skip if nothing to distribute
+-- Skip if nothing to distribute
     IF v_pool_total = 0 THEN
       CONTINUE;
-    END IF;
-
-    -- ----- DISTRIBUTION BY METHOD -----
+END IF;
+-- ----- DISTRIBUTION BY METHOD -----
     IF v_pool.distribution_method = 'percentage' THEN
       -- Percentage split by role, equally among employees of that role
       FOR v_role_share IN
@@ -5513,17 +5080,15 @@ BEGIN
         FROM tip_distribution_details
         WHERE session_id = v_session_id
           AND role_code = v_role_share.role_code;
-
-        IF v_role_count > 0 THEN
+IF v_role_count > 0 THEN
           UPDATE tip_distribution_details
           SET tip_pool_received = tip_pool_received +
             ROUND((v_pool_total * (v_role_share.share_percentage / 100.0)) / v_role_count, 2)
           WHERE session_id = v_session_id
             AND role_code = v_role_share.role_code;
-        END IF;
-      END LOOP;
-
-    ELSIF v_pool.distribution_method = 'equal_split' THEN
+END IF;
+END LOOP;
+ELSIF v_pool.distribution_method = 'equal_split' THEN
       -- Equal split only among employees whose roles are eligible for this pool
       SELECT COUNT(*) INTO v_role_count
       FROM tip_distribution_details dd
@@ -5534,8 +5099,7 @@ BEGIN
             AND prs.role_code = dd.role_code
             AND prs.is_eligible = true
         );
-
-      IF v_role_count > 0 THEN
+IF v_role_count > 0 THEN
         UPDATE tip_distribution_details dd
         SET tip_pool_received = tip_pool_received +
           ROUND(v_pool_total / v_role_count, 2)
@@ -5546,9 +5110,8 @@ BEGIN
               AND prs.role_code = dd.role_code
               AND prs.is_eligible = true
           );
-      END IF;
-
-    ELSIF v_pool.distribution_method = 'hours_weighted' THEN
+END IF;
+ELSIF v_pool.distribution_method = 'hours_weighted' THEN
       -- Hours‑weighted only for eligible roles
       SELECT COALESCE(SUM(dd.hours_worked), 0) INTO v_total_hours
       FROM tip_distribution_details dd
@@ -5559,8 +5122,7 @@ BEGIN
             AND prs.role_code = dd.role_code
             AND prs.is_eligible = true
         );
-
-      IF v_total_hours > 0 THEN
+IF v_total_hours > 0 THEN
         UPDATE tip_distribution_details dd
         SET tip_pool_received = tip_pool_received +
           ROUND(v_pool_total * (dd.hours_worked / v_total_hours), 2)
@@ -5571,9 +5133,8 @@ BEGIN
               AND prs.role_code = dd.role_code
               AND prs.is_eligible = true
           );
-      END IF;
-
-    ELSIF v_pool.distribution_method = 'points' THEN
+END IF;
+ELSIF v_pool.distribution_method = 'points' THEN
       -- Points‑based: role's points_per_hour * employee's hours
       SELECT COALESCE(SUM(prs.points_per_hour * dd.hours_worked), 0) INTO v_total_points
       FROM tip_distribution_details dd
@@ -5582,8 +5143,7 @@ BEGIN
         AND prs.role_code = dd.role_code
         AND prs.is_eligible = true
       WHERE dd.session_id = v_session_id;
-
-      IF v_total_points > 0 THEN
+IF v_total_points > 0 THEN
         UPDATE tip_distribution_details dd
         SET tip_pool_received = tip_pool_received +
           ROUND(v_pool_total * ((prs_sub.points_per_hour * dd.hours_worked) / v_total_points), 2)
@@ -5592,11 +5152,10 @@ BEGIN
           AND prs_sub.tip_pool_config_id = v_pool.id
           AND prs_sub.role_code = dd.role_code
           AND prs_sub.is_eligible = true;
-      END IF;
-    END IF;
-  END LOOP;
-
-  -- =========================================================
+END IF;
+END IF;
+END LOOP;
+-- =========================================================
   -- STEP 8: TIP‑OUT RULES (all three types)
   -- =========================================================
   FOR v_rule IN
@@ -5611,76 +5170,65 @@ BEGIN
     FROM tip_distribution_details
     WHERE session_id = v_session_id
       AND role_code = v_rule.to_role_code;
-
-    IF v_rule.tip_out_type = 'percentage_of_sales' THEN
+IF v_rule.tip_out_type = 'percentage_of_sales' THEN
       -- Deduct from givers
       UPDATE tip_distribution_details dd
       SET tip_out_given = tip_out_given +
         ROUND(dd.gross_sales * (v_rule.tip_out_value / 100.0), 2)
       WHERE dd.session_id = v_session_id
         AND dd.role_code = v_rule.from_role_code;
-
-      -- Total given (for crediting receivers)
+-- Total given (for crediting receivers)
       SELECT COALESCE(SUM(ROUND(dd.gross_sales * (v_rule.tip_out_value / 100.0), 2)), 0)
       INTO v_tipout_total
       FROM tip_distribution_details dd
       WHERE dd.session_id = v_session_id
         AND dd.role_code = v_rule.from_role_code;
-
-      -- Credit receivers equally
+-- Credit receivers equally
       IF v_receiver_count > 0 THEN
         UPDATE tip_distribution_details
         SET tip_out_received = tip_out_received +
           ROUND(v_tipout_total / v_receiver_count, 2)
         WHERE session_id = v_session_id
           AND role_code = v_rule.to_role_code;
-      END IF;
-
-    ELSIF v_rule.tip_out_type = 'percentage_of_tips' THEN
+END IF;
+ELSIF v_rule.tip_out_type = 'percentage_of_tips' THEN
       UPDATE tip_distribution_details dd
       SET tip_out_given = tip_out_given +
         ROUND(dd.individual_tips_earned * (v_rule.tip_out_value / 100.0), 2)
       WHERE dd.session_id = v_session_id
         AND dd.role_code = v_rule.from_role_code;
-
-      SELECT COALESCE(SUM(ROUND(dd.individual_tips_earned * (v_rule.tip_out_value / 100.0), 2)), 0)
+SELECT COALESCE(SUM(ROUND(dd.individual_tips_earned * (v_rule.tip_out_value / 100.0), 2)), 0)
       INTO v_tipout_total
       FROM tip_distribution_details dd
       WHERE dd.session_id = v_session_id
         AND dd.role_code = v_rule.from_role_code;
-
-      IF v_receiver_count > 0 THEN
+IF v_receiver_count > 0 THEN
         UPDATE tip_distribution_details
         SET tip_out_received = tip_out_received +
           ROUND(v_tipout_total / v_receiver_count, 2)
         WHERE session_id = v_session_id
           AND role_code = v_rule.to_role_code;
-      END IF;
-
-    ELSIF v_rule.tip_out_type = 'flat_amount' THEN
+END IF;
+ELSIF v_rule.tip_out_type = 'flat_amount' THEN
       UPDATE tip_distribution_details dd
       SET tip_out_given = tip_out_given + v_rule.tip_out_value
       WHERE dd.session_id = v_session_id
         AND dd.role_code = v_rule.from_role_code;
-
-      SELECT COUNT(*) INTO v_giver_count
+SELECT COUNT(*) INTO v_giver_count
       FROM tip_distribution_details
       WHERE session_id = v_session_id
         AND role_code = v_rule.from_role_code;
-
-      v_tipout_total := v_giver_count * v_rule.tip_out_value;
-
-      IF v_receiver_count > 0 THEN
+v_tipout_total := v_giver_count * v_rule.tip_out_value;
+IF v_receiver_count > 0 THEN
         UPDATE tip_distribution_details
         SET tip_out_received = tip_out_received +
           ROUND(v_tipout_total / v_receiver_count, 2)
         WHERE session_id = v_session_id
           AND role_code = v_rule.to_role_code;
-      END IF;
-    END IF;
-  END LOOP;
-
-  -- =========================================================
+END IF;
+END IF;
+END LOOP;
+-- =========================================================
   -- STEP 9: CALCULATE NET TIPS FOR EACH EMPLOYEE
   -- =========================================================
   UPDATE tip_distribution_details
@@ -5692,8 +5240,7 @@ BEGIN
     + tip_out_received
     + manual_adjustment
   WHERE session_id = v_session_id;
-
-  -- =========================================================
+-- =========================================================
   -- STEP 10: AGGREGATE SESSION TOTALS
   -- =========================================================
   SELECT
@@ -5703,8 +5250,7 @@ BEGIN
   INTO v_total_distributed, v_total_pooled, v_total_tipouts
   FROM tip_distribution_details
   WHERE session_id = v_session_id;
-
-  UPDATE tip_distribution_sessions
+UPDATE tip_distribution_sessions
   SET
     status = 'calculated',
     total_tips_collected = v_total_collected,
@@ -5715,14 +5261,12 @@ BEGIN
     calculated_at = now(),
     calculated_by = p_calculated_by
   WHERE id = v_session_id;
-
-  RETURN json_build_object(
+RETURN json_build_object(
     'success', true,
     'session_id', v_session_id,
     'total_collected', v_total_collected,
     'total_distributed', v_total_distributed
   );
-
 END;
 $$;
 
@@ -5736,28 +5280,27 @@ CREATE OR REPLACE FUNCTION "public"."calculate_tip_distribution_v2"("p_merchant_
     AS $$
 DECLARE
   v_session_id       UUID;
-  v_total_collected   NUMERIC;
-  v_total_distributed NUMERIC;
-  v_total_pooled      NUMERIC;
-  v_total_tipouts     NUMERIC;
-  v_pool              RECORD;
-  v_rule              RECORD;
-  v_role_share        RECORD;
-  v_pool_total        NUMERIC;
-  v_role_count        INTEGER;
-  v_total_hours       NUMERIC;
-  v_total_points      NUMERIC;
-  v_tipout_total      NUMERIC;
-  v_giver_count       INTEGER;
-  v_receiver_count    INTEGER;
+v_total_collected   NUMERIC;
+v_total_distributed NUMERIC;
+v_total_pooled      NUMERIC;
+v_total_tipouts     NUMERIC;
+v_pool              RECORD;
+v_rule              RECORD;
+v_role_share        RECORD;
+v_pool_total        NUMERIC;
+v_role_count        INTEGER;
+v_total_hours       NUMERIC;
+v_total_points      NUMERIC;
+v_tipout_total      NUMERIC;
+v_giver_count       INTEGER;
+v_receiver_count    INTEGER;
 BEGIN
 
   -- Advisory lock to prevent concurrent runs for same location/date
   PERFORM pg_advisory_xact_lock(
     hashtext(p_location_id::text || p_session_date::text)
   );
-
-  -- =========================================================
+-- =========================================================
   -- STEP 1: CREATE OR RESET SESSION
   -- =========================================================
   INSERT INTO tip_distribution_sessions(
@@ -5767,10 +5310,8 @@ BEGIN
   ON CONFLICT(location_id, session_date, shift_period)
   DO UPDATE SET updated_at = now(), status = 'draft'
   RETURNING id INTO v_session_id;
-
-  DELETE FROM tip_distribution_details WHERE session_id = v_session_id;
-
-  -- =========================================================
+DELETE FROM tip_distribution_details WHERE session_id = v_session_id;
+-- =========================================================
   -- STEP 2: POPULATE EMPLOYEE DATA FROM DAILY TIPS
   -- =========================================================
   INSERT INTO tip_distribution_details(
@@ -5796,16 +5337,14 @@ BEGIN
     ON sp.id = edt.staff_profile_id
   WHERE edt.location_id = p_location_id
     AND edt.shift_date = p_session_date;
-
-  -- =========================================================
+-- =========================================================
   -- STEP 3: CALCULATE TOTAL COLLECTED
   -- =========================================================
   SELECT COALESCE(SUM(individual_tips_earned), 0)
   INTO v_total_collected
   FROM tip_distribution_details
   WHERE session_id = v_session_id;
-
-  -- =========================================================
+-- =========================================================
   -- STEP 4: CREATE TEMP TABLE FOR PER‑POOL CONTRIBUTIONS
   -- =========================================================
   CREATE TEMP TABLE temp_pool_contrib (
@@ -5813,8 +5352,7 @@ BEGIN
     staff_profile_id UUID,
     amount NUMERIC
   ) ON COMMIT DROP;
-
-  -- =========================================================
+-- =========================================================
   -- STEP 5: PROCESS EACH ACTIVE TIP POOL – CONTRIBUTIONS
   -- =========================================================
   FOR v_pool IN
@@ -5832,26 +5370,23 @@ BEGIN
       FROM tip_distribution_details dd
       WHERE dd.session_id = v_session_id
         AND dd.role_code = ANY(v_pool.contributing_role_codes);
-
-    ELSIF v_pool.tip_source = 'all_tips' THEN
+ELSIF v_pool.tip_source = 'all_tips' THEN
       INSERT INTO temp_pool_contrib (pool_id, staff_profile_id, amount)
       SELECT v_pool.id, dd.staff_profile_id,
              ROUND(dd.individual_tips_earned * (v_pool.source_percentage / 100.0), 2)
       FROM tip_distribution_details dd
       WHERE dd.session_id = v_session_id
         AND dd.role_code = ANY(v_pool.contributing_role_codes);
-
-    ELSIF v_pool.tip_source = 'cash_only' THEN
+ELSIF v_pool.tip_source = 'cash_only' THEN
       INSERT INTO temp_pool_contrib (pool_id, staff_profile_id, amount)
       SELECT v_pool.id, dd.staff_profile_id,
              ROUND(dd.cash_tips * (v_pool.source_percentage / 100.0), 2)
       FROM tip_distribution_details dd
       WHERE dd.session_id = v_session_id
         AND dd.role_code = ANY(v_pool.contributing_role_codes);
-    END IF;
-  END LOOP;
-
-  -- =========================================================
+END IF;
+END LOOP;
+-- =========================================================
   -- STEP 6: UPDATE tip_pool_contributed FROM TEMP TABLE
   -- =========================================================
   UPDATE tip_distribution_details dd
@@ -5860,8 +5395,7 @@ BEGIN
     WHERE t.staff_profile_id = dd.staff_profile_id
   ), 0)
   WHERE session_id = v_session_id;
-
-  -- =========================================================
+-- =========================================================
   -- STEP 7: REDISTRIBUTE EACH POOL (accumulate receipts)
   -- =========================================================
   FOR v_pool IN
@@ -5875,13 +5409,11 @@ BEGIN
     SELECT COALESCE(SUM(amount), 0) INTO v_pool_total
     FROM temp_pool_contrib
     WHERE pool_id = v_pool.id;
-
-    -- Skip if nothing to distribute
+-- Skip if nothing to distribute
     IF v_pool_total = 0 THEN
       CONTINUE;
-    END IF;
-
-    -- ----- DISTRIBUTION BY METHOD -----
+END IF;
+-- ----- DISTRIBUTION BY METHOD -----
     IF v_pool.distribution_method = 'percentage' THEN
       -- Percentage split by role, equally among employees of that role
       FOR v_role_share IN
@@ -5896,17 +5428,15 @@ BEGIN
         FROM tip_distribution_details
         WHERE session_id = v_session_id
           AND role_code = v_role_share.role_code;
-
-        IF v_role_count > 0 THEN
+IF v_role_count > 0 THEN
           UPDATE tip_distribution_details
           SET tip_pool_received = tip_pool_received +
             ROUND((v_pool_total * (v_role_share.share_percentage / 100.0)) / v_role_count, 2)
           WHERE session_id = v_session_id
             AND role_code = v_role_share.role_code;
-        END IF;
-      END LOOP;
-
-    ELSIF v_pool.distribution_method = 'equal_split' THEN
+END IF;
+END LOOP;
+ELSIF v_pool.distribution_method = 'equal_split' THEN
       -- Equal split only among employees whose roles are eligible for this pool
       SELECT COUNT(*) INTO v_role_count
       FROM tip_distribution_details dd
@@ -5917,8 +5447,7 @@ BEGIN
             AND prs.role_code = dd.role_code
             AND prs.is_eligible = true
         );
-
-      IF v_role_count > 0 THEN
+IF v_role_count > 0 THEN
         UPDATE tip_distribution_details dd
         SET tip_pool_received = tip_pool_received +
           ROUND(v_pool_total / v_role_count, 2)
@@ -5929,9 +5458,8 @@ BEGIN
               AND prs.role_code = dd.role_code
               AND prs.is_eligible = true
           );
-      END IF;
-
-    ELSIF v_pool.distribution_method = 'hours_weighted' THEN
+END IF;
+ELSIF v_pool.distribution_method = 'hours_weighted' THEN
       -- Hours‑weighted only for eligible roles
       SELECT COALESCE(SUM(dd.hours_worked), 0) INTO v_total_hours
       FROM tip_distribution_details dd
@@ -5942,8 +5470,7 @@ BEGIN
             AND prs.role_code = dd.role_code
             AND prs.is_eligible = true
         );
-
-      IF v_total_hours > 0 THEN
+IF v_total_hours > 0 THEN
         UPDATE tip_distribution_details dd
         SET tip_pool_received = tip_pool_received +
           ROUND(v_pool_total * (dd.hours_worked / v_total_hours), 2)
@@ -5954,9 +5481,8 @@ BEGIN
               AND prs.role_code = dd.role_code
               AND prs.is_eligible = true
           );
-      END IF;
-
-    ELSIF v_pool.distribution_method = 'points' THEN
+END IF;
+ELSIF v_pool.distribution_method = 'points' THEN
       -- Points‑based: role's points_per_hour * employee's hours
       SELECT COALESCE(SUM(prs.points_per_hour * dd.hours_worked), 0) INTO v_total_points
       FROM tip_distribution_details dd
@@ -5965,8 +5491,7 @@ BEGIN
         AND prs.role_code = dd.role_code
         AND prs.is_eligible = true
       WHERE dd.session_id = v_session_id;
-
-      IF v_total_points > 0 THEN
+IF v_total_points > 0 THEN
         UPDATE tip_distribution_details dd
         SET tip_pool_received = tip_pool_received +
           ROUND(v_pool_total * ((prs_sub.points_per_hour * dd.hours_worked) / v_total_points), 2)
@@ -5975,11 +5500,10 @@ BEGIN
           AND prs_sub.tip_pool_config_id = v_pool.id
           AND prs_sub.role_code = dd.role_code
           AND prs_sub.is_eligible = true;
-      END IF;
-    END IF;
-  END LOOP;
-
-  -- =========================================================
+END IF;
+END IF;
+END LOOP;
+-- =========================================================
   -- STEP 8: TIP‑OUT RULES (all three types)
   -- =========================================================
   FOR v_rule IN
@@ -5994,76 +5518,65 @@ BEGIN
     FROM tip_distribution_details
     WHERE session_id = v_session_id
       AND role_code = v_rule.to_role_code;
-
-    IF v_rule.tip_out_type = 'percentage_of_sales' THEN
+IF v_rule.tip_out_type = 'percentage_of_sales' THEN
       -- Deduct from givers
       UPDATE tip_distribution_details dd
       SET tip_out_given = tip_out_given +
         ROUND(dd.gross_sales * (v_rule.tip_out_value / 100.0), 2)
       WHERE dd.session_id = v_session_id
         AND dd.role_code = v_rule.from_role_code;
-
-      -- Total given (for crediting receivers)
+-- Total given (for crediting receivers)
       SELECT COALESCE(SUM(ROUND(dd.gross_sales * (v_rule.tip_out_value / 100.0), 2)), 0)
       INTO v_tipout_total
       FROM tip_distribution_details dd
       WHERE dd.session_id = v_session_id
         AND dd.role_code = v_rule.from_role_code;
-
-      -- Credit receivers equally
+-- Credit receivers equally
       IF v_receiver_count > 0 THEN
         UPDATE tip_distribution_details
         SET tip_out_received = tip_out_received +
           ROUND(v_tipout_total / v_receiver_count, 2)
         WHERE session_id = v_session_id
           AND role_code = v_rule.to_role_code;
-      END IF;
-
-    ELSIF v_rule.tip_out_type = 'percentage_of_tips' THEN
+END IF;
+ELSIF v_rule.tip_out_type = 'percentage_of_tips' THEN
       UPDATE tip_distribution_details dd
       SET tip_out_given = tip_out_given +
         ROUND(dd.individual_tips_earned * (v_rule.tip_out_value / 100.0), 2)
       WHERE dd.session_id = v_session_id
         AND dd.role_code = v_rule.from_role_code;
-
-      SELECT COALESCE(SUM(ROUND(dd.individual_tips_earned * (v_rule.tip_out_value / 100.0), 2)), 0)
+SELECT COALESCE(SUM(ROUND(dd.individual_tips_earned * (v_rule.tip_out_value / 100.0), 2)), 0)
       INTO v_tipout_total
       FROM tip_distribution_details dd
       WHERE dd.session_id = v_session_id
         AND dd.role_code = v_rule.from_role_code;
-
-      IF v_receiver_count > 0 THEN
+IF v_receiver_count > 0 THEN
         UPDATE tip_distribution_details
         SET tip_out_received = tip_out_received +
           ROUND(v_tipout_total / v_receiver_count, 2)
         WHERE session_id = v_session_id
           AND role_code = v_rule.to_role_code;
-      END IF;
-
-    ELSIF v_rule.tip_out_type = 'flat_amount' THEN
+END IF;
+ELSIF v_rule.tip_out_type = 'flat_amount' THEN
       UPDATE tip_distribution_details dd
       SET tip_out_given = tip_out_given + v_rule.tip_out_value
       WHERE dd.session_id = v_session_id
         AND dd.role_code = v_rule.from_role_code;
-
-      SELECT COUNT(*) INTO v_giver_count
+SELECT COUNT(*) INTO v_giver_count
       FROM tip_distribution_details
       WHERE session_id = v_session_id
         AND role_code = v_rule.from_role_code;
-
-      v_tipout_total := v_giver_count * v_rule.tip_out_value;
-
-      IF v_receiver_count > 0 THEN
+v_tipout_total := v_giver_count * v_rule.tip_out_value;
+IF v_receiver_count > 0 THEN
         UPDATE tip_distribution_details
         SET tip_out_received = tip_out_received +
           ROUND(v_tipout_total / v_receiver_count, 2)
         WHERE session_id = v_session_id
           AND role_code = v_rule.to_role_code;
-      END IF;
-    END IF;
-  END LOOP;
-
-  -- =========================================================
+END IF;
+END IF;
+END LOOP;
+-- =========================================================
   -- STEP 9: CALCULATE NET TIPS FOR EACH EMPLOYEE
   -- =========================================================
   UPDATE tip_distribution_details
@@ -6075,8 +5588,7 @@ BEGIN
     + tip_out_received
     + manual_adjustment
   WHERE session_id = v_session_id;
-
-  -- =========================================================
+-- =========================================================
   -- STEP 10: AGGREGATE SESSION TOTALS
   -- =========================================================
   SELECT
@@ -6086,8 +5598,7 @@ BEGIN
   INTO v_total_distributed, v_total_pooled, v_total_tipouts
   FROM tip_distribution_details
   WHERE session_id = v_session_id;
-
-  UPDATE tip_distribution_sessions
+UPDATE tip_distribution_sessions
   SET
     status = 'calculated',
     total_tips_collected = v_total_collected,
@@ -6098,8 +5609,7 @@ BEGIN
     calculated_at = now(),
     calculated_by = p_calculated_by
   WHERE id = v_session_id;
-
-  RETURN json_build_object(
+RETURN json_build_object(
     'success', true,
     'session_id', v_session_id,
     'total_collected', v_total_collected,
@@ -6130,7 +5640,6 @@ BEGIN
       WHERE session_id = v_session_id
     )
   );
-
 END;
 $$;
 
@@ -6144,24 +5653,21 @@ CREATE OR REPLACE FUNCTION "public"."can_modify_item"("p_order_item_id" "uuid") 
     AS $$
 DECLARE
   v_order_id UUID;
-  v_course_number INTEGER;
-  v_course_status TEXT;
+v_course_number INTEGER;
+v_course_status TEXT;
 BEGIN
   -- Get item's order and course
   SELECT order_id, course_number INTO v_order_id, v_course_number
   FROM public.order_items
   WHERE id = p_order_item_id;
-
-  IF v_order_id IS NULL THEN
+IF v_order_id IS NULL THEN
     RETURN FALSE;
-  END IF;
-
-  -- Check course status
+END IF;
+-- Check course status
   SELECT status INTO v_course_status
   FROM public.order_courses
   WHERE order_id = v_order_id AND course_number = v_course_number;
-
-  -- Can modify if course doesn't exist yet or is still open
+-- Can modify if course doesn't exist yet or is still open
   RETURN v_course_status IS NULL OR v_course_status = 'open';
 END;
 $$;
@@ -6176,8 +5682,8 @@ CREATE OR REPLACE FUNCTION "public"."cancel_online_order_by_customer"("p_order_i
     AS $$
 DECLARE
   v_session RECORD;
-  v_order   RECORD;
-  v_now     TIMESTAMPTZ := NOW();
+v_order   RECORD;
+v_now     TIMESTAMPTZ := NOW();
 BEGIN
   -- Validate session token and ownership
   SELECT s.id, s.order_id, s.expires_at
@@ -6185,48 +5691,40 @@ BEGIN
     FROM public.online_order_sessions s
    WHERE s.session_token = p_session_token
      AND s.expires_at > v_now;
-
-  IF NOT FOUND THEN
+IF NOT FOUND THEN
     RETURN jsonb_build_object('success', false, 'error', 'Invalid or expired session');
-  END IF;
-
-  IF v_session.order_id <> p_order_id THEN
+END IF;
+IF v_session.order_id <> p_order_id THEN
     RETURN jsonb_build_object('success', false, 'error', 'Order does not belong to this session');
-  END IF;
-
-  -- Lock and check order
+END IF;
+-- Lock and check order
   SELECT id, status
     INTO v_order
     FROM public.orders
    WHERE id = p_order_id
      FOR UPDATE;
-
-  IF NOT FOUND THEN
+IF NOT FOUND THEN
     RETURN jsonb_build_object('success', false, 'error', 'Order not found');
-  END IF;
-
-  IF v_order.status <> 'pending' THEN
+END IF;
+IF v_order.status <> 'pending' THEN
     RETURN jsonb_build_object(
       'success', false,
       'error',   'Order can only be cancelled while pending (current: ' || v_order.status || ')'
     );
-  END IF;
-
-  UPDATE public.orders
+END IF;
+UPDATE public.orders
      SET status               = 'cancelled',
          cancelled_at         = v_now,
          cancelled_by         = 'customer',
          cancellation_reason  = p_reason,
          updated_at           = v_now
    WHERE id = p_order_id;
-
-  INSERT INTO public.order_status_history
+INSERT INTO public.order_status_history
     (order_id, from_status, to_status, changed_at, notes)
   VALUES
     (p_order_id, 'pending', 'cancelled', v_now,
      COALESCE('Cancelled by customer: ' || p_reason, 'Cancelled by customer'));
-
-  RETURN jsonb_build_object(
+RETURN jsonb_build_object(
     'success',      true,
     'order_id',     p_order_id,
     'cancelled_at', v_now
@@ -6248,7 +5746,7 @@ CREATE OR REPLACE FUNCTION "public"."cancel_order"("p_order_id" "uuid", "p_cance
     AS $$
 DECLARE
   v_order_status TEXT;
-  v_result JSON;
+v_result JSON;
 BEGIN
   -- Get order status
   SELECT status INTO v_order_status
@@ -6256,12 +5754,10 @@ BEGIN
   WHERE id = p_order_id
     AND merchant_id = user_merchant_id()
     AND location_id = ANY(user_location_ids());
-
-  IF NOT FOUND THEN
+IF NOT FOUND THEN
     RAISE EXCEPTION 'Order not found';
-  END IF;
-
-  -- For draft/pending orders, we can cancel with lower permission
+END IF;
+-- For draft/pending orders, we can cancel with lower permission
   IF v_order_status IN ('draft', 'pending') THEN
     -- Just need regular order manage permission
     -- IF NOT has_permission('location.orders.manage') THEN
@@ -6272,37 +5768,32 @@ BEGIN
     DELETE FROM public.order_item_modifiers oim
     USING public.order_items oi
     WHERE oim.order_item_id = oi.id AND oi.order_id = p_order_id;
-
-    DELETE FROM public.order_items WHERE order_id = p_order_id;
-
-    -- Update order to cancelled
+DELETE FROM public.order_items WHERE order_id = p_order_id;
+-- Update order to cancelled
     UPDATE public.orders
     SET 
       status = 'cancelled',
       void_reason = p_cancel_reason,
       updated_at = NOW()
     WHERE id = p_order_id;
-
-    -- Close table session if linked
+-- Close table session if linked
     UPDATE public.table_sessions
     SET 
       is_active = FALSE,
       status = 'available',
       closed_at = NOW()
     WHERE order_id = p_order_id AND is_active = TRUE;
-
-    SELECT json_build_object(
+SELECT json_build_object(
       'success', true,
       'order_id', p_order_id,
       'action', 'cancelled',
       'reason', p_cancel_reason
     ) INTO v_result;
-
-    RETURN v_result;
-  ELSE
+RETURN v_result;
+ELSE
     -- For confirmed orders, use void_order
     RETURN public.void_order(p_order_id, p_cancel_reason);
-  END IF;
+END IF;
 END;
 $$;
 
@@ -6320,7 +5811,7 @@ CREATE OR REPLACE FUNCTION "public"."cancel_reservation_for_voided_order"("p_ord
     AS $$
 DECLARE
   v_order_status TEXT;
-  v_cancelled_count INTEGER := 0;
+v_cancelled_count INTEGER := 0;
 BEGIN
   SELECT o.status
   INTO v_order_status
@@ -6328,20 +5819,17 @@ BEGIN
   WHERE o.id = p_order_id
     AND o.merchant_id = user_merchant_id()
     AND o.location_id = ANY(user_location_ids());
-
-  IF NOT FOUND THEN
+IF NOT FOUND THEN
     RAISE EXCEPTION 'Order not found';
-  END IF;
-
-  IF v_order_status <> 'void' THEN
+END IF;
+IF v_order_status <> 'void' THEN
     RETURN json_build_object(
       'success', false,
       'order_id', p_order_id,
       'message', 'Order is not void'
     );
-  END IF;
-
-  UPDATE public.reservations r
+END IF;
+UPDATE public.reservations r
   SET
     status = 'cancelled',
     cancelled_at = COALESCE(r.cancelled_at, NOW()),
@@ -6352,10 +5840,8 @@ BEGIN
     WHERE ts.order_id = p_order_id
   )
     AND r.status = 'seated';
-
-  GET DIAGNOSTICS v_cancelled_count = ROW_COUNT;
-
-  RETURN json_build_object(
+GET DIAGNOSTICS v_cancelled_count = ROW_COUNT;
+RETURN json_build_object(
     'success', true,
     'order_id', p_order_id,
     'cancelled_count', v_cancelled_count
@@ -6377,58 +5863,50 @@ CREATE OR REPLACE FUNCTION "public"."capture_preauth_v1"("p_payment_id" "uuid", 
     AS $$
 DECLARE
   v_payment RECORD;
-  v_order RECORD;
-  v_total_collected NUMERIC;
-  v_new_amount_paid NUMERIC;
-  v_new_amount_due NUMERIC;
-  v_order_fully_paid BOOLEAN;
-  v_new_paid_status TEXT;
-  v_subtotal_portion NUMERIC := 0;
-  v_tax_portion NUMERIC := 0;
-  v_covered_items UUID[] := '{}';
-  v_result_code TEXT;
-  v_result_message TEXT;
+v_order RECORD;
+v_total_collected NUMERIC;
+v_new_amount_paid NUMERIC;
+v_new_amount_due NUMERIC;
+v_order_fully_paid BOOLEAN;
+v_new_paid_status TEXT;
+v_subtotal_portion NUMERIC := 0;
+v_tax_portion NUMERIC := 0;
+v_covered_items UUID[] := '{}';
+v_result_code TEXT;
+v_result_message TEXT;
 BEGIN
   -- Validate payment exists and is authorized
   SELECT id, order_id, amount, status
   INTO v_payment
   FROM order_payments
   WHERE id = p_payment_id;
-
-  IF NOT FOUND THEN
+IF NOT FOUND THEN
     RETURN jsonb_build_object('success', false, 'error', 'Payment not found');
-  END IF;
-
-  IF v_payment.status <> 'authorized' THEN
+END IF;
+IF v_payment.status <> 'authorized' THEN
     RETURN jsonb_build_object('success', false, 'error', 'Payment is not in authorized status');
-  END IF;
-
-  -- Get order for totals update (expanded for enrichment fields)
+END IF;
+-- Get order for totals update (expanded for enrichment fields)
   SELECT id, total_amount, amount_paid, amount_due,
          card_total, card_subtotal, cash_total, cash_subtotal,
          merchant_id, location_id
   INTO v_order
   FROM orders
   WHERE id = v_payment.order_id;
-
-  IF NOT FOUND THEN
+IF NOT FOUND THEN
     RETURN jsonb_build_object('success', false, 'error', 'Order not found');
-  END IF;
-
-  v_total_collected := p_capture_amount + COALESCE(p_tip_amount, 0);
-
-  -- NOW update order totals (capture = real payment) — compute first for v_order_fully_paid
+END IF;
+v_total_collected := p_capture_amount + COALESCE(p_tip_amount, 0);
+-- NOW update order totals (capture = real payment) — compute first for v_order_fully_paid
   v_new_amount_paid := COALESCE(v_order.amount_paid, 0) + p_capture_amount;
-  v_new_amount_due := GREATEST(COALESCE(v_order.total_amount, 0) - v_new_amount_paid, 0);
-  v_order_fully_paid := v_new_amount_due <= 0;
-
-  -- Calculate subtotal/tax portion (same formula as process_payment_v7 full-remaining path)
+v_new_amount_due := GREATEST(COALESCE(v_order.total_amount, 0) - v_new_amount_paid, 0);
+v_order_fully_paid := v_new_amount_due <= 0;
+-- Calculate subtotal/tax portion (same formula as process_payment_v7 full-remaining path)
   IF COALESCE(v_order.card_total, 0) > 0 THEN
     v_subtotal_portion := ROUND(p_capture_amount * (COALESCE(v_order.card_subtotal, 0) / v_order.card_total), 2);
-  END IF;
-  v_tax_portion := p_capture_amount - v_subtotal_portion;
-
-  -- Collect covered items (if fully paid, all unpaid non-voided items)
+END IF;
+v_tax_portion := p_capture_amount - v_subtotal_portion;
+-- Collect covered items (if fully paid, all unpaid non-voided items)
   IF v_order_fully_paid THEN
     SELECT COALESCE(array_agg(id), '{}')
     INTO v_covered_items
@@ -6436,21 +5914,19 @@ BEGIN
     WHERE order_id = v_payment.order_id
       AND (is_voided IS NULL OR is_voided = false)
       AND (quantity - COALESCE(paid_quantity, 0) + COALESCE(refunded_quantity, 0)) > 0;
-  END IF;
-
-  -- Extract result code/message from terminal response
+END IF;
+-- Extract result code/message from terminal response
   IF p_terminal_response IS NOT NULL THEN
     v_result_code := COALESCE(
       p_terminal_response->'castles_transaction'->>'resultCode',
       p_terminal_response->'dejavoo_transaction'->>'resultCode'
     );
-    v_result_message := COALESCE(
+v_result_message := COALESCE(
       p_terminal_response->'castles_transaction'->>'statusMessage',
       p_terminal_response->'dejavoo_transaction'->>'resultMessage'
     );
-  END IF;
-
-  -- Update payment to captured (enriched with all fields)
+END IF;
+-- Update payment to captured (enriched with all fields)
   UPDATE order_payments
   SET
     status = 'captured',
@@ -6469,17 +5945,15 @@ BEGIN
     result_message = COALESCE(v_result_message, result_message),
     processed_by_staff_id = COALESCE(p_staff_id, processed_by_staff_id)
   WHERE id = p_payment_id;
-
-  -- Determine paid_status
+-- Determine paid_status
   IF v_order_fully_paid THEN
     v_new_paid_status := 'paid';
-  ELSIF v_new_amount_paid > 0 THEN
+ELSIF v_new_amount_paid > 0 THEN
     v_new_paid_status := 'partial';
-  ELSE
+ELSE
     v_new_paid_status := 'pending';
-  END IF;
-
-  UPDATE orders
+END IF;
+UPDATE orders
   SET
     amount_paid = v_new_amount_paid,
     amount_due = v_new_amount_due,
@@ -6487,8 +5961,7 @@ BEGIN
     check_status = CASE WHEN v_order_fully_paid THEN 'Closed' ELSE check_status END,
     sync_version = sync_version + 1
   WHERE id = v_payment.order_id;
-
-  -- Mark all items as paid if order is fully covered
+-- Mark all items as paid if order is fully covered
   IF v_order_fully_paid THEN
     UPDATE order_items
     SET paid_quantity = quantity,
@@ -6496,9 +5969,8 @@ BEGIN
     WHERE order_id = v_payment.order_id
       AND (paid_quantity IS NULL OR paid_quantity < quantity)
       AND (is_voided IS NULL OR is_voided = false);
-  END IF;
-
-  RETURN jsonb_build_object(
+END IF;
+RETURN jsonb_build_object(
     'success', true,
     'payment_id', p_payment_id,
     'captured_amount', p_capture_amount,
@@ -6530,23 +6002,20 @@ BEGIN
   FROM station_sessions ss
   WHERE ss.id = p_session_id
     AND ss.device_id = p_device_id;
-
-  IF NOT FOUND THEN
+IF NOT FOUND THEN
     RETURN json_build_object(
       'is_valid', false,
       'status', 'not_found',
       'error', 'Session not found'
     );
-  END IF;
-
-  IF v_session.session_status = 'active' THEN
+END IF;
+IF v_session.session_status = 'active' THEN
     RETURN json_build_object(
       'is_valid', true,
       'status', v_session.session_status
     );
-  END IF;
-
-  -- Session is no longer active (kicked, ended, or expired)
+END IF;
+-- Session is no longer active (kicked, ended, or expired)
   RETURN json_build_object(
     'is_valid', false,
     'status', v_session.session_status,
@@ -6567,27 +6036,26 @@ CREATE OR REPLACE FUNCTION "public"."check_merchant_access"("target_merchant_id"
     AS $$
 DECLARE
     current_clerk_user_id TEXT;
-    merchant_clerk_org_id TEXT;
-    carrier_id_lookup UUID;
-    user_role_code TEXT;
+merchant_clerk_org_id TEXT;
+carrier_id_lookup UUID;
+user_role_code TEXT;
 BEGIN
     -- 1. Get Current User
-    current_clerk_user_id := get_my_claim('sub')::text; -- Or use your request_user_id() helper
-    IF current_clerk_user_id IS NULL THEN RETURN FALSE; END IF;
-
-    -- 2. DEXA HQ OVERRIDE (Manage Everything)
+    current_clerk_user_id := get_my_claim('sub')::text;
+-- Or use your request_user_id() helper
+    IF current_clerk_user_id IS NULL THEN RETURN FALSE;
+END IF;
+-- 2. DEXA HQ OVERRIDE (Manage Everything)
     -- Replace with your actual HQ Org ID check or is_dexa_admin() function
     IF is_dexapos_admin()
     THEN
         RETURN TRUE;
-    END IF;
-
-    -- 3. Get Merchant Context (Clerk Org ID & Carrier ID)
+END IF;
+-- 3. Get Merchant Context (Clerk Org ID & Carrier ID)
     SELECT clerk_org_id, carrier_id INTO merchant_clerk_org_id, carrier_id_lookup
     FROM merchants
     WHERE id = target_merchant_id;
-
-    -- 4. CARRIER OVERRIDE (Manage their merchants)
+-- 4. CARRIER OVERRIDE (Manage their merchants)
     IF EXISTS (
         SELECT 1 FROM members m
         JOIN carriers c ON c.clerk_org_id = m.organization_id
@@ -6596,31 +6064,27 @@ BEGIN
         -- Optional: Check if carrier member has specific carrier permissions here
     ) THEN
         RETURN TRUE;
-    END IF;
-
-    -- 5. MERCHANT ACCESS CHECK
+END IF;
+-- 5. MERCHANT ACCESS CHECK
     -- Get the user's role within this specific merchant
     SELECT role INTO user_role_code
     FROM members
     WHERE user_id = current_clerk_user_id
     AND organization_id = merchant_clerk_org_id;
-
-    IF user_role_code IS NULL THEN
-        RETURN FALSE; -- Not a member of this merchant
+IF user_role_code IS NULL THEN
+        RETURN FALSE;
+-- Not a member of this merchant
     END IF;
-
-    -- If no specific permission is required (Read-Only access), basic membership is enough
+-- If no specific permission is required (Read-Only access), basic membership is enough
     IF required_permission IS NULL THEN
         RETURN TRUE;
-    END IF;
-
-    -- 6. PERMISSION CHECK (Dynamic)
+END IF;
+-- 6. PERMISSION CHECK (Dynamic)
     -- specific override for your requirement: Owner/Admin always allow
     IF user_role_code IN ('merchant.owner', 'merchant.admin') THEN
         RETURN TRUE;
-    END IF;
-
-    -- Check if the user's role maps to the required permission code
+END IF;
+-- Check if the user's role maps to the required permission code
     RETURN EXISTS (
         SELECT 1 FROM role_permissions
         WHERE role_code = user_role_code
@@ -6639,28 +6103,25 @@ CREATE OR REPLACE FUNCTION "public"."check_modifier_group_usage"() RETURNS "trig
     AS $$
 DECLARE
     v_usage_count INTEGER;
-    v_is_location_specific BOOLEAN;
+v_is_location_specific BOOLEAN;
 BEGIN
     -- Check if this is a location-specific group
     SELECT (location_id IS NOT NULL) INTO v_is_location_specific
     FROM modifier_groups WHERE id = OLD.id;
-
-    -- Only check usage for location-specific groups
+-- Only check usage for location-specific groups
     -- Global groups can always be deleted (they cascade to overrides)
     IF v_is_location_specific THEN
         -- Count how many menu items use this modifier group
         SELECT COUNT(*) INTO v_usage_count
         FROM menu_item_modifier_groups
         WHERE modifier_group_id = OLD.id;
-
-        IF v_usage_count > 0 THEN
+IF v_usage_count > 0 THEN
             RAISE EXCEPTION
                 'Cannot delete location-specific modifier group: assigned to % menu item(s). Please unassign it from all menu items first.',
                 v_usage_count;
-        END IF;
-    END IF;
-
-    RETURN OLD;
+END IF;
+END IF;
+RETURN OLD;
 END;
 $$;
 
@@ -6678,13 +6139,12 @@ CREATE OR REPLACE FUNCTION "public"."check_schedule_usage"() RETURNS "trigger"
     AS $$
 DECLARE
     v_usage_count INTEGER;
-    v_is_location_specific BOOLEAN;
+v_is_location_specific BOOLEAN;
 BEGIN
     -- Check if this is a location-specific schedule
     SELECT (location_id IS NOT NULL) INTO v_is_location_specific
     FROM schedules WHERE id = OLD.id;
-
-    -- Only check usage for location-specific schedules
+-- Only check usage for location-specific schedules
     -- Global schedules can always be deleted (they cascade to overrides)
     IF v_is_location_specific THEN
         -- Count how many categories/menus use this schedule
@@ -6692,15 +6152,13 @@ BEGIN
             (SELECT COUNT(*) FROM category_schedules WHERE schedule_id = OLD.id) +
             (SELECT COUNT(*) FROM menu_schedules WHERE schedule_id = OLD.id)
         INTO v_usage_count;
-
-        IF v_usage_count > 0 THEN
+IF v_usage_count > 0 THEN
             RAISE EXCEPTION
                 'Cannot delete location-specific schedule: assigned to % menu(s) or category(ies). Please unassign it first.',
                 v_usage_count;
-        END IF;
-    END IF;
-
-    RETURN OLD;
+END IF;
+END IF;
+RETURN OLD;
 END;
 $$;
 
@@ -6718,12 +6176,11 @@ CREATE OR REPLACE FUNCTION "public"."check_table_availability"("p_location_id" "
     AS $$
 DECLARE
   v_start_time TIMESTAMP;
-  v_end_time TIMESTAMP;
+v_end_time TIMESTAMP;
 BEGIN
   v_start_time := p_date + p_time;
-  v_end_time := v_start_time + (p_duration_minutes || ' minutes')::INTERVAL;
-
-  RETURN (
+v_end_time := v_start_time + (p_duration_minutes || ' minutes')::INTERVAL;
+RETURN (
     SELECT json_build_object(
       'available_tables', COALESCE(json_agg(
         json_build_object(
@@ -6769,9 +6226,9 @@ CREATE OR REPLACE FUNCTION "public"."claim_station"("p_station_id" "uuid", "p_de
     AS $$
 DECLARE
   v_station RECORD;
-  v_existing_session RECORD;
-  v_new_session_id UUID;
-  v_was_kicked BOOLEAN := FALSE;
+v_existing_session RECORD;
+v_new_session_id UUID;
+v_was_kicked BOOLEAN := FALSE;
 BEGIN
   -- Get station info
   SELECT s.*, l.merchant_id 
@@ -6779,30 +6236,26 @@ BEGIN
   FROM stations s
   JOIN locations l ON l.id = s.location_id
   WHERE s.id = p_station_id AND s.is_active = TRUE;
-  
-  IF NOT FOUND THEN
+IF NOT FOUND THEN
     RETURN json_build_object(
       'success', false,
       'error', 'Station not found',
       'error_code', 'STATION_NOT_FOUND'
     );
-  END IF;
-  
-  -- End any session this device has at OTHER stations
+END IF;
+-- End any session this device has at OTHER stations
   UPDATE station_sessions
   SET session_status = 'ended', ended_at = NOW(), updated_at = NOW()
   WHERE device_id = p_device_id
     AND session_status = 'active'
     AND station_id != p_station_id;
-  
-  -- Check for existing session at THIS station
+-- Check for existing session at THIS station
   SELECT * INTO v_existing_session
   FROM station_sessions
   WHERE station_id = p_station_id
     AND session_status = 'active'
   FOR UPDATE;
-  
-  IF FOUND THEN
+IF FOUND THEN
     -- Same device reconnecting
     IF v_existing_session.device_id = p_device_id THEN
       UPDATE station_sessions
@@ -6811,16 +6264,14 @@ BEGIN
         staff_name = COALESCE(p_staff_name, staff_name),
         updated_at = NOW()
       WHERE id = v_existing_session.id;
-      
-      RETURN json_build_object(
+RETURN json_build_object(
         'success', true,
         'session_id', v_existing_session.id,
         'station_name', v_station.station_name,
         'is_reconnect', true
       );
-    END IF;
-    
-    -- Different device - need takeover permission
+END IF;
+-- Different device - need takeover permission
     IF NOT p_force_takeover THEN
       RETURN json_build_object(
         'success', false,
@@ -6832,9 +6283,8 @@ BEGIN
           'started_at', v_existing_session.started_at
         )
       );
-    END IF;
-    
-    -- Force takeover - kick existing session
+END IF;
+-- Force takeover - kick existing session
     UPDATE station_sessions
     SET 
       session_status = 'kicked',
@@ -6844,15 +6294,12 @@ BEGIN
       kick_reason = 'Taken over',
       updated_at = NOW()
     WHERE id = v_existing_session.id;
-    
-    -- Notify kicked device via Realtime
+-- Notify kicked device via Realtime
     INSERT INTO session_kick_notifications (session_id, device_id, kicked_by_staff_name, kick_reason)
     VALUES (v_existing_session.id, v_existing_session.device_id, p_staff_name, 'Taken over');
-    
-    v_was_kicked := TRUE;
-  END IF;
-  
-  -- Create new session
+v_was_kicked := TRUE;
+END IF;
+-- Create new session
   INSERT INTO station_sessions (
     station_id, merchant_id, location_id,
     device_id, device_name,
@@ -6865,13 +6312,11 @@ BEGIN
     'active'
   )
   RETURNING id INTO v_new_session_id;
-  
-  -- Update station
+-- Update station
   UPDATE stations 
   SET device_id = p_device_id, device_name = p_device_name, is_online = TRUE
   WHERE id = p_station_id;
-  
-  RETURN json_build_object(
+RETURN json_build_object(
     'success', true,
     'session_id', v_new_session_id,
     'station_id', p_station_id,
@@ -6891,9 +6336,9 @@ CREATE OR REPLACE FUNCTION "public"."claim_station"("p_station_id" "uuid", "p_de
     AS $$
 DECLARE
   v_station RECORD;
-  v_existing_session RECORD;
-  v_new_session_id UUID;
-  v_was_kicked BOOLEAN := FALSE;
+v_existing_session RECORD;
+v_new_session_id UUID;
+v_was_kicked BOOLEAN := FALSE;
 BEGIN
   -- Get station info
   SELECT s.*, l.merchant_id 
@@ -6901,16 +6346,14 @@ BEGIN
   FROM stations s
   JOIN locations l ON l.id = s.location_id
   WHERE s.id = p_station_id AND s.is_active = TRUE;
-  
-  IF NOT FOUND THEN
+IF NOT FOUND THEN
     RETURN json_build_object(
       'success', false,
       'error', 'Station not found or inactive',
       'error_code', 'STATION_NOT_FOUND'
     );
-  END IF;
-  
-  -- End any existing session for THIS device at a DIFFERENT station
+END IF;
+-- End any existing session for THIS device at a DIFFERENT station
   UPDATE station_sessions
   SET 
     session_status = 'ended',
@@ -6918,13 +6361,13 @@ BEGIN
   WHERE device_id = p_device_id
     AND session_status = 'active'
     AND station_id != p_station_id;
-  
-  -- Check for existing active session at THIS station
+-- Check for existing active session at THIS station
   SELECT * INTO v_existing_session
   FROM station_sessions
   WHERE station_id = p_station_id
     AND session_status = 'active'
-  FOR UPDATE;  -- Lock row to prevent race conditions
+  FOR UPDATE;
+-- Lock row to prevent race conditions
   
   IF FOUND THEN
     -- Same device reconnecting? Just update and return existing session
@@ -6936,16 +6379,14 @@ BEGIN
         staff_name = COALESCE(p_staff_name, staff_name),
         device_name = COALESCE(p_device_name, device_name)
       WHERE id = v_existing_session.id;
-      
-      RETURN json_build_object(
+RETURN json_build_object(
         'success', true,
         'session_id', v_existing_session.id,
         'is_reconnect', true,
         'message', 'Reconnected to existing session'
       );
-    END IF;
-    
-    -- Different device - need to takeover
+END IF;
+-- Different device - need to takeover
     IF NOT p_force_takeover THEN
       RETURN json_build_object(
         'success', false,
@@ -6957,9 +6398,8 @@ BEGIN
           'started_at', v_existing_session.started_at
         )
       );
-    END IF;
-    
-    -- Force takeover - kick the existing session
+END IF;
+-- Force takeover - kick the existing session
     UPDATE station_sessions
     SET 
       session_status = 'kicked',
@@ -6968,10 +6408,8 @@ BEGIN
       kicked_by_staff_name = p_staff_name,
       kick_reason = 'Taken over by another device'
     WHERE id = v_existing_session.id;
-    
-    v_was_kicked := TRUE;
-    
-    -- Insert kick notification for Realtime
+v_was_kicked := TRUE;
+-- Insert kick notification for Realtime
     INSERT INTO session_kick_notifications (
       session_id, device_id, kicked_by_staff_name, kick_reason
     ) VALUES (
@@ -6980,9 +6418,8 @@ BEGIN
       p_staff_name, 
       'Taken over by another device'
     );
-  END IF;
-  
-  -- Create new session
+END IF;
+-- Create new session
   INSERT INTO station_sessions (
     station_id,
     merchant_id,
@@ -7007,8 +6444,7 @@ BEGIN
     NOW()
   )
   RETURNING id INTO v_new_session_id;
-  
-  -- Update station with device info
+-- Update station with device info
   UPDATE stations
   SET 
     device_id = p_device_id,
@@ -7016,8 +6452,7 @@ BEGIN
     is_online = TRUE,
     last_heartbeat_at = NOW()
   WHERE id = p_station_id;
-  
-  RETURN json_build_object(
+RETURN json_build_object(
     'success', true,
     'session_id', v_new_session_id,
     'station_id', p_station_id,
@@ -7041,7 +6476,7 @@ CREATE OR REPLACE FUNCTION "public"."clear_order_item_instructions"("p_order_ite
     AS $$
 DECLARE
   v_order_id UUID;
-  v_result JSON;
+v_result JSON;
 BEGIN
   -- Verify access
   SELECT oi.order_id INTO v_order_id
@@ -7052,12 +6487,10 @@ BEGIN
     AND o.merchant_id = user_merchant_id()
     AND o.location_id = ANY(user_location_ids())
     AND o.status NOT IN ('completed', 'cancelled', 'void');
-
-  IF NOT FOUND THEN
+IF NOT FOUND THEN
     RAISE EXCEPTION 'Order item not found or cannot be modified';
-  END IF;
-
-  -- Verify permission
+END IF;
+-- Verify permission
   -- IF NOT has_permission('location.orders.manage') THEN
   --   RAISE EXCEPTION 'Permission denied';
   -- END IF;
@@ -7068,14 +6501,12 @@ BEGIN
     special_instructions = NULL,
     updated_at = NOW()
   WHERE id = p_order_item_id;
-
-  SELECT json_build_object(
+SELECT json_build_object(
     'success', true,
     'order_item_id', p_order_item_id,
     'special_instructions', NULL
   ) INTO v_result;
-
-  RETURN v_result;
+RETURN v_result;
 END;
 $$;
 
@@ -7089,8 +6520,8 @@ CREATE OR REPLACE FUNCTION "public"."clear_order_items"("p_order_id" "uuid") RET
     AS $$
 DECLARE
   v_order_status TEXT;
-  v_removed_count INTEGER;
-  v_result JSON;
+v_removed_count INTEGER;
+v_result JSON;
 BEGIN
   -- Verify order and status
   SELECT status INTO v_order_status
@@ -7098,16 +6529,13 @@ BEGIN
   WHERE id = p_order_id
     AND merchant_id = user_merchant_id()
     AND location_id = ANY(user_location_ids());
-
-  IF NOT FOUND THEN
+IF NOT FOUND THEN
     RAISE EXCEPTION 'Order not found';
-  END IF;
-
-  IF v_order_status NOT IN ('draft', 'pending') THEN
+END IF;
+IF v_order_status NOT IN ('draft', 'pending') THEN
     RAISE EXCEPTION 'Cannot clear items from % orders', v_order_status;
-  END IF;
-
-  -- Verify permission
+END IF;
+-- Verify permission
   -- IF NOT has_permission('location.orders.manage') THEN
   --   RAISE EXCEPTION 'Permission denied';
   -- END IF;
@@ -7116,13 +6544,10 @@ BEGIN
   DELETE FROM public.order_item_modifiers oim
   USING public.order_items oi
   WHERE oim.order_item_id = oi.id AND oi.order_id = p_order_id;
-
-  -- Delete all items
+-- Delete all items
   DELETE FROM public.order_items WHERE order_id = p_order_id;
-  
-  GET DIAGNOSTICS v_removed_count = ROW_COUNT;
-
-  -- Reset order totals
+GET DIAGNOSTICS v_removed_count = ROW_COUNT;
+-- Reset order totals
   UPDATE public.orders
   SET 
     subtotal = 0,
@@ -7130,14 +6555,12 @@ BEGIN
     total_amount = 0,
     updated_at = NOW()
   WHERE id = p_order_id;
-
-  SELECT json_build_object(
+SELECT json_build_object(
     'success', true,
     'order_id', p_order_id,
     'removed_count', v_removed_count
   ) INTO v_result;
-
-  RETURN v_result;
+RETURN v_result;
 END;
 $$;
 
@@ -7151,22 +6574,20 @@ CREATE OR REPLACE FUNCTION "public"."close_cash_drawer_session"("p_session_id" "
     AS $$
 DECLARE
   v_session RECORD;
-  v_expected_cash NUMERIC;
-  v_variance NUMERIC;
+v_expected_cash NUMERIC;
+v_variance NUMERIC;
 BEGIN
   -- Get session and verify it's open
   SELECT * INTO v_session
   FROM cash_drawer_sessions
   WHERE id = p_session_id AND status = 'open';
-
-  IF v_session IS NULL THEN
+IF v_session IS NULL THEN
     RETURN jsonb_build_object(
       'success', false,
       'error', 'Session not found or not open'
     );
-  END IF;
-
-  -- Calculate expected_cash from operations (source of truth)
+END IF;
+-- Calculate expected_cash from operations (source of truth)
   -- Formula: opening + cash_sales + pay_ins - cash_refunds - pay_outs - cash_drops - tip_outs
   SELECT v_session.opening_amount + COALESCE(SUM(
     CASE
@@ -7178,10 +6599,8 @@ BEGIN
   INTO v_expected_cash
   FROM cash_drawer_operations
   WHERE session_id = p_session_id;
-
-  v_variance := p_closing_amount - v_expected_cash;
-
-  -- Record closing_count operation
+v_variance := p_closing_amount - v_expected_cash;
+-- Record closing_count operation
   INSERT INTO cash_drawer_operations (
     cash_drawer_id, session_id, operation_type,
     amount, performed_by, performed_at,
@@ -7191,8 +6610,7 @@ BEGIN
     p_closing_amount, p_closed_by, NOW(),
     v_expected_cash
   );
-
-  -- Update session
+-- Update session
   UPDATE cash_drawer_sessions
   SET
     closed_by = p_closed_by,
@@ -7205,13 +6623,11 @@ BEGIN
     variance_notes = p_variance_notes,
     status = 'closed'
   WHERE id = p_session_id;
-
-  -- Update drawer status
+-- Update drawer status
   UPDATE cash_drawers
   SET is_open = false, current_session_id = NULL
   WHERE id = p_cash_drawer_id;
-
-  RETURN jsonb_build_object(
+RETURN jsonb_build_object(
     'success', true,
     'expected_cash', v_expected_cash,
     'closing_amount', p_closing_amount,
@@ -7229,22 +6645,20 @@ CREATE OR REPLACE FUNCTION "public"."close_check"("p_order_id" "uuid", "p_staff_
     SET "search_path" TO 'public', 'public', 'pg_temp'
     AS $$DECLARE
   v_order RECORD;
-  v_result JSONB;
+v_result JSONB;
 BEGIN
   -- Lock and fetch order
   SELECT * INTO v_order
   FROM orders
   WHERE id = p_order_id
   FOR UPDATE;
-
-  IF NOT FOUND THEN
+IF NOT FOUND THEN
     RETURN jsonb_build_object(
       'success', false,
       'error', 'Order not found'
     );
-  END IF;
-
-  -- We can close checks thats still have money due
+END IF;
+-- We can close checks thats still have money due
   -- Validate order is fully paid
   -- IF v_order.amount_due > 0.01 THEN
   --   RETURN jsonb_build_object(
@@ -7260,16 +6674,14 @@ BEGIN
       'success', false,
       'error', 'Check is already closed'
     );
-  END IF;
-
-  -- Close the check
+END IF;
+-- Close the check
   UPDATE orders
   SET check_status = 'Closed',
       updated_at = NOW(),
       sync_version = sync_version + 1
   WHERE id = p_order_id;
-
-  -- Log the action (audit_logs table expected to exist)
+-- Log the action (audit_logs table expected to exist)
   INSERT INTO audit_logs (
     action,
     resource_type,
@@ -7285,20 +6697,19 @@ BEGIN
     jsonb_build_object('check_status', 'Closed'),
     NOW()
   );
-
-  -- Return success
+-- Return success
   RETURN jsonb_build_object(
     'success', true,
     'order_id', p_order_id,
     'check_status', 'Closed'
   );
-
 EXCEPTION WHEN OTHERS THEN
   RETURN jsonb_build_object(
     'success', false,
     'error', SQLERRM
   );
-END;$$;
+END;
+$$;
 
 
 ALTER FUNCTION "public"."close_check"("p_order_id" "uuid", "p_staff_id" "uuid") OWNER TO "postgres";
@@ -7310,16 +6721,14 @@ CREATE OR REPLACE FUNCTION "public"."copy_schedule_shifts"("p_source_schedule_id
     AS $$
 DECLARE
     v_source_start date;
-    v_target_start date;
-    v_days_diff integer;
+v_target_start date;
+v_days_diff integer;
 BEGIN
     -- 1. Get date difference to shift the timestamps
     SELECT start_date INTO v_source_start FROM schedules WHERE id = p_source_schedule_id;
-    SELECT start_date INTO v_target_start FROM schedules WHERE id = p_target_schedule_id;
-    
-    v_days_diff := v_target_start - v_source_start;
-
-    -- 2. Clone Shifts
+SELECT start_date INTO v_target_start FROM schedules WHERE id = p_target_schedule_id;
+v_days_diff := v_target_start - v_source_start;
+-- 2. Clone Shifts
     INSERT INTO shifts (
         merchant_id, location_id, schedule_id, 
         employee_id, role_name, 
@@ -7406,7 +6815,7 @@ CREATE OR REPLACE FUNCTION "public"."create_floor_plan"("p_location_id" "uuid", 
     AS $$
 DECLARE
   v_merchant_id UUID;
-  v_floor_plan_id UUID;
+v_floor_plan_id UUID;
 BEGIN
   -- Verify permission
   -- IF NOT has_any_permission(ARRAY['location.floor_plan.manage', 'merchant.settings.manage']) THEN
@@ -7415,20 +6824,17 @@ BEGIN
 
   -- Get merchant ID
   v_merchant_id := user_merchant_id();
-  
-  -- Verify location access
+-- Verify location access
   IF NOT p_location_id = ANY(user_location_ids()) THEN
     RAISE EXCEPTION 'Location access denied';
-  END IF;
-
-  -- If setting as default, unset others
+END IF;
+-- If setting as default, unset others
   IF p_is_default THEN
     UPDATE public.floor_plans 
     SET is_default = FALSE 
     WHERE location_id = p_location_id;
-  END IF;
-
-  -- Create floor plan
+END IF;
+-- Create floor plan
   INSERT INTO public.floor_plans (
     merchant_id, location_id, name, description,
     canvas_width, canvas_height, is_default,
@@ -7439,8 +6845,7 @@ BEGIN
     user_staff_profile_id()
   )
   RETURNING id INTO v_floor_plan_id;
-
-  RETURN json_build_object(
+RETURN json_build_object(
     'success', true,
     'floor_plan_id', v_floor_plan_id,
     'name', p_name
@@ -7458,7 +6863,7 @@ CREATE OR REPLACE FUNCTION "public"."create_inventory_count"("p_merchant_id" "uu
     AS $$
 DECLARE
     v_count_id      UUID;
-    v_items_count   INTEGER;
+v_items_count   INTEGER;
 BEGIN
     -- Create count session
     INSERT INTO inventory_counts (
@@ -7471,8 +6876,7 @@ BEGIN
         p_assigned_to_user_id, p_assigned_to_name
     )
     RETURNING id INTO v_count_id;
-
-    -- Snapshot current stock for each item in scope
+-- Snapshot current stock for each item in scope
     -- Scope: active items belonging to this merchant (global OR location-specific)
     -- Stock snapshot: use location_inventory_stock if a row exists, else 0
     INSERT INTO inventory_count_items (count_id, inventory_item_id, expected_quantity)
@@ -7503,10 +6907,8 @@ BEGIN
                 FROM jsonb_array_elements_text(p_item_ids) AS elem
             )
           );
-
-    GET DIAGNOSTICS v_items_count = ROW_COUNT;
-
-    RETURN jsonb_build_object(
+GET DIAGNOSTICS v_items_count = ROW_COUNT;
+RETURN jsonb_build_object(
         'success',      true,
         'count_id',     v_count_id,
         'items_count',  v_items_count
@@ -7524,29 +6926,25 @@ CREATE OR REPLACE FUNCTION "public"."create_next_course"("p_order_id" "uuid") RE
     AS $$
 DECLARE
   v_next_course INTEGER;
-  v_course_id UUID;
+v_course_id UUID;
 BEGIN
   -- Get next course number
   SELECT COALESCE(MAX(course_number), 0) + 1 INTO v_next_course
   FROM public.order_courses
   WHERE order_id = p_order_id;
-
-  -- Also check items in case courses aren't in order_courses yet
+-- Also check items in case courses aren't in order_courses yet
   SELECT GREATEST(v_next_course, COALESCE(MAX(course_number), 0) + 1) INTO v_next_course
   FROM public.order_items
   WHERE order_id = p_order_id AND is_voided = FALSE;
-
-  -- Create the course
+-- Create the course
   INSERT INTO public.order_courses (order_id, course_number, status)
   VALUES (p_order_id, v_next_course, 'open')
   RETURNING id INTO v_course_id;
-
-  -- Update working course
+-- Update working course
   UPDATE public.table_sessions
   SET working_course = v_next_course, updated_at = NOW()
   WHERE order_id = p_order_id AND is_active = TRUE;
-
-  RETURN json_build_object(
+RETURN json_build_object(
     'success', true,
     'course_number', v_next_course,
     'course_id', v_course_id
@@ -7564,44 +6962,38 @@ CREATE OR REPLACE FUNCTION "public"."create_order"("p_merchant_id" "uuid", "p_lo
     AS $$
 DECLARE
   v_order_id UUID;
-  v_order_number TEXT;
-  v_display_number TEXT;
-  v_user_id TEXT;
-  v_verified_staff_id UUID; -- Variable to hold the safe staff ID
+v_order_number TEXT;
+v_display_number TEXT;
+v_user_id TEXT;
+v_verified_staff_id UUID;
+-- Variable to hold the safe staff ID
   v_result JSON;
 BEGIN
   -- Get current user ID from Clerk JWT
   v_user_id := get_my_claim('sub');
-  
-  -- Verify user has access to this location
+-- Verify user has access to this location
   IF NOT (p_location_id = ANY(user_location_ids())) THEN
     RAISE EXCEPTION 'Access denied: User does not have access to location';
-  END IF;
-  
-  -- Verify merchant_id matches user's merchant
+END IF;
+-- Verify merchant_id matches user's merchant
   IF p_merchant_id != user_merchant_id() THEN
     RAISE EXCEPTION 'Access denied: Invalid merchant_id';
-  END IF;
-
-  -- Safe Staff ID Validation
+END IF;
+-- Safe Staff ID Validation
   -- ---------------------------------------------------------
   -- Initialize with the passed value
   v_verified_staff_id := p_created_by_staff_id;
-
-  -- If a staff ID was provided, verify it exists
+-- If a staff ID was provided, verify it exists
   IF v_verified_staff_id IS NOT NULL THEN
     IF NOT EXISTS (SELECT 1 FROM public.staff_profiles WHERE id = v_verified_staff_id) THEN
        v_verified_staff_id := NULL;
-    END IF;
-  END IF;
-  
-  -- Generate order number
+END IF;
+END IF;
+-- Generate order number
   v_order_number := public.generate_order_number(p_location_id);
-  
-  -- Generate display number (just the sequence part)
+-- Generate display number (just the sequence part)
   v_display_number := '#' || SPLIT_PART(v_order_number, '-', 3);
-  
-  -- Create the order
+-- Create the order
   -- This INSERT will fire the `tr_log_orders` trigger which handles the Audit Log entry
   INSERT INTO public.orders (
     merchant_id,
@@ -7637,8 +7029,7 @@ BEGIN
     NOW()
   )
   RETURNING id INTO v_order_id;
-  
-  -- Return order details
+-- Return order details
   SELECT json_build_object(
     'success', true,
     'order_id', v_order_id,
@@ -7646,8 +7037,7 @@ BEGIN
     'display_number', v_display_number,
     'status', 'draft'
   ) INTO v_result;
-  
-  RETURN v_result;
+RETURN v_result;
 END;
 $$;
 
@@ -7664,21 +7054,20 @@ CREATE OR REPLACE FUNCTION "public"."create_order_v2"("p_merchant_id" "uuid", "p
     SET "search_path" TO 'public', 'public', 'pg_temp'
     AS $$DECLARE
   v_order_id UUID;
-  v_order_number TEXT;
-  v_display_number TEXT;
-  v_user_id TEXT;
-  v_result JSON;
-  v_verified_staff_id UUID; -- Variable to hold the safe staff ID
+v_order_number TEXT;
+v_display_number TEXT;
+v_user_id TEXT;
+v_result JSON;
+v_verified_staff_id UUID;
+-- Variable to hold the safe staff ID
 BEGIN
   -- Get current user ID from Clerk JWT
   v_user_id := get_my_claim('sub');
-  
-  -- Verify user has access to this location
+-- Verify user has access to this location
   IF NOT (p_location_id = ANY(user_location_ids())) THEN
     RAISE EXCEPTION 'Access denied: User does not have access to location';
-  END IF;
-  
-  -- Verify user has permission to manage orders
+END IF;
+-- Verify user has permission to manage orders
   -- IF NOT has_permission('location.orders.manage') THEN
   --   RAISE EXCEPTION 'Permission denied: location.orders.manage required';
   -- END IF;
@@ -7686,34 +7075,27 @@ BEGIN
   -- Verify merchant_id matches user's merchant
   IF p_merchant_id != user_merchant_id() THEN
     RAISE EXCEPTION 'Access denied: Invalid merchant_id';
-  END IF;
-
-  -- Safe Staff ID Validation
+END IF;
+-- Safe Staff ID Validation
   -- ---------------------------------------------------------
   -- Initialize with the passed value
   v_verified_staff_id := p_created_by_staff_id;
-
-  -- If a staff ID was provided, verify it exists in the database
+-- If a staff ID was provided, verify it exists in the database
   IF v_verified_staff_id IS NOT NULL THEN
     IF NOT EXISTS (SELECT 1 FROM public.staff_profiles WHERE id = v_verified_staff_id) THEN
       -- If not found, set to NULL to prevent FK violation error
       v_verified_staff_id := NULL;
-    END IF;
-  END IF;
-
-
-  
-  -- Generate order number (per-station when station_id provided)
+END IF;
+END IF;
+-- Generate order number (per-station when station_id provided)
   v_order_number := public.generate_order_number(p_location_id, p_station_id);
-
-  -- Generate display number (handles both 3-segment and 4-segment formats)
+-- Generate display number (handles both 3-segment and 4-segment formats)
   v_display_number := CASE
     WHEN SPLIT_PART(v_order_number, '-', 4) <> ''
     THEN '#' || SPLIT_PART(v_order_number, '-', 3) || '-' || SPLIT_PART(v_order_number, '-', 4)
     ELSE '#' || SPLIT_PART(v_order_number, '-', 3)
   END;
-  
-  -- Create the order
+-- Create the order
   INSERT INTO public.orders (
     merchant_id,
     location_id,
@@ -7750,8 +7132,7 @@ BEGIN
     NOW()
   )
   RETURNING id INTO v_order_id;
-  
-  -- Log to audit
+-- Log to audit
   INSERT INTO public.audit_logs (
     actor_user_id,
     organization_id,
@@ -7777,8 +7158,7 @@ BEGIN
     ),
     'success'
   );
-  
-  -- Return order details
+-- Return order details
   SELECT json_build_object(
     'success', true,
     'order_id', v_order_id,
@@ -7786,9 +7166,9 @@ BEGIN
     'display_number', v_display_number,
     'status', 'draft'
   ) INTO v_result;
-  
-  RETURN v_result;
-END;$$;
+RETURN v_result;
+END;
+$$;
 
 
 ALTER FUNCTION "public"."create_order_v2"("p_merchant_id" "uuid", "p_location_id" "uuid", "p_order_type" "public"."order_type", "p_table_number" "text", "p_customer_name" "text", "p_customer_phone" "text", "p_special_instructions" "text", "p_device_id" "text", "p_created_by_staff_id" "uuid", "p_station_id" "uuid") OWNER TO "postgres";
@@ -7800,8 +7180,8 @@ CREATE OR REPLACE FUNCTION "public"."create_reservation"("p_location_id" "uuid",
     AS $$
 DECLARE
   v_merchant_id UUID;
-  v_reservation_id UUID;
-  v_confirmation_number TEXT;
+v_reservation_id UUID;
+v_confirmation_number TEXT;
 BEGIN
   -- Verify permission
   -- IF NOT has_any_permission(ARRAY['location.reservations.manage', 'location.tables.manage']) THEN
@@ -7810,19 +7190,16 @@ BEGIN
 
   -- Get merchant ID
   v_merchant_id := user_merchant_id();
-  
-  -- Verify location access
+-- Verify location access
   IF NOT p_location_id = ANY(user_location_ids()) THEN
     RAISE EXCEPTION 'Location access denied';
-  END IF;
-
-  -- Validate date/time is in future
+END IF;
+-- Validate date/time is in future
   IF p_reservation_date < CURRENT_DATE OR 
      (p_reservation_date = CURRENT_DATE AND p_reservation_time < CURRENT_TIME) THEN
     RAISE EXCEPTION 'Reservation must be in the future';
-  END IF;
-
-  -- Create reservation
+END IF;
+-- Create reservation
   INSERT INTO public.reservations (
     merchant_id, location_id,
     party_name, party_size, phone, email,
@@ -7841,8 +7218,7 @@ BEGIN
     user_staff_profile_id()
   )
   RETURNING id, confirmation_number INTO v_reservation_id, v_confirmation_number;
-
-  RETURN json_build_object(
+RETURN json_build_object(
     'success', true,
     'reservation_id', v_reservation_id,
     'confirmation_number', v_confirmation_number,
@@ -7900,7 +7276,7 @@ CREATE OR REPLACE FUNCTION "public"."create_reversal"("p_original_payment_id" "u
     AS $$
 DECLARE
   v_payment record;
-  v_reversal reversals;
+v_reversal reversals;
 BEGIN
   SELECT op.*, o.merchant_id, o.location_id
   INTO v_payment
@@ -7909,12 +7285,10 @@ BEGIN
   WHERE op.id = p_original_payment_id
     AND o.merchant_id = user_merchant_id()
     AND o.location_id = ANY(user_location_ids());
-
-  IF NOT FOUND THEN
+IF NOT FOUND THEN
     RAISE EXCEPTION 'Payment not found or access denied';
-  END IF;
-
-  INSERT INTO reversals (
+END IF;
+INSERT INTO reversals (
     original_payment_id,
     original_psp_reference,
     reversal_reference_id,
@@ -7943,8 +7317,7 @@ BEGIN
     p_approved_by
   )
   RETURNING * INTO v_reversal;
-
-  RETURN v_reversal;
+RETURN v_reversal;
 END;
 $$;
 
@@ -7958,20 +7331,18 @@ CREATE OR REPLACE FUNCTION "public"."create_support_ticket"("p_merchant_id" "uui
     AS $$
 DECLARE
   v_ticket_id     UUID;
-  v_ticket_number TEXT;
-  v_carrier_id    UUID;
+v_ticket_number TEXT;
+v_carrier_id    UUID;
 BEGIN
   -- Auto-resolve carrier from merchant if not provided
   IF p_carrier_id IS NULL THEN
     SELECT carrier_id INTO v_carrier_id FROM public.merchants WHERE id = p_merchant_id;
-  ELSE
+ELSE
     v_carrier_id := p_carrier_id;
-  END IF;
-
-  -- Generate ticket number
+END IF;
+-- Generate ticket number
   v_ticket_number := 'DEXA-' || lpad(nextval('support_ticket_seq')::text, 5, '0');
-
-  INSERT INTO public.support_tickets (
+INSERT INTO public.support_tickets (
     ticket_number, merchant_id, location_id,
     submitted_by, submitted_by_name, submitted_by_email,
     carrier_id, subject, description, category, metadata
@@ -7981,15 +7352,13 @@ BEGIN
     v_carrier_id, p_subject, p_description, p_category, COALESCE(p_metadata, '{}'::jsonb)
   )
   RETURNING id INTO v_ticket_id;
-
-  -- Insert initial description as first message
+-- Insert initial description as first message
   INSERT INTO public.support_ticket_messages (
     ticket_id, sender_id, sender_name, sender_role, message, read_by_admin
   ) VALUES (
     v_ticket_id, p_submitted_by, p_submitted_by_name, 'merchant', p_description, false
   );
-
-  RETURN jsonb_build_object('ticket_id', v_ticket_id, 'ticket_number', v_ticket_number);
+RETURN jsonb_build_object('ticket_id', v_ticket_id, 'ticket_number', v_ticket_number);
 END;
 $$;
 
@@ -8003,22 +7372,20 @@ CREATE OR REPLACE FUNCTION "public"."create_support_ticket"("p_merchant_id" "uui
     AS $$
 DECLARE
   v_ticket_id     UUID;
-  v_ticket_number TEXT;
-  v_carrier_id    UUID;
-  v_message_id    UUID;
-  v_att           JSONB;
+v_ticket_number TEXT;
+v_carrier_id    UUID;
+v_message_id    UUID;
+v_att           JSONB;
 BEGIN
   -- Auto-resolve carrier from merchant if not provided
   IF p_carrier_id IS NULL THEN
     SELECT carrier_id INTO v_carrier_id FROM public.merchants WHERE id = p_merchant_id;
-  ELSE
+ELSE
     v_carrier_id := p_carrier_id;
-  END IF;
-
-  -- Generate ticket number
+END IF;
+-- Generate ticket number
   v_ticket_number := 'DEXA-' || lpad(nextval('support_ticket_seq')::text, 5, '0');
-
-  INSERT INTO public.support_tickets (
+INSERT INTO public.support_tickets (
     ticket_number, merchant_id, location_id,
     submitted_by, submitted_by_name, submitted_by_email,
     carrier_id, subject, description, category, metadata
@@ -8028,15 +7395,13 @@ BEGIN
     v_carrier_id, p_subject, p_description, p_category, COALESCE(p_metadata, '{}'::jsonb)
   )
   RETURNING id INTO v_ticket_id;
-
-  -- Insert initial description as first message
+-- Insert initial description as first message
   INSERT INTO public.support_ticket_messages (
     ticket_id, sender_id, sender_name, sender_role, message, read_by_admin
   ) VALUES (
     v_ticket_id, p_submitted_by, p_submitted_by_name, 'merchant', p_description, false
   ) RETURNING id INTO v_message_id;
-
-  -- Insert attachments linked to the first message
+-- Insert attachments linked to the first message
   FOR v_att IN SELECT * FROM jsonb_array_elements(COALESCE(p_attachments, '[]'::jsonb))
   LOOP
     INSERT INTO public.support_ticket_attachments (
@@ -8049,9 +7414,8 @@ BEGIN
       (v_att->>'file_size')::integer,
       v_att->>'file_type'
     );
-  END LOOP;
-
-  RETURN jsonb_build_object('ticket_id', v_ticket_id, 'ticket_number', v_ticket_number);
+END LOOP;
+RETURN jsonb_build_object('ticket_id', v_ticket_id, 'ticket_number', v_ticket_number);
 END;
 $$;
 
@@ -8064,7 +7428,8 @@ CREATE OR REPLACE FUNCTION "public"."current_user_id"() RETURNS "text"
     SET "search_path" TO 'public', 'public', 'pg_temp'
     AS $$BEGIN
     RETURN get_my_claim('sub')::TEXT;
-END;$$;
+END;
+$$;
 
 
 ALTER FUNCTION "public"."current_user_id"() OWNER TO "postgres";
@@ -8099,26 +7464,23 @@ CREATE OR REPLACE FUNCTION "public"."decline_online_order"("p_order_id" "uuid", 
     AS $$
 DECLARE
   v_order RECORD;
-  v_now   TIMESTAMPTZ := NOW();
+v_now   TIMESTAMPTZ := NOW();
 BEGIN
   SELECT id, status
     INTO v_order
     FROM public.orders
    WHERE id = p_order_id
      FOR UPDATE;
-
-  IF NOT FOUND THEN
+IF NOT FOUND THEN
     RETURN jsonb_build_object('success', false, 'error', 'Order not found');
-  END IF;
-
-  IF v_order.status <> 'pending' THEN
+END IF;
+IF v_order.status <> 'pending' THEN
     RETURN jsonb_build_object(
       'success', false,
       'error',   'Order is not in pending status (current: ' || v_order.status || ')'
     );
-  END IF;
-
-  UPDATE public.orders
+END IF;
+UPDATE public.orders
      SET status           = 'declined',
          declined_at      = v_now,
          declined_reason  = p_reason,
@@ -8126,14 +7488,12 @@ BEGIN
          cancelled_by     = 'merchant',
          updated_at       = v_now
    WHERE id = p_order_id;
-
-  INSERT INTO public.order_status_history
+INSERT INTO public.order_status_history
     (order_id, from_status, to_status, changed_at, notes)
   VALUES
     (p_order_id, 'pending', 'declined', v_now,
      COALESCE('Declined by merchant: ' || p_reason, 'Declined by merchant'));
-
-  RETURN jsonb_build_object(
+RETURN jsonb_build_object(
     'success',     true,
     'order_id',    p_order_id,
     'declined_at', v_now
@@ -8160,8 +7520,7 @@ BEGIN
     DO UPDATE SET
         stock_quantity = GREATEST(0, location_inventory_stock.stock_quantity - p_quantity),
         updated_at     = now();
-
-    -- Sync legacy aggregate
+-- Sync legacy aggregate
     UPDATE inventory_items
     SET
         current_stock = (
@@ -8184,8 +7543,10 @@ CREATE OR REPLACE FUNCTION "public"."detect_schedule_conflicts"("p_merchant_id" 
     AS $$
 DECLARE
     v_conflicts jsonb := '[]'::jsonb;
-    v_overtime_threshold numeric := 40; -- Configurable: 40 hours/week
-    v_rest_threshold interval := '10 hours'; -- Configurable: Min time between shifts
+v_overtime_threshold numeric := 40;
+-- Configurable: 40 hours/week
+    v_rest_threshold interval := '10 hours';
+-- Configurable: Min time between shifts
 BEGIN
 
     -- 1. DETECT DOUBLE BOOKINGS
@@ -8210,8 +7571,7 @@ BEGIN
       AND s1.employee_id IS NOT NULL
       -- If checking a specific draft against published, you might adjust filters here
       AND tstzrange(s1.start_time, s1.end_time) && tstzrange(s2.start_time, s2.end_time);
-
-    -- 2. DETECT "CLOPENINGS" (Back-to-Back Shifts)
+-- 2. DETECT "CLOPENINGS" (Back-to-Back Shifts)
     -- Logic: Check if time between End of Shift A and Start of Shift B is < 10 hours
     WITH shift_gaps AS (
         SELECT 
@@ -8241,8 +7601,7 @@ BEGIN
     JOIN staff_profiles p ON p.id = g.employee_id
     WHERE g.prev_end_time IS NOT NULL
       AND (g.start_time - g.prev_end_time) < v_rest_threshold;
-
-    -- 3. DETECT OVERTIME
+-- 3. DETECT OVERTIME
     -- Logic: Sum duration hours per employee. 
     -- Note: Ideally this runs on a standard "Work Week" (e.g. Mon-Sun), but here matches the requested period.
     WITH hours_calc AS (
@@ -8268,8 +7627,7 @@ BEGIN
     INTO v_conflicts
     FROM hours_calc h
     WHERE h.total_hours > v_overtime_threshold;
-
-    RETURN COALESCE(v_conflicts, '[]'::jsonb);
+RETURN COALESCE(v_conflicts, '[]'::jsonb);
 END;
 $$;
 
@@ -8283,34 +7641,31 @@ CREATE OR REPLACE FUNCTION "public"."duplicate_menu_to_location"("p_source_menu_
     AS $$
 DECLARE
     v_source_menu RECORD;
-    v_merchant_id UUID;
-    v_new_menu_id UUID;
-    v_category_map JSONB := '{}'::JSONB;  -- old_category_id -> new_category_id
+v_merchant_id UUID;
+v_new_menu_id UUID;
+v_category_map JSONB := '{}'::JSONB;
+-- old_category_id -> new_category_id
     v_rec RECORD;
-    v_new_id UUID;
-    v_category_count INT := 0;
-    v_item_count INT := 0;
+v_new_id UUID;
+v_category_count INT := 0;
+v_item_count INT := 0;
 BEGIN
     -- ========================================================================
     -- VALIDATION
     -- ========================================================================
     
     SELECT * INTO v_source_menu FROM menus WHERE id = p_source_menu_id;
-    
-    IF NOT FOUND THEN
+IF NOT FOUND THEN
         RETURN jsonb_build_object('success', false, 'error', 'Source menu not found');
-    END IF;
-    
-    v_merchant_id := v_source_menu.merchant_id;
-    
-    IF NOT EXISTS (
+END IF;
+v_merchant_id := v_source_menu.merchant_id;
+IF NOT EXISTS (
         SELECT 1 FROM locations 
         WHERE id = p_target_location_id AND merchant_id = v_merchant_id
     ) THEN
         RETURN jsonb_build_object('success', false, 'error', 'Invalid target location');
-    END IF;
-    
-    -- ========================================================================
+END IF;
+-- ========================================================================
     -- STEP 1: CREATE NEW MENU (Location-Scoped)
     -- ========================================================================
     
@@ -8325,8 +7680,7 @@ BEGIN
         v_source_menu.display_order
     )
     RETURNING id INTO v_new_menu_id;
-    
-    -- ========================================================================
+-- ========================================================================
     -- STEP 2: DUPLICATE CATEGORIES (Location-Scoped)
     -- ========================================================================
     
@@ -8350,10 +7704,8 @@ BEGIN
             v_rec.image, v_rec.display_order, v_rec.is_active, false
         )
         RETURNING id INTO v_new_id;
-        
-        v_category_map := v_category_map || jsonb_build_object(v_rec.category_id::text, v_new_id::text);
-        
-        -- Link to new menu
+v_category_map := v_category_map || jsonb_build_object(v_rec.category_id::text, v_new_id::text);
+-- Link to new menu
         INSERT INTO menu_categories (
             menu_id, category_id, merchant_id, display_order, is_active,
             custom_title, custom_subtitle, custom_image
@@ -8361,11 +7713,9 @@ BEGIN
             v_new_menu_id, v_new_id, v_merchant_id, v_rec.mc_order, v_rec.mc_active,
             v_rec.custom_title, v_rec.custom_subtitle, v_rec.custom_image
         );
-        
-        v_category_count := v_category_count + 1;
-    END LOOP;
-    
-    -- ========================================================================
+v_category_count := v_category_count + 1;
+END LOOP;
+-- ========================================================================
     -- STEP 3: LINK SAME ITEMS TO NEW CATEGORIES (via category_items)
     -- ========================================================================
     
@@ -8408,10 +7758,8 @@ BEGIN
                 v_rec.is_featured
             )
             ON CONFLICT (category_id, menu_item_id) DO NOTHING;
-            
-            v_item_count := v_item_count + 1;
-            
-            -- Optionally snapshot current effective prices into location overrides
+v_item_count := v_item_count + 1;
+-- Optionally snapshot current effective prices into location overrides
             IF p_copy_current_prices THEN
                 INSERT INTO location_category_item_overrides (
                     location_id,
@@ -8433,19 +7781,17 @@ BEGIN
                     custom_cash_price = EXCLUDED.custom_cash_price,
                     is_available = EXCLUDED.is_available,
                     updated_at = now();
-            END IF;
-        END IF;
-    END LOOP;
-    
-    -- ========================================================================
+END IF;
+END IF;
+END LOOP;
+-- ========================================================================
     -- STEP 4: COPY SCHEDULES
     -- ========================================================================
     
     INSERT INTO menu_schedules (merchant_id, menu_id, schedule_id)
     SELECT v_merchant_id, v_new_menu_id, schedule_id
     FROM menu_schedules WHERE menu_id = p_source_menu_id;
-    
-    INSERT INTO category_schedules (merchant_id, menu_id, category_id, schedule_id)
+INSERT INTO category_schedules (merchant_id, menu_id, category_id, schedule_id)
     SELECT 
         v_merchant_id, 
         v_new_menu_id, 
@@ -8454,16 +7800,14 @@ BEGIN
     FROM category_schedules 
     WHERE menu_id = p_source_menu_id
     AND v_category_map ? category_id::text;
-    
-    -- ========================================================================
+-- ========================================================================
     -- STEP 5: ASSIGN TO LOCATION
     -- ========================================================================
     
     INSERT INTO location_menus (location_id, menu_id, is_active, display_order)
     VALUES (p_target_location_id, v_new_menu_id, true, 1)
     ON CONFLICT (location_id, menu_id) DO UPDATE SET is_active = true;
-    
-    -- ========================================================================
+-- ========================================================================
     -- RETURN
     -- ========================================================================
     
@@ -8480,7 +7824,6 @@ BEGIN
         ),
         'category_map', v_category_map
     );
-    
 EXCEPTION WHEN OTHERS THEN
     RETURN jsonb_build_object('success', false, 'error', SQLERRM, 'code', SQLSTATE);
 END;
@@ -8496,9 +7839,9 @@ CREATE OR REPLACE FUNCTION "public"."duplicate_order_item"("p_order_item_id" "uu
     AS $$
 DECLARE
   v_order_id UUID;
-  v_new_item_id UUID;
-  v_original_item RECORD;
-  v_result JSON;
+v_new_item_id UUID;
+v_original_item RECORD;
+v_result JSON;
 BEGIN
   -- Get original item and verify access
   SELECT 
@@ -8512,12 +7855,10 @@ BEGIN
     AND o.merchant_id = user_merchant_id()
     AND o.location_id = ANY(user_location_ids())
     AND o.status NOT IN ('completed', 'cancelled', 'void');
-
-  IF NOT FOUND THEN
+IF NOT FOUND THEN
     RAISE EXCEPTION 'Order item not found or cannot be duplicated';
-  END IF;
-
-  -- Verify permission
+END IF;
+-- Verify permission
   -- IF NOT has_permission('location.orders.manage') THEN
   --   RAISE EXCEPTION 'Permission denied';
   -- END IF;
@@ -8567,8 +7908,7 @@ BEGIN
     NOW()
   )
   RETURNING id INTO v_new_item_id;
-
-  -- Copy modifiers
+-- Copy modifiers
   INSERT INTO public.order_item_modifiers (
     order_item_id,
     modifier_group_id,
@@ -8590,8 +7930,7 @@ BEGIN
     total_price
   FROM public.order_item_modifiers
   WHERE order_item_id = p_order_item_id;
-
-  -- Recalculate subtotal with new quantity if different
+-- Recalculate subtotal with new quantity if different
   IF p_quantity IS NOT NULL AND p_quantity != v_original_item.quantity THEN
     UPDATE public.order_items
     SET subtotal = (p_quantity * price_paid) + (p_quantity * (
@@ -8600,9 +7939,8 @@ BEGIN
       WHERE order_item_id = v_new_item_id
     ))
     WHERE id = v_new_item_id;
-  END IF;
-
-  SELECT json_build_object(
+END IF;
+SELECT json_build_object(
     'success', true,
     'original_item_id', p_order_item_id,
     'new_item_id', v_new_item_id,
@@ -8610,8 +7948,7 @@ BEGIN
     'item_name', v_original_item.item_name,
     'quantity', COALESCE(p_quantity, v_original_item.quantity)
   ) INTO v_result;
-
-  RETURN v_result;
+RETURN v_result;
 END;
 $$;
 
@@ -8634,15 +7971,12 @@ BEGIN
   SET session_status = 'ended', ended_at = NOW(), updated_at = NOW()
   WHERE id = p_session_id AND session_status = 'active'
   RETURNING * INTO v_session;
-  
-  IF NOT FOUND THEN
+IF NOT FOUND THEN
     RETURN json_build_object('success', false, 'error', 'Session not found');
-  END IF;
-  
-  UPDATE stations SET is_online = FALSE
+END IF;
+UPDATE stations SET is_online = FALSE
   WHERE id = v_session.station_id AND device_id = v_session.device_id;
-  
-  RETURN json_build_object('success', true);
+RETURN json_build_object('success', true);
 END;
 $$;
 
@@ -8661,15 +7995,13 @@ BEGIN
   SELECT id INTO v_course_id
   FROM public.order_courses
   WHERE order_id = p_order_id AND course_number = p_course_number;
-  
-  -- Create if not exists
+-- Create if not exists
   IF v_course_id IS NULL THEN
     INSERT INTO public.order_courses (order_id, course_number, status)
     VALUES (p_order_id, p_course_number, 'open')
     RETURNING id INTO v_course_id;
-  END IF;
-  
-  RETURN v_course_id;
+END IF;
+RETURN v_course_id;
 END;
 $$;
 
@@ -8683,9 +8015,9 @@ CREATE OR REPLACE FUNCTION "public"."estimate_wait_time"("p_location_id" "uuid",
     AS $$
 DECLARE
   v_avg_turn_time INTEGER;
-  v_parties_ahead INTEGER;
-  v_suitable_tables INTEGER;
-  v_estimated_wait INTEGER;
+v_parties_ahead INTEGER;
+v_suitable_tables INTEGER;
+v_estimated_wait INTEGER;
 BEGIN
   -- Get average turn time for this party size from metrics
   SELECT COALESCE(AVG(avg_turn_time), 60)::INTEGER
@@ -8695,13 +8027,13 @@ BEGIN
   WHERE tm.location_id = p_location_id
     AND tm.metric_date >= CURRENT_DATE - INTERVAL '7 days'
     AND fpo.capacity >= p_party_size;
-
-  -- Count parties waiting ahead for similar table size
+-- Count parties waiting ahead for similar table size
   SELECT COUNT(*) INTO v_parties_ahead
   FROM public.waitlist
   WHERE location_id = p_location_id
     AND status = 'waiting'
-    AND party_size <= p_party_size + 2;  -- Similar size parties compete
+    AND party_size <= p_party_size + 2;
+-- Similar size parties compete
 
   -- Count suitable tables
   SELECT COUNT(*) INTO v_suitable_tables
@@ -8715,15 +8047,13 @@ BEGIN
       JOIN public.table_sessions ts ON ts.id = tst.session_id
       WHERE tst.table_id = fpo.id AND ts.is_active = TRUE
     );
-
-  -- Simple estimation: (parties ahead / suitable tables) * avg turn time
+-- Simple estimation: (parties ahead / suitable tables) * avg turn time
   IF v_suitable_tables > 0 THEN
     v_estimated_wait := CEIL(v_parties_ahead::NUMERIC / v_suitable_tables) * v_avg_turn_time;
-  ELSE
+ELSE
     v_estimated_wait := v_parties_ahead * v_avg_turn_time;
-  END IF;
-
-  -- Minimum 5 minutes, maximum 180 minutes
+END IF;
+-- Minimum 5 minutes, maximum 180 minutes
   RETURN GREATEST(5, LEAST(180, v_estimated_wait));
 END;
 $$;
@@ -8738,72 +8068,64 @@ CREATE OR REPLACE FUNCTION "public"."finalize_castles_settlement"("p_batch_uuid"
     AS $$
 DECLARE
   v_batch             record;
-  v_return_code       text;
-  v_final_status      text;
-  v_settle_entry      jsonb;
-  v_all_acquirers_ok  boolean := true;
-  v_any_acquirer_ok   boolean := false;
-  v_failed_acquirers  jsonb   := '[]'::jsonb;
-  v_settled_acquirers jsonb   := '[]'::jsonb;
+v_return_code       text;
+v_final_status      text;
+v_settle_entry      jsonb;
+v_all_acquirers_ok  boolean := true;
+v_any_acquirer_ok   boolean := false;
+v_failed_acquirers  jsonb   := '[]'::jsonb;
+v_settled_acquirers jsonb   := '[]'::jsonb;
 BEGIN
   SELECT * INTO v_batch
   FROM public.settlement_batches
   WHERE id = p_batch_uuid
   FOR UPDATE;
-
-  IF NOT FOUND THEN
+IF NOT FOUND THEN
     RAISE EXCEPTION 'Settlement batch not found: %', p_batch_uuid;
-  END IF;
-
-  IF v_batch.merchant_id != p_merchant_id THEN
+END IF;
+IF v_batch.merchant_id != p_merchant_id THEN
     RAISE EXCEPTION 'Access denied: batch % does not belong to merchant %',
       p_batch_uuid, p_merchant_id;
-  END IF;
-
-  IF v_batch.status = 'settled' THEN
+END IF;
+IF v_batch.status = 'settled' THEN
     RAISE EXCEPTION 'Batch % is already settled. Cannot finalize again.', p_batch_uuid;
-  END IF;
-
-  IF v_batch.status NOT IN ('pending', 'settling', 'retry', 'failed') THEN
+END IF;
+IF v_batch.status NOT IN ('pending', 'settling', 'retry', 'failed') THEN
     RAISE EXCEPTION 'Batch % is in status %. Expected pending/settling/retry/failed.',
       p_batch_uuid, v_batch.status;
-  END IF;
-
-  v_return_code := p_castles_response->>'txnReturnCode';
-
-  IF p_castles_response ? 'txnSettleInfo' THEN
+END IF;
+v_return_code := p_castles_response->>'txnReturnCode';
+IF p_castles_response ? 'txnSettleInfo' THEN
     FOR v_settle_entry IN
       SELECT value FROM jsonb_array_elements(p_castles_response->'txnSettleInfo')
     LOOP
       IF (v_settle_entry->>'txnReturnCode') = '00000000' THEN
         v_any_acquirer_ok   := true;
-        v_settled_acquirers := v_settled_acquirers || jsonb_build_array(
+v_settled_acquirers := v_settled_acquirers || jsonb_build_array(
           v_settle_entry->>'txnAcquirerName'
         );
-      ELSE
+ELSE
         v_all_acquirers_ok := false;
-        v_failed_acquirers := v_failed_acquirers || jsonb_build_array(
+v_failed_acquirers := v_failed_acquirers || jsonb_build_array(
           jsonb_build_object(
             'acquirer',    v_settle_entry->>'txnAcquirerName',
             'return_code', v_settle_entry->>'txnReturnCode',
             'message',     v_settle_entry->>'txnHostMsg'
           )
         );
-      END IF;
-    END LOOP;
-  ELSE
+END IF;
+END LOOP;
+ELSE
     v_all_acquirers_ok := (v_return_code = '00000000');
-    v_any_acquirer_ok  := v_all_acquirers_ok;
-  END IF;
-
-  v_final_status := CASE
+v_any_acquirer_ok  := v_all_acquirers_ok;
+END IF;
+v_final_status := CASE
     WHEN v_all_acquirers_ok                       THEN 'settled'
     WHEN v_any_acquirer_ok AND NOT v_all_acquirers_ok THEN 'partial_failure'
     WHEN v_return_code = 'E000002A'               THEN 'retry'
     ELSE                                               'failed'
   END;
-
-  UPDATE public.settlement_batches
+UPDATE public.settlement_batches
   SET
     status               = v_final_status,
     closed_at            = CASE WHEN v_final_status IN ('settled', 'partial_failure') THEN NOW() ELSE closed_at END,
@@ -8825,8 +8147,7 @@ BEGIN
     END,
     updated_at           = NOW()
   WHERE id = p_batch_uuid;
-
-  IF v_final_status IN ('settled', 'partial_failure') THEN
+IF v_final_status IN ('settled', 'partial_failure') THEN
     UPDATE public.order_payments
     SET
       is_settled          = true,
@@ -8834,15 +8155,13 @@ BEGIN
       batch_number        = v_batch.batch_id
     WHERE
       settlement_batch_id = p_batch_uuid;
-  END IF;
-
-  IF v_final_status IN ('retry', 'failed') THEN
+END IF;
+IF v_final_status IN ('retry', 'failed') THEN
     UPDATE public.order_payments
     SET settlement_batch_id = NULL
     WHERE settlement_batch_id = p_batch_uuid;
-  END IF;
-
-  RETURN jsonb_build_object(
+END IF;
+RETURN jsonb_build_object(
     'success',             v_final_status IN ('settled', 'partial_failure'),
     'status',              v_final_status,
     'return_code',         v_return_code,
@@ -8891,9 +8210,7 @@ BEGIN
     AND c.phone IS NOT NULL
   GROUP BY c.phone
   HAVING COUNT(*) > 1;
-
-
-  -- =========================
+-- =========================
   -- Similar Names (pg_trgm)
   -- =========================
   IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm') THEN
@@ -8933,9 +8250,7 @@ BEGIN
       c1.avg_spend, c1.tags, c1.created_at,
       c2.id, c2.name
     HAVING similarity(LOWER(c1.name), LOWER(c2.name)) > 0.7;
-
-  END IF;
-
+END IF;
 END;
 $$;
 
@@ -8948,8 +8263,8 @@ CREATE OR REPLACE FUNCTION "public"."fire_course"("p_order_id" "uuid", "p_course
     SET "search_path" TO 'public', 'public', 'pg_temp'
     AS $$DECLARE
   v_course_id UUID;
-  v_item_count INTEGER;
-  v_session_id UUID;
+v_item_count INTEGER;
+v_session_id UUID;
 BEGIN
   -- Verify order access
   IF NOT EXISTS (
@@ -8959,31 +8274,26 @@ BEGIN
       AND o.location_id = ANY(user_location_ids())
   ) THEN
     RAISE EXCEPTION 'Order not found';
-  END IF;
-
-  -- Ensure course exists
+END IF;
+-- Ensure course exists
   v_course_id := public.ensure_course_exists(p_order_id, p_course_number);
-
-  -- Check course is open
+-- Check course is open
   IF EXISTS (
     SELECT 1 FROM public.order_courses
     WHERE id = v_course_id AND status != 'open'
   ) THEN
     RAISE EXCEPTION 'Course % is already fired', p_course_number;
-  END IF;
-
-  -- Count items in this course
+END IF;
+-- Count items in this course
   SELECT COUNT(*) INTO v_item_count
   FROM public.order_items
   WHERE order_id = p_order_id 
     AND course_number = p_course_number
     AND is_voided = FALSE;
-
-  IF v_item_count = 0 THEN
+IF v_item_count = 0 THEN
     RAISE EXCEPTION 'Course % has no items to fire', p_course_number;
-  END IF;
-
-  -- Fire the course (lock it)
+END IF;
+-- Fire the course (lock it)
   UPDATE public.order_courses
   SET 
     status = 'fired',
@@ -8991,13 +8301,11 @@ BEGIN
     fired_by = user_staff_profile_id(),
     notes = COALESCE(p_notes, notes)
   WHERE id = v_course_id;
-
-  -- Update table session's working course to next available
+-- Update table session's working course to next available
   SELECT ts.id INTO v_session_id
   FROM public.table_sessions ts
   WHERE ts.order_id = p_order_id AND ts.is_active = TRUE;
-
-  IF v_session_id IS NOT NULL THEN
+IF v_session_id IS NOT NULL THEN
     -- Set working course to course + 1 if we just fired the current working course
     UPDATE public.table_sessions
     SET 
@@ -9005,8 +8313,7 @@ BEGIN
       current_course = p_course_number,  -- Track highest fired course
       updated_at = NOW()
     WHERE id = v_session_id;
-
-    -- Record event
+-- Record event
     INSERT INTO public.table_session_events (
       session_id, event_type, event_data,
       triggered_by_staff_id, triggered_by_user_id
@@ -9022,9 +8329,8 @@ BEGIN
       user_staff_profile_id(),
       get_my_claim('sub')
     );
-  END IF;
-
-  RETURN json_build_object(
+END IF;
+RETURN json_build_object(
     'success', true,
     'order_id', p_order_id,
     'course_number', p_course_number,
@@ -9032,7 +8338,8 @@ BEGIN
     'item_count', v_item_count,
     'fired_at', NOW()
   );
-END;$$;
+END;
+$$;
 
 
 ALTER FUNCTION "public"."fire_course"("p_order_id" "uuid", "p_course_number" integer, "p_notes" "text") OWNER TO "postgres";
@@ -9044,8 +8351,8 @@ CREATE OR REPLACE FUNCTION "public"."fire_course"("p_order_id" "uuid", "p_course
     AS $$
 DECLARE
   v_course_id UUID;
-  v_item_count INTEGER;
-  v_session_id UUID;
+v_item_count INTEGER;
+v_session_id UUID;
 BEGIN
   -- Verify order access
   IF NOT EXISTS (
@@ -9055,31 +8362,26 @@ BEGIN
       AND o.location_id = ANY(user_location_ids())
   ) THEN
     RAISE EXCEPTION 'Order not found';
-  END IF;
-
-  -- Ensure course exists
+END IF;
+-- Ensure course exists
   v_course_id := public.ensure_course_exists(p_order_id, p_course_number);
-
-  -- Check course is open
+-- Check course is open
   IF EXISTS (
     SELECT 1 FROM public.order_courses
     WHERE id = v_course_id AND status != 'open'
   ) THEN
     RAISE EXCEPTION 'Course % is already fired', p_course_number;
-  END IF;
-
-  -- Count items in this course
+END IF;
+-- Count items in this course
   SELECT COUNT(*) INTO v_item_count
   FROM public.order_items
   WHERE order_id = p_order_id 
     AND course_number = p_course_number
     AND is_voided = FALSE;
-
-  IF v_item_count = 0 THEN
+IF v_item_count = 0 THEN
     RAISE EXCEPTION 'Course % has no items to fire', p_course_number;
-  END IF;
-
-  -- Fire the course (lock it)
+END IF;
+-- Fire the course (lock it)
   UPDATE public.order_courses
   SET 
     status = 'fired',
@@ -9087,13 +8389,11 @@ BEGIN
     fired_by = COALESCE(p_staff_id, user_staff_profile_id()),
     notes = COALESCE(p_notes, notes)
   WHERE id = v_course_id;
-
-  -- Update table session's working course to next available
+-- Update table session's working course to next available
   SELECT ts.id INTO v_session_id
   FROM public.table_sessions ts
   WHERE ts.order_id = p_order_id AND ts.is_active = TRUE;
-
-  IF v_session_id IS NOT NULL THEN
+IF v_session_id IS NOT NULL THEN
     -- Set working course to course + 1 if we just fired the current working course
     UPDATE public.table_sessions
     SET 
@@ -9101,8 +8401,7 @@ BEGIN
       current_course = p_course_number,  -- Track highest fired course
       updated_at = NOW()
     WHERE id = v_session_id;
-
-    -- Record event
+-- Record event
     INSERT INTO public.table_session_events (
       session_id, event_type, event_data,
       triggered_by_staff_id, triggered_by_user_id
@@ -9118,9 +8417,8 @@ BEGIN
       COALESCE(p_staff_id, user_staff_profile_id()),
       get_my_claim('sub')
     );
-  END IF;
-
-  RETURN json_build_object(
+END IF;
+RETURN json_build_object(
     'success', true,
     'order_id', p_order_id,
     'course_number', p_course_number,
@@ -9141,13 +8439,13 @@ CREATE OR REPLACE FUNCTION "public"."generate_confirmation_number"() RETURNS "tr
     AS $$
 DECLARE
   chars TEXT := 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  result TEXT := 'RES-';
+result TEXT := 'RES-';
 BEGIN
   FOR i IN 1..6 LOOP
     result := result || SUBSTR(chars, FLOOR(RANDOM() * LENGTH(chars) + 1)::INT, 1);
-  END LOOP;
-  NEW.confirmation_number := result;
-  RETURN NEW;
+END LOOP;
+NEW.confirmation_number := result;
+RETURN NEW;
 END;
 $$;
 
@@ -9167,8 +8465,7 @@ BEGIN
   ON CONFLICT (merchant_id) DO UPDATE
     SET last_number = invoice_number_sequences.last_number + 1
   RETURNING last_number INTO v_next;
-
-  RETURN 'INV-' || LPAD(v_next::TEXT, 4, '0');
+RETURN 'INV-' || LPAD(v_next::TEXT, 4, '0');
 END;
 $$;
 
@@ -9182,41 +8479,35 @@ CREATE OR REPLACE FUNCTION "public"."generate_order_number"("p_location_id" "uui
     AS $$
 DECLARE
   v_merchant_id UUID;
-  v_date_str TEXT;
-  v_sequence_number INT;
-  v_order_number TEXT;
-  v_station_number INT;
-  v_station_prefix TEXT;
-  v_lock_key INT;
+v_date_str TEXT;
+v_sequence_number INT;
+v_order_number TEXT;
+v_station_number INT;
+v_station_prefix TEXT;
+v_lock_key INT;
 BEGIN
   -- Get merchant_id from location
   SELECT merchant_id INTO v_merchant_id
   FROM public.locations
   WHERE id = p_location_id;
-
-  IF v_merchant_id IS NULL THEN
+IF v_merchant_id IS NULL THEN
     RAISE EXCEPTION 'Location not found: %', p_location_id;
-  END IF;
-
-  -- Date string for today
+END IF;
+-- Date string for today
   v_date_str := TO_CHAR(CURRENT_DATE, 'YYYYMMDD');
-
-  -- Look up station number if station_id provided
+-- Look up station number if station_id provided
   IF p_station_id IS NOT NULL THEN
     SELECT station_number INTO v_station_number
     FROM public.stations
     WHERE id = p_station_id;
-  END IF;
-
-  IF v_station_number IS NOT NULL THEN
+END IF;
+IF v_station_number IS NOT NULL THEN
     -- === Per-station sequence ===
     v_station_prefix := 'S' || v_station_number::TEXT;
-
-    -- Advisory lock scoped to merchant + date + station
+-- Advisory lock scoped to merchant + date + station
     v_lock_key := hashtext(v_merchant_id::TEXT || v_date_str || ':' || v_station_prefix);
-    PERFORM pg_advisory_xact_lock(v_lock_key);
-
-    -- Count only orders for this station on this date
+PERFORM pg_advisory_xact_lock(v_lock_key);
+-- Count only orders for this station on this date
     SELECT COALESCE(MAX(
       NULLIF(SPLIT_PART(order_number, '-', 4), '')::INTEGER
     ), 0) + 1
@@ -9224,15 +8515,13 @@ BEGIN
     FROM public.orders
     WHERE merchant_id = v_merchant_id
       AND order_number LIKE 'ORD-' || v_date_str || '-' || v_station_prefix || '-%';
-
-    -- Format: ORD-20260324-S1-0008
+-- Format: ORD-20260324-S1-0008
     v_order_number := 'ORD-' || v_date_str || '-' || v_station_prefix || '-' || LPAD(v_sequence_number::TEXT, 4, '0');
-  ELSE
+ELSE
     -- === Global sequence (fallback, no station) ===
     v_lock_key := hashtext(v_merchant_id::TEXT || v_date_str);
-    PERFORM pg_advisory_xact_lock(v_lock_key);
-
-    SELECT COALESCE(MAX(
+PERFORM pg_advisory_xact_lock(v_lock_key);
+SELECT COALESCE(MAX(
       NULLIF(SPLIT_PART(order_number, '-', 3), '')::INTEGER
     ), 0) + 1
     INTO v_sequence_number
@@ -9240,12 +8529,10 @@ BEGIN
     WHERE merchant_id = v_merchant_id
       AND order_number LIKE 'ORD-' || v_date_str || '-%'
       AND order_number NOT LIKE 'ORD-' || v_date_str || '-S%';
-
-    -- Format: ORD-20260324-0008
+-- Format: ORD-20260324-0008
     v_order_number := 'ORD-' || v_date_str || '-' || LPAD(v_sequence_number::TEXT, 4, '0');
-  END IF;
-
-  RETURN v_order_number;
+END IF;
+RETURN v_order_number;
 END;
 $$;
 
@@ -9259,24 +8546,20 @@ CREATE OR REPLACE FUNCTION "public"."generate_order_number_internal"("p_location
     AS $$
 DECLARE
   v_sequence_number INTEGER;
-  v_date_str TEXT;
-  v_order_number TEXT;
+v_date_str TEXT;
+v_order_number TEXT;
 BEGIN
   v_date_str := TO_CHAR(CURRENT_DATE, 'YYYYMMDD');
-
-  PERFORM pg_advisory_xact_lock(hashtext(p_merchant_id::TEXT || v_date_str));
-
-  SELECT COALESCE(MAX(
+PERFORM pg_advisory_xact_lock(hashtext(p_merchant_id::TEXT || v_date_str));
+SELECT COALESCE(MAX(
     NULLIF(SPLIT_PART(order_number, '-', 3), '')::INTEGER
   ), 0) + 1
   INTO v_sequence_number
   FROM public.orders
   WHERE merchant_id = p_merchant_id
     AND order_number LIKE 'ORD-' || v_date_str || '-%';
-
-  v_order_number := 'ORD-' || v_date_str || '-' || LPAD(v_sequence_number::TEXT, 4, '0');
-
-  RETURN v_order_number;
+v_order_number := 'ORD-' || v_date_str || '-' || LPAD(v_sequence_number::TEXT, 4, '0');
+RETURN v_order_number;
 END;
 $$;
 
@@ -9290,18 +8573,16 @@ CREATE OR REPLACE FUNCTION "public"."generate_po_number"() RETURNS "text"
     AS $$
 DECLARE
   new_number TEXT;
-  year_month TEXT;
-  sequence_num INTEGER;
+year_month TEXT;
+sequence_num INTEGER;
 BEGIN
   year_month := TO_CHAR(NOW(), 'YYYY-MM');
-  
-  SELECT COALESCE(MAX(CAST(SPLIT_PART(po_number, '-', 4) AS INTEGER)), 0) + 1
+SELECT COALESCE(MAX(CAST(SPLIT_PART(po_number, '-', 4) AS INTEGER)), 0) + 1
   INTO sequence_num
   FROM public.purchase_orders
   WHERE po_number LIKE 'PO-' || year_month || '-%';
-  
-  new_number := 'PO-' || year_month || '-' || LPAD(sequence_num::TEXT, 4, '0');
-  RETURN new_number;
+new_number := 'PO-' || year_month || '-' || LPAD(sequence_num::TEXT, 4, '0');
+RETURN new_number;
 END;
 $$;
 
@@ -9321,7 +8602,7 @@ BEGIN
       WHERE location_id = NEW.location_id 
         AND DATE(created_at) = CURRENT_DATE
     )::TEXT, 3, '0');
-  RETURN NEW;
+RETURN NEW;
 END;
 $$;
 
@@ -9335,7 +8616,7 @@ CREATE OR REPLACE FUNCTION "public"."generate_ticket_number"() RETURNS "trigger"
     AS $$
 BEGIN
   NEW.ticket_number := 'DEXA-' || lpad(nextval('support_ticket_seq')::text, 5, '0');
-  RETURN NEW;
+RETURN NEW;
 END;
 $$;
 
@@ -9385,58 +8666,48 @@ CREATE OR REPLACE FUNCTION "public"."get_admin_merchant_breakdown"("p_merchant_i
     AS $$
 DECLARE
   v_allowed_merchants uuid[];
-  v_filter_merchants  uuid[];
-  v_from              timestamptz;
-  v_to                timestamptz;
-  v_period_days       int;
-  v_prior_from        timestamptz;
-  v_prior_to          timestamptz;
+v_filter_merchants  uuid[];
+v_from              timestamptz;
+v_to                timestamptz;
+v_period_days       int;
+v_prior_from        timestamptz;
+v_prior_to          timestamptz;
 BEGIN
   IF NOT public.is_dexapos_admin() THEN
     RETURN;
-  END IF;
-
-  v_from := COALESCE(p_date_from, date_trunc('day', now()) - interval '29 days');
-  v_to := COALESCE(p_date_to, now());
-
-  IF p_date_from IS NULL AND p_date_to IS NOT NULL THEN
+END IF;
+v_from := COALESCE(p_date_from, date_trunc('day', now()) - interval '29 days');
+v_to := COALESCE(p_date_to, now());
+IF p_date_from IS NULL AND p_date_to IS NOT NULL THEN
     v_from := p_date_to - interval '29 days';
-  END IF;
-
-  IF p_date_from IS NOT NULL AND p_date_to IS NULL THEN
+END IF;
+IF p_date_from IS NOT NULL AND p_date_to IS NULL THEN
     v_to := now();
-  END IF;
-
-  IF v_to <= v_from THEN
+END IF;
+IF v_to <= v_from THEN
     v_to := v_from + interval '1 second';
-  END IF;
-
-  v_period_days := GREATEST(EXTRACT(DAY FROM v_to - v_from)::int, 1);
-  v_prior_from := v_from - (v_period_days || ' days')::interval;
-  v_prior_to := v_from;
-
-  SELECT COALESCE(array_agg(mid), ARRAY[]::uuid[])
+END IF;
+v_period_days := GREATEST(EXTRACT(DAY FROM v_to - v_from)::int, 1);
+v_prior_from := v_from - (v_period_days || ' days')::interval;
+v_prior_to := v_from;
+SELECT COALESCE(array_agg(mid), ARRAY[]::uuid[])
     INTO v_allowed_merchants
   FROM public.get_admin_merchant_ids() AS mid;
-
-  IF COALESCE(array_length(v_allowed_merchants, 1), 0) = 0 THEN
+IF COALESCE(array_length(v_allowed_merchants, 1), 0) = 0 THEN
     RETURN;
-  END IF;
-
-  IF p_merchant_ids IS NULL OR array_length(p_merchant_ids, 1) IS NULL THEN
+END IF;
+IF p_merchant_ids IS NULL OR array_length(p_merchant_ids, 1) IS NULL THEN
     v_filter_merchants := v_allowed_merchants;
-  ELSE
+ELSE
     SELECT COALESCE(array_agg(mid), ARRAY[]::uuid[])
       INTO v_filter_merchants
     FROM unnest(p_merchant_ids) AS mid
     WHERE mid = ANY (v_allowed_merchants);
-
-    IF COALESCE(array_length(v_filter_merchants, 1), 0) = 0 THEN
+IF COALESCE(array_length(v_filter_merchants, 1), 0) = 0 THEN
       RETURN;
-    END IF;
-  END IF;
-
-  RETURN QUERY
+END IF;
+END IF;
+RETURN QUERY
   WITH
   base AS (
     SELECT
@@ -9774,35 +9045,30 @@ CREATE OR REPLACE FUNCTION "public"."get_admin_settlement_batch_payments"("p_bat
     AS $$
 DECLARE
   v_allowed_merchants uuid[];
-  v_filter_merchants uuid[];
-  v_batch_id text := NULLIF(trim(p_batch_id), '');
+v_filter_merchants uuid[];
+v_batch_id text := NULLIF(trim(p_batch_id), '');
 BEGIN
   IF NOT public.is_dexapos_admin() THEN
     RETURN;
-  END IF;
-
-  IF v_batch_id IS NULL THEN
+END IF;
+IF v_batch_id IS NULL THEN
     RETURN;
-  END IF;
-
-  SELECT COALESCE(array_agg(mid), ARRAY[]::uuid[])
+END IF;
+SELECT COALESCE(array_agg(mid), ARRAY[]::uuid[])
   INTO v_allowed_merchants
   FROM public.get_admin_merchant_ids() AS mid;
-
-  IF COALESCE(array_length(v_allowed_merchants, 1), 0) = 0 THEN
+IF COALESCE(array_length(v_allowed_merchants, 1), 0) = 0 THEN
     RETURN;
-  END IF;
-
-  IF p_merchant_id IS NOT NULL THEN
+END IF;
+IF p_merchant_id IS NOT NULL THEN
     IF NOT (p_merchant_id = ANY (v_allowed_merchants)) THEN
       RETURN;
-    END IF;
-    v_filter_merchants := ARRAY[p_merchant_id];
-  ELSE
+END IF;
+v_filter_merchants := ARRAY[p_merchant_id];
+ELSE
     v_filter_merchants := v_allowed_merchants;
-  END IF;
-
-  RETURN QUERY
+END IF;
+RETURN QUERY
   SELECT
     op.id AS payment_id,
     op.order_id,
@@ -9847,35 +9113,30 @@ CREATE OR REPLACE FUNCTION "public"."get_admin_settlement_batches"("p_merchant_i
     AS $$
 DECLARE
   v_allowed_merchants uuid[];
-  v_filter_merchants uuid[];
-  v_limit integer := LEAST(GREATEST(COALESCE(p_limit, 200), 1), 500);
+v_filter_merchants uuid[];
+v_limit integer := LEAST(GREATEST(COALESCE(p_limit, 200), 1), 500);
 BEGIN
   IF NOT public.is_dexapos_admin() THEN
     RETURN;
-  END IF;
-
-  SELECT COALESCE(array_agg(mid), ARRAY[]::uuid[])
+END IF;
+SELECT COALESCE(array_agg(mid), ARRAY[]::uuid[])
   INTO v_allowed_merchants
   FROM public.get_admin_merchant_ids() AS mid;
-
-  IF COALESCE(array_length(v_allowed_merchants, 1), 0) = 0 THEN
+IF COALESCE(array_length(v_allowed_merchants, 1), 0) = 0 THEN
     RETURN;
-  END IF;
-
-  IF p_merchant_ids IS NULL OR array_length(p_merchant_ids, 1) IS NULL THEN
+END IF;
+IF p_merchant_ids IS NULL OR array_length(p_merchant_ids, 1) IS NULL THEN
     v_filter_merchants := v_allowed_merchants;
-  ELSE
+ELSE
     SELECT COALESCE(array_agg(mid), ARRAY[]::uuid[])
     INTO v_filter_merchants
     FROM unnest(p_merchant_ids) AS mid
     WHERE mid = ANY (v_allowed_merchants);
-
-    IF COALESCE(array_length(v_filter_merchants, 1), 0) = 0 THEN
+IF COALESCE(array_length(v_filter_merchants, 1), 0) = 0 THEN
       RETURN;
-    END IF;
-  END IF;
-
-  RETURN QUERY
+END IF;
+END IF;
+RETURN QUERY
   WITH scoped_batches AS (
     SELECT
       sb.id,
@@ -9981,33 +9242,28 @@ CREATE OR REPLACE FUNCTION "public"."get_admin_transaction_detail"("p_order_id" 
     AS $$
 DECLARE
   v_order public.orders%ROWTYPE;
-  v_order_enriched jsonb;
-  v_payments jsonb;
-  v_order_items jsonb;
-  v_order_discounts jsonb;
+v_order_enriched jsonb;
+v_payments jsonb;
+v_order_items jsonb;
+v_order_discounts jsonb;
 BEGIN
   IF p_order_id IS NULL THEN
     RETURN NULL;
-  END IF;
-
-  IF NOT public.is_dexapos_admin() THEN
+END IF;
+IF NOT public.is_dexapos_admin() THEN
     RETURN NULL;
-  END IF;
-
-  SELECT o.*
+END IF;
+SELECT o.*
   INTO v_order
   FROM public.orders o
   WHERE o.id = p_order_id;
-
-  IF NOT FOUND THEN
+IF NOT FOUND THEN
     RETURN NULL;
-  END IF;
-
-  IF v_order.merchant_id NOT IN (SELECT public.get_admin_merchant_ids()) THEN
+END IF;
+IF v_order.merchant_id NOT IN (SELECT public.get_admin_merchant_ids()) THEN
     RETURN NULL;
-  END IF;
-
-  SELECT
+END IF;
+SELECT
     to_jsonb(v_order)
     || jsonb_build_object(
       'merchant_name', m.name,
@@ -10021,8 +9277,7 @@ BEGIN
   LEFT JOIN public.staff_profiles sp
     ON sp.id = v_order.created_by_staff_id
   WHERE m.id = v_order.merchant_id;
-
-  SELECT COALESCE(
+SELECT COALESCE(
     jsonb_agg(
       (
         to_jsonb(op)
@@ -10121,8 +9376,7 @@ BEGIN
     LIMIT 1
   ) sb ON true
   WHERE op.order_id = p_order_id;
-
-  SELECT COALESCE(
+SELECT COALESCE(
     jsonb_agg(
       (
         to_jsonb(oi)
@@ -10144,16 +9398,14 @@ BEGIN
   INTO v_order_items
   FROM public.order_items oi
   WHERE oi.order_id = p_order_id;
-
-  SELECT COALESCE(
+SELECT COALESCE(
     jsonb_agg(to_jsonb(od) ORDER BY od.applied_at, od.created_at),
     '[]'::jsonb
   )
   INTO v_order_discounts
   FROM public.order_discounts od
   WHERE od.order_id = p_order_id;
-
-  RETURN jsonb_build_object(
+RETURN jsonb_build_object(
     'order', v_order_enriched,
     'payments', v_payments,
     'order_items', v_order_items,
@@ -10176,69 +9428,58 @@ CREATE OR REPLACE FUNCTION "public"."get_admin_transaction_summary"("p_merchant_
     AS $$
 DECLARE
   v_search text := NULLIF(trim(p_search), '');
-  v_allowed_merchants uuid[];
-  v_filter_merchants uuid[];
-  v_card_tokens text[];
-  v_current_from timestamptz;
-  v_current_to timestamptz;
-  v_previous_from timestamptz;
-  v_previous_to timestamptz;
-  v_window interval;
+v_allowed_merchants uuid[];
+v_filter_merchants uuid[];
+v_card_tokens text[];
+v_current_from timestamptz;
+v_current_to timestamptz;
+v_previous_from timestamptz;
+v_previous_to timestamptz;
+v_window interval;
 BEGIN
   IF NOT public.is_dexapos_admin() THEN
     RETURN;
-  END IF;
-
-  -- Keep signature parity with list RPC (sorting is ignored for aggregates).
+END IF;
+-- Keep signature parity with list RPC (sorting is ignored for aggregates).
   PERFORM p_sort_by, p_sort_dir;
-
-  v_current_from := COALESCE(p_date_from, date_trunc('day', now()) - interval '29 days');
-  v_current_to := COALESCE(p_date_to, now());
-
-  IF p_date_from IS NULL AND p_date_to IS NOT NULL THEN
+v_current_from := COALESCE(p_date_from, date_trunc('day', now()) - interval '29 days');
+v_current_to := COALESCE(p_date_to, now());
+IF p_date_from IS NULL AND p_date_to IS NOT NULL THEN
     v_current_from := p_date_to - interval '29 days';
-  END IF;
-
-  IF p_date_from IS NOT NULL AND p_date_to IS NULL THEN
+END IF;
+IF p_date_from IS NOT NULL AND p_date_to IS NULL THEN
     v_current_to := now();
-  END IF;
-
-  IF v_current_to <= v_current_from THEN
+END IF;
+IF v_current_to <= v_current_from THEN
     v_current_to := v_current_from + interval '1 second';
-  END IF;
-
-  v_window := v_current_to - v_current_from;
-  IF v_window < interval '1 second' THEN
+END IF;
+v_window := v_current_to - v_current_from;
+IF v_window < interval '1 second' THEN
     v_window := interval '1 day';
-  END IF;
-
-  v_previous_to := v_current_from;
-  v_previous_from := v_current_from - v_window;
-
-  SELECT COALESCE(array_agg(mid), ARRAY[]::uuid[])
+END IF;
+v_previous_to := v_current_from;
+v_previous_from := v_current_from - v_window;
+SELECT COALESCE(array_agg(mid), ARRAY[]::uuid[])
   INTO v_allowed_merchants
   FROM public.get_admin_merchant_ids() AS mid;
-
-  IF p_merchant_ids IS NULL OR array_length(p_merchant_ids, 1) IS NULL THEN
+IF p_merchant_ids IS NULL OR array_length(p_merchant_ids, 1) IS NULL THEN
     v_filter_merchants := v_allowed_merchants;
-  ELSE
+ELSE
     SELECT COALESCE(array_agg(mid), ARRAY[]::uuid[])
     INTO v_filter_merchants
     FROM unnest(p_merchant_ids) AS mid
     WHERE mid = ANY (v_allowed_merchants);
-  END IF;
-
-  IF NULLIF(trim(COALESCE(p_card_type, '')), '') IS NOT NULL THEN
+END IF;
+IF NULLIF(trim(COALESCE(p_card_type, '')), '') IS NOT NULL THEN
     v_card_tokens := ARRAY(
       SELECT trim(token)
       FROM unnest(string_to_array(lower(p_card_type), ',')) AS token
       WHERE trim(token) <> ''
     );
-  ELSE
+ELSE
     v_card_tokens := ARRAY[]::text[];
-  END IF;
-
-  RETURN QUERY
+END IF;
+RETURN QUERY
   WITH base AS (
     SELECT
       op.id AS payment_id,
@@ -10499,42 +9740,37 @@ CREATE OR REPLACE FUNCTION "public"."get_admin_transactions"("p_merchant_ids" "u
     AS $$
 DECLARE
   v_page integer := GREATEST(COALESCE(p_page, 1), 1);
-  v_page_size integer := LEAST(GREATEST(COALESCE(p_page_size, 25), 1), 200);
-  v_offset integer := (v_page - 1) * v_page_size;
-  v_sort_by text;
-  v_sort_dir text;
-  v_search text := NULLIF(trim(p_search), '');
-  v_allowed_merchants uuid[];
-  v_filter_merchants uuid[];
-  v_card_tokens text[];
+v_page_size integer := LEAST(GREATEST(COALESCE(p_page_size, 25), 1), 200);
+v_offset integer := (v_page - 1) * v_page_size;
+v_sort_by text;
+v_sort_dir text;
+v_search text := NULLIF(trim(p_search), '');
+v_allowed_merchants uuid[];
+v_filter_merchants uuid[];
+v_card_tokens text[];
 BEGIN
   IF NOT public.is_dexapos_admin() THEN
     RETURN;
-  END IF;
-
-  SELECT COALESCE(array_agg(mid), ARRAY[]::uuid[])
+END IF;
+SELECT COALESCE(array_agg(mid), ARRAY[]::uuid[])
   INTO v_allowed_merchants
   FROM public.get_admin_merchant_ids() AS mid;
-
-  IF COALESCE(array_length(v_allowed_merchants, 1), 0) = 0 THEN
+IF COALESCE(array_length(v_allowed_merchants, 1), 0) = 0 THEN
     RETURN;
-  END IF;
-
-  IF p_merchant_ids IS NULL OR array_length(p_merchant_ids, 1) IS NULL THEN
+END IF;
+IF p_merchant_ids IS NULL OR array_length(p_merchant_ids, 1) IS NULL THEN
     v_filter_merchants := v_allowed_merchants;
-  ELSE
+ELSE
     SELECT COALESCE(array_agg(mid), ARRAY[]::uuid[])
     INTO v_filter_merchants
     FROM unnest(p_merchant_ids) AS mid
     WHERE mid = ANY (v_allowed_merchants);
-
-    IF COALESCE(array_length(v_filter_merchants, 1), 0) = 0 THEN
+IF COALESCE(array_length(v_filter_merchants, 1), 0) = 0 THEN
       RETURN;
-    END IF;
-  END IF;
-
-  v_sort_by := lower(COALESCE(p_sort_by, 'initiated_at'));
-  IF v_sort_by NOT IN (
+END IF;
+END IF;
+v_sort_by := lower(COALESCE(p_sort_by, 'initiated_at'));
+IF v_sort_by NOT IN (
     'initiated_at',
     'created_at',
     'order_number',
@@ -10548,24 +9784,21 @@ BEGIN
     'payment_method'
   ) THEN
     v_sort_by := 'initiated_at';
-  END IF;
-
-  v_sort_dir := lower(COALESCE(p_sort_dir, 'desc'));
-  IF v_sort_dir NOT IN ('asc', 'desc') THEN
+END IF;
+v_sort_dir := lower(COALESCE(p_sort_dir, 'desc'));
+IF v_sort_dir NOT IN ('asc', 'desc') THEN
     v_sort_dir := 'desc';
-  END IF;
-
-  IF NULLIF(trim(COALESCE(p_card_type, '')), '') IS NOT NULL THEN
+END IF;
+IF NULLIF(trim(COALESCE(p_card_type, '')), '') IS NOT NULL THEN
     v_card_tokens := ARRAY(
       SELECT trim(token)
       FROM unnest(string_to_array(lower(p_card_type), ',')) AS token
       WHERE trim(token) <> ''
     );
-  ELSE
+ELSE
     v_card_tokens := ARRAY[]::text[];
-  END IF;
-
-  RETURN QUERY
+END IF;
+RETURN QUERY
   WITH filtered AS (
     SELECT
       op.id,
@@ -10719,40 +9952,35 @@ CREATE OR REPLACE FUNCTION "public"."get_admin_transactions_export"("p_merchant_
     AS $$
 DECLARE
   v_sort_by text;
-  v_sort_dir text;
-  v_search text := NULLIF(trim(p_search), '');
-  v_allowed_merchants uuid[];
-  v_filter_merchants uuid[];
-  v_card_tokens text[];
-  v_export_limit integer := LEAST(GREATEST(COALESCE(p_limit, 10000), 1), 10000);
+v_sort_dir text;
+v_search text := NULLIF(trim(p_search), '');
+v_allowed_merchants uuid[];
+v_filter_merchants uuid[];
+v_card_tokens text[];
+v_export_limit integer := LEAST(GREATEST(COALESCE(p_limit, 10000), 1), 10000);
 BEGIN
   IF NOT public.is_dexapos_admin() THEN
     RETURN;
-  END IF;
-
-  SELECT COALESCE(array_agg(mid), ARRAY[]::uuid[])
+END IF;
+SELECT COALESCE(array_agg(mid), ARRAY[]::uuid[])
   INTO v_allowed_merchants
   FROM public.get_admin_merchant_ids() AS mid;
-
-  IF COALESCE(array_length(v_allowed_merchants, 1), 0) = 0 THEN
+IF COALESCE(array_length(v_allowed_merchants, 1), 0) = 0 THEN
     RETURN;
-  END IF;
-
-  IF p_merchant_ids IS NULL OR array_length(p_merchant_ids, 1) IS NULL THEN
+END IF;
+IF p_merchant_ids IS NULL OR array_length(p_merchant_ids, 1) IS NULL THEN
     v_filter_merchants := v_allowed_merchants;
-  ELSE
+ELSE
     SELECT COALESCE(array_agg(mid), ARRAY[]::uuid[])
     INTO v_filter_merchants
     FROM unnest(p_merchant_ids) AS mid
     WHERE mid = ANY (v_allowed_merchants);
-
-    IF COALESCE(array_length(v_filter_merchants, 1), 0) = 0 THEN
+IF COALESCE(array_length(v_filter_merchants, 1), 0) = 0 THEN
       RETURN;
-    END IF;
-  END IF;
-
-  v_sort_by := lower(COALESCE(p_sort_by, 'initiated_at'));
-  IF v_sort_by NOT IN (
+END IF;
+END IF;
+v_sort_by := lower(COALESCE(p_sort_by, 'initiated_at'));
+IF v_sort_by NOT IN (
     'initiated_at',
     'created_at',
     'order_number',
@@ -10764,24 +9992,21 @@ BEGIN
     'payment_status'
   ) THEN
     v_sort_by := 'initiated_at';
-  END IF;
-
-  v_sort_dir := lower(COALESCE(p_sort_dir, 'desc'));
-  IF v_sort_dir NOT IN ('asc', 'desc') THEN
+END IF;
+v_sort_dir := lower(COALESCE(p_sort_dir, 'desc'));
+IF v_sort_dir NOT IN ('asc', 'desc') THEN
     v_sort_dir := 'desc';
-  END IF;
-
-  IF NULLIF(trim(COALESCE(p_card_type, '')), '') IS NOT NULL THEN
+END IF;
+IF NULLIF(trim(COALESCE(p_card_type, '')), '') IS NOT NULL THEN
     v_card_tokens := ARRAY(
       SELECT trim(token)
       FROM unnest(string_to_array(lower(p_card_type), ',')) AS token
       WHERE trim(token) <> ''
     );
-  ELSE
+ELSE
     v_card_tokens := ARRAY[]::text[];
-  END IF;
-
-  RETURN QUERY
+END IF;
+RETURN QUERY
   WITH filtered AS (
     SELECT
       op.id AS payment_id,
@@ -10985,8 +10210,7 @@ BEGIN
     ) INTO v_result
     FROM public.location_inventory_stock
     WHERE inventory_item_id = p_inventory_item_id;
-    
-    RETURN v_result;
+RETURN v_result;
 END;
 $$;
 
@@ -11153,34 +10377,31 @@ CREATE OR REPLACE FUNCTION "public"."get_business_day_bounds"("p_location_id" "u
     AS $$
 DECLARE
   v_tz text;
-  v_start_hour int;
+v_start_hour int;
 BEGIN
   SELECT timezone, COALESCE(business_day_start_hour, 0)
     INTO v_tz, v_start_hour
     FROM locations WHERE id = p_location_id;
-
-  IF v_tz IS NULL THEN
+IF v_tz IS NULL THEN
     v_tz := 'UTC';
-  END IF;
-
-  IF p_start_date IS NULL THEN
+END IF;
+IF p_start_date IS NULL THEN
     start_ts := (date_trunc('day', now() AT TIME ZONE v_tz)
                  + make_interval(hours => v_start_hour))
                 AT TIME ZONE v_tz;
-    IF (now() AT TIME ZONE v_tz)::time < make_time(v_start_hour, 0, 0) THEN
+IF (now() AT TIME ZONE v_tz)::time < make_time(v_start_hour, 0, 0) THEN
       start_ts := start_ts - interval '1 day';
-    END IF;
-    end_ts := start_ts + interval '1 day';
-  ELSE
+END IF;
+end_ts := start_ts + interval '1 day';
+ELSE
     start_ts := (p_start_date::timestamp
                  + make_interval(hours => v_start_hour))
                 AT TIME ZONE v_tz;
-    end_ts := ((COALESCE(p_end_date, p_start_date) + 1)::timestamp
+end_ts := ((COALESCE(p_end_date, p_start_date) + 1)::timestamp
                + make_interval(hours => v_start_hour))
               AT TIME ZONE v_tz;
-  END IF;
-
-  RETURN NEXT;
+END IF;
+RETURN NEXT;
 END;
 $$;
 
@@ -11508,7 +10729,8 @@ CREATE OR REPLACE FUNCTION "public"."get_categories_for_location"("p_merchant_id
               )
           )
     );
-END;$$;
+END;
+$$;
 
 
 ALTER FUNCTION "public"."get_categories_for_location"("p_merchant_id" "uuid", "p_location_id" "uuid") OWNER TO "postgres";
@@ -11541,15 +10763,14 @@ CREATE OR REPLACE FUNCTION "public"."get_churn_risk_merchants"("p_from" timestam
     AS $$
 DECLARE
   v_window_days INT;
-  v_prev_start  TIMESTAMPTZ;
-  v_prev_end    TIMESTAMPTZ;
+v_prev_start  TIMESTAMPTZ;
+v_prev_end    TIMESTAMPTZ;
 BEGIN
   -- Calculate window size correctly
   v_window_days := EXTRACT(DAY FROM (p_to - p_from));
-  v_prev_start  := p_from - (v_window_days || ' days')::INTERVAL;
-  v_prev_end    := p_from;
-
-  RETURN QUERY
+v_prev_start  := p_from - (v_window_days || ' days')::INTERVAL;
+v_prev_end    := p_from;
+RETURN QUERY
   WITH current_rev AS (
     SELECT 
       o.merchant_id,
@@ -11592,7 +10813,6 @@ BEGIN
     AND ((cr.revenue - pr.revenue) / pr.revenue) < -0.5
 
   ORDER BY change_pct;
-
 END;
 $$;
 
@@ -11623,8 +10843,7 @@ BEGIN
   INTO v_result
   FROM public.order_courses oc
   WHERE oc.order_id = p_order_id AND oc.course_number = p_course_number;
-
-  -- If course doesn't exist yet, return open status
+-- If course doesn't exist yet, return open status
   IF v_result IS NULL THEN
     v_result := json_build_object(
       'course_number', p_course_number,
@@ -11639,9 +10858,8 @@ BEGIN
           AND oi.is_voided = FALSE
       )
     );
-  END IF;
-
-  RETURN v_result;
+END IF;
+RETURN v_result;
 END;
 $$;
 
@@ -11771,7 +10989,6 @@ BEGIN
       ON rp.channel = pp.channel
   CROSS JOIN totals t
   ORDER BY COALESCE(rp.count_recent, 0) DESC;
-
 END;
 $$;
 
@@ -11893,8 +11110,7 @@ BEGIN
       ) act
     )
   ) INTO v_result;
-  
-  RETURN v_result;
+RETURN v_result;
 END;
 $$;
 
@@ -12070,12 +11286,10 @@ BEGIN
   JOIN stations s ON s.id = ss.station_id
   WHERE ss.device_id = p_device_id
     AND ss.session_status = 'active';
-  
-  IF NOT FOUND THEN
+IF NOT FOUND THEN
     RETURN json_build_object('has_session', false);
-  END IF;
-  
-  RETURN json_build_object(
+END IF;
+RETURN json_build_object(
     'has_session', true,
     'session_id', v_session.id,
     'station_id', v_session.station_id,
@@ -12109,12 +11323,10 @@ BEGIN
   JOIN stations s ON s.id = ss.station_id
   WHERE ss.device_id = p_device_id
     AND ss.session_status = 'active';
-  
-  IF NOT FOUND THEN
+IF NOT FOUND THEN
     RETURN json_build_object('has_session', false);
-  END IF;
-  
-  RETURN json_build_object(
+END IF;
+RETURN json_build_object(
     'has_session', true,
     'session_id', v_session.id,
     'station_id', v_session.station_id,
@@ -12167,16 +11379,14 @@ CREATE OR REPLACE FUNCTION "public"."get_dual_pricing_adoption"("p_from" timesta
     AS $$
 DECLARE
   v_total_merchants BIGINT;
-  v_adopted BIGINT;
+v_adopted BIGINT;
 BEGIN
   SELECT COUNT(DISTINCT id)::BIGINT INTO v_total_merchants FROM merchants;
-
-  SELECT COUNT(DISTINCT merchant_id)::BIGINT INTO v_adopted
+SELECT COUNT(DISTINCT merchant_id)::BIGINT INTO v_adopted
   FROM orders
   WHERE created_at >= p_from AND created_at < p_to
     AND cash_discount_applied = true;
-
-  RETURN QUERY
+RETURN QUERY
   SELECT
     COALESCE(v_adopted, 0)::BIGINT,
     v_total_merchants,
@@ -12205,41 +11415,34 @@ BEGIN
     WHERE location_id = p_location_id
       AND inventory_item_id = p_inventory_item_id
       AND custom_cost IS NOT NULL;
-    
-    IF v_cost IS NOT NULL THEN
+IF v_cost IS NOT NULL THEN
         RETURN v_cost;
-    END IF;
-
-    -- Priority 2: Location-specific vendor pricing
+END IF;
+-- Priority 2: Location-specific vendor pricing
     IF p_vendor_id IS NOT NULL THEN
         SELECT unit_cost INTO v_cost
         FROM public.location_vendor_pricing
         WHERE location_id = p_location_id
           AND vendor_id = p_vendor_id
           AND inventory_item_id = p_inventory_item_id;
-        
-        IF v_cost IS NOT NULL THEN
+IF v_cost IS NOT NULL THEN
             RETURN v_cost;
-        END IF;
-    END IF;
-    
-    -- Priority 3: Preferred vendor's default cost
+END IF;
+END IF;
+-- Priority 3: Preferred vendor's default cost
     SELECT vi.default_cost INTO v_cost
     FROM public.vendor_items vi
     WHERE vi.inventory_item_id = p_inventory_item_id
       AND vi.is_preferred = true
     LIMIT 1;
-    
-    IF v_cost IS NOT NULL AND v_cost > 0 THEN
+IF v_cost IS NOT NULL AND v_cost > 0 THEN
         RETURN v_cost;
-    END IF;
-    
-    -- Priority 4: Item's base cost_per_unit
+END IF;
+-- Priority 4: Item's base cost_per_unit
     SELECT cost_per_unit INTO v_cost
     FROM public.inventory_items
     WHERE id = p_inventory_item_id;
-    
-    RETURN COALESCE(v_cost, 0);
+RETURN COALESCE(v_cost, 0);
 END;
 $$;
 
@@ -12253,7 +11456,7 @@ CREATE OR REPLACE FUNCTION "public"."get_effective_pricing"("p_location_id" "uui
     AS $$
 DECLARE
   v_location RECORD;
-  v_merchant RECORD;
+v_merchant RECORD;
 BEGIN
   -- Get location
   SELECT l.merchant_id, l.use_merchant_pricing_defaults,
@@ -12261,28 +11464,25 @@ BEGIN
   INTO v_location
   FROM locations l
   WHERE l.id = p_location_id;
-
-  IF NOT FOUND THEN
+IF NOT FOUND THEN
     RETURN;
-  END IF;
-
-  -- If location uses merchant defaults, return merchant values
+END IF;
+-- If location uses merchant defaults, return merchant values
   IF v_location.use_merchant_pricing_defaults THEN
     SELECT m.pricing_strategy, m.dual_pricing_percentage
     INTO v_merchant
     FROM merchants m
     WHERE m.id = v_location.merchant_id;
-
-    pricing_strategy := v_merchant.pricing_strategy;
-    dual_pricing_percentage := v_merchant.dual_pricing_percentage;
-    source := 'merchant';
-    RETURN NEXT;
-  ELSE
+pricing_strategy := v_merchant.pricing_strategy;
+dual_pricing_percentage := v_merchant.dual_pricing_percentage;
+source := 'merchant';
+RETURN NEXT;
+ELSE
     pricing_strategy := v_location.loc_strategy;
-    dual_pricing_percentage := v_location.loc_percentage;
-    source := 'location';
-    RETURN NEXT;
-  END IF;
+dual_pricing_percentage := v_location.loc_percentage;
+source := 'location';
+RETURN NEXT;
+END IF;
 END;
 $$;
 
@@ -12303,29 +11503,24 @@ BEGIN
     WHERE location_id = p_location_id
       AND inventory_item_id = p_inventory_item_id
       AND reorder_threshold IS NOT NULL;
-    
-    IF v_threshold IS NOT NULL THEN
+IF v_threshold IS NOT NULL THEN
         RETURN v_threshold;
-    END IF;
-    
-    -- Priority 2: Location inventory overrides table
+END IF;
+-- Priority 2: Location inventory overrides table
     SELECT custom_reorder_threshold INTO v_threshold
     FROM public.location_inventory_overrides
     WHERE location_id = p_location_id
       AND inventory_item_id = p_inventory_item_id
       AND custom_reorder_threshold IS NOT NULL;
-    
-    IF v_threshold IS NOT NULL THEN
+IF v_threshold IS NOT NULL THEN
         RETURN v_threshold;
-    END IF;
-    
-    -- Priority 3: Global default from inventory_items
+END IF;
+-- Priority 3: Global default from inventory_items
     -- FIX: Use reorder_point column (not reorder_threshold)
     SELECT reorder_point INTO v_threshold
     FROM public.inventory_items
     WHERE id = p_inventory_item_id;
-    
-    RETURN COALESCE(v_threshold, 0);
+RETURN COALESCE(v_threshold, 0);
 END;
 $$;
 
@@ -12339,25 +11534,24 @@ CREATE OR REPLACE FUNCTION "public"."get_eligible_promotions"("p_customer_id" "u
     AS $$
 DECLARE
     v_promo RECORD;
-    v_result JSONB := '[]'::JSONB;
-    v_customer RECORD;
-    v_visit_count INTEGER;
-    v_last_visit DATE;
-    v_today DATE := CURRENT_DATE;
-    v_now_time TIME := LOCALTIME;
-    v_qualifying BOOLEAN;
-    v_discount_amount NUMERIC;
-    v_bogo_qty INTEGER;
-    v_bundle_match BOOLEAN;
+v_result JSONB := '[]'::JSONB;
+v_customer RECORD;
+v_visit_count INTEGER;
+v_last_visit DATE;
+v_today DATE := CURRENT_DATE;
+v_now_time TIME := LOCALTIME;
+v_qualifying BOOLEAN;
+v_discount_amount NUMERIC;
+v_bogo_qty INTEGER;
+v_bundle_match BOOLEAN;
 BEGIN
     -- Fetch customer info if available
     IF p_customer_id IS NOT NULL THEN
         SELECT * INTO v_customer FROM customers WHERE id = p_customer_id;
-        SELECT COUNT(*) INTO v_visit_count FROM orders WHERE customer_id = p_customer_id AND status = 'completed';
-        SELECT MAX(created_at)::DATE INTO v_last_visit FROM orders WHERE customer_id = p_customer_id AND status = 'completed';
-    END IF;
-
-    FOR v_promo IN
+SELECT COUNT(*) INTO v_visit_count FROM orders WHERE customer_id = p_customer_id AND status = 'completed';
+SELECT MAX(created_at)::DATE INTO v_last_visit FROM orders WHERE customer_id = p_customer_id AND status = 'completed';
+END IF;
+FOR v_promo IN
         SELECT *
         FROM promotions
         WHERE merchant_id = p_merchant_id
@@ -12369,85 +11563,76 @@ BEGIN
         -- Time-of-day filter
         IF v_promo.active_days IS NOT NULL AND NOT (EXTRACT(DOW FROM now())::INTEGER = ANY(v_promo.active_days)) THEN
             CONTINUE;
-        END IF;
-        IF v_promo.active_time_start IS NOT NULL AND v_promo.active_time_end IS NOT NULL THEN
+END IF;
+IF v_promo.active_time_start IS NOT NULL AND v_promo.active_time_end IS NOT NULL THEN
             IF NOT (v_now_time BETWEEN v_promo.active_time_start AND v_promo.active_time_end) THEN
                 CONTINUE;
-            END IF;
-        END IF;
-
-        v_qualifying := true;
-
-        -- Type-specific qualification
+END IF;
+END IF;
+v_qualifying := true;
+-- Type-specific qualification
         CASE v_promo.promo_type
             WHEN 'happy_hour' THEN
                 -- Already handled by time filters above
                 NULL;
-
-            WHEN 'birthday' THEN
+WHEN 'birthday' THEN
                 IF v_customer IS NULL OR v_customer.birthday IS NULL THEN
                     v_qualifying := false;
-                ELSE
+ELSE
                     -- Respect birthday_window: day, week, or month
                     CASE COALESCE(v_promo.birthday_window, 'week')
                         WHEN 'day' THEN
                             IF EXTRACT(MONTH FROM v_customer.birthday) != EXTRACT(MONTH FROM v_today)
                                OR EXTRACT(DAY FROM v_customer.birthday) != EXTRACT(DAY FROM v_today) THEN
                                 v_qualifying := false;
-                            END IF;
-                        WHEN 'week' THEN
+END IF;
+WHEN 'week' THEN
                             -- Check if birthday falls within 7 days (before or after today)
                             IF ABS(
                                 EXTRACT(DOY FROM MAKE_DATE(EXTRACT(YEAR FROM v_today)::INT, EXTRACT(MONTH FROM v_customer.birthday)::INT, EXTRACT(DAY FROM v_customer.birthday)::INT))
                                 - EXTRACT(DOY FROM v_today)
                             ) > 3 THEN
                                 v_qualifying := false;
-                            END IF;
-                        WHEN 'month' THEN
+END IF;
+WHEN 'month' THEN
                             IF EXTRACT(MONTH FROM v_customer.birthday) != EXTRACT(MONTH FROM v_today) THEN
                                 v_qualifying := false;
-                            END IF;
-                        ELSE
+END IF;
+ELSE
                             v_qualifying := false;
-                    END CASE;
-                END IF;
-
-            WHEN 'first_visit' THEN
+END CASE;
+END IF;
+WHEN 'first_visit' THEN
                 -- Qualifies if customer is anonymous OR has 0 completed orders
                 IF p_customer_id IS NOT NULL AND v_visit_count > 0 THEN
                     v_qualifying := false;
-                END IF;
-
-            WHEN 'comeback' THEN
+END IF;
+WHEN 'comeback' THEN
                 IF v_last_visit IS NULL OR v_last_visit > v_today - COALESCE(v_promo.comeback_days, 30) THEN
                     v_qualifying := false;
-                END IF;
-
-            WHEN 'threshold' THEN
+END IF;
+WHEN 'threshold' THEN
                 IF p_order_total IS NULL OR p_order_total < COALESCE(v_promo.threshold_amount, 0) THEN
                     v_qualifying := false;
-                END IF;
-
-            WHEN 'bogo' THEN
+END IF;
+WHEN 'bogo' THEN
                 -- Check if order contains at least bogo_buy_quantity of qualifying items
                 IF p_order_items IS NULL THEN
                     v_qualifying := false;
-                ELSE
+ELSE
                     SELECT COALESCE(SUM((item->>'quantity')::INTEGER), 0) INTO v_bogo_qty
                     FROM jsonb_array_elements(p_order_items) AS item
                     WHERE (v_promo.target_item_ids IS NULL OR (item->>'menu_item_id')::UUID = ANY(v_promo.target_item_ids))
                       AND (v_promo.target_categories IS NULL OR (item->>'category_id')::UUID = ANY(v_promo.target_categories));
-
-                    IF v_bogo_qty < COALESCE(v_promo.bogo_buy_quantity, 1) THEN
+IF v_bogo_qty < COALESCE(v_promo.bogo_buy_quantity, 1) THEN
                         v_qualifying := false;
-                    END IF;
-                END IF;
-
-            WHEN 'bundle' THEN
+END IF;
+END IF;
+WHEN 'bundle' THEN
                 -- Check all target items/categories present in order
                 IF p_order_items IS NULL THEN
                     v_qualifying := false;
-                ELSE
+ELSE
                     -- All target_item_ids must appear in the order
                     IF v_promo.target_item_ids IS NOT NULL THEN
                         SELECT bool_and(EXISTS(
@@ -12455,51 +11640,44 @@ BEGIN
                             WHERE (item->>'menu_item_id')::UUID = tid
                         )) INTO v_bundle_match
                         FROM unnest(v_promo.target_item_ids) AS tid;
-
-                        IF NOT COALESCE(v_bundle_match, false) THEN
+IF NOT COALESCE(v_bundle_match, false) THEN
                             v_qualifying := false;
-                        END IF;
-                    END IF;
-                END IF;
-
-            WHEN 'seasonal' THEN
+END IF;
+END IF;
+END IF;
+WHEN 'seasonal' THEN
                 -- Already handled by date range filters above
                 NULL;
-
-            WHEN 'referral' THEN
+WHEN 'referral' THEN
                 IF v_customer IS NULL OR v_customer.referred_by_customer_id IS NULL THEN
                     v_qualifying := false;
-                ELSE
+ELSE
                     -- Check if referral promo already used by this customer
                     PERFORM 1 FROM promotion_usage WHERE promotion_id = v_promo.id AND customer_id = p_customer_id;
-                    IF FOUND THEN
+IF FOUND THEN
                         v_qualifying := false;
-                    END IF;
-                END IF;
-
-            ELSE
+END IF;
+END IF;
+ELSE
                 -- Unknown promo type, skip
                 v_qualifying := false;
-        END CASE;
-
-        -- Check per-customer usage limits
+END CASE;
+-- Check per-customer usage limits
         IF v_qualifying AND p_customer_id IS NOT NULL AND v_promo.max_uses_per_customer IS NOT NULL THEN
             PERFORM 1 FROM promotion_usage
             WHERE promotion_id = v_promo.id AND customer_id = p_customer_id
             HAVING COUNT(*) >= v_promo.max_uses_per_customer;
-            IF FOUND THEN
+IF FOUND THEN
                 v_qualifying := false;
-            END IF;
-        END IF;
-
-        -- Check total usage limits
+END IF;
+END IF;
+-- Check total usage limits
         IF v_qualifying AND v_promo.max_uses_total IS NOT NULL THEN
             IF v_promo.current_uses >= v_promo.max_uses_total THEN
                 v_qualifying := false;
-            END IF;
-        END IF;
-
-        IF v_qualifying THEN
+END IF;
+END IF;
+IF v_qualifying THEN
             -- Calculate discount amount if order total is known
             IF p_order_total IS NOT NULL THEN
                 IF v_promo.discount_type = 'percentage' THEN
@@ -12507,16 +11685,15 @@ BEGIN
                         p_order_total * v_promo.discount_value / 100,
                         COALESCE(v_promo.discount_max, p_order_total)
                     );
-                ELSIF v_promo.discount_type = 'fixed_amount' THEN
+ELSIF v_promo.discount_type = 'fixed_amount' THEN
                     v_discount_amount := v_promo.discount_value;
-                ELSE
+ELSE
                     v_discount_amount := v_promo.discount_value;
-                END IF;
-            ELSE
+END IF;
+ELSE
                 v_discount_amount := NULL;
-            END IF;
-
-            v_result := v_result || jsonb_build_object(
+END IF;
+v_result := v_result || jsonb_build_object(
                 'promo_id', v_promo.id,
                 'name', v_promo.name,
                 'promo_type', v_promo.promo_type,
@@ -12526,10 +11703,9 @@ BEGIN
                 'discount_amount', v_discount_amount,
                 'auto_apply', COALESCE(v_promo.auto_apply, false)
             );
-        END IF;
-    END LOOP;
-
-    RETURN v_result;
+END IF;
+END LOOP;
+RETURN v_result;
 END;
 $$;
 
@@ -12543,10 +11719,10 @@ CREATE OR REPLACE FUNCTION "public"."get_eod_cash_summary"("p_location_id" "uuid
     AS $$
 DECLARE
   v_drawers JSONB := '[]'::JSONB;
-  v_grand_totals JSONB;
-  v_drawer RECORD;
-  v_ops RECORD;
-  v_no_sale_audit JSONB;
+v_grand_totals JSONB;
+v_drawer RECORD;
+v_ops RECORD;
+v_no_sale_audit JSONB;
 BEGIN
   -- Per-drawer breakdown
   FOR v_drawer IN
@@ -12581,8 +11757,7 @@ BEGIN
     INTO v_ops
     FROM cash_drawer_operations
     WHERE session_id = v_drawer.session_id;
-
-    v_drawers := v_drawers || jsonb_build_object(
+v_drawers := v_drawers || jsonb_build_object(
       'session_id', v_drawer.session_id,
       'drawer_id', v_drawer.drawer_id,
       'drawer_name', v_drawer.drawer_name,
@@ -12601,9 +11776,8 @@ BEGIN
       'tip_outs', v_ops.tip_outs,
       'no_sale_count', v_ops.no_sale_count
     );
-  END LOOP;
-
-  -- Grand totals across all drawers
+END LOOP;
+-- Grand totals across all drawers
   SELECT jsonb_build_object(
     'total_opening', COALESCE(SUM(s.opening_amount), 0),
     'total_closing', COALESCE(SUM(s.closing_amount), 0),
@@ -12616,8 +11790,7 @@ BEGIN
   FROM cash_drawer_sessions s
   WHERE s.location_id = p_location_id
     AND s.business_date = p_business_date;
-
-  -- No Sale audit by employee
+-- No Sale audit by employee
   SELECT COALESCE(jsonb_agg(row_to_json(t)), '[]'::JSONB)
   INTO v_no_sale_audit
   FROM (
@@ -12632,8 +11805,7 @@ BEGIN
     GROUP BY o.performed_by
     ORDER BY no_sale_count DESC
   ) t;
-
-  RETURN jsonb_build_object(
+RETURN jsonb_build_object(
     'drawers', v_drawers,
     'grand_totals', v_grand_totals,
     'no_sale_audit', v_no_sale_audit,
@@ -12654,8 +11826,7 @@ DECLARE
   v_total_merchants BIGINT;
 BEGIN
   SELECT COUNT(DISTINCT id)::BIGINT INTO v_total_merchants FROM merchants;
-
-  RETURN QUERY
+RETURN QUERY
   SELECT
     'kds'::TEXT as feature,
     COUNT(DISTINCT kd.merchant_id)::BIGINT,
@@ -12698,10 +11869,10 @@ CREATE OR REPLACE FUNCTION "public"."get_financial_kpis"("p_merchant_id" "uuid",
     AS $$
 DECLARE
     v_summary JSON;
-    v_payment_methods JSON;
-    v_daily_stats JSON;
-    v_best_sellers JSON;
-    v_order_types JSON;
+v_payment_methods JSON;
+v_daily_stats JSON;
+v_best_sellers JSON;
+v_order_types JSON;
 BEGIN
     -- 1. Summary Metrics
     SELECT json_build_object(
@@ -12728,8 +11899,7 @@ BEGIN
       AND (p_location_id IS NULL OR location_id = p_location_id)
       AND status NOT IN ('draft', 'cancelled', 'void')
       AND created_at BETWEEN p_start_date AND p_end_date;
-
-    -- 2. Payment Methods Breakdown
+-- 2. Payment Methods Breakdown
     SELECT COALESCE(json_agg(pm), '[]'::json) INTO v_payment_methods
     FROM (
         SELECT 
@@ -12744,8 +11914,7 @@ BEGIN
           AND op.initiated_at BETWEEN p_start_date AND p_end_date
         GROUP BY payment_method
     ) pm;
-
-    -- 3. Daily Stats for Charts
+-- 3. Daily Stats for Charts
     SELECT COALESCE(json_agg(ds), '[]'::json) INTO v_daily_stats
     FROM (
         SELECT 
@@ -12761,8 +11930,7 @@ BEGIN
         GROUP BY 1
         ORDER BY 1 ASC
     ) ds;
-
-    -- 4. Best Selling Items
+-- 4. Best Selling Items
     SELECT COALESCE(json_agg(bs), '[]'::json) INTO v_best_sellers
     FROM (
         SELECT 
@@ -12780,8 +11948,7 @@ BEGIN
         ORDER BY revenue DESC
         LIMIT 10
     ) bs;
-
-    -- 5. Order Type Breakdown (ADDED)
+-- 5. Order Type Breakdown (ADDED)
     SELECT COALESCE(json_agg(ot), '[]'::json) INTO v_order_types
     FROM (
         SELECT 
@@ -12795,8 +11962,7 @@ BEGIN
           AND created_at BETWEEN p_start_date AND p_end_date
         GROUP BY order_type
     ) ot;
-
-    RETURN json_build_object(
+RETURN json_build_object(
         'summary', v_summary,
         'payment_methods', v_payment_methods,
         'daily_stats', v_daily_stats,
@@ -12877,12 +12043,10 @@ BEGIN
   WHERE fp.id = p_floor_plan_id
     AND fp.merchant_id = user_merchant_id()
     AND fp.location_id = ANY(user_location_ids());
-
-  IF v_result IS NULL THEN
+IF v_result IS NULL THEN
     RAISE EXCEPTION 'Floor plan not found or access denied';
-  END IF;
-
-  RETURN v_result;
+END IF;
+RETURN v_result;
 END;
 $$;
 
@@ -13056,7 +12220,8 @@ CREATE OR REPLACE FUNCTION "public"."get_floor_plan_status"("p_floor_plan_id" "u
       AND fp.merchant_id = user_merchant_id()
       -- AND fp.location_id = ANY(user_location_ids())
   );
-END;$$;
+END;
+$$;
 
 
 ALTER FUNCTION "public"."get_floor_plan_status"("p_floor_plan_id" "uuid") OWNER TO "postgres";
@@ -13511,8 +12676,7 @@ BEGIN
     WHERE o.location_id = p_location_id
       AND o.status NOT IN ('completed', 'cancelled', 'void', 'refunded')
   ) sub;
-
-  RETURN v_result;
+RETURN v_result;
 END;
 $$;
 
@@ -13615,8 +12779,7 @@ BEGIN
     WHERE o.location_id = p_location_id
       AND o.status NOT IN ('completed', 'cancelled', 'void', 'refunded')
   ) sub;
-
-  RETURN v_result;
+RETURN v_result;
 END;
 $$;
 
@@ -13769,8 +12932,7 @@ BEGIN
       FROM daily_trend_data dtd
     ), '[]'::jsonb)
   ) INTO v_result;
-
-  RETURN v_result;
+RETURN v_result;
 END;
 $$;
 
@@ -13835,7 +12997,8 @@ CREATE OR REPLACE FUNCTION "public"."get_location_floor_plans"("p_location_id" "
     WHERE fp.location_id = p_location_id
       AND fp.merchant_id = user_merchant_id()
   );
-END;$$;
+END;
+$$;
 
 
 ALTER FUNCTION "public"."get_location_floor_plans"("p_location_id" "uuid") OWNER TO "postgres";
@@ -13856,16 +13019,15 @@ BEGIN
         LEFT JOIN location_menu_item_overrides o 
             ON o.menu_item_id = mi.id AND o.location_id = p_location_id
         WHERE mi.id = p_menu_item_id;
-    ELSE
+ELSE
         SELECT COALESCE(o.custom_price, mi.price)
         INTO v_price
         FROM menu_items mi
         LEFT JOIN location_menu_item_overrides o 
             ON o.menu_item_id = mi.id AND o.location_id = p_location_id
         WHERE mi.id = p_menu_item_id;
-    END IF;
-    
-    RETURN v_price;
+END IF;
+RETURN v_price;
 END;
 $$;
 
@@ -13888,7 +13050,7 @@ begin
       and lpd.location_id = p_location_id
       and lpd.is_active = true
     limit 1;
-  else
+else
     select *
     into v_device
     from public.location_payment_devices lpd
@@ -13897,13 +13059,11 @@ begin
       and lpd.use_for_online_ordering = true
     order by lpd.updated_at desc, lpd.created_at desc
     limit 1;
-  end if;
-
-  if v_device.id is null then
+end if;
+if v_device.id is null then
     return;
-  end if;
-
-  return query
+end if;
+return query
   select
     v_device.id,
     v_device.tpn,
@@ -14348,8 +13508,7 @@ BEGIN
     ) INTO result
     FROM menus m
     WHERE m.id = p_menu_id;
-    
-    RETURN result;
+RETURN result;
 END;
 $$;
 
@@ -14824,8 +13983,7 @@ BEGIN
     INTO result
     FROM menus m
     WHERE m.id = p_menu_id;
-
-    RETURN result;
+RETURN result;
 END;
 $$;
 
@@ -14861,15 +14019,14 @@ CREATE OR REPLACE FUNCTION "public"."get_merchant_retention"("p_from" timestamp 
     AS $$
 DECLARE
   v_window_days INT;
-  v_prev_start  TIMESTAMPTZ;
-  v_prev_end    TIMESTAMPTZ;
+v_prev_start  TIMESTAMPTZ;
+v_prev_end    TIMESTAMPTZ;
 BEGIN
   -- Calculate window size
   v_window_days := EXTRACT(DAY FROM (p_to - p_from));
-  v_prev_start  := p_from - (v_window_days || ' days')::INTERVAL;
-  v_prev_end    := p_from;
-
-  RETURN QUERY
+v_prev_start  := p_from - (v_window_days || ' days')::INTERVAL;
+v_prev_end    := p_from;
+RETURN QUERY
   WITH current_active AS (
     SELECT DISTINCT merchant_id
     FROM orders
@@ -14916,7 +14073,6 @@ BEGIN
   FROM previous_active pa
   LEFT JOIN current_active ca
     ON pa.merchant_id = ca.merchant_id;
-
 END;
 $$;
 
@@ -14952,22 +14108,20 @@ CREATE OR REPLACE FUNCTION "public"."get_my_hq_permissions"() RETURNS "text"[]
     AS $$
 DECLARE
   v_user_id text;
-  v_permissions text[];
+v_permissions text[];
 BEGIN
   v_user_id := current_user_id();
-  IF v_user_id IS NULL OR NOT is_dexapos_admin() THEN
+IF v_user_id IS NULL OR NOT is_dexapos_admin() THEN
     RETURN ARRAY[]::text[];
-  END IF;
-
-  SELECT ARRAY_AGG(DISTINCT rp.permission_code)
+END IF;
+SELECT ARRAY_AGG(DISTINCT rp.permission_code)
   INTO v_permissions
   FROM members m
   JOIN roles r ON r.code = m.role
   JOIN role_permissions rp ON rp.role_code = m.role
   WHERE m.user_id = v_user_id
     AND r.organization_type = 'hq';
-
-  RETURN COALESCE(v_permissions, ARRAY[]::text[]);
+RETURN COALESCE(v_permissions, ARRAY[]::text[]);
 END;
 $$;
 
@@ -14986,11 +14140,10 @@ CREATE OR REPLACE FUNCTION "public"."get_my_hq_role"() RETURNS TABLE("role_code"
   v_user_id text;
 BEGIN
   v_user_id := current_user_id();
-  IF v_user_id IS NULL OR NOT is_dexapos_admin() THEN
+IF v_user_id IS NULL OR NOT is_dexapos_admin() THEN
     RETURN;
-  END IF;
-
-  -- RETURN QUERY
+END IF;
+-- RETURN QUERY
   -- SELECT r.code, r.name, r.level
   -- FROM user_roles ur
   -- JOIN roles r ON r.code = ur.role_code
@@ -15007,7 +14160,8 @@ BEGIN
     AND r.organization_type = 'hq'
   ORDER BY r.level DESC
   LIMIT 1;
-END;$$;
+END;
+$$;
 
 
 ALTER FUNCTION "public"."get_my_hq_role"() OWNER TO "postgres";
@@ -15138,7 +14292,7 @@ CREATE OR REPLACE FUNCTION "public"."get_order_details"("p_order_id" "uuid") RET
     SET "search_path" TO 'public', 'public', 'pg_temp'
     AS $$DECLARE
   v_result JSON;
-  v_station_name TEXT;
+v_station_name TEXT;
 BEGIN
   -- Verify user has access
   IF NOT EXISTS (
@@ -15148,15 +14302,13 @@ BEGIN
       AND location_id = ANY(user_location_ids())
   ) THEN
     RAISE EXCEPTION 'Order not found or access denied';
-  END IF;
-  
-  -- Get station name for this order
+END IF;
+-- Get station name for this order
   SELECT s.station_name INTO v_station_name
   FROM public.orders o
   LEFT JOIN public.stations s ON s.id = o.station_id
   WHERE o.id = p_order_id;
-
-  SELECT json_build_object(
+SELECT json_build_object(
     'order', row_to_json(o.*),
     'station_name', v_station_name,
     'items', (
@@ -15213,9 +14365,9 @@ BEGIN
   INTO v_result
   FROM public.orders o
   WHERE o.id = p_order_id;
-  
-  RETURN v_result;
-END;$$;
+RETURN v_result;
+END;
+$$;
 
 
 ALTER FUNCTION "public"."get_order_details"("p_order_id" "uuid") OWNER TO "postgres";
@@ -15456,8 +14608,7 @@ BEGIN
       FROM completion_time_calc ctc
     ), '[]'::jsonb)
   ) INTO v_result;
-
-  RETURN v_result;
+RETURN v_result;
 END;
 $$;
 
@@ -15529,12 +14680,10 @@ BEGIN
   WHERE oi.id = p_order_item_id
     AND o.merchant_id = user_merchant_id()
     AND o.location_id = ANY(user_location_ids());
-
-  IF v_result IS NULL THEN
+IF v_result IS NULL THEN
     RAISE EXCEPTION 'Order item not found';
-  END IF;
-
-  RETURN v_result;
+END IF;
+RETURN v_result;
 END;
 $$;
 
@@ -15548,22 +14697,20 @@ CREATE OR REPLACE FUNCTION "public"."get_organization_info"("p_organization_id" 
     AS $$
 DECLARE
   v_result json;
-  v_org json;
-  v_members json;
-  v_pending_invites json;
-  v_carriers json;
+v_org json;
+v_members json;
+v_pending_invites json;
+v_carriers json;
 BEGIN
   -- Get organization details
   SELECT to_json(o.*)
   INTO v_org
   FROM organizations o
   WHERE o.id = p_organization_id;
-
-  IF v_org IS NULL THEN
+IF v_org IS NULL THEN
     RETURN json_build_object('error', 'Organization not found');
-  END IF;
-
-  -- Get members with user details
+END IF;
+-- Get members with user details
   SELECT COALESCE(json_agg(
     json_build_object(
       'id', m.id,
@@ -15587,8 +14734,7 @@ BEGIN
   FROM members m
   LEFT JOIN users u ON u.id = m.user_id
   WHERE m.organization_id = p_organization_id;
-
-  -- Get pending admin invites with both user references
+-- Get pending admin invites with both user references
   SELECT COALESCE(json_agg(
     json_build_object(
       'id', pai.id,
@@ -15628,8 +14774,7 @@ BEGIN
   LEFT JOIN users cu ON cu.id = pai.clerk_user_id
   LEFT JOIN users iu ON iu.id = pai.invited_by
   WHERE pai.organization_id = p_organization_id;
-
-  -- Get carriers with merchants (if applicable)
+-- Get carriers with merchants (if applicable)
   -- SELECT COALESCE(json_agg(
   --   json_build_object(
   --     'id', c.id,
@@ -15650,8 +14795,7 @@ BEGIN
     'pending_org_admin_invites', v_pending_invites,
     'carriers', v_carriers
   );
-
-  RETURN v_result;
+RETURN v_result;
 END;
 $$;
 
@@ -15751,7 +14895,6 @@ BEGIN
   FROM order_payments op
   WHERE op.initiated_at >= p_from
     AND op.initiated_at < p_to;
-
 END;
 $$;
 
@@ -15842,8 +14985,7 @@ BEGIN
             )
         )
     ) INTO result;
-
-    RETURN result;
+RETURN result;
 END;
 $$;
 
@@ -15857,17 +14999,15 @@ CREATE OR REPLACE FUNCTION "public"."get_pos_inventory_sync"("p_location_id" "uu
     AS $$
 DECLARE
     v_merchant_id UUID;
-    v_result      JSON;
+v_result      JSON;
 BEGIN
     SELECT merchant_id INTO v_merchant_id
     FROM locations
     WHERE id = p_location_id;
-
-    IF v_merchant_id IS NULL THEN
+IF v_merchant_id IS NULL THEN
         RETURN json_build_object('error', 'Location not found');
-    END IF;
-
-    SELECT json_agg(row_to_json(t)) INTO v_result
+END IF;
+SELECT json_agg(row_to_json(t)) INTO v_result
     FROM (
         SELECT
             ii.id,
@@ -15895,8 +15035,7 @@ BEGIN
           AND ii.is_active   = true
         ORDER BY ii.name
     ) t;
-
-    RETURN COALESCE(v_result, '[]'::json);
+RETURN COALESCE(v_result, '[]'::json);
 END;
 $$;
 
@@ -16192,8 +15331,7 @@ BEGIN
         'check_presented_to_payment_complete', (SELECT avg_minutes FROM check_to_payment),
         'payment_to_table_cleared', (SELECT avg_minutes FROM payment_to_cleared)
     ) INTO result;
-
-    RETURN result;
+RETURN result;
 END;
 $$;
 
@@ -16423,8 +15561,7 @@ BEGIN
       WHERE sad.staff_id IS NOT NULL
     ), '[]'::jsonb)
   ) INTO v_result;
-
-  RETURN v_result;
+RETURN v_result;
 END;
 $$;
 
@@ -16442,22 +15579,19 @@ CREATE OR REPLACE FUNCTION "public"."get_station_status"("p_station_id" "uuid") 
     AS $$
 DECLARE
   v_station RECORD;
-  v_session RECORD;
+v_session RECORD;
 BEGIN
   SELECT * INTO v_station
   FROM stations
   WHERE id = p_station_id;
-  
-  IF NOT FOUND THEN
+IF NOT FOUND THEN
     RETURN json_build_object('error', 'Station not found');
-  END IF;
-  
-  SELECT * INTO v_session
+END IF;
+SELECT * INTO v_session
   FROM station_sessions
   WHERE station_id = p_station_id
     AND session_status = 'active';
-  
-  RETURN json_build_object(
+RETURN json_build_object(
     'station_id', v_station.id,
     'station_name', v_station.station_name,
     'station_type', v_station.station_type,
@@ -16483,36 +15617,31 @@ CREATE OR REPLACE FUNCTION "public"."get_support_dashboard_stats"() RETURNS "jso
     AS $$
 DECLARE
   v_open_count            INTEGER;
-  v_unassigned_count      INTEGER;
-  v_avg_first_response    NUMERIC;
-  v_avg_resolution        NUMERIC;
-  v_tickets_today         INTEGER;
+v_unassigned_count      INTEGER;
+v_avg_first_response    NUMERIC;
+v_avg_resolution        NUMERIC;
+v_tickets_today         INTEGER;
 BEGIN
   SELECT COUNT(*) INTO v_open_count
   FROM public.support_tickets
   WHERE status IN ('open', 'in_progress', 'waiting_on_merchant');
-
-  SELECT COUNT(*) INTO v_unassigned_count
+SELECT COUNT(*) INTO v_unassigned_count
   FROM public.support_tickets
   WHERE status IN ('open', 'in_progress') AND assigned_to IS NULL;
-
-  SELECT ROUND(AVG(EXTRACT(EPOCH FROM (first_response_at - created_at)) / 3600)::NUMERIC, 1)
+SELECT ROUND(AVG(EXTRACT(EPOCH FROM (first_response_at - created_at)) / 3600)::NUMERIC, 1)
   INTO v_avg_first_response
   FROM public.support_tickets
   WHERE first_response_at IS NOT NULL
     AND created_at >= now() - INTERVAL '30 days';
-
-  SELECT ROUND(AVG(EXTRACT(EPOCH FROM (resolved_at - created_at)) / 3600)::NUMERIC, 1)
+SELECT ROUND(AVG(EXTRACT(EPOCH FROM (resolved_at - created_at)) / 3600)::NUMERIC, 1)
   INTO v_avg_resolution
   FROM public.support_tickets
   WHERE resolved_at IS NOT NULL
     AND created_at >= now() - INTERVAL '30 days';
-
-  SELECT COUNT(*) INTO v_tickets_today
+SELECT COUNT(*) INTO v_tickets_today
   FROM public.support_tickets
   WHERE created_at >= date_trunc('day', now());
-
-  RETURN jsonb_build_object(
+RETURN jsonb_build_object(
     'open_count',               COALESCE(v_open_count, 0),
     'unassigned_count',         COALESCE(v_unassigned_count, 0),
     'avg_first_response_hours', COALESCE(v_avg_first_response, 0),
@@ -16755,8 +15884,7 @@ BEGIN
       FROM section_stats_calc ssc
     ), '[]'::jsonb)
   ) INTO v_result;
-
-  RETURN v_result;
+RETURN v_result;
 END;
 $$;
 
@@ -16774,10 +15902,12 @@ CREATE OR REPLACE FUNCTION "public"."get_terminal_credentials"("p_terminal_id" "
     AS $$
 DECLARE
   v_tpn TEXT;
-  v_auth_key TEXT;        -- Now storing plain text key
-  v_register_id TEXT;     -- Added register_id
+v_auth_key TEXT;
+-- Now storing plain text key
+  v_register_id TEXT;
+-- Added register_id
   v_api_environment TEXT;
-  v_spin_proxy_timeout INTEGER;
+v_spin_proxy_timeout INTEGER;
 BEGIN
   -- Direct select of plain text columns
   SELECT 
@@ -16802,15 +15932,13 @@ BEGIN
       -- We cast the claim to text just in case user_id is text/uuid mismatch
       WHERE sp.user_id::text = get_my_claim('sub')::text
     );
-
-  IF NOT FOUND THEN
+IF NOT FOUND THEN
     RETURN json_build_object(
       'success', false,
       'error', 'Terminal not found or access denied'
     );
-  END IF;
-
-  RETURN json_build_object(
+END IF;
+RETURN json_build_object(
     'success', true,
     'tpn', v_tpn,
     'auth_key', v_auth_key,         -- Returning raw key
@@ -16893,7 +16021,8 @@ CREATE OR REPLACE FUNCTION "public"."get_top_performing_merchants"("p_limit" int
     GROUP BY m.id, m.name
     ORDER BY SUM(o.total_amount) DESC
     LIMIT p_limit;
-END;$$;
+END;
+$$;
 
 
 ALTER FUNCTION "public"."get_top_performing_merchants"("p_limit" integer, "p_days" integer) OWNER TO "postgres";
@@ -17199,7 +16328,8 @@ CREATE OR REPLACE FUNCTION "public"."get_waitlist"("p_location_id" "uuid", "p_in
       )
       AND w.created_at >= CURRENT_DATE
   );
-END;$$;
+END;
+$$;
 
 
 ALTER FUNCTION "public"."get_waitlist"("p_location_id" "uuid", "p_include_completed" boolean) OWNER TO "postgres";
@@ -17216,8 +16346,7 @@ BEGIN
     completed_at = NOW()
   WHERE order_item_id = NEW.id
     AND status NOT IN ('cancelled', 'completed');
-
-  RETURN NEW;
+RETURN NEW;
 END;
 $$;
 
@@ -17240,8 +16369,7 @@ BEGIN
     completed_at = NOW()
   WHERE order_id = NEW.id
     AND status NOT IN ('cancelled', 'completed');
-
-  RETURN NEW;
+RETURN NEW;
 END;
 $$;
 
@@ -17262,45 +16390,40 @@ DECLARE
 BEGIN
     -- Check if parent schedule is active
     SELECT status INTO v_schedule_status FROM schedules WHERE id = NEW.schedule_id;
-    
-    -- If schedule is draft, do nothing
-    IF v_schedule_status != 'active' THEN RETURN NEW; END IF;
-
-    -- CASE 1: Shift Assigned (Null -> User)
+-- If schedule is draft, do nothing
+    IF v_schedule_status != 'active' THEN RETURN NEW;
+END IF;
+-- CASE 1: Shift Assigned (Null -> User)
     IF OLD.employee_id IS NULL AND NEW.employee_id IS NOT NULL THEN
         INSERT INTO notifications (merchant_id, recipient_id, type, title, body, data)
         VALUES (NEW.merchant_id, NEW.employee_id, 'schedule_update', 
                 'New Shift Assigned', 
                 'You have been assigned a shift on ' || to_char(NEW.start_time, 'Mon DD') || ' at ' || to_char(NEW.start_time, 'HH:MI AM'),
                 jsonb_build_object('shift_id', NEW.id));
-
-    -- CASE 2: Shift Removed (User -> Null)
+-- CASE 2: Shift Removed (User -> Null)
     ELSIF OLD.employee_id IS NOT NULL AND NEW.employee_id IS NULL THEN
         INSERT INTO notifications (merchant_id, recipient_id, type, title, body, data)
         VALUES (OLD.merchant_id, OLD.employee_id, 'schedule_update', 
                 'Shift Removed', 
                 'Your shift on ' || to_char(OLD.start_time, 'Mon DD') || ' has been removed.',
                 jsonb_build_object('shift_id', OLD.id));
-
-    -- CASE 3: Shift Reassigned (User A -> User B)
+-- CASE 3: Shift Reassigned (User A -> User B)
     ELSIF OLD.employee_id IS NOT NULL AND NEW.employee_id IS NOT NULL AND OLD.employee_id != NEW.employee_id THEN
         -- Notify Old User
         INSERT INTO notifications (merchant_id, recipient_id, type, title, body, data)
         VALUES (OLD.merchant_id, OLD.employee_id, 'schedule_update', 'Shift Removed', 'Your shift on ' || to_char(OLD.start_time, 'Mon DD') || ' has been removed.', jsonb_build_object('shift_id', OLD.id));
-        -- Notify New User
+-- Notify New User
         INSERT INTO notifications (merchant_id, recipient_id, type, title, body, data)
         VALUES (NEW.merchant_id, NEW.employee_id, 'schedule_update', 'New Shift Assigned', 'You have been assigned a shift on ' || to_char(NEW.start_time, 'Mon DD') || '.', jsonb_build_object('shift_id', NEW.id));
-
-    -- CASE 4: Time Change (Same User)
+-- CASE 4: Time Change (Same User)
     ELSIF OLD.employee_id = NEW.employee_id AND (OLD.start_time != NEW.start_time OR OLD.end_time != NEW.end_time) THEN
         INSERT INTO notifications (merchant_id, recipient_id, type, title, body, data)
         VALUES (NEW.merchant_id, NEW.employee_id, 'schedule_update', 
                 'Shift Updated', 
                 'Your shift on ' || to_char(NEW.start_time, 'Mon DD') || ' changed: ' || to_char(NEW.start_time, 'HH:MI AM') || ' - ' || to_char(NEW.end_time, 'HH:MI AM'),
                 jsonb_build_object('shift_id', NEW.id));
-    END IF;
-
-    RETURN NEW;
+END IF;
+RETURN NEW;
 END;
 $$;
 
@@ -17650,18 +16773,16 @@ CREATE OR REPLACE FUNCTION "public"."hq_has_permission"("p_permission_code" "tex
     AS $$
 DECLARE
   v_user_id text;
-  v_has_permission boolean;
+v_has_permission boolean;
 BEGIN
   v_user_id := current_user_id();
-  IF v_user_id IS NULL THEN
+IF v_user_id IS NULL THEN
     RETURN false;
-  END IF;
-
-  IF NOT is_dexapos_admin() THEN
+END IF;
+IF NOT is_dexapos_admin() THEN
     RETURN false;
-  END IF;
-
-  SELECT EXISTS (
+END IF;
+SELECT EXISTS (
     SELECT 1
     FROM members m
     JOIN roles r ON r.code = m.role
@@ -17671,8 +16792,7 @@ BEGIN
       AND rp.permission_code = p_permission_code
   )
   INTO v_has_permission;
-
-  RETURN COALESCE(v_has_permission, false);
+RETURN COALESCE(v_has_permission, false);
 END;
 $$;
 
@@ -17700,12 +16820,10 @@ BEGIN
     castles_counter_updated_at = now()
   WHERE id = p_terminal_id
   RETURNING castles_txn_counter INTO v_next;
-
-  IF NOT FOUND THEN
+IF NOT FOUND THEN
     RAISE EXCEPTION 'Terminal not found: %', p_terminal_id;
-  END IF;
-
-  RETURN v_next;
+END IF;
+RETURN v_next;
 END;
 $$;
 
@@ -17724,8 +16842,7 @@ BEGIN
     DO UPDATE SET
         stock_quantity = location_inventory_stock.stock_quantity + p_quantity,
         updated_at     = now();
-
-    -- Sync legacy aggregate
+-- Sync legacy aggregate
     UPDATE inventory_items
     SET
         current_stock = (
@@ -17754,8 +16871,7 @@ BEGIN
         updated_at = NOW()
     WHERE id = p_order_id
     RETURNING sync_version INTO v_new_version;
-
-    RETURN COALESCE(v_new_version, 1);
+RETURN COALESCE(v_new_version, 1);
 END;
 $$;
 
@@ -17772,8 +16888,7 @@ DECLARE
 BEGIN
     -- Authorization check (#7)
     PERFORM public.authorize_location_access(p_location_id);
-
-    INSERT INTO location_inventory_stock (location_id, inventory_item_id, stock_quantity)
+INSERT INTO location_inventory_stock (location_id, inventory_item_id, stock_quantity)
     SELECT p_location_id, ii.id, 0
     FROM inventory_items ii
     JOIN locations l ON l.merchant_id = ii.merchant_id
@@ -17785,9 +16900,8 @@ BEGIN
           WHERE lis.location_id       = p_location_id
             AND lis.inventory_item_id = ii.id
       );
-
-    GET DIAGNOSTICS v_count = ROW_COUNT;
-    RETURN v_count;
+GET DIAGNOSTICS v_count = ROW_COUNT;
+RETURN v_count;
 END;
 $$;
 
@@ -17839,7 +16953,8 @@ CREATE OR REPLACE FUNCTION "public"."is_merchant_admin"("p_merchant_id" "uuid") 
           AND mer.id = p_merchant_id
           AND m.role IN ('merchant.owner', 'merchant.admin', 'merchant.manager') 
     )
-);$$;
+);
+$$;
 
 
 ALTER FUNCTION "public"."is_merchant_admin"("p_merchant_id" "uuid") OWNER TO "postgres";
@@ -17857,7 +16972,8 @@ SELECT EXISTS (
       AND mer.id = p_merchant_id
       -- The role is directly checked against the membership for THIS merchant
       AND m.role IN ('merchant.owner', 'merchant.admin') 
-);$$;
+);
+$$;
 
 
 ALTER FUNCTION "public"."is_merchant_owner"("p_merchant_id" "uuid") OWNER TO "postgres";
@@ -17875,9 +16991,8 @@ CREATE OR REPLACE FUNCTION "public"."link_order_to_session"("p_session_id" "uuid
       'success', false,
       'error', 'Both order_id and session_id are required'
     );
-  END IF;
-
-  -- Verify session
+END IF;
+-- Verify session
   IF NOT EXISTS (
     SELECT 1 FROM public.table_sessions
     WHERE id = p_session_id AND is_active = TRUE
@@ -17885,9 +17000,8 @@ CREATE OR REPLACE FUNCTION "public"."link_order_to_session"("p_session_id" "uuid
       AND location_id = ANY(user_location_ids())
   ) THEN
     RAISE EXCEPTION 'Session not found';
-  END IF;
-
-  -- Verify order
+END IF;
+-- Verify order
   IF NOT EXISTS (
     SELECT 1 FROM public.orders
     WHERE id = p_order_id
@@ -17895,9 +17009,8 @@ CREATE OR REPLACE FUNCTION "public"."link_order_to_session"("p_session_id" "uuid
       AND location_id = ANY(user_location_ids())
   ) THEN
     RAISE EXCEPTION 'Order not found';
-  END IF;
-
-  -- -- Check if session exists
+END IF;
+-- -- Check if session exists
   -- SELECT EXISTS(SELECT 1 FROM table_sessions WHERE id = p_session_id)
   -- INTO v_session_exists;
 
@@ -17918,15 +17031,13 @@ CREATE OR REPLACE FUNCTION "public"."link_order_to_session"("p_session_id" "uuid
     session_id = p_session_id,
     updated_at = NOW()
   WHERE id = p_order_id;
-
-  -- Update session to point to order
+-- Update session to point to order
   UPDATE table_sessions
   SET
     order_id = p_order_id,
     updated_at = NOW()
   WHERE id = p_session_id;
-
-  -- Record event if first order
+-- Record event if first order
   INSERT INTO public.table_session_events (
     session_id, event_type, event_data,
     triggered_by_staff_id, triggered_by_user_id
@@ -17935,15 +17046,13 @@ CREATE OR REPLACE FUNCTION "public"."link_order_to_session"("p_session_id" "uuid
     jsonb_build_object('order_id', p_order_id),
     COALESCE(p_staff_id, user_staff_profile_id()), get_my_claim('sub')
   );
-
-  return json_build_object(
+return json_build_object(
     'success', true,
     'order_id', p_order_id,
     'session_id', p_session_id,
     'linked_at', NOW(),
     'message', 'Order and session linked successfully'
   );
-
 EXCEPTION WHEN OTHERS THEN
   -- Handle any unexpected errors
   RETURN json_build_object(
@@ -17951,7 +17060,8 @@ EXCEPTION WHEN OTHERS THEN
     'error', SQLERRM,
     'error_code', SQLSTATE
   );
-END;$$;
+END;
+$$;
 
 
 ALTER FUNCTION "public"."link_order_to_session"("p_session_id" "uuid", "p_order_id" "uuid", "p_staff_id" "uuid") OWNER TO "postgres";
@@ -17963,20 +17073,18 @@ CREATE OR REPLACE FUNCTION "public"."list_location_payment_devices"("p_location_
     AS $$
 declare
   v_merchant_id uuid;
-  v_carrier_id uuid;
+v_carrier_id uuid;
 begin
   select l.merchant_id, m.carrier_id
   into v_merchant_id, v_carrier_id
   from public.locations l
   join public.merchants m on m.id = l.merchant_id
   where l.id = p_location_id;
-
-  if v_merchant_id is null then
+if v_merchant_id is null then
     raise exception 'Location % not found', p_location_id
       using errcode = '42501';
-  end if;
-
-  if not (
+end if;
+if not (
     public.is_dexapos_admin()
     or public.is_merchant_admin(v_merchant_id)
     or public.is_location_member(p_location_id)
@@ -17984,9 +17092,8 @@ begin
   ) then
     raise exception 'Unauthorized: no access to location %', p_location_id
       using errcode = '42501';
-  end if;
-
-  return query
+end if;
+return query
   select
     lpd.id,
     lpd.merchant_id,
@@ -18018,64 +17125,58 @@ CREATE OR REPLACE FUNCTION "public"."log_admin_payment_audit_event"("p_action" "
     AS $$
 DECLARE
   v_user_id text := auth.jwt()->>'sub';
-  v_user_email text := NULLIF(auth.jwt()->>'email', '');
-  v_user_role text := NULL;
-  v_resource_id uuid := NULL;
-  v_merchant_id uuid := NULL;
-  v_location_id uuid := NULL;
-  v_ip_address inet := NULL;
+v_user_email text := NULLIF(auth.jwt()->>'email', '');
+v_user_role text := NULL;
+v_resource_id uuid := NULL;
+v_merchant_id uuid := NULL;
+v_location_id uuid := NULL;
+v_ip_address inet := NULL;
 BEGIN
   IF NOT public.is_dexapos_admin() THEN
     RETURN;
-  END IF;
-
-  IF NULLIF(trim(COALESCE(p_resource_id, '')), '') IS NOT NULL THEN
+END IF;
+IF NULLIF(trim(COALESCE(p_resource_id, '')), '') IS NOT NULL THEN
     BEGIN
       v_resource_id := trim(p_resource_id)::uuid;
-    EXCEPTION
+EXCEPTION
       WHEN others THEN
         v_resource_id := NULL;
-    END;
-  END IF;
-
-  IF NULLIF(trim(COALESCE(p_merchant_id, '')), '') IS NOT NULL THEN
+END;
+END IF;
+IF NULLIF(trim(COALESCE(p_merchant_id, '')), '') IS NOT NULL THEN
     BEGIN
       v_merchant_id := trim(p_merchant_id)::uuid;
-    EXCEPTION
+EXCEPTION
       WHEN others THEN
         v_merchant_id := NULL;
-    END;
-  END IF;
-
-  IF NULLIF(trim(COALESCE(p_location_id, '')), '') IS NOT NULL THEN
+END;
+END IF;
+IF NULLIF(trim(COALESCE(p_location_id, '')), '') IS NOT NULL THEN
     BEGIN
       v_location_id := trim(p_location_id)::uuid;
-    EXCEPTION
+EXCEPTION
       WHEN others THEN
         v_location_id := NULL;
-    END;
-  END IF;
-
-  IF NULLIF(trim(COALESCE(p_ip_address, '')), '') IS NOT NULL THEN
+END;
+END IF;
+IF NULLIF(trim(COALESCE(p_ip_address, '')), '') IS NOT NULL THEN
     BEGIN
       v_ip_address := trim(p_ip_address)::inet;
-    EXCEPTION
+EXCEPTION
       WHEN others THEN
         v_ip_address := NULL;
-    END;
-  END IF;
-
-  BEGIN
+END;
+END IF;
+BEGIN
     SELECT role_code::text
     INTO v_user_role
     FROM public.get_my_hq_role()
     LIMIT 1;
-  EXCEPTION
+EXCEPTION
     WHEN others THEN
       v_user_role := NULL;
-  END;
-
-  INSERT INTO public.payment_audit_log (
+END;
+INSERT INTO public.payment_audit_log (
     resource_type,
     resource_id,
     action,
@@ -18160,8 +17261,7 @@ BEGIN
     p_metadata
   )
   RETURNING id INTO v_log_id;
-  
-  RETURN v_log_id;
+RETURN v_log_id;
 END;
 $$;
 
@@ -18216,13 +17316,11 @@ BEGIN
         now()
     )
     RETURNING id INTO v_event_id;
-    
-    RETURN v_event_id;
-    
+RETURN v_event_id;
 EXCEPTION WHEN OTHERS THEN
     -- Fire and forget - don't fail the main transaction for audit logging
     RAISE WARNING 'Failed to log payment event: %', SQLERRM;
-    RETURN NULL;
+RETURN NULL;
 END;
 $$;
 
@@ -18241,30 +17339,27 @@ CREATE OR REPLACE FUNCTION "public"."log_purchase_order_delivery"("p_purchase_or
     AS $$
 DECLARE
     v_location_id       UUID;
-    v_merchant_id       UUID;
-    v_item              JSONB;
-    v_inventory_item_id UUID;
-    v_qty_received      NUMERIC;
-    v_qty_ordered       NUMERIC;
-    v_prev_stock        NUMERIC;
-    v_new_stock         NUMERIC;
-    v_items_processed   INTEGER := 0;
-    v_discrepancies     JSONB   := '[]'::jsonb;
+v_merchant_id       UUID;
+v_item              JSONB;
+v_inventory_item_id UUID;
+v_qty_received      NUMERIC;
+v_qty_ordered       NUMERIC;
+v_prev_stock        NUMERIC;
+v_new_stock         NUMERIC;
+v_items_processed   INTEGER := 0;
+v_discrepancies     JSONB   := '[]'::jsonb;
 BEGIN
     SELECT po.location_id, po.merchant_id
     INTO   v_location_id, v_merchant_id
     FROM   purchase_orders po
     WHERE  po.id = p_purchase_order_id;
-
-    -- Authorization check (#7)
+-- Authorization check (#7)
     PERFORM public.authorize_location_access(v_location_id);
-
-    FOR v_item IN SELECT * FROM jsonb_array_elements(p_received_items)
+FOR v_item IN SELECT * FROM jsonb_array_elements(p_received_items)
     LOOP
         v_inventory_item_id := (v_item->>'inventory_item_id')::UUID;
-        v_qty_received      := (v_item->>'quantity_received')::NUMERIC;
-
-        -- Capture pre-receive stock WITH row lock (#5)
+v_qty_received      := (v_item->>'quantity_received')::NUMERIC;
+-- Capture pre-receive stock WITH row lock (#5)
         -- FOR UPDATE locks the row so no concurrent transaction can modify it
         -- between this read and the increment below.
         SELECT COALESCE(stock_quantity, 0)
@@ -18273,34 +17368,28 @@ BEGIN
         WHERE  location_id      = v_location_id
           AND  inventory_item_id = v_inventory_item_id
         FOR UPDATE;
-
-        -- If no row exists yet, prev_stock is 0 (FOR UPDATE returns nothing → NULL → COALESCE 0)
+-- If no row exists yet, prev_stock is 0 (FOR UPDATE returns nothing → NULL → COALESCE 0)
         v_prev_stock := COALESCE(v_prev_stock, 0);
-
-        -- Get ordered quantity for discrepancy detection
+-- Get ordered quantity for discrepancy detection
         SELECT quantity_ordered
         INTO   v_qty_ordered
         FROM   purchase_order_items
         WHERE  purchase_order_id = p_purchase_order_id
           AND  inventory_item_id = v_inventory_item_id;
-
-        -- Update received qty on PO line
+-- Update received qty on PO line
         UPDATE purchase_order_items
         SET    quantity_received = v_qty_received
         WHERE  purchase_order_id = p_purchase_order_id
           AND  inventory_item_id = v_inventory_item_id;
-
-        -- Increment stock (internal helper — auth already done above)
+-- Increment stock (internal helper — auth already done above)
         PERFORM public.increment_location_stock(v_inventory_item_id, v_location_id, v_qty_received);
-
-        -- Capture post-receive stock for audit log
+-- Capture post-receive stock for audit log
         SELECT COALESCE(stock_quantity, 0)
         INTO   v_new_stock
         FROM   location_inventory_stock
         WHERE  location_id      = v_location_id
           AND  inventory_item_id = v_inventory_item_id;
-
-        -- Audit log entry
+-- Audit log entry
         INSERT INTO stock_update_log (
             merchant_id, location_id, inventory_item_id,
             previous_stock, new_stock, change_amount,
@@ -18314,20 +17403,17 @@ BEGIN
             p_logged_by_user_id, p_logged_by_name,
             p_purchase_order_id
         );
-
-        IF v_qty_ordered IS NOT NULL AND v_qty_received <> v_qty_ordered THEN
+IF v_qty_ordered IS NOT NULL AND v_qty_received <> v_qty_ordered THEN
             v_discrepancies := v_discrepancies || jsonb_build_object(
                 'inventory_item_id', v_inventory_item_id,
                 'quantity_ordered',  v_qty_ordered,
                 'quantity_received', v_qty_received,
                 'difference',        v_qty_received - v_qty_ordered
             );
-        END IF;
-
-        v_items_processed := v_items_processed + 1;
-    END LOOP;
-
-    UPDATE purchase_orders
+END IF;
+v_items_processed := v_items_processed + 1;
+END LOOP;
+UPDATE purchase_orders
     SET
         status                     = 'received',
         received_at                = now(),
@@ -18338,8 +17424,7 @@ BEGIN
         delivery_logged_by_name    = p_logged_by_name,
         updated_at                 = now()
     WHERE id = p_purchase_order_id;
-
-    RETURN jsonb_build_object(
+RETURN jsonb_build_object(
         'success',         true,
         'items_processed', v_items_processed,
         'discrepancies',   v_discrepancies
@@ -18361,25 +17446,23 @@ CREATE OR REPLACE FUNCTION "public"."log_purchase_order_payment"("p_purchase_ord
     AS $$
 DECLARE
     v_payment_id  UUID;
-    v_vendor_id   UUID;
-    v_vendor_name TEXT;
-    v_location_id UUID;
-    v_merchant_id UUID;
+v_vendor_id   UUID;
+v_vendor_name TEXT;
+v_location_id UUID;
+v_merchant_id UUID;
 BEGIN
     SELECT po.vendor_id, v.name, po.location_id, po.merchant_id
     INTO   v_vendor_id, v_vendor_name, v_location_id, v_merchant_id
     FROM   purchase_orders po
     LEFT JOIN vendors v ON v.id = po.vendor_id
     WHERE  po.id = p_purchase_order_id;
-
-    -- Authorization check (#7): use location if available, otherwise merchant
+-- Authorization check (#7): use location if available, otherwise merchant
     IF v_location_id IS NOT NULL THEN
         PERFORM public.authorize_location_access(v_location_id);
-    ELSE
+ELSE
         PERFORM public.authorize_merchant_access(v_merchant_id);
-    END IF;
-
-    INSERT INTO purchase_order_payments (
+END IF;
+INSERT INTO purchase_order_payments (
         purchase_order_id, payment_method, card_last_four, amount,
         vendor_id, vendor_name, paid_to,
         paid_by_user_id, paid_by_name, notes
@@ -18389,8 +17472,7 @@ BEGIN
         p_paid_by_user_id, p_paid_by_name, p_notes
     )
     RETURNING id INTO v_payment_id;
-
-    UPDATE purchase_orders
+UPDATE purchase_orders
     SET
         status         = 'paid',
         paid_at        = now(),
@@ -18398,8 +17480,7 @@ BEGIN
         card_last_four = p_card_last_four,
         updated_at     = now()
     WHERE id = p_purchase_order_id;
-
-    RETURN jsonb_build_object('success', true, 'payment_id', v_payment_id);
+RETURN jsonb_build_object('success', true, 'payment_id', v_payment_id);
 END;
 $$;
 
@@ -18413,12 +17494,12 @@ CREATE OR REPLACE FUNCTION "public"."log_purchase_order_payment"("p_purchase_ord
     AS $$
 DECLARE
   v_po_merchant_id UUID;
-  v_po_location_id UUID;
-  v_po_number TEXT;
-  v_po_vendor_id UUID;
-  v_expense_vendor_name TEXT;
-  v_vendor_name TEXT;
-  v_payment_id UUID;
+v_po_location_id UUID;
+v_po_number TEXT;
+v_po_vendor_id UUID;
+v_expense_vendor_name TEXT;
+v_vendor_name TEXT;
+v_payment_id UUID;
 BEGIN
   -- Get the purchase order with vendor info
   SELECT 
@@ -18438,12 +17519,10 @@ BEGIN
   FROM public.purchase_orders po
   LEFT JOIN public.vendors v ON po.vendor_id = v.id
   WHERE po.id = p_purchase_order_id;
-  
-  IF v_po_number IS NULL THEN
+IF v_po_number IS NULL THEN
     RAISE EXCEPTION 'Purchase order not found';
-  END IF;
-  
-  -- Create payment record
+END IF;
+-- Create payment record
   INSERT INTO public.purchase_order_payments (
     purchase_order_id,
     payment_method,
@@ -18468,16 +17547,14 @@ BEGIN
     p_notes
   )
   RETURNING id INTO v_payment_id;
-  
-  -- Update PO status to paid
+-- Update PO status to paid
   UPDATE public.purchase_orders
   SET 
     status = 'paid',
     paid_at = NOW(),
     updated_at = NOW()
   WHERE id = p_purchase_order_id;
-  
-  -- Log to audit_logs
+-- Log to audit_logs
   INSERT INTO public.audit_logs (
     merchant_id,
     location_id,
@@ -18512,8 +17589,7 @@ BEGIN
       'notes', p_notes
     )
   );
-  
-  RETURN v_payment_id;
+RETURN v_payment_id;
 END;
 $$;
 
@@ -18527,40 +17603,35 @@ CREATE OR REPLACE FUNCTION "public"."log_stock_update_with_audit"("p_location_id
     AS $$
 DECLARE
   v_item_name TEXT;
-  v_unit_type TEXT;
-  v_previous_stock NUMERIC;
-  v_merchant_id UUID;
-  v_change_amount NUMERIC;
-  v_stock_log_id UUID;
-  v_audit_log_id UUID;
+v_unit_type TEXT;
+v_previous_stock NUMERIC;
+v_merchant_id UUID;
+v_change_amount NUMERIC;
+v_stock_log_id UUID;
+v_audit_log_id UUID;
 BEGIN
   -- Get the inventory item details
   SELECT ii.name, ii.unit_type, ii.merchant_id 
   INTO v_item_name, v_unit_type, v_merchant_id
   FROM public.inventory_items ii
   WHERE ii.id = p_inventory_item_id;
-  
-  IF v_item_name IS NULL THEN
+IF v_item_name IS NULL THEN
     RAISE EXCEPTION 'Inventory item not found';
-  END IF;
-  
-  -- Get current stock for this location
+END IF;
+-- Get current stock for this location
   SELECT lis.stock_quantity INTO v_previous_stock
   FROM public.location_inventory_stock lis
   WHERE lis.location_id = p_location_id AND lis.inventory_item_id = p_inventory_item_id;
-  
-  v_previous_stock := COALESCE(v_previous_stock, 0);
-  v_change_amount := p_new_stock - v_previous_stock;
-  
-  -- Upsert the location stock
+v_previous_stock := COALESCE(v_previous_stock, 0);
+v_change_amount := p_new_stock - v_previous_stock;
+-- Upsert the location stock
   INSERT INTO public.location_inventory_stock (location_id, inventory_item_id, stock_quantity, updated_at)
   VALUES (p_location_id, p_inventory_item_id, p_new_stock, NOW())
   ON CONFLICT (location_id, inventory_item_id)
   DO UPDATE SET 
     stock_quantity = EXCLUDED.stock_quantity,
     updated_at = NOW();
-  
-  -- Log to stock_update_log
+-- Log to stock_update_log
   INSERT INTO public.stock_update_log (
     merchant_id,
     location_id,
@@ -18585,8 +17656,7 @@ BEGIN
     p_user_name
   )
   RETURNING id INTO v_stock_log_id;
-  
-  -- Log to audit_logs
+-- Log to audit_logs
   INSERT INTO public.audit_logs (
     merchant_id,
     location_id,
@@ -18623,8 +17693,7 @@ BEGIN
     )
   )
   RETURNING id INTO v_audit_log_id;
-  
-  RETURN jsonb_build_object(
+RETURN jsonb_build_object(
     'success', true,
     'stock_log_id', v_stock_log_id,
     'audit_log_id', v_audit_log_id,
@@ -18645,36 +17714,31 @@ CREATE OR REPLACE FUNCTION "public"."log_waste"("p_merchant_id" "uuid", "p_locat
     AS $$
 DECLARE
     v_waste_log_id      UUID;
-    v_cost_per_unit     NUMERIC;
-    v_estimated_cost    NUMERIC;
-    v_prev_stock        NUMERIC;
-    v_new_stock         NUMERIC;
+v_cost_per_unit     NUMERIC;
+v_estimated_cost    NUMERIC;
+v_prev_stock        NUMERIC;
+v_new_stock         NUMERIC;
 BEGIN
     -- Validate quantity
     IF p_quantity <= 0 THEN
         RETURN jsonb_build_object('success', false, 'error', 'quantity must be greater than zero');
-    END IF;
-
-    -- Fetch cost_per_unit for estimated_cost calculation
+END IF;
+-- Fetch cost_per_unit for estimated_cost calculation
     SELECT COALESCE(cost_per_unit, 0)
     INTO   v_cost_per_unit
     FROM   inventory_items
     WHERE  id = p_inventory_item_id;
-
-    IF NOT FOUND THEN
+IF NOT FOUND THEN
         RETURN jsonb_build_object('success', false, 'error', 'inventory item not found');
-    END IF;
-
-    v_estimated_cost := ROUND(v_cost_per_unit * p_quantity, 4);
-
-    -- Capture pre-waste stock
+END IF;
+v_estimated_cost := ROUND(v_cost_per_unit * p_quantity, 4);
+-- Capture pre-waste stock
     SELECT COALESCE(stock_quantity, 0)
     INTO   v_prev_stock
     FROM   location_inventory_stock
     WHERE  location_id       = p_location_id
       AND  inventory_item_id = p_inventory_item_id;
-
-    -- Insert waste record
+-- Insert waste record
     INSERT INTO waste_logs (
         merchant_id, location_id, inventory_item_id,
         quantity, reason, notes,
@@ -18687,18 +17751,15 @@ BEGIN
         p_logged_by_user_id, p_logged_by_name
     )
     RETURNING id INTO v_waste_log_id;
-
-    -- Decrement stock (floored at 0)
+-- Decrement stock (floored at 0)
     PERFORM public.decrement_location_stock(p_inventory_item_id, p_location_id, p_quantity);
-
-    -- Capture post-waste stock
+-- Capture post-waste stock
     SELECT COALESCE(stock_quantity, 0)
     INTO   v_new_stock
     FROM   location_inventory_stock
     WHERE  location_id       = p_location_id
       AND  inventory_item_id = p_inventory_item_id;
-
-    -- Audit log
+-- Audit log
     INSERT INTO stock_update_log (
         merchant_id, location_id, inventory_item_id,
         previous_stock, new_stock, change_amount,
@@ -18710,8 +17771,7 @@ BEGIN
         'waste_spoilage', 'waste',
         p_logged_by_user_id, p_logged_by_name
     );
-
-    RETURN jsonb_build_object(
+RETURN jsonb_build_object(
         'success',        true,
         'waste_log_id',   v_waste_log_id,
         'estimated_cost', v_estimated_cost,
@@ -18730,34 +17790,31 @@ CREATE OR REPLACE FUNCTION "public"."loyalty_earn_on_order"("p_order_id" "uuid")
     AS $$
 DECLARE
     v_customer_id UUID;
-    v_merchant_id UUID;
-    v_location_id UUID;
-    v_total NUMERIC;
-    v_discount NUMERIC;
-    v_status TEXT;
-    v_program RECORD;
-    v_enrollment RECORD;
-    v_points_earned INTEGER;
-    v_qualifying_amount NUMERIC;
-    v_item RECORD;
-    v_punch_earned INTEGER;
-    v_reward_id UUID;
-    v_result JSONB := '[]'::JSONB;
+v_merchant_id UUID;
+v_location_id UUID;
+v_total NUMERIC;
+v_discount NUMERIC;
+v_status TEXT;
+v_program RECORD;
+v_enrollment RECORD;
+v_points_earned INTEGER;
+v_qualifying_amount NUMERIC;
+v_item RECORD;
+v_punch_earned INTEGER;
+v_reward_id UUID;
+v_result JSONB := '[]'::JSONB;
 BEGIN
     SELECT customer_id, merchant_id, location_id, total_amount, discount_amount, status
     INTO v_customer_id, v_merchant_id, v_location_id, v_total, v_discount, v_status
     FROM orders
     WHERE id = p_order_id;
-
-    IF v_status IS NULL THEN
+IF v_status IS NULL THEN
         RETURN jsonb_build_object('error', 'Order not found', 'order_id', p_order_id);
-    END IF;
-
-    IF v_customer_id IS NULL THEN
+END IF;
+IF v_customer_id IS NULL THEN
         RETURN jsonb_build_object('error', 'Order has no customer', 'order_id', p_order_id);
-    END IF;
-
-    FOR v_program IN
+END IF;
+FOR v_program IN
         SELECT *
         FROM loyalty_programs
         WHERE merchant_id = v_merchant_id
@@ -18767,14 +17824,12 @@ BEGIN
           AND (location_ids IS NULL OR v_location_id = ANY(location_ids))
     LOOP
         v_reward_id := NULL;
-        v_points_earned := 0;
-        v_punch_earned := 0;
-
-        SELECT * INTO v_enrollment
+v_points_earned := 0;
+v_punch_earned := 0;
+SELECT * INTO v_enrollment
         FROM loyalty_enrollments
         WHERE program_id = v_program.id AND customer_id = v_customer_id;
-
-        IF v_enrollment IS NULL THEN
+IF v_enrollment IS NULL THEN
             IF v_program.auto_enroll THEN
                 INSERT INTO loyalty_enrollments (
                     program_id, customer_id, merchant_id,
@@ -18787,23 +17842,20 @@ BEGIN
                     0, 0, 0, 0, 0, 0, 0, 0, 0
                 )
                 RETURNING * INTO v_enrollment;
-            ELSE
+ELSE
                 CONTINUE;
-            END IF;
-        END IF;
-
-        IF v_program.cooldown_minutes IS NOT NULL AND v_program.cooldown_minutes > 0
+END IF;
+END IF;
+IF v_program.cooldown_minutes IS NOT NULL AND v_program.cooldown_minutes > 0
            AND v_enrollment.last_earn_at IS NOT NULL THEN
             IF v_enrollment.last_earn_at + (v_program.cooldown_minutes * interval '1 minute') > now() THEN
                 CONTINUE;
-            END IF;
-        END IF;
-
-        IF v_program.min_order_amount IS NOT NULL AND v_total < v_program.min_order_amount THEN
+END IF;
+END IF;
+IF v_program.min_order_amount IS NOT NULL AND v_total < v_program.min_order_amount THEN
             CONTINUE;
-        END IF;
-
-        IF v_program.program_type = 'points' THEN
+END IF;
+IF v_program.program_type = 'points' THEN
             SELECT COALESCE(SUM(
                 (oi.unit_price * oi.quantity) -
                 CASE WHEN NOT v_program.earn_on_discounted THEN COALESCE(oi.discount_amount, 0) ELSE 0 END
@@ -18813,10 +17865,8 @@ BEGIN
             WHERE oi.order_id = p_order_id
               AND (v_program.excluded_categories IS NULL OR oi.category_id != ALL(v_program.excluded_categories))
               AND (v_program.excluded_item_ids IS NULL OR oi.menu_item_id != ALL(v_program.excluded_item_ids));
-
-            v_points_earned := FLOOR(v_qualifying_amount * v_program.points_per_dollar);
-
-            IF v_points_earned > 0 THEN
+v_points_earned := FLOOR(v_qualifying_amount * v_program.points_per_dollar);
+IF v_points_earned > 0 THEN
                 UPDATE loyalty_enrollments
                 SET
                     current_points = current_points + v_points_earned,
@@ -18825,8 +17875,7 @@ BEGIN
                     updated_at = now()
                 WHERE id = v_enrollment.id
                 RETURNING * INTO v_enrollment;
-
-                INSERT INTO loyalty_transactions (
+INSERT INTO loyalty_transactions (
                     enrollment_id, customer_id, program_id, merchant_id,
                     order_id, transaction_type,
                     points_delta, balance_points,
@@ -18837,8 +17886,7 @@ BEGIN
                     v_points_earned, v_enrollment.current_points,
                     'Earned ' || v_points_earned || ' points'
                 );
-
-                IF v_program.points_redemption_threshold IS NOT NULL
+IF v_program.points_redemption_threshold IS NOT NULL
                    AND v_enrollment.current_points >= v_program.points_redemption_threshold
                 THEN
                     INSERT INTO loyalty_rewards (
@@ -18855,15 +17903,13 @@ BEGIN
                              ELSE NULL END,
                         'available'
                     ) RETURNING id INTO v_reward_id;
-
-                    UPDATE loyalty_enrollments
+UPDATE loyalty_enrollments
                     SET
                         current_points = current_points - v_program.points_redemption_threshold,
                         total_rewards_earned = total_rewards_earned + 1
                     WHERE id = v_enrollment.id
                     RETURNING current_points INTO v_enrollment.current_points;
-
-                    INSERT INTO loyalty_transactions (
+INSERT INTO loyalty_transactions (
                         enrollment_id, customer_id, program_id, merchant_id,
                         order_id, transaction_type,
                         points_delta, balance_points,
@@ -18875,10 +17921,9 @@ BEGIN
                         'Reward unlocked: ' || v_program.reward_description,
                         v_reward_id
                     );
-                END IF;
-            END IF;
-
-        ELSIF v_program.program_type = 'visits' THEN
+END IF;
+END IF;
+ELSIF v_program.program_type = 'visits' THEN
             UPDATE loyalty_enrollments
             SET
                 current_visits = current_visits + 1,
@@ -18887,8 +17932,7 @@ BEGIN
                 updated_at = now()
             WHERE id = v_enrollment.id
             RETURNING * INTO v_enrollment;
-
-            INSERT INTO loyalty_transactions (
+INSERT INTO loyalty_transactions (
                 enrollment_id, customer_id, program_id, merchant_id,
                 order_id, transaction_type,
                 visits_delta, balance_visits,
@@ -18899,8 +17943,7 @@ BEGIN
                 1, v_enrollment.current_visits,
                 'Earned a visit'
             );
-
-            IF v_program.visits_required IS NOT NULL
+IF v_program.visits_required IS NOT NULL
                AND v_enrollment.current_visits >= v_program.visits_required
             THEN
                 INSERT INTO loyalty_rewards (
@@ -18917,15 +17960,13 @@ BEGIN
                          ELSE NULL END,
                     'available'
                 ) RETURNING id INTO v_reward_id;
-
-                UPDATE loyalty_enrollments
+UPDATE loyalty_enrollments
                 SET
                     current_visits = 0,
                     total_rewards_earned = total_rewards_earned + 1
                 WHERE id = v_enrollment.id
                 RETURNING current_visits INTO v_enrollment.current_visits;
-
-                INSERT INTO loyalty_transactions (
+INSERT INTO loyalty_transactions (
                     enrollment_id, customer_id, program_id, merchant_id,
                     order_id, transaction_type,
                     visits_delta, balance_visits,
@@ -18937,11 +17978,10 @@ BEGIN
                     'Reward unlocked: ' || v_program.reward_description,
                     v_reward_id
                 );
-            END IF;
-
-        ELSIF v_program.program_type = 'punch_card' THEN
+END IF;
+ELSIF v_program.program_type = 'punch_card' THEN
             v_punch_earned := 0;
-            FOR v_item IN
+FOR v_item IN
                 SELECT oi.menu_item_id, oi.quantity, mi.category_id
                 FROM order_items oi
                 LEFT JOIN menu_items mi ON oi.menu_item_id = mi.id
@@ -18949,12 +17989,11 @@ BEGIN
             LOOP
                 IF v_program.punch_target_type = 'item' AND v_item.menu_item_id = v_program.punch_menu_item_id THEN
                     v_punch_earned := v_punch_earned + v_item.quantity;
-                ELSIF v_program.punch_target_type = 'category' AND v_item.category_id = v_program.punch_category_id THEN
+ELSIF v_program.punch_target_type = 'category' AND v_item.category_id = v_program.punch_category_id THEN
                     v_punch_earned := v_punch_earned + v_item.quantity;
-                END IF;
-            END LOOP;
-
-            IF v_punch_earned > 0 THEN
+END IF;
+END LOOP;
+IF v_punch_earned > 0 THEN
                 UPDATE loyalty_enrollments
                 SET
                     current_punches = current_punches + v_punch_earned,
@@ -18963,8 +18002,7 @@ BEGIN
                     updated_at = now()
                 WHERE id = v_enrollment.id
                 RETURNING * INTO v_enrollment;
-
-                INSERT INTO loyalty_transactions (
+INSERT INTO loyalty_transactions (
                     enrollment_id, customer_id, program_id, merchant_id,
                     order_id, transaction_type,
                     punches_delta, balance_punches,
@@ -18975,8 +18013,7 @@ BEGIN
                     v_punch_earned, v_enrollment.current_punches,
                     'Earned ' || v_punch_earned || ' punches'
                 );
-
-                IF v_program.punches_required IS NOT NULL
+IF v_program.punches_required IS NOT NULL
                    AND v_enrollment.current_punches >= v_program.punches_required
                 THEN
                     INSERT INTO loyalty_rewards (
@@ -18993,15 +18030,13 @@ BEGIN
                              ELSE NULL END,
                         'available'
                     ) RETURNING id INTO v_reward_id;
-
-                    UPDATE loyalty_enrollments
+UPDATE loyalty_enrollments
                     SET
                         current_punches = current_punches - v_program.punches_required,
                         total_rewards_earned = total_rewards_earned + 1
                     WHERE id = v_enrollment.id
                     RETURNING current_punches INTO v_enrollment.current_punches;
-
-                    INSERT INTO loyalty_transactions (
+INSERT INTO loyalty_transactions (
                         enrollment_id, customer_id, program_id, merchant_id,
                         order_id, transaction_type,
                         punches_delta, balance_punches,
@@ -19013,11 +18048,10 @@ BEGIN
                         'Reward unlocked: ' || v_program.reward_description,
                         v_reward_id
                     );
-                END IF;
-            END IF;
-        END IF;
-
-        v_result := v_result || jsonb_build_object(
+END IF;
+END IF;
+END IF;
+v_result := v_result || jsonb_build_object(
             'program_name', v_program.name,
             'program_type', v_program.program_type,
             'earned', CASE v_program.program_type
@@ -19032,9 +18066,8 @@ BEGIN
             END,
             'reward_unlocked', v_reward_id IS NOT NULL
         );
-    END LOOP;
-
-    RETURN v_result;
+END LOOP;
+RETURN v_result;
 END;
 $$;
 
@@ -19057,8 +18090,7 @@ BEGIN
         UPDATE loyalty_rewards
         SET status = 'expired'
         WHERE id = v_reward.id;
-
-        INSERT INTO loyalty_transactions (
+INSERT INTO loyalty_transactions (
             enrollment_id, customer_id, program_id, merchant_id,
             transaction_type,
             description, reward_id
@@ -19068,7 +18100,7 @@ BEGIN
             'Reward expired: ' || v_reward.reward_description,
             v_reward.id
         );
-    END LOOP;
+END LOOP;
 END;
 $$;
 
@@ -19082,11 +18114,11 @@ CREATE OR REPLACE FUNCTION "public"."loyalty_get_customer_status"("p_customer_id
     AS $$
 DECLARE
     v_customer JSONB;
-    v_enrollments JSONB := '[]'::JSONB;
-    v_available_rewards JSONB := '[]'::JSONB;
-    v_eligible_promos JSONB;
-    v_record RECORD;
-    v_progress NUMERIC;
+v_enrollments JSONB := '[]'::JSONB;
+v_available_rewards JSONB := '[]'::JSONB;
+v_eligible_promos JSONB;
+v_record RECORD;
+v_progress NUMERIC;
 BEGIN
     -- Basic customer info
     SELECT jsonb_build_object(
@@ -19097,8 +18129,7 @@ BEGIN
     ) INTO v_customer
     FROM customers
     WHERE id = p_customer_id;
-
-    -- Enrollments with progress
+-- Enrollments with progress
     FOR v_record IN
         SELECT
             e.*,
@@ -19115,15 +18146,14 @@ BEGIN
     LOOP
         IF v_record.program_type = 'points' AND COALESCE(v_record.points_redemption_threshold, 0) > 0 THEN
             v_progress := (v_record.current_points::NUMERIC / v_record.points_redemption_threshold) * 100;
-        ELSIF v_record.program_type = 'visits' AND COALESCE(v_record.visits_required, 0) > 0 THEN
+ELSIF v_record.program_type = 'visits' AND COALESCE(v_record.visits_required, 0) > 0 THEN
             v_progress := (v_record.current_visits::NUMERIC / v_record.visits_required) * 100;
-        ELSIF v_record.program_type = 'punch_card' AND COALESCE(v_record.punches_required, 0) > 0 THEN
+ELSIF v_record.program_type = 'punch_card' AND COALESCE(v_record.punches_required, 0) > 0 THEN
             v_progress := (v_record.current_punches::NUMERIC / v_record.punches_required) * 100;
-        ELSE
+ELSE
             v_progress := 0;
-        END IF;
-
-        v_enrollments := v_enrollments || jsonb_build_object(
+END IF;
+v_enrollments := v_enrollments || jsonb_build_object(
             'program_id', v_record.program_id,
             'program_name', v_record.program_name,
             'program_type', v_record.program_type,
@@ -19136,9 +18166,8 @@ BEGIN
             'progress_percent', ROUND(v_progress::NUMERIC, 1),
             'next_reward', v_record.reward_description
         );
-    END LOOP;
-
-    -- Available (non-expired) rewards
+END LOOP;
+-- Available (non-expired) rewards
     FOR v_record IN
         SELECT r.*, p.name as program_name
         FROM loyalty_rewards r
@@ -19155,13 +18184,11 @@ BEGIN
             'expires_at', v_record.expires_at,
             'program_name', v_record.program_name
         );
-    END LOOP;
-
-    -- Eligible promotions (delegate to separate function)
+END LOOP;
+-- Eligible promotions (delegate to separate function)
     SELECT get_eligible_promotions(p_customer_id, p_merchant_id, NULL, NULL, NULL)
     INTO v_eligible_promos;
-
-    -- Assemble result matching spec shape
+-- Assemble result matching spec shape
     RETURN jsonb_build_object(
         'customer', v_customer,
         'enrollments', v_enrollments,
@@ -19181,14 +18208,13 @@ CREATE OR REPLACE FUNCTION "public"."loyalty_manual_adjust"("p_enrollment_id" "u
     AS $$
 DECLARE
     v_enrollment RECORD;
-    v_new_balance INTEGER;
+v_new_balance INTEGER;
 BEGIN
     SELECT * INTO v_enrollment FROM loyalty_enrollments WHERE id = p_enrollment_id;
-    IF NOT FOUND THEN
+IF NOT FOUND THEN
         RETURN jsonb_build_object('error', 'Enrollment not found');
-    END IF;
-
-    CASE p_adjustment_type
+END IF;
+CASE p_adjustment_type
         WHEN 'points' THEN
             UPDATE loyalty_enrollments
             SET
@@ -19197,8 +18223,7 @@ BEGIN
                 updated_at = now()
             WHERE id = p_enrollment_id
             RETURNING current_points INTO v_new_balance;
-
-            INSERT INTO loyalty_transactions (
+INSERT INTO loyalty_transactions (
                 enrollment_id, customer_id, program_id, merchant_id,
                 transaction_type,
                 points_delta, balance_points,
@@ -19210,8 +18235,7 @@ BEGIN
                 'Manual adjustment: ' || p_reason,
                 p_staff_id
             );
-
-        WHEN 'visits' THEN
+WHEN 'visits' THEN
             UPDATE loyalty_enrollments
             SET
                 current_visits = current_visits + p_amount,
@@ -19219,8 +18243,7 @@ BEGIN
                 updated_at = now()
             WHERE id = p_enrollment_id
             RETURNING current_visits INTO v_new_balance;
-
-            INSERT INTO loyalty_transactions (
+INSERT INTO loyalty_transactions (
                 enrollment_id, customer_id, program_id, merchant_id,
                 transaction_type,
                 visits_delta, balance_visits,
@@ -19232,8 +18255,7 @@ BEGIN
                 'Manual adjustment: ' || p_reason,
                 p_staff_id
             );
-
-        WHEN 'punches' THEN
+WHEN 'punches' THEN
             UPDATE loyalty_enrollments
             SET
                 current_punches = current_punches + p_amount,
@@ -19241,8 +18263,7 @@ BEGIN
                 updated_at = now()
             WHERE id = p_enrollment_id
             RETURNING current_punches INTO v_new_balance;
-
-            INSERT INTO loyalty_transactions (
+INSERT INTO loyalty_transactions (
                 enrollment_id, customer_id, program_id, merchant_id,
                 transaction_type,
                 punches_delta, balance_punches,
@@ -19254,12 +18275,10 @@ BEGIN
                 'Manual adjustment: ' || p_reason,
                 p_staff_id
             );
-
-        ELSE
+ELSE
             RETURN jsonb_build_object('error', 'Invalid adjustment type. Must be: points, visits, or punches');
-    END CASE;
-
-    RETURN jsonb_build_object('success', true, 'new_balance', v_new_balance);
+END CASE;
+RETURN jsonb_build_object('success', true, 'new_balance', v_new_balance);
 END;
 $$;
 
@@ -19273,13 +18292,13 @@ CREATE OR REPLACE FUNCTION "public"."loyalty_redeem_reward"("p_reward_id" "uuid"
     AS $$
 DECLARE
     v_reward RECORD;
-    v_customer_id UUID;
-    v_order_total NUMERIC;
-    v_enrollment RECORD;
-    v_discount_amount NUMERIC;
-    v_free_item_id UUID;
-    v_item_price NUMERIC;
-    v_discount JSONB;
+v_customer_id UUID;
+v_order_total NUMERIC;
+v_enrollment RECORD;
+v_discount_amount NUMERIC;
+v_free_item_id UUID;
+v_item_price NUMERIC;
+v_discount JSONB;
 BEGIN
     -- Fetch reward and validate
     SELECT r.*, p.merchant_id AS program_merchant_id
@@ -19287,50 +18306,42 @@ BEGIN
     FROM loyalty_rewards r
     JOIN loyalty_programs p ON r.program_id = p.id
     WHERE r.id = p_reward_id AND r.status = 'available';
-
-    IF NOT FOUND THEN
+IF NOT FOUND THEN
         RETURN jsonb_build_object('error', 'Reward not available');
-    END IF;
-
-    -- Check expiry
+END IF;
+-- Check expiry
     IF v_reward.expires_at IS NOT NULL AND v_reward.expires_at < now() THEN
         UPDATE loyalty_rewards SET status = 'expired' WHERE id = p_reward_id;
-        RETURN jsonb_build_object('error', 'Reward expired');
-    END IF;
-
-    -- Validate customer matches order
+RETURN jsonb_build_object('error', 'Reward expired');
+END IF;
+-- Validate customer matches order
     SELECT customer_id, total_amount INTO v_customer_id, v_order_total FROM orders WHERE id = p_order_id;
-    IF v_customer_id IS NULL OR v_customer_id != v_reward.customer_id THEN
+IF v_customer_id IS NULL OR v_customer_id != v_reward.customer_id THEN
         RETURN jsonb_build_object('error', 'Reward does not belong to this customer');
-    END IF;
-
-    -- Get enrollment for balance updates
+END IF;
+-- Get enrollment for balance updates
     SELECT * INTO v_enrollment FROM loyalty_enrollments WHERE id = v_reward.enrollment_id;
-
-    -- Compute discount based on reward_type
+-- Compute discount based on reward_type
     CASE v_reward.reward_type
         WHEN 'discount_fixed' THEN
             v_discount_amount := v_reward.reward_value;
-
-        WHEN 'discount_percent' THEN
+WHEN 'discount_percent' THEN
             v_discount_amount := LEAST(
                 (v_order_total * v_reward.reward_value / 100),
                 COALESCE(v_reward.reward_max_value, v_order_total)
             );
-
-        WHEN 'free_item' THEN
+WHEN 'free_item' THEN
             v_free_item_id := v_reward.reward_menu_item_id;
-            IF v_free_item_id IS NULL THEN
+IF v_free_item_id IS NULL THEN
                 RETURN jsonb_build_object('error', 'Free item reward missing menu item reference');
-            END IF;
-            -- Look up the item price from the order
+END IF;
+-- Look up the item price from the order
             SELECT oi.unit_price INTO v_item_price
             FROM order_items oi
             WHERE oi.order_id = p_order_id AND oi.menu_item_id = v_free_item_id
             LIMIT 1;
-            v_discount_amount := COALESCE(v_item_price, 0);
-
-        WHEN 'free_category_item' THEN
+v_discount_amount := COALESCE(v_item_price, 0);
+WHEN 'free_category_item' THEN
             -- Find the cheapest qualifying category item on the order
             SELECT oi.unit_price, oi.menu_item_id INTO v_item_price, v_free_item_id
             FROM order_items oi
@@ -19339,13 +18350,11 @@ BEGIN
               AND mi.category_id = v_reward.reward_category_id
             ORDER BY oi.unit_price ASC
             LIMIT 1;
-            v_discount_amount := COALESCE(v_item_price, 0);
-
-        ELSE
+v_discount_amount := COALESCE(v_item_price, 0);
+ELSE
             RETURN jsonb_build_object('error', 'Unsupported reward type');
-    END CASE;
-
-    -- Mark reward as redeemed
+END CASE;
+-- Mark reward as redeemed
     UPDATE loyalty_rewards
     SET
         status = 'redeemed',
@@ -19353,8 +18362,7 @@ BEGIN
         redeemed_order_id = p_order_id,
         redeemed_location_id = p_location_id
     WHERE id = p_reward_id;
-
-    -- Update enrollment totals
+-- Update enrollment totals
     UPDATE loyalty_enrollments
     SET
         total_rewards_redeemed = total_rewards_redeemed + 1,
@@ -19362,8 +18370,7 @@ BEGIN
         last_redeem_at = now(),
         updated_at = now()
     WHERE id = v_reward.enrollment_id;
-
-    -- Log transaction
+-- Log transaction
     INSERT INTO loyalty_transactions (
         enrollment_id, customer_id, program_id, merchant_id,
         order_id, location_id, transaction_type,
@@ -19378,8 +18385,7 @@ BEGIN
         'Redeemed: ' || v_reward.reward_description,
         p_reward_id
     );
-
-    -- Return discount details → feeds into order_discounts with source = 'loyalty'
+-- Return discount details → feeds into order_discounts with source = 'loyalty'
     v_discount := jsonb_build_object(
         'discount_type', CASE v_reward.reward_type
             WHEN 'discount_fixed' THEN 'fixed_amount'
@@ -19392,8 +18398,7 @@ BEGIN
         'source', 'loyalty',
         'free_item_id', v_free_item_id
     );
-
-    RETURN v_discount;
+RETURN v_discount;
 END;
 $$;
 
@@ -19407,9 +18412,9 @@ CREATE OR REPLACE FUNCTION "public"."loyalty_void_order_earnings"("p_order_id" "
     AS $$
 DECLARE
     v_tx RECORD;
-    v_enrollment RECORD;
-    v_reward RECORD;
-    v_threshold_tx RECORD;
+v_enrollment RECORD;
+v_reward RECORD;
+v_threshold_tx RECORD;
 BEGIN
     FOR v_tx IN
         SELECT *
@@ -19419,8 +18424,7 @@ BEGIN
     LOOP
         -- Fetch current enrollment state
         SELECT * INTO v_enrollment FROM loyalty_enrollments WHERE id = v_tx.enrollment_id;
-
-        -- Reverse balances
+-- Reverse balances
         UPDATE loyalty_enrollments
         SET
             current_points = current_points - COALESCE(v_tx.points_delta, 0),
@@ -19431,8 +18435,7 @@ BEGIN
             lifetime_punches = lifetime_punches - COALESCE(v_tx.punches_delta, 0),
             updated_at = now()
         WHERE id = v_tx.enrollment_id;
-
-        -- Log void transaction
+-- Log void transaction
         INSERT INTO loyalty_transactions (
             enrollment_id, customer_id, program_id, merchant_id,
             order_id, transaction_type,
@@ -19450,8 +18453,7 @@ BEGIN
             v_enrollment.current_visits - COALESCE(v_tx.visits_delta, 0),
             'Voided earnings from order ' || p_order_id
         );
-
-        -- Void any unredeemed rewards linked via threshold_crossed transactions for this order
+-- Void any unredeemed rewards linked via threshold_crossed transactions for this order
         FOR v_threshold_tx IN
             SELECT *
             FROM loyalty_transactions
@@ -19462,25 +18464,23 @@ BEGIN
         LOOP
             -- Check reward status before voiding
             SELECT * INTO v_reward FROM loyalty_rewards WHERE id = v_threshold_tx.reward_id;
-
-            IF v_reward.status = 'available' THEN
+IF v_reward.status = 'available' THEN
                 -- Safe to void — not yet redeemed
                 UPDATE loyalty_rewards
                 SET status = 'voided', voided_at = now(), voided_reason = 'Order voided'
                 WHERE id = v_reward.id;
-
-                -- Decrement total_rewards_earned
+-- Decrement total_rewards_earned
                 UPDATE loyalty_enrollments
                 SET total_rewards_earned = GREATEST(total_rewards_earned - 1, 0)
                 WHERE id = v_tx.enrollment_id;
-            ELSIF v_reward.status = 'redeemed' THEN
+ELSIF v_reward.status = 'redeemed' THEN
                 -- Already redeemed → flag for manager review, do NOT auto-claw-back
                 UPDATE loyalty_rewards
                 SET voided_reason = 'REVIEW: Order voided but reward was already redeemed'
                 WHERE id = v_reward.id;
-            END IF;
-        END LOOP;
-    END LOOP;
+END IF;
+END LOOP;
+END LOOP;
 END;
 $$;
 
@@ -19972,28 +18972,24 @@ CREATE OR REPLACE FUNCTION "public"."mark_course_served"("p_order_id" "uuid", "p
     AS $$
 DECLARE
   v_course_id UUID;
-  v_session_id UUID;
+v_session_id UUID;
 BEGIN
   -- Get course
   SELECT id INTO v_course_id
   FROM public.order_courses
   WHERE order_id = p_order_id AND course_number = p_course_number;
-
-  IF v_course_id IS NULL THEN
+IF v_course_id IS NULL THEN
     RAISE EXCEPTION 'Course not found';
-  END IF;
-
-  -- Update to served
+END IF;
+-- Update to served
   UPDATE public.order_courses
   SET status = 'served', served_at = NOW()
   WHERE id = v_course_id;
-
-  -- Record event on session
+-- Record event on session
   SELECT ts.id INTO v_session_id
   FROM public.table_sessions ts
   WHERE ts.order_id = p_order_id AND ts.is_active = TRUE;
-
-  IF v_session_id IS NOT NULL THEN
+IF v_session_id IS NOT NULL THEN
     INSERT INTO public.table_session_events (
       session_id, event_type, event_data,
       triggered_by_staff_id, triggered_by_user_id
@@ -20009,14 +19005,12 @@ BEGIN
       COALESCE(p_staff_id, user_staff_profile_id()),
       get_my_claim('sub')
     );
-
-    -- Update food_served_at if not set
+-- Update food_served_at if not set
     UPDATE public.table_sessions
     SET food_served_at = COALESCE(food_served_at, NOW())
     WHERE id = v_session_id;
-  END IF;
-
-  RETURN json_build_object(
+END IF;
+RETURN json_build_object(
     'success', true,
     'course_number', p_course_number,
     'status', 'served'
@@ -20055,9 +19049,8 @@ BEGIN
   SET is_online = FALSE
   WHERE is_online = TRUE
     AND last_heartbeat_at < NOW() - INTERVAL '3 minutes';
-
-  GET DIAGNOSTICS v_count = ROW_COUNT;
-  RETURN v_count;
+GET DIAGNOSTICS v_count = ROW_COUNT;
+RETURN v_count;
 END;
 $$;
 
@@ -20071,13 +19064,13 @@ CREATE OR REPLACE FUNCTION "public"."merge_customers"("p_primary_id" "uuid", "p_
     AS $$
 DECLARE
   v_merchant_id uuid;
-  v_primary_name text;
-  v_new_spend numeric := 0;
-  v_new_visits bigint := 0;
-  v_new_last_visit timestamptz;
-  v_new_total_orders bigint := 0;
-  v_merged_tags text[];
-  v_duplicate_count int;
+v_primary_name text;
+v_new_spend numeric := 0;
+v_new_visits bigint := 0;
+v_new_last_visit timestamptz;
+v_new_total_orders bigint := 0;
+v_merged_tags text[];
+v_duplicate_count int;
 BEGIN
 
   -- =====================================
@@ -20090,16 +19083,14 @@ BEGIN
       'success', false,
       'error', 'No duplicate IDs provided'
     );
-  END IF;
-
-  IF p_primary_id = ANY(p_duplicate_ids) THEN
+END IF;
+IF p_primary_id = ANY(p_duplicate_ids) THEN
     RETURN jsonb_build_object(
       'success', false,
       'error', 'Primary ID cannot be included in duplicate IDs'
     );
-  END IF;
-
-  -- =====================================
+END IF;
+-- =====================================
   -- 2️⃣ Lock Primary Customer Row
   -- =====================================
 
@@ -20108,15 +19099,13 @@ BEGIN
   FROM customers
   WHERE id = p_primary_id
   FOR UPDATE;
-
-  IF v_merchant_id IS NULL THEN
+IF v_merchant_id IS NULL THEN
     RETURN jsonb_build_object(
       'success', false,
       'error', 'Primary customer not found'
     );
-  END IF;
-
-  -- =====================================
+END IF;
+-- =====================================
   -- 3️⃣ Validate + Lock Duplicate Rows
   -- =====================================
 
@@ -20126,15 +19115,13 @@ BEGIN
   WHERE id = ANY(p_duplicate_ids)
     AND merchant_id = v_merchant_id
   FOR UPDATE;
-
-  IF v_duplicate_count <> array_length(p_duplicate_ids, 1) THEN
+IF v_duplicate_count <> array_length(p_duplicate_ids, 1) THEN
     RETURN jsonb_build_object(
       'success', false,
       'error', 'One or more duplicate IDs invalid or cross-merchant'
     );
-  END IF;
-
-  -- =====================================
+END IF;
+-- =====================================
   -- 4️⃣ Aggregate Duplicate Totals
   -- =====================================
 
@@ -20151,8 +19138,7 @@ BEGIN
   FROM customers
   WHERE id = ANY(p_duplicate_ids)
     AND merchant_id = v_merchant_id;
-
-  -- =====================================
+-- =====================================
   -- 5️⃣ Merge Tags (Set Union)
   -- =====================================
 
@@ -20166,8 +19152,7 @@ BEGIN
       AND tags IS NOT NULL
   ) t
   WHERE tag IS NOT NULL;
-
-  -- =====================================
+-- =====================================
   -- 6️⃣ Reassign Orders
   -- =====================================
 
@@ -20176,8 +19161,7 @@ BEGIN
       updated_at = NOW()
   WHERE customer_id = ANY(p_duplicate_ids)
     AND merchant_id = v_merchant_id;
-
-  -- =====================================
+-- =====================================
   -- 7️⃣ Reassign Customer Activities
   -- =====================================
 
@@ -20186,8 +19170,7 @@ BEGIN
       updated_at = NOW()
   WHERE customer_id = ANY(p_duplicate_ids)
     AND merchant_id = v_merchant_id;
-
-  -- =====================================
+-- =====================================
   -- 8️⃣ Update Primary Customer
   -- =====================================
 
@@ -20206,16 +19189,14 @@ BEGIN
     updated_at = NOW()
   WHERE id = p_primary_id
     AND merchant_id = v_merchant_id;
-
-  -- =====================================
+-- =====================================
   -- 9️⃣ Delete Duplicate Customers
   -- =====================================
 
   DELETE FROM customers
   WHERE id = ANY(p_duplicate_ids)
     AND merchant_id = v_merchant_id;
-
-  -- =====================================
+-- =====================================
   -- 10️⃣ Success Response
   -- =====================================
 
@@ -20228,7 +19209,6 @@ BEGIN
     'combined_spend', v_new_spend,
     'combined_visits', v_new_visits
   );
-
 EXCEPTION WHEN OTHERS THEN
   RETURN jsonb_build_object(
     'success', false,
@@ -20285,27 +19265,23 @@ BEGIN
       AND location_id = ANY(user_location_ids())
   ) THEN
     RAISE EXCEPTION 'Session not found';
-  END IF;
-
-  -- Check table is available
+END IF;
+-- Check table is available
   IF EXISTS (
     SELECT 1 FROM public.table_session_tables tst
     JOIN public.table_sessions ts ON ts.id = tst.session_id
     WHERE tst.table_id = p_table_id AND ts.is_active = TRUE
   ) THEN
     RAISE EXCEPTION 'Table is already occupied';
-  END IF;
-
-  -- Get next position
+END IF;
+-- Get next position
   SELECT COALESCE(MAX(seated_position), 0) + 1 INTO v_position
   FROM public.table_session_tables
   WHERE session_id = p_session_id;
-
-  -- Add table
+-- Add table
   INSERT INTO public.table_session_tables (session_id, table_id, is_primary, seated_position)
   VALUES (p_session_id, p_table_id, FALSE, v_position);
-
-  RETURN json_build_object(
+RETURN json_build_object(
     'success', true,
     'session_id', p_session_id,
     'merged_table_id', p_table_id
@@ -20323,8 +19299,8 @@ CREATE OR REPLACE FUNCTION "public"."migrate_menu_items_to_categories"() RETURNS
     AS $$
 DECLARE
     v_migrated INTEGER := 0;
-    v_default_category_id UUID;
-    v_merchant_id UUID;
+v_default_category_id UUID;
+v_merchant_id UUID;
 BEGIN
     -- For each unique merchant that has menu_item_menus records
     FOR v_merchant_id IN 
@@ -20337,13 +19313,11 @@ BEGIN
         INSERT INTO categories (merchant_id, name, description, is_active)
         VALUES (v_merchant_id, 'Uncategorized', 'Items without a specific category', true)
         ON CONFLICT DO NOTHING;
-        
-        SELECT id INTO v_default_category_id 
+SELECT id INTO v_default_category_id 
         FROM categories 
         WHERE merchant_id = v_merchant_id AND name = 'Uncategorized'
         LIMIT 1;
-        
-        -- Migrate items that don't have category assignments
+-- Migrate items that don't have category assignments
         INSERT INTO category_items (category_id, menu_item_id, display_order, is_available)
         SELECT DISTINCT 
             v_default_category_id,
@@ -20358,8 +19332,7 @@ BEGIN
               WHERE ci.menu_item_id = mim.menu_item_id
           )
         ON CONFLICT (category_id, menu_item_id) DO NOTHING;
-        
-        -- Add category to menus that had these items
+-- Add category to menus that had these items
         INSERT INTO menu_categories (menu_id, category_id, display_order, is_active, merchant_id)
         SELECT DISTINCT 
             mim.menu_id,
@@ -20371,18 +19344,15 @@ BEGIN
         JOIN menu_items mi ON mi.id = mim.menu_item_id
         WHERE mi.merchant_id = v_merchant_id
         ON CONFLICT (menu_id, category_id) DO NOTHING;
-        
-        -- Mark as migrated
+-- Mark as migrated
         UPDATE menu_item_menus mim
         SET is_migrated = true
         FROM menu_items mi
         WHERE mi.id = mim.menu_item_id
           AND mi.merchant_id = v_merchant_id;
-        
-        GET DIAGNOSTICS v_migrated = ROW_COUNT;
-    END LOOP;
-    
-    RETURN json_build_object(
+GET DIAGNOSTICS v_migrated = ROW_COUNT;
+END LOOP;
+RETURN json_build_object(
         'success', true,
         'migrated_count', v_migrated
     );
@@ -20399,7 +19369,7 @@ CREATE OR REPLACE FUNCTION "public"."migrate_pending_to_preparing"("p_location_i
     AS $$
 DECLARE
   v_affected_count INT;
-  v_affected_order_ids UUID[];
+v_affected_order_ids UUID[];
 BEGIN
   -- Advance all "sent" items to "preparing" for active orders at this location
   UPDATE order_items oi
@@ -20413,10 +19383,8 @@ BEGIN
     AND o.status IN ('sent_to_kitchen', 'preparing')
     AND oi.kitchen_status = 'sent'
     AND COALESCE(oi.is_voided, false) = false;
-
-  GET DIAGNOSTICS v_affected_count = ROW_COUNT;
-
-  -- Update kds_item_status: set started_at for pending display items
+GET DIAGNOSTICS v_affected_count = ROW_COUNT;
+-- Update kds_item_status: set started_at for pending display items
   UPDATE kds_item_status kis
   SET started_at = COALESCE(started_at, NOW()), updated_at = NOW()
   FROM order_items oi, orders o
@@ -20425,20 +19393,17 @@ BEGIN
     AND o.location_id = p_location_id
     AND kis.status = 'pending'
     AND oi.kitchen_status = 'preparing';
-
-  -- Bump sync_version on affected orders to trigger broadcasts
+-- Bump sync_version on affected orders to trigger broadcasts
   SELECT ARRAY_AGG(DISTINCT o.id) INTO v_affected_order_ids
   FROM orders o
   WHERE o.location_id = p_location_id
     AND o.status IN ('sent_to_kitchen', 'preparing');
-
-  IF v_affected_order_ids IS NOT NULL THEN
+IF v_affected_order_ids IS NOT NULL THEN
     UPDATE orders
     SET sync_version = COALESCE(sync_version, 0) + 1, updated_at = NOW()
     WHERE id = ANY(v_affected_order_ids);
-  END IF;
-
-  RETURN jsonb_build_object('success', true, 'migrated_items', v_affected_count);
+END IF;
+RETURN jsonb_build_object('success', true, 'migrated_items', v_affected_count);
 END;
 $$;
 
@@ -20452,25 +19417,21 @@ CREATE OR REPLACE FUNCTION "public"."notify_waitlist_party"("p_waitlist_id" "uui
     AS $$
 DECLARE
   v_entry    waitlist%ROWTYPE;
-  v_location locations%ROWTYPE;
+v_location locations%ROWTYPE;
 BEGIN
   SELECT * INTO v_entry FROM waitlist
   WHERE id = p_waitlist_id
     AND merchant_id = user_merchant_id()
     AND location_id = ANY(user_location_ids())
     AND status = 'waiting';
-
-  IF NOT FOUND THEN
+IF NOT FOUND THEN
     RETURN json_build_object('success', false, 'error', 'Entry not found or not in waiting status');
-  END IF;
-
-  IF v_entry.notification_count >= 3 THEN
+END IF;
+IF v_entry.notification_count >= 3 THEN
     RETURN json_build_object('success', false, 'error', 'max_notifications_reached');
-  END IF;
-
-  SELECT * INTO v_location FROM locations WHERE id = v_entry.location_id;
-
-  RETURN json_build_object(
+END IF;
+SELECT * INTO v_location FROM locations WHERE id = v_entry.location_id;
+RETURN json_build_object(
     'success', true,
     'phone', v_entry.phone,
     'party_name', v_entry.party_name,
@@ -20495,8 +19456,8 @@ CREATE OR REPLACE FUNCTION "public"."open_cash_drawer_session"("p_cash_drawer_id
     AS $$
 DECLARE
   v_session_id UUID;
-  v_business_date DATE := CURRENT_DATE;
-  v_existing_session UUID;
+v_business_date DATE := CURRENT_DATE;
+v_existing_session UUID;
 BEGIN
   -- Verify no open session exists for this drawer
   SELECT id INTO v_existing_session
@@ -20504,16 +19465,14 @@ BEGIN
   WHERE cash_drawer_id = p_cash_drawer_id
     AND status = 'open'
   LIMIT 1;
-
-  IF v_existing_session IS NOT NULL THEN
+IF v_existing_session IS NOT NULL THEN
     RETURN jsonb_build_object(
       'success', false,
       'error', 'Drawer already has an open session',
       'existing_session_id', v_existing_session
     );
-  END IF;
-
-  -- Create session
+END IF;
+-- Create session
   INSERT INTO cash_drawer_sessions (
     cash_drawer_id, merchant_id, location_id,
     opened_by, opened_at, opening_amount,
@@ -20526,8 +19485,7 @@ BEGIN
     p_opening_amount, 'open', v_business_date
   )
   RETURNING id INTO v_session_id;
-
-  -- Record opening_count operation
+-- Record opening_count operation
   INSERT INTO cash_drawer_operations (
     cash_drawer_id, session_id, operation_type,
     amount, performed_by, performed_at,
@@ -20537,13 +19495,11 @@ BEGIN
     p_opening_amount, p_opened_by, NOW(),
     p_opening_amount
   );
-
-  -- Update drawer status
+-- Update drawer status
   UPDATE cash_drawers
   SET is_open = true, current_session_id = v_session_id
   WHERE id = p_cash_drawer_id;
-
-  RETURN jsonb_build_object(
+RETURN jsonb_build_object(
     'success', true,
     'session_id', v_session_id,
     'business_date', v_business_date
@@ -21046,38 +20002,32 @@ CREATE OR REPLACE FUNCTION "public"."pos_staff_logout"("p_session_id" "uuid", "p
     AS $$
 DECLARE
   v_session RECORD;
-  v_clock_result JSON;
+v_clock_result JSON;
 BEGIN
   UPDATE station_sessions
   SET session_status = 'ended', ended_at = NOW(), last_activity_at = NOW()
   WHERE id = p_session_id AND session_status = 'active'
   RETURNING * INTO v_session;
-
-  IF NOT FOUND THEN
+IF NOT FOUND THEN
     RETURN json_build_object('success', false, 'error', 'Session not found');
-  END IF;
-
-  UPDATE stations SET is_online = FALSE
+END IF;
+UPDATE stations SET is_online = FALSE
   WHERE id = v_session.station_id AND device_id = v_session.device_id;
-
-  UPDATE station_devices
+UPDATE station_devices
   SET is_connected = FALSE, last_seen_at = NOW(), updated_at = NOW()
   WHERE session_id = p_session_id AND device_type = 'pos_device';
-
-  UPDATE device_login_history
+UPDATE device_login_history
   SET logged_out_at = NOW(), logout_reason = 'logout'
   WHERE session_id = p_session_id AND logged_out_at IS NULL;
-
-  IF p_clock_out THEN
+IF p_clock_out THEN
     v_clock_result := handle_time_clock(
       p_pin_code,
       p_location_id,
       'clock_out'::TEXT,
       p_device_id
     );
-  END IF;
-
-  RETURN json_build_object(
+END IF;
+RETURN json_build_object(
     'success', true,
     'clocked_out', p_clock_out,
     'clock_result', v_clock_result
@@ -21095,33 +20045,30 @@ CREATE OR REPLACE FUNCTION "public"."prepare_castles_settlement"("p_terminal_id"
     AS $$
 DECLARE
   v_terminal          record;
-  v_payment_count     integer;
-  v_date_start        date;
-  v_date_end          date;
-  v_gross             numeric(10,2);
-  v_tips              numeric(10,2);
-  v_total             numeric(10,2);
-  v_batch_seq         integer;
-  v_batch_id          text;
-  v_batch_uuid        uuid;
-  v_pos_txn_id        text;
-  v_next_pos_txn_int  integer;
+v_payment_count     integer;
+v_date_start        date;
+v_date_end          date;
+v_gross             numeric(10,2);
+v_tips              numeric(10,2);
+v_total             numeric(10,2);
+v_batch_seq         integer;
+v_batch_id          text;
+v_batch_uuid        uuid;
+v_pos_txn_id        text;
+v_next_pos_txn_int  integer;
 BEGIN
   SELECT * INTO v_terminal
   FROM public.payment_terminals
   WHERE id = p_terminal_id
   FOR UPDATE;
-
-  IF NOT FOUND THEN
+IF NOT FOUND THEN
     RAISE EXCEPTION 'Terminal not found: %', p_terminal_id;
-  END IF;
-
-  IF v_terminal.merchant_id != p_merchant_id THEN
+END IF;
+IF v_terminal.merchant_id != p_merchant_id THEN
     RAISE EXCEPTION 'Access denied: terminal % does not belong to merchant %',
       p_terminal_id, p_merchant_id;
-  END IF;
-
-  UPDATE public.settlement_batches
+END IF;
+UPDATE public.settlement_batches
   SET
     status         = 'failed',
     failure_reason = 'Auto-reset: prepare was called but the Castles device was never contacted (app crash or timeout). Safe to retry.',
@@ -21130,25 +20077,22 @@ BEGIN
     payment_terminal_id = p_terminal_id
     AND status = 'pending'
     AND opened_at < (NOW() - INTERVAL '10 minutes');
-
-  UPDATE public.order_payments op
+UPDATE public.order_payments op
   SET settlement_batch_id = NULL
   FROM public.settlement_batches sb
   WHERE
     op.settlement_batch_id = sb.id
     AND sb.payment_terminal_id = p_terminal_id
     AND sb.status = 'failed';
-
-  IF EXISTS (
+IF EXISTS (
     SELECT 1
     FROM public.settlement_batches
     WHERE payment_terminal_id = p_terminal_id
       AND status IN ('pending', 'settling')
   ) THEN
     RAISE EXCEPTION 'A settlement is already in progress for terminal %. Wait or check for a stuck batch.', p_terminal_id;
-  END IF;
-
-  SELECT
+END IF;
+SELECT
     COUNT(*),
     MIN(op.approved_at::date),
     MAX(op.approved_at::date),
@@ -21165,35 +20109,29 @@ BEGIN
     AND op.is_settled      = false
     AND op.status          = 'captured'
     AND op.settlement_batch_id IS NULL;
-
-  IF v_payment_count = 0 THEN
+IF v_payment_count = 0 THEN
     RAISE EXCEPTION 'No unsettled captured payments found for terminal %. All transactions may already be settled or none have been captured yet.', p_terminal_id;
-  END IF;
-
-  SELECT COUNT(*) + 1
+END IF;
+SELECT COUNT(*) + 1
   INTO v_batch_seq
   FROM public.settlement_batches
   WHERE payment_terminal_id = p_terminal_id;
-
-  v_batch_id := 'DEXA-'
+v_batch_id := 'DEXA-'
     || UPPER(LEFT(REPLACE(p_terminal_id::text, '-', ''), 8))
     || '-'
     || TO_CHAR(NOW() AT TIME ZONE 'America/New_York', 'YYYYMMDD')
     || '-'
     || LPAD(v_batch_seq::text, 3, '0');
-
-  v_next_pos_txn_int := (
+v_next_pos_txn_int := (
     (COALESCE(v_terminal.castles_last_pos_txn_id, '000000')::integer % 999999) + 1
   );
-  v_pos_txn_id := LPAD(v_next_pos_txn_int::text, 6, '0');
-
-  UPDATE public.payment_terminals
+v_pos_txn_id := LPAD(v_next_pos_txn_int::text, 6, '0');
+UPDATE public.payment_terminals
   SET
     castles_last_pos_txn_id = v_pos_txn_id,
     updated_at              = NOW()
   WHERE id = p_terminal_id;
-
-  INSERT INTO public.settlement_batches (
+INSERT INTO public.settlement_batches (
     batch_id,
     merchant_id,
     location_id,
@@ -21232,8 +20170,7 @@ BEGIN
     NOW()
   )
   RETURNING id INTO v_batch_uuid;
-
-  UPDATE public.order_payments
+UPDATE public.order_payments
   SET
     settlement_batch_id = v_batch_uuid
   WHERE
@@ -21242,8 +20179,7 @@ BEGIN
     AND is_settled         = false
     AND status             = 'captured'
     AND settlement_batch_id IS NULL;
-
-  RETURN jsonb_build_object(
+RETURN jsonb_build_object(
     'batch_uuid',         v_batch_uuid,
     'batch_id',           v_batch_id,
     'payment_count',      v_payment_count,
@@ -21285,14 +20221,14 @@ CREATE OR REPLACE FUNCTION "public"."preview_payment"("p_order_id" "uuid", "p_is
     AS $$
 DECLARE
   v_order RECORD;
-  v_charge_amount NUMERIC;
-  v_subtotal_portion NUMERIC;
-  v_tax_portion NUMERIC;
-  v_discount_portion NUMERIC;
-  v_remaining_balance NUMERIC;
-  v_outstanding_total NUMERIC;
-  v_outstanding_subtotal NUMERIC;
-  v_outstanding_tax NUMERIC;
+v_charge_amount NUMERIC;
+v_subtotal_portion NUMERIC;
+v_tax_portion NUMERIC;
+v_discount_portion NUMERIC;
+v_remaining_balance NUMERIC;
+v_outstanding_total NUMERIC;
+v_outstanding_subtotal NUMERIC;
+v_outstanding_tax NUMERIC;
 BEGIN
   -- Get order with current totals
   SELECT 
@@ -21306,14 +20242,11 @@ BEGIN
   INTO v_order
   FROM orders o
   WHERE o.id = p_order_id;
-  
-  IF NOT FOUND THEN
+IF NOT FOUND THEN
     RAISE EXCEPTION 'Order not found: %', p_order_id;
-  END IF;
-  
-  v_outstanding_total := v_order.outstanding;
-  
-  -- Calculate outstanding subtotal and tax from unpaid items
+END IF;
+v_outstanding_total := v_order.outstanding;
+-- Calculate outstanding subtotal and tax from unpaid items
   SELECT 
     COALESCE(SUM(
       CASE WHEN p_is_cash THEN 
@@ -21332,25 +20265,22 @@ BEGIN
   WHERE oi.order_id = p_order_id
   AND NOT oi.is_voided
   AND oi.quantity > COALESCE(oi.paid_quantity, 0);
-  
-  -- Calculate based on payment type
+-- Calculate based on payment type
   CASE p_payment_type
     WHEN 'full' THEN
       v_charge_amount := v_outstanding_total;
-      v_subtotal_portion := v_outstanding_subtotal;
-      v_tax_portion := v_outstanding_tax;
-      v_discount_portion := v_order.discount_amount * 
+v_subtotal_portion := v_outstanding_subtotal;
+v_tax_portion := v_outstanding_tax;
+v_discount_portion := v_order.discount_amount * 
         (v_outstanding_subtotal / NULLIF(v_order.subtotal, 0));
-      v_remaining_balance := 0;
-      
-    WHEN 'split_even' THEN
+v_remaining_balance := 0;
+WHEN 'split_even' THEN
       v_charge_amount := ROUND(v_outstanding_total / COALESCE(p_split_count, 1), 2);
-      v_subtotal_portion := ROUND(v_outstanding_subtotal / COALESCE(p_split_count, 1), 2);
-      v_tax_portion := ROUND(v_outstanding_tax / COALESCE(p_split_count, 1), 2);
-      v_discount_portion := ROUND(v_order.discount_amount / COALESCE(p_split_count, 1), 2);
-      v_remaining_balance := v_outstanding_total - v_charge_amount;
-      
-    WHEN 'split_by_item' THEN
+v_subtotal_portion := ROUND(v_outstanding_subtotal / COALESCE(p_split_count, 1), 2);
+v_tax_portion := ROUND(v_outstanding_tax / COALESCE(p_split_count, 1), 2);
+v_discount_portion := ROUND(v_order.discount_amount / COALESCE(p_split_count, 1), 2);
+v_remaining_balance := v_outstanding_total - v_charge_amount;
+WHEN 'split_by_item' THEN
       -- Calculate from selected items
       SELECT 
         COALESCE(SUM(
@@ -21384,26 +20314,23 @@ BEGIN
         ON oi.id = (alloc->>'item_id')::UUID
       WHERE oi.order_id = p_order_id
       AND NOT oi.is_voided;
-      
-      v_remaining_balance := v_outstanding_total - v_charge_amount;
-      -- Simplified portions for split by item
-      v_subtotal_portion := v_charge_amount * 0.9; -- Approximate
+v_remaining_balance := v_outstanding_total - v_charge_amount;
+-- Simplified portions for split by item
+      v_subtotal_portion := v_charge_amount * 0.9;
+-- Approximate
       v_tax_portion := v_charge_amount * 0.1;
-      v_discount_portion := 0;
-      
-    WHEN 'split_custom' THEN
+v_discount_portion := 0;
+WHEN 'split_custom' THEN
       v_charge_amount := LEAST(p_custom_amount, v_outstanding_total);
-      v_remaining_balance := v_outstanding_total - v_charge_amount;
-      -- Estimate proportions
+v_remaining_balance := v_outstanding_total - v_charge_amount;
+-- Estimate proportions
       v_subtotal_portion := v_charge_amount * (v_outstanding_subtotal / NULLIF(v_outstanding_total, 0));
-      v_tax_portion := v_charge_amount * (v_outstanding_tax / NULLIF(v_outstanding_total, 0));
-      v_discount_portion := 0;
-      
-    ELSE
+v_tax_portion := v_charge_amount * (v_outstanding_tax / NULLIF(v_outstanding_total, 0));
+v_discount_portion := 0;
+ELSE
       RAISE EXCEPTION 'Invalid payment type: %', p_payment_type;
-  END CASE;
-  
-  RETURN jsonb_build_object(
+END CASE;
+RETURN jsonb_build_object(
     'charge_amount', ROUND(v_charge_amount, 2),
     'subtotal_portion', ROUND(v_subtotal_portion, 2),
     'tax_portion', ROUND(v_tax_portion, 2),
@@ -21425,22 +20352,19 @@ CREATE OR REPLACE FUNCTION "public"."process_cash_payment_full_order"("p_order_i
     AS $$
 DECLARE
     v_order record;
-    v_payment_id uuid;
-    v_change_due numeric;
+v_payment_id uuid;
+v_change_due numeric;
 BEGIN
     -- Get current order with cash pricing
     SELECT * INTO v_order 
     FROM public.orders 
     WHERE id = p_order_id;
-    
-    IF NOT FOUND THEN
+IF NOT FOUND THEN
         RAISE EXCEPTION 'Order not found: %', p_order_id;
-    END IF;
-    
-    -- Calculate change
+END IF;
+-- Calculate change
     v_change_due := GREATEST(p_amount_tendered - v_order.cash_total, 0);
-    
-    -- Update order to use cash pricing as effective
+-- Update order to use cash pricing as effective
     UPDATE public.orders SET
         effective_subtotal = cash_subtotal,
         effective_tax_amount = cash_tax_amount,
@@ -21455,8 +20379,7 @@ BEGIN
         payment_status = 'paid',
         updated_at = now()
     WHERE id = p_order_id;
-    
-    -- Create payment record
+-- Create payment record
     INSERT INTO public.order_payments (
         order_id,
         payment_method,
@@ -21491,8 +20414,7 @@ BEGIN
         now()
     )
     RETURNING id INTO v_payment_id;
-    
-    RETURN jsonb_build_object(
+RETURN jsonb_build_object(
         'success', true,
         'payment_id', v_payment_id,
         'cash_total', v_order.cash_total,
@@ -21513,48 +20435,43 @@ CREATE OR REPLACE FUNCTION "public"."process_online_order"("p_location_id" "uuid
     SET "search_path" TO 'public', 'public', 'pg_temp'
     AS $$DECLARE
   v_merchant_id      UUID;
-  v_order_id         UUID;
-  v_order_number     TEXT;
-  v_display_number   TEXT;
-  v_payment_id       UUID;
-  v_order_type       public.order_type;
-  v_status           public.order_status;
-  v_kitchen_status   TEXT;
-  v_provider_enum    public.online_order_provider;
-
-  v_item             JSONB;
-  v_item_index       INTEGER := 0;
-  v_item_count       INTEGER := 0;
-  v_order_item_id    UUID;
-
-  v_menu_item        RECORD;
-  v_menu_item_found  BOOLEAN;
-
-  v_item_tax_raw     NUMERIC;
-  v_item_tax_floor   NUMERIC;
-  v_tax_distributed  NUMERIC := 0;
-  v_tax_remainders   NUMERIC[];
-  v_tax_item_ids     UUID[];
-  v_tax_floors       NUMERIC[];
-
-  v_modifier         JSONB;
-  v_default_tax_rate NUMERIC;
-  v_warnings         JSONB := '[]'::JSONB;
+v_order_id         UUID;
+v_order_number     TEXT;
+v_display_number   TEXT;
+v_payment_id       UUID;
+v_order_type       public.order_type;
+v_status           public.order_status;
+v_kitchen_status   TEXT;
+v_provider_enum    public.online_order_provider;
+v_item             JSONB;
+v_item_index       INTEGER := 0;
+v_item_count       INTEGER := 0;
+v_order_item_id    UUID;
+v_menu_item        RECORD;
+v_menu_item_found  BOOLEAN;
+v_item_tax_raw     NUMERIC;
+v_item_tax_floor   NUMERIC;
+v_tax_distributed  NUMERIC := 0;
+v_tax_remainders   NUMERIC[];
+v_tax_item_ids     UUID[];
+v_tax_floors       NUMERIC[];
+v_modifier         JSONB;
+v_default_tax_rate NUMERIC;
+v_warnings         JSONB := '[]'::JSONB;
 BEGIN
   -- ========================================================================
   -- STEP 0: IDEMPOTENCY
   -- ========================================================================
   DECLARE
     v_existing_order_id UUID;
-    v_existing_online_id UUID;
-  BEGIN
+v_existing_online_id UUID;
+BEGIN
     SELECT oo.order_id, oo.id
     INTO v_existing_order_id, v_existing_online_id
     FROM public.online_orders oo
     WHERE oo.provider = p_provider::public.online_order_provider
       AND oo.provider_order_id = p_provider_order_id;
-
-    IF v_existing_order_id IS NOT NULL THEN
+IF v_existing_order_id IS NOT NULL THEN
       RETURN jsonb_build_object(
         'success', true,
         'order_id', v_existing_order_id,
@@ -21562,44 +20479,38 @@ BEGIN
         'duplicate', true,
         'message', 'Order already processed'
       );
-    END IF;
-
-    SELECT id INTO v_existing_order_id
+END IF;
+SELECT id INTO v_existing_order_id
     FROM public.orders
     WHERE external_id = p_provider || ':' || p_provider_order_id;
-
-    IF v_existing_order_id IS NOT NULL THEN
+IF v_existing_order_id IS NOT NULL THEN
       RETURN jsonb_build_object(
         'success', true,
         'order_id', v_existing_order_id,
         'duplicate', true,
         'message', 'Order already processed (external_id match)'
       );
-    END IF;
-  END;
-
-  -- ========================================================================
+END IF;
+END;
+-- ========================================================================
   -- STEP 1: RESOLVE MERCHANT
   -- ========================================================================
   SELECT merchant_id INTO v_merchant_id
   FROM public.locations
   WHERE id = p_location_id;
-
-  IF v_merchant_id IS NULL THEN
+IF v_merchant_id IS NULL THEN
     RAISE EXCEPTION 'Location not found: %', p_location_id;
-  END IF;
-
-  -- ========================================================================
+END IF;
+-- ========================================================================
   -- STEP 2: CAST PROVIDER ENUM
   -- ========================================================================
   BEGIN
     v_provider_enum := p_provider::public.online_order_provider;
-  EXCEPTION WHEN invalid_text_representation THEN
+EXCEPTION WHEN invalid_text_representation THEN
     v_provider_enum := 'other'::public.online_order_provider;
-    p_provider_metadata := p_provider_metadata || jsonb_build_object('original_provider', p_provider);
-  END;
-
-  -- ========================================================================
+p_provider_metadata := p_provider_metadata || jsonb_build_object('original_provider', p_provider);
+END;
+-- ========================================================================
   -- STEP 3: MAP ORDER TYPE & STATUS
   -- ========================================================================
   v_order_type := CASE UPPER(p_order_type_raw)
@@ -21608,16 +20519,14 @@ BEGIN
     WHEN 'TAKEOUT'  THEN 'takeout'::public.order_type
     ELSE 'online'::public.order_type
   END;
-
-  IF p_auto_accept THEN
+IF p_auto_accept THEN
     v_status := 'sent_to_kitchen'::public.order_status;
-    v_kitchen_status := 'sent';
-  ELSE
+v_kitchen_status := 'sent';
+ELSE
     v_status := 'pending'::public.order_status;
-    v_kitchen_status := NULL;
-  END IF;
-
-  -- ========================================================================
+v_kitchen_status := NULL;
+END IF;
+-- ========================================================================
   -- STEP 4: GET DEFAULT TAX RATE
   -- FIX: removed tax_category = 'default' filter — picks the first active rate
   --      for the location regardless of category name (handles 'standard',
@@ -21631,36 +20540,31 @@ BEGIN
     CASE tax_category WHEN 'standard' THEN 0 WHEN 'default' THEN 1 ELSE 2 END,
     created_at ASC
   LIMIT 1;
-
-  -- Self-healing tax: if the caller passed p_tax = 0 but we found a rate,
+-- Self-healing tax: if the caller passed p_tax = 0 but we found a rate,
   -- recalculate tax and total so the stored record is always correct.
   IF v_default_tax_rate IS NOT NULL AND p_tax = 0 AND p_subtotal > 0 THEN
     p_tax   := ROUND(p_subtotal * (v_default_tax_rate / 100), 2);
-    p_total := p_subtotal + p_tax + COALESCE(p_gratuity, 0)
+p_total := p_subtotal + p_tax + COALESCE(p_gratuity, 0)
                            + COALESCE(p_surcharge, 0)
                            + COALESCE(p_delivery_charge, 0)
                            - COALESCE(p_discount, 0);
-  END IF;
-
-  -- Infer rate from p_tax if still unknown (e.g. third-party providers)
+END IF;
+-- Infer rate from p_tax if still unknown (e.g. third-party providers)
   IF v_default_tax_rate IS NULL AND p_subtotal > 0 AND p_tax > 0 THEN
     v_default_tax_rate := ROUND((p_tax / p_subtotal) * 100, 4);
-  END IF;
-
-  -- ========================================================================
+END IF;
+-- ========================================================================
   -- STEP 5: GENERATE ORDER NUMBER
   -- ========================================================================
   -- Generate order number (per-station when station_id provided)
   v_order_number := public.generate_order_number(p_location_id);
-
-  -- Generate display number (handles both 3-segment and 4-segment formats)
+-- Generate display number (handles both 3-segment and 4-segment formats)
   v_display_number := CASE
     WHEN SPLIT_PART(v_order_number, '-', 4) <> ''
     THEN '#' || SPLIT_PART(v_order_number, '-', 3) || '-' || SPLIT_PART(v_order_number, '-', 4)
     ELSE '#' || SPLIT_PART(v_order_number, '-', 3)
   END;
-  
-  -- ========================================================================
+-- ========================================================================
   -- STEP 6: INSERT ORDER
   -- ========================================================================
   INSERT INTO public.orders (
@@ -21698,20 +20602,17 @@ BEGIN
     'online'
   )
   RETURNING id INTO v_order_id;
-
-  -- ========================================================================
+-- ========================================================================
   -- STEP 7: INSERT ORDER ITEMS
   -- ========================================================================
   v_tax_remainders := ARRAY[]::NUMERIC[];
-  v_tax_item_ids   := ARRAY[]::UUID[];
-  v_tax_floors     := ARRAY[]::NUMERIC[];
-
-  FOR v_item IN SELECT * FROM jsonb_array_elements(p_items)
+v_tax_item_ids   := ARRAY[]::UUID[];
+v_tax_floors     := ARRAY[]::NUMERIC[];
+FOR v_item IN SELECT * FROM jsonb_array_elements(p_items)
   LOOP
     v_item_index := v_item_index + 1;
-    v_menu_item_found := FALSE;
-
-    IF v_item->>'external_id' IS NOT NULL AND v_item->>'external_id' != '' THEN
+v_menu_item_found := FALSE;
+IF v_item->>'external_id' IS NOT NULL AND v_item->>'external_id' != '' THEN
       BEGIN
         SELECT mi.id, mi.name, mi.price, mi.is_tax_exempt,
                ci.category_id AS cat_id, c.name AS cat_name
@@ -21722,57 +20623,53 @@ BEGIN
         WHERE mi.id = (v_item->>'external_id')::UUID
           AND mi.merchant_id = v_merchant_id
         LIMIT 1;
-
-        IF FOUND THEN v_menu_item_found := TRUE; END IF;
-      EXCEPTION WHEN invalid_text_representation THEN NULL;
-      END;
-    END IF;
-
-    DECLARE
+IF FOUND THEN v_menu_item_found := TRUE;
+END IF;
+EXCEPTION WHEN invalid_text_representation THEN NULL;
+END;
+END IF;
+DECLARE
       v_item_unit_price    NUMERIC;
-      v_item_qty           INTEGER;
-      v_item_subtotal      NUMERIC;
-      v_item_name          TEXT;
-      v_item_menu_id       UUID;
-      v_item_cat_id        UUID;
-      v_item_cat_name      TEXT;
-      v_item_is_open       BOOLEAN;
-      v_item_is_tax_exempt BOOLEAN;
-    BEGIN
+v_item_qty           INTEGER;
+v_item_subtotal      NUMERIC;
+v_item_name          TEXT;
+v_item_menu_id       UUID;
+v_item_cat_id        UUID;
+v_item_cat_name      TEXT;
+v_item_is_open       BOOLEAN;
+v_item_is_tax_exempt BOOLEAN;
+BEGIN
       v_item_qty        := COALESCE((v_item->>'quantity')::INTEGER, 1);
-      v_item_unit_price := COALESCE((v_item->>'price')::NUMERIC, 0);
-      v_item_subtotal   := COALESCE((v_item->>'total')::NUMERIC, 0);
-      v_item_name       := v_item->>'name';
-
-      IF v_menu_item_found THEN
+v_item_unit_price := COALESCE((v_item->>'price')::NUMERIC, 0);
+v_item_subtotal   := COALESCE((v_item->>'total')::NUMERIC, 0);
+v_item_name       := v_item->>'name';
+IF v_menu_item_found THEN
         v_item_menu_id       := v_menu_item.id;
-        v_item_cat_id        := v_menu_item.cat_id;
-        v_item_cat_name      := v_menu_item.cat_name;
-        v_item_is_open       := FALSE;
-        v_item_is_tax_exempt := COALESCE(v_menu_item.is_tax_exempt, FALSE);
-      ELSE
+v_item_cat_id        := v_menu_item.cat_id;
+v_item_cat_name      := v_menu_item.cat_name;
+v_item_is_open       := FALSE;
+v_item_is_tax_exempt := COALESCE(v_menu_item.is_tax_exempt, FALSE);
+ELSE
         v_item_menu_id       := NULL;
-        v_item_cat_id        := NULL;
-        v_item_cat_name      := NULL;
-        v_item_is_open       := TRUE;
-        v_item_is_tax_exempt := FALSE;
-        v_warnings := v_warnings || jsonb_build_object(
+v_item_cat_id        := NULL;
+v_item_cat_name      := NULL;
+v_item_is_open       := TRUE;
+v_item_is_tax_exempt := FALSE;
+v_warnings := v_warnings || jsonb_build_object(
           'type', 'menu_item_not_found',
           'external_id', v_item->>'external_id',
           'item_name', v_item_name,
           'message', 'Menu item not found in POS — inserted as open item'
         );
-      END IF;
-
-      IF p_subtotal > 0 AND NOT v_item_is_tax_exempt THEN
+END IF;
+IF p_subtotal > 0 AND NOT v_item_is_tax_exempt THEN
         v_item_tax_raw   := p_tax * (v_item_subtotal / p_subtotal);
-        v_item_tax_floor := TRUNC(v_item_tax_raw, 2);
-      ELSE
+v_item_tax_floor := TRUNC(v_item_tax_raw, 2);
+ELSE
         v_item_tax_raw   := 0;
-        v_item_tax_floor := 0;
-      END IF;
-
-      INSERT INTO public.order_items (
+v_item_tax_floor := 0;
+END IF;
+INSERT INTO public.order_items (
         order_id, menu_item_id, item_name, quantity, unit_price, subtotal,
         tax_amount, tax_rate, category_id, category_name,
         item_status, kitchen_status, sent_to_kitchen_at, display_order,
@@ -21801,23 +20698,21 @@ BEGIN
         NOW(), NOW()
       )
       RETURNING id INTO v_order_item_id;
-
-      v_tax_distributed := v_tax_distributed + v_item_tax_floor;
-      v_tax_remainders  := array_append(v_tax_remainders, v_item_tax_raw - v_item_tax_floor);
-      v_tax_item_ids    := array_append(v_tax_item_ids, v_order_item_id);
-      v_tax_floors      := array_append(v_tax_floors, v_item_tax_floor);
-      v_item_count      := v_item_count + 1;
-
-      IF v_item->'modifiers' IS NOT NULL AND jsonb_array_length(v_item->'modifiers') > 0 THEN
+v_tax_distributed := v_tax_distributed + v_item_tax_floor;
+v_tax_remainders  := array_append(v_tax_remainders, v_item_tax_raw - v_item_tax_floor);
+v_tax_item_ids    := array_append(v_tax_item_ids, v_order_item_id);
+v_tax_floors      := array_append(v_tax_floors, v_item_tax_floor);
+v_item_count      := v_item_count + 1;
+IF v_item->'modifiers' IS NOT NULL AND jsonb_array_length(v_item->'modifiers') > 0 THEN
         FOR v_modifier IN SELECT * FROM jsonb_array_elements(v_item->'modifiers')
         LOOP
           DECLARE
             v_mod_price NUMERIC;
-            v_mod_qty   INTEGER;
-          BEGIN
+v_mod_qty   INTEGER;
+BEGIN
             v_mod_price := COALESCE((v_modifier->>'price')::NUMERIC, 0);
-            v_mod_qty   := COALESCE((v_modifier->>'quantity')::INTEGER, 1);
-            INSERT INTO public.order_item_modifiers (
+v_mod_qty   := COALESCE((v_modifier->>'quantity')::INTEGER, 1);
+INSERT INTO public.order_item_modifiers (
               order_item_id, modifier_group_name, modifier_name,
               price_modifier, quantity, total_price, metadata
             ) VALUES (
@@ -21830,64 +20725,60 @@ BEGIN
                 'provider_modifier_id', v_modifier->>'id'
               )
             );
-          END;
-        END LOOP;
-      END IF;
-    END;
-  END LOOP;
-
-  -- ========================================================================
+END;
+END LOOP;
+END IF;
+END;
+END LOOP;
+-- ========================================================================
   -- STEP 8: TAX REMAINDER DISTRIBUTION (Largest Remainder Method)
   -- ========================================================================
   DECLARE
     v_tax_deficit NUMERIC;
-    v_penny_count INTEGER;
-    v_num_items   INTEGER;
-    i             INTEGER;
-    j             INTEGER;
-    v_max_rem     NUMERIC;
-    v_max_idx     INTEGER;
-    v_tmp_rem     NUMERIC;
-    v_tmp_id      UUID;
-    v_tmp_floor   NUMERIC;
-  BEGIN
+v_penny_count INTEGER;
+v_num_items   INTEGER;
+i             INTEGER;
+j             INTEGER;
+v_max_rem     NUMERIC;
+v_max_idx     INTEGER;
+v_tmp_rem     NUMERIC;
+v_tmp_id      UUID;
+v_tmp_floor   NUMERIC;
+BEGIN
     v_tax_deficit := ROUND(p_tax - v_tax_distributed, 2);
-    v_penny_count := ROUND(v_tax_deficit * 100)::INTEGER;
-    v_num_items   := COALESCE(array_length(v_tax_remainders, 1), 0);
-
-    IF v_penny_count > 0 AND v_num_items > 0 THEN
+v_penny_count := ROUND(v_tax_deficit * 100)::INTEGER;
+v_num_items   := COALESCE(array_length(v_tax_remainders, 1), 0);
+IF v_penny_count > 0 AND v_num_items > 0 THEN
       FOR i IN 1..v_num_items LOOP
         v_max_rem := v_tax_remainders[i];
-        v_max_idx := i;
-        FOR j IN (i+1)..v_num_items LOOP
+v_max_idx := i;
+FOR j IN (i+1)..v_num_items LOOP
           IF v_tax_remainders[j] > v_max_rem THEN
             v_max_rem := v_tax_remainders[j];
-            v_max_idx := j;
-          END IF;
-        END LOOP;
-        IF v_max_idx != i THEN
+v_max_idx := j;
+END IF;
+END LOOP;
+IF v_max_idx != i THEN
           v_tmp_rem := v_tax_remainders[i];
-          v_tax_remainders[i] := v_tax_remainders[v_max_idx];
-          v_tax_remainders[v_max_idx] := v_tmp_rem;
-          v_tmp_id := v_tax_item_ids[i];
-          v_tax_item_ids[i] := v_tax_item_ids[v_max_idx];
-          v_tax_item_ids[v_max_idx] := v_tmp_id;
-          v_tmp_floor := v_tax_floors[i];
-          v_tax_floors[i] := v_tax_floors[v_max_idx];
-          v_tax_floors[v_max_idx] := v_tmp_floor;
-        END IF;
-      END LOOP;
-
-      FOR i IN 1..LEAST(v_penny_count, v_num_items) LOOP
+v_tax_remainders[i] := v_tax_remainders[v_max_idx];
+v_tax_remainders[v_max_idx] := v_tmp_rem;
+v_tmp_id := v_tax_item_ids[i];
+v_tax_item_ids[i] := v_tax_item_ids[v_max_idx];
+v_tax_item_ids[v_max_idx] := v_tmp_id;
+v_tmp_floor := v_tax_floors[i];
+v_tax_floors[i] := v_tax_floors[v_max_idx];
+v_tax_floors[v_max_idx] := v_tmp_floor;
+END IF;
+END LOOP;
+FOR i IN 1..LEAST(v_penny_count, v_num_items) LOOP
         UPDATE public.order_items
         SET tax_amount      = v_tax_floors[i] + 0.01,
             cash_tax_amount = v_tax_floors[i] + 0.01
         WHERE id = v_tax_item_ids[i];
-      END LOOP;
-    END IF;
-  END;
-
-  -- ========================================================================
+END LOOP;
+END IF;
+END;
+-- ========================================================================
   -- STEP 9: INSERT ORDER PAYMENT
   -- ========================================================================
   INSERT INTO public.order_payments (
@@ -21910,8 +20801,7 @@ BEGIN
     )
   )
   RETURNING id INTO v_payment_id;
-
-  -- ========================================================================
+-- ========================================================================
   -- STEP 10: INSERT ORDER PAYMENT ITEMS
   -- ========================================================================
   INSERT INTO public.order_payment_items (
@@ -21921,8 +20811,7 @@ BEGIN
   SELECT v_payment_id, oi.id, oi.quantity, oi.unit_price, oi.subtotal, oi.tax_amount
   FROM public.order_items oi
   WHERE oi.order_id = v_order_id;
-
-  -- ========================================================================
+-- ========================================================================
   -- STEP 11: ORDER STATUS HISTORY
   -- ========================================================================
   INSERT INTO public.order_status_history (
@@ -21937,8 +20826,7 @@ BEGIN
       'provider_order_id', p_provider_order_id
     )
   );
-
-  -- ========================================================================
+-- ========================================================================
   -- STEP 12: INSERT ONLINE_ORDERS LINK RECORD
   -- ========================================================================
   INSERT INTO public.online_orders (
@@ -21953,8 +20841,7 @@ BEGIN
     p_provider_metadata, p_raw_payload,
     CASE WHEN p_auto_accept THEN 'confirmed' ELSE 'received' END
   );
-
-  -- ========================================================================
+-- ========================================================================
   -- STEP 13: AUDIT LOG
   -- ========================================================================
   INSERT INTO public.audit_logs (
@@ -21974,8 +20861,7 @@ BEGIN
     ),
     'success'
   );
-
-  -- ========================================================================
+-- ========================================================================
   -- RETURN
   -- ========================================================================
   RETURN jsonb_build_object(
@@ -21992,7 +20878,6 @@ BEGIN
     'provider', p_provider,
     'warnings', v_warnings
   );
-
 EXCEPTION WHEN OTHERS THEN
   RETURN jsonb_build_object(
     'success', false,
@@ -22001,7 +20886,8 @@ EXCEPTION WHEN OTHERS THEN
     'provider', p_provider,
     'provider_order_id', p_provider_order_id
   );
-END;$$;
+END;
+$$;
 
 
 ALTER FUNCTION "public"."process_online_order"("p_location_id" "uuid", "p_provider" "text", "p_provider_order_id" "text", "p_provider_restaurant_id" "text", "p_external_reference" "text", "p_delivery_company" "text", "p_provider_metadata" "jsonb", "p_order_type_raw" "text", "p_customer_name" "text", "p_customer_phone" "text", "p_customer_email" "text", "p_subtotal" numeric, "p_tax" numeric, "p_total" numeric, "p_gratuity" numeric, "p_surcharge" numeric, "p_delivery_charge" numeric, "p_discount" numeric, "p_placed_at" timestamp with time zone, "p_ready_by" timestamp with time zone, "p_estimated_delivery" timestamp with time zone, "p_items" "jsonb", "p_delivery_address" "jsonb", "p_order_notes" "text", "p_raw_payload" "jsonb", "p_auto_accept" boolean) OWNER TO "postgres";
@@ -22017,29 +20903,25 @@ CREATE OR REPLACE FUNCTION "public"."process_order_inventory_deduction"("p_order
     AS $$
 DECLARE
     v_location_id      UUID;
-    v_already_deducted BOOLEAN;
-    v_order_item       RECORD;
-    v_recipe_item      RECORD;
-    v_modifier         RECORD;
+v_already_deducted BOOLEAN;
+v_order_item       RECORD;
+v_recipe_item      RECORD;
+v_modifier         RECORD;
 BEGIN
     SELECT location_id, COALESCE(inventory_deducted, FALSE)
     INTO   v_location_id, v_already_deducted
     FROM   orders
     WHERE  id = p_order_id;
-
-    IF v_location_id IS NULL THEN
+IF v_location_id IS NULL THEN
         RETURN;
-    END IF;
-
-    -- Idempotency guard (#4): skip if already processed
+END IF;
+-- Idempotency guard (#4): skip if already processed
     IF v_already_deducted = TRUE THEN
         RETURN;
-    END IF;
-
-    -- Authorization check (#7)
+END IF;
+-- Authorization check (#7)
     PERFORM public.authorize_location_access(v_location_id);
-
-    -- Path 1: Direct inventory_item_id link, stock_mode = 'stock_tracking' only (#8)
+-- Path 1: Direct inventory_item_id link, stock_mode = 'stock_tracking' only (#8)
     FOR v_order_item IN
         SELECT
             oi.quantity,
@@ -22059,9 +20941,8 @@ BEGIN
             v_location_id,
             v_order_item.quantity_used * v_order_item.quantity_multiplier * v_order_item.quantity
         );
-    END LOOP;
-
-    -- Path 2: Recipe-based — recipe_id → recipe_items → inventory_item_id
+END LOOP;
+-- Path 2: Recipe-based — recipe_id → recipe_items → inventory_item_id
     FOR v_order_item IN
         SELECT
             oi.quantity,
@@ -22087,10 +20968,9 @@ BEGIN
                 v_location_id,
                 v_recipe_item.quantity * v_order_item.quantity_multiplier * v_order_item.quantity
             );
-        END LOOP;
-    END LOOP;
-
-    -- Path 3: Modifier deductions
+END LOOP;
+END LOOP;
+-- Path 3: Modifier deductions
     FOR v_modifier IN
         SELECT
             oim.quantity,
@@ -22109,9 +20989,8 @@ BEGIN
             v_location_id,
             v_modifier.quantity_used * v_modifier.quantity
         );
-    END LOOP;
-
-    -- Mark as processed to prevent double-deduction (#4)
+END LOOP;
+-- Mark as processed to prevent double-deduction (#4)
     UPDATE orders SET inventory_deducted = TRUE WHERE id = p_order_id;
 END;
 $$;
@@ -22129,39 +21008,34 @@ CREATE OR REPLACE FUNCTION "public"."process_order_payment"("p_order_id" "uuid",
     SET "search_path" TO 'public', 'public', 'pg_temp'
     AS $$DECLARE
     v_user_id text;
-    v_staff_id uuid;
-    v_order record;
-    v_payment_id uuid;
-    v_is_cash boolean;
-    v_is_full_payment boolean;
-    v_has_item_allocations boolean;
-    
-    -- Calculated amounts
+v_staff_id uuid;
+v_order record;
+v_payment_id uuid;
+v_is_cash boolean;
+v_is_full_payment boolean;
+v_has_item_allocations boolean;
+-- Calculated amounts
     v_payment_total numeric;
-    v_subtotal_portion numeric;
-    v_tax_portion numeric;
-    v_change_given numeric := 0;
-    v_actual_tendered numeric;
-    v_original_card_amount numeric;
-    
-    -- Order state after payment
+v_subtotal_portion numeric;
+v_tax_portion numeric;
+v_change_given numeric := 0;
+v_actual_tendered numeric;
+v_original_card_amount numeric;
+-- Order state after payment
     v_new_amount_paid numeric;
-    v_remaining_due numeric;
-    v_new_payment_status text;
-    
-    v_result jsonb;
+v_remaining_due numeric;
+v_new_payment_status text;
+v_result jsonb;
 BEGIN
     -- ============================================
     -- 1. AUTHENTICATION & AUTHORIZATION
     -- ============================================
     v_user_id := get_my_claim('sub');
-    
-    SELECT id INTO v_staff_id
+SELECT id INTO v_staff_id
     FROM public.staff_profiles
     WHERE user_id = v_user_id
     LIMIT 1;
-    
-    -- ============================================
+-- ============================================
     -- 2. GET ORDER WITH ACCESS CHECK
     -- ============================================
     SELECT *
@@ -22170,27 +21044,22 @@ BEGIN
     WHERE id = p_order_id
       AND merchant_id = user_merchant_id()
       AND location_id = ANY(user_location_ids());
-    
-    IF NOT FOUND THEN
+IF NOT FOUND THEN
         RAISE EXCEPTION 'Order not found or access denied';
-    END IF;
-    
-    -- ============================================
+END IF;
+-- ============================================
     -- 3. VALIDATION
     -- ============================================
     IF p_amount <= 0 THEN
         RAISE EXCEPTION 'Payment amount must be positive';
-    END IF;
-    
-    IF v_order.payment_status = 'captured' THEN
+END IF;
+IF v_order.payment_status = 'captured' THEN
         RAISE EXCEPTION 'Order is already fully paid';
-    END IF;
-    
-    -- Determine payment characteristics
+END IF;
+-- Determine payment characteristics
     v_is_cash := p_payment_method = 'cash';
-    v_has_item_allocations := p_item_allocations IS NOT NULL AND jsonb_array_length(p_item_allocations) > 0;
-    
-    -- ============================================
+v_has_item_allocations := p_item_allocations IS NOT NULL AND jsonb_array_length(p_item_allocations) > 0;
+-- ============================================
     -- 4. CALCULATE AMOUNTS BASED ON PAYMENT TYPE
     -- ============================================
     
@@ -22200,48 +21069,43 @@ BEGIN
         -- Check if this is full payment (paying remaining balance)
         v_is_full_payment := p_amount >= v_order.amount_due 
                             OR p_amount >= v_order.cash_total - COALESCE(v_order.amount_paid, 0);
-        
-        IF v_is_full_payment AND NOT v_has_item_allocations THEN
+IF v_is_full_payment AND NOT v_has_item_allocations THEN
             -- Full cash payment - use cash total
             v_payment_total := v_order.cash_total - COALESCE(v_order.amount_paid, 0);
-            v_subtotal_portion := v_order.cash_subtotal * (v_payment_total / NULLIF(v_order.cash_total, 0));
-            v_tax_portion := v_payment_total - v_subtotal_portion;
-            v_original_card_amount := v_order.card_total - COALESCE(v_order.amount_paid, 0);
-        ELSE
+v_subtotal_portion := v_order.cash_subtotal * (v_payment_total / NULLIF(v_order.cash_total, 0));
+v_tax_portion := v_payment_total - v_subtotal_portion;
+v_original_card_amount := v_order.card_total - COALESCE(v_order.amount_paid, 0);
+ELSE
             -- Partial cash payment - prorate using cash pricing ratios
             v_payment_total := LEAST(p_amount, v_order.amount_due);
-            IF v_order.cash_total > 0 THEN
+IF v_order.cash_total > 0 THEN
                 v_subtotal_portion := ROUND(v_payment_total * (v_order.cash_subtotal / v_order.cash_total), 2);
-                v_tax_portion := v_payment_total - v_subtotal_portion;
-            ELSE
+v_tax_portion := v_payment_total - v_subtotal_portion;
+ELSE
                 v_subtotal_portion := v_payment_total;
-                v_tax_portion := 0;
-            END IF;
-            -- Calculate what this would have been at card price
+v_tax_portion := 0;
+END IF;
+-- Calculate what this would have been at card price
             v_original_card_amount := ROUND(v_payment_total * (v_order.card_total / NULLIF(v_order.cash_total, 0)), 2);
-        END IF;
-        
-        -- Calculate change
+END IF;
+-- Calculate change
         v_actual_tendered := COALESCE(p_amount_tendered, p_amount + p_tip_amount);
-        v_change_given := GREATEST(v_actual_tendered - (v_payment_total + p_tip_amount), 0);
-        
-    ELSE
+v_change_given := GREATEST(v_actual_tendered - (v_payment_total + p_tip_amount), 0);
+ELSE
         -- CARD PAYMENT: Use card pricing
         v_payment_total := p_amount;
-        v_actual_tendered := p_amount + p_tip_amount;
-        v_change_given := 0;
-        v_original_card_amount := p_amount;
-        
-        IF v_order.card_total > 0 THEN
+v_actual_tendered := p_amount + p_tip_amount;
+v_change_given := 0;
+v_original_card_amount := p_amount;
+IF v_order.card_total > 0 THEN
             v_subtotal_portion := ROUND(v_payment_total * (v_order.card_subtotal / v_order.card_total), 2);
-            v_tax_portion := v_payment_total - v_subtotal_portion;
-        ELSE
+v_tax_portion := v_payment_total - v_subtotal_portion;
+ELSE
             v_subtotal_portion := v_payment_total;
-            v_tax_portion := 0;
-        END IF;
-    END IF;
-    
-    -- ============================================
+v_tax_portion := 0;
+END IF;
+END IF;
+-- ============================================
     -- 5. CREATE PAYMENT RECORD
     -- ============================================
     INSERT INTO public.order_payments (
@@ -22296,8 +21160,7 @@ BEGIN
         )
     )
     RETURNING id INTO v_payment_id;
-    
-    -- ============================================
+-- ============================================
     -- 6. HANDLE PER-ITEM ALLOCATIONS (if provided)
     -- ============================================
     IF v_has_item_allocations THEN
@@ -22315,26 +21178,22 @@ BEGIN
             COALESCE((item->>'unit_price')::numeric, (item->>'amount')::numeric),
             (item->>'amount')::numeric
         FROM jsonb_array_elements(p_item_allocations) AS item;
-    END IF;
-    
-    -- ============================================
+END IF;
+-- ============================================
     -- 7. UPDATE ORDER STATE
     -- ============================================
     v_new_amount_paid := COALESCE(v_order.amount_paid, 0) + v_payment_total + p_tip_amount;
-    v_remaining_due := GREATEST(v_order.total_amount - v_new_amount_paid, 0);
-    
-    -- For cash full payment, recalculate based on cash total
+v_remaining_due := GREATEST(v_order.total_amount - v_new_amount_paid, 0);
+-- For cash full payment, recalculate based on cash total
     IF v_is_cash AND v_is_full_payment AND NOT v_has_item_allocations THEN
         v_remaining_due := 0;
-    END IF;
-    
-    v_new_payment_status := CASE
+END IF;
+v_new_payment_status := CASE
         WHEN v_remaining_due <= 0 THEN 'paid'
         WHEN v_new_amount_paid > 0 THEN 'partial'
         ELSE 'pending'
     END;
-    
-    UPDATE public.orders SET
+UPDATE public.orders SET
         amount_paid = v_new_amount_paid,
         amount_due = v_remaining_due,
         tip_amount = COALESCE(tip_amount, 0) + p_tip_amount,
@@ -22385,8 +21244,7 @@ BEGIN
         
         updated_at = now()
     WHERE id = p_order_id;
-    
-    -- ============================================
+-- ============================================
     -- 8. AUDIT LOG
     -- ============================================
     INSERT INTO public.audit_logs (
@@ -22417,8 +21275,7 @@ BEGIN
         ),
         'success'
     );
-    
-    -- ============================================
+-- ============================================
     -- 9. RETURN RESULT
     -- ============================================
     v_result := jsonb_build_object(
@@ -22439,9 +21296,9 @@ BEGIN
         'order_fully_paid', v_remaining_due <= 0,
         'order_payment_status', v_new_payment_status
     );
-    
-    RETURN v_result;
-END;$$;
+RETURN v_result;
+END;
+$$;
 
 
 ALTER FUNCTION "public"."process_order_payment"("p_order_id" "uuid", "p_payment_method" "text", "p_amount" numeric, "p_tip_amount" numeric, "p_amount_tendered" numeric, "p_terminal_type" "text", "p_terminal_id" "text", "p_device_id" "text", "p_transaction_details" "jsonb", "p_item_allocations" "jsonb", "p_reason" "text") OWNER TO "postgres";
@@ -25379,71 +24236,64 @@ CREATE OR REPLACE FUNCTION "public"."process_preauth_v1"("p_order_id" "uuid", "p
     AS $$
 DECLARE
   v_order RECORD;
-  v_existing_auth_count INT;
-  v_payment_id UUID;
-  v_rrn TEXT;
-  v_auth_code TEXT;
-  v_ref_id TEXT;
-  v_card_type TEXT;
-  v_card_last_four TEXT;
+v_existing_auth_count INT;
+v_payment_id UUID;
+v_rrn TEXT;
+v_auth_code TEXT;
+v_ref_id TEXT;
+v_card_type TEXT;
+v_card_last_four TEXT;
 BEGIN
   -- Validate order exists and is active
   SELECT id, status, location_id, merchant_id
   INTO v_order
   FROM orders
   WHERE id = p_order_id;
-
-  IF NOT FOUND THEN
+IF NOT FOUND THEN
     RETURN jsonb_build_object('success', false, 'error', 'Order not found');
-  END IF;
-
-  IF v_order.status IN ('completed', 'cancelled', 'refunded', 'void') THEN
+END IF;
+IF v_order.status IN ('completed', 'cancelled', 'refunded', 'void') THEN
     RETURN jsonb_build_object('success', false, 'error', 'Order is not active');
-  END IF;
-
-  -- Guard: reject if order already has an active pre-auth
+END IF;
+-- Guard: reject if order already has an active pre-auth
   SELECT COUNT(*)
   INTO v_existing_auth_count
   FROM order_payments
   WHERE order_id = p_order_id
     AND status = 'authorized'
     AND (is_voided IS NULL OR is_voided = false);
-
-  IF v_existing_auth_count > 0 THEN
+IF v_existing_auth_count > 0 THEN
     RETURN jsonb_build_object('success', false, 'error', 'Order already has an active pre-authorization');
-  END IF;
-
-  -- Extract terminal reference fields
+END IF;
+-- Extract terminal reference fields
   v_rrn := COALESCE(
     p_terminal_response->'castles_transaction'->>'rrn',
     p_terminal_response->>'rrn',
     ''
   );
-  v_auth_code := COALESCE(
+v_auth_code := COALESCE(
     p_terminal_response->'castles_transaction'->>'approvalCode',
     p_terminal_response->>'AuthCode',
     ''
   );
-  v_ref_id := COALESCE(
+v_ref_id := COALESCE(
     p_terminal_response->'castles_transaction'->>'referenceId',
     p_terminal_response->>'ReferenceId',
     ''
   );
-
-  -- Extract card details from terminal response
+-- Extract card details from terminal response
   v_card_type := COALESCE(
     p_terminal_response->'castles_transaction'->>'cardType',
     p_terminal_response->'raw_castles_response'->>'txnCardBrand',
     p_terminal_response->'dejavoo_transaction'->>'CardType',
     NULL
   );
-  v_card_last_four := COALESCE(
+v_card_last_four := COALESCE(
     p_terminal_response->'castles_transaction'->>'cardLast4',
     p_terminal_response->'dejavoo_transaction'->>'Last4',
     NULL
   );
-
-  -- Insert authorized payment
+-- Insert authorized payment
   INSERT INTO order_payments (
     order_id,
     payment_method,
@@ -25489,8 +24339,7 @@ BEGIN
     NOW()
   )
   RETURNING id INTO v_payment_id;
-
-  RETURN jsonb_build_object(
+RETURN jsonb_build_object(
     'success', true,
     'payment_id', v_payment_id,
     'authorized_amount', p_amount,
@@ -25510,10 +24359,10 @@ CREATE OR REPLACE FUNCTION "public"."process_shift_pto_accrual"() RETURNS "trigg
     AS $$
 DECLARE
     v_policy_id uuid;
-    v_accrual_rate numeric;
-    v_method text;
-    v_hours_worked numeric;
-    v_earned numeric;
+v_accrual_rate numeric;
+v_method text;
+v_hours_worked numeric;
+v_earned numeric;
 BEGIN
     -- Only run when shift becomes 'completed'
     IF NEW.status = 'completed' AND (OLD.status != 'completed' OR OLD.status IS NULL) THEN
@@ -25524,17 +24373,14 @@ BEGIN
         FROM staff_profiles sp
         JOIN pto_policies p ON p.id = sp.pto_policy_id
         WHERE sp.id = NEW.employee_id;
-        
-        -- If no policy or not hourly, skip
-        IF v_policy_id IS NULL OR v_method != 'hourly' THEN RETURN NEW; END IF;
-
-        -- 2. Calculate Hours Worked (using actual clock times if available, else scheduled)
+-- If no policy or not hourly, skip
+        IF v_policy_id IS NULL OR v_method != 'hourly' THEN RETURN NEW;
+END IF;
+-- 2. Calculate Hours Worked (using actual clock times if available, else scheduled)
         v_hours_worked := EXTRACT(EPOCH FROM (NEW.end_time - NEW.start_time))/3600;
-        
-        -- 3. Calculate Earned Amount
+-- 3. Calculate Earned Amount
         v_earned := v_hours_worked * v_accrual_rate;
-        
-        -- 4. Credit the Ledger
+-- 4. Credit the Ledger
         INSERT INTO pto_ledger (
             merchant_id, 
             employee_id, 
@@ -25550,8 +24396,8 @@ BEGIN
             NEW.id,
             'Accrued from ' || round(v_hours_worked, 2) || 'h shift'
         );
-    END IF;
-    RETURN NEW;
+END IF;
+RETURN NEW;
 END;
 $$;
 
@@ -25565,56 +24411,49 @@ CREATE OR REPLACE FUNCTION "public"."process_split_payment"("p_order_id" "uuid",
     AS $$
 DECLARE
     v_order record;
-    v_payment_id uuid;
-    v_is_cash boolean;
-    v_subtotal_portion numeric;
-    v_tax_portion numeric;
-    v_total_for_tender numeric;
-    v_remaining_after numeric;
-    v_change_due numeric := 0;
-    v_new_payment_status text;
+v_payment_id uuid;
+v_is_cash boolean;
+v_subtotal_portion numeric;
+v_tax_portion numeric;
+v_total_for_tender numeric;
+v_remaining_after numeric;
+v_change_due numeric := 0;
+v_new_payment_status text;
 BEGIN
     v_is_cash := p_payment_method = 'cash';
-
-    -- Get current order state
+-- Get current order state
     SELECT * INTO v_order
     FROM public.orders
     WHERE id = p_order_id;
-
-    IF NOT FOUND THEN
+IF NOT FOUND THEN
         RAISE EXCEPTION 'Order not found: %', p_order_id;
-    END IF;
-
-    -- Calculate what portion of the order this payment covers
+END IF;
+-- Calculate what portion of the order this payment covers
     -- Use the appropriate pricing based on tender type
     IF v_is_cash THEN
         -- Cash payment uses cash pricing for its portion
         v_total_for_tender := LEAST(p_amount, v_order.amount_due);
-
-        -- Pro-rate subtotal and tax at cash rates
+-- Pro-rate subtotal and tax at cash rates
         IF v_order.cash_total > 0 THEN
             v_subtotal_portion := ROUND(v_total_for_tender * (v_order.cash_subtotal / v_order.cash_total), 2);
-            v_tax_portion := v_total_for_tender - v_subtotal_portion;
-        ELSE
+v_tax_portion := v_total_for_tender - v_subtotal_portion;
+ELSE
             v_subtotal_portion := v_total_for_tender;
-            v_tax_portion := 0;
-        END IF;
-
-        v_change_due := GREATEST(COALESCE(p_amount_tendered, p_amount) - v_total_for_tender, 0);
-    ELSE
+v_tax_portion := 0;
+END IF;
+v_change_due := GREATEST(COALESCE(p_amount_tendered, p_amount) - v_total_for_tender, 0);
+ELSE
         -- Card payment uses card pricing
         v_total_for_tender := p_amount;
-
-        IF v_order.card_total > 0 THEN
+IF v_order.card_total > 0 THEN
             v_subtotal_portion := ROUND(v_total_for_tender * (v_order.card_subtotal / v_order.card_total), 2);
-            v_tax_portion := v_total_for_tender - v_subtotal_portion;
-        ELSE
+v_tax_portion := v_total_for_tender - v_subtotal_portion;
+ELSE
             v_subtotal_portion := v_total_for_tender;
-            v_tax_portion := 0;
-        END IF;
-    END IF;
-
-    -- Create payment record
+v_tax_portion := 0;
+END IF;
+END IF;
+-- Create payment record
     INSERT INTO public.order_payments (
         order_id,
         payment_method,
@@ -25653,16 +24492,14 @@ BEGIN
         now()
     )
     RETURNING id INTO v_payment_id;
-
-    -- Calculate new order totals
+-- Calculate new order totals
     v_remaining_after := GREATEST(v_order.amount_due - v_total_for_tender, 0);
-    v_new_payment_status := CASE
+v_new_payment_status := CASE
         WHEN v_remaining_after <= 0 THEN 'paid'
         WHEN v_order.amount_paid + v_total_for_tender > 0 THEN 'partial'
         ELSE 'pending'
     END;
-
-    -- Update order
+-- Update order
     UPDATE public.orders SET
         amount_paid = amount_paid + v_total_for_tender,
         amount_due = v_remaining_after,
@@ -25689,8 +24526,7 @@ BEGIN
         ),
         updated_at = now()
     WHERE id = p_order_id;
-
-    RETURN jsonb_build_object(
+RETURN jsonb_build_object(
         'success', true,
         'payment_id', v_payment_id,
         'payment_method', p_payment_method,
@@ -25717,8 +24553,7 @@ BEGIN
   UPDATE orders
   SET updated_at = NOW()
   WHERE id = NEW.order_id;
-
-  RETURN NEW;
+RETURN NEW;
 END;
 $$;
 
@@ -25736,28 +24571,25 @@ CREATE OR REPLACE FUNCTION "public"."publish_schedule"("p_schedule_id" "uuid", "
     AS $$
 DECLARE
     v_schedule_name text;
-    v_start_date date;
-    v_end_date date;
+v_start_date date;
+v_end_date date;
 BEGIN
     -- 1. Get Schedule Details & Validate
     SELECT name, start_date, end_date 
     INTO v_schedule_name, v_start_date, v_end_date
     FROM schedules 
     WHERE id = p_schedule_id AND merchant_id = p_merchant_id;
-
-    IF NOT FOUND THEN RAISE EXCEPTION 'Schedule not found'; END IF;
-
-    -- 2. Update Schedule Status
+IF NOT FOUND THEN RAISE EXCEPTION 'Schedule not found';
+END IF;
+-- 2. Update Schedule Status
     UPDATE schedules 
     SET status = 'active', updated_at = now() 
     WHERE id = p_schedule_id;
-
-    -- 3. Update Shifts Status
+-- 3. Update Shifts Status
     UPDATE shifts 
     SET status = 'published', updated_at = now()
     WHERE schedule_id = p_schedule_id;
-
-    -- 4. BATCH NOTIFY: Insert one notification per unique employee
+-- 4. BATCH NOTIFY: Insert one notification per unique employee
     INSERT INTO notifications (
         merchant_id, 
         recipient_id, 
@@ -25776,7 +24608,8 @@ BEGIN
         jsonb_build_object('schedule_id', p_schedule_id)
     FROM shifts s
     WHERE s.schedule_id = p_schedule_id
-      AND s.employee_id IS NOT NULL; -- Don't notify open shifts yet
+      AND s.employee_id IS NOT NULL;
+-- Don't notify open shifts yet
 
     RETURN true;
 END;
@@ -25792,30 +24625,28 @@ CREATE OR REPLACE FUNCTION "public"."recalculate_order_discount"("p_order_id" "u
     AS $$
 DECLARE
     v_discount RECORD;
-    v_preset_discount RECORD;
-    v_applicable_subtotal NUMERIC := 0;
-    v_new_calculated_amount NUMERIC := 0;
-    v_affected_item_ids UUID[] := '{}';
-    
-    -- For item distribution
+v_preset_discount RECORD;
+v_applicable_subtotal NUMERIC := 0;
+v_new_calculated_amount NUMERIC := 0;
+v_affected_item_ids UUID[] := '{}';
+-- For item distribution
     v_item RECORD;
-    v_item_proportion NUMERIC;
-    v_item_discount_amount NUMERIC;
-    v_distributed_total NUMERIC := 0;
-    v_last_item_id UUID;
-    v_item_calcs JSONB;
-    
-    -- Order totals
+v_item_proportion NUMERIC;
+v_item_discount_amount NUMERIC;
+v_distributed_total NUMERIC := 0;
+v_last_item_id UUID;
+v_item_calcs JSONB;
+-- Order totals
     v_gross_card_subtotal NUMERIC;
-    v_gross_cash_subtotal NUMERIC;
-    v_total_discount NUMERIC;
-    v_net_card_subtotal NUMERIC;
-    v_net_cash_subtotal NUMERIC;
-    v_card_tax NUMERIC;
-    v_cash_tax NUMERIC;
-    v_card_total NUMERIC;
-    v_cash_total NUMERIC;
-    v_amount_paid NUMERIC;
+v_gross_cash_subtotal NUMERIC;
+v_total_discount NUMERIC;
+v_net_card_subtotal NUMERIC;
+v_net_cash_subtotal NUMERIC;
+v_card_tax NUMERIC;
+v_cash_tax NUMERIC;
+v_card_total NUMERIC;
+v_cash_total NUMERIC;
+v_amount_paid NUMERIC;
 BEGIN
     -- ============================================
     -- 1. Get Active Order-Level Discount
@@ -25840,8 +24671,7 @@ BEGIN
       AND od.voided_at IS NULL
     ORDER BY od.applied_at DESC
     LIMIT 1;
-    
-    -- If no active discount, just recalculate totals and return
+-- If no active discount, just recalculate totals and return
     IF v_discount.id IS NULL THEN
         -- Clear any stale discount data from items
         UPDATE public.order_items
@@ -25863,17 +24693,14 @@ BEGIN
         WHERE order_id = p_order_id
           AND is_voided = false
           AND discount_amount > 0;
-        
-        PERFORM calculate_order_totals_fast(p_order_id);
-        
-        RETURN jsonb_build_object(
+PERFORM calculate_order_totals_fast(p_order_id);
+RETURN jsonb_build_object(
             'success', true,
             'has_discount', false,
             'message', 'No active discount'
         );
-    END IF;
-    
-    -- ============================================
+END IF;
+-- ============================================
     -- 2. Get All Applicable Items
     -- ============================================
     -- Start with all unpaid, non-voided items
@@ -25885,8 +24712,7 @@ BEGIN
     WHERE oi.order_id = p_order_id
       AND oi.is_voided = false
       AND oi.quantity > COALESCE(oi.paid_quantity, 0);
-    
-    -- Apply exclusions if preset discount
+-- Apply exclusions if preset discount
     IF v_discount.discount_id IS NOT NULL THEN
         -- Exclude alcohol
         IF COALESCE(v_discount.exclude_alcohol, false) THEN
@@ -25900,9 +24726,8 @@ BEGIN
               AND oi.is_voided = false
               AND oi.quantity > COALESCE(oi.paid_quantity, 0)
               AND COALESCE(mi.is_alcohol, false) = false;
-        END IF;
-        
-        -- Exclude categories
+END IF;
+-- Exclude categories
         IF v_discount.exclude_categories IS NOT NULL THEN
             SELECT 
                 COALESCE(SUM(oi.quantity * oi.unit_price), 0),
@@ -25914,9 +24739,8 @@ BEGIN
               AND oi.is_voided = false
               AND oi.quantity > COALESCE(oi.paid_quantity, 0)
               AND (mi.category_id IS NULL OR NOT (mi.category_id = ANY(v_discount.exclude_categories)));
-        END IF;
-        
-        -- Apply to specific categories only
+END IF;
+-- Apply to specific categories only
         IF v_discount.applies_to_categories IS NOT NULL THEN
             SELECT 
                 COALESCE(SUM(oi.quantity * oi.unit_price), 0),
@@ -25928,28 +24752,26 @@ BEGIN
               AND oi.is_voided = false
               AND oi.quantity > COALESCE(oi.paid_quantity, 0)
               AND mi.category_id = ANY(v_discount.applies_to_categories);
-        END IF;
-    END IF;
-    
-    -- ============================================
+END IF;
+END IF;
+-- ============================================
     -- 3. Calculate New Discount Amount
     -- ============================================
     IF v_applicable_subtotal > 0 THEN
         IF v_discount.discount_type = 'percentage' THEN
             v_new_calculated_amount := ROUND(v_applicable_subtotal * (v_discount.discount_value / 100), 2);
-            -- Apply cap if exists
+-- Apply cap if exists
             IF v_discount.max_discount_amount IS NOT NULL THEN
                 v_new_calculated_amount := LEAST(v_new_calculated_amount, v_discount.max_discount_amount);
-            END IF;
-        ELSE
+END IF;
+ELSE
             -- Fixed amount
             v_new_calculated_amount := LEAST(v_discount.discount_value, v_applicable_subtotal);
-        END IF;
-    ELSE
+END IF;
+ELSE
         v_new_calculated_amount := 0;
-    END IF;
-    
-    -- ============================================
+END IF;
+-- ============================================
     -- 4. Update order_discounts Record
     -- ============================================
     UPDATE public.order_discounts
@@ -25958,8 +24780,7 @@ BEGIN
         pre_discount_subtotal = v_applicable_subtotal,
         applied_to_item_ids = v_affected_item_ids
     WHERE id = v_discount.id;
-    
-    -- ============================================
+-- ============================================
     -- 5. Clear Discounts from Non-Applicable Items
     -- ============================================
     UPDATE public.order_items
@@ -25980,14 +24801,12 @@ BEGIN
     WHERE order_id = p_order_id
       AND is_voided = false
       AND id <> ALL(v_affected_item_ids);
-    
-    -- ============================================
+-- ============================================
     -- 6. Distribute Discount to Applicable Items
     -- ============================================
     v_distributed_total := 0;
-    v_last_item_id := NULL;
-    
-    FOR v_item IN
+v_last_item_id := NULL;
+FOR v_item IN
         SELECT 
             oi.id,
             oi.quantity,
@@ -26004,16 +24823,14 @@ BEGIN
         -- Calculate proportion
         IF v_applicable_subtotal > 0 THEN
             v_item_proportion := v_item.item_gross_subtotal / v_applicable_subtotal;
-        ELSE
+ELSE
             v_item_proportion := 0;
-        END IF;
-        
-        -- This item's discount
+END IF;
+-- This item's discount
         v_item_discount_amount := ROUND(v_new_calculated_amount * v_item_proportion, 2);
-        v_distributed_total := v_distributed_total + v_item_discount_amount;
-        v_last_item_id := v_item.id;
-        
-        -- Calculate item totals with discount
+v_distributed_total := v_distributed_total + v_item_discount_amount;
+v_last_item_id := v_item.id;
+-- Calculate item totals with discount
         v_item_calcs := calculate_item_totals(
             v_item.quantity,
             v_item.unit_price,
@@ -26021,8 +24838,7 @@ BEGIN
             v_item.tax_rate,
             v_item_discount_amount
         );
-        
-        -- Update item
+-- Update item
         UPDATE public.order_items
         SET
             discount_id = v_discount.discount_id,
@@ -26039,25 +24855,22 @@ BEGIN
             cash_tax_amount = (v_item_calcs->>'cash_tax_amount')::numeric,
             updated_at = now()
         WHERE id = v_item.id;
-    END LOOP;
-    
-    -- Handle rounding remainder
+END LOOP;
+-- Handle rounding remainder
     IF v_last_item_id IS NOT NULL AND v_distributed_total <> v_new_calculated_amount THEN
         DECLARE
             v_rounding_adj NUMERIC := v_new_calculated_amount - v_distributed_total;
-            v_last_row RECORD;
-        BEGIN
+v_last_row RECORD;
+BEGIN
             SELECT * INTO v_last_row FROM public.order_items WHERE id = v_last_item_id;
-            
-            v_item_calcs := calculate_item_totals(
+v_item_calcs := calculate_item_totals(
                 v_last_row.quantity,
                 v_last_row.unit_price,
                 v_last_row.cash_price,
                 v_last_row.tax_rate,
                 v_last_row.discount_amount + v_rounding_adj
             );
-            
-            UPDATE public.order_items
+UPDATE public.order_items
             SET
                 discount_amount = discount_amount + v_rounding_adj,
                 subtotal = (v_item_calcs->>'subtotal')::numeric,
@@ -26066,16 +24879,14 @@ BEGIN
                 cash_tax_amount = (v_item_calcs->>'cash_tax_amount')::numeric,
                 updated_at = now()
             WHERE id = v_last_item_id;
-        END;
-    END IF;
-    
-    -- ============================================
+END;
+END IF;
+-- ============================================
     -- 7. Recalculate Order Totals
     -- ============================================
     SELECT COALESCE(amount_paid, 0) INTO v_amount_paid
     FROM public.orders WHERE id = p_order_id;
-    
-    SELECT 
+SELECT 
         COALESCE(SUM(quantity * unit_price), 0),
         COALESCE(SUM(quantity * COALESCE(cash_price, unit_price)), 0),
         COALESCE(SUM(discount_amount), 0),
@@ -26093,11 +24904,9 @@ BEGIN
         v_cash_tax
     FROM public.order_items
     WHERE order_id = p_order_id AND is_voided = false;
-    
-    v_card_total := v_net_card_subtotal + v_card_tax;
-    v_cash_total := v_net_cash_subtotal + v_cash_tax;
-    
-    UPDATE public.orders SET
+v_card_total := v_net_card_subtotal + v_card_tax;
+v_cash_total := v_net_cash_subtotal + v_cash_tax;
+UPDATE public.orders SET
         card_subtotal = v_gross_card_subtotal,
         cash_subtotal = v_gross_cash_subtotal,
         subtotal = v_gross_card_subtotal,
@@ -26115,8 +24924,7 @@ BEGIN
         cash_amount_due = GREATEST(v_cash_total - v_amount_paid, 0),
         updated_at = now()
     WHERE id = p_order_id;
-    
-    -- ============================================
+-- ============================================
     -- 8. Return Result
     -- ============================================
     RETURN jsonb_build_object(
@@ -26149,23 +24957,21 @@ CREATE OR REPLACE FUNCTION "public"."recalculate_order_totals"() RETURNS "trigge
     AS $$
 DECLARE
   v_order_id UUID;
-  v_subtotal NUMERIC(10, 2);
+v_subtotal NUMERIC(10, 2);
 BEGIN
   -- Determine order_id based on trigger context
   IF TG_OP = 'DELETE' THEN
     v_order_id = OLD.order_id;
-  ELSE
+ELSE
     v_order_id = NEW.order_id;
-  END IF;
-  
-  -- Recalculate order subtotal
+END IF;
+-- Recalculate order subtotal
   SELECT COALESCE(SUM(subtotal), 0)
   INTO v_subtotal
   FROM public.order_items
   WHERE order_id = v_order_id
     AND is_voided = FALSE;
-  
-  -- Update order
+-- Update order
   UPDATE public.orders
   SET 
     subtotal = v_subtotal,
@@ -26173,8 +24979,7 @@ BEGIN
     amount_due = v_subtotal + tax_amount + service_charge - discount_amount - amount_paid,
     updated_at = NOW()
   WHERE id = v_order_id;
-  
-  RETURN NULL;
+RETURN NULL;
 END;
 $$;
 
@@ -26200,8 +25005,7 @@ BEGIN
     END,
     updated_at = NOW()
   WHERE id = ANY(p_order_item_ids);
-
-  -- Reset kds_item_status records
+-- Reset kds_item_status records
   UPDATE kds_item_status
   SET
     status = CASE WHEN p_target_status = 'preparing' THEN 'pending' ELSE 'pending' END,
@@ -26211,8 +25015,7 @@ BEGIN
     bumped_by = NULL,
     updated_at = NOW()
   WHERE order_item_id = ANY(p_order_item_ids);
-
-  -- Touch parent order(s) to trigger broadcast
+-- Touch parent order(s) to trigger broadcast
   FOR v_order_id IN
     SELECT DISTINCT order_id FROM order_items WHERE id = ANY(p_order_item_ids)
   LOOP
@@ -26221,7 +25024,7 @@ BEGIN
       updated_at = NOW(),
       sync_version = COALESCE(sync_version, 0) + 1
     WHERE id = v_order_id;
-  END LOOP;
+END LOOP;
 END;
 $$;
 
@@ -26243,8 +25046,7 @@ BEGIN
     started_preparing_at = NULL,
     updated_at = NOW()
   WHERE id = ANY(p_order_item_ids);
-
-  -- Reset kds_item_status records back to 'pending'
+-- Reset kds_item_status records back to 'pending'
   UPDATE kds_item_status
   SET
     status = 'pending',
@@ -26254,8 +25056,7 @@ BEGIN
     bumped_by = NULL,
     updated_at = NOW()
   WHERE order_item_id = ANY(p_order_item_ids);
-
-  -- Touch parent order(s) to trigger broadcast
+-- Touch parent order(s) to trigger broadcast
   FOR v_order_id IN
     SELECT DISTINCT order_id FROM order_items WHERE id = ANY(p_order_item_ids)
   LOOP
@@ -26264,8 +25065,9 @@ BEGIN
       updated_at = NOW(),
       sync_version = COALESCE(sync_version, 0) + 1
     WHERE id = v_order_id;
-  END LOOP;
-END;$$;
+END LOOP;
+END;
+$$;
 
 
 ALTER FUNCTION "public"."recall_kds_items_dep"("p_order_item_ids" "uuid"[]) OWNER TO "postgres";
@@ -26277,24 +25079,22 @@ CREATE OR REPLACE FUNCTION "public"."record_cash_operation"("p_cash_drawer_id" "
     AS $$
 DECLARE
   v_session RECORD;
-  v_current_balance NUMERIC;
-  v_balance_after NUMERIC;
-  v_should_kick_drawer BOOLEAN := false;
-  v_op_id UUID;
+v_current_balance NUMERIC;
+v_balance_after NUMERIC;
+v_should_kick_drawer BOOLEAN := false;
+v_op_id UUID;
 BEGIN
   -- Verify session is open
   SELECT * INTO v_session
   FROM cash_drawer_sessions
   WHERE id = p_session_id AND status = 'open';
-
-  IF v_session IS NULL THEN
+IF v_session IS NULL THEN
     RETURN jsonb_build_object(
       'success', false,
       'error', 'No open session found'
     );
-  END IF;
-
-  -- Calculate current balance from operations
+END IF;
+-- Calculate current balance from operations
   SELECT v_session.opening_amount + COALESCE(SUM(
     CASE
       WHEN operation_type IN ('cash_sale', 'pay_in') THEN amount
@@ -26305,18 +25105,15 @@ BEGIN
   INTO v_current_balance
   FROM cash_drawer_operations
   WHERE session_id = p_session_id;
-
-  -- Calculate new balance
+-- Calculate new balance
   v_balance_after := CASE
     WHEN p_operation_type IN ('cash_sale', 'pay_in') THEN v_current_balance + p_amount
     WHEN p_operation_type IN ('cash_refund', 'pay_out', 'cash_drop', 'tip_out') THEN v_current_balance - p_amount
     ELSE v_current_balance -- no_sale, opening_count, closing_count
   END;
-
-  -- Determine if drawer should be kicked open
+-- Determine if drawer should be kicked open
   v_should_kick_drawer := p_operation_type IN ('no_sale', 'pay_in', 'pay_out', 'cash_drop');
-
-  -- Insert operation
+-- Insert operation
   INSERT INTO cash_drawer_operations (
     cash_drawer_id, session_id, operation_type,
     amount, performed_by, performed_at,
@@ -26329,15 +25126,13 @@ BEGIN
     p_reason, p_approved_by
   )
   RETURNING id INTO v_op_id;
-
-  -- Update session expected_cash for balance-affecting operations
+-- Update session expected_cash for balance-affecting operations
   IF p_operation_type NOT IN ('no_sale', 'opening_count', 'closing_count') THEN
     UPDATE cash_drawer_sessions
     SET expected_cash = v_balance_after
     WHERE id = p_session_id;
-  END IF;
-
-  RETURN jsonb_build_object(
+END IF;
+RETURN jsonb_build_object(
     'success', true,
     'operation_id', v_op_id,
     'balance_after', v_balance_after,
@@ -26371,22 +25166,20 @@ BEGIN
       NEW.created_by_user_id,
       NOW()
     );
-    
-    -- Update timing fields based on status
+-- Update timing fields based on status
     IF NEW.status = 'pending' AND NEW.sent_to_kitchen_at IS NULL THEN
       NEW.sent_to_kitchen_at = NOW();
-    ELSIF NEW.status = 'preparing' AND NEW.started_preparing_at IS NULL THEN
+ELSIF NEW.status = 'preparing' AND NEW.started_preparing_at IS NULL THEN
       NEW.started_preparing_at = NOW();
-    ELSIF NEW.status = 'ready' AND NEW.ready_at IS NULL THEN
+ELSIF NEW.status = 'ready' AND NEW.ready_at IS NULL THEN
       NEW.ready_at = NOW();
-    ELSIF NEW.status = 'completed' AND NEW.completed_at IS NULL THEN
+ELSIF NEW.status = 'completed' AND NEW.completed_at IS NULL THEN
       NEW.completed_at = NOW();
-    ELSIF NEW.status IN ('cancelled', 'void') AND NEW.cancelled_at IS NULL THEN
+ELSIF NEW.status IN ('cancelled', 'void') AND NEW.cancelled_at IS NULL THEN
       NEW.cancelled_at = NOW();
-    END IF;
-  END IF;
-  
-  RETURN NEW;
+END IF;
+END IF;
+RETURN NEW;
 END;
 $$;
 
@@ -26431,14 +25224,13 @@ BEGIN
       COALESCE((v_item->>'return_to_inventory')::boolean, false),
       COALESCE((v_item->>'inventory_updated')::boolean, false)
     );
-
-    UPDATE order_items
+UPDATE order_items
     SET refunded_quantity = COALESCE(refunded_quantity, 0)
           + COALESCE((v_item->>'quantity_refunded')::integer, 0),
         refunded_amount = COALESCE(refunded_amount, 0)
           + COALESCE((v_item->>'total_refunded')::numeric, 0)
     WHERE id = (v_item->>'order_item_id')::uuid;
-  END LOOP;
+END LOOP;
 END;
 $$;
 
@@ -26461,9 +25253,8 @@ BEGIN
       AND location_id = ANY(user_location_ids())
   ) THEN
     RAISE EXCEPTION 'Session not found';
-  END IF;
-
-  INSERT INTO public.table_session_events (
+END IF;
+INSERT INTO public.table_session_events (
     session_id, event_type, event_data, notes,
     triggered_by_staff_id, triggered_by_user_id
   ) VALUES (
@@ -26471,8 +25262,7 @@ BEGIN
     user_staff_profile_id(), get_my_claim('sub')
   )
   RETURNING id INTO v_event_id;
-
-  RETURN json_build_object(
+RETURN json_build_object(
     'success', true,
     'event_id', v_event_id,
     'event_type', p_event_type
@@ -26493,7 +25283,7 @@ BEGIN
     UPDATE waitlist
     SET notification_failures = notification_failures + 1
     WHERE id = p_waitlist_id;
-  END IF;
+END IF;
 END;
 $$;
 
@@ -26514,14 +25304,14 @@ BEGIN
       notification_count = notification_count + 1,
       last_notification_type = p_notification_type
     WHERE id = p_waitlist_id;
-  ELSE
+ELSE
     UPDATE waitlist
     SET
       notification_count = notification_count + 1,
       notification_failures = notification_failures + 1,
       last_notification_type = p_notification_type
     WHERE id = p_waitlist_id;
-  END IF;
+END IF;
 END;
 $$;
 
@@ -26535,17 +25325,17 @@ CREATE OR REPLACE FUNCTION "public"."redistribute_order_discount"("p_order_id" "
     AS $$
 DECLARE
     v_total_discount NUMERIC := 0;
-    v_order_subtotal NUMERIC := 0;
-    v_order_cash_subtotal NUMERIC := 0;
-    v_item RECORD;
-    v_item_proportion NUMERIC;
-    v_item_discount_amount NUMERIC;
-    v_discounted_subtotal NUMERIC;
-    v_discounted_cash_subtotal NUMERIC;
-    v_new_tax_amount NUMERIC;
-    v_new_cash_tax_amount NUMERIC;
-    v_distributed_total NUMERIC := 0;
-    v_last_item_id UUID;
+v_order_subtotal NUMERIC := 0;
+v_order_cash_subtotal NUMERIC := 0;
+v_item RECORD;
+v_item_proportion NUMERIC;
+v_item_discount_amount NUMERIC;
+v_discounted_subtotal NUMERIC;
+v_discounted_cash_subtotal NUMERIC;
+v_new_tax_amount NUMERIC;
+v_new_cash_tax_amount NUMERIC;
+v_distributed_total NUMERIC := 0;
+v_last_item_id UUID;
 BEGIN
     -- Get total active discount amount
     SELECT COALESCE(SUM(calculated_amount), 0)
@@ -26553,8 +25343,7 @@ BEGIN
     FROM public.order_discounts
     WHERE order_id = p_order_id
       AND voided_at IS NULL;
-    
-    -- If no discount, reset all items to original values
+-- If no discount, reset all items to original values
     IF v_total_discount <= 0 THEN
         UPDATE public.order_items
         SET
@@ -26566,10 +25355,9 @@ BEGIN
             updated_at = now()
         WHERE order_id = p_order_id
           AND is_voided = false;
-        RETURN;
-    END IF;
-    
-    -- Get order totals (pre-discount)
+RETURN;
+END IF;
+-- Get order totals (pre-discount)
     SELECT 
         COALESCE(SUM(quantity * unit_price), 0),
         COALESCE(SUM(quantity * COALESCE(cash_price, unit_price)), 0)
@@ -26577,12 +25365,10 @@ BEGIN
     FROM public.order_items
     WHERE order_id = p_order_id
       AND is_voided = false;
-    
-    IF v_order_subtotal <= 0 THEN
+IF v_order_subtotal <= 0 THEN
         RETURN;
-    END IF;
-    
-    -- Distribute discount proportionally to each item
+END IF;
+-- Distribute discount proportionally to each item
     FOR v_item IN
         SELECT 
             id,
@@ -26599,22 +25385,18 @@ BEGIN
     LOOP
         -- Calculate proportion
         v_item_proportion := v_item.item_subtotal / v_order_subtotal;
-        
-        -- Calculate discount amount for this item
+-- Calculate discount amount for this item
         v_item_discount_amount := ROUND(v_total_discount * v_item_proportion, 2);
-        v_distributed_total := v_distributed_total + v_item_discount_amount;
-        v_last_item_id := v_item.id;
-        
-        -- Calculate discounted subtotals
+v_distributed_total := v_distributed_total + v_item_discount_amount;
+v_last_item_id := v_item.id;
+-- Calculate discounted subtotals
         v_discounted_subtotal := v_item.item_subtotal - v_item_discount_amount;
-        v_discounted_cash_subtotal := v_item.item_cash_subtotal - 
+v_discounted_cash_subtotal := v_item.item_cash_subtotal - 
             ROUND(v_item_discount_amount * v_item.item_cash_subtotal / NULLIF(v_item.item_subtotal, 0), 2);
-        
-        -- Calculate tax on DISCOUNTED amounts
+-- Calculate tax on DISCOUNTED amounts
         v_new_tax_amount := ROUND(v_discounted_subtotal * COALESCE(v_item.tax_rate, 0) / 100, 2);
-        v_new_cash_tax_amount := ROUND(v_discounted_cash_subtotal * COALESCE(v_item.tax_rate, 0) / 100, 2);
-        
-        -- Update item
+v_new_cash_tax_amount := ROUND(v_discounted_cash_subtotal * COALESCE(v_item.tax_rate, 0) / 100, 2);
+-- Update item
         UPDATE public.order_items
         SET
             discount_amount = v_item_discount_amount,
@@ -26624,30 +25406,28 @@ BEGIN
             cash_tax_amount = v_new_cash_tax_amount,
             updated_at = now()
         WHERE id = v_item.id;
-    END LOOP;
-    
-    -- Handle rounding difference - assign to last item
+END LOOP;
+-- Handle rounding difference - assign to last item
     IF v_last_item_id IS NOT NULL AND v_distributed_total <> v_total_discount THEN
         DECLARE
             v_rounding_adjustment NUMERIC := v_total_discount - v_distributed_total;
-            v_current_discount NUMERIC;
-            v_current_subtotal NUMERIC;
-            v_current_tax_rate NUMERIC;
-        BEGIN
+v_current_discount NUMERIC;
+v_current_subtotal NUMERIC;
+v_current_tax_rate NUMERIC;
+BEGIN
             SELECT discount_amount, subtotal, tax_rate
             INTO v_current_discount, v_current_subtotal, v_current_tax_rate
             FROM public.order_items
             WHERE id = v_last_item_id;
-            
-            UPDATE public.order_items
+UPDATE public.order_items
             SET
                 discount_amount = v_current_discount + v_rounding_adjustment,
                 subtotal = v_current_subtotal - v_rounding_adjustment,
                 tax_amount = ROUND((v_current_subtotal - v_rounding_adjustment) * COALESCE(v_current_tax_rate, 0) / 100, 2),
                 updated_at = now()
             WHERE id = v_last_item_id;
-        END;
-    END IF;
+END;
+END IF;
 END;
 $$;
 
@@ -26675,12 +25455,10 @@ CREATE OR REPLACE FUNCTION "public"."remove_category_from_menu"("p_menu_id" "uui
 BEGIN
     DELETE FROM menu_categories
     WHERE menu_id = p_menu_id AND category_id = p_category_id;
-    
-    -- Also clean up location overrides
+-- Also clean up location overrides
     DELETE FROM location_menu_category_overrides
     WHERE menu_id = p_menu_id AND category_id = p_category_id;
-    
-    RETURN json_build_object(
+RETURN json_build_object(
         'success', true,
         'menu_id', p_menu_id,
         'category_id', p_category_id
@@ -26700,12 +25478,10 @@ BEGIN
     -- Remove the item from category
     DELETE FROM category_items
     WHERE category_id = p_category_id AND menu_item_id = p_menu_item_id;
-    
-    -- Also clean up any location overrides for this category+item
+-- Also clean up any location overrides for this category+item
     DELETE FROM location_category_item_overrides
     WHERE category_id = p_category_id AND menu_item_id = p_menu_item_id;
-    
-    RETURN json_build_object(
+RETURN json_build_object(
         'success', true,
         'category_id', p_category_id,
         'menu_item_id', p_menu_item_id
@@ -26723,9 +25499,9 @@ CREATE OR REPLACE FUNCTION "public"."remove_order_item"("p_order_item_id" "uuid"
     AS $$
 DECLARE
   v_order_id UUID;
-  v_order_status TEXT;
-  v_item_subtotal NUMERIC(10, 2);
-  v_result JSON;
+v_order_status TEXT;
+v_item_subtotal NUMERIC(10, 2);
+v_result JSON;
 BEGIN
   -- Get order info and verify access
   SELECT 
@@ -26739,18 +25515,15 @@ BEGIN
     AND oi.is_voided = FALSE
     AND o.merchant_id = user_merchant_id()
     AND o.location_id = ANY(user_location_ids());
-
-  IF NOT FOUND THEN
+IF NOT FOUND THEN
     RAISE EXCEPTION 'Order item not found or access denied';
-  END IF;
-
-  -- Only allow hard delete on draft/pending orders
+END IF;
+-- Only allow hard delete on draft/pending orders
   -- Once order is confirmed/sent to kitchen, must use void_order_item
   IF v_order_status NOT IN ('draft', 'pending') THEN
     RAISE EXCEPTION 'Cannot remove items from % orders. Use void_order_item() instead.', v_order_status;
-  END IF;
-
-  -- Verify permission
+END IF;
+-- Verify permission
   -- IF NOT has_permission('location.orders.manage') THEN
   --   RAISE EXCEPTION 'Permission denied: location.orders.manage required';
   -- END IF;
@@ -26758,20 +25531,17 @@ BEGIN
   -- Delete modifiers first (cascade would handle this, but being explicit)
   DELETE FROM public.order_item_modifiers
   WHERE order_item_id = p_order_item_id;
-
-  -- Delete the item
+-- Delete the item
   DELETE FROM public.order_items
   WHERE id = p_order_item_id;
-
-  -- Return result
+-- Return result
   SELECT json_build_object(
     'success', true,
     'removed_item_id', p_order_item_id,
     'order_id', v_order_id,
     'removed_subtotal', v_item_subtotal
   ) INTO v_result;
-
-  RETURN v_result;
+RETURN v_result;
 END;
 $$;
 
@@ -26789,12 +25559,12 @@ CREATE OR REPLACE FUNCTION "public"."remove_order_item_modifier"("p_modifier_id"
     AS $$
 DECLARE
   v_order_item_id UUID;
-  v_order_id UUID;
-  v_item_quantity INTEGER;
-  v_price_paid NUMERIC(10, 2);
-  v_new_modifier_total NUMERIC(10, 2);
-  v_new_subtotal NUMERIC(10, 2);
-  v_result JSON;
+v_order_id UUID;
+v_item_quantity INTEGER;
+v_price_paid NUMERIC(10, 2);
+v_new_modifier_total NUMERIC(10, 2);
+v_new_subtotal NUMERIC(10, 2);
+v_result JSON;
 BEGIN
   -- Get modifier and item details
   SELECT 
@@ -26811,12 +25581,10 @@ BEGIN
     AND o.merchant_id = user_merchant_id()
     AND o.location_id = ANY(user_location_ids())
     AND o.status NOT IN ('completed', 'cancelled', 'void');
-
-  IF NOT FOUND THEN
+IF NOT FOUND THEN
     RAISE EXCEPTION 'Modifier not found or cannot be removed';
-  END IF;
-
-  -- Verify permission
+END IF;
+-- Verify permission
   -- IF NOT has_permission('location.orders.manage') THEN
   --   RAISE EXCEPTION 'Permission denied';
   -- END IF;
@@ -26824,31 +25592,26 @@ BEGIN
   -- Delete modifier
   DELETE FROM public.order_item_modifiers
   WHERE id = p_modifier_id;
-
-  -- Calculate new totals
+-- Calculate new totals
   SELECT COALESCE(SUM(total_price), 0)
   INTO v_new_modifier_total
   FROM public.order_item_modifiers
   WHERE order_item_id = v_order_item_id;
-
-  v_new_subtotal := (v_item_quantity * v_price_paid) + (v_item_quantity * v_new_modifier_total);
-
-  -- Update item subtotal
+v_new_subtotal := (v_item_quantity * v_price_paid) + (v_item_quantity * v_new_modifier_total);
+-- Update item subtotal
   UPDATE public.order_items
   SET 
     subtotal = v_new_subtotal,
     updated_at = NOW()
   WHERE id = v_order_item_id;
-
-  SELECT json_build_object(
+SELECT json_build_object(
     'success', true,
     'removed_modifier_id', p_modifier_id,
     'order_item_id', v_order_item_id,
     'modifier_total', v_new_modifier_total,
     'new_subtotal', v_new_subtotal
   ) INTO v_result;
-
-  RETURN v_result;
+RETURN v_result;
 END;
 $$;
 
@@ -26862,10 +25625,10 @@ CREATE OR REPLACE FUNCTION "public"."remove_order_items_batch"("p_order_item_ids
     AS $$
 DECLARE
   v_order_id UUID;
-  v_order_status TEXT;
-  v_removed_count INTEGER := 0;
-  v_item_id UUID;
-  v_result JSON;
+v_order_status TEXT;
+v_removed_count INTEGER := 0;
+v_item_id UUID;
+v_result JSON;
 BEGIN
   -- Verify all items belong to same order and order is draft/pending
   SELECT DISTINCT o.id, o.status
@@ -26875,16 +25638,13 @@ BEGIN
   WHERE oi.id = ANY(p_order_item_ids)
     AND o.merchant_id = user_merchant_id()
     AND o.location_id = ANY(user_location_ids());
-
-  IF NOT FOUND THEN
+IF NOT FOUND THEN
     RAISE EXCEPTION 'Order items not found or access denied';
-  END IF;
-
-  IF v_order_status NOT IN ('draft', 'pending') THEN
+END IF;
+IF v_order_status NOT IN ('draft', 'pending') THEN
     RAISE EXCEPTION 'Cannot remove items from % orders', v_order_status;
-  END IF;
-
-  -- Verify permission
+END IF;
+-- Verify permission
   -- IF NOT has_permission('location.orders.manage') THEN
   --   RAISE EXCEPTION 'Permission denied';
   -- END IF;
@@ -26892,22 +25652,18 @@ BEGIN
   -- Delete modifiers for all items
   DELETE FROM public.order_item_modifiers
   WHERE order_item_id = ANY(p_order_item_ids);
-
-  -- Delete items
+-- Delete items
   DELETE FROM public.order_items
   WHERE id = ANY(p_order_item_ids)
     AND is_voided = FALSE;
-
-  GET DIAGNOSTICS v_removed_count = ROW_COUNT;
-
-  SELECT json_build_object(
+GET DIAGNOSTICS v_removed_count = ROW_COUNT;
+SELECT json_build_object(
     'success', true,
     'order_id', v_order_id,
     'removed_count', v_removed_count,
     'removed_item_ids', p_order_item_ids
   ) INTO v_result;
-
-  RETURN v_result;
+RETURN v_result;
 END;
 $$;
 
@@ -26920,40 +25676,35 @@ CREATE OR REPLACE FUNCTION "public"."reopen_check"("p_order_id" "uuid", "p_staff
     SET "search_path" TO 'public', 'public', 'pg_temp'
     AS $$DECLARE
   v_order RECORD;
-  v_result JSONB;
+v_result JSONB;
 BEGIN
   -- Lock and fetch order
   SELECT * INTO v_order
   FROM orders
   WHERE id = p_order_id
   FOR UPDATE;
-
-  IF NOT FOUND THEN
+IF NOT FOUND THEN
     RETURN jsonb_build_object(
       'success', false,
       'error', 'Order not found'
     );
-  END IF;
-
-  -- Validate check is closed (can't reopen an open check)
+END IF;
+-- Validate check is closed (can't reopen an open check)
   IF v_order.check_status != 'Closed' THEN
     RETURN jsonb_build_object(
       'success', false,
       'error', 'Check is not closed'
     );
-  END IF;
-
-  -- Reopen the check
+END IF;
+-- Reopen the check
   UPDATE orders
   SET check_status = 'Opened',
       updated_at = NOW(),
       sync_version = sync_version + 1
   WHERE id = p_order_id;
-
-  -- Recalculate amount_due so re-payment is possible
+-- Recalculate amount_due so re-payment is possible
   PERFORM calculate_order_totals_fast(p_order_id);
-  
-  -- Log the action with reason (audit_logs table expected to exist)
+-- Log the action with reason (audit_logs table expected to exist)
   INSERT INTO audit_logs (
     action,
     resource_type,
@@ -26972,20 +25723,19 @@ BEGIN
     ),
     NOW()
   );
-
-  -- Return success
+-- Return success
   RETURN jsonb_build_object(
     'success', true,
     'order_id', p_order_id,
     'check_status', 'Opened'
   );
-
 EXCEPTION WHEN OTHERS THEN
   RETURN jsonb_build_object(
     'success', false,
     'error', SQLERRM
   );
-END;$$;
+END;
+$$;
 
 
 ALTER FUNCTION "public"."reopen_check"("p_order_id" "uuid", "p_staff_id" "uuid", "p_reason" "text") OWNER TO "postgres";
@@ -27006,16 +25756,15 @@ BEGIN
             SET display_order = v_item.display_order,
                 updated_at = NOW()
             WHERE category_id = p_category_id AND menu_item_id = v_item.menu_item_id;
-        ELSE
+ELSE
             -- Location override update
             INSERT INTO location_category_item_overrides (location_id, category_id, menu_item_id, display_order, updated_at)
             VALUES (p_location_id, p_category_id, v_item.menu_item_id, v_item.display_order, NOW())
             ON CONFLICT (location_id, category_id, menu_item_id)
             DO UPDATE SET display_order = EXCLUDED.display_order, updated_at = NOW();
-        END IF;
-    END LOOP;
-    
-    RETURN json_build_object('success', true);
+END IF;
+END LOOP;
+RETURN json_build_object('success', true);
 END;
 $$;
 
@@ -27038,16 +25787,15 @@ BEGIN
             SET display_order = v_item.display_order,
                 updated_at = NOW()
             WHERE menu_id = p_menu_id AND category_id = v_item.category_id;
-        ELSE
+ELSE
             -- Location override update
             INSERT INTO location_menu_category_overrides (location_id, menu_id, category_id, display_order, updated_at)
             VALUES (p_location_id, p_menu_id, v_item.category_id, v_item.display_order, NOW())
             ON CONFLICT (location_id, menu_id, category_id)
             DO UPDATE SET display_order = EXCLUDED.display_order, updated_at = NOW();
-        END IF;
-    END LOOP;
-    
-    RETURN json_build_object('success', true);
+END IF;
+END LOOP;
+RETURN json_build_object('success', true);
 END;
 $$;
 
@@ -27060,32 +25808,27 @@ CREATE OR REPLACE FUNCTION "public"."replace_order_item_modifiers"("p_order_item
     SET "search_path" TO 'public', 'public', 'pg_temp'
     AS $$DECLARE
     v_order_id uuid;
-    v_location_id uuid;
-    v_base_unit_price numeric;
-    v_base_cash_price numeric;
-    v_quantity integer;
-    v_size_modifier numeric;
-    v_tax_rate numeric;
-    v_is_tax_exempt boolean;
-
-    v_old_modifier_total numeric := 0;
-    v_new_modifier_total numeric := 0;
-
-    v_new_unit_price numeric;
-    v_new_cash_unit_price numeric;
-    v_new_subtotal numeric;
-    v_new_cash_subtotal numeric;
-    v_new_tax_amount numeric;
-    v_new_cash_tax_amount numeric;
-
-    v_discount_amount numeric := 0;
-    v_discount_cash_amount numeric := 0;
-    v_has_active_discount boolean := false;
-
-    v_cash_discount_rate numeric := 0.04;
-    v_new_sync_version integer;
-
-    v_result jsonb;
+v_location_id uuid;
+v_base_unit_price numeric;
+v_base_cash_price numeric;
+v_quantity integer;
+v_size_modifier numeric;
+v_tax_rate numeric;
+v_is_tax_exempt boolean;
+v_old_modifier_total numeric := 0;
+v_new_modifier_total numeric := 0;
+v_new_unit_price numeric;
+v_new_cash_unit_price numeric;
+v_new_subtotal numeric;
+v_new_cash_subtotal numeric;
+v_new_tax_amount numeric;
+v_new_cash_tax_amount numeric;
+v_discount_amount numeric := 0;
+v_discount_cash_amount numeric := 0;
+v_has_active_discount boolean := false;
+v_cash_discount_rate numeric := 0.04;
+v_new_sync_version integer;
+v_result jsonb;
 BEGIN
     -- ============================================
     -- 1. Get current item details
@@ -27115,27 +25858,25 @@ BEGIN
     WHERE oi.id = p_order_item_id
       AND o.merchant_id = user_merchant_id()
       AND o.location_id = ANY(user_location_ids())
-    FOR UPDATE;  -- Lock row to prevent race conditions
+    FOR UPDATE;
+-- Lock row to prevent race conditions
 
     IF v_order_id IS NULL THEN
         RAISE EXCEPTION 'Order item not found or access denied';
-    END IF;
-
-    -- ============================================
+END IF;
+-- ============================================
     -- 2. Calculate old modifier total (for comparison)
     -- ============================================
     SELECT COALESCE(SUM(total_price), 0)
     INTO v_old_modifier_total
     FROM public.order_item_modifiers
     WHERE order_item_id = p_order_item_id;
-
-    -- ============================================
+-- ============================================
     -- 3. Delete existing modifiers
     -- ============================================
     DELETE FROM public.order_item_modifiers
     WHERE order_item_id = p_order_item_id;
-
-    -- ============================================
+-- ============================================
     -- 4. Insert new modifiers and calculate total
     -- ============================================
     IF p_modifiers IS NOT NULL AND jsonb_array_length(p_modifiers) > 0 THEN
@@ -27161,15 +25902,13 @@ BEGIN
             COALESCE((mod->>'price_modifier')::numeric, 0) * COALESCE((mod->>'quantity')::integer, 1),
             COALESCE((mod->>'is_no')::boolean, false)
         FROM jsonb_array_elements(p_modifiers) AS mod;
-
-        -- Calculate new modifier total
+-- Calculate new modifier total
         SELECT COALESCE(SUM(total_price), 0)
         INTO v_new_modifier_total
         FROM public.order_item_modifiers
         WHERE order_item_id = p_order_item_id;
-    END IF;
-
-    -- ============================================
+END IF;
+-- ============================================
     -- 5. Recalculate item pricing
     -- ============================================
     -- The base prices are stored WITHOUT modifiers/size
@@ -27180,32 +25919,28 @@ BEGIN
     -- So we need to subtract size_modifier and old_modifier_total to get true base
     DECLARE
         v_true_base_card_price numeric;
-        v_true_base_cash_price numeric;
-    BEGIN
+v_true_base_cash_price numeric;
+BEGIN
         -- Current unit_price = base + size + old_modifiers
         -- We want: base + size + new_modifiers
         v_true_base_card_price := v_base_unit_price - v_size_modifier - v_old_modifier_total;
-        v_true_base_cash_price := v_base_cash_price - v_size_modifier - v_old_modifier_total;
-
-        -- New prices with modifiers
+v_true_base_cash_price := v_base_cash_price - v_size_modifier - v_old_modifier_total;
+-- New prices with modifiers
         v_new_unit_price := v_true_base_card_price + v_size_modifier + v_new_modifier_total;
-        v_new_cash_unit_price := v_true_base_cash_price + v_size_modifier + v_new_modifier_total;
-    END;
-
-    -- Calculate subtotals (pre-discount)
+v_new_cash_unit_price := v_true_base_cash_price + v_size_modifier + v_new_modifier_total;
+END;
+-- Calculate subtotals (pre-discount)
     v_new_subtotal := v_new_unit_price * v_quantity;
-    v_new_cash_subtotal := v_new_cash_unit_price * v_quantity;
-
-    -- Calculate tax (pre-discount)
+v_new_cash_subtotal := v_new_cash_unit_price * v_quantity;
+-- Calculate tax (pre-discount)
     IF v_is_tax_exempt THEN
         v_new_tax_amount := 0;
-        v_new_cash_tax_amount := 0;
-    ELSE
+v_new_cash_tax_amount := 0;
+ELSE
         v_new_tax_amount := ROUND(v_new_subtotal * v_tax_rate / 100, 2);
-        v_new_cash_tax_amount := ROUND(v_new_cash_subtotal * v_tax_rate / 100, 2);
-    END IF;
-
-    -- ============================================
+v_new_cash_tax_amount := ROUND(v_new_cash_subtotal * v_tax_rate / 100, 2);
+END IF;
+-- ============================================
     -- 6. Update order item with new pricing
     -- ============================================
     UPDATE public.order_items SET
@@ -27219,8 +25954,7 @@ BEGIN
         discount_cash_amount = 0,
         updated_at = now()
     WHERE id = p_order_item_id;
-
-    -- ============================================
+-- ============================================
     -- 7. Handle active order discounts
     -- ============================================
     SELECT EXISTS(
@@ -27229,12 +25963,10 @@ BEGIN
           AND voided_at IS NULL
           AND calculated_amount > 0
     ) INTO v_has_active_discount;
-
-    IF v_has_active_discount THEN
+IF v_has_active_discount THEN
         -- Redistribute discount across all items (including this updated one)
         PERFORM redistribute_order_discount(v_order_id);
-
-        -- Get updated values after discount redistribution
+-- Get updated values after discount redistribution
         SELECT
             subtotal,
             cash_subtotal,
@@ -27251,20 +25983,17 @@ BEGIN
             v_discount_cash_amount
         FROM public.order_items
         WHERE id = p_order_item_id;
-    END IF;
-
-    -- ============================================
+END IF;
+-- ============================================
     -- 8. Update order sync version
     -- ============================================
     -- UPDATE public.orders
     v_new_sync_version := increment_order_sync_version(v_order_id);
-
-    -- ============================================
+-- ============================================
     -- 9. Recalculate order totals
     -- ============================================
     PERFORM recalculate_order_discount(v_order_id);
-
-    -- ============================================
+-- ============================================
     -- 10. Return enhanced result with complete item data
     -- ============================================
     SELECT json_build_object(
@@ -27314,9 +26043,9 @@ BEGIN
             WHERE order_item_id = p_order_item_id
         )
     ) INTO v_result;
-
-    RETURN v_result;
-END;$$;
+RETURN v_result;
+END;
+$$;
 
 
 ALTER FUNCTION "public"."replace_order_item_modifiers"("p_order_item_id" "uuid", "p_modifiers" "jsonb") OWNER TO "postgres";
@@ -27331,32 +26060,27 @@ CREATE OR REPLACE FUNCTION "public"."replace_order_item_modifiers_v2"("p_order_i
     SET "search_path" TO 'public', 'public', 'pg_temp'
     AS $$DECLARE
     v_order_id uuid;
-    v_location_id uuid;
-    v_base_unit_price numeric;
-    v_base_cash_price numeric;
-    v_quantity integer;
-    v_size_modifier numeric;
-    v_tax_rate numeric;
-    v_is_tax_exempt boolean;
-
-    v_old_modifier_total numeric := 0;
-    v_new_modifier_total numeric := 0;
-
-    v_new_unit_price numeric;
-    v_new_cash_unit_price numeric;
-    v_new_subtotal numeric;
-    v_new_cash_subtotal numeric;
-    v_new_tax_amount numeric;
-    v_new_cash_tax_amount numeric;
-
-    v_discount_amount numeric := 0;
-    v_discount_cash_amount numeric := 0;
-    v_has_active_discount boolean := false;
-
-    v_cash_discount_rate numeric := 0.04;
-    v_new_sync_version integer;
-
-    v_result jsonb;
+v_location_id uuid;
+v_base_unit_price numeric;
+v_base_cash_price numeric;
+v_quantity integer;
+v_size_modifier numeric;
+v_tax_rate numeric;
+v_is_tax_exempt boolean;
+v_old_modifier_total numeric := 0;
+v_new_modifier_total numeric := 0;
+v_new_unit_price numeric;
+v_new_cash_unit_price numeric;
+v_new_subtotal numeric;
+v_new_cash_subtotal numeric;
+v_new_tax_amount numeric;
+v_new_cash_tax_amount numeric;
+v_discount_amount numeric := 0;
+v_discount_cash_amount numeric := 0;
+v_has_active_discount boolean := false;
+v_cash_discount_rate numeric := 0.04;
+v_new_sync_version integer;
+v_result jsonb;
 BEGIN
     -- ============================================
     -- 1. Get current item details
@@ -27386,27 +26110,25 @@ BEGIN
     WHERE oi.id = p_order_item_id
       AND o.merchant_id = user_merchant_id()
       AND o.location_id = ANY(user_location_ids())
-    FOR UPDATE;  -- Lock row to prevent race conditions
+    FOR UPDATE;
+-- Lock row to prevent race conditions
 
     IF v_order_id IS NULL THEN
         RAISE EXCEPTION 'Order item not found or access denied';
-    END IF;
-
-    -- ============================================
+END IF;
+-- ============================================
     -- 2. Calculate old modifier total (for comparison)
     -- ============================================
     SELECT COALESCE(SUM(total_price), 0)
     INTO v_old_modifier_total
     FROM public.order_item_modifiers
     WHERE order_item_id = p_order_item_id;
-
-    -- ============================================
+-- ============================================
     -- 3. Delete existing modifiers
     -- ============================================
     DELETE FROM public.order_item_modifiers
     WHERE order_item_id = p_order_item_id;
-
-    -- ============================================
+-- ============================================
     -- 4. Insert new modifiers and calculate total
     -- ============================================
     IF p_modifiers IS NOT NULL AND jsonb_array_length(p_modifiers) > 0 THEN
@@ -27432,15 +26154,13 @@ BEGIN
             COALESCE((mod->>'price_modifier')::numeric, 0) * COALESCE((mod->>'quantity')::integer, 1),
             COALESCE((mod->>'is_no')::boolean, false)
         FROM jsonb_array_elements(p_modifiers) AS mod;
-
-        -- Calculate new modifier total
+-- Calculate new modifier total
         SELECT COALESCE(SUM(total_price), 0)
         INTO v_new_modifier_total
         FROM public.order_item_modifiers
         WHERE order_item_id = p_order_item_id;
-    END IF;
-
-    -- ============================================
+END IF;
+-- ============================================
     -- 5. Recalculate item pricing
     -- ============================================
     -- The base prices are stored WITHOUT modifiers/size
@@ -27451,32 +26171,28 @@ BEGIN
     -- So we need to subtract size_modifier and old_modifier_total to get true base
     DECLARE
         v_true_base_card_price numeric;
-        v_true_base_cash_price numeric;
-    BEGIN
+v_true_base_cash_price numeric;
+BEGIN
         -- Current unit_price = base + size + old_modifiers
         -- We want: base + size + new_modifiers
         v_true_base_card_price := v_base_unit_price - v_size_modifier - v_old_modifier_total;
-        v_true_base_cash_price := v_base_cash_price - v_size_modifier - v_old_modifier_total;
-
-        -- New prices with modifiers
+v_true_base_cash_price := v_base_cash_price - v_size_modifier - v_old_modifier_total;
+-- New prices with modifiers
         v_new_unit_price := v_true_base_card_price + v_size_modifier + v_new_modifier_total;
-        v_new_cash_unit_price := v_true_base_cash_price + v_size_modifier + v_new_modifier_total;
-    END;
-
-    -- Calculate subtotals (pre-discount)
+v_new_cash_unit_price := v_true_base_cash_price + v_size_modifier + v_new_modifier_total;
+END;
+-- Calculate subtotals (pre-discount)
     v_new_subtotal := v_new_unit_price * v_quantity;
-    v_new_cash_subtotal := v_new_cash_unit_price * v_quantity;
-
-    -- Calculate tax (pre-discount)
+v_new_cash_subtotal := v_new_cash_unit_price * v_quantity;
+-- Calculate tax (pre-discount)
     IF v_is_tax_exempt THEN
         v_new_tax_amount := 0;
-        v_new_cash_tax_amount := 0;
-    ELSE
+v_new_cash_tax_amount := 0;
+ELSE
         v_new_tax_amount := ROUND(v_new_subtotal * v_tax_rate / 100, 2);
-        v_new_cash_tax_amount := ROUND(v_new_cash_subtotal * v_tax_rate / 100, 2);
-    END IF;
-
-    -- ============================================
+v_new_cash_tax_amount := ROUND(v_new_cash_subtotal * v_tax_rate / 100, 2);
+END IF;
+-- ============================================
     -- 6. Update order item with new pricing
     -- ============================================
     UPDATE public.order_items SET
@@ -27490,8 +26206,7 @@ BEGIN
         discount_cash_amount = 0,
         updated_at = now()
     WHERE id = p_order_item_id;
-
-    -- ============================================
+-- ============================================
     -- 7. Handle active order discounts
     -- ============================================
     SELECT EXISTS(
@@ -27500,12 +26215,10 @@ BEGIN
           AND voided_at IS NULL
           AND calculated_amount > 0
     ) INTO v_has_active_discount;
-
-    IF v_has_active_discount THEN
+IF v_has_active_discount THEN
         -- Redistribute discount across all items (including this updated one)
         PERFORM redistribute_order_discount(v_order_id);
-
-        -- Get updated values after discount redistribution
+-- Get updated values after discount redistribution
         SELECT
             subtotal,
             cash_subtotal,
@@ -27522,20 +26235,17 @@ BEGIN
             v_discount_cash_amount
         FROM public.order_items
         WHERE id = p_order_item_id;
-    END IF;
-
-    -- ============================================
+END IF;
+-- ============================================
     -- 8. Update order sync version
     -- ============================================
     -- UPDATE public.orders
     v_new_sync_version := increment_order_sync_version(v_order_id);
-
-    -- ============================================
+-- ============================================
     -- 9. Recalculate order totals
     -- ============================================
     PERFORM recalculate_order_discount(v_order_id);
-
-    -- ============================================
+-- ============================================
     -- 10. Return enhanced result with complete item data
     -- ============================================
     SELECT json_build_object(
@@ -27585,9 +26295,9 @@ BEGIN
             WHERE order_item_id = p_order_item_id
         )
     ) INTO v_result;
-
-    RETURN v_result;
-END;$$;
+RETURN v_result;
+END;
+$$;
 
 
 ALTER FUNCTION "public"."replace_order_item_modifiers_v2"("p_order_item_id" "uuid", "p_modifiers" "jsonb") OWNER TO "postgres";
@@ -27603,25 +26313,21 @@ CREATE OR REPLACE FUNCTION "public"."resend_waitlist_notification"("p_waitlist_i
     AS $$
 DECLARE
   v_entry    waitlist%ROWTYPE;
-  v_location locations%ROWTYPE;
+v_location locations%ROWTYPE;
 BEGIN
   SELECT * INTO v_entry FROM waitlist
   WHERE id = p_waitlist_id
     AND merchant_id = user_merchant_id()
     AND location_id = ANY(user_location_ids())
     AND status IN ('waiting', 'notified', 'arrived');
-
-  IF NOT FOUND THEN
+IF NOT FOUND THEN
     RETURN json_build_object('success', false, 'error', 'Entry not found');
-  END IF;
-
-  IF v_entry.notification_count >= 3 THEN
+END IF;
+IF v_entry.notification_count >= 3 THEN
     RETURN json_build_object('success', false, 'error', 'max_notifications_reached');
-  END IF;
-
-  SELECT * INTO v_location FROM locations WHERE id = v_entry.location_id;
-
-  RETURN json_build_object(
+END IF;
+SELECT * INTO v_location FROM locations WHERE id = v_entry.location_id;
+RETURN json_build_object(
     'success', true,
     'phone', v_entry.phone,
     'party_name', v_entry.party_name,
@@ -27671,37 +26377,31 @@ BEGIN
           AND menu_id = p_menu_id
           AND menu_item_id = p_menu_item_id
           AND (p_category_id IS NULL OR category_id = p_category_id);
-
-        IF FOUND THEN
+IF FOUND THEN
             v_deleted_levels := array_append(v_deleted_levels, 'level_5_location_menu');
-        END IF;
-    END IF;
-
-    -- Reset UI L4 (global menu category price — category_items WHERE menu_id IS NOT NULL)
+END IF;
+END IF;
+-- Reset UI L4 (global menu category price — category_items WHERE menu_id IS NOT NULL)
     IF p_target_level < 4 AND p_menu_id IS NOT NULL AND p_location_id IS NULL AND p_category_id IS NOT NULL THEN
         DELETE FROM category_items
         WHERE menu_item_id = p_menu_item_id
           AND category_id = p_category_id
           AND menu_id = p_menu_id;
-
-        IF FOUND THEN
+IF FOUND THEN
             v_deleted_levels := array_append(v_deleted_levels, 'level_4_menu_category');
-        END IF;
-    END IF;
-
-    -- Reset UI L3 (branch category — location_category_item_overrides)
+END IF;
+END IF;
+-- Reset UI L3 (branch category — location_category_item_overrides)
     IF p_target_level < 3 AND p_location_id IS NOT NULL AND p_category_id IS NOT NULL THEN
         DELETE FROM location_category_item_overrides
         WHERE location_id = p_location_id
           AND category_id = p_category_id
           AND menu_item_id = p_menu_item_id;
-
-        IF FOUND THEN
+IF FOUND THEN
             v_deleted_levels := array_append(v_deleted_levels, 'level_4_location_category');
-        END IF;
-    END IF;
-
-    -- Reset UI L2 (global category price — category_items WHERE menu_id IS NULL)
+END IF;
+END IF;
+-- Reset UI L2 (global category price — category_items WHERE menu_id IS NULL)
     -- Guard: only clear L2 when NOT in menu context (p_menu_id IS NULL).
     -- When resetting from L4/L5 (menu context), L2 is a prior-level baseline and must not be cleared.
     IF p_target_level < 2 AND p_location_id IS NULL AND p_category_id IS NOT NULL AND p_menu_id IS NULL THEN
@@ -27710,23 +26410,19 @@ BEGIN
         WHERE category_id = p_category_id
           AND menu_item_id = p_menu_item_id
           AND menu_id IS NULL;
-
-        IF FOUND THEN
+IF FOUND THEN
             v_deleted_levels := array_append(v_deleted_levels, 'level_3_category');
-        END IF;
-    END IF;
-
-    -- Reset location item override
+END IF;
+END IF;
+-- Reset location item override
     IF p_target_level < 2 AND p_location_id IS NOT NULL THEN
         DELETE FROM location_item_overrides
         WHERE location_id = p_location_id AND menu_item_id = p_menu_item_id;
-
-        IF FOUND THEN
+IF FOUND THEN
             v_deleted_levels := array_append(v_deleted_levels, 'level_2_location_item');
-        END IF;
-    END IF;
-
-    RETURN json_build_object(
+END IF;
+END IF;
+RETURN json_build_object(
         'success', true,
         'target_level', p_target_level,
         'deleted_overrides', v_deleted_levels
@@ -27751,34 +26447,28 @@ BEGIN
         WHERE location_id = p_location_id 
           AND menu_id = p_menu_id 
           AND menu_item_id = p_menu_item_id;
-        
-        IF FOUND THEN
+IF FOUND THEN
             v_deleted_levels := array_append(v_deleted_levels, 'level_4_location_menu');
-        END IF;
-    END IF;
-    
-    -- Reset Level 3 (menu override) - only if merchant admin
+END IF;
+END IF;
+-- Reset Level 3 (menu override) - only if merchant admin
     IF p_target_level < 3 AND p_location_id IS NULL AND p_menu_id IS NOT NULL THEN
         UPDATE menu_item_menus
         SET custom_price = NULL, custom_cash_price = NULL, updated_at = NOW()
         WHERE menu_id = p_menu_id AND menu_item_id = p_menu_item_id;
-        
-        IF FOUND THEN
+IF FOUND THEN
             v_deleted_levels := array_append(v_deleted_levels, 'level_3_menu');
-        END IF;
-    END IF;
-    
-    -- Reset Level 2 (location item override)
+END IF;
+END IF;
+-- Reset Level 2 (location item override)
     IF p_target_level < 2 AND p_location_id IS NOT NULL THEN
         DELETE FROM location_item_overrides
         WHERE location_id = p_location_id AND menu_item_id = p_menu_item_id;
-        
-        IF FOUND THEN
+IF FOUND THEN
             v_deleted_levels := array_append(v_deleted_levels, 'level_2_location_item');
-        END IF;
-    END IF;
-    
-    RETURN json_build_object(
+END IF;
+END IF;
+RETURN json_build_object(
         'success', true,
         'target_level', p_target_level,
         'deleted_overrides', v_deleted_levels
@@ -27804,12 +26494,10 @@ BEGIN
     WHERE lio.menu_item_id = p_item_id
       AND lio.location_id = p_location_id
       AND ps.is_active = true;
-
-    IF v_station_name IS NOT NULL THEN
+IF v_station_name IS NOT NULL THEN
         RETURN v_station_name;
-    END IF;
-
-    -- 2. Check category-level default (if category provided)
+END IF;
+-- 2. Check category-level default (if category provided)
     IF p_category_id IS NOT NULL THEN
         SELECT ps.name INTO v_station_name
         FROM location_category_prep_defaults lcpd
@@ -27817,13 +26505,11 @@ BEGIN
         WHERE lcpd.category_id = p_category_id
           AND lcpd.location_id = p_location_id
           AND ps.is_active = true;
-
-        IF v_station_name IS NOT NULL THEN
+IF v_station_name IS NOT NULL THEN
             RETURN v_station_name;
-        END IF;
-    END IF;
-
-    -- 3. No assignment → return NULL (routes to Expo via catch-all)
+END IF;
+END IF;
+-- 3. No assignment → return NULL (routes to Expo via catch-all)
     RETURN NULL;
 END;
 $$;
@@ -27842,38 +26528,34 @@ CREATE OR REPLACE FUNCTION "public"."route_items_to_kds"() RETURNS "trigger"
     AS $$
 DECLARE
   v_location_id UUID;
-  v_order_type TEXT;
-  v_display RECORD;
-  v_matched BOOLEAN;
-  v_any_routed BOOLEAN := false;
-  v_rule RECORD;
-  v_resolved_prep_station TEXT;
+v_order_type TEXT;
+v_display RECORD;
+v_matched BOOLEAN;
+v_any_routed BOOLEAN := false;
+v_rule RECORD;
+v_resolved_prep_station TEXT;
 BEGIN
   -- Only process when sent_to_kitchen_at transitions from NULL to a value
   IF NEW.sent_to_kitchen_at IS NULL THEN
     RETURN NEW;
-  END IF;
-  IF TG_OP = 'UPDATE' AND OLD.sent_to_kitchen_at IS NOT NULL THEN
+END IF;
+IF TG_OP = 'UPDATE' AND OLD.sent_to_kitchen_at IS NOT NULL THEN
     RETURN NEW;
-  END IF;
-
-  -- Get the location_id and order_type from the parent order
+END IF;
+-- Get the location_id and order_type from the parent order
   SELECT o.location_id, o.order_type
   INTO v_location_id, v_order_type
   FROM orders o
   WHERE o.id = NEW.order_id;
-
-  IF v_location_id IS NULL THEN
+IF v_location_id IS NULL THEN
     RETURN NEW;
-  END IF;
-
-  -- Resolve effective prep station via location overrides cascade
+END IF;
+-- Resolve effective prep station via location overrides cascade
   v_resolved_prep_station := resolve_item_prep_station(NEW.menu_item_id, v_location_id, NEW.category_id);
-  IF v_resolved_prep_station IS NULL THEN
+IF v_resolved_prep_station IS NULL THEN
     v_resolved_prep_station := NEW.prep_station;
-  END IF;
-
-  -- Iterate over all active KDS displays for this location
+END IF;
+-- Iterate over all active KDS displays for this location
   FOR v_display IN
     SELECT d.id, d.routing_mode, d.show_all_items
     FROM kds_displays d
@@ -27881,11 +26563,10 @@ BEGIN
       AND d.is_active = true
   LOOP
     v_matched := false;
-
-    -- routing_mode = 'all' (expo/catch-all): always route
+-- routing_mode = 'all' (expo/catch-all): always route
     IF v_display.routing_mode = 'all' THEN
       v_matched := true;
-    ELSE
+ELSE
       -- Check routing rules for this display
       FOR v_rule IN
         SELECT r.rule_type, r.rule_value
@@ -27895,42 +26576,37 @@ BEGIN
         -- Match by prep_station (resolved from location overrides)
         IF v_rule.rule_type = 'prep_station' AND v_resolved_prep_station = v_rule.rule_value THEN
           v_matched := true;
-          EXIT; -- One match is enough
+EXIT;
+-- One match is enough
         END IF;
-
-        -- Match by category (name or ID)
+-- Match by category (name or ID)
         IF v_rule.rule_type = 'category' AND (
           NEW.category_name = v_rule.rule_value
           OR (NEW.category_id IS NOT NULL AND NEW.category_id::text = v_rule.rule_value)
         ) THEN
           v_matched := true;
-          EXIT;
-        END IF;
-
-        -- Match by order_type
+EXIT;
+END IF;
+-- Match by order_type
         IF v_rule.rule_type = 'order_type' AND v_order_type = v_rule.rule_value THEN
           v_matched := true;
-          EXIT;
-        END IF;
-      END LOOP;
-    END IF;
-
-    -- Also match if display has show_all_items = true (expo display that gets copies of everything)
+EXIT;
+END IF;
+END LOOP;
+END IF;
+-- Also match if display has show_all_items = true (expo display that gets copies of everything)
     IF NOT v_matched AND COALESCE(v_display.show_all_items, false) THEN
       v_matched := true;
-    END IF;
-
-    -- Insert into kds_item_status if matched (idempotent via ON CONFLICT)
+END IF;
+-- Insert into kds_item_status if matched (idempotent via ON CONFLICT)
     IF v_matched THEN
       INSERT INTO kds_item_status (kds_display_id, order_id, order_item_id, status)
       VALUES (v_display.id, NEW.order_id, NEW.id, 'pending')
       ON CONFLICT (kds_display_id, order_item_id) DO NOTHING;
-
-      v_any_routed := true;
-    END IF;
-  END LOOP;
-
-  -- Fallback: route unmatched items so nothing is lost
+v_any_routed := true;
+END IF;
+END LOOP;
+-- Fallback: route unmatched items so nothing is lost
   -- Prefer show_all_items displays first; only blast to ALL if none exist
   IF NOT v_any_routed THEN
     FOR v_display IN
@@ -27942,10 +26618,9 @@ BEGIN
       INSERT INTO kds_item_status (kds_display_id, order_id, order_item_id, status)
       VALUES (v_display.id, NEW.order_id, NEW.id, 'pending')
       ON CONFLICT (kds_display_id, order_item_id) DO NOTHING;
-      v_any_routed := true;
-    END LOOP;
-
-    -- Last resort: no show_all_items displays, send to every active display
+v_any_routed := true;
+END LOOP;
+-- Last resort: no show_all_items displays, send to every active display
     IF NOT v_any_routed THEN
       FOR v_display IN
         SELECT d.id FROM kds_displays d
@@ -27954,11 +26629,10 @@ BEGIN
         INSERT INTO kds_item_status (kds_display_id, order_id, order_item_id, status)
         VALUES (v_display.id, NEW.order_id, NEW.id, 'pending')
         ON CONFLICT (kds_display_id, order_item_id) DO NOTHING;
-      END LOOP;
-    END IF;
-  END IF;
-
-  RETURN NEW;
+END LOOP;
+END IF;
+END IF;
+RETURN NEW;
 END;
 $$;
 
@@ -28017,7 +26691,7 @@ CREATE OR REPLACE FUNCTION "public"."seat_from_waitlist"("p_waitlist_id" "uuid",
     AS $$
 DECLARE
   v_waitlist RECORD;
-  v_result JSON;
+v_result JSON;
 BEGIN
   -- Get waitlist info
   SELECT * INTO v_waitlist
@@ -28026,12 +26700,10 @@ BEGIN
     AND merchant_id = user_merchant_id()
     AND location_id = ANY(user_location_ids())
     AND status IN ('waiting', 'notified', 'arrived');
-
-  IF NOT FOUND THEN
+IF NOT FOUND THEN
     RAISE EXCEPTION 'Waitlist entry not found or not ready to seat';
-  END IF;
-
-  -- Seat the guests (reuse seat_guests function)
+END IF;
+-- Seat the guests (reuse seat_guests function)
   SELECT public.seat_guests(
     p_table_ids := p_table_ids,
     p_party_size := v_waitlist.party_size,
@@ -28041,8 +26713,7 @@ BEGIN
     p_waitlist_id := p_waitlist_id,
     p_create_order := TRUE
   ) INTO v_result;
-
-  RETURN v_result;
+RETURN v_result;
 END;
 $$;
 
@@ -28056,12 +26727,12 @@ CREATE OR REPLACE FUNCTION "public"."seat_guests"("p_table_ids" "uuid"[], "p_par
     AS $$
 DECLARE
   v_merchant_id UUID;
-  v_location_id UUID;
-  v_session_id UUID;
-  v_order_id UUID;
-  v_table_id UUID;
-  v_is_first BOOLEAN := TRUE;
-  v_server_staff_id UUID;
+v_location_id UUID;
+v_session_id UUID;
+v_order_id UUID;
+v_table_id UUID;
+v_is_first BOOLEAN := TRUE;
+v_server_staff_id UUID;
 BEGIN
   -- Get merchant and location from first table
   SELECT fpo.merchant_id, fpo.location_id
@@ -28070,24 +26741,20 @@ BEGIN
   WHERE fpo.id = p_table_ids[1]
     AND fpo.merchant_id = user_merchant_id()
     AND fpo.location_id = ANY(user_location_ids());
-
-  IF NOT FOUND THEN
+IF NOT FOUND THEN
     RAISE EXCEPTION 'Table not found or access denied';
-  END IF;
-
-  -- Check if any table is already occupied
+END IF;
+-- Check if any table is already occupied
   IF EXISTS (
     SELECT 1 FROM public.table_session_tables tst
     JOIN public.table_sessions ts ON ts.id = tst.session_id
     WHERE tst.table_id = ANY(p_table_ids) AND ts.is_active = TRUE
   ) THEN
     RAISE EXCEPTION 'One or more tables are already occupied';
-  END IF;
-
-  -- Use provided staff_id OR fall back to JWT-based lookup
+END IF;
+-- Use provided staff_id OR fall back to JWT-based lookup
   v_server_staff_id := COALESCE(p_staff_id, user_staff_profile_id());
-
-  -- Create session
+-- Create session
   INSERT INTO public.table_sessions (
     merchant_id, location_id,
     party_size, guest_name, guest_phone, guest_notes,
@@ -28102,36 +26769,31 @@ BEGIN
     'seated', NOW()
   )
   RETURNING id INTO v_session_id;
-
-  -- Link tables to session
+-- Link tables to session
   FOREACH v_table_id IN ARRAY p_table_ids
   LOOP
     INSERT INTO public.table_session_tables (session_id, table_id, is_primary, seated_position)
     VALUES (v_session_id, v_table_id, v_is_first, 
             ARRAY_POSITION(p_table_ids, v_table_id) - 1);
-    v_is_first := FALSE;
-  END LOOP;
-
-  -- Create initial event
+v_is_first := FALSE;
+END LOOP;
+-- Create initial event
   INSERT INTO public.table_session_events (session_id, event_type, triggered_by_staff_id, triggered_by_user_id)
   VALUES (v_session_id, 'seated', v_server_staff_id, get_my_claim('sub'));
-
-  -- Update reservation if provided
+-- Update reservation if provided
   IF p_reservation_id IS NOT NULL THEN
     UPDATE public.reservations
     SET status = 'seated', seated_at = NOW(), seated_session_id = v_session_id
     WHERE id = p_reservation_id;
-  END IF;
-
-  -- Update waitlist if provided
+END IF;
+-- Update waitlist if provided
   IF p_waitlist_id IS NOT NULL THEN
     UPDATE public.waitlist
     SET status = 'seated', seated_at = NOW(), seated_session_id = v_session_id,
         actual_wait_minutes = EXTRACT(EPOCH FROM (NOW() - created_at)) / 60
     WHERE id = p_waitlist_id;
-  END IF;
-
-  -- Create order if requested
+END IF;
+-- Create order if requested
   IF p_create_order THEN
     SELECT (public.create_order(
       p_merchant_id := v_merchant_id,
@@ -28141,14 +26803,12 @@ BEGIN
       p_customer_name := p_guest_name,
       p_created_by_staff_id := v_server_staff_id
     ))->>'order_id' INTO v_order_id;
-
-    -- Link order to session
+-- Link order to session
     UPDATE public.table_sessions
     SET order_id = v_order_id::UUID
     WHERE id = v_session_id;
-  END IF;
-
-  RETURN json_build_object(
+END IF;
+RETURN json_build_object(
     'success', true,
     'session_id', v_session_id,
     'order_id', v_order_id,
@@ -28173,12 +26833,12 @@ CREATE OR REPLACE FUNCTION "public"."seat_guests_v2"("p_table_ids" "uuid"[], "p_
     AS $$
 DECLARE
   v_merchant_id UUID;
-  v_location_id UUID;
-  v_session_id UUID;
-  v_order_id UUID;
-  v_table_id UUID;
-  v_is_first BOOLEAN := TRUE;
-  v_server_staff_id UUID;
+v_location_id UUID;
+v_session_id UUID;
+v_order_id UUID;
+v_table_id UUID;
+v_is_first BOOLEAN := TRUE;
+v_server_staff_id UUID;
 BEGIN
   -- Get merchant and location from first table
   SELECT fpo.merchant_id, fpo.location_id
@@ -28187,24 +26847,20 @@ BEGIN
   WHERE fpo.id = p_table_ids[1]
     AND fpo.merchant_id = user_merchant_id()
     AND fpo.location_id = ANY(user_location_ids());
-
-  IF NOT FOUND THEN
+IF NOT FOUND THEN
     RAISE EXCEPTION 'Table not found or access denied';
-  END IF;
-
-  -- Check if any table is already occupied
+END IF;
+-- Check if any table is already occupied
   IF EXISTS (
     SELECT 1 FROM public.table_session_tables tst
     JOIN public.table_sessions ts ON ts.id = tst.session_id
     WHERE tst.table_id = ANY(p_table_ids) AND ts.is_active = TRUE
   ) THEN
     RAISE EXCEPTION 'One or more tables are already occupied';
-  END IF;
-
-  -- Use provided staff_id OR fall back to JWT-based lookup
+END IF;
+-- Use provided staff_id OR fall back to JWT-based lookup
   v_server_staff_id := COALESCE(p_staff_id, user_staff_profile_id());
-
-  -- Create session
+-- Create session
   INSERT INTO public.table_sessions (
     merchant_id, location_id,
     party_size, guest_name, guest_phone, guest_notes,
@@ -28219,36 +26875,31 @@ BEGIN
     'seated', NOW()
   )
   RETURNING id INTO v_session_id;
-
-  -- Link tables to session
+-- Link tables to session
   FOREACH v_table_id IN ARRAY p_table_ids
   LOOP
     INSERT INTO public.table_session_tables (session_id, table_id, is_primary, seated_position)
     VALUES (v_session_id, v_table_id, v_is_first,
             ARRAY_POSITION(p_table_ids, v_table_id) - 1);
-    v_is_first := FALSE;
-  END LOOP;
-
-  -- Create initial event
+v_is_first := FALSE;
+END LOOP;
+-- Create initial event
   INSERT INTO public.table_session_events (session_id, event_type, triggered_by_staff_id, triggered_by_user_id)
   VALUES (v_session_id, 'seated', v_server_staff_id, get_my_claim('sub'));
-
-  -- Update reservation if provided
+-- Update reservation if provided
   IF p_reservation_id IS NOT NULL THEN
     UPDATE public.reservations
     SET status = 'seated', seated_at = NOW(), seated_session_id = v_session_id
     WHERE id = p_reservation_id;
-  END IF;
-
-  -- Update waitlist if provided
+END IF;
+-- Update waitlist if provided
   IF p_waitlist_id IS NOT NULL THEN
     UPDATE public.waitlist
     SET status = 'seated', seated_at = NOW(), seated_session_id = v_session_id,
         actual_wait_minutes = EXTRACT(EPOCH FROM (NOW() - created_at)) / 60
     WHERE id = p_waitlist_id;
-  END IF;
-
-  -- Create order if requested
+END IF;
+-- Create order if requested
   IF p_create_order THEN
     SELECT (public.create_order_v2(
       p_merchant_id := v_merchant_id,
@@ -28262,8 +26913,7 @@ BEGIN
       p_station_id := p_station_id,
       p_device_id := p_device_id
     ))->>'order_id' INTO v_order_id;
-
-    -- ===================================================================
+-- ===================================================================
     -- NEW: Set bidirectional link between order and session (ATOMIC)
     -- ===================================================================
     IF v_order_id IS NOT NULL THEN
@@ -28272,16 +26922,14 @@ BEGIN
       SET session_id = v_session_id,
           updated_at = NOW()
       WHERE id = v_order_id::UUID;
-
-      -- Update session to point to order (existing logic kept)
+-- Update session to point to order (existing logic kept)
       UPDATE public.table_sessions
       SET order_id = v_order_id::UUID,
           updated_at = NOW()
       WHERE id = v_session_id;
-    END IF;
-  END IF;
-
-  -- Return response (matching original format)
+END IF;
+END IF;
+-- Return response (matching original format)
   RETURN json_build_object(
     'success', true,
     'session_id', v_session_id,
@@ -28302,29 +26950,29 @@ CREATE OR REPLACE FUNCTION "public"."seat_guests_v3"("p_table_id" "uuid", "p_mer
     SET "search_path" TO 'public', 'public', 'pg_temp'
     AS $$DECLARE
   v_table              RECORD;
-  v_session_id         UUID;
-  v_order_id           UUID;
-  v_order_number       TEXT;
-  v_display_number     TEXT;
-  v_session_number     TEXT;
-  v_location_id        UUID;
-  v_merchant_id        UUID;
-  v_daily_count        INT;
-  v_user_id            TEXT;
-  v_verified_staff_id  UUID;   -- Validated POS staff (created_by)
-  v_verified_server_id UUID;   -- Validated assigned server
+v_session_id         UUID;
+v_order_id           UUID;
+v_order_number       TEXT;
+v_display_number     TEXT;
+v_session_number     TEXT;
+v_location_id        UUID;
+v_merchant_id        UUID;
+v_daily_count        INT;
+v_user_id            TEXT;
+v_verified_staff_id  UUID;
+-- Validated POS staff (created_by)
+  v_verified_server_id UUID;
+-- Validated assigned server
 BEGIN
   -- ──────────────────────────────────────────────────────────────
   -- 1. AUTH
   -- ──────────────────────────────────────────────────────────────
 
   v_user_id := get_my_claim('sub');
-
-  IF p_merchant_id != user_merchant_id() THEN
+IF p_merchant_id != user_merchant_id() THEN
     RAISE EXCEPTION 'Access denied: Invalid merchant_id';
-  END IF;
-
-  -- ──────────────────────────────────────────────────────────────
+END IF;
+-- ──────────────────────────────────────────────────────────────
   -- 2. Lock table + extract location
   -- ──────────────────────────────────────────────────────────────
 
@@ -28334,22 +26982,18 @@ BEGIN
   WHERE fpo.id = p_table_id
     AND fpo.is_active = true
   FOR UPDATE;
-
-  IF NOT FOUND THEN
+IF NOT FOUND THEN
     RETURN json_build_object(
       'success', false,
       'error', 'Table not found or inactive'
     );
-  END IF;
-
-  v_location_id := v_table.location_id;
-  v_merchant_id := v_table.merchant_id;
-
-  IF NOT (v_location_id = ANY(user_location_ids())) THEN
+END IF;
+v_location_id := v_table.location_id;
+v_merchant_id := v_table.merchant_id;
+IF NOT (v_location_id = ANY(user_location_ids())) THEN
     RAISE EXCEPTION 'Access denied: User does not have access to location';
-  END IF;
-
-  -- ──────────────────────────────────────────────────────────────
+END IF;
+-- ──────────────────────────────────────────────────────────────
   -- 3. Check no active session exists
   -- ──────────────────────────────────────────────────────────────
 
@@ -28366,29 +27010,26 @@ BEGIN
       'success', false,
       'error', 'Table already has an active session'
     );
-  END IF;
-
-  -- ──────────────────────────────────────────────────────────────
+END IF;
+-- ──────────────────────────────────────────────────────────────
   -- 4. Validate BOTH staff IDs independently
   -- ──────────────────────────────────────────────────────────────
 
   -- POS logged-in staff (who performed the action)
   v_verified_staff_id := p_staff_id;
-  IF v_verified_staff_id IS NOT NULL THEN
+IF v_verified_staff_id IS NOT NULL THEN
     IF NOT EXISTS (SELECT 1 FROM public.staff_profiles WHERE id = v_verified_staff_id) THEN
       v_verified_staff_id := NULL;
-    END IF;
-  END IF;
-
-  -- Assigned server (who is responsible for the table)
+END IF;
+END IF;
+-- Assigned server (who is responsible for the table)
   v_verified_server_id := p_server_staff_id;
-  IF v_verified_server_id IS NOT NULL THEN
+IF v_verified_server_id IS NOT NULL THEN
     IF NOT EXISTS (SELECT 1 FROM public.staff_profiles WHERE id = v_verified_server_id) THEN
       v_verified_server_id := NULL;
-    END IF;
-  END IF;
-
-  -- ──────────────────────────────────────────────────────────────
+END IF;
+END IF;
+-- ──────────────────────────────────────────────────────────────
   -- 5. Generate session number
   -- ──────────────────────────────────────────────────────────────
 
@@ -28397,10 +27038,8 @@ BEGIN
   FROM table_sessions
   WHERE location_id = v_location_id
     AND created_at::date = CURRENT_DATE;
-
-  v_session_number := v_table.name || '-' || LPAD(v_daily_count::TEXT, 3, '0');
-
-  -- ──────────────────────────────────────────────────────────────
+v_session_number := v_table.name || '-' || LPAD(v_daily_count::TEXT, 3, '0');
+-- ──────────────────────────────────────────────────────────────
   -- 6. Create session
   --    server_staff_id = the assigned server (responsible for table)
   -- ──────────────────────────────────────────────────────────────
@@ -28439,15 +27078,13 @@ BEGIN
     'normal'
   )
   RETURNING id INTO v_session_id;
-
-  -- ──────────────────────────────────────────────────────────────
+-- ──────────────────────────────────────────────────────────────
   -- 7. Link table to session
   -- ──────────────────────────────────────────────────────────────
 
   INSERT INTO table_session_tables (session_id, table_id, is_primary, is_active)
   VALUES (v_session_id, p_table_id, true, true);
-
-  -- ──────────────────────────────────────────────────────────────
+-- ──────────────────────────────────────────────────────────────
   -- 8. Create order
   --    created_by_staff_id  = POS staff who tapped "seat" (the actor)
   --    assigned_server_id   = server responsible for the table
@@ -28455,12 +27092,12 @@ BEGIN
 
   IF p_create_order THEN
     v_order_number := public.generate_order_number(v_location_id, p_station_id);
-    v_display_number := CASE
+v_display_number := CASE
       WHEN SPLIT_PART(v_order_number, '-', 4) <> ''
       THEN '#' || SPLIT_PART(v_order_number, '-', 3) || '-' || SPLIT_PART(v_order_number, '-', 4)
       ELSE '#' || SPLIT_PART(v_order_number, '-', 3)
     END;
-    INSERT INTO public.orders (
+INSERT INTO public.orders (
       merchant_id,
       location_id,
       order_number,
@@ -28494,12 +27131,10 @@ BEGIN
       NOW()
     )
     RETURNING id INTO v_order_id;
-
-    UPDATE table_sessions
+UPDATE table_sessions
     SET order_id = v_order_id
     WHERE id = v_session_id;
-
-    -- Audit log
+-- Audit log
     INSERT INTO public.audit_logs (
       actor_user_id,
       organization_id,
@@ -28529,9 +27164,8 @@ BEGIN
       ),
       'success'
     );
-  END IF;
-
-  -- ──────────────────────────────────────────────────────────────
+END IF;
+-- ──────────────────────────────────────────────────────────────
   -- 9. Log seated event
   --    triggered_by = POS staff who performed the action
   -- ──────────────────────────────────────────────────────────────
@@ -28555,8 +27189,7 @@ BEGIN
       'assigned_server_id', v_verified_server_id
     )
   );
-
-  -- ──────────────────────────────────────────────────────────────
+-- ──────────────────────────────────────────────────────────────
   -- 10. Update waitlist if linked
   -- ──────────────────────────────────────────────────────────────
 
@@ -28568,9 +27201,8 @@ BEGIN
         actual_wait_minutes = EXTRACT(EPOCH FROM (NOW() - created_at))::INT / 60
     WHERE id = p_waitlist_id
       AND status IN ('waiting', 'notified', 'arrived');
-  END IF;
-
-  -- ──────────────────────────────────────────────────────────────
+END IF;
+-- ──────────────────────────────────────────────────────────────
   -- 11. Update reservation if linked
   -- ──────────────────────────────────────────────────────────────
 
@@ -28581,9 +27213,8 @@ BEGIN
         seated_session_id = v_session_id
     WHERE id = p_reservation_id
       AND status IN ('confirmed', 'reminded', 'arrived');
-  END IF;
-
-  -- ──────────────────────────────────────────────────────────────
+END IF;
+-- ──────────────────────────────────────────────────────────────
   -- 12. Return
   -- ──────────────────────────────────────────────────────────────
 
@@ -28597,7 +27228,8 @@ BEGIN
     'table_name',     v_table.name,
     'status',         'draft'
   );
-END;$$;
+END;
+$$;
 
 
 ALTER FUNCTION "public"."seat_guests_v3"("p_table_id" "uuid", "p_merchant_id" "uuid", "p_staff_id" "uuid", "p_server_staff_id" "uuid", "p_party_size" integer, "p_create_order" boolean, "p_guest_name" "text", "p_guest_phone" "text", "p_reservation_id" "uuid", "p_waitlist_id" "uuid", "p_device_id" "text", "p_station_id" "uuid") OWNER TO "postgres";
@@ -28609,8 +27241,8 @@ CREATE OR REPLACE FUNCTION "public"."seat_reservation"("p_reservation_id" "uuid"
     AS $$
 DECLARE
   v_reservation RECORD;
-  v_table_ids UUID[];
-  v_result JSON;
+v_table_ids UUID[];
+v_result JSON;
 BEGIN
   -- Get reservation info
   SELECT * INTO v_reservation
@@ -28619,19 +27251,15 @@ BEGIN
     AND merchant_id = user_merchant_id()
     AND location_id = ANY(user_location_ids())
     AND status IN ('pending', 'confirmed', 'reminded', 'arrived');
-
-  IF NOT FOUND THEN
+IF NOT FOUND THEN
     RAISE EXCEPTION 'Reservation not found or not ready to seat';
-  END IF;
-
-  -- Use provided tables or assigned tables
+END IF;
+-- Use provided tables or assigned tables
   v_table_ids := COALESCE(p_table_ids, v_reservation.assigned_table_ids);
-
-  IF v_table_ids IS NULL OR array_length(v_table_ids, 1) = 0 THEN
+IF v_table_ids IS NULL OR array_length(v_table_ids, 1) = 0 THEN
     RAISE EXCEPTION 'No tables specified for seating';
-  END IF;
-
-  -- Seat the guests
+END IF;
+-- Seat the guests
   SELECT public.seat_guests(
     p_table_ids := v_table_ids,
     p_party_size := v_reservation.party_size,
@@ -28641,8 +27269,7 @@ BEGIN
     p_reservation_id := p_reservation_id,
     p_create_order := TRUE
   ) INTO v_result;
-
-  RETURN v_result;
+RETURN v_result;
 END;
 $$;
 
@@ -28656,7 +27283,7 @@ CREATE OR REPLACE FUNCTION "public"."set_cfd_ordering_panel_images_updated_at"()
     AS $$
 begin
   new.updated_at = now();
-  return new;
+return new;
 end;
 $$;
 
@@ -28670,7 +27297,7 @@ CREATE OR REPLACE FUNCTION "public"."set_item_course"("p_order_item_id" "uuid", 
     AS $$
 DECLARE
   v_order_id UUID;
-  v_current_course_status TEXT;
+v_current_course_status TEXT;
 BEGIN
   -- Get order ID and verify access
   SELECT oi.order_id INTO v_order_id
@@ -28679,30 +27306,24 @@ BEGIN
   WHERE oi.id = p_order_item_id
     AND o.merchant_id = user_merchant_id()
     AND o.location_id = ANY(user_location_ids());
-
-  IF NOT FOUND THEN
+IF NOT FOUND THEN
     RAISE EXCEPTION 'Order item not found';
-  END IF;
-
-  -- Check if target course is still open
+END IF;
+-- Check if target course is still open
   SELECT status INTO v_current_course_status
   FROM public.order_courses
   WHERE order_id = v_order_id AND course_number = p_course_number;
-
-  -- If course exists and is fired, can't add to it
+-- If course exists and is fired, can't add to it
   IF v_current_course_status IS NOT NULL AND v_current_course_status != 'open' THEN
     RAISE EXCEPTION 'Course % is already fired and cannot be modified', p_course_number;
-  END IF;
-
-  -- Ensure course exists
+END IF;
+-- Ensure course exists
   PERFORM public.ensure_course_exists(v_order_id, p_course_number);
-
-  -- Update item
+-- Update item
   UPDATE public.order_items
   SET course_number = p_course_number, updated_at = NOW()
   WHERE id = p_order_item_id;
-
-  RETURN json_build_object(
+RETURN json_build_object(
     'success', true,
     'order_item_id', p_order_item_id,
     'course_number', p_course_number
@@ -28742,11 +27363,11 @@ BEGIN
   -- an explicit ein_last_four set by the app.
   IF NEW.ein IS NOT NULL THEN
     v_digits := regexp_replace(NEW.ein, '[^0-9]', '', 'g');
-    IF length(v_digits) = 9 THEN
+IF length(v_digits) = 9 THEN
       NEW.ein_last_four := right(v_digits, 4);
-    END IF;
-  END IF;
-  RETURN NEW;
+END IF;
+END IF;
+RETURN NEW;
 END;
 $$;
 
@@ -28761,15 +27382,13 @@ CREATE OR REPLACE FUNCTION "public"."set_location_stock"("p_inventory_item_id" "
 BEGIN
     -- Authorization check (#7)
     PERFORM public.authorize_location_access(p_location_id);
-
-    INSERT INTO location_inventory_stock (location_id, inventory_item_id, stock_quantity, updated_at)
+INSERT INTO location_inventory_stock (location_id, inventory_item_id, stock_quantity, updated_at)
     VALUES (p_location_id, p_inventory_item_id, GREATEST(0, p_quantity), now())
     ON CONFLICT (location_id, inventory_item_id)
     DO UPDATE SET
         stock_quantity = GREATEST(0, p_quantity),
         updated_at     = now();
-
-    -- Sync legacy aggregate on inventory_items
+-- Sync legacy aggregate on inventory_items
     UPDATE inventory_items
     SET
         current_stock = (
@@ -28793,8 +27412,8 @@ CREATE OR REPLACE FUNCTION "public"."set_po_number"() RETURNS "trigger"
 BEGIN
   IF NEW.po_number IS NULL THEN
     NEW.po_number := generate_po_number();
-  END IF;
-  RETURN NEW;
+END IF;
+RETURN NEW;
 END;
 $$;
 
@@ -28810,34 +27429,35 @@ BEGIN
   CASE NEW.station_type
     WHEN 'register' THEN
       NEW.can_create_orders := TRUE;
-      NEW.can_process_payments := TRUE;
-      NEW.can_void_orders := FALSE;
-      NEW.can_apply_discounts := TRUE;
-      NEW.can_update_kitchen_status := FALSE;
-      NEW.view_scope := 'location';
-    WHEN 'checkout' THEN
+NEW.can_process_payments := TRUE;
+NEW.can_void_orders := FALSE;
+NEW.can_apply_discounts := TRUE;
+NEW.can_update_kitchen_status := FALSE;
+NEW.view_scope := 'location';
+WHEN 'checkout' THEN
       NEW.can_create_orders := TRUE;
-      NEW.can_process_payments := TRUE;
-      NEW.can_void_orders := TRUE;
-      NEW.can_apply_discounts := TRUE;
-      NEW.can_update_kitchen_status := FALSE;
-      NEW.view_scope := 'location';
-    WHEN 'kds' THEN
+NEW.can_process_payments := TRUE;
+NEW.can_void_orders := TRUE;
+NEW.can_apply_discounts := TRUE;
+NEW.can_update_kitchen_status := FALSE;
+NEW.view_scope := 'location';
+WHEN 'kds' THEN
       NEW.can_create_orders := FALSE;
-      NEW.can_process_payments := FALSE;
-      NEW.can_void_orders := FALSE;
-      NEW.can_apply_discounts := FALSE;
-      NEW.can_update_kitchen_status := TRUE;
-      NEW.view_scope := 'location';  -- KDS sees ALL orders
+NEW.can_process_payments := FALSE;
+NEW.can_void_orders := FALSE;
+NEW.can_apply_discounts := FALSE;
+NEW.can_update_kitchen_status := TRUE;
+NEW.view_scope := 'location';
+-- KDS sees ALL orders
     WHEN 'self_service' THEN
       NEW.can_create_orders := TRUE;
-      NEW.can_process_payments := TRUE;
-      NEW.can_void_orders := FALSE;
-      NEW.can_apply_discounts := FALSE;
-      NEW.can_update_kitchen_status := FALSE;
-      NEW.view_scope := 'own';
-  END CASE;
-  RETURN NEW;
+NEW.can_process_payments := TRUE;
+NEW.can_void_orders := FALSE;
+NEW.can_apply_discounts := FALSE;
+NEW.can_update_kitchen_status := FALSE;
+NEW.view_scope := 'own';
+END CASE;
+RETURN NEW;
 END;
 $$;
 
@@ -28851,7 +27471,7 @@ CREATE OR REPLACE FUNCTION "public"."set_updated_at"() RETURNS "trigger"
     AS $$
 BEGIN
   NEW.updated_at = now();
-  RETURN NEW;
+RETURN NEW;
 END;
 $$;
 
@@ -28870,20 +27490,16 @@ BEGIN
   SELECT status INTO v_course_status
   FROM public.order_courses
   WHERE order_id = p_order_id AND course_number = p_course_number;
-
-  IF v_course_status IS NOT NULL AND v_course_status != 'open' THEN
+IF v_course_status IS NOT NULL AND v_course_status != 'open' THEN
     RAISE EXCEPTION 'Cannot set working course to fired course %', p_course_number;
-  END IF;
-
-  -- Ensure course exists
+END IF;
+-- Ensure course exists
   PERFORM public.ensure_course_exists(p_order_id, p_course_number);
-
-  -- Update session
+-- Update session
   UPDATE public.table_sessions
   SET working_course = p_course_number, updated_at = NOW()
   WHERE order_id = p_order_id AND is_active = TRUE;
-
-  RETURN json_build_object(
+RETURN json_build_object(
     'success', true,
     'working_course', p_course_number
   );
@@ -28900,22 +27516,22 @@ CREATE OR REPLACE FUNCTION "public"."settle_castles_batch"("p_location_id" "text
     AS $$
 DECLARE
   v_location_id      UUID    := p_location_id::uuid;
-  v_terminal_id      UUID    := p_terminal_id::uuid;
-  v_batch_id         TEXT;   -- returned from settlement_batches (varchar col)
+v_terminal_id      UUID    := p_terminal_id::uuid;
+v_batch_id         TEXT;
+-- returned from settlement_batches (varchar col)
   v_payments_updated INT;
-  v_merchant_id      UUID;
-  v_batch_number     TEXT;   -- final batch number: p_batch_id OR generated id
+v_merchant_id      UUID;
+v_batch_number     TEXT;
+-- final batch number: p_batch_id OR generated id
 BEGIN
   -- 0) Resolve merchant_id from location
   SELECT merchant_id INTO v_merchant_id
   FROM locations
   WHERE id = v_location_id;
-
-  IF v_merchant_id IS NULL THEN
+IF v_merchant_id IS NULL THEN
     RAISE EXCEPTION 'settle_castles_batch: could not resolve merchant_id for location %', v_location_id;
-  END IF;
-
-  -- 1) Insert settlement_batches record
+END IF;
+-- 1) Insert settlement_batches record
   --    batch_id (varchar) gets gen_random_uuid() auto-cast to text
   --    terminal_id (varchar) gets v_terminal_id::text
   INSERT INTO settlement_batches (
@@ -28954,11 +27570,9 @@ BEGIN
     p_raw_response
   )
   RETURNING batch_id INTO v_batch_id;
-
-  -- Standardized batch number: terminal's batch number if provided, else our generated id
+-- Standardized batch number: terminal's batch number if provided, else our generated id
   v_batch_number := COALESCE(p_batch_id, v_batch_id);
-
-  -- 2) Mark all unsettled payments for this terminal as settled
+-- 2) Mark all unsettled payments for this terminal as settled
   --    order_payments.terminal_id is TEXT, so compare as text
   UPDATE order_payments
   SET
@@ -28969,18 +27583,15 @@ BEGIN
     terminal_id = v_terminal_id::TEXT
     AND (is_settled IS NULL OR is_settled = FALSE)
     AND status IN ('captured', 'refunded', 'partially_refunded');
-
-  GET DIAGNOSTICS v_payments_updated = ROW_COUNT;
-
-  -- 3) Update terminal's batch number
+GET DIAGNOSTICS v_payments_updated = ROW_COUNT;
+-- 3) Update terminal's batch number
   --    payment_terminals.id is UUID, castles_batch_number is TEXT
   UPDATE payment_terminals
   SET
     castles_batch_number = v_batch_number,
     updated_at = NOW()
   WHERE id = v_terminal_id;
-
-  RETURN jsonb_build_object(
+RETURN jsonb_build_object(
     'batch_uuid', v_batch_id,
     'payments_updated', v_payments_updated
   );
@@ -29002,12 +27613,10 @@ BEGIN
     last_heartbeat_at = NOW(),
     ip_address = COALESCE(p_ip_address, ip_address)
   WHERE id = p_station_id;
-  
-  IF NOT FOUND THEN
+IF NOT FOUND THEN
     RETURN json_build_object('success', false, 'error', 'Station not found');
-  END IF;
-  
-  RETURN json_build_object('success', true, 'heartbeat_at', NOW());
+END IF;
+RETURN json_build_object('success', true, 'heartbeat_at', NOW());
 END;
 $$;
 
@@ -29021,86 +27630,74 @@ CREATE OR REPLACE FUNCTION "public"."submit_inventory_count"("p_count_id" "uuid"
     AS $$
 DECLARE
     v_location_id           UUID;
-    v_merchant_id           UUID;
-    v_count_status          TEXT;
-    v_item                  JSONB;
-    v_inventory_item_id     UUID;
-    v_counted_qty           NUMERIC;
-    v_expected_qty          NUMERIC;
-    v_variance              NUMERIC;
-    v_cost_per_unit         NUMERIC;
-    v_variance_cost         NUMERIC;
-    v_total_variance_cost   NUMERIC  := 0;
-    v_items_counted         INTEGER  := 0;
-    v_adjustments_applied   INTEGER  := 0;
+v_merchant_id           UUID;
+v_count_status          TEXT;
+v_item                  JSONB;
+v_inventory_item_id     UUID;
+v_counted_qty           NUMERIC;
+v_expected_qty          NUMERIC;
+v_variance              NUMERIC;
+v_cost_per_unit         NUMERIC;
+v_variance_cost         NUMERIC;
+v_total_variance_cost   NUMERIC  := 0;
+v_items_counted         INTEGER  := 0;
+v_adjustments_applied   INTEGER  := 0;
 BEGIN
     -- Fetch count session metadata and validate status
     SELECT ic.location_id, ic.merchant_id, ic.status
     INTO   v_location_id, v_merchant_id, v_count_status
     FROM   inventory_counts ic
     WHERE  ic.id = p_count_id;
-
-    IF NOT FOUND THEN
+IF NOT FOUND THEN
         RETURN jsonb_build_object('success', false, 'error', 'count session not found');
-    END IF;
-
-    IF v_count_status IN ('completed', 'approved') THEN
+END IF;
+IF v_count_status IN ('completed', 'approved') THEN
         RETURN jsonb_build_object(
             'success', false,
             'error',   'count is already ' || v_count_status || ' and cannot be modified'
         );
-    END IF;
-
-    -- Mark as in_progress when first items are submitted
+END IF;
+-- Mark as in_progress when first items are submitted
     IF v_count_status = 'draft' THEN
         UPDATE inventory_counts
         SET status     = 'in_progress',
             started_at = COALESCE(started_at, now()),
             updated_at = now()
         WHERE id = p_count_id;
-    END IF;
-
-    -- Process each submitted count item
+END IF;
+-- Process each submitted count item
     FOR v_item IN SELECT * FROM jsonb_array_elements(p_counted_items)
     LOOP
         v_inventory_item_id := (v_item->>'inventory_item_id')::UUID;
-        v_counted_qty       := (v_item->>'counted_quantity')::NUMERIC;
-
-        IF v_counted_qty IS NULL OR v_counted_qty < 0 THEN
+v_counted_qty       := (v_item->>'counted_quantity')::NUMERIC;
+IF v_counted_qty IS NULL OR v_counted_qty < 0 THEN
             CONTINUE;
-        END IF;
-
-        -- Fetch expected_quantity from the count snapshot and item cost
+END IF;
+-- Fetch expected_quantity from the count snapshot and item cost
         SELECT ici.expected_quantity, ii.cost_per_unit
         INTO   v_expected_qty, v_cost_per_unit
         FROM   inventory_count_items ici
         JOIN   inventory_items ii ON ii.id = ici.inventory_item_id
         WHERE  ici.count_id          = p_count_id
           AND  ici.inventory_item_id = v_inventory_item_id;
-
-        IF NOT FOUND THEN
+IF NOT FOUND THEN
             -- Item wasn't part of this count's scope; skip silently
             CONTINUE;
-        END IF;
-
-        v_variance      := v_counted_qty - v_expected_qty;
-        v_variance_cost := ROUND(v_variance * COALESCE(v_cost_per_unit, 0), 4);
-
-        -- Write counted_quantity and variance_cost back to count item
+END IF;
+v_variance      := v_counted_qty - v_expected_qty;
+v_variance_cost := ROUND(v_variance * COALESCE(v_cost_per_unit, 0), 4);
+-- Write counted_quantity and variance_cost back to count item
         UPDATE inventory_count_items
         SET counted_quantity = v_counted_qty,
             variance_cost    = v_variance_cost
         WHERE count_id          = p_count_id
           AND inventory_item_id = v_inventory_item_id;
-
-        v_total_variance_cost := v_total_variance_cost + v_variance_cost;
-        v_items_counted := v_items_counted + 1;
-
-        -- Optionally reconcile stock for items with a variance
+v_total_variance_cost := v_total_variance_cost + v_variance_cost;
+v_items_counted := v_items_counted + 1;
+-- Optionally reconcile stock for items with a variance
         IF p_apply_adjustments AND v_variance <> 0 THEN
             PERFORM public.set_location_stock(v_inventory_item_id, v_location_id, v_counted_qty);
-
-            INSERT INTO stock_update_log (
+INSERT INTO stock_update_log (
                 merchant_id, location_id, inventory_item_id,
                 previous_stock, new_stock, change_amount,
                 update_reason, update_source,
@@ -29111,19 +27708,16 @@ BEGIN
                 'physical_count', 'adjustment',
                 p_user_id, p_user_name
             );
-
-            v_adjustments_applied := v_adjustments_applied + 1;
-        END IF;
-    END LOOP;
-
-    -- Mark count as completed
+v_adjustments_applied := v_adjustments_applied + 1;
+END IF;
+END LOOP;
+-- Mark count as completed
     UPDATE inventory_counts
     SET status       = 'completed',
         completed_at = now(),
         updated_at   = now()
     WHERE id = p_count_id;
-
-    RETURN jsonb_build_object(
+RETURN jsonb_build_object(
         'success',              true,
         'items_counted',        v_items_counted,
         'total_variance_cost',  v_total_variance_cost,
@@ -29152,16 +27746,14 @@ BEGIN
         updated_at = NOW()
     WHERE session_id = NEW.id
       AND device_type = 'pos_device';
-
-    -- Close the login history entry
+-- Close the login history entry
     UPDATE device_login_history
     SET logged_out_at = NOW(),
         logout_reason = NEW.session_status
     WHERE session_id = NEW.id
       AND logged_out_at IS NULL;
-  END IF;
-
-  RETURN NEW;
+END IF;
+RETURN NEW;
 END;
 $$;
 
@@ -29180,13 +27772,11 @@ BEGIN
     INTO v_merchant_id
   FROM public.locations l
   WHERE l.id = NEW.location_id;
-
-  IF v_merchant_id IS NULL THEN
+IF v_merchant_id IS NULL THEN
     RAISE EXCEPTION 'Invalid location_id % for location_banking_profiles', NEW.location_id;
-  END IF;
-
-  NEW.merchant_id := v_merchant_id;
-  RETURN NEW;
+END IF;
+NEW.merchant_id := v_merchant_id;
+RETURN NEW;
 END;
 $$;
 
@@ -29204,8 +27794,8 @@ BEGIN
     UPDATE public.table_session_tables
     SET is_active = NEW.is_active
     WHERE session_id = NEW.id;
-  END IF;
-  RETURN NEW;
+END IF;
+RETURN NEW;
 END;
 $$;
 
@@ -29220,14 +27810,12 @@ CREATE OR REPLACE FUNCTION "public"."sync_user_roles"() RETURNS "trigger"
 BEGIN
     -- Delete existing roles for this user
     DELETE FROM user_roles WHERE user_id = NEW.id;
-    
-    -- Insert new roles from metadata
+-- Insert new roles from metadata
     INSERT INTO user_roles (user_id, role_code)
     SELECT NEW.id, role_code
     FROM jsonb_array_elements_text(COALESCE(NEW.public_metadata->'roles', '[]'::jsonb)) AS role_code
     WHERE EXISTS (SELECT 1 FROM roles WHERE code = role_code);
-    
-    RETURN NEW;
+RETURN NEW;
 END;
 $$;
 
@@ -29249,7 +27837,7 @@ begin
     NEW,                                               -- new record - the record after the change
     OLD                                                -- old record - the record before the change
   );
-  return null;
+return null;
 end;
 $$;
 
@@ -29269,8 +27857,7 @@ BEGIN
   SET is_prioritized = p_is_prioritized,
       updated_at = NOW()
   WHERE id = ANY(p_order_item_ids);
-
-  -- Touch parent orders to trigger broadcast (bumps sync_version)
+-- Touch parent orders to trigger broadcast (bumps sync_version)
   FOR v_order_id IN
     SELECT DISTINCT order_id
     FROM order_items
@@ -29280,7 +27867,7 @@ BEGIN
     SET updated_at = NOW(),
         sync_version = COALESCE(sync_version, 0) + 1
     WHERE id = v_order_id;
-  END LOOP;
+END LOOP;
 END;
 $$;
 
@@ -29301,8 +27888,7 @@ BEGIN
     rush = p_rush,
     updated_at = NOW()
   WHERE id = ANY(p_order_item_ids);
-
-  -- Touch parent order(s) to trigger broadcast
+-- Touch parent order(s) to trigger broadcast
   FOR v_order_id IN
     SELECT DISTINCT order_id FROM order_items WHERE id = ANY(p_order_item_ids)
   LOOP
@@ -29311,7 +27897,7 @@ BEGIN
       updated_at = NOW(),
       sync_version = COALESCE(sync_version, 0) + 1
     WHERE id = v_order_id;
-  END LOOP;
+END LOOP;
 END;
 $$;
 
@@ -29341,8 +27927,8 @@ CREATE OR REPLACE FUNCTION "public"."transfer_table_session"("p_session_id" "uui
     AS $$
 DECLARE
   v_old_table_ids UUID[];
-  v_table_id UUID;
-  v_is_first BOOLEAN := TRUE;
+v_table_id UUID;
+v_is_first BOOLEAN := TRUE;
 BEGIN
   -- Verify permission
   -- IF NOT has_any_permission(ARRAY['location.tables.manage', 'merchant.orders.manage']) THEN
@@ -29358,9 +27944,8 @@ BEGIN
       AND location_id = ANY(user_location_ids())
   ) THEN
     RAISE EXCEPTION 'Session not found or not active';
-  END IF;
-
-  -- Check new tables are available
+END IF;
+-- Check new tables are available
   IF EXISTS (
     SELECT 1 FROM public.table_session_tables tst
     JOIN public.table_sessions ts ON ts.id = tst.session_id
@@ -29369,33 +27954,28 @@ BEGIN
       AND ts.id != p_session_id
   ) THEN
     RAISE EXCEPTION 'One or more target tables are occupied';
-  END IF;
-
-  -- Get old table IDs for reference
+END IF;
+-- Get old table IDs for reference
   SELECT ARRAY_AGG(table_id) INTO v_old_table_ids
   FROM public.table_session_tables
   WHERE session_id = p_session_id;
-
-  -- Remove old table links
+-- Remove old table links
   DELETE FROM public.table_session_tables
   WHERE session_id = p_session_id;
-
-  -- Add new table links
+-- Add new table links
   FOREACH v_table_id IN ARRAY p_new_table_ids
   LOOP
     INSERT INTO public.table_session_tables (session_id, table_id, is_primary, seated_position)
     VALUES (p_session_id, v_table_id, v_is_first, 
             ARRAY_POSITION(p_new_table_ids, v_table_id) - 1);
-    v_is_first := FALSE;
-  END LOOP;
-
-  -- Update order table number if linked
+v_is_first := FALSE;
+END LOOP;
+-- Update order table number if linked
   UPDATE public.orders o
   SET table_number = (SELECT name FROM public.floor_plan_objects WHERE id = p_new_table_ids[1])
   FROM public.table_sessions ts
   WHERE ts.id = p_session_id AND o.id = ts.order_id;
-
-  -- Record transfer event
+-- Record transfer event
   INSERT INTO public.table_session_events (
     session_id, event_type, notes, event_data,
     triggered_by_staff_id, triggered_by_user_id
@@ -29408,8 +27988,7 @@ BEGIN
     ),
     user_staff_profile_id(), get_my_claim('sub')
   );
-
-  RETURN json_build_object(
+RETURN json_build_object(
     'success', true,
     'session_id', p_session_id,
     'from_table_ids', v_old_table_ids,
@@ -29431,8 +28010,8 @@ BEGIN
   IF NEW.status = 'completed' AND (OLD.status IS DISTINCT FROM 'completed') THEN
     -- Call the loyalty RPC function (ignore result, just execute)
     PERFORM loyalty_earn_on_order(NEW.id);
-  END IF;
-  RETURN NEW;
+END IF;
+RETURN NEW;
 END;
 $$;
 
@@ -29452,9 +28031,8 @@ BEGIN
         WHERE l.merchant_id = NEW.merchant_id
           AND l.is_active   = true
         ON CONFLICT (location_id, inventory_item_id) DO NOTHING;
-    END IF;
-
-    RETURN NEW;
+END IF;
+RETURN NEW;
 END;
 $$;
 
@@ -29468,7 +28046,7 @@ CREATE OR REPLACE FUNCTION "public"."trigger_initialize_location_stock"() RETURN
     AS $$
 BEGIN
     PERFORM initialize_location_stock(NEW.id);
-    RETURN NEW;
+RETURN NEW;
 END;
 $$;
 
@@ -29482,79 +28060,74 @@ CREATE OR REPLACE FUNCTION "public"."trigger_log_audit_event"() RETURNS "trigger
     AS $$
 DECLARE
     v_actor_name text := 'System';
-    v_actor_user_id text := NULL;
-    v_metadata jsonb := '{}'::jsonb;
-    v_changes jsonb := NULL;
-    v_action text;
-    v_category text;
-    v_resource_type text;
-    v_resource_id uuid;
-    v_resource_name text;
-    v_staff_profile_id uuid;
-    v_duration_minutes numeric;
-    v_duration_text text;
+v_actor_user_id text := NULL;
+v_metadata jsonb := '{}'::jsonb;
+v_changes jsonb := NULL;
+v_action text;
+v_category text;
+v_resource_type text;
+v_resource_id uuid;
+v_resource_name text;
+v_staff_profile_id uuid;
+v_duration_minutes numeric;
+v_duration_text text;
 BEGIN
     -- ------------------------------------------------------------------
     -- STAFF SHIFTS (Clock In / Clock Out)
     -- ------------------------------------------------------------------
     IF TG_TABLE_NAME = 'staff_shifts' THEN
         v_category := 'staff';
-        v_resource_type := 'staff_member';
-        v_staff_profile_id := NEW.staff_profile_id;
-        v_resource_id := NEW.staff_profile_id;
-        
-        -- Get Staff Name
+v_resource_type := 'staff_member';
+v_staff_profile_id := NEW.staff_profile_id;
+v_resource_id := NEW.staff_profile_id;
+-- Get Staff Name
         SELECT coalesce(display_name, first_name || ' ' || last_name)
         INTO v_resource_name
         FROM staff_profiles 
         WHERE id = NEW.staff_profile_id;
-
-        v_actor_name := v_resource_name; -- The staff acts on themselves
+v_actor_name := v_resource_name;
+-- The staff acts on themselves
         
         -- Store human-readable metadata (staff_name instead of staff_profile_id)
         v_metadata := jsonb_build_object('staff_name', v_resource_name);
-
-        IF TG_OP = 'INSERT' THEN
+IF TG_OP = 'INSERT' THEN
             v_action := 'staff.clock_in';
-            v_changes := jsonb_build_object('reason', 'Shift Started');
-        ELSIF TG_OP = 'UPDATE' AND OLD.status != 'completed' AND NEW.status = 'completed' THEN
+v_changes := jsonb_build_object('reason', 'Shift Started');
+ELSIF TG_OP = 'UPDATE' AND OLD.status != 'completed' AND NEW.status = 'completed' THEN
             v_action := 'staff.clock_out';
-            
-            -- Calculate duration and format it nicely
+-- Calculate duration and format it nicely
             v_duration_minutes := EXTRACT(EPOCH FROM (NEW.clock_out_time - NEW.clock_in_time))/60;
-            
-            -- Format duration as human-readable text
+-- Format duration as human-readable text
             IF v_duration_minutes >= 60 THEN
                 v_duration_text := FLOOR(v_duration_minutes / 60)::text || ' hour';
-                IF FLOOR(v_duration_minutes / 60) > 1 THEN
+IF FLOOR(v_duration_minutes / 60) > 1 THEN
                     v_duration_text := v_duration_text || 's';
-                END IF;
-                IF MOD(v_duration_minutes::integer, 60) > 0 THEN
+END IF;
+IF MOD(v_duration_minutes::integer, 60) > 0 THEN
                     v_duration_text := v_duration_text || ' ' || MOD(v_duration_minutes::integer, 60)::text || ' minute';
-                    IF MOD(v_duration_minutes::integer, 60) > 1 THEN
+IF MOD(v_duration_minutes::integer, 60) > 1 THEN
                         v_duration_text := v_duration_text || 's';
-                    END IF;
-                END IF;
-            ELSE
+END IF;
+END IF;
+ELSE
                 v_duration_text := ROUND(v_duration_minutes)::text || ' minute';
-                IF ROUND(v_duration_minutes) != 1 THEN
+IF ROUND(v_duration_minutes) != 1 THEN
                     v_duration_text := v_duration_text || 's';
-                END IF;
-            END IF;
-            
-            v_changes := jsonb_build_object(
+END IF;
+END IF;
+v_changes := jsonb_build_object(
                 'reason', 'Shift Ended',
                 'duration', v_duration_text
             );
-        ELSE
-            RETURN NEW; -- Ignore other updates
+ELSE
+            RETURN NEW;
+-- Ignore other updates
         END IF;
-    ELSE
+ELSE
         -- Unknown table - do nothing
         RETURN NEW;
-    END IF;
-
-    -- Insert Log
+END IF;
+-- Insert Log
     INSERT INTO audit_logs (
         merchant_id, 
         location_id, 
@@ -29584,12 +28157,11 @@ BEGIN
         v_metadata,
         NOW()
     );
-
-    RETURN NEW;
+RETURN NEW;
 EXCEPTION WHEN OTHERS THEN
     -- Don't fail the transaction if logging fails
     RAISE WARNING 'Failed to log audit event: %', SQLERRM;
-    RETURN NEW;
+RETURN NEW;
 END;
 $$;
 
@@ -29606,17 +28178,14 @@ DECLARE
 BEGIN
     IF TG_OP = 'DELETE' THEN
         v_order_id := OLD.order_id;
-    ELSE
+ELSE
         v_order_id := NEW.order_id;
-    END IF;
-    
-    IF v_order_id IS NULL THEN
+END IF;
+IF v_order_id IS NULL THEN
         RETURN NULL;
-    END IF;
-    
-    PERFORM calculate_order_dual_totals(v_order_id);
-    
-    RETURN NULL;
+END IF;
+PERFORM calculate_order_dual_totals(v_order_id);
+RETURN NULL;
 END;
 $$;
 
@@ -29634,20 +28203,18 @@ BEGIN
     -- Determine order_id based on trigger operation
     IF TG_OP = 'DELETE' THEN
         v_order_id := OLD.order_id;
-    ELSE
+ELSE
         v_order_id := NEW.order_id;
-    END IF;
-    
-    -- Skip if order_id is null (shouldn't happen, but safety check)
+END IF;
+-- Skip if order_id is null (shouldn't happen, but safety check)
     IF v_order_id IS NULL THEN
         RETURN NULL;
-    END IF;
-    
-    -- Call the main calculation function
+END IF;
+-- Call the main calculation function
     -- The function updates the order internally, we just need to invoke it
     PERFORM calculate_order_dual_totals(v_order_id);
-    
-    RETURN NULL; -- AFTER trigger, return value is ignored
+RETURN NULL;
+-- AFTER trigger, return value is ignored
 END;
 $$;
 
@@ -29712,7 +28279,8 @@ BEGIN
     -- WHERE id = v_order_id;
     
     RETURN NULL;
-END;$$;
+END;
+$$;
 
 
 ALTER FUNCTION "public"."trigger_update_effective_totals_on_payment"() OWNER TO "postgres";
@@ -29726,9 +28294,10 @@ CREATE OR REPLACE FUNCTION "public"."trigger_void_loyalty_earnings"() RETURNS "t
   IF NEW.status IN ('void', 'refunded') AND (OLD.status NOT IN ('void', 'refunded')) THEN
     -- Call the loyalty RPC function to reverse earnings (ignore result, just execute)
     PERFORM loyalty_void_order_earnings(NEW.id);
-  END IF;
-  RETURN NEW;
-END;$$;
+END IF;
+RETURN NEW;
+END;
+$$;
 
 
 ALTER FUNCTION "public"."trigger_void_loyalty_earnings"() OWNER TO "postgres";
@@ -29749,22 +28318,18 @@ BEGIN
       AND location_id = ANY(user_location_ids())
   ) THEN
     RAISE EXCEPTION 'Session not found';
-  END IF;
-
-  -- Can't remove the only table
+END IF;
+-- Can't remove the only table
   SELECT COUNT(*) INTO v_remaining_count
   FROM public.table_session_tables
   WHERE session_id = p_session_id;
-
-  IF v_remaining_count <= 1 THEN
+IF v_remaining_count <= 1 THEN
     RAISE EXCEPTION 'Cannot unmerge the only table in a session';
-  END IF;
-
-  -- Remove table
+END IF;
+-- Remove table
   DELETE FROM public.table_session_tables
   WHERE session_id = p_session_id AND table_id = p_table_id;
-
-  -- If primary was removed, set new primary
+-- If primary was removed, set new primary
   IF NOT EXISTS (
     SELECT 1 FROM public.table_session_tables
     WHERE session_id = p_session_id AND is_primary = TRUE
@@ -29781,9 +28346,8 @@ BEGIN
       LIMIT 1
     ) s
     WHERE t.id = s.id;
-  END IF;
-
-  RETURN json_build_object(
+END IF;
+RETURN json_build_object(
     'success', true,
     'session_id', p_session_id,
     'unmerged_table_id', p_table_id
@@ -29801,7 +28365,7 @@ CREATE OR REPLACE FUNCTION "public"."update_admin_merchant_access_updated_at"() 
     AS $$
 BEGIN
     NEW.updated_at = NOW();
-    RETURN NEW;
+RETURN NEW;
 END;
 $$;
 
@@ -29815,25 +28379,22 @@ CREATE OR REPLACE FUNCTION "public"."update_customer_metrics_on_order"() RETURNS
     AS $$
 DECLARE
   v_customer_id UUID;
-  v_order_total NUMERIC;
-  v_order_tip NUMERIC;
-  v_order_subtotal NUMERIC;
+v_order_total NUMERIC;
+v_order_tip NUMERIC;
+v_order_subtotal NUMERIC;
 BEGIN
   -- Only update when order is completed or ready
   IF NEW.status IN ('completed', 'ready') AND (OLD.status IS NULL OR OLD.status NOT IN ('completed', 'ready')) THEN
     
     v_customer_id := NEW.customer_id;
-    
-    -- Skip if no customer assigned
+-- Skip if no customer assigned
     IF v_customer_id IS NULL THEN
       RETURN NEW;
-    END IF;
-    
-    v_order_total := COALESCE(NEW.total_amount, 0);
-    v_order_tip := COALESCE(NEW.tip_amount, 0);
-    v_order_subtotal := COALESCE(NEW.subtotal, 0);
-    
-    -- Update customer metrics
+END IF;
+v_order_total := COALESCE(NEW.total_amount, 0);
+v_order_tip := COALESCE(NEW.tip_amount, 0);
+v_order_subtotal := COALESCE(NEW.subtotal, 0);
+-- Update customer metrics
     UPDATE public.customers
     SET
       last_order_date = NEW.completed_at,
@@ -29850,8 +28411,7 @@ BEGIN
       END,
       updated_at = NOW()
     WHERE id = v_customer_id;
-    
-    -- Log activity
+-- Log activity
     INSERT INTO public.customer_activities (
       customer_id,
       merchant_id,
@@ -29870,17 +28430,13 @@ BEGIN
         'items_count', (SELECT COUNT(*) FROM public.order_items WHERE order_id = NEW.id)
       )
     );
-    
-  END IF;
-  
-  -- Handle refunds
+END IF;
+-- Handle refunds
   IF NEW.status = 'refunded' AND (OLD.status IS NULL OR OLD.status != 'refunded') THEN
     v_customer_id := NEW.customer_id;
-    
-    IF v_customer_id IS NOT NULL THEN
+IF v_customer_id IS NOT NULL THEN
       v_order_total := COALESCE(NEW.total_amount, 0);
-      
-      -- Subtract from lifetime spend
+-- Subtract from lifetime spend
       UPDATE public.customers
       SET
         lifetime_spend = GREATEST(lifetime_spend - v_order_total, 0),
@@ -29891,8 +28447,7 @@ BEGIN
         END,
         updated_at = NOW()
       WHERE id = v_customer_id;
-      
-      -- Log refund activity
+-- Log refund activity
       INSERT INTO public.customer_activities (
         customer_id,
         merchant_id,
@@ -29906,10 +28461,9 @@ BEGIN
         NEW.id,
         jsonb_build_object('amount', v_order_total)
       );
-    END IF;
-  END IF;
-  
-  RETURN NEW;
+END IF;
+END IF;
+RETURN NEW;
 END;
 $$;
 
@@ -29929,20 +28483,20 @@ CREATE OR REPLACE FUNCTION "public"."update_floor_plan_object_position"("p_objec
     updated_at = NOW()
   WHERE id = p_object_id
     AND merchant_id = user_merchant_id();
-    -- AND location_id = ANY(user_location_ids());
+-- AND location_id = ANY(user_location_ids());
 
   IF NOT FOUND THEN
     RAISE EXCEPTION 'Object not found or access denied';
-  END IF;
-
-  RETURN json_build_object(
+END IF;
+RETURN json_build_object(
     'success', true,
     'object_id', p_object_id,
     'x', p_x,
     'y', p_y,
     'rotation', p_rotation
   );
-END;$$;
+END;
+$$;
 
 
 ALTER FUNCTION "public"."update_floor_plan_object_position"("p_object_id" "uuid", "p_x" numeric, "p_y" numeric, "p_rotation" numeric) OWNER TO "postgres";
@@ -29953,7 +28507,7 @@ CREATE OR REPLACE FUNCTION "public"."update_floor_plan_objects_batch"("p_updates
     SET "search_path" TO 'public', 'public', 'pg_temp'
     AS $$DECLARE
   v_update JSONB;
-  v_updated_count INTEGER := 0;
+v_updated_count INTEGER := 0;
 BEGIN
   FOR v_update IN SELECT * FROM jsonb_array_elements(p_updates)
   LOOP
@@ -29965,19 +28519,18 @@ BEGIN
       updated_at = NOW()
     WHERE id = (v_update->>'id')::UUID
       AND merchant_id = user_merchant_id();
-      -- AND location_id = ANY(user_location_ids());
+-- AND location_id = ANY(user_location_ids());
     RAISE LOG 'v_update %', v_update;
-
-    IF FOUND THEN
+IF FOUND THEN
       v_updated_count := v_updated_count + 1;
-    END IF;
-  END LOOP;
-
-  RETURN json_build_object(
+END IF;
+END LOOP;
+RETURN json_build_object(
     'success', true,
     'updated_count', v_updated_count
   );
-END;$$;
+END;
+$$;
 
 
 ALTER FUNCTION "public"."update_floor_plan_objects_batch"("p_updates" "jsonb") OWNER TO "postgres";
@@ -29989,23 +28542,20 @@ CREATE OR REPLACE FUNCTION "public"."update_location_pos_config"("p_location_id"
     AS $$
 DECLARE
   v_existing JSONB;
-  v_merged JSONB;
-  v_result JSONB;
+v_merged JSONB;
+v_result JSONB;
 BEGIN
   -- Get existing config for this namespace (or empty object)
   SELECT COALESCE(pos_config->p_namespace, '{}'::jsonb)
   INTO v_existing
   FROM locations
   WHERE id = p_location_id;
-
-  IF NOT FOUND THEN
+IF NOT FOUND THEN
     RAISE EXCEPTION 'Location not found: %', p_location_id;
-  END IF;
-
-  -- Deep merge: existing namespace values || new values (new wins on conflict)
+END IF;
+-- Deep merge: existing namespace values || new values (new wins on conflict)
   v_merged := v_existing || p_config;
-
-  -- Atomic update with metadata
+-- Atomic update with metadata
   UPDATE locations
   SET pos_config = jsonb_set(
     jsonb_set(
@@ -30019,8 +28569,7 @@ BEGIN
   updated_at = now()
   WHERE id = p_location_id
   RETURNING pos_config INTO v_result;
-
-  RETURN v_result;
+RETURN v_result;
 END;
 $$;
 
@@ -30034,7 +28583,7 @@ CREATE OR REPLACE FUNCTION "public"."update_merchant_notes_updated_at"() RETURNS
     AS $$
 BEGIN
   NEW.updated_at := now();
-  RETURN NEW;
+RETURN NEW;
 END;
 $$;
 
@@ -30048,11 +28597,11 @@ CREATE OR REPLACE FUNCTION "public"."update_order_item"("p_order_item_id" "uuid"
     AS $$
 DECLARE
   v_order_id UUID;
-  v_current_quantity INTEGER;
-  v_price_paid NUMERIC(10, 2);
-  v_modifier_total NUMERIC(10, 2);
-  v_new_subtotal NUMERIC(10, 2);
-  v_result JSON;
+v_current_quantity INTEGER;
+v_price_paid NUMERIC(10, 2);
+v_modifier_total NUMERIC(10, 2);
+v_new_subtotal NUMERIC(10, 2);
+v_result JSON;
 BEGIN
   -- Get item details and verify access
   SELECT 
@@ -30072,12 +28621,10 @@ BEGIN
     AND o.merchant_id = user_merchant_id()
     AND o.location_id = ANY(user_location_ids())
     AND o.status NOT IN ('completed', 'cancelled', 'void');
-
-  IF NOT FOUND THEN
+IF NOT FOUND THEN
     RAISE EXCEPTION 'Order item not found or cannot be modified';
-  END IF;
-
-  -- Verify permission
+END IF;
+-- Verify permission
   -- IF NOT has_permission('location.orders.manage') THEN
   --   RAISE EXCEPTION 'Permission denied: location.orders.manage required';
   -- END IF;
@@ -30086,22 +28633,18 @@ BEGIN
   IF p_price_override IS NOT NULL THEN
     IF NOT has_any_permission(ARRAY['location.orders.override_price', 'merchant.orders.manage']) THEN
       RAISE EXCEPTION 'Permission denied: price override requires manager permission';
-    END IF;
-    v_price_paid := p_price_override;
-  END IF;
-
-  -- Use provided quantity or keep current
+END IF;
+v_price_paid := p_price_override;
+END IF;
+-- Use provided quantity or keep current
   v_current_quantity := COALESCE(p_quantity, v_current_quantity);
-  
-  -- Validate quantity
+-- Validate quantity
   IF v_current_quantity < 1 THEN
     RAISE EXCEPTION 'Quantity must be at least 1';
-  END IF;
-
-  -- Calculate new subtotal
+END IF;
+-- Calculate new subtotal
   v_new_subtotal := (v_current_quantity * v_price_paid) + (v_current_quantity * v_modifier_total);
-
-  -- Update the item (only non-null fields)
+-- Update the item (only non-null fields)
   UPDATE public.order_items
   SET 
     quantity = v_current_quantity,
@@ -30112,8 +28655,7 @@ BEGIN
     course_number = COALESCE(p_course_number, course_number),
     updated_at = NOW()
   WHERE id = p_order_item_id;
-
-  -- Return result
+-- Return result
   SELECT json_build_object(
     'success', true,
     'order_item_id', p_order_item_id,
@@ -30126,8 +28668,7 @@ BEGIN
     'prep_station', p_prep_station,
     'course_number', p_course_number
   ) INTO v_result;
-
-  RETURN v_result;
+RETURN v_result;
 END;
 $$;
 
@@ -30144,33 +28685,29 @@ CREATE OR REPLACE FUNCTION "public"."update_order_item_quantity"("p_order_item_i
     SET "search_path" TO 'public', 'public', 'pg_temp'
     AS $$DECLARE
     v_order_id UUID;
-    v_merchant_id UUID;
-    v_location_id UUID;
-    
-    -- Item details
+v_merchant_id UUID;
+v_location_id UUID;
+-- Item details
     v_unit_price NUMERIC;
-    v_cash_price NUMERIC;
-    v_tax_rate NUMERIC;
-    v_paid_quantity INTEGER;
-    v_current_quantity INTEGER;
-    
-    -- New Totals
+v_cash_price NUMERIC;
+v_tax_rate NUMERIC;
+v_paid_quantity INTEGER;
+v_current_quantity INTEGER;
+-- New Totals
     v_new_subtotal NUMERIC;
-    v_new_cash_subtotal NUMERIC;
-    v_new_tax_amount NUMERIC;
-    v_new_cash_tax_amount NUMERIC;
-    
-    v_result JSON;
-    v_new_sync_version integer;
+v_new_cash_subtotal NUMERIC;
+v_new_tax_amount NUMERIC;
+v_new_cash_tax_amount NUMERIC;
+v_result JSON;
+v_new_sync_version integer;
 BEGIN
     -- ==========================================
     -- 1. Validate Input
     -- ==========================================
     IF p_quantity < 1 THEN
         RAISE EXCEPTION 'Quantity must be at least 1. Use void_order_item() to remove items.';
-    END IF;
-
-    -- ==========================================
+END IF;
+-- ==========================================
     -- 2. Get Item Details & Verify Access
     -- ==========================================
     SELECT 
@@ -30199,31 +28736,26 @@ BEGIN
       AND o.location_id = ANY(user_location_ids())
       AND o.status NOT IN ('completed', 'cancelled', 'void')
     FOR UPDATE;
-
-    IF NOT FOUND THEN
+IF NOT FOUND THEN
         RAISE EXCEPTION 'Order item not found or cannot be modified';
-    END IF;
-
-    -- ==========================================
+END IF;
+-- ==========================================
     -- 3. Safety Check: Paid Quantity
     -- ==========================================
     IF p_quantity < v_paid_quantity THEN
         RAISE EXCEPTION 'Cannot reduce quantity below paid amount (%)', v_paid_quantity;
-    END IF;
-
-    -- ==========================================
+END IF;
+-- ==========================================
     -- 4. Calculate New Totals (Gross)
     -- ==========================================
     -- We calculate "Gross" totals first. 
     -- If there is a discount, recalculate_order_discount will adjust these to "Net" later.
     v_new_subtotal := p_quantity * v_unit_price;
-    v_new_cash_subtotal := p_quantity * v_cash_price;
-    
-    -- Calculate Tax
+v_new_cash_subtotal := p_quantity * v_cash_price;
+-- Calculate Tax
     v_new_tax_amount := ROUND(v_new_subtotal * (v_tax_rate / 100), 2);
-    v_new_cash_tax_amount := ROUND(v_new_cash_subtotal * (v_tax_rate / 100), 2);
-
-    -- ==========================================
+v_new_cash_tax_amount := ROUND(v_new_cash_subtotal * (v_tax_rate / 100), 2);
+-- ==========================================
     -- 5. Update Order Item
     -- ==========================================
     UPDATE public.order_items
@@ -30244,24 +28776,21 @@ BEGIN
         
         updated_at = NOW()
     WHERE id = p_order_item_id;
-
-    -- ==========================================
+-- ==========================================
     -- 6. Recalculate Order-Level Math
     -- ==========================================
     -- 1. Redistribute any active discounts across the new quantity
     PERFORM recalculate_order_discount(v_order_id);
-    
-    -- 2. Update the main Order Header (Total, Tax, Amount Due)
+-- 2. Update the main Order Header (Total, Tax, Amount Due)
     -- PERFORM calculate_order_totals_fast(v_order_id);
     -- PERFORM calculate_order_totals_fast(p_order_id);
     v_new_sync_version := increment_order_sync_version(v_order_id);
-    -- ==========================================
+-- ==========================================
     -- 7. Return Result
     -- ==========================================
     -- Fetch final values (in case discount changed them)
     SELECT subtotal INTO v_new_subtotal FROM public.order_items WHERE id = p_order_item_id;
-
-    SELECT json_build_object(
+SELECT json_build_object(
         'success', true,
         'order_item_id', p_order_item_id,
         'order_id', v_order_id,
@@ -30270,9 +28799,9 @@ BEGIN
         'new_subtotal', v_new_subtotal,
         'sync_version', v_new_sync_version
     ) INTO v_result;
-
-    RETURN v_result;
-END;$$;
+RETURN v_result;
+END;
+$$;
 
 
 ALTER FUNCTION "public"."update_order_item_quantity"("p_order_item_id" "uuid", "p_quantity" integer) OWNER TO "postgres";
@@ -30288,33 +28817,28 @@ CREATE OR REPLACE FUNCTION "public"."update_order_item_quantity_v2"("p_order_ite
     AS $$
 DECLARE
     v_order_id uuid;
-    v_location_id uuid;
-    v_unit_price numeric;
-    v_cash_unit_price numeric;
-    v_tax_rate numeric;
-    v_is_tax_exempt boolean;
-
-    v_modifier_total numeric;
-    v_new_subtotal numeric;
-    v_new_cash_subtotal numeric;
-    v_new_tax_amount numeric;
-    v_new_cash_tax_amount numeric;
-
-    v_discount_amount numeric := 0;
-    v_discount_cash_amount numeric := 0;
-    v_has_active_discount boolean := false;
-
-    v_new_sync_version integer;
-    v_price_paid numeric;
-
-    v_result jsonb;
+v_location_id uuid;
+v_unit_price numeric;
+v_cash_unit_price numeric;
+v_tax_rate numeric;
+v_is_tax_exempt boolean;
+v_modifier_total numeric;
+v_new_subtotal numeric;
+v_new_cash_subtotal numeric;
+v_new_tax_amount numeric;
+v_new_cash_tax_amount numeric;
+v_discount_amount numeric := 0;
+v_discount_cash_amount numeric := 0;
+v_has_active_discount boolean := false;
+v_new_sync_version integer;
+v_price_paid numeric;
+v_result jsonb;
 BEGIN
     -- Validate quantity
     IF p_quantity IS NULL OR p_quantity < 1 THEN
         RAISE EXCEPTION 'Invalid quantity: must be at least 1';
-    END IF;
-
-    -- ============================================
+END IF;
+-- ============================================
     -- 1. Get current item details
     -- ============================================
     SELECT
@@ -30338,40 +28862,36 @@ BEGIN
     WHERE oi.id = p_order_item_id
       AND o.merchant_id = user_merchant_id()
       AND o.location_id = ANY(user_location_ids())
-    FOR UPDATE;  -- Lock row to prevent race conditions
+    FOR UPDATE;
+-- Lock row to prevent race conditions
 
     IF v_order_id IS NULL THEN
         RAISE EXCEPTION 'Order item not found or access denied';
-    END IF;
-
-    -- ============================================
+END IF;
+-- ============================================
     -- 2. Calculate modifier total (for reference)
     -- ============================================
     SELECT COALESCE(SUM(total_price), 0)
     INTO v_modifier_total
     FROM public.order_item_modifiers
     WHERE order_item_id = p_order_item_id;
-
-    -- ============================================
+-- ============================================
     -- 3. Calculate new pricing based on quantity
     -- ============================================
     -- Subtotals = unit price × new quantity
     v_new_subtotal := v_unit_price * p_quantity;
-    v_new_cash_subtotal := v_cash_unit_price * p_quantity;
-
-    -- Calculate tax
+v_new_cash_subtotal := v_cash_unit_price * p_quantity;
+-- Calculate tax
     IF v_is_tax_exempt THEN
         v_new_tax_amount := 0;
-        v_new_cash_tax_amount := 0;
-    ELSE
+v_new_cash_tax_amount := 0;
+ELSE
         v_new_tax_amount := ROUND(v_new_subtotal * v_tax_rate / 100, 2);
-        v_new_cash_tax_amount := ROUND(v_new_cash_subtotal * v_tax_rate / 100, 2);
-    END IF;
-
-    -- Calculate price paid (for backward compatibility)
+v_new_cash_tax_amount := ROUND(v_new_cash_subtotal * v_tax_rate / 100, 2);
+END IF;
+-- Calculate price paid (for backward compatibility)
     v_price_paid := v_unit_price * p_quantity;
-
-    -- ============================================
+-- ============================================
     -- 4. Update order item with new pricing
     -- ============================================
     UPDATE public.order_items SET
@@ -30384,8 +28904,7 @@ BEGIN
         discount_cash_amount = 0,
         updated_at = now()
     WHERE id = p_order_item_id;
-
-    -- ============================================
+-- ============================================
     -- 5. Handle active order discounts
     -- ============================================
     SELECT EXISTS(
@@ -30394,12 +28913,10 @@ BEGIN
           AND voided_at IS NULL
           AND calculated_amount > 0
     ) INTO v_has_active_discount;
-
-    IF v_has_active_discount THEN
+IF v_has_active_discount THEN
         -- Redistribute discount across all items (including this updated one)
         PERFORM redistribute_order_discount(v_order_id);
-
-        -- Get updated values after discount redistribution
+-- Get updated values after discount redistribution
         SELECT
             subtotal,
             cash_subtotal,
@@ -30416,23 +28933,19 @@ BEGIN
             v_discount_cash_amount
         FROM public.order_items
         WHERE id = p_order_item_id;
-
-        -- Recalculate price_paid after discount
+-- Recalculate price_paid after discount
         v_price_paid := v_new_subtotal;
-    END IF;
-
-    -- ============================================
+END IF;
+-- ============================================
     -- 6. Update order sync version
     -- ============================================
     -- UPDATE public.orders
     v_new_sync_version := increment_order_sync_version(v_order_id);
-
-    -- ============================================
+-- ============================================
     -- 7. Recalculate order totals
     -- ============================================
     PERFORM recalculate_order_discount(v_order_id);
-
-    -- ============================================
+-- ============================================
     -- 8. Return enhanced result with complete item data
     -- ============================================
     SELECT json_build_object(
@@ -30463,8 +28976,7 @@ BEGIN
         -- Sync version for conflict detection
         'sync_version', v_new_sync_version
     ) INTO v_result;
-
-    RETURN v_result;
+RETURN v_result;
 END;
 $$;
 
@@ -30482,19 +28994,17 @@ CREATE OR REPLACE FUNCTION "public"."update_order_item_v2"("p_order_item_id" "uu
     AS $$
 DECLARE
     v_order_id uuid;
-    v_is_open_item boolean;
-    v_location_id uuid;
-    v_tax_rate numeric;
-    
-    v_new_quantity integer;
-    v_new_price numeric;
-    v_cash_price numeric;
-    v_subtotal numeric;
-    v_cash_subtotal numeric;
-    v_tax_amount numeric;
-    v_cash_tax_amount numeric;
-    
-    v_cash_discount_rate numeric := 0.04;
+v_is_open_item boolean;
+v_location_id uuid;
+v_tax_rate numeric;
+v_new_quantity integer;
+v_new_price numeric;
+v_cash_price numeric;
+v_subtotal numeric;
+v_cash_subtotal numeric;
+v_tax_amount numeric;
+v_cash_tax_amount numeric;
+v_cash_discount_rate numeric := 0.04;
 BEGIN
     -- Get current item details
     SELECT 
@@ -30510,32 +29020,27 @@ BEGIN
     WHERE oi.id = p_order_item_id
       AND o.merchant_id = user_merchant_id()
       AND o.location_id = ANY(user_location_ids());
-    
-    IF v_order_id IS NULL THEN
+IF v_order_id IS NULL THEN
         RAISE EXCEPTION 'Order item not found or access denied';
-    END IF;
-    
-    -- Update quantity if provided
+END IF;
+-- Update quantity if provided
     IF p_quantity IS NOT NULL THEN
         v_new_quantity := p_quantity;
-    END IF;
-    
-    -- Update price if provided AND it's an open item
+END IF;
+-- Update price if provided AND it's an open item
     IF p_unit_price IS NOT NULL THEN
         IF NOT v_is_open_item THEN
             RAISE EXCEPTION 'Cannot change price of regular menu items';
-        END IF;
-        v_new_price := p_unit_price;
-    END IF;
-    
-    -- Recalculate pricing
+END IF;
+v_new_price := p_unit_price;
+END IF;
+-- Recalculate pricing
     v_cash_price := v_new_price * (1 - v_cash_discount_rate);
-    v_subtotal := v_new_price * v_new_quantity;
-    v_cash_subtotal := v_cash_price * v_new_quantity;
-    v_tax_amount := ROUND(v_subtotal * v_tax_rate / 100, 2);
-    v_cash_tax_amount := ROUND(v_cash_subtotal * v_tax_rate / 100, 2);
-    
-    -- Update the item
+v_subtotal := v_new_price * v_new_quantity;
+v_cash_subtotal := v_cash_price * v_new_quantity;
+v_tax_amount := ROUND(v_subtotal * v_tax_rate / 100, 2);
+v_cash_tax_amount := ROUND(v_cash_subtotal * v_tax_rate / 100, 2);
+-- Update the item
     UPDATE public.order_items SET
         quantity = v_new_quantity,
         unit_price = v_new_price,
@@ -30549,11 +29054,9 @@ BEGIN
         seat_number = COALESCE(p_seat_number, seat_number),
         updated_at = now()
     WHERE id = p_order_item_id;
-    
-    -- Recalculate order totals
+-- Recalculate order totals
     PERFORM calculate_order_totals_fast(v_order_id);
-    
-    RETURN jsonb_build_object(
+RETURN jsonb_build_object(
         'success', true,
         'order_item_id', p_order_item_id,
         'quantity', v_new_quantity,
@@ -30572,22 +29075,19 @@ CREATE OR REPLACE FUNCTION "public"."update_order_item_v2_dep"("p_order_item_id"
     SET "search_path" TO 'public', 'public', 'pg_temp'
     AS $$DECLARE
     v_order_id uuid;
-    v_is_open_item boolean;
-    v_location_id uuid;
-    v_tax_rate numeric;
-    
-    v_new_quantity integer;
-    v_new_price numeric;
-    v_cash_price numeric;
-    v_subtotal numeric;
-    v_cash_subtotal numeric;
-    v_tax_amount numeric;
-    v_cash_tax_amount numeric;
-    
-    v_new_sync_version integer;
-
-    v_cash_discount_rate numeric := 0.04;
-    v_has_active_discount boolean := false;
+v_is_open_item boolean;
+v_location_id uuid;
+v_tax_rate numeric;
+v_new_quantity integer;
+v_new_price numeric;
+v_cash_price numeric;
+v_subtotal numeric;
+v_cash_subtotal numeric;
+v_tax_amount numeric;
+v_cash_tax_amount numeric;
+v_new_sync_version integer;
+v_cash_discount_rate numeric := 0.04;
+v_has_active_discount boolean := false;
 BEGIN
     -- Get current item details
     SELECT 
@@ -30603,32 +29103,27 @@ BEGIN
     WHERE oi.id = p_order_item_id
       AND o.merchant_id = user_merchant_id()
       AND o.location_id = ANY(user_location_ids());
-    
-    IF v_order_id IS NULL THEN
+IF v_order_id IS NULL THEN
         RAISE EXCEPTION 'Order item not found or access denied';
-    END IF;
-    
-    -- Update quantity if provided
+END IF;
+-- Update quantity if provided
     IF p_quantity IS NOT NULL THEN
         v_new_quantity := p_quantity;
-    END IF;
-    
-    -- Update price if provided AND it's an open item
+END IF;
+-- Update price if provided AND it's an open item
     IF p_unit_price IS NOT NULL THEN
         IF NOT v_is_open_item THEN
             RAISE EXCEPTION 'Cannot change price of regular menu items';
-        END IF;
-        v_new_price := p_unit_price;
-    END IF;
-    
-    -- Recalculate base pricing (pre-discount)
+END IF;
+v_new_price := p_unit_price;
+END IF;
+-- Recalculate base pricing (pre-discount)
     v_cash_price := v_new_price * (1 - v_cash_discount_rate);
-    v_subtotal := v_new_price * v_new_quantity;
-    v_cash_subtotal := v_cash_price * v_new_quantity;
-    v_tax_amount := ROUND(v_subtotal * v_tax_rate / 100, 2);
-    v_cash_tax_amount := ROUND(v_cash_subtotal * v_tax_rate / 100, 2);
-    
-    -- Update the item with base values (discount will be applied after)
+v_subtotal := v_new_price * v_new_quantity;
+v_cash_subtotal := v_cash_price * v_new_quantity;
+v_tax_amount := ROUND(v_subtotal * v_tax_rate / 100, 2);
+v_cash_tax_amount := ROUND(v_cash_subtotal * v_tax_rate / 100, 2);
+-- Update the item with base values (discount will be applied after)
     UPDATE public.order_items SET
         quantity = v_new_quantity,
         unit_price = v_new_price,
@@ -30642,33 +29137,27 @@ BEGIN
         special_instructions = COALESCE(p_special_instructions, special_instructions),
         updated_at = now()
     WHERE id = p_order_item_id;
-    
-    -- Check if there's an active order discount
+-- Check if there's an active order discount
     SELECT EXISTS(
         SELECT 1 FROM public.order_discounts
         WHERE order_id = v_order_id
           AND voided_at IS NULL
           AND calculated_amount > 0
     ) INTO v_has_active_discount;
-    
-    -- If discount exists, redistribute across all items
+-- If discount exists, redistribute across all items
     IF v_has_active_discount THEN
         PERFORM redistribute_order_discount(v_order_id);
-        
-        -- Get updated values
+-- Get updated values
         SELECT subtotal, tax_amount, cash_subtotal, cash_tax_amount
         INTO v_subtotal, v_tax_amount, v_cash_subtotal, v_cash_tax_amount
         FROM public.order_items
         WHERE id = p_order_item_id;
-    END IF;
-    
-    -- Recalculate order totals
+END IF;
+-- Recalculate order totals
     -- PERFORM calculate_order_totals_fast(v_order_id);
     PERFORM recalculate_order_discount(v_order_id);
-    
-    v_new_sync_version := increment_order_sync_version(v_order_id);
-
-    RETURN jsonb_build_object(
+v_new_sync_version := increment_order_sync_version(v_order_id);
+RETURN jsonb_build_object(
         'success', true,
         'order_item_id', p_order_item_id,
         'quantity', v_new_quantity,
@@ -30676,7 +29165,8 @@ BEGIN
         'subtotal', v_subtotal,
         'discount_applied', v_has_active_discount
     );
-END;$$;
+END;
+$$;
 
 
 ALTER FUNCTION "public"."update_order_item_v2_dep"("p_order_item_id" "uuid", "p_quantity" integer, "p_unit_price" numeric, "p_special_instructions" "text") OWNER TO "postgres";
@@ -30687,7 +29177,7 @@ CREATE OR REPLACE FUNCTION "public"."update_order_payment_status_after_refund"("
     SET "search_path" TO 'public', 'public', 'pg_temp'
     AS $$DECLARE
   v_order record;
-  v_payment_status payment_status;
+v_payment_status payment_status;
 BEGIN
   -- Verify order access
   SELECT * INTO v_order
@@ -30695,33 +29185,29 @@ BEGIN
   WHERE id = p_order_id
     AND merchant_id = user_merchant_id()
     AND location_id = ANY(user_location_ids());
-
-  IF NOT FOUND THEN
+IF NOT FOUND THEN
     RAISE EXCEPTION 'Order not found or access denied';
-  END IF;
-
-  -- Use calculate_order_totals_fast for comprehensive calculation
+END IF;
+-- Use calculate_order_totals_fast for comprehensive calculation
   -- This includes both item-level refunds (refunded_quantity) and
   -- payment-level refunds (refunded_amount) using MAX logic
   PERFORM calculate_order_totals_fast(p_order_id);
-  
-  -- Refresh order data after recalculation
+-- Refresh order data after recalculation
   SELECT * INTO v_order FROM orders WHERE id = p_order_id;
-
-  -- Determine payment status based on recalculated amounts
+-- Determine payment status based on recalculated amounts
   IF COALESCE(v_order.amount_due, 0) <= 0 THEN
     v_payment_status := 'paid'::payment_status;
-  ELSIF COALESCE(v_order.amount_paid, 0) > 0 THEN
+ELSIF COALESCE(v_order.amount_paid, 0) > 0 THEN
     v_payment_status := 'partial'::payment_status;
-  ELSE
+ELSE
     v_payment_status := 'refunded'::payment_status;
-  END IF;
-
-  -- Update only the payment_status (totals already updated by calculate_order_totals_fast)
+END IF;
+-- Update only the payment_status (totals already updated by calculate_order_totals_fast)
   UPDATE orders
   SET payment_status = v_payment_status
   WHERE id = p_order_id;
-END;$$;
+END;
+$$;
 
 
 ALTER FUNCTION "public"."update_order_payment_status_after_refund"("p_order_id" "uuid") OWNER TO "postgres";
@@ -30733,24 +29219,21 @@ CREATE OR REPLACE FUNCTION "public"."update_order_status"("p_order_id" "uuid", "
     AS $$
 DECLARE
   v_current_status TEXT;
-  v_result JSONB;
+v_result JSONB;
 BEGIN
   -- Get current status
   SELECT status::text INTO v_current_status
   FROM orders
   WHERE id = p_order_id;
-
-  IF v_current_status IS NULL THEN
+IF v_current_status IS NULL THEN
     RAISE EXCEPTION 'Order not found: %', p_order_id;
-  END IF;
-
-  -- Prevent redundant status updates
+END IF;
+-- Prevent redundant status updates
   IF v_current_status = p_new_status THEN
     RAISE EXCEPTION 'Order is already in % status', p_new_status
       USING ERRCODE = 'P0001';
-  END IF;
-
-  -- Update the order with appropriate timestamps based on new status
+END IF;
+-- Update the order with appropriate timestamps based on new status
   UPDATE orders
   SET
     status = p_new_status::order_status,
@@ -30791,8 +29274,7 @@ BEGIN
       ELSE cancellation_reason
     END
   WHERE id = p_order_id;
-
-  -- Return the updated order
+-- Return the updated order
   SELECT jsonb_build_object(
     'id', id,
     'status', status,
@@ -30803,8 +29285,7 @@ BEGIN
   ) INTO v_result
   FROM orders
   WHERE id = p_order_id;
-
-  RETURN v_result;
+RETURN v_result;
 END;
 $$;
 
@@ -30817,7 +29298,7 @@ CREATE OR REPLACE FUNCTION "public"."update_order_status_dep"("p_order_id" "uuid
     SET "search_path" TO 'public', 'public', 'pg_temp'
     AS $$DECLARE
   v_current_status order_status;
-  v_result JSON;
+v_result JSON;
 BEGIN
   -- Verify user has access and get current status
   SELECT status INTO v_current_status
@@ -30825,12 +29306,10 @@ BEGIN
   WHERE id = p_order_id
     AND merchant_id = user_merchant_id()
     AND location_id = ANY(user_location_ids());
-  
-  IF NOT FOUND THEN
+IF NOT FOUND THEN
     RAISE EXCEPTION 'Order not found or access denied';
-  END IF;
-  
-  -- Verify user has permission
+END IF;
+-- Verify user has permission
   -- IF NOT auth.has_any_permission(ARRAY['location.orders.manage', 'merchant.orders.manage']) THEN
   --   RAISE EXCEPTION 'Permission denied: location.orders.manage or merchant.orders.manage required';
   -- END IF;
@@ -30838,16 +29317,14 @@ BEGIN
   -- Validate status transition
   IF v_current_status = p_new_status THEN
     RAISE WARNING 'Order is already in % status', p_new_status;
-  END IF;
-  
-  -- Update order status (trigger will record history)
+END IF;
+-- Update order status (trigger will record history)
   UPDATE public.orders
   SET 
     status = p_new_status,
     updated_at = NOW()
   WHERE id = p_order_id;
-  
-  -- Add notes to history if provided
+-- Add notes to history if provided
   IF p_reason IS NOT NULL OR p_notes IS NOT NULL THEN
     UPDATE public.order_status_history
     SET 
@@ -30860,9 +29337,8 @@ BEGIN
         FROM public.order_status_history
         WHERE order_id = p_order_id
       );
-  END IF;
-  
-  -- Return result
+END IF;
+-- Return result
   SELECT json_build_object(
     'success', true,
     'order_id', p_order_id,
@@ -30870,9 +29346,9 @@ BEGIN
     'new_status', p_new_status,
     'updated_at', NOW()
   ) INTO v_result;
-  
-  RETURN v_result;
-END;$$;
+RETURN v_result;
+END;
+$$;
 
 
 ALTER FUNCTION "public"."update_order_status_dep"("p_order_id" "uuid", "p_new_status" "public"."order_status", "p_reason" "text", "p_notes" "text") OWNER TO "postgres";
@@ -30894,16 +29370,13 @@ BEGIN
   INTO v_payment
   FROM order_payments
   WHERE id = p_payment_id;
-
-  IF NOT FOUND THEN
+IF NOT FOUND THEN
     RETURN jsonb_build_object('success', false, 'error', 'Payment not found');
-  END IF;
-
-  IF v_payment.status <> 'authorized' THEN
+END IF;
+IF v_payment.status <> 'authorized' THEN
     RETURN jsonb_build_object('success', false, 'error', 'Payment is not in authorized status');
-  END IF;
-
-  -- Update authorized amount
+END IF;
+-- Update authorized amount
   UPDATE order_payments
   SET
     amount = p_new_amount,
@@ -30913,8 +29386,7 @@ BEGIN
       ELSE terminal_response
     END
   WHERE id = p_payment_id;
-
-  RETURN jsonb_build_object(
+RETURN jsonb_build_object(
     'success', true,
     'payment_id', p_payment_id,
     'new_authorized_amount', p_new_amount
@@ -30939,12 +29411,10 @@ BEGIN
   WHERE id = p_reservation_id
     AND merchant_id = user_merchant_id()
     AND location_id = ANY(user_location_ids());
-
-  IF NOT FOUND THEN
+IF NOT FOUND THEN
     RAISE EXCEPTION 'Reservation not found';
-  END IF;
-
-  -- Update status
+END IF;
+-- Update status
   UPDATE public.reservations
   SET 
     status = p_status,
@@ -30954,8 +29424,7 @@ BEGIN
     cancellation_reason = COALESCE(p_cancellation_reason, cancellation_reason),
     updated_at = NOW()
   WHERE id = p_reservation_id;
-
-  RETURN json_build_object(
+RETURN json_build_object(
     'success', true,
     'reservation_id', p_reservation_id,
     'previous_status', v_old_status,
@@ -30979,7 +29448,8 @@ CREATE OR REPLACE FUNCTION "public"."update_reversal_status"("p_reversal_id" "uu
       completed_at = CASE WHEN p_status = 'completed' THEN now() ELSE completed_at END,
       failed_at = CASE WHEN p_status = 'failed' THEN now() ELSE failed_at END
   WHERE id = p_reversal_id;
-END;$$;
+END;
+$$;
 
 
 ALTER FUNCTION "public"."update_reversal_status"("p_reversal_id" "uuid", "p_status" "public"."reversal_status_type", "p_terminal_response" "jsonb", "p_emv_data" "jsonb") OWNER TO "postgres";
@@ -31051,8 +29521,7 @@ BEGIN
     END,
     updated_at = NOW()
   WHERE id = NEW.session_id;
-  
-  RETURN NEW;
+RETURN NEW;
 END;
 $$;
 
@@ -31072,12 +29541,10 @@ BEGIN
     last_activity_at = NOW()
   WHERE id = p_session_id
     AND session_status = 'active';
-  
-  IF NOT FOUND THEN
+IF NOT FOUND THEN
     RETURN json_build_object('success', false, 'error', 'Session not found');
-  END IF;
-  
-  RETURN json_build_object('success', true);
+END IF;
+RETURN json_build_object('success', true);
 END;
 $$;
 
@@ -31091,7 +29558,7 @@ CREATE OR REPLACE FUNCTION "public"."update_stations_updated_at"() RETURNS "trig
     AS $$
 BEGIN
   NEW.updated_at = NOW();
-  RETURN NEW;
+RETURN NEW;
 END;
 $$;
 
@@ -31105,7 +29572,7 @@ CREATE OR REPLACE FUNCTION "public"."update_table_session_status"("p_session_id"
     AS $$
 DECLARE
   v_old_status public.table_status;
-  v_event_type public.session_event_type;
+v_event_type public.session_event_type;
 BEGIN
   -- Get current status
   SELECT status INTO v_old_status
@@ -31113,12 +29580,10 @@ BEGIN
   WHERE id = p_session_id
     AND merchant_id = user_merchant_id()
     AND location_id = ANY(user_location_ids());
-
-  IF NOT FOUND THEN
+IF NOT FOUND THEN
     RAISE EXCEPTION 'Session not found';
-  END IF;
-
-  -- Map status to event type
+END IF;
+-- Map status to event type
   v_event_type := CASE p_status
     WHEN 'ordered' THEN 'order_placed'::public.session_event_type
     WHEN 'served' THEN 'mains_served'::public.session_event_type
@@ -31128,8 +29593,7 @@ BEGIN
     WHEN 'available' THEN 'table_cleaned'::public.session_event_type
     ELSE 'custom'::public.session_event_type
   END;
-
-  -- Record event (this triggers status update via trigger)
+-- Record event (this triggers status update via trigger)
   INSERT INTO public.table_session_events (
     session_id, event_type, notes,
     triggered_by_staff_id, triggered_by_user_id
@@ -31137,8 +29601,7 @@ BEGIN
     p_session_id, v_event_type, p_notes,
     COALESCE(p_staff_id, user_staff_profile_id()), get_my_claim('sub')
   );
-
-  -- If closing session
+-- If closing session
   IF p_status IN ('available') THEN
     UPDATE public.table_sessions
     SET 
@@ -31147,9 +29610,8 @@ BEGIN
       closed_by = COALESCE(p_staff_id, user_staff_profile_id()),
       closed_at = NOW()
     WHERE id = p_session_id;
-  END IF;
-
-  RETURN json_build_object(
+END IF;
+RETURN json_build_object(
     'success', true,
     'session_id', p_session_id,
     'previous_status', v_old_status,
@@ -31183,15 +29645,13 @@ BEGIN
     END,
     updated_at = NOW()
   WHERE id = p_terminal_id;
-
-  IF NOT FOUND THEN
+IF NOT FOUND THEN
     RETURN json_build_object(
       'success', FALSE,
       'error', 'Terminal not found'
     );
-  END IF;
-
-  SELECT json_build_object(
+END IF;
+SELECT json_build_object(
     'success', TRUE,
     'terminal_id', id,
     'is_connected', is_connected,
@@ -31200,8 +29660,7 @@ BEGIN
   ) INTO v_result
   FROM payment_terminals
   WHERE id = p_terminal_id;
-
-  RETURN v_result;
+RETURN v_result;
 END;
 $$;
 
@@ -31223,13 +29682,12 @@ CREATE OR REPLACE FUNCTION "public"."update_terminal_status"("p_terminal_id" "uu
     AND merchant_id IN (
       SELECT merchant_id FROM staff_profiles WHERE user_id = get_my_claim('sub')
     );
-  
-  IF NOT FOUND THEN
+IF NOT FOUND THEN
     RETURN json_build_object('success', false, 'error', 'Terminal not found');
-  END IF;
-  
-  RETURN json_build_object('success', true);
-END;$$;
+END IF;
+RETURN json_build_object('success', true);
+END;
+$$;
 
 
 ALTER FUNCTION "public"."update_terminal_status"("p_terminal_id" "uuid", "p_status" "text", "p_is_connected" boolean) OWNER TO "postgres";
@@ -31248,12 +29706,10 @@ BEGIN
     resolved_by = CASE WHEN p_status = 'resolved' AND p_resolved_by IS NOT NULL THEN p_resolved_by ELSE resolved_by END,
     resolution_notes = CASE WHEN p_resolution_notes IS NOT NULL THEN p_resolution_notes ELSE resolution_notes END
   WHERE id = p_ticket_id;
-
-  IF NOT FOUND THEN
+IF NOT FOUND THEN
     RETURN jsonb_build_object('success', false, 'error', 'Ticket not found');
-  END IF;
-
-  RETURN jsonb_build_object('success', true);
+END IF;
+RETURN jsonb_build_object('success', true);
 END;
 $$;
 
@@ -31267,7 +29723,7 @@ CREATE OR REPLACE FUNCTION "public"."update_updated_at_column"() RETURNS "trigge
     AS $$
 BEGIN
   NEW.updated_at = NOW();
-  RETURN NEW;
+RETURN NEW;
 END;
 $$;
 
@@ -31281,7 +29737,7 @@ CREATE OR REPLACE FUNCTION "public"."update_updated_at_column_for_payment_relate
     AS $$
 BEGIN
     NEW.updated_at = NOW();
-    RETURN NEW;
+RETURN NEW;
 END;
 $$;
 
@@ -31305,8 +29761,7 @@ BEGIN
   SET position_in_queue = ranked.new_position
   FROM ranked
   WHERE w.id = ranked.id;
-  
-  RETURN COALESCE(NEW, OLD);
+RETURN COALESCE(NEW, OLD);
 END;
 $$;
 
@@ -31327,12 +29782,10 @@ BEGIN
   WHERE id = p_waitlist_id
     AND merchant_id = user_merchant_id()
     AND location_id = ANY(user_location_ids());
-
-  IF NOT FOUND THEN
+IF NOT FOUND THEN
     RAISE EXCEPTION 'Waitlist entry not found';
-  END IF;
-
-  -- Update status
+END IF;
+-- Update status
   UPDATE public.waitlist
   SET 
     status = p_status,
@@ -31341,8 +29794,7 @@ BEGIN
     expired_at = CASE WHEN p_status = 'expired' THEN NOW() ELSE expired_at END,
     notes = COALESCE(p_notes, notes)
   WHERE id = p_waitlist_id;
-
-  RETURN json_build_object(
+RETURN json_build_object(
     'success', true,
     'waitlist_id', p_waitlist_id,
     'previous_status', v_old_status,
@@ -31360,10 +29812,10 @@ CREATE OR REPLACE FUNCTION "public"."upsert_category_item_override"("p_menu_item
     AS $$
 DECLARE
     v_update_level INTEGER;
-    v_update_table TEXT;
-    v_is_empty BOOLEAN;
-    v_menu_location_id UUID;
-    v_merchant_id UUID;
+v_update_table TEXT;
+v_is_empty BOOLEAN;
+v_menu_location_id UUID;
+v_merchant_id UUID;
 BEGIN
     -- ========================================================================
     -- SCENARIO A: No category context (Items Library - base item only)
@@ -31373,9 +29825,8 @@ BEGIN
         IF p_location_id IS NULL THEN
             -- UI L1: Update base item
             v_update_level := 1;
-            v_update_table := 'menu_items';
-
-            UPDATE menu_items
+v_update_table := 'menu_items';
+UPDATE menu_items
             SET
                 price = COALESCE(p_custom_price, price),
                 cash_price = COALESCE(p_custom_cash_price, cash_price),
@@ -31384,13 +29835,11 @@ BEGIN
                 delivery_price = COALESCE(p_custom_delivery_price, delivery_price),
                 updated_at = NOW()
             WHERE id = p_menu_item_id;
-
-        ELSE
+ELSE
             -- Location item override
             v_update_level := 2;
-            v_update_table := 'location_item_overrides';
-
-            v_is_empty := (
+v_update_table := 'location_item_overrides';
+v_is_empty := (
                 p_custom_price IS NULL AND
                 p_custom_cash_price IS NULL AND
                 p_custom_delivery_price IS NULL AND
@@ -31399,16 +29848,14 @@ BEGIN
                 p_stock_tracking_mode IS NULL AND
                 p_current_stock IS NULL
             );
-
-            IF v_is_empty THEN
+IF v_is_empty THEN
                 DELETE FROM location_item_overrides
                 WHERE location_id = p_location_id AND menu_item_id = p_menu_item_id;
-
-                RETURN json_build_object(
+RETURN json_build_object(
                     'success', true, 'action', 'deleted',
                     'level', v_update_level, 'table', v_update_table
                 );
-            ELSE
+ELSE
                 INSERT INTO location_item_overrides (
                     location_id, menu_item_id,
                     custom_price, custom_cash_price, custom_delivery_price,
@@ -31433,10 +29880,9 @@ BEGIN
                     stock_tracking_mode = COALESCE(EXCLUDED.stock_tracking_mode, location_item_overrides.stock_tracking_mode),
                     current_stock = COALESCE(EXCLUDED.current_stock, location_item_overrides.current_stock),
                     updated_at = NOW();
-            END IF;
-        END IF;
-
-    -- ========================================================================
+END IF;
+END IF;
+-- ========================================================================
     -- SCENARIO B: Category context
     -- ========================================================================
     ELSE
@@ -31444,9 +29890,8 @@ BEGIN
         IF p_location_id IS NULL AND p_menu_id IS NULL THEN
             -- UI L2: Global category price (category_items WHERE menu_id IS NULL)
             v_update_level := 3;
-            v_update_table := 'category_items';
-
-            UPDATE category_items
+v_update_table := 'category_items';
+UPDATE category_items
             SET
                 custom_price = p_custom_price,
                 custom_cash_price = p_custom_cash_price,
@@ -31458,34 +29903,29 @@ BEGIN
             WHERE category_id = p_category_id
               AND menu_item_id = p_menu_item_id
               AND menu_id IS NULL;
-
-        ELSIF p_location_id IS NULL AND p_menu_id IS NOT NULL THEN
+ELSIF p_location_id IS NULL AND p_menu_id IS NOT NULL THEN
             -- UI L4: Global menu category price (category_items WHERE menu_id = p_menu_id)
             -- Separate row from L2 — does not affect global category price.
             v_update_level := 4;
-            v_update_table := 'category_items';
-
-            v_is_empty := (
+v_update_table := 'category_items';
+v_is_empty := (
                 p_custom_price IS NULL AND
                 p_custom_cash_price IS NULL AND
                 p_custom_delivery_price IS NULL
             );
-
-            IF v_is_empty THEN
+IF v_is_empty THEN
                 DELETE FROM category_items
                 WHERE category_id = p_category_id
                   AND menu_item_id = p_menu_item_id
                   AND menu_id = p_menu_id;
-
-                RETURN json_build_object(
+RETURN json_build_object(
                     'success', true, 'action', 'deleted',
                     'level', v_update_level, 'table', v_update_table
                 );
-            ELSE
+ELSE
                 SELECT merchant_id INTO v_merchant_id
                 FROM menu_items WHERE id = p_menu_item_id;
-
-                INSERT INTO category_items (
+INSERT INTO category_items (
                     menu_item_id, category_id, menu_id, merchant_id,
                     custom_price, custom_cash_price, custom_delivery_price,
                     is_available, display_order, is_featured,
@@ -31507,14 +29947,13 @@ BEGIN
                     display_order = COALESCE(EXCLUDED.display_order, category_items.display_order),
                     is_featured = COALESCE(EXCLUDED.is_featured, category_items.is_featured),
                     updated_at = NOW();
-            END IF;
-
-        ELSIF p_location_id IS NOT NULL AND p_menu_id IS NULL THEN
+END IF;
+ELSIF p_location_id IS NOT NULL AND p_menu_id IS NULL THEN
             -- UI L3: Branch category price (location_category_item_overrides)
-            v_update_level := 4; -- old internal numbering kept for audit logs
+            v_update_level := 4;
+-- old internal numbering kept for audit logs
             v_update_table := 'location_category_item_overrides';
-
-            v_is_empty := (
+v_is_empty := (
                 p_custom_price IS NULL AND
                 p_custom_cash_price IS NULL AND
                 p_custom_delivery_price IS NULL AND
@@ -31522,18 +29961,16 @@ BEGIN
                 p_display_order IS NULL AND
                 p_is_featured IS NULL
             );
-
-            IF v_is_empty THEN
+IF v_is_empty THEN
                 DELETE FROM location_category_item_overrides
                 WHERE location_id = p_location_id
                   AND category_id = p_category_id
                   AND menu_item_id = p_menu_item_id;
-
-                RETURN json_build_object(
+RETURN json_build_object(
                     'success', true, 'action', 'deleted',
                     'level', v_update_level, 'table', v_update_table
                 );
-            ELSE
+ELSE
                 INSERT INTO location_category_item_overrides (
                     location_id, category_id, menu_item_id,
                     custom_price, custom_cash_price, custom_delivery_price, is_available,
@@ -31554,41 +29991,35 @@ BEGIN
                     display_order = EXCLUDED.display_order,
                     is_featured = EXCLUDED.is_featured,
                     updated_at = NOW();
-            END IF;
-
-        ELSIF p_location_id IS NOT NULL AND p_menu_id IS NOT NULL THEN
+END IF;
+ELSIF p_location_id IS NOT NULL AND p_menu_id IS NOT NULL THEN
             -- UI L5: Branch menu category price (location_menu_item_overrides)
             v_update_level := 5;
-            v_update_table := 'location_menu_item_overrides';
-
-            SELECT location_id INTO v_menu_location_id FROM menus WHERE id = p_menu_id;
-
-            IF v_menu_location_id IS NOT NULL THEN
+v_update_table := 'location_menu_item_overrides';
+SELECT location_id INTO v_menu_location_id FROM menus WHERE id = p_menu_id;
+IF v_menu_location_id IS NOT NULL THEN
                 RETURN json_build_object(
                     'success', false,
                     'error', 'Use category_items for location-owned menus'
                 );
-            END IF;
-
-            v_is_empty := (
+END IF;
+v_is_empty := (
                 p_custom_price IS NULL AND
                 p_custom_cash_price IS NULL AND
                 p_custom_delivery_price IS NULL AND
                 (p_is_available IS NULL OR p_is_available = true)
             );
-
-            IF v_is_empty THEN
+IF v_is_empty THEN
                 DELETE FROM location_menu_item_overrides
                 WHERE location_id = p_location_id
                   AND menu_id = p_menu_id
                   AND category_id = p_category_id
                   AND menu_item_id = p_menu_item_id;
-
-                RETURN json_build_object(
+RETURN json_build_object(
                     'success', true, 'action', 'deleted',
                     'level', v_update_level, 'table', v_update_table
                 );
-            ELSE
+ELSE
                 INSERT INTO location_menu_item_overrides (
                     location_id, menu_id, category_id, menu_item_id,
                     custom_price, custom_cash_price, custom_delivery_price, is_available,
@@ -31605,11 +30036,10 @@ BEGIN
                     custom_delivery_price = EXCLUDED.custom_delivery_price,
                     is_available = EXCLUDED.is_available,
                     updated_at = NOW();
-            END IF;
-        END IF;
-    END IF;
-
-    RETURN json_build_object(
+END IF;
+END IF;
+END IF;
+RETURN json_build_object(
         'success', true,
         'action', 'upserted',
         'level', v_update_level,
@@ -31632,10 +30062,10 @@ CREATE OR REPLACE FUNCTION "public"."upsert_item_override"("p_menu_item_id" "uui
     AS $$
 DECLARE
     v_menu_location_id UUID;
-    v_menu_is_global BOOLEAN;
-    v_update_level INTEGER;
-    v_update_table TEXT;
-    v_is_empty BOOLEAN;
+v_menu_is_global BOOLEAN;
+v_update_level INTEGER;
+v_update_table TEXT;
+v_is_empty BOOLEAN;
 BEGIN
     -- ========================================================================
     -- SCENARIO A: No menu context (Items Library view)
@@ -31647,9 +30077,8 @@ BEGIN
             -- LEVEL 1: Merchant admin editing global item base
             -- ────────────────────────────────────────────────────────────────
             v_update_level := 1;
-            v_update_table := 'menu_items';
-            
-            UPDATE menu_items
+v_update_table := 'menu_items';
+UPDATE menu_items
             SET 
                 price = COALESCE(p_custom_price, price),
                 cash_price = COALESCE(p_custom_cash_price, cash_price),
@@ -31657,16 +30086,14 @@ BEGIN
                 stock_tracking_mode = COALESCE(p_stock_tracking_mode, stock_tracking_mode),
                 updated_at = NOW()
             WHERE id = p_menu_item_id;
-            
-        ELSE
+ELSE
             -- ────────────────────────────────────────────────────────────────
             -- LEVEL 2: Location manager editing location item base
             -- (This is what your screenshot shows!)
             -- ────────────────────────────────────────────────────────────────
             v_update_level := 2;
-            v_update_table := 'location_item_overrides';
-            
-            -- Check if all values would be empty/default
+v_update_table := 'location_item_overrides';
+-- Check if all values would be empty/default
             v_is_empty := (
                 p_custom_price IS NULL AND 
                 p_custom_cash_price IS NULL AND 
@@ -31675,20 +30102,18 @@ BEGIN
                 p_stock_tracking_mode IS NULL AND
                 p_current_stock IS NULL
             );
-            
-            IF v_is_empty THEN
+IF v_is_empty THEN
                 -- Delete override (reset to global base)
                 DELETE FROM location_item_overrides
                 WHERE location_id = p_location_id AND menu_item_id = p_menu_item_id;
-                
-                RETURN json_build_object(
+RETURN json_build_object(
                     'success', true,
                     'action', 'deleted',
                     'level', v_update_level,
                     'table', v_update_table,
                     'message', 'Location override removed - using global base price'
                 );
-            ELSE
+ELSE
                 -- Upsert the location item override
                 INSERT INTO location_item_overrides (
                     location_id, menu_item_id,
@@ -31715,10 +30140,9 @@ BEGIN
                     stock_tracking_mode = COALESCE(EXCLUDED.stock_tracking_mode, location_item_overrides.stock_tracking_mode),
                     current_stock = COALESCE(EXCLUDED.current_stock, location_item_overrides.current_stock),
                     updated_at = NOW();
-            END IF;
-        END IF;
-        
-    -- ========================================================================
+END IF;
+END IF;
+-- ========================================================================
     -- SCENARIO B: Menu context (viewing/editing within a menu)
     -- ========================================================================
     ELSE
@@ -31726,72 +30150,63 @@ BEGIN
         SELECT location_id, (location_id IS NULL)
         INTO v_menu_location_id, v_menu_is_global
         FROM menus WHERE id = p_menu_id;
-        
-        IF p_location_id IS NULL THEN
+IF p_location_id IS NULL THEN
             -- ────────────────────────────────────────────────────────────────
             -- LEVEL 3: Merchant admin editing global menu price
             -- ────────────────────────────────────────────────────────────────
             v_update_level := 3;
-            v_update_table := 'menu_item_menus';
-            
-            UPDATE menu_item_menus
+v_update_table := 'menu_item_menus';
+UPDATE menu_item_menus
             SET 
                 custom_price = p_custom_price,
                 custom_cash_price = p_custom_cash_price,
                 is_available = COALESCE(p_is_available, is_available),
                 updated_at = NOW()
             WHERE menu_id = p_menu_id AND menu_item_id = p_menu_item_id;
-            
-        ELSIF NOT v_menu_is_global THEN
+ELSIF NOT v_menu_is_global THEN
             -- ────────────────────────────────────────────────────────────────
             -- LEVEL 5: Location's own menu
             -- ────────────────────────────────────────────────────────────────
             v_update_level := 5;
-            v_update_table := 'menu_item_menus';
-            
-            -- Verify ownership
+v_update_table := 'menu_item_menus';
+-- Verify ownership
             IF v_menu_location_id != p_location_id THEN
                 RETURN json_build_object(
                     'success', false,
                     'error', 'Menu does not belong to this location'
                 );
-            END IF;
-            
-            UPDATE menu_item_menus
+END IF;
+UPDATE menu_item_menus
             SET 
                 custom_price = p_custom_price,
                 custom_cash_price = p_custom_cash_price,
                 is_available = COALESCE(p_is_available, is_available),
                 updated_at = NOW()
             WHERE menu_id = p_menu_id AND menu_item_id = p_menu_item_id;
-            
-        ELSE
+ELSE
             -- ────────────────────────────────────────────────────────────────
             -- LEVEL 4: Location + Global Menu override
             -- ────────────────────────────────────────────────────────────────
             v_update_level := 4;
-            v_update_table := 'location_menu_item_overrides';
-            
-            v_is_empty := (
+v_update_table := 'location_menu_item_overrides';
+v_is_empty := (
                 p_custom_price IS NULL AND 
                 p_custom_cash_price IS NULL AND 
                 (p_is_available IS NULL OR p_is_available = true)
             );
-            
-            IF v_is_empty THEN
+IF v_is_empty THEN
                 DELETE FROM location_menu_item_overrides
                 WHERE location_id = p_location_id 
                   AND menu_id = p_menu_id 
                   AND menu_item_id = p_menu_item_id;
-                  
-                RETURN json_build_object(
+RETURN json_build_object(
                     'success', true,
                     'action', 'deleted',
                     'level', v_update_level,
                     'table', v_update_table,
                     'message', 'Override removed - using menu/location base price'
                 );
-            ELSE
+ELSE
                 INSERT INTO location_menu_item_overrides (
                     location_id, menu_id, menu_item_id,
                     custom_price, custom_cash_price, is_available,
@@ -31807,11 +30222,10 @@ BEGIN
                     custom_cash_price = EXCLUDED.custom_cash_price,
                     is_available = EXCLUDED.is_available,
                     updated_at = NOW();
-            END IF;
-        END IF;
-    END IF;
-
-    -- Return result
+END IF;
+END IF;
+END IF;
+-- Return result
     RETURN json_build_object(
         'success', true,
         'action', 'upserted',
@@ -31847,8 +30261,7 @@ BEGIN
         notes = COALESCE(EXCLUDED.notes, location_inventory_overrides.notes),
         updated_at = NOW()
     RETURNING id INTO v_id;
-    
-    RETURN jsonb_build_object('id', v_id, 'success', true);
+RETURN jsonb_build_object('id', v_id, 'success', true);
 END;
 $$;
 
@@ -31862,81 +30275,71 @@ CREATE OR REPLACE FUNCTION "public"."upsert_location_payment_device"("p_location
     AS $$
 declare
   v_merchant_id uuid;
-  v_carrier_id uuid;
-  v_device_id uuid;
-  v_existing_secret_id uuid;
-  v_secret_id uuid;
-  v_secret_name text;
-  v_trimmed_tpn text := nullif(trim(p_tpn), '');
-  v_trimmed_ftd_key text := nullif(trim(coalesce(p_ftd_ecom_key, '')), '');
+v_carrier_id uuid;
+v_device_id uuid;
+v_existing_secret_id uuid;
+v_secret_id uuid;
+v_secret_name text;
+v_trimmed_tpn text := nullif(trim(p_tpn), '');
+v_trimmed_ftd_key text := nullif(trim(coalesce(p_ftd_ecom_key, '')), '');
 begin
   select l.merchant_id, m.carrier_id
   into v_merchant_id, v_carrier_id
   from public.locations l
   join public.merchants m on m.id = l.merchant_id
   where l.id = p_location_id;
-
-  if v_merchant_id is null then
+if v_merchant_id is null then
     raise exception 'Location % not found', p_location_id
       using errcode = '42501';
-  end if;
-
-  if not (
+end if;
+if not (
     public.is_dexapos_admin()
     or public.is_merchant_admin(v_merchant_id)
     or v_carrier_id = public.get_my_carrier_id()
   ) then
     raise exception 'Unauthorized: no access to location %', p_location_id
       using errcode = '42501';
-  end if;
-
-  if v_trimmed_tpn is null then
+end if;
+if v_trimmed_tpn is null then
     raise exception 'TPN is required' using errcode = '22023';
-  end if;
-
-  select lpd.id, lpd.ftd_ecom_key_secret_id
+end if;
+select lpd.id, lpd.ftd_ecom_key_secret_id
   into v_device_id, v_existing_secret_id
   from public.location_payment_devices lpd
   where lpd.location_id = p_location_id
     and lpd.tpn = v_trimmed_tpn
   limit 1;
-
-  v_secret_name := format('dejavoo_ftd:%s:%s', p_location_id, v_trimmed_tpn);
-
-  if v_existing_secret_id is not null then
+v_secret_name := format('dejavoo_ftd:%s:%s', p_location_id, v_trimmed_tpn);
+if v_existing_secret_id is not null then
     v_secret_id := v_existing_secret_id;
-  else
+else
     select id
     into v_secret_id
     from vault.secrets
     where name = v_secret_name
     limit 1;
-  end if;
-
-  if v_secret_id is null and v_trimmed_ftd_key is null then
+end if;
+if v_secret_id is null and v_trimmed_ftd_key is null then
     raise exception 'FTD Ecom/TOP key is required for a new online-ordering payment device'
       using errcode = '22023';
-  end if;
-
-  if v_secret_id is null then
+end if;
+if v_secret_id is null then
     v_secret_id := vault.create_secret(
       v_trimmed_ftd_key,
       v_secret_name,
       'Dejavoo FTD Ecom/TOP key for location ' || p_location_id
     );
-  elsif v_trimmed_ftd_key is not null then
+elsif v_trimmed_ftd_key is not null then
     perform vault.update_secret(v_secret_id, v_trimmed_ftd_key);
-  end if;
-
-  if p_use_for_online_ordering then
+end if;
+if p_use_for_online_ordering then
     update public.location_payment_devices
     set use_for_online_ordering = false
     where location_id = p_location_id
       and use_for_online_ordering = true
       and tpn <> v_trimmed_tpn;
-  end if;
-
-  insert into public.location_payment_devices (
+end if;
+insert into public.location_payment_devices (
     merchant_id,
     carrier_id,
     location_id,
@@ -31968,15 +30371,13 @@ begin
         use_for_online_ordering = excluded.use_for_online_ordering,
         updated_at = now()
   returning id into v_device_id;
-
-  if p_use_for_online_ordering then
+if p_use_for_online_ordering then
     update public.online_store_config
     set ipospays_tpn = v_trimmed_tpn,
         updated_at = now()
     where location_id = p_location_id;
-  end if;
-
-  return v_device_id;
+end if;
+return v_device_id;
 end;
 $$;
 
@@ -31990,32 +30391,26 @@ CREATE OR REPLACE FUNCTION "public"."upsert_menu_item_with_recipe"("p_menu_item_
     AS $$
 DECLARE
     v_merchant_id UUID;
-    v_items       JSONB;
-    v_item        JSONB;
+v_items       JSONB;
+v_item        JSONB;
 BEGIN
     SELECT merchant_id INTO v_merchant_id
     FROM menu_items
     WHERE id = p_menu_item_id;
-
-    IF v_merchant_id IS NULL THEN
+IF v_merchant_id IS NULL THEN
         RAISE EXCEPTION 'Menu item % not found', p_menu_item_id;
-    END IF;
-
-    -- Authorization: verify the caller owns this merchant
+END IF;
+-- Authorization: verify the caller owns this merchant
     PERFORM public.authorize_merchant_access(v_merchant_id);
-
-    -- p_recipe_items takes precedence over p_ingredients
+-- p_recipe_items takes precedence over p_ingredients
     v_items := COALESCE(p_recipe_items, p_ingredients);
-
-    IF v_items IS NULL THEN
+IF v_items IS NULL THEN
         RETURN;
-    END IF;
-
-    DELETE FROM menu_item_recipes
+END IF;
+DELETE FROM menu_item_recipes
     WHERE menu_item_id = p_menu_item_id
       AND merchant_id  = v_merchant_id;
-
-    FOR v_item IN SELECT * FROM jsonb_array_elements(v_items)
+FOR v_item IN SELECT * FROM jsonb_array_elements(v_items)
     LOOP
         INSERT INTO menu_item_recipes (
             menu_item_id,
@@ -32036,7 +30431,7 @@ BEGIN
             ),
             COALESCE((v_item->>'quantity_multiplier')::NUMERIC, 1)
         );
-    END LOOP;
+END LOOP;
 END;
 $$;
 
@@ -32054,23 +30449,20 @@ CREATE OR REPLACE FUNCTION "public"."upsert_modifier_item_with_recipe"("p_modifi
     AS $$
 DECLARE
     v_merchant_id UUID;
-    item jsonb;
+item jsonb;
 BEGIN
     IF p_modifier_item_id IS NULL THEN
         RAISE EXCEPTION 'Modifier Item ID is required';
-    END IF;
-
-    -- Get merchant_id from the modifier item (via group)
+END IF;
+-- Get merchant_id from the modifier item (via group)
     SELECT mg.merchant_id INTO v_merchant_id
     FROM modifier_group_items mgi
     JOIN modifier_groups mg ON mgi.modifier_group_id = mg.id
     WHERE mgi.id = p_modifier_item_id;
-
-    -- Delete existing recipe lines
+-- Delete existing recipe lines
     DELETE FROM modifier_group_item_recipes 
     WHERE modifier_group_item_id = p_modifier_item_id;
-
-    -- Insert new lines
+-- Insert new lines
     IF p_recipe_items IS NOT NULL THEN
         FOR item IN SELECT * FROM jsonb_array_elements(p_recipe_items)
         LOOP
@@ -32085,8 +30477,8 @@ BEGIN
                 (item->>'quantity')::NUMERIC,
                 v_merchant_id
             );
-        END LOOP;
-    END IF;
+END LOOP;
+END IF;
 END;
 $$;
 
@@ -32104,8 +30496,7 @@ BEGIN
     -- 1. Get Merchant ID from the modifier item to ensure safety
     SELECT merchant_id INTO v_merchant_id
     FROM modifier_group_items WHERE id = p_modifier_item_id;
-
-    -- 2. Upsert
+-- 2. Upsert
     INSERT INTO location_modifier_item_overrides (
         location_id, modifier_group_item_id, merchant_id,
         price_modifier, is_active, 
@@ -32124,8 +30515,7 @@ BEGIN
         stock_tracking_mode = COALESCE(EXCLUDED.stock_tracking_mode, location_modifier_item_overrides.stock_tracking_mode),
         current_stock = COALESCE(EXCLUDED.current_stock, location_modifier_item_overrides.current_stock),
         updated_at = NOW();
-
-    RETURN json_build_object('success', true);
+RETURN json_build_object('success', true);
 END;
 $$;
 
@@ -32139,12 +30529,11 @@ CREATE OR REPLACE FUNCTION "public"."user_has_location_permission"("p_location_i
     AS $$
 DECLARE
     v_user_id TEXT;
-    v_merchant_id UUID;
-    v_role_code TEXT;
+v_merchant_id UUID;
+v_role_code TEXT;
 BEGIN
     v_user_id := current_user_id();
-    
-    -- Fast path: check location membership first (most common case)
+-- Fast path: check location membership first (most common case)
     SELECT lm.role_code, l.merchant_id 
     INTO v_role_code, v_merchant_id
     FROM location_members lm
@@ -32152,28 +30541,24 @@ BEGIN
     WHERE lm.user_id = v_user_id
       AND lm.location_id = p_location_id
       AND lm.is_active = true;
-    
-    -- If user is a location member, check their role's permissions
+-- If user is a location member, check their role's permissions
     IF v_role_code IS NOT NULL THEN
         RETURN EXISTS (
             SELECT 1 FROM role_permissions
             WHERE role_code = v_role_code
               AND permission_code = p_permission_code
         );
-    END IF;
-    
-    -- Fallback: get merchant_id and check if user is merchant admin
+END IF;
+-- Fallback: get merchant_id and check if user is merchant admin
     IF v_merchant_id IS NULL THEN
         SELECT merchant_id INTO v_merchant_id 
         FROM locations WHERE id = p_location_id;
-    END IF;
-    
-    -- Check if merchant admin (they have all location permissions)
+END IF;
+-- Check if merchant admin (they have all location permissions)
     IF is_merchant_admin(v_merchant_id) THEN
         RETURN true;
-    END IF;
-    
-    RETURN false;
+END IF;
+RETURN false;
 END;
 $$;
 
@@ -32269,8 +30654,9 @@ CREATE OR REPLACE FUNCTION "public"."validate_payment_amount"("p_order_id" "uuid
     AS $$
 DECLARE
   v_correct_amount NUMERIC;
-  v_order RECORD;
-  v_tolerance NUMERIC := 0.02; -- 2 cents tolerance for rounding
+v_order RECORD;
+v_tolerance NUMERIC := 0.02;
+-- 2 cents tolerance for rounding
 BEGIN
   -- Get fresh order totals
   SELECT 
@@ -32283,16 +30669,14 @@ BEGIN
   INTO v_order
   FROM orders o
   WHERE o.id = p_order_id;
-  
-  IF NOT FOUND THEN
+IF NOT FOUND THEN
     RETURN jsonb_build_object(
       'valid', false,
       'error', 'Order not found',
       'correct_amount', 0
     );
-  END IF;
-  
-  -- Calculate correct amount
+END IF;
+-- Calculate correct amount
   IF p_item_allocations IS NOT NULL THEN
     -- Split by item - calculate from allocations
     SELECT COALESCE(SUM(
@@ -32320,20 +30704,18 @@ BEGIN
       ON oi.id = (alloc->>'item_id')::UUID
     WHERE oi.order_id = p_order_id
     AND NOT oi.is_voided;
-  ELSE
+ELSE
     -- Full or split even - use outstanding
     v_correct_amount := v_order.outstanding;
-  END IF;
-  
-  v_correct_amount := ROUND(v_correct_amount, 2);
-  
-  -- Check if amounts match within tolerance
+END IF;
+v_correct_amount := ROUND(v_correct_amount, 2);
+-- Check if amounts match within tolerance
   IF ABS(p_expected_amount - v_correct_amount) <= v_tolerance THEN
     RETURN jsonb_build_object(
       'valid', true,
       'correct_amount', v_correct_amount
     );
-  ELSE
+ELSE
     RETURN jsonb_build_object(
       'valid', false,
       'correct_amount', v_correct_amount,
@@ -32341,7 +30723,7 @@ BEGIN
       'discrepancy', ROUND(p_expected_amount - v_correct_amount, 2),
       'error', 'Amount mismatch - order may have been modified'
     );
-  END IF;
+END IF;
 END;
 $$;
 
@@ -32484,8 +30866,8 @@ CREATE OR REPLACE FUNCTION "public"."void_order_and_cancel_reservation"("p_order
     AS $$
 DECLARE
   v_void_result JSONB;
-  v_cancelled_count INTEGER := 0;
-  v_session_ids UUID[];
+v_cancelled_count INTEGER := 0;
+v_session_ids UUID[];
 BEGIN
   -- Snapshot linked session IDs before void_order in case underlying logic
   -- clears/relinks table_sessions.order_id during close.
@@ -32493,22 +30875,19 @@ BEGIN
   INTO v_session_ids
   FROM public.table_sessions ts
   WHERE ts.order_id = p_order_id;
-
-  -- Reuse existing void logic unchanged.
+-- Reuse existing void logic unchanged.
   v_void_result := COALESCE(
     public.void_order(p_order_id, p_void_reason)::JSONB,
     '{}'::JSONB
   );
-
-  -- Fallback: if nothing was linked pre-void, try post-void linkage.
+-- Fallback: if nothing was linked pre-void, try post-void linkage.
   IF array_length(v_session_ids, 1) IS NULL THEN
     SELECT COALESCE(array_agg(ts.id), ARRAY[]::UUID[])
     INTO v_session_ids
     FROM public.table_sessions ts
     WHERE ts.order_id = p_order_id;
-  END IF;
-
-  -- Cancel seated reservation(s) linked to this order's table session(s).
+END IF;
+-- Cancel seated reservation(s) linked to this order's table session(s).
   UPDATE public.reservations r
   SET
     status = 'cancelled',
@@ -32516,10 +30895,8 @@ BEGIN
     cancellation_reason = COALESCE(r.cancellation_reason, p_void_reason)
   WHERE r.seated_session_id = ANY(v_session_ids)
     AND r.status = 'seated';
-
-  GET DIAGNOSTICS v_cancelled_count = ROW_COUNT;
-
-  RETURN (
+GET DIAGNOSTICS v_cancelled_count = ROW_COUNT;
+RETURN (
     v_void_result || jsonb_build_object(
       'reservation_cancelled_count', v_cancelled_count
     )
@@ -32540,21 +30917,19 @@ CREATE OR REPLACE FUNCTION "public"."void_order_item"("p_order_item_id" "uuid", 
     SET "search_path" TO 'public', 'public', 'pg_temp'
     AS $$DECLARE
   v_staff_id UUID;
-  v_user_id TEXT;
-  v_result JSON;
-  v_order_id UUID;
-  v_new_sync_version integer;
+v_user_id TEXT;
+v_result JSON;
+v_order_id UUID;
+v_new_sync_version integer;
 BEGIN
   -- Get current user
   v_user_id := get_my_claim('sub');
-  
-  -- Get staff_id if exists
+-- Get staff_id if exists
   SELECT id INTO v_staff_id
   FROM public.staff_profiles
   WHERE user_id = v_user_id
   LIMIT 1;
-  
-  -- -- Verify user has permission
+-- -- Verify user has permission
   -- IF NOT has_permission('location.orders.manage') THEN
   --   RAISE EXCEPTION 'Permission denied: location.orders.manage required';
   -- END IF;
@@ -32576,26 +30951,24 @@ BEGIN
         AND o.location_id = ANY(user_location_ids())
         AND o.status NOT IN ('completed', 'cancelled')
     )
-  RETURNING order_id INTO v_order_id; -- <--- ADD THIS LINE
+  RETURNING order_id INTO v_order_id;
+-- <--- ADD THIS LINE
   
   IF NOT FOUND THEN
     RAISE EXCEPTION 'Order item not found or cannot be voided';
-  END IF;
-
-  -- PERFORM calculate_order_totals_fast(v_order_id);
+END IF;
+-- PERFORM calculate_order_totals_fast(v_order_id);
     PERFORM recalculate_order_discount(v_order_id);
-   
-    v_new_sync_version := increment_order_sync_version(v_order_id);
-  
-  SELECT json_build_object(
+v_new_sync_version := increment_order_sync_version(v_order_id);
+SELECT json_build_object(
     'success', true,
     'order_item_id', p_order_item_id,
     'voided_at', NOW(),
     'sync_version', v_new_sync_version
   ) INTO v_result;
-  
-  RETURN v_result;
-END;$$;
+RETURN v_result;
+END;
+$$;
 
 
 ALTER FUNCTION "public"."void_order_item"("p_order_item_id" "uuid", "p_void_reason" "text") OWNER TO "postgres";
@@ -32610,9 +30983,9 @@ CREATE OR REPLACE FUNCTION "public"."void_payment"("p_payment_id" "uuid", "p_voi
     AS $$
 DECLARE
   v_payment       record;
-  v_order_id      uuid;
-  v_voided_amount numeric;
-  v_item          record;
+v_order_id      uuid;
+v_voided_amount numeric;
+v_item          record;
 BEGIN
   -- ── 1. Authorization guard ────────────────────────────────────────────────
   SELECT op.*, o.id AS o_order_id
@@ -32622,29 +30995,25 @@ BEGIN
   WHERE  op.id         = p_payment_id
     AND  o.merchant_id = user_merchant_id()
     AND  o.location_id = ANY(user_location_ids());
-
-  IF NOT FOUND THEN
+IF NOT FOUND THEN
     RAISE EXCEPTION 'Payment not found or access denied';
-  END IF;
-
-  -- Idempotent: already voided — return cleanly
-  IF v_payment.is_voided IS TRUE THEN RETURN; END IF;
-
-  v_order_id      := v_payment.order_id;
-  -- Include tip in voided amount to match how voidPayment() store code
+END IF;
+-- Idempotent: already voided — return cleanly
+  IF v_payment.is_voided IS TRUE THEN RETURN;
+END IF;
+v_order_id      := v_payment.order_id;
+-- Include tip in voided amount to match how voidPayment() store code
   -- sums amount + tip_amount into amount_paid
   v_voided_amount := COALESCE(v_payment.amount, 0)
                    + COALESCE(v_payment.tip_amount, 0);
-
-  -- ── 2. Mark payment voided ────────────────────────────────────────────────
+-- ── 2. Mark payment voided ────────────────────────────────────────────────
   UPDATE public.order_payments
   SET    is_voided   = true,
          status      = 'void'::payment_status,
          voided_at   = now(),
          void_reason = p_void_reason
   WHERE  id = p_payment_id;
-
-  -- ── 3a. Restore paid_quantity — precise path via order_payment_items ──────
+-- ── 3a. Restore paid_quantity — precise path via order_payment_items ──────
   -- Decrement by the exact quantity_paid recorded at payment time.
   -- GREATEST(..., 0) prevents negative quantities from data anomalies.
   -- UPDATE ... FROM JOIN: zero rows updated = no-op when no junction records exist.
@@ -32654,8 +31023,7 @@ BEGIN
   FROM   public.order_payment_items opi
   WHERE  opi.order_payment_id = p_payment_id
     AND  opi.order_item_id    = oi.id;
-
-  -- ── 3b. Fallback: covers_items UUID array ────────────────────────────────
+-- ── 3b. Fallback: covers_items UUID array ────────────────────────────────
   -- Only activates for payments with no order_payment_items rows
   -- (legacy split-even payments inserted before the junction table existed).
   IF NOT EXISTS (
@@ -32666,21 +31034,18 @@ BEGIN
       UPDATE public.order_items
       SET    paid_quantity = GREATEST(COALESCE(paid_quantity, 0) - 1, 0)
       WHERE  id = v_item.item_id::uuid;
-    END LOOP;
-  END IF;
-
-  -- ── 4. Update orders.amount_paid ──────────────────────────────────────────
+END LOOP;
+END IF;
+-- ── 4. Update orders.amount_paid ──────────────────────────────────────────
   UPDATE public.orders
   SET    amount_paid = GREATEST(COALESCE(amount_paid, 0) - v_voided_amount, 0)
   WHERE  id = v_order_id;
-
-  -- ── 5. Recalculate totals via the authoritative fast totals function ───────
+-- ── 5. Recalculate totals via the authoritative fast totals function ───────
   -- After setting is_voided=true the payment appears in v_payment_voided inside
   -- calculate_order_totals_fast, which disables the fully-paid guard and allows
   -- amount_due to correctly reflect the restored unpaid balance.
   PERFORM calculate_order_totals_fast(v_order_id);
-
-  -- ── 6. Update payment_status ──────────────────────────────────────────────
+-- ── 6. Update payment_status ──────────────────────────────────────────────
   UPDATE public.orders
   SET    payment_status =
            CASE
@@ -32691,7 +31056,6 @@ BEGIN
              ELSE 'pending'::payment_status
            END
   WHERE  id = v_order_id;
-
 END;
 $$;
 
@@ -32711,16 +31075,13 @@ BEGIN
   INTO v_payment
   FROM order_payments
   WHERE id = p_payment_id;
-
-  IF NOT FOUND THEN
+IF NOT FOUND THEN
     RETURN jsonb_build_object('success', false, 'error', 'Payment not found');
-  END IF;
-
-  IF v_payment.status <> 'authorized' THEN
+END IF;
+IF v_payment.status <> 'authorized' THEN
     RETURN jsonb_build_object('success', false, 'error', 'Payment is not in authorized status');
-  END IF;
-
-  -- Void the payment
+END IF;
+-- Void the payment
   UPDATE order_payments
   SET
     status = 'void',
@@ -32729,8 +31090,7 @@ BEGIN
     void_reason = p_reason,
     voided_by = p_staff_id
   WHERE id = p_payment_id;
-
-  RETURN jsonb_build_object(
+RETURN jsonb_build_object(
     'success', true,
     'payment_id', p_payment_id
   );
@@ -50217,35 +48577,4 @@ ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON FUN
 ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TABLES TO "postgres";
 ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TABLES TO "anon";
 ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TABLES TO "authenticated";
-ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TABLES TO "service_role";
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TABLES TO "service_role";;

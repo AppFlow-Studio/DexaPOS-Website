@@ -69,4 +69,4 @@ CREATE INDEX IF NOT EXISTS idx_cash_drawer_ops_session_type
   ON cash_drawer_operations (session_id, operation_type);
 
 CREATE INDEX IF NOT EXISTS idx_cash_drawer_ops_session_time
-  ON cash_drawer_operations (session_id, performed_at);
+  ON cash_drawer_operations (session_id, performed_at);;

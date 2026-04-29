@@ -16,7 +16,6 @@ ALTER FUNCTION public.get_categories_for_location(uuid, uuid)
   SET search_path = public;
 ALTER FUNCTION public.reset_category_item_to_level(uuid, uuid, uuid, uuid, integer)
   SET search_path = public;
-
 -- Orders / order items
 ALTER FUNCTION public.add_order_item_v2(
   uuid, uuid, integer, numeric, numeric, text, text, uuid, uuid, text,
@@ -30,7 +29,6 @@ ALTER FUNCTION public.ensure_course_exists(uuid, integer)
   SET search_path = public;
 ALTER FUNCTION public.broadcast_order_changes()
   SET search_path = public;
-
 -- Payments / refunds
 ALTER FUNCTION public.process_payment_v8(
   uuid, text, numeric, numeric, numeric, jsonb, uuid, jsonb,
@@ -48,7 +46,6 @@ ALTER FUNCTION public.record_refund_items(uuid, jsonb)
   SET search_path = public;
 ALTER FUNCTION public.record_refund_items(uuid, jsonb, boolean)
   SET search_path = public;
-
 -- Cash drawer / EOD
 ALTER FUNCTION public.record_cash_operation(
   uuid, uuid, text, numeric, uuid, uuid, uuid, text, uuid
@@ -57,13 +54,10 @@ ALTER FUNCTION public.get_eod_cash_summary(uuid, date)
   SET search_path = public;
 ALTER FUNCTION public.get_session_variance_analysis(uuid)
   SET search_path = public;
-
 -- KDS
 ALTER FUNCTION public.get_kds_tickets_v2(uuid, text[], uuid)
   SET search_path = public;
-
 -- RLS helper (used inside policies — could silently break access checks)
 ALTER FUNCTION public.user_belongs_to_merchant(uuid)
   SET search_path = public;
-
 NOTIFY pgrst, 'reload schema';

@@ -15,17 +15,14 @@
 
 ALTER TABLE public.merchants
   ADD COLUMN IF NOT EXISTS external_merchant_id text;
-
 COMMENT ON COLUMN public.merchants.external_merchant_id IS
   'Dejavoo/iPOSpays-supplied merchantId (12-char alphanumeric). One per merchant. '
   'Required for the /v2/merchant/add-on whitelist-domain call. '
   'Distinct from public.merchants.id (UUID) and public.merchants.clerk_org_id.';
-
 -- 12-char alphanumeric per the docs example ("merchId-12-chars").
 -- Nullable so existing rows are unaffected; HQ populates per-merchant via UI.
 ALTER TABLE public.merchants
   DROP CONSTRAINT IF EXISTS merchants_external_merchant_id_format;
-
 ALTER TABLE public.merchants
   ADD CONSTRAINT merchants_external_merchant_id_format
   CHECK (

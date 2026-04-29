@@ -36,7 +36,6 @@
 -- =============================================================================
 
 BEGIN;
-
 -- =============================================================================
 -- CHUNK 1 — Type conversion in employee_daily_tips
 -- -----------------------------------------------------------------------------
@@ -55,7 +54,6 @@ ALTER TABLE public.employee_daily_tips
   ALTER COLUMN tip_out_received     TYPE NUMERIC(12,2) USING tip_out_received::numeric,
   ALTER COLUMN total_tips           TYPE NUMERIC(12,2) USING total_tips::numeric,
   ALTER COLUMN gross_sales          TYPE NUMERIC(12,2) USING gross_sales::numeric;
-
 -- Set clean defaults to 0.00 instead of 0 for the now-numeric columns
 ALTER TABLE public.employee_daily_tips
   ALTER COLUMN cash_tips_declared   SET DEFAULT 0.00,
@@ -64,8 +62,6 @@ ALTER TABLE public.employee_daily_tips
   ALTER COLUMN tip_pool_contributed SET DEFAULT 0.00,
   ALTER COLUMN tip_out_given        SET DEFAULT 0.00,
   ALTER COLUMN tip_out_received     SET DEFAULT 0.00;
-
-
 -- =============================================================================
 -- CHUNK 2 — Attribution plumbing
 -- -----------------------------------------------------------------------------
@@ -80,11 +76,9 @@ ALTER TABLE public.employee_daily_tips
 ALTER TABLE public.staff_shifts
   ADD COLUMN IF NOT EXISTS declared_cash_tips NUMERIC(10,2) NOT NULL DEFAULT 0.00,
   ADD COLUMN IF NOT EXISTS tips_declared_at   TIMESTAMPTZ;
-
 COMMENT ON COLUMN public.staff_shifts.declared_cash_tips IS
   'Cash tips declared by the employee at clock-out. Summed into '
   'employee_daily_tips.cash_tips_declared per shift date.';
-
 -- -----------------------------------------------------------------------------
 -- 2b: rebuild_employee_daily_tips
 --     Recomputes employee_daily_tips rows for a given location + shift_date
@@ -195,13 +189,11 @@ BEGIN
   RETURN v_rows;
 END;
 $$;
-
 COMMENT ON FUNCTION public.rebuild_employee_daily_tips IS
   'Recomputes daily tip rollups from orders/payments/staff_shifts for a given '
   'location and date. Idempotent. Skips rows where is_verified=true. Called '
   'automatically by calculate_tip_distribution_v2 and manually by the manager '
   'reconciliation screen.';
-
 -- -----------------------------------------------------------------------------
 -- 2c: declare_cash_tips_for_shift
 --     Called from the clock-out modal. Staff can only set their own shift;
@@ -276,7 +268,6 @@ BEGIN
   );
 END;
 $$;
-
 -- -----------------------------------------------------------------------------
 -- 2d: upsert_employee_daily_tips_override
 --     Manager-facing manual edit. Any non-null param overrides the computed
@@ -343,7 +334,6 @@ BEGIN
   RETURN json_build_object('success', true, 'id', v_row_id);
 END;
 $$;
-
 -- -----------------------------------------------------------------------------
 -- 2e: verify_employee_daily_tips
 --     Manager lock-in. Sets is_verified=true, records verifier + timestamp.
@@ -381,8 +371,6 @@ BEGIN
   RETURN json_build_object('success', true);
 END;
 $$;
-
-
 -- =============================================================================
 -- CHUNK 3 — Pool configuration hardening
 -- -----------------------------------------------------------------------------
@@ -395,15 +383,12 @@ $$;
 -- 3a: Ordering for multi-pool evaluation
 ALTER TABLE public.tip_pool_configs
   ADD COLUMN IF NOT EXISTS priority INTEGER NOT NULL DEFAULT 100;
-
 COMMENT ON COLUMN public.tip_pool_configs.priority IS
   'Evaluation order when multiple pools exist for the same location. '
   'Lower values run first. Ties broken by created_at.';
-
 -- 3d (Chunk 8): Policy interval — reserve column, enforce full_workday only in v1.1
 ALTER TABLE public.tip_pool_configs
   ADD COLUMN IF NOT EXISTS policy_interval TEXT NOT NULL DEFAULT 'full_workday';
-
 DO $$
 BEGIN
   IF NOT EXISTS (
@@ -415,12 +400,10 @@ BEGIN
       CHECK (policy_interval IN ('full_workday', 'by_shift', 'order'));
   END IF;
 END $$;
-
 COMMENT ON COLUMN public.tip_pool_configs.policy_interval IS
   'Aggregation window for the pool. v1.1 only supports full_workday. '
   'by_shift requires shift_windows table (v1.2). order requires per-check '
   'calculation (v1.3).';
-
 -- -----------------------------------------------------------------------------
 -- 3b: Share-percentage sum validation (deferrable constraint trigger)
 --     FOR EACH ROW with DEFERRABLE INITIALLY DEFERRED: runs at COMMIT so
@@ -465,15 +448,12 @@ BEGIN
   RETURN COALESCE(NEW, OLD);
 END;
 $$;
-
 DROP TRIGGER IF EXISTS trg_validate_pool_share_sum ON public.tip_pool_role_shares;
-
 CREATE CONSTRAINT TRIGGER trg_validate_pool_share_sum
   AFTER INSERT OR UPDATE OR DELETE ON public.tip_pool_role_shares
   DEFERRABLE INITIALLY DEFERRED
   FOR EACH ROW
   EXECUTE FUNCTION public.validate_pool_share_sum();
-
 -- -----------------------------------------------------------------------------
 -- 3c: validate_tip_pool_config — pre-save UI validator
 --     Returns { valid: bool, issues: [{code, message, severity}] }
@@ -613,8 +593,6 @@ BEGIN
   );
 END;
 $$;
-
-
 -- =============================================================================
 -- CHUNK 4 — Tip-out reciprocity guard
 -- -----------------------------------------------------------------------------
@@ -646,15 +624,11 @@ BEGIN
   RETURN NEW;
 END;
 $$;
-
 DROP TRIGGER IF EXISTS trg_tip_out_no_reciprocity ON public.tip_out_rules;
-
 CREATE TRIGGER trg_tip_out_no_reciprocity
   BEFORE INSERT OR UPDATE ON public.tip_out_rules
   FOR EACH ROW
   EXECUTE FUNCTION public.enforce_tip_out_no_reciprocity();
-
-
 -- =============================================================================
 -- CHUNK 5 — Rewrite calculate_tip_distribution_v2
 -- -----------------------------------------------------------------------------
@@ -670,11 +644,9 @@ CREATE TRIGGER trg_tip_out_no_reciprocity
 -- 5c pre-req: new column to track clipped tip-out amounts
 ALTER TABLE public.tip_distribution_details
   ADD COLUMN IF NOT EXISTS tip_out_clipped NUMERIC(12,2) NOT NULL DEFAULT 0.00;
-
 COMMENT ON COLUMN public.tip_distribution_details.tip_out_clipped IS
   'Amount of tip_out_given that was clipped to prevent net_tips < 0. '
   'Surfaced to managers when reviewing a calculated session.';
-
 CREATE OR REPLACE FUNCTION public.calculate_tip_distribution_v2(
   p_merchant_id    UUID,
   p_location_id    UUID,
@@ -1155,8 +1127,6 @@ BEGIN
   );
 END;
 $$;
-
-
 -- =============================================================================
 -- CHUNK 6 — Session lifecycle RPCs + tip_payroll_exports table
 -- -----------------------------------------------------------------------------
@@ -1183,7 +1153,6 @@ CREATE TABLE IF NOT EXISTS public.tip_payroll_exports (
   created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at         TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-
 CREATE INDEX IF NOT EXISTS idx_tip_payroll_exports_session
   ON public.tip_payroll_exports(session_id);
 CREATE INDEX IF NOT EXISTS idx_tip_payroll_exports_merchant_date
@@ -1191,10 +1160,8 @@ CREATE INDEX IF NOT EXISTS idx_tip_payroll_exports_merchant_date
 CREATE INDEX IF NOT EXISTS idx_tip_payroll_exports_status_pending
   ON public.tip_payroll_exports(destination, status)
   WHERE status = 'pending';
-
 ALTER TABLE public.tip_payroll_exports ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.tip_payroll_exports FORCE ROW LEVEL SECURITY;
-
 DROP POLICY IF EXISTS tip_payroll_exports_merchant_scope ON public.tip_payroll_exports;
 CREATE POLICY tip_payroll_exports_merchant_scope
   ON public.tip_payroll_exports
@@ -1209,18 +1176,15 @@ CREATE POLICY tip_payroll_exports_merchant_scope
     (SELECT is_dexapos_admin())
     OR merchant_id = (SELECT user_merchant_id())
   );
-
 CREATE TRIGGER update_tip_payroll_exports_updated_at
   BEFORE UPDATE ON public.tip_payroll_exports
   FOR EACH ROW
   EXECUTE FUNCTION public.update_updated_at_column();
-
 -- 6a: void_tip_distribution — also expands sessions schema
 ALTER TABLE public.tip_distribution_sessions
   ADD COLUMN IF NOT EXISTS voided_at   TIMESTAMPTZ,
   ADD COLUMN IF NOT EXISTS voided_by   UUID REFERENCES public.staff_profiles(id),
   ADD COLUMN IF NOT EXISTS void_reason TEXT;
-
 CREATE OR REPLACE FUNCTION public.void_tip_distribution(
   p_session_id UUID,
   p_reason     TEXT,
@@ -1272,7 +1236,6 @@ BEGIN
   );
 END;
 $$;
-
 -- 6b: export_tip_distribution
 CREATE OR REPLACE FUNCTION public.export_tip_distribution(
   p_session_id  UUID,
@@ -1368,8 +1331,6 @@ BEGIN
   );
 END;
 $$;
-
-
 -- =============================================================================
 -- CHUNK 7 — Drop calculate_tip_distribution v1
 -- -----------------------------------------------------------------------------
@@ -1392,7 +1353,6 @@ $$;
 
 
 COMMIT;
-
 -- =============================================================================
 -- END OF MIGRATION
--- =============================================================================
+-- =============================================================================;

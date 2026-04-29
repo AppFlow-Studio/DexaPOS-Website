@@ -1,27 +1,6 @@
 -- =====================================================================
 -- Migration: add_order_item_v3 — Wave 1.1 station-ownership guard
 -- =====================================================================
--- Adds `p_station_id uuid DEFAULT NULL` to add_order_item_v3 and wires it
--- through `_assert_order_station_match` (see assert_order_station_match.sql)
--- so the server rejects writes against orders owned by another station with
--- a typed ORDER_OWNED_BY_OTHER_STATION error.
---
--- Backwards-compat: `p_station_id DEFAULT NULL` lets pre-update clients keep
--- working — the helper bypasses the check when station id is null. The
--- updated client (services/orderService.ts → AddOrderItemParams) starts
--- passing it from `useStoreSettingsStore.getState().selectedStation?.id`.
---
--- The body is otherwise verbatim from add_order_item_v3.sql; the only
--- additions are (1) the parameter, (2) the PERFORM call after the auth
--- lock, and (3) the new GRANT signature.
---
--- DROP-then-CREATE because PostgreSQL treats different parameter counts as
--- distinct overloads — leaving the old signature would let racy clients
--- bypass the check.
---
--- Rollback: add_order_item_v3_station_guard_rollback.sql
--- =====================================================================
-
 DROP FUNCTION IF EXISTS public.add_order_item_v3(uuid, uuid, integer, numeric, numeric, text, text, uuid, uuid, text, numeric, jsonb, text, integer, integer, uuid, text, uuid, uuid);
 
 CREATE OR REPLACE FUNCTION public.add_order_item_v3(
@@ -79,7 +58,6 @@ BEGIN
     END IF;
   END IF;
 
-  -- BEGIN_VERBATIM
   SELECT o.location_id, o.merchant_id INTO v_location_id, v_merchant_id
   FROM public.orders o
   WHERE o.id = p_order_id
@@ -92,8 +70,6 @@ BEGIN
     RAISE EXCEPTION 'Order not found or access denied: %', p_order_id;
   END IF;
 
-  -- Wave 1.1: refuse to mutate an order owned by another station.
-  -- Pass-through when p_station_id is NULL (legacy clients).
   PERFORM public._assert_order_station_match(p_order_id, p_station_id);
 
   SELECT COALESCE(l.dual_pricing_percentage / 100.0, 0.04) INTO v_cash_discount_rate
@@ -214,7 +190,6 @@ BEGIN
     'cash_tax_amount', v_cash_tax_amount,
     'sync_version', v_new_sync_version
   );
-  -- END_VERBATIM
 
   IF p_idempotency_key IS NOT NULL THEN
     PERFORM public._idempotency_complete(p_idempotency_key, 'add_order_item_v3', v_result);
@@ -224,4 +199,4 @@ BEGIN
 END;
 $function$;
 
-GRANT EXECUTE ON FUNCTION public.add_order_item_v3(uuid, uuid, integer, numeric, numeric, text, text, uuid, uuid, text, numeric, jsonb, text, integer, integer, uuid, text, uuid, uuid, uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.add_order_item_v3(uuid, uuid, integer, numeric, numeric, text, text, uuid, uuid, text, numeric, jsonb, text, integer, integer, uuid, text, uuid, uuid, uuid) TO authenticated;;

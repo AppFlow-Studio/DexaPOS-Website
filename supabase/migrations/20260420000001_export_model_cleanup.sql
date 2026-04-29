@@ -12,7 +12,6 @@
 -- =============================================================================
 
 BEGIN;
-
 -- 1. Update calculate_tip_distribution_v2 to no longer block on 'exported' status.
 --    Only 'voided' and 'approved' are truly locked.
 --    We replace just the status check block (lines 730-737 of the original).
@@ -27,7 +26,6 @@ BEGIN
     NULL;
   END IF;
 END $$;
-
 -- Re-read the full function and patch only the locked-status check.
 -- Since CREATE OR REPLACE requires the full body, we patch via a targeted
 -- ALTER approach: update the check constraint inline.
@@ -49,7 +47,6 @@ BEGIN
   END IF;
 END;
 $$;
-
 -- 2. Update export_tip_distribution to NOT change session status.
 --    Keep everything else (payload building, tip_payroll_exports insert).
 CREATE OR REPLACE FUNCTION public.export_tip_distribution(
@@ -144,5 +141,4 @@ BEGIN
   );
 END;
 $$;
-
 COMMIT;

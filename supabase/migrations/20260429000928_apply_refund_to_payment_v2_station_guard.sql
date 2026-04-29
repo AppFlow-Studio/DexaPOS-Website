@@ -1,13 +1,4 @@
--- =====================================================================
 -- Migration: apply_refund_to_payment_v2 — Wave 2.2 station-ownership guard
--- =====================================================================
--- The existing SELECT pulls op.order_id (aliased o_order_id) into v_payment;
--- the helper call goes right after the FOUND check, using v_payment.o_order_id
--- as the order id to validate.
---
--- Rollback: apply_refund_to_payment_v2_station_guard_rollback.sql
--- =====================================================================
-
 DROP FUNCTION IF EXISTS public.apply_refund_to_payment_v2(uuid, numeric, reversal_type, text, text, text, text, text, uuid, boolean, uuid);
 
 CREATE OR REPLACE FUNCTION public.apply_refund_to_payment_v2(
@@ -22,7 +13,7 @@ CREATE OR REPLACE FUNCTION public.apply_refund_to_payment_v2(
   p_initiated_by uuid DEFAULT NULL,
   p_restore_paid_quantity boolean DEFAULT false,
   p_idempotency_key UUID DEFAULT NULL,
-  p_station_id uuid DEFAULT NULL  -- Wave 2.2
+  p_station_id uuid DEFAULT NULL
 )
 RETURNS void
 LANGUAGE plpgsql
@@ -43,7 +34,6 @@ BEGIN
     END IF;
   END IF;
 
-  -- BEGIN_VERBATIM
   SELECT op.*, o.id AS o_order_id INTO v_payment
   FROM order_payments op
   JOIN orders o ON o.id = op.order_id
@@ -55,7 +45,6 @@ BEGIN
     RAISE EXCEPTION 'Payment not found or access denied';
   END IF;
 
-  -- Wave 2.2: refuse to mutate orders owned by another station.
   PERFORM public._assert_order_station_match(v_payment.o_order_id, p_station_id);
 
   v_new_refunded := COALESCE(v_payment.refunded_amount, 0) + p_refund_amount;
@@ -101,7 +90,6 @@ BEGIN
       END LOOP;
     END IF;
   END IF;
-  -- END_VERBATIM
 
   IF p_idempotency_key IS NOT NULL THEN
     PERFORM public._idempotency_complete(p_idempotency_key, 'apply_refund_to_payment_v2', '{}'::jsonb);
@@ -109,4 +97,4 @@ BEGIN
 END;
 $function$;
 
-GRANT EXECUTE ON FUNCTION public.apply_refund_to_payment_v2(uuid, numeric, reversal_type, text, text, text, text, text, uuid, boolean, uuid, uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.apply_refund_to_payment_v2(uuid, numeric, reversal_type, text, text, text, text, text, uuid, boolean, uuid, uuid) TO authenticated;;

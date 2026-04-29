@@ -1,27 +1,5 @@
--- =====================================================================
--- Rollback: 20260429120000_idempotency_composite_pk.sql
--- =====================================================================
--- Restores `idempotency_keys` to PRIMARY KEY (key) and reverts both
--- helper functions to their staging-deployed bodies (captured 2026-04-29
--- from project dfwqakoyittmrwbqvxgw via pg_get_functiondef).
---
--- Wave 3.0a has not shipped to prod, so staging is the deployed source
--- of truth for the rollback target. When prod eventually receives 3.0a
--- + 3.0c together, this rollback restores the same target state (the
--- bundled v3 migration recreates the helpers idempotently, identical
--- bodies on both envs once caught up).
---
--- ---------------------------------------------------------------------
--- Two-TRUNCATE-on-rollback gotcha
--- ---------------------------------------------------------------------
--- This rollback TRUNCATEs the table again, dropping any rows accumulated
--- since the forward migration applied. Worst case: doubles the transient-
--- error window seen on apply. Symmetric, not worse — but operators should
--- expect a brief retry burst on rollback. See Wave 3.0c plan Operator
--- Runbook.
--- =====================================================================
-
-BEGIN;
+-- ROLLBACK TEST — Wave 3.0c. Restores single-PK + prior helper bodies.
+-- Will be RE-APPLIED in the next step to leave staging on the composite PK.
 
 TRUNCATE TABLE public.idempotency_keys;
 
@@ -86,6 +64,4 @@ COMMENT ON TABLE public.idempotency_keys IS
 COMMENT ON FUNCTION public._idempotency_claim IS
   'Atomic claim-then-record helper. Returns cached result if completed, raises serialization_failure if in-flight (<60s), takes over stale claim (>60s).';
 COMMENT ON FUNCTION public._idempotency_complete IS
-  'Stores RPC result against a claimed key. Refuses to cache results >32KB (deletes the row instead).';
-
-COMMIT;
+  'Stores RPC result against a claimed key. Refuses to cache results >32KB (deletes the row instead).';;

@@ -318,14 +318,12 @@ BEGIN
     );
 END;
 $$;
-
 -- 3. Re-deploy process_payment_v8 with cash discount fix
 -- The full function is in utils/supabase/migrations/process_payment_v7_terminal_id.sql
 -- Apply that file to deploy the fix.
 
 -- Drop existing function so we can add the new p_terminal_id parameter
 DROP FUNCTION IF EXISTS process_payment_v8(uuid, text, numeric, numeric, numeric, jsonb, uuid, jsonb, integer, integer, boolean, uuid);
-
 CREATE OR REPLACE FUNCTION process_payment_v8(
     p_order_id uuid,
     p_payment_method text,

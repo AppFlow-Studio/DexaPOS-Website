@@ -1,18 +1,7 @@
--- =====================================================================
--- Migration: duplicate_order_item_v2 — Wave 1.4 station-ownership guard
--- =====================================================================
--- Body resolves order via v_original_item.order_id; helper call goes there.
---
--- Rollback: duplicate_order_item_v2_station_guard_rollback.sql
--- =====================================================================
-
-DROP FUNCTION IF EXISTS public.duplicate_order_item_v2(uuid, integer, uuid);
-
 CREATE OR REPLACE FUNCTION public.duplicate_order_item_v2(
   p_order_item_id uuid,
   p_quantity integer DEFAULT NULL,
-  p_idempotency_key UUID DEFAULT NULL,
-  p_station_id uuid DEFAULT NULL  -- Wave 1.4
+  p_idempotency_key UUID DEFAULT NULL
 )
 RETURNS json
 LANGUAGE plpgsql
@@ -33,7 +22,6 @@ BEGIN
     END IF;
   END IF;
 
-  -- BEGIN_VERBATIM
   SELECT oi.*, o.merchant_id
   INTO v_original_item
   FROM public.order_items oi
@@ -47,9 +35,6 @@ BEGIN
   IF NOT FOUND THEN
     RAISE EXCEPTION 'Order item not found or cannot be duplicated';
   END IF;
-
-  -- Wave 1.4: refuse to mutate orders owned by another station.
-  PERFORM public._assert_order_station_match(v_original_item.order_id, p_station_id);
 
   INSERT INTO public.order_items (
     order_id, menu_item_id, location_exclusive_item_id, item_name, item_description,
@@ -96,7 +81,6 @@ BEGIN
     'item_name', v_original_item.item_name,
     'quantity', COALESCE(p_quantity, v_original_item.quantity)
   ) INTO v_result;
-  -- END_VERBATIM
 
   IF p_idempotency_key IS NOT NULL THEN
     PERFORM public._idempotency_complete(p_idempotency_key, 'duplicate_order_item_v2', to_jsonb(v_result));
@@ -106,7 +90,4 @@ BEGIN
 END;
 $function$;
 
-GRANT EXECUTE ON FUNCTION public.duplicate_order_item_v2(uuid, integer, uuid, uuid) TO authenticated;
-
-COMMENT ON FUNCTION public.duplicate_order_item_v2 IS
-  'Duplicates an order item. v2 adds optional p_idempotency_key. Wave 1.4 adds optional p_station_id (NULL = bypass) for cross-station ownership enforcement.';
+GRANT EXECUTE ON FUNCTION public.duplicate_order_item_v2(uuid, integer, uuid) TO authenticated;;

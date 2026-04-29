@@ -18,13 +18,10 @@ AS $$
   FROM public.members
   WHERE user_id = get_my_claim('sub'::text)
 $$;
-
 REVOKE ALL ON FUNCTION public.current_user_org_ids() FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.current_user_org_ids()
   TO authenticated, anon, service_role;
-
 DROP POLICY IF EXISTS merchants_self_access ON public.merchants;
-
 CREATE POLICY merchants_self_access ON public.merchants
   FOR SELECT
   USING (clerk_org_id IN (SELECT public.current_user_org_ids()));

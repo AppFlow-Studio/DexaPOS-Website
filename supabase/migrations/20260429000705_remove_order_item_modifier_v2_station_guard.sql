@@ -1,19 +1,10 @@
--- =====================================================================
 -- Migration: remove_order_item_modifier_v2 — Wave 1.4 station-ownership guard
--- =====================================================================
--- Same pattern as Wave 1.3 (modifier-add): the existing SELECT walks
--- modifier → item → order, so v_order_id is in scope for the helper call
--- right after the FOUND check.
---
--- Rollback: remove_order_item_modifier_v2_station_guard_rollback.sql
--- =====================================================================
-
 DROP FUNCTION IF EXISTS public.remove_order_item_modifier_v2(uuid, uuid);
 
 CREATE OR REPLACE FUNCTION public.remove_order_item_modifier_v2(
   p_modifier_id uuid,
   p_idempotency_key UUID DEFAULT NULL,
-  p_station_id uuid DEFAULT NULL  -- Wave 1.4
+  p_station_id uuid DEFAULT NULL
 )
 RETURNS json
 LANGUAGE plpgsql
@@ -37,7 +28,6 @@ BEGIN
     END IF;
   END IF;
 
-  -- BEGIN_VERBATIM
   SELECT oim.order_item_id, oi.order_id, oi.quantity, oi.price_paid
   INTO v_order_item_id, v_order_id, v_item_quantity, v_price_paid
   FROM public.order_item_modifiers oim
@@ -53,7 +43,6 @@ BEGIN
     RAISE EXCEPTION 'Modifier not found or cannot be removed';
   END IF;
 
-  -- Wave 1.4: refuse to mutate orders owned by another station.
   PERFORM public._assert_order_station_match(v_order_id, p_station_id);
 
   DELETE FROM public.order_item_modifiers WHERE id = p_modifier_id;
@@ -76,7 +65,6 @@ BEGIN
     'modifier_total', v_new_modifier_total,
     'new_subtotal', v_new_subtotal
   ) INTO v_result;
-  -- END_VERBATIM
 
   IF p_idempotency_key IS NOT NULL THEN
     PERFORM public._idempotency_complete(p_idempotency_key, 'remove_order_item_modifier_v2', to_jsonb(v_result));
@@ -89,4 +77,4 @@ $function$;
 GRANT EXECUTE ON FUNCTION public.remove_order_item_modifier_v2(uuid, uuid, uuid) TO authenticated;
 
 COMMENT ON FUNCTION public.remove_order_item_modifier_v2 IS
-  'Removes a modifier from an order item. v2 adds optional p_idempotency_key. Wave 1.4 adds optional p_station_id (NULL = bypass) for cross-station ownership enforcement.';
+  'Removes a modifier from an order item. v2 adds optional p_idempotency_key. Wave 1.4 adds optional p_station_id (NULL = bypass) for cross-station ownership enforcement.';;

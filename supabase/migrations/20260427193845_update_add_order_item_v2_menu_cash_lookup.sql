@@ -1,25 +1,3 @@
--- =====================================================================
--- Migration: add_order_item_v2 — menu cash_price fallback
--- =====================================================================
--- Hardens add_order_item_v2 against client-side bugs where the cart fails to
--- pass `p_cash_unit_price`. The original function fell back to
--- `p_unit_price * (1 - 0.04)` (a hardcoded 4% cash discount), which silently
--- overwrote the menu's authoritative `cash_price` when the menu's actual cash
--- price was set to anything other than card_price × 0.96.
---
--- New fallback chain when p_cash_unit_price IS NULL:
---   1. menu_items.cash_price (the menu's own value — the truth)
---   2. p_unit_price * (1 - location.dual_pricing_percentage / 100)
---      (current behaviour, but reads location's actual rate instead of
---      a hardcoded 0.04, mirroring add_order_item_v3)
---
--- Also stores the RESOLVED cash unit price into base_cash_price (rather than
--- the raw, possibly-NULL p_cash_unit_price), so the column is never NULL after
--- a successful insert.
---
--- Already applied to staging (project dfwqakoyittmrwbqvxgw) via MCP on 2026-04-27.
--- =====================================================================
-
 CREATE OR REPLACE FUNCTION public.add_order_item_v2(
     p_order_id uuid,
     p_menu_item_id uuid DEFAULT NULL::uuid,
@@ -64,7 +42,6 @@ DECLARE
     v_has_active_discount boolean := false;
     v_new_sync_version integer;
 BEGIN
-    -- 1. Validate & Get Order Context (with RLS)
     SELECT o.location_id, o.merchant_id
     INTO v_location_id, v_merchant_id
     FROM public.orders o
@@ -78,14 +55,12 @@ BEGIN
         RAISE EXCEPTION 'Order not found or access denied: %', p_order_id;
     END IF;
 
-    -- 1b. Read location's dual_pricing_percentage (fall back to 0.04)
     SELECT COALESCE(l.dual_pricing_percentage / 100.0, 0.04)
     INTO v_cash_discount_rate
     FROM public.locations l
     WHERE l.id = v_location_id;
     v_cash_discount_rate := COALESCE(v_cash_discount_rate, 0.04);
 
-    -- 2. Get Tax Rate
     IF p_menu_item_id IS NOT NULL THEN
         SELECT
             COALESCE(tr.percentage, 0),
@@ -116,7 +91,6 @@ BEGIN
 
     v_tax_rate := COALESCE(v_tax_rate, 0);
 
-    -- 3. Calculate Modifier Total
     IF p_modifiers IS NOT NULL AND jsonb_array_length(p_modifiers) > 0 THEN
         SELECT COALESCE(SUM(
             COALESCE((mod->>'price_modifier')::numeric, 0) *
@@ -126,18 +100,12 @@ BEGIN
         FROM jsonb_array_elements(p_modifiers) AS mod;
     END IF;
 
-    -- 4. Calculate Pricing
     v_size_mod := COALESCE(p_size_price_modifier, 0);
 
-    -- Resolve cash unit price using the new fallback chain. This is the
-    -- per-unit, modifier-free, size-free cash price (i.e., what we'd want to
-    -- store in base_cash_price).
     v_resolved_cash_unit_price := COALESCE(
         p_cash_unit_price,
-        -- NEW: prefer the menu's own cash_price when caller didn't supply one.
         (SELECT mi.cash_price FROM public.menu_items mi
          WHERE mi.id = p_menu_item_id AND p_menu_item_id IS NOT NULL),
-        -- Last resort: derive from card price using location's discount rate.
         p_unit_price * (1 - v_cash_discount_rate)
     );
 
@@ -150,7 +118,6 @@ BEGIN
     v_tax_amount := ROUND(v_subtotal * v_tax_rate / 100, 2);
     v_cash_tax_amount := ROUND(v_cash_subtotal * v_tax_rate / 100, 2);
 
-    -- 5. Insert Order Item
     INSERT INTO public.order_items (
         order_id, menu_item_id, location_exclusive_item_id, item_name, category_name, quantity,
         unit_price, subtotal, tax_rate, tax_amount,
@@ -168,15 +135,11 @@ BEGIN
         p_selected_size_id, p_selected_size_name, v_size_mod,
         p_special_instructions, 'pending', COALESCE(p_course_number, 1),
         p_seat_number, 0, now(), now(),
-        p_unit_price,
-        -- CHANGED: store the RESOLVED cash unit price (never NULL after
-        -- successful insert) instead of the raw p_cash_unit_price.
-        v_resolved_cash_unit_price,
+        p_unit_price, v_resolved_cash_unit_price,
         p_menu_id, p_menu_name, p_category_id
     )
     RETURNING id INTO v_item_id;
 
-    -- 6. Insert Modifiers
     IF p_modifiers IS NOT NULL AND jsonb_array_length(p_modifiers) > 0 THEN
         INSERT INTO public.order_item_modifiers (
             order_item_id, modifier_group_id, modifier_item_id, modifier_group_name,
@@ -195,7 +158,6 @@ BEGIN
         FROM jsonb_array_elements(p_modifiers) AS mod;
     END IF;
 
-    -- 7. Check if there's an active order discount
     SELECT EXISTS(
         SELECT 1 FROM public.order_discounts
         WHERE order_id = p_order_id
@@ -203,7 +165,6 @@ BEGIN
           AND calculated_amount > 0
     ) INTO v_has_active_discount;
 
-    -- 8. If discount exists, redistribute across all items (including new one)
     IF v_has_active_discount THEN
         PERFORM redistribute_order_discount(p_order_id);
         SELECT subtotal, tax_amount, cash_subtotal, cash_tax_amount
@@ -212,11 +173,9 @@ BEGIN
         WHERE id = v_item_id;
     END IF;
 
-    -- 9. Recalculate discount + bump sync_version
     PERFORM recalculate_order_discount(p_order_id);
     SELECT sync_version INTO v_new_sync_version FROM orders WHERE id = p_order_id;
 
-    -- 10. Return
     RETURN jsonb_build_object(
         'success', true,
         'order_item_id', v_item_id,
@@ -233,4 +192,4 @@ BEGIN
         'sync_version', v_new_sync_version
     );
 END
-$function$;
+$function$;;

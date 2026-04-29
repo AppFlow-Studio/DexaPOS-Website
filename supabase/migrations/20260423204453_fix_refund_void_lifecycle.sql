@@ -1,16 +1,3 @@
--- ============================================================================
--- Fix: Refund→Re-Pay lifecycle (paid_quantity/refunded_quantity state corruption)
---
--- Issues fixed:
--- 1. apply_refund_to_payment: adds p_restore_paid_quantity flag for full voids
--- 2. record_refund_items: adds p_skip_quantity_update flag for full voids
--- 3. process_payment_v8: clears refunded_quantity on re-pay, caps paid_qty
--- 4. calculate_order_totals_fast: caps effective_unpaid at quantity (safety net)
--- ============================================================================
-
--- ============================================
--- 1. apply_refund_to_payment: restore paid_quantity for full payment voids
--- ============================================
 CREATE OR REPLACE FUNCTION apply_refund_to_payment(
   p_payment_id uuid,
   p_refund_amount numeric,
@@ -71,17 +58,13 @@ BEGIN
       return_reason = COALESCE(p_return_reason, return_reason)
   WHERE id = p_payment_id;
 
-  -- For full payment voids: restore paid_quantity on order_items
-  -- (matches void_payment.sql behavior)
   IF p_restore_paid_quantity THEN
-    -- Primary: precise decrement via order_payment_items junction
     UPDATE public.order_items oi
     SET paid_quantity = GREATEST(COALESCE(oi.paid_quantity, 0) - opi.quantity_paid, 0)
     FROM public.order_payment_items opi
     WHERE opi.order_payment_id = p_payment_id
       AND opi.order_item_id = oi.id;
 
-    -- Fallback: covers_items array for legacy payments without junction records
     IF NOT EXISTS (
       SELECT 1 FROM public.order_payment_items WHERE order_payment_id = p_payment_id
     ) AND v_payment.covers_items IS NOT NULL THEN
@@ -95,9 +78,6 @@ BEGIN
 END;
 $$;
 
--- ============================================
--- 2. record_refund_items: skip refunded_quantity increment for full voids
--- ============================================
 CREATE OR REPLACE FUNCTION record_refund_items(
   p_reversal_id uuid,
   p_items jsonb,
@@ -112,7 +92,6 @@ DECLARE
 BEGIN
   FOR v_item IN SELECT * FROM jsonb_array_elements(p_items)
   LOOP
-    -- Always insert the refund log record
     INSERT INTO order_refund_items (
       reversal_id,
       order_item_id,
@@ -142,8 +121,6 @@ BEGIN
       COALESCE((v_item->>'inventory_updated')::boolean, false)
     );
 
-    -- Only update order_items state for non-void refunds.
-    -- For full payment voids, paid_quantity is restored instead (in apply_refund_to_payment).
     IF NOT p_skip_quantity_update THEN
       UPDATE order_items
       SET refunded_quantity = COALESCE(refunded_quantity, 0)
@@ -154,4 +131,4 @@ BEGIN
     END IF;
   END LOOP;
 END;
-$$;
+$$;;

@@ -22,21 +22,17 @@ CREATE TABLE IF NOT EXISTS public.order_number_day_sequences (
   date_str      TEXT        NOT NULL,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-
 CREATE INDEX IF NOT EXISTS idx_order_num_seqs_date
   ON public.order_number_day_sequences (date_str);
-
 -- -----------------------------------------------------------------------------
 -- 2. Indexes for the idempotency checks in process_online_order STEP 0
 --    These selects fire on every order — they should hit indexes, not seq scans.
 -- -----------------------------------------------------------------------------
 CREATE INDEX IF NOT EXISTS idx_online_orders_provider_order_id
   ON public.online_orders (provider, provider_order_id);
-
 CREATE INDEX IF NOT EXISTS idx_orders_external_id
   ON public.orders (external_id)
   WHERE external_id IS NOT NULL;
-
 -- -----------------------------------------------------------------------------
 -- 3. Replace generate_order_number
 --    Key change: nextval() instead of advisory lock + MAX() scan.
@@ -175,7 +171,6 @@ BEGIN
   RETURN v_order_number;
 END;
 $$;
-
 -- -----------------------------------------------------------------------------
 -- 4. Replace generate_order_number_internal (used in some POS tablet paths)
 --    Same change: nextval() instead of advisory lock + MAX() scan.
@@ -243,7 +238,6 @@ BEGIN
   RETURN v_order_number;
 END;
 $$;
-
 -- -----------------------------------------------------------------------------
 -- 5. Cleanup function — drop sequences older than N days
 --    Call this once daily via a Supabase cron or pg_cron job.
@@ -276,7 +270,6 @@ BEGIN
   RETURN v_dropped;
 END;
 $$;
-
 COMMENT ON FUNCTION public.generate_order_number IS
   'v4: replaced pg_advisory_xact_lock + MAX(LIKE) with per-day nextval() sequences. '
   'nextval lock is held for microseconds only — not for the calling transaction. '

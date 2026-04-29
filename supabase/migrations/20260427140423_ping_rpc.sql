@@ -14,12 +14,9 @@ STABLE
 AS $$
   SELECT (extract(epoch FROM now()) * 1000)::bigint
 $$;
-
 GRANT EXECUTE ON FUNCTION ping() TO authenticated;
-
 COMMENT ON FUNCTION ping IS 'Connection-quality probe. Returns server epoch ms. Added by bad-WiFi optimization Option C.';
-
 -- =====================================================================
 -- Verification:
 --   SELECT ping();  -- should return current epoch ms within ~1ms
--- =====================================================================
+-- =====================================================================;

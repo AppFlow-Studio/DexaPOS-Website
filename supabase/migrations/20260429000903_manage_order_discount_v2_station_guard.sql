@@ -1,17 +1,4 @@
--- =====================================================================
 -- Migration: manage_order_discount_v2 — Wave 2.1 station-ownership guard
--- =====================================================================
--- Same DROP + CREATE OR REPLACE pattern as Wave 1.x. The body is verbatim
--- from manage_order_discount_v2.sql; the only diffs are:
---   1. `p_station_id uuid DEFAULT NULL` appended to the parameter list.
---   2. `PERFORM public._assert_order_station_match(p_order_id, p_station_id)`
---      inserted immediately after the existing order auth check (the
---      "Order not found or access denied" early-return).
---   3. Updated GRANT signature (15 params instead of 14).
---
--- Rollback: manage_order_discount_v2_station_guard_rollback.sql
--- =====================================================================
-
 DROP FUNCTION IF EXISTS public.manage_order_discount_v2(text, uuid, uuid, uuid, text, text, numeric, text, text, uuid[], uuid, uuid, text, uuid);
 
 CREATE OR REPLACE FUNCTION public.manage_order_discount_v2(
@@ -29,7 +16,7 @@ CREATE OR REPLACE FUNCTION public.manage_order_discount_v2(
   p_order_discount_id uuid DEFAULT NULL,
   p_void_reason text DEFAULT NULL,
   p_idempotency_key UUID DEFAULT NULL,
-  p_station_id uuid DEFAULT NULL  -- Wave 2.1
+  p_station_id uuid DEFAULT NULL
 )
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -84,15 +71,12 @@ BEGIN
     END IF;
   END IF;
 
-  -- BEGIN_VERBATIM (body from manage_discounts.sql:manage_order_discount)
-  -- Early-error returns intentionally NOT cached (see header comment).
   SELECT * INTO v_order FROM public.orders
   WHERE id = p_order_id AND merchant_id = user_merchant_id() AND location_id = ANY(user_location_ids());
   IF NOT FOUND THEN
     RETURN jsonb_build_object('success', false, 'error', 'Order not found or access denied');
   END IF;
 
-  -- Wave 2.1: refuse to mutate orders owned by another station.
   PERFORM public._assert_order_station_match(p_order_id, p_station_id);
 
   IF v_order.payment_status = 'paid' THEN
@@ -459,7 +443,6 @@ BEGIN
       FROM public.order_discounts od WHERE od.order_id = p_order_id AND od.voided_at IS NULL
     )
   );
-  -- END_VERBATIM
 
   IF p_idempotency_key IS NOT NULL THEN
     PERFORM public._idempotency_complete(p_idempotency_key, 'manage_order_discount_v2', v_result);
@@ -469,4 +452,4 @@ BEGIN
 END;
 $function$;
 
-GRANT EXECUTE ON FUNCTION public.manage_order_discount_v2(text, uuid, uuid, uuid, text, text, numeric, text, text, uuid[], uuid, uuid, text, uuid, uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.manage_order_discount_v2(text, uuid, uuid, uuid, text, text, numeric, text, text, uuid[], uuid, uuid, text, uuid, uuid) TO authenticated;;
