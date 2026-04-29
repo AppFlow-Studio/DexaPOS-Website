@@ -1,12 +1,19 @@
 "use server";
 
+import { headers } from "next/headers";
 import twilio from "twilio";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
 const OTP_LENGTH = 6;
 const OTP_EXPIRY_MINUTES = 5;
-const MAX_ATTEMPTS = 3;
-const RATE_LIMIT_PER_PHONE = 5; // max OTPs per phone per hour
+
+interface PhoneVerificationRpcResult {
+  success: boolean;
+  error?: string;
+  verification_id?: string;
+  attempts?: number;
+  remaining_attempts?: number;
+}
 
 function generateOtp(): string {
   const digits = "0123456789";
@@ -23,6 +30,13 @@ function normalizePhone(phone: string): string {
   if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`;
   if (digits.startsWith("+")) return phone.replace(/\s/g, "");
   return `+${digits}`;
+}
+
+async function getRequestIp(): Promise<string | null> {
+  const requestHeaders = await headers();
+  const forwardedFor = requestHeaders.get("x-forwarded-for");
+  const realIp = requestHeaders.get("x-real-ip");
+  return forwardedFor?.split(",")[0]?.trim() || realIp?.trim() || null;
 }
 
 export async function sendOtp(
@@ -48,36 +62,32 @@ export async function sendOtp(
 
   const merchantId = storeConfig.merchant_id;
 
-  // Rate limit: max OTPs per phone per hour
-  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-  const { count } = await supabase
-    .from("phone_verifications")
-    .select("id", { count: "exact", head: true })
-    .eq("phone", normalized)
-    .eq("merchant_id", merchantId)
-    .gte("created_at", oneHourAgo);
-
-  if ((count ?? 0) >= RATE_LIMIT_PER_PHONE) {
-    return { success: false, error: "Too many attempts. Try again later." };
-  }
-
   const code = generateOtp();
   const expiresAt = new Date(
     Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000
   ).toISOString();
 
-  const { error: insertError } = await supabase
-    .from("phone_verifications")
-    .insert({
-      phone: normalized,
-      code,
-      merchant_id: merchantId,
-      expires_at: expiresAt,
-    });
+  const requestIp = await getRequestIp();
+  const { data: issueResult, error: issueError } = await supabase.rpc(
+    "issue_phone_verification_otp",
+    {
+      p_phone: normalized,
+      p_merchant_id: merchantId,
+      p_code: code,
+      p_request_ip: requestIp,
+      p_expires_at: expiresAt,
+    }
+  );
 
-  if (insertError) {
-    return { success: false, error: "Failed to create verification" };
+  const verificationResult = issueResult as PhoneVerificationRpcResult | null;
+  if (issueError || !verificationResult?.success || !verificationResult.verification_id) {
+    return {
+      success: false,
+      error: verificationResult?.error || "Failed to create verification",
+    };
   }
+
+  const verificationId = verificationResult.verification_id;
 
   // Send via Twilio
   const accountSid = process.env.TWILIO_ACCOUNT_SID;
@@ -91,6 +101,7 @@ export async function sendOtp(
       console.log(`[DEV] OTP for ${normalized}: ${code}`);
       return { success: true };
     }
+    await supabase.from("phone_verifications").delete().eq("id", verificationId);
     return { success: false, error: "SMS service not configured" };
   }
 
@@ -104,6 +115,7 @@ export async function sendOtp(
     return { success: true };
   } catch (err: any) {
     console.error("Twilio send error:", err?.message);
+    await supabase.from("phone_verifications").delete().eq("id", verificationId);
     return { success: false, error: "Failed to send verification code" };
   }
 }
@@ -142,41 +154,22 @@ export async function verifyOtp(
 
   const merchantId = storeConfig.merchant_id;
 
-  // Find the latest unexpired, unverified code for this phone+merchant
-  const { data: verification, error: fetchError } = await supabase
-    .from("phone_verifications")
-    .select("*")
-    .eq("phone", normalized)
-    .eq("merchant_id", merchantId)
-    .is("verified_at", null)
-    .gt("expires_at", new Date().toISOString())
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .single();
+  const { data: verifyResult, error: verifyError } = await supabase.rpc(
+    "verify_phone_verification_otp",
+    {
+      p_phone: normalized,
+      p_merchant_id: merchantId,
+      p_code: code,
+    }
+  );
 
-  if (fetchError || !verification) {
-    return { success: false, error: "No active verification found. Request a new code." };
+  const verificationResult = verifyResult as PhoneVerificationRpcResult | null;
+  if (verifyError || !verificationResult?.success) {
+    return {
+      success: false,
+      error: verificationResult?.error || "Invalid code",
+    };
   }
-
-  if (verification.attempts >= MAX_ATTEMPTS) {
-    return { success: false, error: "Too many failed attempts. Request a new code." };
-  }
-
-  // Increment attempts
-  await supabase
-    .from("phone_verifications")
-    .update({ attempts: verification.attempts + 1 })
-    .eq("id", verification.id);
-
-  if (verification.code !== code) {
-    return { success: false, error: "Invalid code" };
-  }
-
-  // Mark as verified
-  await supabase
-    .from("phone_verifications")
-    .update({ verified_at: new Date().toISOString() })
-    .eq("id", verification.id);
 
   // Find or create customer
   let { data: customer } = await supabase
