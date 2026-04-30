@@ -57,8 +57,7 @@ ALTER FUNCTION public.get_session_variance_analysis(uuid)
 -- KDS
 ALTER FUNCTION public.get_kds_tickets_v2(uuid, text[], uuid)
   SET search_path = public;
--- Note: public.user_belongs_to_merchant(uuid) is created in
--- 20260427130000_security_hardening_lanes_a_to_d.sql with a fully-qualified
--- body, so it doesn't need this fix and isn't ALTERed here (it doesn't exist
--- yet at this point in the migration order).
+-- RLS helper (used inside policies — could silently break access checks)
+ALTER FUNCTION public.user_belongs_to_merchant(uuid)
+  SET search_path = public;
 NOTIFY pgrst, 'reload schema';

@@ -7,7 +7,7 @@
 -- Rollback: 00_ping_rpc_rollback.sql
 -- =====================================================================
 
-CREATE FUNCTION ping()
+CREATE OR REPLACE FUNCTION ping()
 RETURNS bigint
 LANGUAGE sql
 STABLE
