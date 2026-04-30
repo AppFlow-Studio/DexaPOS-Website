@@ -54,7 +54,6 @@ BEGIN
   );
 END;
 $function$;
-
 -- ── finalize_castles_settlement ──
 CREATE OR REPLACE FUNCTION public.finalize_castles_settlement(p_batch_uuid uuid, p_merchant_id uuid, p_castles_response jsonb)
  RETURNS jsonb
@@ -180,7 +179,6 @@ BEGIN
   );
 END;
 $function$;
-
 -- ── get_business_day_bounds ──
 CREATE OR REPLACE FUNCTION public.get_business_day_bounds(p_location_id uuid, p_start_date date DEFAULT NULL::date, p_end_date date DEFAULT NULL::date)
  RETURNS TABLE(start_ts timestamp with time zone, end_ts timestamp with time zone)
@@ -220,7 +218,6 @@ BEGIN
   RETURN NEXT;
 END;
 $function$;
-
 -- ── get_unsettled_summary_by_terminal ──
 CREATE OR REPLACE FUNCTION public.get_unsettled_summary_by_terminal(p_merchant_id uuid, p_location_id uuid DEFAULT NULL::uuid)
  RETURNS TABLE(terminal_uuid uuid, terminal_name text, terminal_type text, castles_ip_address text, castles_port integer, is_active boolean, is_connected boolean, payment_count bigint, gross_amount numeric, tip_amount numeric, total_amount numeric, oldest_payment_date date, newest_payment_date date, day_span integer, has_stuck_batch boolean, stuck_batch_status text, stuck_batch_uuid uuid)
@@ -288,7 +285,6 @@ BEGIN
     pt.is_active, pt.is_connected;
 END;
 $function$;
-
 -- ── mark_dlq_replay_success ──
 CREATE OR REPLACE FUNCTION public.mark_dlq_replay_success(p_id uuid)
  RETURNS void
@@ -303,7 +299,6 @@ AS $function$
       updated_at = now()
   WHERE id = p_id;
 $function$;
-
 -- ── merge_orderout_connected_channels ──
 CREATE OR REPLACE FUNCTION public.merge_orderout_connected_channels(p_restaurant_id uuid, p_updates jsonb)
  RETURNS void
@@ -316,7 +311,6 @@ AS $function$
       updated_at = now()
   WHERE id = p_restaurant_id;
 $function$;
-
 -- ── merge_orderout_platform_statuses ──
 CREATE OR REPLACE FUNCTION public.merge_orderout_platform_statuses(p_link_id uuid, p_updates jsonb)
  RETURNS void
@@ -329,7 +323,6 @@ AS $function$
       updated_at = now()
   WHERE id = p_link_id;
 $function$;
-
 -- ── prepare_castles_settlement ──
 CREATE OR REPLACE FUNCTION public.prepare_castles_settlement(p_terminal_id uuid, p_merchant_id uuid, p_initiated_by text)
  RETURNS jsonb
@@ -505,7 +498,6 @@ BEGIN
   );
 END;
 $function$;
-
 -- ── touch_dlq_replay_failure ──
 CREATE OR REPLACE FUNCTION public.touch_dlq_replay_failure(p_id uuid, p_error_message text)
  RETURNS void
@@ -520,7 +512,6 @@ AS $function$
       updated_at = now()
   WHERE id = p_id;
 $function$;
-
 -- ── void_order_and_cancel_reservation ──
 CREATE OR REPLACE FUNCTION public.void_order_and_cancel_reservation(p_order_id uuid, p_void_reason text DEFAULT 'Order cancelled'::text)
  RETURNS json
@@ -572,7 +563,6 @@ BEGIN
   )::JSON;
 END;
 $function$;
-
 -- ── void_payment ──
 CREATE OR REPLACE FUNCTION public.void_payment(p_payment_id uuid, p_void_reason text DEFAULT 'User voided'::text)
  RETURNS void
@@ -1071,4 +1061,3 @@ BEGIN
 
 END;
 $function$;
-

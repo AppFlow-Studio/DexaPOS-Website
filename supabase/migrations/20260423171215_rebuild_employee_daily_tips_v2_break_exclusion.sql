@@ -1,7 +1,3 @@
--- rebuild_employee_daily_tips_v2: Subtract unpaid break time from hours_worked
--- FLSA compliance fix: tip pool shares must exclude unpaid break time
--- break_logs is jsonb array: [{"start": "...", "end": "..."}, ...]
-
 CREATE OR REPLACE FUNCTION public.rebuild_employee_daily_tips(
   p_location_id UUID,
   p_shift_date  DATE
@@ -43,7 +39,6 @@ BEGIN
       AND o.status NOT IN ('cancelled', 'void', 'refunded')
       AND COALESCE(o.assigned_server_id, o.created_by_staff_id) IS NOT NULL
   ),
-  -- Split tips by payment method: card vs cash
   server_tips AS (
     SELECT
       sa.staff_profile_id,
@@ -106,4 +101,4 @@ BEGIN
   GET DIAGNOSTICS v_rows = ROW_COUNT;
   RETURN v_rows;
 END;
-$$;
+$$;;

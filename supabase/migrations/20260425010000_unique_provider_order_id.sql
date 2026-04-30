@@ -47,7 +47,6 @@ BEGIN
       'GROUP BY 1, 2 HAVING COUNT(*) > 1;', v_dup_count;
   END IF;
 END $$;
-
 -- -----------------------------------------------------------------------------
 -- 2. Drop the old non-unique index (will be replaced by the unique one).
 --    Safe to drop because the unique index below covers the same query shape.
