@@ -392,6 +392,15 @@ export async function adminCreateTerminal(
       return { success: false, error: error.message, data: null }
     }
 
+    // Vault the auth_key and store the secret UUID pointer
+    const { error: vaultErr } = await supabase.rpc('upsert_terminal_vault_secret', {
+      p_terminal_id: data.id,
+      p_auth_key: input.auth_key,
+    })
+    if (vaultErr) {
+      console.error('[adminCreateTerminal] Vault error:', vaultErr)
+    }
+
     // Mask auth_key in response
     const maskedData = {
       ...data,
@@ -489,6 +498,17 @@ export async function adminUpdateTerminal(
     if (error) {
       console.error('[adminUpdateTerminal] Error:', error)
       return { success: false, error: error.message, data: null }
+    }
+
+    // Re-vault auth_key if it was updated
+    if (input.auth_key !== undefined) {
+      const { error: vaultErr } = await supabase.rpc('upsert_terminal_vault_secret', {
+        p_terminal_id: terminalId,
+        p_auth_key: input.auth_key,
+      })
+      if (vaultErr) {
+        console.error('[adminUpdateTerminal] Vault error:', vaultErr)
+      }
     }
 
     // Mask auth_key in response
@@ -784,9 +804,19 @@ export async function adminTestTerminalConnection(terminalId: string) {
     // Determine online_since
     let onlineSince = (terminal.metadata as any)?.online_since
 
+    // Retrieve the real auth_key from vault — never read plaintext from the row
+    const { data: authKey, error: vaultErr } = await supabase.rpc(
+      'get_payment_terminal_credentials',
+      { p_terminal_id: terminalId },
+    )
+    if (vaultErr || !authKey) {
+      console.error('[adminTestTerminalConnection] Vault error:', vaultErr)
+      return { success: false, status: 'Error', error: 'Could not retrieve terminal credentials' }
+    }
+
     try {
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_DEJAVOO_SPIN_API}/spin/v2/Common/TerminalStatus?request.registerId=${terminal.register_id}&request.authkey=${terminal.auth_key}`,
+        `${process.env.NEXT_PUBLIC_DEJAVOO_SPIN_API}/spin/v2/Common/TerminalStatus?request.registerId=${terminal.register_id}&request.authkey=${authKey}`,
         requestOptions
       )
       const result = await response.json()

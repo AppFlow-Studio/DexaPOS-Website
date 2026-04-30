@@ -405,6 +405,15 @@ export async function createPaymentTerminal(
       return { success: false, error: error.message, data: null };
     }
 
+    // Vault the auth_key and store the secret UUID pointer
+    const { error: vaultErr } = await supabase.rpc("upsert_terminal_vault_secret", {
+      p_terminal_id: data.id,
+      p_auth_key: input.auth_key,
+    });
+    if (vaultErr) {
+      console.error("[createPaymentTerminal] Vault error:", vaultErr);
+    }
+
     // Mask auth_key in response
     const maskedData = {
       ...data,
@@ -518,6 +527,17 @@ export async function updatePaymentTerminal(
     if (error) {
       console.error("[updatePaymentTerminal] Error:", error);
       return { success: false, error: error.message, data: null };
+    }
+
+    // Re-vault auth_key if it was updated
+    if (input.auth_key !== undefined) {
+      const { error: vaultErr } = await supabase.rpc("upsert_terminal_vault_secret", {
+        p_terminal_id: terminalId,
+        p_auth_key: input.auth_key,
+      });
+      if (vaultErr) {
+        console.error("[updatePaymentTerminal] Vault error:", vaultErr);
+      }
     }
 
     // Mask auth_key in response
@@ -889,8 +909,18 @@ export async function testTerminalConnection(terminalId: string) {
       ...terminal.metadata,
       online_since: onlineSince,
     };
+    // Retrieve the real auth_key from vault — never read plaintext from the row
+    const { data: authKey, error: vaultErr } = await supabase.rpc(
+      "get_payment_terminal_credentials",
+      { p_terminal_id: terminalId },
+    );
+    if (vaultErr || !authKey) {
+      console.error("[testTerminalConnection] Vault error:", vaultErr);
+      return { success: false, status: "Error", error: "Could not retrieve terminal credentials" };
+    }
+
     const response = await fetch(
-      `${process.env.NEXT_PUBLIC_DEJAVOO_SPIN_API}/v2/Common/TerminalStatus?request.registerId=${terminal.register_id}&request.authkey=${terminal.auth_key}`,
+      `${process.env.NEXT_PUBLIC_DEJAVOO_SPIN_API}/v2/Common/TerminalStatus?request.registerId=${terminal.register_id}&request.authkey=${authKey}`,
       requestOptions as RequestInit,
     )
       .then((response) => response.json())

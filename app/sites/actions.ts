@@ -51,18 +51,16 @@ function mapStoreConfigToSite(config: any): Site {
     menuLayout: config.menu_layout || "cards",
     pickupEnabled: config.accepts_pickup,
     deliveryEnabled: config.accepts_delivery,
-    minimumOrderAmount: config.min_order_cents ? config.min_order_cents / 100 : 0,
+    minimumOrderAmount: Number(config.min_order ?? 0),
     preparationLeadTime: config.estimated_prep_minutes,
     futureOrderMaxDays: config.max_future_order_days,
     tippingEnabled: config.tip_enabled,
     tipConfig: config.tip_presets
       ? { presetPercentages: config.tip_presets }
       : undefined,
-    baseDeliveryFee: config.delivery_fee_cents
-      ? config.delivery_fee_cents / 100
-      : 0,
-    freeDeliveryThreshold: config.free_delivery_threshold_cents
-      ? config.free_delivery_threshold_cents / 100
+    baseDeliveryFee: Number(config.delivery_fee ?? 0),
+    freeDeliveryThreshold: config.free_delivery_threshold
+      ? Number(config.free_delivery_threshold)
       : undefined,
     acceptOnlinePayments: config.accepts_online_payments ?? true,
     acceptCashOnDelivery: config.accepts_cash_on_delivery ?? false,
