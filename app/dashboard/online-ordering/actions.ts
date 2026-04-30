@@ -448,6 +448,27 @@ export async function saveOnlineStoreRequestRequirements(formData: FormData) {
       publicMetadata: metadataUpdates,
     });
 
+    const merchantColumnUpdates: Record<string, unknown> = {};
+    if (businessLegalName) merchantColumnUpdates.business_legal_name = businessLegalName;
+    if (dbaName) merchantColumnUpdates.dba_name = dbaName;
+    if (einTaxId) merchantColumnUpdates.ein_last_four = einTaxId.slice(-4);
+    if (ownerFirstName) merchantColumnUpdates.owner_first_name = ownerFirstName;
+    if (ownerLastName) merchantColumnUpdates.owner_last_name = ownerLastName;
+
+    if (Object.keys(merchantColumnUpdates).length > 0) {
+      const { error: merchantUpdateError } = await supabase
+        .from("merchants")
+        .update({
+          ...merchantColumnUpdates,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", merchant.id);
+
+      if (merchantUpdateError) {
+        return { success: false, error: merchantUpdateError.message };
+      }
+    }
+
     const bankName = readFormText(formData, "bankName");
     const accountHolderName = readFormText(formData, "accountHolderName");
     const ddaAccountNumber = readFormText(formData, "ddaAccountNumber");

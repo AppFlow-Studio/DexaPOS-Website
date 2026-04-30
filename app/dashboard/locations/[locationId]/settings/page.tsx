@@ -1,32 +1,24 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { ArrowLeft, Landmark, ShieldCheck } from 'lucide-react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
+import { ArrowLeft } from 'lucide-react'
+import { auth } from '@clerk/nextjs/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { LocationTaxComplianceCard } from '@/components/dashboard/locations/LocationTaxComplianceCard'
+import { LocationBankingProfileCard } from '@/components/dashboard/locations/LocationBankingProfileCard'
 import type { Location } from '@/types/merchant_locations'
+import type {
+  AccountType,
+  LocationBankingProfileSummary,
+  PayoutFrequency,
+} from '@/app/dashboard/actions/location-banking-profiles'
 
 interface LocationSettingsPageProps {
   params: Promise<{ locationId: string }>
 }
 
-interface LocationBankingProfileSummary {
-  bank_name: string | null
-  account_holder_name: string | null
-  account_number_last_four: string | null
-  routing_number_last_four: string | null
-  account_type: string | null
-  payout_frequency: string | null
-  payout_day_of_week: number | null
-  payout_day_of_month: number | null
-  minimum_payout_amount: number | null
-  is_verified: boolean | null
-  updated_at: string | null
-}
-
 export default async function LocationSettingsPage({ params }: LocationSettingsPageProps) {
   const { locationId } = await params
+  const { orgId } = await auth()
   const supabase = createServerSupabaseClient()
 
   const { data: location, error: locationError } = await supabase
@@ -43,6 +35,7 @@ export default async function LocationSettingsPage({ params }: LocationSettingsP
     .from('location_banking_profiles')
     .select(
       `
+      id,
       bank_name,
       account_holder_name,
       account_number_last_four,
@@ -53,6 +46,7 @@ export default async function LocationSettingsPage({ params }: LocationSettingsP
       payout_day_of_month,
       minimum_payout_amount,
       is_verified,
+      is_active,
       updated_at
     `
     )
@@ -66,7 +60,23 @@ export default async function LocationSettingsPage({ params }: LocationSettingsP
     console.error('[LocationSettingsPage] Banking profile read error:', bankingProfileError)
   }
 
-  const profile = (bankingProfile || null) as LocationBankingProfileSummary | null
+  const initialProfile: LocationBankingProfileSummary | null = bankingProfile
+    ? {
+        id: bankingProfile.id as string,
+        bank_name: (bankingProfile.bank_name ?? '') as string,
+        account_holder_name: (bankingProfile.account_holder_name ?? '') as string,
+        account_number_last_four: (bankingProfile.account_number_last_four ?? '') as string,
+        routing_number_last_four: (bankingProfile.routing_number_last_four ?? '') as string,
+        account_type: (bankingProfile.account_type ?? 'checking') as AccountType,
+        payout_frequency: (bankingProfile.payout_frequency ?? 'daily') as PayoutFrequency,
+        payout_day_of_week: bankingProfile.payout_day_of_week ?? null,
+        payout_day_of_month: bankingProfile.payout_day_of_month ?? null,
+        minimum_payout_amount: Number(bankingProfile.minimum_payout_amount ?? 0),
+        is_verified: Boolean(bankingProfile.is_verified),
+        is_active: Boolean(bankingProfile.is_active),
+        updated_at: (bankingProfile.updated_at ?? new Date().toISOString()) as string,
+      }
+    : null
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
@@ -88,64 +98,11 @@ export default async function LocationSettingsPage({ params }: LocationSettingsP
 
       <LocationTaxComplianceCard location={location as Location} />
 
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center gap-2">
-            <Landmark className="h-4 w-4" />
-            Banking & Payouts
-          </CardTitle>
-          <CardDescription>
-            Read-only visibility for payout profile. Edit actions remain paused pending banking approval.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center gap-2">
-            <Badge variant="outline">[BANK-RELATED: HOLD]</Badge>
-            <p className="text-sm text-muted-foreground">
-              Banking edits are intentionally disabled in this phase.
-            </p>
-          </div>
-
-          {profile ? (
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div>
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">Bank</p>
-                <p className="font-medium">{profile.bank_name || 'Not set'}</p>
-              </div>
-              <div>
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">Account Holder</p>
-                <p className="font-medium">{profile.account_holder_name || 'Not set'}</p>
-              </div>
-              <div>
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">Account</p>
-                <p className="font-medium">
-                  {profile.account_type || 'account'}{' '}
-                  {profile.account_number_last_four ? `****${profile.account_number_last_four}` : 'Not set'}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">Routing</p>
-                <p className="font-medium">
-                  {profile.routing_number_last_four ? `****${profile.routing_number_last_four}` : 'Not set'}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">Payout Frequency</p>
-                <p className="font-medium">{profile.payout_frequency || 'Not set'}</p>
-              </div>
-              <div>
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">Verification</p>
-                <p className="font-medium inline-flex items-center gap-1">
-                  <ShieldCheck className="h-4 w-4" />
-                  {profile.is_verified ? 'Verified' : 'Pending'}
-                </p>
-              </div>
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">No active location banking profile found.</p>
-          )}
-        </CardContent>
-      </Card>
+      <LocationBankingProfileCard
+        clerkOrgId={orgId ?? ''}
+        locationId={locationId}
+        initialProfile={initialProfile}
+      />
     </div>
   )
 }
