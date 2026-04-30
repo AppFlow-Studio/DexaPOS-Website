@@ -8,11 +8,9 @@
 -- =============================================================================
 
 BEGIN;
-
 -- 1. Reconciliation column
 ALTER TABLE public.tip_distribution_sessions
   ADD COLUMN IF NOT EXISTS reconciliation_acknowledged_at TIMESTAMPTZ;
-
 -- 2. Largest remainder distribution helper
 -- Distributes p_total across detail rows matching p_session_id + p_filter_column = p_filter_value
 -- using floor-then-assign-pennies. Guarantees SUM = p_total exactly.
@@ -65,7 +63,6 @@ BEGIN
   );
 END;
 $$;
-
 -- 3. Weighted remainder distribution helper (for hours_weighted and points)
 CREATE OR REPLACE FUNCTION public._distribute_weighted_with_remainder(
   p_session_id     UUID,
@@ -127,5 +124,4 @@ BEGIN
   );
 END;
 $$;
-
 COMMIT;

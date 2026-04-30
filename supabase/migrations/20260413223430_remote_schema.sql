@@ -1,19 +1,11 @@
 drop policy "cfd_ordering_panel_images_public_read" on "public"."cfd_ordering_panel_images";
-
 drop policy "delivery_zones_public_read" on "public"."delivery_zones";
-
 drop policy "online_store_config_public_read" on "public"."online_store_config";
-
 drop policy "online_store_pages_public_read" on "public"."online_store_pages";
-
 alter table "public"."settlement_batches" drop constraint "chk_settlement_status";
-
 alter table "public"."settlement_batches" add constraint "chk_settlement_status" CHECK (((status)::text = ANY ((ARRAY['open'::character varying, 'pending'::character varying, 'settling'::character varying, 'settled'::character varying, 'partial_failure'::character varying, 'retry'::character varying, 'failed'::character varying, 'terminal_unavailable'::character varying, 'closed'::character varying])::text[]))) not valid;
-
 alter table "public"."settlement_batches" validate constraint "chk_settlement_status";
-
 set check_function_bodies = off;
-
 CREATE OR REPLACE FUNCTION public.accept_online_order(p_order_id uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -69,9 +61,7 @@ BEGIN
     'accepted_at', v_now
   );
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.add_category_to_menu(p_menu_id uuid, p_category_id uuid, p_display_order integer DEFAULT 0, p_custom_title text DEFAULT NULL::text)
  RETURNS json
  LANGUAGE plpgsql
@@ -101,9 +91,7 @@ BEGIN
         'category_id', p_category_id
     );
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.add_item_to_category(p_category_id uuid, p_menu_item_id uuid, p_display_order integer DEFAULT 0, p_custom_price numeric DEFAULT NULL::numeric, p_is_featured boolean DEFAULT false)
  RETURNS json
  LANGUAGE plpgsql
@@ -133,9 +121,7 @@ BEGIN
         'menu_item_id', p_menu_item_id
     );
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.add_ticket_message(p_ticket_id uuid, p_sender_id text, p_sender_name text, p_sender_role text, p_message text, p_is_internal boolean DEFAULT false)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -181,9 +167,7 @@ BEGIN
 
   RETURN jsonb_build_object('message_id', v_message_id);
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.add_ticket_message_with_attachments(p_ticket_id uuid, p_sender_id text, p_sender_name text, p_sender_role text, p_message text, p_is_internal boolean DEFAULT false, p_attachments jsonb DEFAULT '[]'::jsonb)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -244,9 +228,7 @@ BEGIN
 
   RETURN jsonb_build_object('message_id', v_message_id);
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.admin_bulk_reset_pins(p_merchant_id uuid, p_location_id uuid DEFAULT NULL::uuid)
  RETURNS TABLE(staff_profile_id uuid, staff_name text, new_pin text)
  LANGUAGE plpgsql
@@ -343,9 +325,7 @@ BEGIN
     )
   );
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.admin_get_unified_staff_view(p_merchant_id uuid, p_location_id uuid DEFAULT NULL::uuid)
  RETURNS TABLE(member_id text, staff_profile_id uuid, user_id text, clerk_user_id text, email text, first_name text, last_name text, display_name text, avatar_url text, phone text, account_type text, is_clerk_user boolean, location_assignments jsonb, total_locations bigint, primary_location_id uuid, primary_location_name text, overall_is_active boolean, member_created_at timestamp with time zone, last_updated_at timestamp with time zone)
  LANGUAGE plpgsql
@@ -435,9 +415,7 @@ BEGIN
   LEFT JOIN location_data ld ON ld.profile_id = sd.profile_id
   ORDER BY sd.last_name, sd.first_name;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.admin_reset_staff_pin(p_staff_profile_id uuid, p_location_id uuid, p_custom_pin text DEFAULT NULL::text)
  RETURNS TABLE(success boolean, new_pin text, error_message text)
  LANGUAGE plpgsql
@@ -527,9 +505,7 @@ BEGIN
 
   RETURN QUERY SELECT true, v_pin, NULL::text;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.app_set_location_stock(p_inventory_item_id uuid, p_location_id uuid, p_quantity numeric)
  RETURNS void
  LANGUAGE plpgsql
@@ -539,9 +515,7 @@ AS $function$
 BEGIN
     PERFORM public.set_location_stock(p_inventory_item_id, p_location_id, p_quantity);
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.approve_tip_distribution(p_session_id uuid, p_approved_by uuid)
  RETURNS json
  LANGUAGE plpgsql
@@ -573,9 +547,7 @@ RETURN json_build_object(
 );
 
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.assign_device(p_device_id uuid, p_new_status public.device_lifecycle_status, p_to_merchant_id uuid DEFAULT NULL::uuid, p_to_location_id uuid DEFAULT NULL::uuid, p_tracking_number text DEFAULT NULL::text, p_reason text DEFAULT NULL::text, p_notes text DEFAULT NULL::text)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -776,9 +748,7 @@ BEGIN
     )
   );
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.authorize_location_access(p_location_id uuid)
  RETURNS void
  LANGUAGE plpgsql
@@ -808,9 +778,7 @@ BEGIN
             USING ERRCODE = '42501';
     END IF;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.authorize_merchant_access(p_merchant_id uuid)
  RETURNS void
  LANGUAGE plpgsql
@@ -827,9 +795,7 @@ BEGIN
             USING ERRCODE = '42501';
     END IF;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.auto_activate_merchant_on_first_successful_payment()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -891,9 +857,7 @@ begin
   end if;
 
   return new;
-end;$function$
-;
-
+end;$function$;
 CREATE OR REPLACE FUNCTION public.broadcast_order_changes()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -1177,9 +1141,7 @@ END;
 
 -- ============================================================================
 -- COMMENTS
--- ============================================================================$function$
-;
-
+-- ============================================================================$function$;
 CREATE OR REPLACE FUNCTION public.broadcast_order_item_changes()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -1207,9 +1169,7 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN
   RAISE WARNING 'broadcast_order_item_changes failed: %', SQLERRM;
   RETURN COALESCE(NEW, OLD);
-END;$function$
-;
-
+END;$function$;
 CREATE OR REPLACE FUNCTION public.calculate_tip_distribution(p_location_id uuid, p_merchant_id uuid, p_session_date date, p_shift_period text DEFAULT 'full_day'::text, p_calculated_by uuid DEFAULT NULL::uuid)
  RETURNS json
  LANGUAGE plpgsql
@@ -1586,9 +1546,7 @@ BEGIN
   );
 
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.calculate_tip_distribution_v2(p_merchant_id uuid, p_location_id uuid, p_session_date date, p_shift_period text DEFAULT NULL::text, p_calculated_by uuid DEFAULT NULL::uuid)
  RETURNS json
  LANGUAGE plpgsql
@@ -1993,9 +1951,7 @@ BEGIN
   );
 
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.cancel_online_order_by_customer(p_order_id uuid, p_session_token text, p_reason text DEFAULT NULL::text)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -2060,9 +2016,7 @@ BEGIN
     'cancelled_at', v_now
   );
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.cancel_order(p_order_id uuid, p_cancel_reason text DEFAULT 'Customer cancelled'::text)
  RETURNS json
  LANGUAGE plpgsql
@@ -2127,9 +2081,7 @@ BEGIN
     RETURN public.void_order(p_order_id, p_cancel_reason);
   END IF;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.cancel_reservation_for_voided_order(p_order_id uuid, p_reason text DEFAULT 'Order voided'::text)
  RETURNS json
  LANGUAGE plpgsql
@@ -2179,9 +2131,7 @@ BEGIN
     'cancelled_count', v_cancelled_count
   );
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.clear_order_items(p_order_id uuid)
  RETURNS json
  LANGUAGE plpgsql
@@ -2240,9 +2190,7 @@ BEGIN
 
   RETURN v_result;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.create_adhoc_expense(p_merchant_id uuid, p_location_id uuid, p_expense_vendor_name text, p_expense_category text, p_expense_notes text, p_payment_method text, p_card_last_four text, p_total_amount numeric, p_user_id text, p_user_name text, p_items jsonb)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -2296,9 +2244,7 @@ BEGIN
         'po_number',         v_po_number
     );
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.create_inventory_count(p_merchant_id uuid, p_location_id uuid, p_count_name text, p_assigned_to_user_id text DEFAULT NULL::text, p_assigned_to_name text DEFAULT NULL::text, p_item_ids jsonb DEFAULT NULL::jsonb)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -2361,9 +2307,7 @@ BEGIN
         'items_count',  v_items_count
     );
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.create_support_ticket(p_merchant_id uuid, p_location_id uuid, p_subject text, p_description text, p_category text, p_submitted_by text, p_submitted_by_name text, p_submitted_by_email text DEFAULT NULL::text, p_carrier_id uuid DEFAULT NULL::uuid, p_metadata jsonb DEFAULT '{}'::jsonb)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -2405,9 +2349,7 @@ BEGIN
 
   RETURN jsonb_build_object('ticket_id', v_ticket_id, 'ticket_number', v_ticket_number);
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.create_support_ticket(p_merchant_id uuid, p_location_id uuid, p_subject text, p_description text, p_category text, p_submitted_by text, p_submitted_by_name text, p_submitted_by_email text DEFAULT NULL::text, p_carrier_id uuid DEFAULT NULL::uuid, p_metadata jsonb DEFAULT '{}'::jsonb, p_attachments jsonb DEFAULT '[]'::jsonb)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -2466,9 +2408,7 @@ BEGIN
 
   RETURN jsonb_build_object('ticket_id', v_ticket_id, 'ticket_number', v_ticket_number);
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.decline_online_order(p_order_id uuid, p_reason text DEFAULT NULL::text)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -2517,9 +2457,7 @@ BEGIN
     'declined_at', v_now
   );
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.decrement_location_stock(p_inventory_item_id uuid, p_location_id uuid, p_quantity numeric)
  RETURNS void
  LANGUAGE plpgsql
@@ -2545,9 +2483,7 @@ BEGIN
         updated_at = now()
     WHERE id = p_inventory_item_id;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.find_duplicate_customers(p_merchant_id uuid)
  RETURNS TABLE(customers jsonb, reason text)
  LANGUAGE plpgsql
@@ -2628,9 +2564,7 @@ BEGIN
   END IF;
 
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.generate_invoice_number(p_merchant_id uuid)
  RETURNS text
  LANGUAGE plpgsql
@@ -2648,9 +2582,7 @@ BEGIN
 
   RETURN 'INV-' || LPAD(v_next::TEXT, 4, '0');
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.generate_ticket_number()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -2660,9 +2592,7 @@ BEGIN
   NEW.ticket_number := 'DEXA-' || lpad(nextval('support_ticket_seq')::text, 5, '0');
   RETURN NEW;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_admin_merchant_breakdown(p_merchant_ids uuid[] DEFAULT NULL::uuid[], p_location_ids uuid[] DEFAULT NULL::uuid[], p_payment_status text[] DEFAULT NULL::text[], p_date_from timestamp with time zone DEFAULT NULL::timestamp with time zone, p_date_to timestamp with time zone DEFAULT NULL::timestamp with time zone)
  RETURNS TABLE(merchant_id uuid, merchant_name text, total_locations bigint, active_locations bigint, order_count bigint, transaction_count bigint, card_revenue numeric, cash_revenue numeric, total_revenue numeric, avg_ticket numeric, tip_total numeric, total_fees numeric, void_count bigint, refund_count bigint, void_refund_amount numeric, void_rate_pct numeric, unsettled_amount numeric, cash_discount_count bigint, last_transaction_at timestamp with time zone, prior_total_revenue numeric, revenue_change_pct numeric, payment_method_breakdown jsonb, daily_revenue_trend jsonb)
  LANGUAGE plpgsql
@@ -3005,9 +2935,7 @@ BEGIN
   LEFT JOIN trend t ON t.merchant_id = mr.merchant_id
   ORDER BY mr.total_revenue DESC, mr.transaction_count DESC;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_admin_merchant_ids()
  RETURNS SETOF uuid
  LANGUAGE sql
@@ -3039,9 +2967,7 @@ AS $function$
     AND c.is_super_admin = false
     AND ama.admin_user_id = c.user_id
     AND ama.is_active = true;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_admin_settlement_batch_payments(p_batch_id text, p_merchant_id uuid DEFAULT NULL::uuid)
  RETURNS TABLE(payment_id uuid, order_id uuid, order_number text, merchant_id uuid, merchant_name text, location_id uuid, location_name text, payment_method text, payment_status text, total_amount numeric, tip_amount numeric, refund_amount numeric, is_voided boolean, is_returned boolean, initiated_at timestamp with time zone, captured_at timestamp with time zone)
  LANGUAGE plpgsql
@@ -3107,9 +3033,7 @@ BEGIN
     AND COALESCE(op.batch_number, op.dejavoo_batch_number) = v_batch_id
   ORDER BY COALESCE(op.captured_at, op.initiated_at, o.created_at) DESC;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_admin_settlement_batches(p_merchant_ids uuid[] DEFAULT NULL::uuid[], p_status text[] DEFAULT NULL::text[], p_date_from date DEFAULT NULL::date, p_date_to date DEFAULT NULL::date, p_limit integer DEFAULT 200)
  RETURNS TABLE(id uuid, batch_id text, merchant_id uuid, merchant_name text, location_id uuid, location_name text, business_date date, opened_at timestamp with time zone, closed_at timestamp with time zone, settlement_date date, funded_date date, transaction_count integer, sales_count integer, refund_count integer, void_count integer, gross_amount numeric, tip_amount numeric, refund_amount numeric, net_deposit numeric, status text, linked_payment_count bigint, linked_payment_amount numeric, discrepancy_amount numeric, has_discrepancy boolean)
  LANGUAGE plpgsql
@@ -3236,9 +3160,7 @@ BEGIN
   ) lp ON true
   ORDER BY b.business_date DESC, b.closed_at DESC NULLS LAST, b.opened_at DESC;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_admin_transaction_detail(p_order_id uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -3426,9 +3348,7 @@ BEGIN
     'order_discounts', v_order_discounts
   );
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_admin_transaction_summary(p_merchant_ids uuid[] DEFAULT NULL::uuid[], p_location_ids uuid[] DEFAULT NULL::uuid[], p_status text[] DEFAULT NULL::text[], p_payment_status text[] DEFAULT NULL::text[], p_payment_method text[] DEFAULT NULL::text[], p_date_from timestamp with time zone DEFAULT NULL::timestamp with time zone, p_date_to timestamp with time zone DEFAULT NULL::timestamp with time zone, p_min_amount numeric DEFAULT NULL::numeric, p_max_amount numeric DEFAULT NULL::numeric, p_search text DEFAULT NULL::text, p_card_type text DEFAULT NULL::text, p_staff_id uuid DEFAULT NULL::uuid, p_sort_by text DEFAULT 'initiated_at'::text, p_sort_dir text DEFAULT 'desc'::text)
  RETURNS TABLE(current_period_from timestamp with time zone, current_period_to timestamp with time zone, previous_period_from timestamp with time zone, previous_period_to timestamp with time zone, current_total_transactions bigint, previous_total_transactions bigint, current_card_revenue numeric, previous_card_revenue numeric, current_card_count bigint, previous_card_count bigint, current_cash_revenue numeric, previous_cash_revenue numeric, current_cash_count bigint, previous_cash_count bigint, current_total_revenue numeric, previous_total_revenue numeric, current_avg_tip numeric, previous_avg_tip numeric, current_avg_tip_pct numeric, previous_avg_tip_pct numeric, current_void_return_count bigint, previous_void_return_count bigint, current_void_return_amount numeric, previous_void_return_amount numeric, current_void_rate_pct numeric, previous_void_rate_pct numeric)
  LANGUAGE plpgsql
@@ -3744,9 +3664,7 @@ BEGIN
   FROM current_metrics cm
   CROSS JOIN previous_metrics pm;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_admin_transactions(p_merchant_ids uuid[] DEFAULT NULL::uuid[], p_location_ids uuid[] DEFAULT NULL::uuid[], p_status text[] DEFAULT NULL::text[], p_payment_status text[] DEFAULT NULL::text[], p_payment_method text[] DEFAULT NULL::text[], p_date_from timestamp with time zone DEFAULT NULL::timestamp with time zone, p_date_to timestamp with time zone DEFAULT NULL::timestamp with time zone, p_min_amount numeric DEFAULT NULL::numeric, p_max_amount numeric DEFAULT NULL::numeric, p_search text DEFAULT NULL::text, p_card_type text DEFAULT NULL::text, p_staff_id uuid DEFAULT NULL::uuid, p_sort_by text DEFAULT 'initiated_at'::text, p_sort_dir text DEFAULT 'desc'::text, p_page integer DEFAULT 1, p_page_size integer DEFAULT 25)
  RETURNS TABLE(id uuid, order_id uuid, order_number text, display_number text, merchant_id uuid, merchant_name text, location_id uuid, location_name text, customer_name text, payment_method text, card_type text, card_last_four text, authorization_code text, reference_number text, amount numeric, tip_amount numeric, total_amount numeric, subtotal_amount numeric, tax_amount numeric, discount_amount numeric, status text, order_status text, payment_status text, staff_id uuid, staff_name text, entry_mode text, created_at timestamp with time zone, total_count bigint)
  LANGUAGE plpgsql
@@ -3959,9 +3877,7 @@ BEGIN
   LIMIT v_page_size
   OFFSET v_offset;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_admin_transactions_export(p_merchant_ids uuid[] DEFAULT NULL::uuid[], p_location_ids uuid[] DEFAULT NULL::uuid[], p_status text[] DEFAULT NULL::text[], p_payment_status text[] DEFAULT NULL::text[], p_payment_method text[] DEFAULT NULL::text[], p_date_from timestamp with time zone DEFAULT NULL::timestamp with time zone, p_date_to timestamp with time zone DEFAULT NULL::timestamp with time zone, p_min_amount numeric DEFAULT NULL::numeric, p_max_amount numeric DEFAULT NULL::numeric, p_search text DEFAULT NULL::text, p_card_type text DEFAULT NULL::text, p_staff_id uuid DEFAULT NULL::uuid, p_sort_by text DEFAULT 'initiated_at'::text, p_sort_dir text DEFAULT 'desc'::text, p_limit integer DEFAULT 10000)
  RETURNS TABLE(payment_id uuid, order_id uuid, order_number text, display_number text, created_at timestamp with time zone, merchant_id uuid, merchant_name text, location_id uuid, location_name text, customer_name text, order_type text, order_status text, payment_method text, card_type text, card_last_four text, entry_mode text, authorization_code text, reference_number text, batch_number text, subtotal_amount numeric, tax_amount numeric, tip_amount numeric, discount_amount numeric, service_charge_amount numeric, total_amount numeric, amount_tendered numeric, change_given numeric, payment_status text, is_voided boolean, void_reason text, is_returned boolean, return_amount numeric, return_reason text, staff_name text, terminal_serial text, device_id text, total_count bigint)
  LANGUAGE plpgsql
@@ -4207,9 +4123,7 @@ BEGIN
     c.created_at DESC
   LIMIT v_export_limit;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_avg_kitchen_time(p_from timestamp with time zone, p_to timestamp with time zone)
  RETURNS TABLE(date date, avg_minutes numeric, overall_avg numeric)
  LANGUAGE plpgsql
@@ -4240,9 +4154,7 @@ BEGIN
   FROM daily_avg d
   ORDER BY d.kitchen_date;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_avg_table_turn_time(p_from timestamp with time zone, p_to timestamp with time zone)
  RETURNS TABLE(date date, avg_minutes numeric, overall_avg numeric)
  LANGUAGE plpgsql
@@ -4289,9 +4201,7 @@ BEGIN
   FROM daily_avg d
   ORDER BY d.session_date;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_avg_ticket_by_day(p_from timestamp with time zone, p_to timestamp with time zone)
  RETURNS TABLE(date date, avg_ticket numeric)
  LANGUAGE plpgsql
@@ -4308,9 +4218,7 @@ BEGIN
   GROUP BY DATE(o.created_at)
   ORDER BY date;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_avg_time_to_first_order(p_from timestamp with time zone, p_to timestamp with time zone)
  RETURNS TABLE(avg_days numeric)
  LANGUAGE plpgsql
@@ -4327,9 +4235,7 @@ BEGIN
   WHERE m.created_at >= p_from AND m.created_at < p_to
     AND o.created_at >= p_from AND o.created_at < p_to;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_busiest_locations(p_from timestamp with time zone, p_to timestamp with time zone)
  RETURNS TABLE(location_id uuid, location_name text, merchant_name text, order_count bigint)
  LANGUAGE plpgsql
@@ -4350,9 +4256,7 @@ BEGIN
   ORDER BY order_count DESC
   LIMIT 10;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_cash_vs_card_split(p_from timestamp with time zone, p_to timestamp with time zone)
  RETURNS TABLE(pricing_mode text, order_count bigint, revenue numeric)
  LANGUAGE plpgsql
@@ -4370,9 +4274,7 @@ BEGIN
   GROUP BY o.payment_pricing_mode
   ORDER BY order_count DESC;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_chargeback_volume_by_month(p_from timestamp with time zone, p_to timestamp with time zone)
  RETURNS TABLE(month text, chargeback_count bigint, total_amount numeric)
  LANGUAGE plpgsql
@@ -4389,9 +4291,7 @@ BEGIN
   GROUP BY DATE_TRUNC('month', cb.received_at)
   ORDER BY month;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_churn_risk_merchants(p_from timestamp with time zone, p_to timestamp with time zone)
  RETURNS TABLE(merchant_id uuid, merchant_name text, last_period_revenue numeric, current_revenue numeric, change_pct numeric)
  LANGUAGE plpgsql
@@ -4452,9 +4352,7 @@ BEGIN
   ORDER BY change_pct;
 
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_customer_activity_timeline(p_customer_id uuid, p_limit integer DEFAULT 50)
  RETURNS TABLE(activity_id text, activity_type text, activity_label text, description text, amount_value numeric, currency text, created_at timestamp with time zone, is_clickable boolean, related_entity_id uuid, related_entity_type text)
  LANGUAGE plpgsql
@@ -4515,9 +4413,7 @@ BEGIN
   ORDER BY created_at DESC
   LIMIT p_limit;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_customer_channel_trend(p_customer_id uuid, p_days integer DEFAULT 90)
  RETURNS TABLE(channel text, count_recent bigint, count_previous bigint, percentage_recent numeric, percentage_previous numeric, trend_label text)
  LANGUAGE plpgsql
@@ -4580,9 +4476,7 @@ BEGIN
   ORDER BY COALESCE(rp.count_recent, 0) DESC;
 
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_customer_percentile(p_customer_id uuid, p_merchant_id uuid)
  RETURNS TABLE(percentile numeric, rank_position bigint, total_customers bigint, is_top_tier boolean)
  LANGUAGE plpgsql
@@ -4608,9 +4502,7 @@ BEGIN
   FROM customer_rank
   WHERE id = p_customer_id;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_customer_spend_trend(p_customer_id uuid, p_months integer DEFAULT 6)
  RETURNS TABLE(month text, month_date date, total_spend numeric, order_count bigint)
  LANGUAGE plpgsql
@@ -4631,9 +4523,7 @@ BEGIN
   GROUP BY DATE_TRUNC('month', o.created_at)
   ORDER BY month_date ASC;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_customer_top_items(p_customer_id uuid, p_days integer DEFAULT 90, p_limit integer DEFAULT 10)
  RETURNS TABLE(item_id uuid, item_name text, order_count bigint, total_spent numeric, last_ordered_at timestamp with time zone, is_new_favorite boolean, frequency_label text)
  LANGUAGE plpgsql
@@ -4684,9 +4574,7 @@ BEGIN
   ORDER BY io.order_count DESC
   LIMIT p_limit;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_customer_visit_pattern(p_customer_id uuid, p_days integer DEFAULT 90)
  RETURNS TABLE(day_of_week text, hour_of_day integer, visit_count bigint, is_peak boolean)
  LANGUAGE plpgsql
@@ -4715,9 +4603,7 @@ BEGIN
   FROM visit_stats
   ORDER BY visit_stats.visit_count DESC;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_customer_visit_trend(p_customer_id uuid, p_recent_days integer DEFAULT 90, p_compare_days integer DEFAULT 90)
  RETURNS TABLE(recent_visits bigint, previous_visits bigint, trend_direction text, trend_percentage numeric)
  LANGUAGE plpgsql
@@ -4755,9 +4641,7 @@ BEGIN
     END AS trend_percentage
   FROM recent r, previous p;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_dual_pricing_adoption(p_from timestamp with time zone, p_to timestamp with time zone)
  RETURNS TABLE(adopted_merchants bigint, total_merchants bigint, adoption_pct numeric)
  LANGUAGE plpgsql
@@ -4784,9 +4668,7 @@ BEGIN
       ELSE 0::NUMERIC
     END;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_eligible_promotions(p_customer_id uuid, p_merchant_id uuid, p_location_id uuid DEFAULT NULL::uuid, p_order_total numeric DEFAULT NULL::numeric, p_order_items jsonb DEFAULT NULL::jsonb)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -4987,9 +4869,7 @@ BEGIN
 
     RETURN v_result;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_feature_adoption_rates(p_from timestamp with time zone, p_to timestamp with time zone)
  RETURNS TABLE(feature text, adopted_count bigint, total_merchants bigint, adoption_pct numeric)
  LANGUAGE plpgsql
@@ -5031,9 +4911,7 @@ BEGIN
   WHERE o.created_at >= p_from AND o.created_at < p_to
     AND o.order_type = 'online';
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_floor_plan_objects_with_sessions(p_floor_plan_id uuid)
  RETURNS TABLE(id uuid, floor_plan_id uuid, location_id uuid, merchant_id uuid, name text, shape_id text, category text, x numeric, y numeric, rotation numeric, z_index integer, width numeric, height numeric, capacity integer, min_capacity integer, is_reservable boolean, is_combinable boolean, is_visible boolean, is_active boolean, section_id uuid, zone_name text, default_turn_time integer, label_override text, color_override text, created_at timestamp with time zone, updated_at timestamp with time zone, session_id uuid, session_status text, session_number text, party_size integer, guest_name text, order_id uuid, server_staff_id uuid, is_vip boolean, needs_attention boolean, current_course integer, seated_at timestamp with time zone, reservation_id uuid, waitlist_id uuid, merged_tables uuid[])
  LANGUAGE plpgsql
@@ -5100,9 +4978,7 @@ BEGIN
     AND fpo.is_active = true
   ORDER BY fpo.z_index, fpo.name;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_items_for_location_library(p_merchant_id uuid, p_location_id uuid DEFAULT NULL::uuid)
  RETURNS json
  LANGUAGE plpgsql
@@ -5326,9 +5202,7 @@ BEGIN
         WHERE mi.merchant_id = p_merchant_id
     );
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_kds_tickets_v2(p_location_id uuid, p_statuses text[] DEFAULT ARRAY['sent'::text, 'preparing'::text, 'ready'::text], p_kds_display_id uuid DEFAULT NULL::uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -5429,9 +5303,7 @@ BEGIN
 
   RETURN v_result;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_kitchen_performance_stats(p_merchant_id uuid, p_location_id uuid DEFAULT NULL::uuid, p_start_date timestamp with time zone DEFAULT (now() - '7 days'::interval), p_end_date timestamp with time zone DEFAULT now())
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -5582,9 +5454,7 @@ BEGIN
 
   RETURN v_result;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_location_payment_device_secret(p_location_id uuid, p_device_id uuid DEFAULT NULL::uuid)
  RETURNS TABLE(device_id uuid, tpn text, decrypted_secret text)
  LANGUAGE plpgsql
@@ -5626,9 +5496,7 @@ begin
   where ds.id = v_device.ftd_ecom_key_secret_id
   limit 1;
 end;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_menu_item_details(p_item_id uuid, p_location_id uuid DEFAULT NULL::uuid)
  RETURNS json
  LANGUAGE plpgsql
@@ -5760,9 +5628,7 @@ BEGIN
         WHERE mi.id = p_item_id
     );
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_merchant_acquisition(p_from timestamp with time zone, p_to timestamp with time zone)
  RETURNS TABLE(period text, new_merchants bigint, new_locations bigint)
  LANGUAGE plpgsql
@@ -5780,9 +5646,7 @@ BEGIN
   GROUP BY DATE_TRUNC('week', m.created_at)
   ORDER BY period;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_merchant_retention(p_from timestamp with time zone, p_to timestamp with time zone)
  RETURNS TABLE(retained bigint, churned bigint, new_merchants bigint, retention_rate numeric)
  LANGUAGE plpgsql
@@ -5847,9 +5711,7 @@ BEGIN
     ON pa.merchant_id = ca.merchant_id;
 
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_my_hq_permissions()
  RETURNS text[]
  LANGUAGE plpgsql
@@ -5875,9 +5737,7 @@ BEGIN
 
   RETURN COALESCE(v_permissions, ARRAY[]::text[]);
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_onboarding_funnel(p_from timestamp with time zone, p_to timestamp with time zone)
  RETURNS TABLE(stage text, merchant_count bigint)
  LANGUAGE plpgsql
@@ -5926,9 +5786,7 @@ BEGIN
   UNION ALL
   SELECT 'Steady State (5+ orders)', (SELECT cnt FROM steady_state);
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_order_flow_stats(p_merchant_id uuid, p_location_id uuid DEFAULT NULL::uuid, p_start_date timestamp with time zone DEFAULT (now() - '7 days'::interval), p_end_date timestamp with time zone DEFAULT now())
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -6165,9 +6023,7 @@ BEGIN
 
   RETURN v_result;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_payment_failure_rate_by_day(p_from timestamp with time zone, p_to timestamp with time zone)
  RETURNS TABLE(date date, total_txns bigint, failed_txns bigint, failure_rate_pct numeric)
  LANGUAGE plpgsql
@@ -6193,9 +6049,7 @@ BEGIN
   GROUP BY DATE(op.initiated_at)
   ORDER BY date;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_payment_method_mix(p_from timestamp with time zone, p_to timestamp with time zone)
  RETURNS TABLE(payment_method text, txn_count bigint, total_amount numeric)
  LANGUAGE plpgsql
@@ -6213,9 +6067,7 @@ BEGIN
   GROUP BY op.payment_method
   ORDER BY txn_count DESC;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_payment_summary_stats(p_from timestamp with time zone, p_to timestamp with time zone)
  RETURNS TABLE(total_transactions bigint, total_failed bigint, overall_failure_rate numeric, total_chargebacks bigint, total_chargeback_amount numeric)
  LANGUAGE plpgsql
@@ -6259,9 +6111,7 @@ BEGIN
     AND op.initiated_at < p_to;
 
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_peak_hours_heatmap(p_from timestamp with time zone, p_to timestamp with time zone)
  RETURNS TABLE(day_of_week integer, hour integer, order_count bigint)
  LANGUAGE plpgsql
@@ -6278,9 +6128,7 @@ BEGIN
   GROUP BY EXTRACT(DOW FROM o.created_at), EXTRACT(HOUR FROM o.created_at)
   ORDER BY day_of_week, hour;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_platform_gmv_by_day(p_from timestamp with time zone, p_to timestamp with time zone)
  RETURNS TABLE(date date, revenue numeric, order_count bigint)
  LANGUAGE plpgsql
@@ -6298,9 +6146,7 @@ BEGIN
   GROUP BY DATE(o.created_at)
   ORDER BY date;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_pos_full_sync(p_location_id uuid)
  RETURNS json
  LANGUAGE plpgsql
@@ -6346,9 +6192,7 @@ BEGIN
 
     RETURN result;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_pos_inventory_sync(p_location_id uuid)
  RETURNS json
  LANGUAGE plpgsql
@@ -6398,9 +6242,7 @@ BEGIN
 
     RETURN COALESCE(v_result, '[]'::json);
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_refund_rate_by_day(p_from timestamp with time zone, p_to timestamp with time zone)
  RETURNS TABLE(date date, refund_rate_pct numeric)
  LANGUAGE plpgsql
@@ -6425,9 +6267,7 @@ BEGIN
   GROUP BY DATE(op.initiated_at)
   ORDER BY date;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_revenue_by_merchant(p_from timestamp with time zone, p_to timestamp with time zone)
  RETURNS TABLE(merchant_id uuid, merchant_name text, revenue numeric)
  LANGUAGE plpgsql
@@ -6447,9 +6287,7 @@ BEGIN
   ORDER BY revenue DESC
   LIMIT 20;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_revenue_by_order_type(p_from timestamp with time zone, p_to timestamp with time zone)
  RETURNS TABLE(order_type text, revenue numeric, order_count bigint)
  LANGUAGE plpgsql
@@ -6467,9 +6305,7 @@ BEGIN
   GROUP BY o.order_type
   ORDER BY revenue DESC;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_service_timeline_breakdown(p_location_id text, p_start_date timestamp with time zone, p_end_date timestamp with time zone)
  RETURNS json
  LANGUAGE plpgsql
@@ -6579,9 +6415,7 @@ BEGIN
 
     RETURN result;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_staff_performance_stats(p_merchant_id uuid, p_location_id uuid DEFAULT NULL::uuid, p_start_date timestamp with time zone DEFAULT (now() - '7 days'::interval), p_end_date timestamp with time zone DEFAULT now())
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -6809,9 +6643,7 @@ BEGIN
 
   RETURN v_result;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_support_dashboard_stats()
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -6857,9 +6689,7 @@ BEGIN
     'tickets_today',            COALESCE(v_tickets_today, 0)
   );
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_table_performance_stats(p_merchant_id uuid, p_location_id uuid DEFAULT NULL::uuid, p_start_date timestamp with time zone DEFAULT (now() - '7 days'::interval), p_end_date timestamp with time zone DEFAULT now())
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -7094,9 +6924,7 @@ BEGIN
 
   RETURN v_result;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_terminal_type_distribution(p_from timestamp with time zone, p_to timestamp with time zone)
  RETURNS TABLE(terminal_type text, terminal_count bigint)
  LANGUAGE plpgsql
@@ -7112,9 +6940,7 @@ BEGIN
   GROUP BY pt.terminal_type
   ORDER BY terminal_count DESC;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_tip_rate_by_day(p_from timestamp with time zone, p_to timestamp with time zone)
  RETURNS TABLE(date date, tip_rate_pct numeric)
  LANGUAGE plpgsql
@@ -7135,9 +6961,7 @@ BEGIN
   GROUP BY DATE(op.initiated_at)
   ORDER BY date;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_transaction_volume_by_day(p_from timestamp with time zone, p_to timestamp with time zone)
  RETURNS TABLE(date date, txn_count bigint, total_amount numeric)
  LANGUAGE plpgsql
@@ -7155,9 +6979,7 @@ BEGIN
   GROUP BY DATE(op.initiated_at)
   ORDER BY date;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_unified_staff_view(p_merchant_id uuid, p_location_id uuid DEFAULT NULL::uuid)
  RETURNS TABLE(member_id text, staff_profile_id uuid, user_id text, clerk_user_id text, email text, first_name text, last_name text, display_name text, avatar_url text, phone text, account_type text, is_clerk_user boolean, location_assignments jsonb, total_locations integer, primary_location_id uuid, primary_location_name text, overall_is_active boolean, member_created_at timestamp with time zone, last_updated_at timestamp with time zone)
  LANGUAGE plpgsql
@@ -7244,9 +7066,7 @@ BEGIN
   WHERE m.id IS NOT NULL OR ld.profile_id IS NOT NULL
   ORDER BY sd.last_name, sd.first_name;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.hq_has_permission(p_permission_code text)
  RETURNS boolean
  LANGUAGE plpgsql
@@ -7279,9 +7099,7 @@ BEGIN
 
   RETURN COALESCE(v_has_permission, false);
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.increment_location_stock(p_inventory_item_id uuid, p_location_id uuid, p_quantity numeric)
  RETURNS void
  LANGUAGE plpgsql
@@ -7307,9 +7125,7 @@ BEGIN
         updated_at = now()
     WHERE id = p_inventory_item_id;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.initialize_location_stock(p_location_id uuid)
  RETURNS integer
  LANGUAGE plpgsql
@@ -7338,9 +7154,7 @@ BEGIN
     GET DIAGNOSTICS v_count = ROW_COUNT;
     RETURN v_count;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.list_location_payment_devices(p_location_id uuid)
  RETURNS TABLE(id uuid, merchant_id uuid, location_id uuid, provider text, device_label text, tpn text, whitelist_origins text[], whitelist_synced_at timestamp with time zone, last_synced_from_crm_at timestamp with time zone, is_active boolean, use_for_online_ordering boolean, created_at timestamp with time zone, updated_at timestamp with time zone, ftd_key_configured boolean)
  LANGUAGE plpgsql
@@ -7392,9 +7206,7 @@ begin
   where lpd.location_id = p_location_id
   order by lpd.use_for_online_ordering desc, lpd.updated_at desc, lpd.created_at desc;
 end;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.log_admin_payment_audit_event(p_action text, p_resource_type text DEFAULT 'payment_data'::text, p_resource_id text DEFAULT NULL::text, p_merchant_id text DEFAULT NULL::text, p_location_id text DEFAULT NULL::text, p_fields_accessed text[] DEFAULT NULL::text[], p_success boolean DEFAULT true, p_error_message text DEFAULT NULL::text, p_request_path text DEFAULT '/manage/transactions'::text, p_ip_address text DEFAULT NULL::text, p_user_agent text DEFAULT NULL::text)
  RETURNS void
  LANGUAGE plpgsql
@@ -7498,9 +7310,7 @@ EXCEPTION
   WHEN others THEN
     RETURN;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.log_purchase_order_delivery(p_purchase_order_id uuid, p_delivered_by text, p_delivery_notes text, p_logged_by_user_id text, p_logged_by_name text, p_received_items jsonb)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -7613,9 +7423,7 @@ BEGIN
         'discrepancies',   v_discrepancies
     );
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.log_purchase_order_payment(p_purchase_order_id uuid, p_payment_method text, p_amount numeric, p_paid_by_user_id text, p_paid_by_name text, p_paid_to text, p_card_last_four text, p_notes text)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -7664,9 +7472,7 @@ BEGIN
 
     RETURN jsonb_build_object('success', true, 'payment_id', v_payment_id);
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.log_waste(p_merchant_id uuid, p_location_id uuid, p_inventory_item_id uuid, p_quantity numeric, p_reason text, p_notes text, p_logged_by_user_id text, p_logged_by_name text, p_waste_date date DEFAULT CURRENT_DATE)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -7748,9 +7554,7 @@ BEGIN
         'new_stock',      v_new_stock
     );
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.loyalty_earn_on_order(p_order_id uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -8065,9 +7869,7 @@ BEGIN
 
     RETURN v_result;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.loyalty_expire_rewards()
  RETURNS void
  LANGUAGE plpgsql
@@ -8097,9 +7899,7 @@ BEGIN
         );
     END LOOP;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.loyalty_get_customer_status(p_customer_id uuid, p_merchant_id uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -8195,9 +7995,7 @@ BEGIN
         'eligible_promotions', COALESCE(v_eligible_promos, '[]'::JSONB)
     );
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.loyalty_manual_adjust(p_enrollment_id uuid, p_adjustment_type text, p_amount integer, p_reason text, p_staff_id uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -8285,9 +8083,7 @@ BEGIN
 
     RETURN jsonb_build_object('success', true, 'new_balance', v_new_balance);
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.loyalty_redeem_reward(p_reward_id uuid, p_order_id uuid, p_location_id uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -8417,9 +8213,7 @@ BEGIN
 
     RETURN v_discount;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.loyalty_void_order_earnings(p_order_id uuid)
  RETURNS void
  LANGUAGE plpgsql
@@ -8502,9 +8296,7 @@ BEGIN
         END LOOP;
     END LOOP;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.merge_customers(p_primary_id uuid, p_duplicate_ids uuid[])
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -8677,9 +8469,7 @@ EXCEPTION WHEN OTHERS THEN
     'detail', SQLSTATE
   );
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.notify_waitlist_party(p_waitlist_id uuid, p_notification_type text DEFAULT 'sms'::text)
  RETURNS json
  LANGUAGE plpgsql
@@ -8719,9 +8509,7 @@ BEGIN
     'message_template', 'Hi ' || v_entry.party_name || '! Your table at ' || COALESCE(v_location.name, 'Our Restaurant') || ' is ready. Please check in with the host within 10 minutes.'
   );
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.pos_staff_login(p_location_id uuid, p_pin_code text)
  RETURNS TABLE(success boolean, staff_profile_id uuid, role_code text, first_name text, last_name text, error_message text)
  LANGUAGE plpgsql
@@ -8775,9 +8563,7 @@ BEGIN
   RETURN QUERY SELECT false, NULL::UUID, NULL::TEXT, NULL::TEXT, NULL::TEXT,
     'Invalid PIN'::TEXT;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.prevent_append_only_mutation()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -8786,9 +8572,7 @@ AS $function$
 BEGIN
   RAISE EXCEPTION 'Table % is append-only; % is not allowed', TG_TABLE_NAME, TG_OP;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.process_online_order(p_location_id uuid, p_provider text, p_provider_order_id text, p_provider_restaurant_id text DEFAULT NULL::text, p_external_reference text DEFAULT NULL::text, p_delivery_company text DEFAULT NULL::text, p_provider_metadata jsonb DEFAULT '{}'::jsonb, p_order_type_raw text DEFAULT 'DELIVERY'::text, p_customer_name text DEFAULT NULL::text, p_customer_phone text DEFAULT NULL::text, p_customer_email text DEFAULT NULL::text, p_subtotal numeric DEFAULT 0, p_tax numeric DEFAULT 0, p_total numeric DEFAULT 0, p_gratuity numeric DEFAULT 0, p_surcharge numeric DEFAULT 0, p_delivery_charge numeric DEFAULT 0, p_discount numeric DEFAULT 0, p_placed_at timestamp with time zone DEFAULT NULL::timestamp with time zone, p_ready_by timestamp with time zone DEFAULT NULL::timestamp with time zone, p_estimated_delivery timestamp with time zone DEFAULT NULL::timestamp with time zone, p_items jsonb DEFAULT '[]'::jsonb, p_delivery_address jsonb DEFAULT NULL::jsonb, p_order_notes text DEFAULT NULL::text, p_raw_payload jsonb DEFAULT NULL::jsonb, p_auto_accept boolean DEFAULT false)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -9284,9 +9068,7 @@ EXCEPTION WHEN OTHERS THEN
     'provider', p_provider,
     'provider_order_id', p_provider_order_id
   );
-END;$function$
-;
-
+END;$function$;
 CREATE OR REPLACE FUNCTION public.process_order_inventory_deduction(p_order_id uuid)
  RETURNS void
  LANGUAGE plpgsql
@@ -9392,9 +9174,7 @@ BEGIN
     -- Mark as processed to prevent double-deduction (#4)
     UPDATE orders SET inventory_deducted = TRUE WHERE id = p_order_id;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.record_waitlist_sms_result(p_waitlist_id uuid, p_success boolean)
  RETURNS void
  LANGUAGE plpgsql
@@ -9408,9 +9188,7 @@ BEGIN
     WHERE id = p_waitlist_id;
   END IF;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.record_waitlist_sms_result(p_waitlist_id uuid, p_success boolean, p_notification_type text DEFAULT 'sms'::text)
  RETURNS void
  LANGUAGE plpgsql
@@ -9435,9 +9213,7 @@ BEGIN
     WHERE id = p_waitlist_id;
   END IF;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.remove_category_from_menu(p_menu_id uuid, p_category_id uuid)
  RETURNS json
  LANGUAGE plpgsql
@@ -9458,9 +9234,7 @@ BEGIN
         'category_id', p_category_id
     );
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.remove_item_from_category(p_category_id uuid, p_menu_item_id uuid)
  RETURNS json
  LANGUAGE plpgsql
@@ -9482,9 +9256,7 @@ BEGIN
         'menu_item_id', p_menu_item_id
     );
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.remove_order_item(p_order_item_id uuid)
  RETURNS json
  LANGUAGE plpgsql
@@ -9543,9 +9315,7 @@ BEGIN
 
   RETURN v_result;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.remove_order_items_batch(p_order_item_ids uuid[])
  RETURNS json
  LANGUAGE plpgsql
@@ -9601,9 +9371,7 @@ BEGIN
 
   RETURN v_result;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.resend_waitlist_notification(p_waitlist_id uuid, p_notification_type text DEFAULT 'sms'::text)
  RETURNS json
  LANGUAGE plpgsql
@@ -9643,9 +9411,7 @@ BEGIN
     'message_template', 'Hi ' || v_entry.party_name || '! Your table at ' || COALESCE(v_location.name, 'Our Restaurant') || ' is ready. Please check in with the host within 10 minutes.'
   );
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.safe_jsonb_int(p_value jsonb, p_default integer DEFAULT 1)
  RETURNS integer
  LANGUAGE plpgsql
@@ -9679,9 +9445,7 @@ BEGIN
 
   RETURN COALESCE(v_int, p_default);
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.set_cfd_ordering_panel_images_updated_at()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -9691,9 +9455,7 @@ begin
   new.updated_at = now();
   return new;
 end;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.set_location_ein_last_four()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -9713,9 +9475,7 @@ BEGIN
   END IF;
   RETURN NEW;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.set_location_stock(p_inventory_item_id uuid, p_location_id uuid, p_quantity numeric)
  RETURNS void
  LANGUAGE plpgsql
@@ -9744,9 +9504,7 @@ BEGIN
         updated_at = now()
     WHERE id = p_inventory_item_id;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.submit_inventory_count(p_count_id uuid, p_counted_items jsonb, p_user_id text, p_user_name text, p_apply_adjustments boolean DEFAULT false)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -9864,9 +9622,7 @@ BEGIN
         'adjustments_applied',  v_adjustments_applied
     );
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.sync_location_banking_profile_merchant_id()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -9887,9 +9643,7 @@ BEGIN
   NEW.merchant_id := v_merchant_id;
   RETURN NEW;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.trigger_earn_on_order_completion()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -9903,9 +9657,7 @@ BEGIN
   END IF;
   RETURN NEW;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.trigger_init_stock_for_new_item()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -9924,9 +9676,7 @@ BEGIN
 
     RETURN NEW;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.trigger_void_loyalty_earnings()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -9938,9 +9688,7 @@ AS $function$BEGIN
     PERFORM loyalty_void_order_earnings(NEW.id);
   END IF;
   RETURN NEW;
-END;$function$
-;
-
+END;$function$;
 CREATE OR REPLACE FUNCTION public.update_merchant_notes_updated_at()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -9950,9 +9698,7 @@ BEGIN
   NEW.updated_at := now();
   RETURN NEW;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.update_ticket_status(p_ticket_id uuid, p_status text, p_resolution_notes text DEFAULT NULL::text, p_resolved_by text DEFAULT NULL::text)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -9975,9 +9721,7 @@ BEGIN
 
   RETURN jsonb_build_object('success', true);
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.upsert_location_payment_device(p_location_id uuid, p_tpn text, p_ftd_ecom_key text DEFAULT NULL::text, p_device_label text DEFAULT NULL::text, p_use_for_online_ordering boolean DEFAULT true)
  RETURNS uuid
  LANGUAGE plpgsql
@@ -10102,9 +9846,7 @@ begin
 
   return v_device_id;
 end;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.upsert_menu_item_with_recipe(p_menu_item_id uuid, p_ingredients jsonb DEFAULT NULL::jsonb, p_recipe_items jsonb DEFAULT NULL::jsonb, p_location_id uuid DEFAULT NULL::uuid)
  RETURNS void
  LANGUAGE plpgsql
@@ -10161,9 +9903,7 @@ BEGIN
         );
     END LOOP;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.void_order(p_order_id uuid, p_void_reason text DEFAULT 'Order cancelled'::text)
  RETURNS json
  LANGUAGE plpgsql
@@ -10285,9 +10025,7 @@ BEGIN
   ) INTO v_result;
 
   RETURN v_result;
-END;$function$
-;
-
+END;$function$;
 CREATE OR REPLACE FUNCTION public.void_order_and_cancel_reservation(p_order_id uuid, p_void_reason text DEFAULT 'Order cancelled'::text)
  RETURNS json
  LANGUAGE plpgsql
@@ -10337,43 +10075,28 @@ BEGIN
     )
   )::JSON;
 END;
-$function$
-;
-
-
-  create policy "cfd_ordering_panel_images_public_read"
+$function$;
+create policy "cfd_ordering_panel_images_public_read"
   on "public"."cfd_ordering_panel_images"
   as permissive
   for select
   to anon, authenticated
 using (true);
-
-
-
-  create policy "delivery_zones_public_read"
+create policy "delivery_zones_public_read"
   on "public"."delivery_zones"
   as permissive
   for select
   to anon, authenticated
 using ((is_active = true));
-
-
-
-  create policy "online_store_config_public_read"
+create policy "online_store_config_public_read"
   on "public"."online_store_config"
   as permissive
   for select
   to anon, authenticated
 using ((is_active = true));
-
-
-
-  create policy "online_store_pages_public_read"
+create policy "online_store_pages_public_read"
   on "public"."online_store_pages"
   as permissive
   for select
   to anon, authenticated
 using ((is_visible = true));
-
-
-

@@ -13,7 +13,6 @@ DO $$ BEGIN
     USING (is_merchant_admin(merchant_id));
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
-
 DO $$ BEGIN
   CREATE POLICY "Merchant Admin can delete " ON public.menu_item_modifier_groups
     AS PERMISSIVE FOR UPDATE TO public
@@ -21,7 +20,6 @@ DO $$ BEGIN
     WITH CHECK (is_merchant_admin(merchant_id));
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
-
 DO $$ BEGIN
   CREATE POLICY "Admin Write" ON public.reservations
     AS PERMISSIVE FOR ALL TO public
@@ -29,14 +27,12 @@ DO $$ BEGIN
     WITH CHECK (is_merchant_admin(merchant_id));
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
-
 DO $$ BEGIN
   CREATE POLICY "Enable for merchant admins " ON public.schedules
     AS PERMISSIVE FOR DELETE TO public
     USING (is_merchant_admin(merchant_id));
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
-
 -- ── SECTION 2: Missing indexes (67) ────────────────────────
 
 -- cash_drawer_sessions

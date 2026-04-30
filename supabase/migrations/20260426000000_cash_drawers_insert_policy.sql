@@ -12,7 +12,6 @@
 -- =============================================================================
 
 DROP POLICY IF EXISTS "cash_drawers_insert" ON public.cash_drawers;
-
 CREATE POLICY "cash_drawers_insert"
   ON public.cash_drawers
   FOR INSERT

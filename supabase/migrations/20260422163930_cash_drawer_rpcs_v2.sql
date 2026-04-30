@@ -104,7 +104,7 @@ BEGIN
       'cash_management',
       'warning',
       'cash_drawer_operation',
-      v_op_id,
+      v_op_id::TEXT,
       'No Sale - Drawer Pop',
       p_performed_by,
       v_session.location_id,
@@ -429,4 +429,4 @@ BEGIN
     'suspicious_patterns', v_suspicious
   );
 END;
-$$;
+$$;;

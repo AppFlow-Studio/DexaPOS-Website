@@ -8,7 +8,6 @@
 -- =============================================================================
 
 BEGIN;
-
 CREATE OR REPLACE FUNCTION public.calculate_tip_distribution_v2(
   p_merchant_id    UUID,
   p_location_id    UUID,
@@ -391,5 +390,4 @@ BEGIN
   );
 END;
 $$;
-
 COMMIT;

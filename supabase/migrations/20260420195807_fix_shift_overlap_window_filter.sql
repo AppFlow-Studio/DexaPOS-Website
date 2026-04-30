@@ -42,3 +42,4 @@ BEGIN
   -- rebuild_employee_daily_tips uses day boundaries not session windows,
   -- so it doesn't need this specific fix. No change needed.
 END $$;
+;

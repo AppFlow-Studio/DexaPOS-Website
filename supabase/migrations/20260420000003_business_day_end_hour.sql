@@ -11,11 +11,9 @@
 -- =============================================================================
 
 BEGIN;
-
 -- 1. Add column to locations
 ALTER TABLE public.locations
   ADD COLUMN IF NOT EXISTS business_day_end_hour INTEGER NOT NULL DEFAULT 0;
-
 DO $$
 BEGIN
   IF NOT EXISTS (
@@ -26,12 +24,10 @@ BEGIN
       CHECK (business_day_end_hour >= 0 AND business_day_end_hour <= 23);
   END IF;
 END $$;
-
 COMMENT ON COLUMN public.locations.business_day_end_hour IS
   'Hour (0-23) when the business day ends. 0 = midnight (default). '
   '4 = 4 AM (common for bars/restaurants open past midnight). '
   'A "Monday" business day with end_hour=4 runs from Mon 4 AM → Tue 4 AM.';
-
 -- =============================================================================
 -- 2. Update calculate_tip_distribution_v2 with business day boundaries
 -- =============================================================================
@@ -496,7 +492,6 @@ BEGIN
   );
 END;
 $$;
-
 -- =============================================================================
 -- 3. Update rebuild_employee_daily_tips with business day boundaries
 -- =============================================================================
@@ -577,7 +572,6 @@ BEGIN
   RETURN v_rows;
 END;
 $$;
-
 -- =============================================================================
 -- 4. Update declare_cash_tips_for_shift with business day date computation
 -- =============================================================================
@@ -637,5 +631,4 @@ BEGIN
   RETURN json_build_object('success', true, 'shift_id', p_shift_id, 'declared_amount', p_amount);
 END;
 $$;
-
 COMMIT;

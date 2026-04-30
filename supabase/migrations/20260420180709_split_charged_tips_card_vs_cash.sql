@@ -581,4 +581,4 @@ charged_tips = COALESCE((
     AND op.status = 'captured'
     AND o.created_at::date = edt.shift_date
 ), 0);
-
+;

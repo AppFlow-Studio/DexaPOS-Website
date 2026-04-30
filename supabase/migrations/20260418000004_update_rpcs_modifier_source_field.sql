@@ -353,7 +353,6 @@ BEGIN
     RETURN result;
 END;
 $$;
-
 -- 2. get_categories_for_location
 CREATE OR REPLACE FUNCTION "public"."get_categories_for_location"("p_merchant_id" "uuid", "p_location_id" "uuid" DEFAULT NULL::"uuid") RETURNS json
     LANGUAGE "plpgsql" SECURITY DEFINER
@@ -627,7 +626,6 @@ CREATE OR REPLACE FUNCTION "public"."get_categories_for_location"("p_merchant_id
           )
     );
 END;$$;
-
 -- 3. get_items_for_location_library
 CREATE OR REPLACE FUNCTION "public"."get_items_for_location_library"("p_merchant_id" "uuid", "p_location_id" "uuid" DEFAULT NULL::"uuid") RETURNS json
     LANGUAGE "plpgsql" SECURITY DEFINER
@@ -856,7 +854,6 @@ BEGIN
     );
 END;
 $$;
-
 -- 4. get_menu_item_details (Pattern B: adds UNION + source)
 CREATE OR REPLACE FUNCTION "public"."get_menu_item_details"("p_item_id" "uuid", "p_location_id" "uuid" DEFAULT NULL::"uuid") RETURNS json
     LANGUAGE "plpgsql" SECURITY DEFINER
