@@ -1,32 +1,14 @@
+
 -- ============================================================================
 -- Migration: kds_voided_refunded_items
 -- Date: 2026-04-22
 --
 -- PURPOSE: Make voided and refunded items visible on KDS with visual indicators
 -- instead of silently filtering them out.
---
--- CHANGES:
---   1. get_kds_tickets_v2: Include voided/refunded items that had kitchen_status,
---      add is_voided/is_refunded/refunded_quantity to items JSON,
---      derive status/count from active items only.
---
---   2. broadcast_order_changes: Remove is_voided filter from order_items query
---      so voided items are included in the broadcast payload for KDS display.
---
--- BACKWARD COMPATIBLE: Yes — new JSON fields are additive. Client-side code
--- handles missing fields via optional chaining / defaults.
 -- ============================================================================
 
 
--- ============================================================================
 -- PART 1: Update get_kds_tickets_v2()
---
--- Changes vs. previous version:
---   - WHERE clause: include voided/refunded items that had kitchen_status
---   - Items JSON: add is_voided, is_refunded, refunded_quantity fields
---   - Status aggregation: derive from active items only (skip voided/fully-refunded)
---   - Item count: count only active quantities (exclude voided, subtract refunded)
--- ============================================================================
 
 CREATE OR REPLACE FUNCTION get_kds_tickets_v2(
   p_location_id UUID,
@@ -74,7 +56,6 @@ BEGIN
       SELECT
         oi.order_id,
         COALESCE(oi.course_number, 1) AS course_number,
-        -- Status from ACTIVE items only (not voided, not fully refunded)
         bool_and(
           CASE WHEN NOT COALESCE(oi.is_voided, false)
                 AND COALESCE(oi.refunded_quantity, 0) < oi.quantity
@@ -87,7 +68,6 @@ BEGIN
                THEN oi.kitchen_status = 'sent'
                ELSE false END
         ) AS any_active_sent,
-        -- Count only active quantities (exclude voided, subtract refunded)
         SUM(
           CASE WHEN COALESCE(oi.is_voided, false) THEN 0
                ELSE GREATEST(oi.quantity - COALESCE(oi.refunded_quantity, 0), 0)
@@ -95,7 +75,6 @@ BEGIN
         )::int AS active_item_count,
         oi.fire_time,
         bool_or(COALESCE(oi.is_prioritized, false)) AS any_prioritized,
-        -- Items array now includes voided/refunded fields for KDS display
         jsonb_agg(
           jsonb_build_object(
             'id', oi.id,
@@ -137,13 +116,10 @@ BEGIN
         AND kis.status NOT IN ('cancelled', 'completed')
       WHERE oi.kitchen_status IS NOT NULL
         AND (
-          -- Active items with KDS-relevant statuses
           (COALESCE(oi.is_voided, false) = false
            AND COALESCE(oi.refunded_quantity, 0) < oi.quantity
            AND oi.kitchen_status = ANY(p_statuses))
-          -- Voided items that had been sent to kitchen — show as VOIDED
           OR COALESCE(oi.is_voided, false) = true
-          -- Refunded items (partial or full) that had been sent to kitchen — show as REFUNDED
           OR COALESCE(oi.refunded_quantity, 0) > 0
         )
         AND (p_kds_display_id IS NULL OR kis.id IS NOT NULL)
@@ -158,19 +134,8 @@ END;
 $$;
 
 
--- ============================================================================
 -- PART 2: Update broadcast_order_changes()
---
--- Single change: remove "AND COALESCE(oi.is_voided, false) = false" filter
--- from the order_items query so voided items are included in the broadcast
--- payload. The KDS client filters handle display logic. All other consumers
--- already have is_voided in the BroadcastOrderItemData type and filter
--- client-side as needed.
---
--- NOTE: The full function body is reproduced below (CREATE OR REPLACE
--- requires the complete function). The ONLY change vs. the previous version
--- is the removal of the is_voided filter on the order_items SELECT.
--- ============================================================================
+-- Only change: removed "AND COALESCE(oi.is_voided, false) = false" from order_items query
 
 CREATE OR REPLACE FUNCTION broadcast_order_changes()
 RETURNS TRIGGER
@@ -190,19 +155,15 @@ DECLARE
   v_location_id uuid;
   v_station_name text;
 BEGIN
-  -- Get location_id (handle DELETE case)
   v_location_id := COALESCE(NEW.location_id, OLD.location_id);
 
   IF v_location_id IS NULL THEN
     RETURN NULL;
   END IF;
 
-  -- Build topic
   v_topic := 'location:' || v_location_id::text || ':orders';
 
-  -- Build payload based on operation
   IF TG_OP = 'DELETE' THEN
-    -- DELETE: Minimal payload (no need to fetch items)
     payload := jsonb_build_object(
       'operation', TG_OP,
       'timestamp', now(),
@@ -216,14 +177,10 @@ BEGIN
       )
     );
   ELSE
-    -- INSERT/UPDATE: Full payload with order_items and modifiers
-    -- 1. FETCH STATION NAME ----------------------------------------
     SELECT station_name INTO v_station_name
     FROM stations
     WHERE id = NEW.station_id;
-    -----------------------------------------------------------------
-    -- Fetch order items WITH their modifiers for this order
-    -- NOTE: No is_voided filter — voided items included for KDS display
+
     SELECT COALESCE(jsonb_agg(
       jsonb_build_object(
         'id', oi.id,
@@ -257,7 +214,6 @@ BEGIN
         'rush', COALESCE(oi.rush, false),
         'is_prioritized', COALESCE(oi.is_prioritized, false),
         'fire_time', oi.fire_time::timestamptz,
-        -- Phase 2.5: Include modifiers for this item
         'modifiers', (
           SELECT COALESCE(jsonb_agg(
             jsonb_build_object(
@@ -279,9 +235,6 @@ BEGIN
     FROM order_items oi
     WHERE oi.order_id = NEW.id;
 
-
-    -- Fetch order payments for this order
-    -- Split into two jsonb_build_object calls to stay under 100-arg limit
     SELECT COALESCE(jsonb_agg(
       jsonb_build_object(
         'id', op.id,
@@ -322,7 +275,6 @@ BEGIN
         'reference_number', op.reference_number,
         'reference_id', op.reference_number,
         'created_at', op.initiated_at,
-        -- Return/refund tracking fields
         'is_returned', COALESCE(op.is_returned, false),
         'returned_at', op.returned_at,
         'returned_by', op.returned_by,
@@ -337,9 +289,7 @@ BEGIN
     FROM order_payments op
     WHERE op.order_id = NEW.id
       AND op.status IN ('captured', 'refunded', 'partially_refunded', 'void');
-    -- Include refunded/voided payments for history display
 
-    -- Fetch reversals for this order (via payment linkage)
     SELECT COALESCE(jsonb_agg(
       jsonb_build_object(
         'id', r.id,
@@ -370,7 +320,6 @@ BEGIN
     JOIN order_payments op ON op.id = r.original_payment_id
     WHERE op.order_id = NEW.id;
 
-    -- Fetch refund line items for this order
     SELECT COALESCE(jsonb_agg(
       jsonb_build_object(
         'id', ori.id,
@@ -393,7 +342,6 @@ BEGIN
     JOIN order_items oi ON oi.id = ori.order_item_id
     WHERE oi.order_id = NEW.id;
 
-    -- Fetch per-payment item coverage from junction table
     SELECT COALESCE(jsonb_agg(
       jsonb_build_object(
         'id', opi.id,
@@ -409,8 +357,6 @@ BEGIN
     JOIN order_payments op ON op.id = opi.order_payment_id
     WHERE op.order_id = NEW.id;
 
-    -- Build order_data in parts to avoid 100 argument limit
-    -- Part 1: Identifiers and relationships
     order_data := jsonb_build_object(
       'id', NEW.id,
       'order_number', NEW.order_number,
@@ -433,7 +379,6 @@ BEGIN
       'check_status', NEW.check_status
     );
 
-    -- Part 2: Financial totals
     order_data := order_data || jsonb_build_object(
       'subtotal', NEW.subtotal,
       'tax_amount', NEW.tax_amount,
@@ -451,7 +396,6 @@ BEGIN
       'cash_discount_amount', NEW.cash_discount_amount
     );
 
-    -- Part 3: Effective pricing and payment status
     order_data := order_data || jsonb_build_object(
       'effective_subtotal', NEW.effective_subtotal,
       'effective_tax_amount', NEW.effective_tax_amount,
@@ -463,7 +407,6 @@ BEGIN
       'cash_amount_due', NEW.cash_amount_due
     );
 
-    -- Part 4: Timestamps
     order_data := order_data || jsonb_build_object(
       'created_at', NEW.created_at,
       'updated_at', NEW.updated_at,
@@ -475,7 +418,6 @@ BEGIN
       'voided_at', NEW.voided_at
     );
 
-    -- Part 5: Void info, sync info, order items, and payments
     order_data := order_data || jsonb_build_object(
       'voided_by', NEW.voided_by,
       'void_reason', NEW.void_reason,
@@ -489,7 +431,6 @@ BEGIN
       'payment_items', payment_items_data
     );
 
-    -- Build final payload
     payload := jsonb_build_object(
       'operation', TG_OP,
       'timestamp', now(),
@@ -502,7 +443,6 @@ BEGIN
   RAISE LOG 'Broadcasting order for location %', v_topic;
   RAISE LOG 'Broadcasting order for location %', payload;
 
-  -- Broadcast using Supabase Realtime
   PERFORM realtime.send(
     payload,
     TG_OP,
@@ -517,3 +457,4 @@ EXCEPTION WHEN OTHERS THEN
   RETURN NULL;
 END;
 $fn$;
+;

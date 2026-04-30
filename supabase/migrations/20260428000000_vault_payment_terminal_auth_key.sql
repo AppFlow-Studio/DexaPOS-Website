@@ -13,7 +13,6 @@
 -- A1 ── Add vault secret pointer column
 ALTER TABLE public.payment_terminals
   ADD COLUMN IF NOT EXISTS auth_key_secret_id uuid;
-
 -- A3 ── Backfill existing rows into vault (idempotent — safe to re-run)
 DO $$
 DECLARE

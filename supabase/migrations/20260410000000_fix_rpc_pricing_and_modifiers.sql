@@ -354,9 +354,7 @@ BEGIN
 
     RETURN result;
 END;
-$function$
-;
-
+$function$;
 -- ============================================================================
 -- FIX 2: get_categories_for_location — add modifier_groups to item JSON
 -- ============================================================================
@@ -629,5 +627,4 @@ AS $function$BEGIN
               )
           )
     );
-END;$function$
-;
+END;$function$;

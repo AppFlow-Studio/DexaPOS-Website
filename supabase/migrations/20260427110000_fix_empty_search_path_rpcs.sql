@@ -10,10 +10,8 @@
 
 ALTER FUNCTION public.get_menu_with_categories(uuid, uuid)
   SET search_path = public;
-
 ALTER FUNCTION public.upsert_category_item_override(
   uuid, uuid, uuid, uuid, numeric, numeric, boolean,
   numeric, text, integer, boolean, text, integer, numeric
 ) SET search_path = public;
-
 NOTIFY pgrst, 'reload schema';

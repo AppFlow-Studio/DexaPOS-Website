@@ -1,6 +1,7 @@
+
 -- ============================================================================
 -- Migration: reduce_broadcast_count_per_item_add
---
+-- 
 -- Problem: add_order_item_v2 fires 2 UPDATEs to orders table per call:
 --   1. recalculate_order_discount → UPDATE orders (totals)
 --   2. increment_order_sync_version → UPDATE orders (sync_version)
@@ -45,7 +46,7 @@ v_custom_refund_balance numeric;
 v_order record;
 v_new_sync_version integer;
 BEGIN
-SELECT
+SELECT 
     COALESCE(SUM(quantity * unit_price), 0),
     COALESCE(SUM(quantity * COALESCE(cash_price, unit_price)), 0),
     COALESCE(SUM(discount_amount), 0)
@@ -53,7 +54,7 @@ INTO v_original_card_subtotal, v_original_cash_subtotal, v_discount
 FROM public.order_items
 WHERE order_id = p_order_id AND is_voided = false;
 
-SELECT
+SELECT 
     COALESCE(SUM(subtotal), 0),
     COALESCE(SUM(cash_subtotal), 0),
     COALESCE(SUM(tax_amount), 0),
@@ -121,36 +122,36 @@ UPDATE public.orders SET
     -- Original subtotals (pre-discount) for reference
     card_subtotal = v_original_card_subtotal,
     cash_subtotal = v_original_cash_subtotal,
-
+    
     -- Discount amount
     discount_amount = v_discount,
-
+    
     -- Effective values (after discount)
     effective_subtotal = v_card_subtotal,
     effective_tax_amount = v_card_tax,
     effective_total = v_card_subtotal + v_card_tax + v_service_charge,
-
+    
     -- Tax amounts (on discounted subtotals)
     card_tax_amount = v_card_tax,
     cash_tax_amount = v_cash_tax,
-
+    
     -- Totals (discounted subtotal + tax + service)
     card_total = v_card_subtotal + v_card_tax + v_service_charge,
     cash_total = v_cash_subtotal + v_cash_tax + v_service_charge,
-
+    
     -- Legacy fields
     subtotal = v_card_subtotal,
     tax_amount = v_card_tax,
     total_amount = v_card_subtotal + v_card_tax + v_service_charge,
-
+    
     -- Amount due (calculated from UNPAID items, not total - paid)
     amount_due = v_unpaid_card_total,
     cash_amount_due = v_unpaid_cash_total,
-
+    
     -- Bump sync_version to reduce broadcast count: callers no longer need
     -- a separate increment_order_sync_version UPDATE on the orders row
     sync_version = COALESCE(sync_version, 0) + 1,
-
+    
     updated_at = now()
 WHERE id = p_order_id
 RETURNING sync_version INTO v_new_sync_version;
@@ -183,7 +184,7 @@ DECLARE
     v_applicable_subtotal NUMERIC := 0;
     v_new_calculated_amount NUMERIC := 0;
     v_affected_item_ids UUID[] := '{}';
-
+    
     -- For item distribution
     v_item RECORD;
     v_item_proportion NUMERIC;
@@ -191,7 +192,7 @@ DECLARE
     v_distributed_total NUMERIC := 0;
     v_last_item_id UUID;
     v_item_calcs JSONB;
-
+    
     -- Order totals
     v_gross_card_subtotal NUMERIC;
     v_gross_cash_subtotal NUMERIC;
@@ -208,7 +209,7 @@ BEGIN
     -- ============================================
     -- 1. Get Active Order-Level Discount
     -- ============================================
-    SELECT
+    SELECT 
         od.id,
         od.discount_id,
         od.discount_name,
@@ -228,7 +229,7 @@ BEGIN
       AND od.voided_at IS NULL
     ORDER BY od.applied_at DESC
     LIMIT 1;
-
+    
     -- If no active discount, just recalculate totals and return
     IF v_discount.id IS NULL THEN
         -- Clear any stale discount data from items
@@ -251,21 +252,21 @@ BEGIN
         WHERE order_id = p_order_id
           AND is_voided = false
           AND discount_amount > 0;
-
+        
         -- calculate_order_totals_fast now also bumps sync_version
         PERFORM calculate_order_totals_fast(p_order_id);
-
+        
         RETURN jsonb_build_object(
             'success', true,
             'has_discount', false,
             'message', 'No active discount'
         );
     END IF;
-
+    
     -- ============================================
     -- 2. Get All Applicable Items
     -- ============================================
-    SELECT
+    SELECT 
         COALESCE(SUM(oi.quantity * oi.unit_price), 0),
         COALESCE(array_agg(oi.id), '{}')
     INTO v_applicable_subtotal, v_affected_item_ids
@@ -273,12 +274,12 @@ BEGIN
     WHERE oi.order_id = p_order_id
       AND oi.is_voided = false
       AND oi.quantity > COALESCE(oi.paid_quantity, 0);
-
+    
     -- Apply exclusions if preset discount
     IF v_discount.discount_id IS NOT NULL THEN
         -- Exclude alcohol
         IF COALESCE(v_discount.exclude_alcohol, false) THEN
-            SELECT
+            SELECT 
                 COALESCE(SUM(oi.quantity * oi.unit_price), 0),
                 COALESCE(array_agg(oi.id), '{}')
             INTO v_applicable_subtotal, v_affected_item_ids
@@ -289,10 +290,10 @@ BEGIN
               AND oi.quantity > COALESCE(oi.paid_quantity, 0)
               AND COALESCE(mi.is_alcohol, false) = false;
         END IF;
-
+        
         -- Exclude categories
         IF v_discount.exclude_categories IS NOT NULL THEN
-            SELECT
+            SELECT 
                 COALESCE(SUM(oi.quantity * oi.unit_price), 0),
                 COALESCE(array_agg(oi.id), '{}')
             INTO v_applicable_subtotal, v_affected_item_ids
@@ -303,10 +304,10 @@ BEGIN
               AND oi.quantity > COALESCE(oi.paid_quantity, 0)
               AND (mi.category_id IS NULL OR NOT (mi.category_id = ANY(v_discount.exclude_categories)));
         END IF;
-
+        
         -- Apply to specific categories only
         IF v_discount.applies_to_categories IS NOT NULL THEN
-            SELECT
+            SELECT 
                 COALESCE(SUM(oi.quantity * oi.unit_price), 0),
                 COALESCE(array_agg(oi.id), '{}')
             INTO v_applicable_subtotal, v_affected_item_ids
@@ -318,7 +319,7 @@ BEGIN
               AND mi.category_id = ANY(v_discount.applies_to_categories);
         END IF;
     END IF;
-
+    
     -- ============================================
     -- 3. Calculate New Discount Amount
     -- ============================================
@@ -336,7 +337,7 @@ BEGIN
     ELSE
         v_new_calculated_amount := 0;
     END IF;
-
+    
     -- ============================================
     -- 4. Update order_discounts Record
     -- ============================================
@@ -346,7 +347,7 @@ BEGIN
         pre_discount_subtotal = v_applicable_subtotal,
         applied_to_item_ids = v_affected_item_ids
     WHERE id = v_discount.id;
-
+    
     -- ============================================
     -- 5. Clear Discounts from Non-Applicable Items
     -- ============================================
@@ -368,15 +369,15 @@ BEGIN
     WHERE order_id = p_order_id
       AND is_voided = false
       AND id <> ALL(v_affected_item_ids);
-
+    
     -- ============================================
     -- 6. Distribute Discount to Applicable Items
     -- ============================================
     v_distributed_total := 0;
     v_last_item_id := NULL;
-
+    
     FOR v_item IN
-        SELECT
+        SELECT 
             oi.id,
             oi.quantity,
             oi.paid_quantity,
@@ -395,12 +396,12 @@ BEGIN
         ELSE
             v_item_proportion := 0;
         END IF;
-
+        
         -- This item's discount
         v_item_discount_amount := ROUND(v_new_calculated_amount * v_item_proportion, 2);
         v_distributed_total := v_distributed_total + v_item_discount_amount;
         v_last_item_id := v_item.id;
-
+        
         -- Calculate item totals with discount
         v_item_calcs := calculate_item_totals(
             v_item.quantity,
@@ -409,7 +410,7 @@ BEGIN
             v_item.tax_rate,
             v_item_discount_amount
         );
-
+        
         -- Update item
         UPDATE public.order_items
         SET
@@ -428,7 +429,7 @@ BEGIN
             updated_at = now()
         WHERE id = v_item.id;
     END LOOP;
-
+    
     -- Handle rounding remainder
     IF v_last_item_id IS NOT NULL AND v_distributed_total <> v_new_calculated_amount THEN
         DECLARE
@@ -436,7 +437,7 @@ BEGIN
             v_last_row RECORD;
         BEGIN
             SELECT * INTO v_last_row FROM public.order_items WHERE id = v_last_item_id;
-
+            
             v_item_calcs := calculate_item_totals(
                 v_last_row.quantity,
                 v_last_row.unit_price,
@@ -444,7 +445,7 @@ BEGIN
                 v_last_row.tax_rate,
                 v_last_row.discount_amount + v_rounding_adj
             );
-
+            
             UPDATE public.order_items
             SET
                 discount_amount = discount_amount + v_rounding_adj,
@@ -456,14 +457,14 @@ BEGIN
             WHERE id = v_last_item_id;
         END;
     END IF;
-
+    
     -- ============================================
     -- 7. Recalculate Order Totals
     -- ============================================
     SELECT COALESCE(amount_paid, 0) INTO v_amount_paid
     FROM public.orders WHERE id = p_order_id;
-
-    SELECT
+    
+    SELECT 
         COALESCE(SUM(quantity * unit_price), 0),
         COALESCE(SUM(quantity * COALESCE(cash_price, unit_price)), 0),
         COALESCE(SUM(discount_amount), 0),
@@ -471,7 +472,7 @@ BEGIN
         COALESCE(SUM(cash_subtotal), 0),
         COALESCE(SUM(tax_amount), 0),
         COALESCE(SUM(cash_tax_amount), 0)
-    INTO
+    INTO 
         v_gross_card_subtotal,
         v_gross_cash_subtotal,
         v_total_discount,
@@ -481,10 +482,10 @@ BEGIN
         v_cash_tax
     FROM public.order_items
     WHERE order_id = p_order_id AND is_voided = false;
-
+    
     v_card_total := v_net_card_subtotal + v_card_tax;
     v_cash_total := v_net_cash_subtotal + v_cash_tax;
-
+    
     UPDATE public.orders SET
         card_subtotal = v_gross_card_subtotal,
         cash_subtotal = v_gross_cash_subtotal,
@@ -506,7 +507,7 @@ BEGIN
         updated_at = now()
     WHERE id = p_order_id
     RETURNING sync_version INTO v_new_sync_version;
-
+    
     -- ============================================
     -- 8. Return Result
     -- ============================================
@@ -563,7 +564,7 @@ DECLARE
     v_tax_rate numeric := 0;
     v_is_tax_exempt boolean := false;
     v_item_id uuid;
-
+    
     -- Pricing calculations
     v_modifier_total numeric := 0;
     v_size_mod numeric;
@@ -573,7 +574,7 @@ DECLARE
     v_cash_subtotal numeric;
     v_tax_amount numeric;
     v_cash_tax_amount numeric;
-
+    
     v_cash_discount_rate numeric := 0.04;
     v_has_active_discount boolean := false;
     v_new_sync_version integer;
@@ -581,7 +582,7 @@ BEGIN
     -- ============================================
     -- 1. Validate & Get Order Context (with RLS)
     -- ============================================
-    SELECT o.location_id, o.merchant_id
+    SELECT o.location_id, o.merchant_id 
     INTO v_location_id, v_merchant_id
     FROM public.orders o
     WHERE o.id = p_order_id
@@ -589,29 +590,29 @@ BEGIN
       AND o.merchant_id = user_merchant_id()
       AND o.location_id = ANY(user_location_ids())
     FOR UPDATE;
-
+    
     IF v_location_id IS NULL THEN
         RAISE EXCEPTION 'Order not found or access denied: %', p_order_id;
     END IF;
-
+    
     -- ============================================
     -- 2. Get Tax Rate
     -- ============================================
     IF p_menu_item_id IS NOT NULL THEN
-        SELECT
+        SELECT 
             COALESCE(tr.percentage, 0),
             COALESCE(lio.is_tax_exempt, mi.is_tax_exempt, false)
         INTO v_tax_rate, v_is_tax_exempt
         FROM public.menu_items mi
-        LEFT JOIN public.location_item_overrides lio
-            ON lio.menu_item_id = mi.id
+        LEFT JOIN public.location_item_overrides lio 
+            ON lio.menu_item_id = mi.id 
             AND lio.location_id = v_location_id
-        LEFT JOIN public.tax_rates tr
-            ON tr.location_id = v_location_id
+        LEFT JOIN public.tax_rates tr 
+            ON tr.location_id = v_location_id 
             AND tr.tax_category::text = COALESCE(lio.tax_category, mi.tax_category, 'standard')::text
             AND tr.is_active = true
         WHERE mi.id = p_menu_item_id;
-
+        
         IF v_is_tax_exempt THEN
             v_tax_rate := 0;
         END IF;
@@ -619,12 +620,12 @@ BEGIN
         SELECT COALESCE(tr.percentage, 0)
         INTO v_tax_rate
         FROM public.tax_rates tr
-        WHERE tr.location_id = v_location_id
-          AND tr.tax_category = 'standard'
+        WHERE tr.location_id = v_location_id 
+          AND tr.tax_category = 'standard' 
           AND tr.is_active = true
         LIMIT 1;
     END IF;
-
+    
     v_tax_rate := COALESCE(v_tax_rate, 0);
 
     -- ============================================
@@ -632,28 +633,28 @@ BEGIN
     -- ============================================
     IF p_modifiers IS NOT NULL AND jsonb_array_length(p_modifiers) > 0 THEN
         SELECT COALESCE(SUM(
-            COALESCE((mod->>'price_modifier')::numeric, 0) *
+            COALESCE((mod->>'price_modifier')::numeric, 0) * 
             COALESCE((mod->>'quantity')::integer, 1)
         ), 0)
         INTO v_modifier_total
         FROM jsonb_array_elements(p_modifiers) AS mod;
     END IF;
-
+    
     -- ============================================
     -- 4. Calculate Pricing
     -- ============================================
     v_size_mod := COALESCE(p_size_price_modifier, 0);
-
+    
     v_effective_card_price := p_unit_price + v_size_mod + v_modifier_total;
-    v_effective_cash_price := COALESCE(p_cash_unit_price, p_unit_price * (1 - v_cash_discount_rate))
+    v_effective_cash_price := COALESCE(p_cash_unit_price, p_unit_price * (1 - v_cash_discount_rate)) 
                               + v_size_mod + v_modifier_total;
-
+    
     v_subtotal := v_effective_card_price * p_quantity;
     v_cash_subtotal := v_effective_cash_price * p_quantity;
-
+    
     v_tax_amount := ROUND(v_subtotal * v_tax_rate / 100, 2);
     v_cash_tax_amount := ROUND(v_cash_subtotal * v_tax_rate / 100, 2);
-
+    
     -- ============================================
     -- 5. Insert Order Item
     -- ============================================
@@ -753,17 +754,17 @@ BEGIN
           AND voided_at IS NULL
           AND calculated_amount > 0
     ) INTO v_has_active_discount;
-
+    
     -- 8. If discount exists, redistribute across all items (including new one)
     IF v_has_active_discount THEN
         PERFORM redistribute_order_discount(p_order_id);
-
+        
         SELECT subtotal, tax_amount, cash_subtotal, cash_tax_amount
         INTO v_subtotal, v_tax_amount, v_cash_subtotal, v_cash_tax_amount
         FROM public.order_items
         WHERE id = v_item_id;
     END IF;
-
+    
     -- ============================================
     -- 9. RECALCULATE DISCOUNT + TOTALS + SYNC_VERSION
     -- recalculate_order_discount now bumps sync_version in its final UPDATE,
@@ -771,7 +772,7 @@ BEGIN
     -- This reduces broadcasts from 2 to 1 per item add.
     -- ============================================
     PERFORM recalculate_order_discount(p_order_id);
-
+    
     -- Read the sync_version that was bumped by recalculate_order_discount
     SELECT sync_version INTO v_new_sync_version FROM orders WHERE id = p_order_id;
 
@@ -795,3 +796,4 @@ BEGIN
     );
 END
 $$;
+;
