@@ -763,7 +763,7 @@ export function PaymentTerminalTab({ station }: PaymentTerminalTabProps) {
 
       {/* Create Terminal Dialog */}
       <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent >
           <DialogHeader>
             <DialogTitle>
               Register {getTerminalTypeLabel(createType)} Terminal
