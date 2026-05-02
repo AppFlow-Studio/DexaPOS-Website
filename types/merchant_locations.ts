@@ -776,10 +776,6 @@ export interface LocationFormStep4 {
   bank_support_document_name: string;
   bank_support_document_url?: string;
   account_type: 'checking' | 'savings';
-  payout_frequency: 'daily' | 'weekly' | 'monthly';
-  payout_day_of_week: string;
-  payout_day_of_month: string;
-  minimum_payout_amount: string;
   use_merchant_billing_profile: boolean;
 }
 

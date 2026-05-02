@@ -85,10 +85,6 @@ const initialFormData: LocationFormData = {
     confirm_account_number: '',
     bank_support_document_name: '',
     account_type: 'checking',
-    payout_frequency: 'daily',
-    payout_day_of_week: '1',
-    payout_day_of_month: '1',
-    minimum_payout_amount: '0.00',
     use_merchant_billing_profile: false,
     business_hours: DEFAULT_BUSINESS_HOURS,
     manager_assignment_type: 'skip',
@@ -254,12 +250,6 @@ export function AdminCreateLocationWizard({ merchantId, merchantName }: AdminCre
                     formData.account_number !== formData.confirm_account_number
                 ) {
                     newErrors.confirm_account_number = 'Account number confirmation must match'
-                }
-                if (
-                    formData.minimum_payout_amount &&
-                    Number.isNaN(Number(formData.minimum_payout_amount))
-                ) {
-                    newErrors.minimum_payout_amount = 'Minimum payout must be a valid amount'
                 }
                 if (!bankSupportFile) {
                     newErrors.bank_support_document_name = 'Bank letter or voided check is required'

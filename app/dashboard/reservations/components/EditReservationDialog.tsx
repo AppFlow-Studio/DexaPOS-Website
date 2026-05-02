@@ -29,12 +29,12 @@ import type { Reservation } from '@/types/floor-plan'
 
 const schema = z.object({
   partyName: z.string().min(1, 'Name required'),
-  partySize: z.number().int().min(1).max(20),
+  partySize: z.coerce.number().int().min(1, 'Min 1').max(20, 'Max 20'),
   phone: z.string().min(7, 'Valid phone required'),
   email: z.string().email('Invalid email').or(z.literal('')).optional(),
   reservationDate: z.string().min(1, 'Date required'),
   reservationTime: z.string().min(1, 'Time required'),
-  durationMinutes: z.number().int().min(15).max(480),
+  durationMinutes: z.coerce.number().int().min(15, 'Min 15 min').max(480, 'Max 480 min'),
   isVip: z.boolean().default(false),
   preferredSection: z.string().optional(),
   seatingPreference: z.string().optional(),
@@ -169,9 +169,9 @@ export default function EditReservationDialog ({
                         type='number'
                         min={1}
                         max={20}
-                        value={field.value}
+                        value={field.value ?? ''}
                         onChange={e =>
-                          field.onChange(parseInt(e.target.value, 10) || 1)
+                          field.onChange(e.target.value === '' ? '' : parseInt(e.target.value, 10))
                         }
                       />
                     </FormControl>
@@ -254,9 +254,9 @@ export default function EditReservationDialog ({
                       type='number'
                       min={15}
                       max={480}
-                      value={field.value}
+                      value={field.value ?? ''}
                       onChange={e =>
-                        field.onChange(parseInt(e.target.value, 10) || 90)
+                        field.onChange(e.target.value === '' ? '' : parseInt(e.target.value, 10))
                       }
                     />
                   </FormControl>

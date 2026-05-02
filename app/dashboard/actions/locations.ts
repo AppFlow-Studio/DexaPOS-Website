@@ -405,42 +405,87 @@ export async function ToggleLocationOrders(locationId: string) {
 }
 
 // ============================================================================
-// DELETE OPERATIONS
+// ARCHIVE / RESTORE OPERATIONS  (replaces hard-delete)
 // ============================================================================
 
-export async function DeleteLocation(locationId: string) {
+export async function ArchiveLocation(locationId: string) {
   if (!locationId) {
     return { error: "Location ID is required" };
   }
 
   const supabase = createServerSupabaseClient();
 
-  // Fetch location details before deletion for audit log
-  const { data: locationToDelete } = await supabase
-    .from("locations")
-    .select("name, merchant_id")
-    .eq("id", locationId)
-    .single();
-
-  const { error } = await supabase
-    .from("locations")
-    .delete()
-    .eq("id", locationId);
+  const { data, error } = await supabase.rpc("archive_location", {
+    p_location_id: locationId,
+  });
 
   if (error) {
-    console.error("Error deleting location:", error);
+    console.error("Error archiving location:", error);
     return { error: error.message };
   }
 
-  // Log audit event
-  if (locationToDelete) {
+  const result = data as { error?: string; success?: boolean; name?: string };
+  if (result.error) {
+    return { error: result.error };
+  }
+
+  const { data: locationData } = await supabase
+    .from("locations")
+    .select("merchant_id")
+    .eq("id", locationId)
+    .single();
+
+  if (locationData) {
     await LogAuditEvent({
-      merchantId: locationToDelete.merchant_id,
-      action: `Deleted Location: ${locationToDelete.name}`,
+      merchantId: locationData.merchant_id,
+      action: `Archived Location: ${result.name}`,
       actionCategory: "settings",
       resourceType: "location",
       resourceId: locationId,
-      resourceName: locationToDelete.name,
+      resourceName: result.name ?? locationId,
+      changes: { before: { is_active: true }, after: { is_active: false } },
+    });
+  }
+
+  return { success: true };
+}
+
+export async function RestoreLocation(locationId: string) {
+  if (!locationId) {
+    return { error: "Location ID is required" };
+  }
+
+  const supabase = createServerSupabaseClient();
+
+  const { data, error } = await supabase.rpc("restore_location", {
+    p_location_id: locationId,
+  });
+
+  if (error) {
+    console.error("Error restoring location:", error);
+    return { error: error.message };
+  }
+
+  const result = data as { error?: string; success?: boolean; name?: string };
+  if (result.error) {
+    return { error: result.error };
+  }
+
+  const { data: locationData } = await supabase
+    .from("locations")
+    .select("merchant_id")
+    .eq("id", locationId)
+    .single();
+
+  if (locationData) {
+    await LogAuditEvent({
+      merchantId: locationData.merchant_id,
+      action: `Restored Location: ${result.name}`,
+      actionCategory: "settings",
+      resourceType: "location",
+      resourceId: locationId,
+      resourceName: result.name ?? locationId,
+      changes: { before: { is_active: false }, after: { is_active: true } },
     });
   }
 
