@@ -243,9 +243,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
         online_store_config!inner(
           id, location_id, merchant_id, ipospays_tpn, is_active,
           operating_hours, accepts_pickup, accepts_delivery,
-          min_order_cents, estimated_prep_minutes,
-          delivery_radius_miles, delivery_fee_cents,
-          free_delivery_threshold_cents, address,
+          min_order, estimated_prep_minutes,
+          delivery_radius_miles, delivery_fee,
+          free_delivery_threshold, address,
           slug, auto_accept_orders
         )
       `)
@@ -268,9 +268,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
       .select(`
         id, location_id, merchant_id, ipospays_tpn, is_active,
         operating_hours, accepts_pickup, accepts_delivery,
-        min_order_cents, estimated_prep_minutes,
-        delivery_radius_miles, delivery_fee_cents,
-        free_delivery_threshold_cents, address,
+        min_order, estimated_prep_minutes,
+        delivery_radius_miles, delivery_fee,
+        free_delivery_threshold, address,
         slug, auto_accept_orders
       `)
       .eq('id', body.store_config_id)
@@ -392,9 +392,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
       storeConfig.address,
       body.delivery_address,
       storeConfig.delivery_radius_miles,
-      storeConfig.delivery_fee_cents,
-      storeConfig.min_order_cents,
-      storeConfig.free_delivery_threshold_cents
+      Math.round((storeConfig.delivery_fee ?? 0) * 100),
+      Math.round((storeConfig.min_order ?? 0) * 100),
+      storeConfig.free_delivery_threshold != null
+        ? Math.round(storeConfig.free_delivery_threshold * 100)
+        : null
     )
 
     if (!zoneResult.valid) {
@@ -539,9 +541,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
   })
 
   // ---- Step 7: Validate minimum order ----
+  const storeMinOrderCents = Math.round((storeConfig.min_order ?? 0) * 100)
   const effectiveMinOrderCents = body.order_type === 'delivery'
-    ? Math.max(deliveryMinOrderCents, storeConfig.min_order_cents ?? 0)
-    : (storeConfig.min_order_cents ?? 0)
+    ? Math.max(deliveryMinOrderCents, storeMinOrderCents)
+    : storeMinOrderCents
 
   const minResult = validateMinimumOrder(subtotalCents, effectiveMinOrderCents)
   if (!minResult.valid) {

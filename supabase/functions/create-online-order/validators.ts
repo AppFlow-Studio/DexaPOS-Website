@@ -304,9 +304,11 @@ export async function validateDeliveryZone(
           return {
             valid: true,
             zone: { id: zone.id, zone_name: zone.zone_name },
-            deliveryFeeCents: zone.delivery_fee_cents ?? 0,
-            minOrderCents: zone.min_order_cents ?? 0,
-            freeDeliveryThresholdCents: zone.free_delivery_threshold_cents ?? null,
+            deliveryFeeCents: Math.round((zone.delivery_fee ?? 0) * 100),
+            minOrderCents: Math.round((zone.min_order ?? 0) * 100),
+            freeDeliveryThresholdCents: zone.free_delivery_threshold != null
+              ? Math.round(zone.free_delivery_threshold * 100)
+              : null,
           }
         }
       }
