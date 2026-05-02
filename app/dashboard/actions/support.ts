@@ -108,30 +108,18 @@ export async function GetTicketDetail(
       .in("id", unreadAdminMessages);
   }
 
-  // Fetch attachments and generate signed URLs
+  // Fetch attachment metadata only. Bytes are streamed through
+  // /api/support/attachments/[id], which audit-logs every access. See the
+  // matching comment in app/manage/actions/support.ts for rationale.
   const { data: attachments } = await supabase
     .from("support_ticket_attachments")
     .select("*")
     .eq("ticket_id", ticketId)
     .order("created_at", { ascending: true });
 
-  let attachmentsWithUrls: SupportTicketAttachmentWithUrl[] = [];
-  if (attachments && attachments.length > 0) {
-    const paths = attachments.map((a) => a.file_path);
-    const { data: signedData } = await supabase.storage
-      .from("support-attachments")
-      .createSignedUrls(paths, 3600); // 1-hour expiry
-
-    const urlMap: Record<string, string> = {};
-    (signedData || []).forEach((item) => {
-      urlMap[item.path] = item.signedUrl;
-    });
-
-    attachmentsWithUrls = attachments.map((a) => ({
-      ...a,
-      signed_url: urlMap[a.file_path],
-    }));
-  }
+  const attachmentsWithUrls: SupportTicketAttachmentWithUrl[] = (attachments || []).map(
+    (a) => ({ ...a }),
+  );
 
   // Group attachments by message_id
   const attachmentsByMessageId = attachmentsWithUrls.reduce<

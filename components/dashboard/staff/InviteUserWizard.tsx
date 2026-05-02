@@ -63,6 +63,7 @@ interface InviteUserWizardProps {
   onOpenChange?: (open: boolean) => void;
   onSuccess?: () => void;
   children?: React.ReactNode;
+  defaultLocationId?: string;
 }
 
 type Step = "type" | "details" | "role" | "locations" | "pos_config" | "review";
@@ -106,6 +107,7 @@ export function InviteUserWizard({
   onOpenChange: controlledOnOpenChange,
   onSuccess,
   children,
+  defaultLocationId,
 }: InviteUserWizardProps) {
   const clerkOrgId = useClerkOrgId();
   const { data: userInfo } = useUserInfo();
@@ -174,6 +176,14 @@ export function InviteUserWizard({
       setSelectedRoleCode(roles[0].code);
     }
   }, [open, roles, selectedRoleCode]);
+
+  // Pre-select location when opened from a location context
+  React.useEffect(() => {
+    if (open && defaultLocationId) {
+      setSelectedLocationIds(new Set([defaultLocationId]));
+      setPrimaryLocationId(defaultLocationId);
+    }
+  }, [open, defaultLocationId]);
 
   // Reset form when closing
   React.useEffect(() => {

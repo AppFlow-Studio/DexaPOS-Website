@@ -162,6 +162,18 @@ interface LogAuditEventParams {
     reason?: string;
   };
   metadata?: Record<string, unknown>;
+  /**
+   * When this event represents access to PII, set the access type.
+   * NULL/undefined for non-PII events. Constrained by DB CHECK to:
+   *   'attachment_view' | 'customer_pii_view' | 'customer_pii_export'
+   *   | 'staff_pii_view' | 'merchant_billing_view'
+   */
+  piiAccessType?:
+    | "attachment_view"
+    | "customer_pii_view"
+    | "customer_pii_export"
+    | "staff_pii_view"
+    | "merchant_billing_view";
 }
 
 /**
@@ -336,6 +348,7 @@ export async function LogAuditEvent(
     p_changes: finalChanges || null,
     p_metadata:
       sanitizeRecord(params.metadata as Record<string, unknown>) || null,
+    p_pii_access_type: params.piiAccessType ?? null,
   });
 
   if (error) {

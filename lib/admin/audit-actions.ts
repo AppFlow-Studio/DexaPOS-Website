@@ -23,6 +23,21 @@ export const ADMIN_ACTIONS = {
     category: 'merchant',
     severity: 'warning',
   },
+  MERCHANT_SUSPENSION_REQUESTED: {
+    action: 'merchant.suspension_requested',
+    category: 'merchant',
+    severity: 'warning',
+  },
+  MERCHANT_SUSPENSION_FORCED: {
+    action: 'merchant.suspension_forced',
+    category: 'merchant',
+    severity: 'critical',
+  },
+  MERCHANT_SUSPENSION_CANCELLED: {
+    action: 'merchant.suspension_cancelled',
+    category: 'merchant',
+    severity: 'info',
+  },
   MERCHANT_SETTINGS_CHANGED: {
     action: 'merchant.settings_changed',
     category: 'merchant',

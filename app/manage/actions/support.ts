@@ -139,30 +139,19 @@ export async function GetAdminTicketDetail(
       .in("id", unread);
   }
 
-  // Fetch attachments and generate signed URLs
+  // Fetch attachment metadata only. Bytes are streamed through
+  // /api/support/attachments/[id], which audit-logs every access. We no longer
+  // mint bulk signed URLs at page-load time — that overstated access (most
+  // URLs were never redeemed) and bypassed any audit trail.
   const { data: attachments } = await supabase
     .from("support_ticket_attachments")
     .select("*")
     .eq("ticket_id", ticketId)
     .order("created_at", { ascending: true });
 
-  let attachmentsWithUrls: SupportTicketAttachmentWithUrl[] = [];
-  if (attachments && attachments.length > 0) {
-    const paths = attachments.map((a) => a.file_path);
-    const { data: signedData } = await supabase.storage
-      .from("support-attachments")
-      .createSignedUrls(paths, 3600);
-
-    const urlMap: Record<string, string> = {};
-    (signedData || []).forEach((item) => {
-      urlMap[item.path] = item.signedUrl;
-    });
-
-    attachmentsWithUrls = attachments.map((a) => ({
-      ...a,
-      signed_url: urlMap[a.file_path],
-    }));
-  }
+  const attachmentsWithUrls: SupportTicketAttachmentWithUrl[] = (attachments || []).map(
+    (a) => ({ ...a }),
+  );
 
   // Group attachments by message_id
   const attachmentsByMessageId = attachmentsWithUrls.reduce<
