@@ -455,7 +455,7 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
 
             {/* Edit Business Info Dialog */}
             <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-                <DialogContent className="sm:max-w-[600px]">
+                <DialogContent >
                     <DialogHeader>
                         <DialogTitle>Edit Business Information</DialogTitle>
                         <DialogDescription>

@@ -37,7 +37,8 @@
       "Bash(curl -s \"http://ein-l-mirasi.localhost:3000\")",
       "Bash(node -e *)",
       "Bash(curl -s \"http://localhost:3000/dashboard\")",
-      "mcp__supabase__execute_sql"
+      "mcp__supabase__execute_sql",
+      "Bash(git fetch *)"
     ],
     "additionalDirectories": [
       "C:\\Users\\HP i5\\Desktop\\mdptech\\DexaPOS-website\\DexaPOS-Website\\tasks",

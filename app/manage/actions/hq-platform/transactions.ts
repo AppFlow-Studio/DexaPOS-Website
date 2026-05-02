@@ -3492,6 +3492,65 @@ export async function getPlatformMerchants(): Promise<PlatformMerchant[]> {
   return (data ?? []).map((m: any) => ({ id: m.id, name: m.name }))
 }
 
+// Search-as-you-type for merchant pickers. Backs <MerchantSearchSelect />.
+// Static dropdowns hit PostgREST's max_rows=1000 cap silently — for HQs with
+// more merchants than that, the dropdown was missing entries. This endpoint
+// is paginated/searched server-side instead.
+export async function searchPlatformMerchants(
+  query: string = '',
+  limit: number = 20,
+): Promise<PlatformMerchant[]> {
+  const { userId, role } = await assertHQPermission('hq.merchant.view')
+  const merchantScope = await getAssignedMerchantScope(userId, role?.role_code)
+
+  const supabase = createServerSupabaseClient()
+  const cappedLimit = Math.max(1, Math.min(limit, 50))
+
+  let q = supabase
+    .from('merchants')
+    .select('id, name')
+    .order('name')
+    .limit(cappedLimit)
+
+  const term = query.trim()
+  if (term.length > 0) {
+    q = q.ilike('name', `%${term}%`)
+  }
+
+  if (merchantScope !== null) {
+    if (merchantScope.length === 0) return []
+    q = q.in('id', merchantScope)
+  }
+
+  const { data, error } = await q
+  if (error) {
+    console.error('[searchPlatformMerchants] Error:', error)
+    return []
+  }
+  return (data ?? []).map((m: any) => ({ id: m.id, name: m.name }))
+}
+
+// Lookup a single merchant by id — used by <MerchantSearchSelect /> to render
+// the currently-selected label without forcing the parent to keep the name.
+export async function getPlatformMerchantById(
+  id: string,
+): Promise<PlatformMerchant | null> {
+  const { userId, role } = await assertHQPermission('hq.merchant.view')
+  const merchantScope = await getAssignedMerchantScope(userId, role?.role_code)
+
+  if (merchantScope !== null && !merchantScope.includes(id)) return null
+
+  const supabase = createServerSupabaseClient()
+  const { data, error } = await supabase
+    .from('merchants')
+    .select('id, name')
+    .eq('id', id)
+    .maybeSingle()
+
+  if (error || !data) return null
+  return { id: data.id, name: data.name }
+}
+
 // Locations for filter dropdown
 
 export interface PlatformLocation {

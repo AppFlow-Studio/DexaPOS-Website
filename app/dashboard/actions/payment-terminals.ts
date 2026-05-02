@@ -81,6 +81,7 @@ export interface CreatePaymentTerminalInput {
   terminal_type: TerminalType;
   terminal_model?: string | null;
   serial_number?: string | null;
+  firmware_version?: string | null;
   auth_key: string;
   register_id: string;
   api_environment?: ApiEnvironment;
@@ -362,6 +363,10 @@ export async function createPaymentTerminal(
     }
 
     const now = new Date().toISOString();
+    const firmwareVersion = input.firmware_version?.trim() || null;
+    const initialMetadata: Record<string, unknown> = firmwareVersion
+      ? { firmware_version: firmwareVersion }
+      : {};
 
     const { data, error } = await supabase
       .from("payment_terminals")
@@ -372,7 +377,7 @@ export async function createPaymentTerminal(
         terminal_name: input.terminal_name,
         terminal_type: input.terminal_type,
         terminal_model: input.terminal_model || null,
-        serial_number: input.serial_number || null,
+        serial_number: input.serial_number?.trim() || null,
         auth_key: input.auth_key,
         register_id: input.register_id,
         auth_key_encrypted: bcrypt.hashSync(input.auth_key) || null,
@@ -393,7 +398,7 @@ export async function createPaymentTerminal(
         supports_tip_adjust: true,
         auto_settle: false,
         spin_proxy_timeout: 120,
-        metadata: {},
+        metadata: initialMetadata,
         created_at: now,
         updated_at: now,
       })

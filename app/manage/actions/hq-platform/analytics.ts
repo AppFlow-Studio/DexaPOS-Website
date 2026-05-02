@@ -218,6 +218,10 @@ export interface PlatformAuditLogFilters {
   resourceType?: string
   /** Filter to rows that have a non-null error_message */
   hasError?: boolean
+  /** Show only rows where pii_access_type IS NOT NULL */
+  piiAccessOnly?: boolean
+  /** Filter to a specific PII access category (implies piiAccessOnly) */
+  piiAccessType?: string
 }
 
 export interface PlatformAuditLogRow {
@@ -243,6 +247,7 @@ export interface PlatformAuditLogRow {
   organization_name?: string
   changes?: Record<string, unknown> | null
   metadata?: Record<string, unknown> | null
+  pii_access_type?: string | null
 }
 
 export interface PlatformAuditLogsResult {
@@ -654,6 +659,7 @@ export async function getPlatformAuditLogs(
       organization_name,
       changes,
       metadata,
+      pii_access_type,
       merchants(name),
       location:locations(id, name)
     `, { count: 'exact' })
@@ -711,6 +717,12 @@ export async function getPlatformAuditLogs(
     query = query.not('error_message', 'is', null)
   }
 
+  if (filters?.piiAccessType) {
+    query = query.eq('pii_access_type', filters.piiAccessType)
+  } else if (filters?.piiAccessOnly) {
+    query = query.not('pii_access_type', 'is', null)
+  }
+
   query = query.range(offset, offset + limit - 1)
 
   const { data, error, count } = await query
@@ -749,6 +761,7 @@ export async function getPlatformAuditLogs(
       organization_name: row.organization_name || undefined,
       changes: row.changes || null,
       metadata: row.metadata || null,
+      pii_access_type: row.pii_access_type ?? null,
     }
   })
 
@@ -4193,6 +4206,16 @@ const STATE_NAME_MAP: Record<string, string> = {
   VA:'Virginia',WA:'Washington',WV:'West Virginia',WI:'Wisconsin',WY:'Wyoming',DC:'D.C.',
 }
 
+// Canonical CSV column set for audit-log export. Keep this list in sync with
+// the headers array in app/manage/audit-logs/page.tsx::buildCsv. The screen
+// view shows a subset (timestamp, org, location, what-happened, who, category,
+// severity, status); the CSV adds resource/error/changes/metadata for offline
+// review. Export delegates to getPlatformAuditLogs so screen and file always
+// agree on filter semantics — only the row cap differs.
+//
+// CSV columns (canonical): Timestamp, Actor Name, Actor Email, Actor Role,
+// Action, Category, Resource Type, Resource Name, Resource ID, Merchant,
+// Location, Org Type, Severity, Status, Error Message, Changes, Metadata.
 export async function getPlatformAuditLogsExport(
   filters?: PlatformAuditLogFilters,
   cap: number = 5000
