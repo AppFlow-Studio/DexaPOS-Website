@@ -100,6 +100,14 @@ export function formatMoneyCents(amount: number | null | undefined) {
   }).format(amount / 100)
 }
 
+export function formatMoneyDollars(amount: number | null | undefined) {
+  if (amount === null || amount === undefined) return 'N/A'
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+  }).format(Number(amount))
+}
+
 export function getTimelineIcon(item: DeviceActivityItem): LucideIcon {
   switch (item.type) {
     case 'assignment':

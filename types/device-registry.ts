@@ -38,6 +38,7 @@ export interface AdminDeviceInventoryRow {
   model_name: string
   model_sku: string | null
   monthly_fee_cents: number | null
+  monthly_fee: number | null
   merchant_id: string | null
   merchant_name: string | null
   location_id: string | null
