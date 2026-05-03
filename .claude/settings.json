@@ -42,7 +42,8 @@
     ],
     "additionalDirectories": [
       "C:\\Users\\HP i5\\Desktop\\mdptech\\DexaPOS-website\\DexaPOS-Website\\tasks",
-      "c:\\Users\\saleh\\OneDrive - Lebanese American University\\Apps\\Dexa\\DexaPOS-Website\\app\\sites\\[slug]"
+      "c:\\Users\\saleh\\OneDrive - Lebanese American University\\Apps\\Dexa\\DexaPOS-Website\\app\\sites\\[slug]",
+      "C:\\Users\\HP i5\\.claude\\projects\\c--Users-HP-i5-Desktop-mdptech-DexaPOS-website-DexaPOS-Website"
     ]
   },
   "hooks": {
