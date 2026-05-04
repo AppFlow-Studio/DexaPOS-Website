@@ -1,7 +1,7 @@
 'use client'
 
 import { format } from 'date-fns'
-import { AlertCircle, CreditCard, Store, User } from 'lucide-react'
+import { AlertCircle, CreditCard, Receipt, Store, User } from 'lucide-react'
 import {
   Sheet,
   SheetContent,
@@ -35,6 +35,77 @@ function toLabel(value?: string) {
   return value
     .replace(/_/g, ' ')
     .replace(/\b\w/g, (char) => char.toUpperCase())
+}
+
+function PlatformFeeBreakdownCard({
+  data,
+}: {
+  data: {
+    dual_pricing_fee?: number
+    tip_fee?: number
+    refunded_dual_pricing_fee?: number
+    refunded_tip_fee?: number
+    original_tip_fee?: number
+    dual_pricing_percentage_snapshot?: number
+    tip_surcharge_percentage_snapshot?: number
+  }
+}) {
+  const dualFee = Number(data.dual_pricing_fee ?? 0)
+  const tipFee = Number(data.tip_fee ?? 0)
+  const refundedDualFee = Number(data.refunded_dual_pricing_fee ?? 0)
+  const refundedTipFee = Number(data.refunded_tip_fee ?? 0)
+  const dualPct = Number(data.dual_pricing_percentage_snapshot ?? 0)
+  const tipPct = Number(data.tip_surcharge_percentage_snapshot ?? 0)
+  const originalTipFee = data.original_tip_fee
+  const tipFeeAdjusted =
+    originalTipFee !== undefined && Math.abs(Number(originalTipFee) - tipFee) > 0.001
+
+  const hasAnyFee =
+    dualFee > 0 || tipFee > 0 || refundedDualFee > 0 || refundedTipFee > 0 || dualPct > 0 || tipPct > 0
+  if (!hasAnyFee) return null
+
+  const netDualFee = Math.max(0, dualFee - refundedDualFee)
+  const netTipFee = Math.max(0, tipFee - refundedTipFee)
+  const netTotal = netDualFee + netTipFee
+
+  return (
+    <div className="rounded-lg border bg-emerald-50/30 dark:bg-emerald-950/10 p-4">
+      <div className="mb-3 flex items-center justify-between">
+        <div className="flex items-center gap-2 text-sm font-medium">
+          <Receipt className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />
+          Fees & Surcharges
+        </div>
+        {netTotal > 0 && (
+          <Badge variant="outline" className="text-xs border-emerald-300 text-emerald-800 dark:text-emerald-300">
+            Net platform fee {formatCurrency(netTotal)}
+          </Badge>
+        )}
+      </div>
+      <div className="grid gap-3 md:grid-cols-3">
+        {(dualFee > 0 || dualPct > 0) && (
+          <Field
+            label={`Card Surcharge${dualPct > 0 ? ` (${dualPct}%)` : ''}`}
+            value={formatCurrency(dualFee)}
+          />
+        )}
+        {refundedDualFee > 0 && (
+          <Field label="Refunded Card Surcharge" value={`-${formatCurrency(refundedDualFee)}`} />
+        )}
+        {(tipFee > 0 || tipPct > 0) && (
+          <Field
+            label={`Tip Surcharge${tipPct > 0 ? ` (${tipPct}%)` : ''}`}
+            value={formatCurrency(tipFee)}
+          />
+        )}
+        {tipFeeAdjusted && originalTipFee !== undefined && (
+          <Field label="Original Tip Fee" value={formatCurrency(Number(originalTipFee))} />
+        )}
+        {refundedTipFee > 0 && (
+          <Field label="Refunded Tip Surcharge" value={`-${formatCurrency(refundedTipFee)}`} />
+        )}
+      </div>
+    </div>
+  )
 }
 
 function StatusPill({ label, value }: { label: string; value?: string }) {
@@ -184,6 +255,12 @@ export function TransactionDetailSheet({
                   <Field label="Payment Amount" value={formatCurrency(data.amount)} />
                   <Field label="Payment Tip" value={formatCurrency(data.tip_amount)} />
                   <Field label="Payment Total" value={formatCurrency(data.total_amount)} />
+                  {data.subtotal_portion !== undefined && (
+                    <Field label="Subtotal Portion" value={formatCurrency(data.subtotal_portion)} />
+                  )}
+                  {data.tax_portion !== undefined && (
+                    <Field label="Tax Portion" value={formatCurrency(data.tax_portion)} />
+                  )}
                   <Field label="Order Subtotal" value={formatCurrency(data.order_subtotal)} />
                   <Field label="Order Tax" value={formatCurrency(data.order_tax_amount)} />
                   <Field label="Order Tip" value={formatCurrency(data.order_tip_amount)} />
@@ -200,6 +277,8 @@ export function TransactionDetailSheet({
                     <Field label="Gateway Fee" value={formatCurrency(data.gateway_fee)} />
                   )}
                 </div>
+
+                <PlatformFeeBreakdownCard data={data} />
 
                 {(data.error_code || data.error_message || data.is_voided || data.refund_reason || data.return_reason) && (
                   <div className="rounded-lg border border-amber-300 bg-amber-50 p-4">

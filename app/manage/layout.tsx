@@ -51,6 +51,7 @@ import {
     Monitor,
     Plug,
     AlertOctagon,
+    Receipt,
     LucideIcon,
 } from 'lucide-react'
 import Link from 'next/link'
@@ -115,6 +116,12 @@ const navMain: NavGroup[] = [
                 url: '/manage/analytics',
                 icon: BarChart3,
                 requiredPermission: 'analytics.view',
+            },
+            {
+                title: 'Platform Fees',
+                url: '/manage/platform-fees',
+                icon: Receipt,
+                requiredPermission: 'hq.merchant.transactions' as PermissionCode,
             },
         ]
     },

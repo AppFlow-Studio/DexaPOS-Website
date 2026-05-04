@@ -153,7 +153,127 @@ function basicToRich(p: OrderPayment): RichPayment {
       tax_paid: Number(opi.tax_paid) ?? null,
     })),
     events: [],
+    subtotal_portion: p.subtotal_portion ?? null,
+    tax_portion: p.tax_portion ?? null,
+    dual_pricing_fee: p.dual_pricing_fee ?? null,
+    tip_fee: p.tip_fee ?? null,
+    refunded_dual_pricing_fee: p.refunded_dual_pricing_fee ?? null,
+    refunded_tip_fee: p.refunded_tip_fee ?? null,
+    original_tip_fee: p.original_tip_fee ?? null,
+    dual_pricing_percentage_snapshot: p.dual_pricing_percentage_snapshot ?? null,
+    tip_surcharge_percentage_snapshot: p.tip_surcharge_percentage_snapshot ?? null,
   };
+}
+
+// ─── Fees & Surcharges Breakdown ───
+
+function PaymentFeeBreakdown({ payment }: { payment: RichPayment }) {
+  const dualFee = Number(payment.dual_pricing_fee ?? 0);
+  const tipFee = Number(payment.tip_fee ?? 0);
+  const refundedDualFee = Number(payment.refunded_dual_pricing_fee ?? 0);
+  const refundedTipFee = Number(payment.refunded_tip_fee ?? 0);
+  const taxPortion = payment.tax_portion;
+  const subtotalPortion = payment.subtotal_portion;
+  const dualPct = Number(payment.dual_pricing_percentage_snapshot ?? 0);
+  const tipPct = Number(payment.tip_surcharge_percentage_snapshot ?? 0);
+  const originalTipFee = payment.original_tip_fee;
+  const tipFeeAdjusted =
+    originalTipFee != null && Math.abs(Number(originalTipFee) - tipFee) > 0.001;
+
+  const hasAnyFee =
+    dualFee > 0 ||
+    tipFee > 0 ||
+    refundedDualFee > 0 ||
+    refundedTipFee > 0 ||
+    dualPct > 0 ||
+    tipPct > 0 ||
+    (subtotalPortion != null && Number(subtotalPortion) > 0) ||
+    (taxPortion != null && Number(taxPortion) > 0);
+
+  if (!hasAnyFee) return null;
+
+  const netDualFee = Math.max(0, dualFee - refundedDualFee);
+  const netTipFee = Math.max(0, tipFee - refundedTipFee);
+  const netTotal = netDualFee + netTipFee;
+
+  return (
+    <div className="border-t px-4 py-3">
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-[11px] font-medium text-muted-foreground">
+          Fees & Surcharges
+        </p>
+        {netTotal > 0 && (
+          <span className="text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
+            Net platform fee {formatCurrency(netTotal)}
+          </span>
+        )}
+      </div>
+      <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-xs">
+        {subtotalPortion != null && (
+          <>
+            <span className="text-muted-foreground">Subtotal portion</span>
+            <span className="font-mono">{formatCurrency(Number(subtotalPortion))}</span>
+          </>
+        )}
+        {taxPortion != null && (
+          <>
+            <span className="text-muted-foreground">Tax portion</span>
+            <span className="font-mono">{formatCurrency(Number(taxPortion))}</span>
+          </>
+        )}
+        {(dualFee > 0 || dualPct > 0) && (
+          <>
+            <span className="text-muted-foreground">
+              Card surcharge
+              {dualPct > 0 && (
+                <span className="ml-1 text-[10px] text-muted-foreground/70">
+                  ({dualPct}%)
+                </span>
+              )}
+            </span>
+            <span className="font-mono">{formatCurrency(dualFee)}</span>
+          </>
+        )}
+        {refundedDualFee > 0 && (
+          <>
+            <span className="text-muted-foreground pl-3">↳ Refunded</span>
+            <span className="font-mono text-rose-600 dark:text-rose-400">
+              -{formatCurrency(refundedDualFee)}
+            </span>
+          </>
+        )}
+        {(tipFee > 0 || tipPct > 0) && (
+          <>
+            <span className="text-muted-foreground">
+              Tip surcharge
+              {tipPct > 0 && (
+                <span className="ml-1 text-[10px] text-muted-foreground/70">
+                  ({tipPct}%)
+                </span>
+              )}
+            </span>
+            <span className="font-mono">{formatCurrency(tipFee)}</span>
+          </>
+        )}
+        {tipFeeAdjusted && originalTipFee != null && (
+          <>
+            <span className="text-muted-foreground pl-3">↳ Original</span>
+            <span className="font-mono line-through text-muted-foreground">
+              {formatCurrency(Number(originalTipFee))}
+            </span>
+          </>
+        )}
+        {refundedTipFee > 0 && (
+          <>
+            <span className="text-muted-foreground pl-3">↳ Refunded</span>
+            <span className="font-mono text-rose-600 dark:text-rose-400">
+              -{formatCurrency(refundedTipFee)}
+            </span>
+          </>
+        )}
+      </div>
+    </div>
+  );
 }
 
 // ─── Enhanced Payment Card ───
@@ -373,6 +493,9 @@ export function EnhancedPaymentCard({
                 {formatCurrency(payment.total_amount)}
               </span>
             </div>
+
+            {/* Fees & Surcharges (per migration 20260503234806) */}
+            <PaymentFeeBreakdown payment={payment} />
 
             {/* Card info: card_type, card_last_four, auth_code, authorization_code */}
             {hasCardDetails && !isCash && (
