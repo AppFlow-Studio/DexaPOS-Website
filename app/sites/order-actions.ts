@@ -315,6 +315,8 @@ export interface OrderTrackingData {
   declinedAt: string | null;
   declinedReason: string | null;
   estimatedPrepMinutes: number;
+  requestedTime: string | null;
+  locationTimezone: string;
   subtotal: number;
   tax: number;
   taxRatePercent: number | null;
@@ -344,7 +346,7 @@ export async function getOrderTracking(
       id, order_number, display_number, status, order_type,
       customer_name, created_at, accepted_at, sent_to_kitchen_at, started_preparing_at,
       ready_at, completed_at, cancelled_at, cancelled_by, cancellation_reason,
-      declined_at, declined_reason,
+      declined_at, declined_reason, estimated_delivery_time,
       subtotal, tax_amount, tip_amount, total_amount,
       special_instructions, location_id,
       order_items (item_name, quantity, unit_price, subtotal, special_instructions, tax_rate)
@@ -374,6 +376,13 @@ export async function getOrderTracking(
     .limit(1)
     .single();
 
+  // Get location timezone for scheduled order display
+  const { data: locationRow } = await supabase
+    .from("locations")
+    .select("timezone")
+    .eq("id", (order as any).location_id)
+    .single();
+
   const o = order as any;
   return {
     data: {
@@ -396,6 +405,8 @@ export async function getOrderTracking(
       declinedAt: o.declined_at ?? null,
       declinedReason: o.declined_reason ?? null,
       estimatedPrepMinutes: config?.estimated_prep_minutes ?? 20,
+      requestedTime: o.estimated_delivery_time ?? null,
+      locationTimezone: locationRow?.timezone ?? "America/New_York",
       subtotal: Number(o.subtotal) || 0,
       tax: Number(o.tax_amount) || 0,
       taxRatePercent: (() => {
@@ -492,6 +503,292 @@ export async function cancelOnlineOrder(
     console.error("cancel-online-order error:", error);
     return { success: false, error: "Failed to cancel order. Please try again." };
   }
+}
+
+// ---- Promo Code Validation ----
+
+export type PromoCodeError =
+  | "not_found"
+  | "inactive"
+  | "not_started"
+  | "expired"
+  | "usage_limit_reached"
+  | "customer_limit_reached"
+  | "minimum_not_met"
+  | "first_order_only";
+
+export interface PromoCodeResult {
+  valid: boolean;
+  error?: string;
+  errorCode?: PromoCodeError;
+  promotionId?: string;
+  promotionName?: string;
+  discountType?: "percentage" | "fixed_amount";
+  discountValue?: number;
+  discountAmount?: number; // computed dollar amount off the order
+}
+
+/**
+ * Validate a promo code against the merchant's promotions table.
+ * Returns the computed discount amount so the UI can apply it immediately.
+ * The server action uses service-role so RLS on promotions doesn't block it.
+ */
+export async function validatePromoCode(
+  storeConfigId: string,
+  code: string,
+  orderSubtotal: number,
+  customerId?: string
+): Promise<PromoCodeResult> {
+  if (!code.trim()) return { valid: false, error: "Please enter a promo code.", errorCode: "not_found" };
+
+  const supabase = createServiceRoleClient();
+
+  const { data: config } = await supabase
+    .from("online_store_config")
+    .select("merchant_id")
+    .eq("id", storeConfigId)
+    .single();
+
+  if (!config) return { valid: false, error: "Store not found.", errorCode: "not_found" };
+
+  const { data: promoRaw } = await supabase
+    .from("promotions")
+    .select(
+      "id, name, discount_type, discount_value, discount_max, min_order_amount, " +
+      "is_active, starts_at, ends_at, max_uses_total, max_uses_per_customer, " +
+      "current_uses, promo_type"
+    )
+    .eq("merchant_id", config.merchant_id)
+    .ilike("promo_code", code.trim())
+    .single();
+
+  if (!promoRaw) return { valid: false, error: "That promo code doesn't exist.", errorCode: "not_found" };
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const promo = promoRaw as any;
+
+  if (!promo.is_active) {
+    return { valid: false, error: "This promo code is no longer active.", errorCode: "inactive" };
+  }
+
+  const now = new Date();
+
+  if (promo.starts_at && new Date(promo.starts_at) > now) {
+    const startDate = new Date(promo.starts_at).toLocaleDateString("en-US", { month: "long", day: "numeric" });
+    return { valid: false, error: `This code isn't valid until ${startDate}.`, errorCode: "not_started" };
+  }
+
+  if (promo.ends_at && new Date(promo.ends_at) < now) {
+    const expDate = new Date(promo.ends_at).toLocaleDateString("en-US", { month: "long", day: "numeric" });
+    return { valid: false, error: `This code expired on ${expDate}.`, errorCode: "expired" };
+  }
+
+  if (promo.max_uses_total !== null && promo.current_uses >= promo.max_uses_total) {
+    return { valid: false, error: "This promo code has reached its usage limit.", errorCode: "usage_limit_reached" };
+  }
+
+  const minOrder = Number(promo.min_order_amount ?? 0);
+  if (minOrder > 0 && orderSubtotal < minOrder) {
+    return {
+      valid: false,
+      error: `Minimum order of $${minOrder.toFixed(2)} required to use this code.`,
+      errorCode: "minimum_not_met",
+    };
+  }
+
+  if (customerId && promo.max_uses_per_customer !== null) {
+    const { count } = await supabase
+      .from("promotion_usage")
+      .select("id", { count: "exact", head: true })
+      .eq("promotion_id", promo.id)
+      .eq("customer_id", customerId);
+
+    if ((count ?? 0) >= promo.max_uses_per_customer) {
+      return {
+        valid: false,
+        error: "You've already used this promo code the maximum number of times.",
+        errorCode: "customer_limit_reached",
+      };
+    }
+  }
+
+  if (promo.promo_type === "first_visit" && customerId) {
+    const { count } = await supabase
+      .from("promotion_usage")
+      .select("id", { count: "exact", head: true })
+      .eq("customer_id", customerId)
+      .eq("merchant_id", config.merchant_id);
+
+    if ((count ?? 0) > 0) {
+      return {
+        valid: false,
+        error: "This code is for first-time customers only.",
+        errorCode: "first_order_only",
+      };
+    }
+  }
+
+  // Compute discount amount
+  const discountType = promo.discount_type as "percentage" | "fixed_amount";
+  let discountAmount = 0;
+  if (discountType === "percentage") {
+    discountAmount = orderSubtotal * (Number(promo.discount_value) / 100);
+    if (promo.discount_max) discountAmount = Math.min(discountAmount, Number(promo.discount_max));
+  } else if (discountType === "fixed_amount") {
+    discountAmount = Math.min(Number(promo.discount_value), orderSubtotal);
+  }
+  discountAmount = Math.round(discountAmount * 100) / 100;
+
+  return {
+    valid: true,
+    promotionId: promo.id,
+    promotionName: promo.name,
+    discountType,
+    discountValue: Number(promo.discount_value),
+    discountAmount,
+  };
+}
+
+// ---- Delivery Zone Pre-Validation ----
+
+export interface DeliveryZoneCheckResult {
+  valid: boolean;
+  reason?: string;
+  zoneName?: string;
+  deliveryFeeCents?: number;
+  minOrderCents?: number;
+}
+
+/**
+ * Check whether a text address falls within the store's delivery zones.
+ * Called client-side (debounced) as the customer types their address, so they
+ * get immediate feedback before placing the order.
+ *
+ * Uses the same geocoding + haversine logic as the edge function — single
+ * source of truth lives in the edge function; this mirrors it server-side
+ * via the Google Maps Geocoding API so we don't expose the key to the browser.
+ */
+export async function checkDeliveryZone(
+  storeConfigId: string,
+  address: { street: string; city: string; state: string; zip: string }
+): Promise<DeliveryZoneCheckResult> {
+  if (!storeConfigId) return { valid: false, reason: "Missing store configuration." };
+
+  const supabase = createServiceRoleClient();
+
+  const { data: config } = await supabase
+    .from("online_store_config")
+    .select("address, delivery_radius_miles, delivery_fee, min_order, free_delivery_threshold")
+    .eq("id", storeConfigId)
+    .single();
+
+  if (!config) return { valid: false, reason: "Store not found." };
+
+  const { data: zones } = await supabase
+    .from("delivery_zones")
+    .select("id, zone_name, zone_type, radius_miles, delivery_fee, min_order, is_active")
+    .eq("store_config_id", storeConfigId)
+    .eq("is_active", true)
+    .order("display_order", { ascending: true });
+
+  const hasZones = zones && zones.length > 0;
+  const storeRadiusMiles = Number(config.delivery_radius_miles ?? 0);
+  const hasStoreRadius = storeRadiusMiles > 0;
+
+  // No zone restrictions configured — delivery is open everywhere.
+  if (!hasZones && !hasStoreRadius) {
+    return {
+      valid: true,
+      deliveryFeeCents: Math.round((config.delivery_fee ?? 0) * 100),
+      minOrderCents: Math.round((config.min_order ?? 0) * 100),
+    };
+  }
+
+  // Geocode the customer address.
+  const addressText = [address.street, address.city, address.state, address.zip]
+    .filter(Boolean)
+    .join(", ");
+
+  if (!addressText.trim()) {
+    return { valid: false, reason: "Please enter a complete delivery address." };
+  }
+
+  const googleKey = process.env.GOOGLE_MAPS_API_KEY ?? process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+  if (!googleKey) {
+    // No geocoding key — skip pre-validation; the edge function will gate it.
+    return { valid: true };
+  }
+
+  let customerLat: number | null = null;
+  let customerLng: number | null = null;
+  try {
+    const geoRes = await fetch(
+      `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(addressText)}&key=${googleKey}`
+    );
+    const geoData = await geoRes.json();
+    if (geoData.status === "OK" && geoData.results?.[0]) {
+      customerLat = geoData.results[0].geometry.location.lat;
+      customerLng = geoData.results[0].geometry.location.lng;
+    }
+  } catch {
+    // Geocoding failed — let edge function handle it.
+    return { valid: true };
+  }
+
+  if (customerLat === null || customerLng === null) {
+    return {
+      valid: false,
+      reason: "We couldn't locate that address. Please double-check the street, city, and ZIP.",
+    };
+  }
+
+  const storeAddress = config.address as { lat?: number; lng?: number } | null;
+  if (!storeAddress?.lat || !storeAddress?.lng) {
+    // Store has no coordinates — skip distance check.
+    return { valid: true };
+  }
+
+  function haversine(lat1: number, lng1: number, lat2: number, lng2: number): number {
+    const R = 3958.8;
+    const dLat = ((lat2 - lat1) * Math.PI) / 180;
+    const dLng = ((lng2 - lng1) * Math.PI) / 180;
+    const a =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
+
+  // Check named zones first.
+  for (const zone of zones ?? []) {
+    if (zone.zone_type === "radius" && zone.radius_miles) {
+      const dist = haversine(storeAddress.lat, storeAddress.lng, customerLat, customerLng);
+      if (dist <= Number(zone.radius_miles)) {
+        return {
+          valid: true,
+          zoneName: zone.zone_name,
+          deliveryFeeCents: Math.round((zone.delivery_fee ?? 0) * 100),
+          minOrderCents: Math.round((zone.min_order ?? 0) * 100),
+        };
+      }
+    }
+  }
+
+  // Check store-level radius fallback.
+  if (hasStoreRadius) {
+    const dist = haversine(storeAddress.lat, storeAddress.lng, customerLat, customerLng);
+    if (dist <= storeRadiusMiles) {
+      return {
+        valid: true,
+        deliveryFeeCents: Math.round((config.delivery_fee ?? 0) * 100),
+        minOrderCents: Math.round((config.min_order ?? 0) * 100),
+      };
+    }
+  }
+
+  return {
+    valid: false,
+    reason: "Sorry, we don't deliver to this address. Try a different address or choose pickup.",
+  };
 }
 
 export async function getOrderHistory(

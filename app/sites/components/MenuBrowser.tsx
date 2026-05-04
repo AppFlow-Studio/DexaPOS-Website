@@ -307,7 +307,7 @@ export function MenuBrowser({
     : activeMenu.categories;
 
   return (
-    <div className="space-y-6 min-w-0">
+    <main id="main-content" className="space-y-6 min-w-0">
       <ItemDetailsModal
         item={selectedItem}
         isOpen={isModalOpen}
@@ -317,8 +317,9 @@ export function MenuBrowser({
       />
 
       {/* Sticky nav: menu tabs + search */}
-      <div
+      <nav
         id="sticky-category-nav"
+        aria-label="Menu categories"
         className={`${searchQuery ? "sticky" : ""} lg:sticky z-40 -mx-4 px-4`}
         style={{
           top: headerHeight,
@@ -533,12 +534,13 @@ export function MenuBrowser({
             </div>
           )}
         </div>
-      </div>
+      </nav>
 
       <div className="flex flex-col lg:flex-row gap-8 relative items-start">
         {/* Desktop Sidebar — classic and bold only */}
         {!isMinimalTemplate && (
           <aside
+            aria-label="Category list"
             className="hidden lg:block w-56 shrink-0 lg:sticky self-start overflow-y-auto"
             style={{
               top: headerHeight + 12,
@@ -552,7 +554,7 @@ export function MenuBrowser({
             <h3 className="font-semibold text-base mb-3 px-2" style={{ color: "#111827" }}>
               Categories
             </h3>
-            <nav className="space-y-0.5">
+            <nav aria-label="Category list" className="space-y-0.5">
               {categories.map((cat) => {
                 const isActive = activeCategory === cat.id;
                 return (
@@ -691,7 +693,7 @@ export function MenuBrowser({
           </AnimatePresence>
         </div>
       </div>
-    </div>
+    </main>
   );
 }
 
@@ -802,9 +804,14 @@ function ItemCard({
             </p>
           )}
         </div>
-        <span className="font-semibold text-sm shrink-0" style={{ color: "#111827" }}>
-          ${item.delivery_price.toFixed(2)}
-        </span>
+        <div className="flex flex-col items-end shrink-0">
+          <span className="font-semibold text-sm" style={{ color: "#111827" }}>
+            ${item.delivery_price.toFixed(2)}
+          </span>
+          {item.price !== item.delivery_price && (
+            <span className="text-[10px] text-slate-500">in-store ${item.price.toFixed(2)}</span>
+          )}
+        </div>
         <AddButton item={item} onClick={onClick} />
       </motion.div>
     );
@@ -857,9 +864,14 @@ function ItemCard({
             )}
           </div>
           <div className="mt-2 flex items-center justify-between gap-2">
-            <span className="font-semibold text-sm" style={{ color: "#111827" }}>
-              ${item.delivery_price.toFixed(2)}
-            </span>
+            <div className="flex flex-col">
+              <span className="font-semibold text-sm" style={{ color: "#111827" }}>
+                ${item.delivery_price.toFixed(2)}
+              </span>
+              {item.price !== item.delivery_price && (
+                <span className="text-[10px] text-slate-500">in-store ${item.price.toFixed(2)}</span>
+              )}
+            </div>
             <AddButton item={item} onClick={onClick} />
           </div>
         </div>
@@ -950,9 +962,14 @@ function ItemCard({
             </p>
           )}
           <div className="flex items-center justify-between gap-2 mt-auto">
-            <span className="text-base font-bold" style={{ color: "#111827" }}>
-              ${item.delivery_price.toFixed(2)}
-            </span>
+            <div className="flex flex-col">
+              <span className="text-base font-bold" style={{ color: "#111827" }}>
+                ${item.delivery_price.toFixed(2)}
+              </span>
+              {item.price !== item.delivery_price && (
+                <span className="text-[10px] text-slate-500">in-store ${item.price.toFixed(2)}</span>
+              )}
+            </div>
             <AddButton item={item} onClick={onClick} />
           </div>
         </div>
@@ -1025,9 +1042,14 @@ function ItemCard({
           </p>
         )}
         <div className="flex items-center justify-between gap-2 mt-auto pt-1">
-          <span className="text-sm font-semibold" style={{ color: "#111827" }}>
-            ${item.delivery_price.toFixed(2)}
-          </span>
+          <div className="flex flex-col">
+            <span className="text-sm font-semibold" style={{ color: "#111827" }}>
+              ${item.delivery_price.toFixed(2)}
+            </span>
+            {item.price !== item.delivery_price && (
+              <span className="text-[10px] text-slate-500">in-store ${item.price.toFixed(2)}</span>
+            )}
+          </div>
           <AddButton item={item} onClick={onClick} />
         </div>
       </div>

@@ -8,6 +8,7 @@ import { Info, ArrowLeftRight } from "lucide-react";
 import { useSelectedLocation } from "@/stores/location-store";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
+import { deriveCashPrice, deriveCardPrice } from "@/lib/pricing";
 import {
   Tooltip,
   TooltipContent,
@@ -85,11 +86,10 @@ export function PriceInputGroup({
   useEffect(() => {
     if (lastEditedRef.current === "cash") return;
     if (isDual && price > 0 && (cashPrice === null || cashPrice === 0)) {
-      const rawCash = price / (1 + percentage / 100);
-      const roundedCash = Math.round(rawCash * 100) / 100;
-      if (roundedCash !== cashPrice) {
+      const derived = deriveCashPrice(price, percentage);
+      if (derived !== cashPrice) {
         lastEditedRef.current = "card";
-        onCashPriceChange(roundedCash);
+        onCashPriceChange(derived);
       }
     }
   }, [isDual, price, cashPrice, percentage, onCashPriceChange]);
@@ -101,9 +101,7 @@ export function PriceInputGroup({
     const num = parseFloat(cleaned) || 0;
     onPriceChange(num);
     if (isDual) {
-      const rawCash = num / (1 + percentage / 100);
-      const roundedCash = Math.round(rawCash * 100) / 100;
-      onCashPriceChange(roundedCash);
+      onCashPriceChange(deriveCashPrice(num, percentage));
     }
   };
 
@@ -117,9 +115,7 @@ export function PriceInputGroup({
     // If the user already has a card price set, editing cash should NOT overwrite it —
     // that prevents the infinite card↔cash recalc loop when working with L5 overrides.
     if (isDual && !disabled && num !== null && (autoCalcCard || !price || price === 0)) {
-      const rawCard = num * (1 + percentage / 100);
-      const roundedCard = Math.round(rawCard * 100) / 100;
-      onPriceChange(roundedCard);
+      onPriceChange(deriveCardPrice(num, percentage));
     }
   };
 

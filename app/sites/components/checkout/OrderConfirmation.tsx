@@ -1,8 +1,9 @@
 "use client";
 
-import { Check, Hourglass, Clock } from "lucide-react";
+import { Check, Hourglass, Clock, CalendarClock } from "lucide-react";
 import Link from "next/link";
 import { useStorefrontPath } from "../../lib/use-storefront-path";
+import { formatScheduledTime } from "../../lib/format-scheduled-time";
 
 interface OrderConfirmationProps {
   displayNumber?: string;
@@ -10,10 +11,15 @@ interface OrderConfirmationProps {
   orderId?: string;
   slug: string;
   isPending?: boolean;
+  requestedTime?: string | null;
+  locationTimezone?: string;
 }
 
-export function OrderConfirmation({ displayNumber, estimatedTime, orderId, slug, isPending }: OrderConfirmationProps) {
+export function OrderConfirmation({ displayNumber, estimatedTime, orderId, slug, isPending, requestedTime, locationTimezone }: OrderConfirmationProps) {
   const storePath = useStorefrontPath(slug);
+  const scheduledLabel = requestedTime && locationTimezone
+    ? formatScheduledTime(requestedTime, locationTimezone)
+    : null;
   return (
     <div className="flex flex-col items-center justify-center min-h-[calc(100vh-80px)] text-center px-6 space-y-6">
       <div
@@ -39,6 +45,23 @@ export function OrderConfirmation({ displayNumber, estimatedTime, orderId, slug,
           </p>
         )}
       </div>
+
+      {scheduledLabel && (
+        <div
+          className="flex items-center gap-3 px-4 py-3 rounded-xl w-full max-w-xs"
+          style={{ backgroundColor: "var(--card)", border: "1px solid var(--border)" }}
+        >
+          <CalendarClock className="h-5 w-5 flex-shrink-0" style={{ color: "var(--primary)" }} />
+          <div>
+            <p className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
+              Scheduled for
+            </p>
+            <p className="text-sm font-semibold" style={{ color: "var(--text)" }}>
+              {scheduledLabel}
+            </p>
+          </div>
+        </div>
+      )}
 
       {isPending ? (
         <div

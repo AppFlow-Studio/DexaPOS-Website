@@ -1009,7 +1009,7 @@ export default function MerchantDashboardLayout({
   return (
     <SidebarProvider>
       <MerchantSidebar />
-      <main className="flex-1 flex flex-col ">
+      <main aria-label="Dashboard content" className="flex-1 flex flex-col ">
         <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
           <SidebarTrigger className="-ml-1" />
           <div className="flex items-center gap-3">
@@ -1026,7 +1026,7 @@ export default function MerchantDashboardLayout({
             </Button>
           </div>
         </header>
-        <div className="flex-1 overflow-auto p-6">{children}</div>
+        <div id="main-content" className="flex-1 overflow-auto p-6">{children}</div>
       </main>
     </SidebarProvider>
   );
