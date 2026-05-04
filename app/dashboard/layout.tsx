@@ -90,6 +90,8 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import { ImpersonationBanner } from "@/components/dashboard/ImpersonationBanner";
+import { ImpersonationHydrator } from "@/components/dashboard/ImpersonationHydrator";
 
 const navMain = [
   {
@@ -160,11 +162,11 @@ const navMain = [
         url: "/dashboard/staff",
         icon: Users,
       },
-      {
-        title: "Schedules",
-        url: "/dashboard/schedules",
-        icon: Calendar,
-      },
+      // {
+      //   title: "Schedules",
+      //   url: "/dashboard/schedules",
+      //   icon: Calendar,
+      // },
       {
         title: "Online Ordering",
         url: "/dashboard/online-ordering",
@@ -1008,8 +1010,10 @@ export default function MerchantDashboardLayout({
 
   return (
     <SidebarProvider>
+      <ImpersonationHydrator />
       <MerchantSidebar />
       <main aria-label="Dashboard content" className="flex-1 flex flex-col ">
+        <ImpersonationBanner />
         <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
           <SidebarTrigger className="-ml-1" />
           <div className="flex items-center gap-3">

@@ -6,6 +6,7 @@ import { Building2, MapPin, Users, ShoppingCart, DollarSign, MessageSquare } fro
 import type { MerchantSummary } from '@/types/merchant'
 import { formatDistanceToNow } from 'date-fns'
 import Image from 'next/image'
+import { ImpersonateMerchantButton } from '@/components/admin/ImpersonateMerchantButton'
 
 interface MerchantCardProps {
   merchant: MerchantSummary
@@ -103,6 +104,14 @@ export function MerchantCard({ merchant, onClick }: MerchantCardProps) {
               {merchant.notes_count}
             </div>
           )}
+        </div>
+
+        <div className="mt-3 flex justify-end">
+          <ImpersonateMerchantButton
+            merchantId={merchant.id}
+            merchantName={merchant.name}
+            variant="card"
+          />
         </div>
       </CardContent>
     </Card>

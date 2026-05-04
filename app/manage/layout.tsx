@@ -46,6 +46,7 @@ import {
     Layers,
     UserCheck,
     ShieldCheck,
+    ShieldAlert,
     History,
     LogOut,
     Monitor,
@@ -145,6 +146,12 @@ const navMain: NavGroup[] = [
                 title: 'Audit Logs',
                 url: '/manage/audit-logs',
                 icon: History,
+                requiredPermission: 'audit.view',
+            },
+            {
+                title: 'Impersonation Sessions',
+                url: '/manage/audit-logs/impersonation',
+                icon: ShieldAlert,
                 requiredPermission: 'audit.view',
             },
             {
