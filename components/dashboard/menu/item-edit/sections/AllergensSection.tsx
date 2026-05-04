@@ -46,6 +46,8 @@ export function AllergensSection({ itemId, item, globalScope }: SectionRenderCtx
       toast.success("Allergens saved");
       queryClient.invalidateQueries({ queryKey: ["menu-item", itemId] });
       queryClient.invalidateQueries({ queryKey: ["menu-items"] });
+      queryClient.invalidateQueries({ queryKey: ["menu-items-flat"] });
+      queryClient.invalidateQueries({ queryKey: ["categories-with-items"] });
     },
     onError: (err) =>
       toast.error("Save failed", {

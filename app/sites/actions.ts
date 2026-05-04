@@ -24,6 +24,7 @@ export interface StorefrontData {
     longitude?: number | null;
   } | null;
   menus: StorefrontMenu[];
+  pricingDisclosureText: string | null;
 }
 
 const UUID_REGEX =
@@ -53,7 +54,7 @@ function mapStoreConfigToSite(config: any): Site {
     deliveryEnabled: config.accepts_delivery,
     minimumOrderAmount: Number(config.min_order ?? 0),
     preparationLeadTime: config.estimated_prep_minutes,
-    futureOrderMaxDays: config.max_future_order_days,
+    futureOrderMaxDays: config.max_future_order_days || undefined,
     tippingEnabled: config.tip_enabled,
     tipConfig: config.tip_presets
       ? { presetPercentages: config.tip_presets }
@@ -117,7 +118,7 @@ export async function getStorefrontData(
   }
 
   if (storeConfig.is_active === false) {
-    return { site: null, location: null, menus: [] };
+    return { site: null, location: null, menus: [], pricingDisclosureText: null };
   }
 
   const site = mapStoreConfigToSite(storeConfig);
@@ -127,21 +128,22 @@ export async function getStorefrontData(
   const { data: location, error: locationError } = await supabase
     .from("locations")
     .select(
-      "id, name, address_line1, city, state, postal_code, phone, email, business_hours, merchant_id, latitude, longitude"
+      "id, name, address_line1, city, state, postal_code, phone, email, business_hours, merchant_id, latitude, longitude, timezone"
     )
     .eq("id", locationId)
     .single();
 
   if (locationError || !location) {
-    return { site, location: null, menus: [] };
+    return { site, location: null, menus: [], pricingDisclosureText: null };
   }
 
   const merchantId = location.merchant_id;
+  const pricingDisclosureText = storeConfig.pricing_disclosure_text ?? null;
 
   // 3. Fetch menus + categories + items + modifiers (same logic as before)
   const menus = await fetchMenus(supabase, merchantId, locationId);
 
-  return { site, location, menus };
+  return { site, location, menus, pricingDisclosureText };
 }
 
 async function getStorefrontDataLegacy(
@@ -160,29 +162,29 @@ async function getStorefrontDataLegacy(
   const { data: siteData } = await siteQuery.single();
 
   if (siteData?.is_active === false) {
-    return { site: null, location: null, menus: [] };
+    return { site: null, location: null, menus: [], pricingDisclosureText: null };
   }
 
   const locationId = isUuid ? slugOrId : siteData?.location_id;
   if (!locationId) {
-    return { site: siteData, location: null, menus: [] };
+    return { site: siteData, location: null, menus: [], pricingDisclosureText: null };
   }
 
   const { data: location } = await supabase
     .from("locations")
     .select(
-      "id, name, address_line1, city, state, postal_code, phone, email, business_hours, merchant_id, latitude, longitude"
+      "id, name, address_line1, city, state, postal_code, phone, email, business_hours, merchant_id, latitude, longitude, timezone"
     )
     .eq("id", locationId)
     .single();
 
   if (!location) {
-    return { site: siteData, location: null, menus: [] };
+    return { site: siteData, location: null, menus: [], pricingDisclosureText: null };
   }
 
   const menus = await fetchMenus(supabase, location.merchant_id, locationId);
 
-  return { site: siteData, location, menus };
+  return { site: siteData, location, menus, pricingDisclosureText: null };
 }
 
 async function fetchMenus(
@@ -256,10 +258,7 @@ function mapRpcMenuToStorefront(rpcMenu: any): StorefrontMenu | null {
             }));
 
           const allergens = Array.isArray(mi.allergens) ? mi.allergens : [];
-          const mealTypes = Array.isArray(mi.meal_types) ? mi.meal_types : [];
-          const dietaryTags = mealTypes.filter((t: string) =>
-            /vegan|vegetarian|gluten.?free|dairy.?free|keto|halal|kosher|organic|high.?protein/i.test(String(t))
-          );
+          const dietaryTags = Array.isArray(mi.dietary_flags) ? mi.dietary_flags : [];
 
           return {
             id: mi.id,

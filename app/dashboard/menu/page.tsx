@@ -222,6 +222,8 @@ export default function MenuPage () {
       setIsCreateDialogOpen(false)
       form.reset()
       queryClient.invalidateQueries({ queryKey: ['menus'] })
+      queryClient.invalidateQueries({ queryKey: ['categories'] })
+      queryClient.invalidateQueries({ queryKey: ['categories-with-items'] })
       refetch()
     } catch (error) {
       if (uploadedAsset) {
@@ -251,6 +253,8 @@ export default function MenuPage () {
         description: 'The menu status has been updated.'
       })
       queryClient.invalidateQueries({ queryKey: ['menus'] })
+      queryClient.invalidateQueries({ queryKey: ['categories'] })
+      queryClient.invalidateQueries({ queryKey: ['categories-with-items'] })
       refetch()
     } catch (error) {
       toast.error('Update Failed', {
@@ -279,6 +283,8 @@ export default function MenuPage () {
         description: 'The menu has been permanently deleted.'
       })
       queryClient.invalidateQueries({ queryKey: ['menus'] })
+      queryClient.invalidateQueries({ queryKey: ['categories'] })
+      queryClient.invalidateQueries({ queryKey: ['categories-with-items'] })
       refetch()
     } catch (error) {
       toast.error('Delete Failed', {
@@ -418,6 +424,8 @@ export default function MenuPage () {
       })
 
       await queryClient.invalidateQueries({ queryKey: ['menus'] })
+      await queryClient.invalidateQueries({ queryKey: ['categories'] })
+      await queryClient.invalidateQueries({ queryKey: ['categories-with-items'] })
       await refetch()
       setHasOrderChanges(false)
     } catch (error) {

@@ -337,7 +337,7 @@ export function SettingsTab({ location, onUpdate, onClose }: SettingsTabProps) {
                                                 onBlur={async (e) => {
                                                     const val = parseFloat(e.target.value);
                                                     if (isNaN(val)) return;
-                                                    if (val === location.dual_pricing_percentage) return;
+                                                    if (val === parseFloat(String(location.dual_pricing_percentage ?? 0))) return;
 
                                                     try {
                                                         const result = await UpdateLocation(location.id, {

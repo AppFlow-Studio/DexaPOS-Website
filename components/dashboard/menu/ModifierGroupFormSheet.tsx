@@ -468,6 +468,8 @@ export function ModifierGroupFormSheet({
       }
 
       queryClient.invalidateQueries({ queryKey: ["modifier-groups"] });
+      queryClient.invalidateQueries({ queryKey: ["menu-items"] });
+      queryClient.invalidateQueries({ queryKey: ["categories-with-items"] });
       form.reset();
       setOptions([]);
       onOpenChange(false);
@@ -565,6 +567,8 @@ export function ModifierGroupFormSheet({
                             queryClient.invalidateQueries({
                               queryKey: ["modifier-groups"],
                             });
+                            queryClient.invalidateQueries({ queryKey: ["menu-items"] });
+                            queryClient.invalidateQueries({ queryKey: ["categories-with-items"] });
                           } catch (error) {
                             setLocationIsActive(!checked); // Revert on error
                             toast.error("Update Failed");

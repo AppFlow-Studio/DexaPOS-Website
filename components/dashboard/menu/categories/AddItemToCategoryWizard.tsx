@@ -1002,6 +1002,7 @@ export function AddItemToCategoryWizard({
                         image={imageUpload.previewUrl || watchedValues.image || undefined}
                         availability={watchedValues.availability}
                         categories={[categoryName]}
+                        allergens={watchedValues.allergens ?? []}
                         expandDescription
                       />
                       <div>
