@@ -38,6 +38,7 @@ export function AuthDialog({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [countdown, setCountdown] = useState(0);
+  const [rateLimited, setRateLimited] = useState(false);
   const [pendingAuth, setPendingAuth] = useState<{
     sessionToken: string;
     customer: { id: string; name: string | null; phone: string | null; email: string | null };
@@ -71,6 +72,8 @@ export function AuthDialog({
       setOtp(["", "", "", "", "", ""]);
       setError("");
       setLoading(false);
+      setCountdown(0);
+      setRateLimited(false);
       setPendingAuth(null);
       setProfileName("");
       setProfileEmail("");
@@ -118,10 +121,21 @@ export function AuthDialog({
     setLoading(false);
 
     if (!result.success) {
-      setError(result.error ?? "Failed to send code");
+      if (result.code === "rate_limited_phone" || result.code === "rate_limited_ip") {
+        setRateLimited(true);
+        // Stay on phone step so they see the error clearly, not a frozen OTP screen.
+        setError(
+          result.code === "rate_limited_phone"
+            ? "Too many codes sent to this number. Please wait an hour before trying again."
+            : "Too many requests from your network. Please wait an hour before trying again."
+        );
+      } else {
+        setError(result.error ?? "Failed to send code");
+      }
       return;
     }
 
+    setRateLimited(false);
     setStep("otp");
     setCountdown(60);
     setTimeout(() => otpRefs.current[0]?.focus(), 100);
@@ -190,7 +204,24 @@ export function AuthDialog({
     setLoading(false);
 
     if (!result.success || !result.sessionToken || !result.customer) {
-      setError(result.error ?? "Verification failed");
+      if (result.code === "max_attempts") {
+        // Code is burned — force back to phone step so they request a new one.
+        setError("Too many incorrect attempts. Please request a new code.");
+        setStep("phone");
+        setOtp(["", "", "", "", "", ""]);
+        setCountdown(0);
+      } else if (result.code === "expired") {
+        setError("That code has expired. Please request a new one.");
+        setStep("phone");
+        setOtp(["", "", "", "", "", ""]);
+        setCountdown(0);
+      } else if (result.remainingAttempts !== undefined && result.remainingAttempts > 0) {
+        setError(
+          `Incorrect code — ${result.remainingAttempts} attempt${result.remainingAttempts === 1 ? "" : "s"} remaining.`
+        );
+      } else {
+        setError(result.error ?? "Verification failed");
+      }
       return;
     }
 
@@ -242,7 +273,7 @@ export function AuthDialog({
   };
 
   const handleResend = async () => {
-    if (countdown > 0) return;
+    if (countdown > 0 || rateLimited) return;
     setLoading(true);
     setError("");
     setOtp(["", "", "", "", "", ""]);
@@ -251,7 +282,16 @@ export function AuthDialog({
     setLoading(false);
 
     if (!result.success) {
-      setError(result.error ?? "Failed to resend code");
+      if (result.code === "rate_limited_phone" || result.code === "rate_limited_ip") {
+        setRateLimited(true);
+        setError(
+          result.code === "rate_limited_phone"
+            ? "Too many codes sent to this number. Please wait an hour before trying again."
+            : "Too many requests from your network. Please wait an hour before trying again."
+        );
+      } else {
+        setError(result.error ?? "Failed to resend code");
+      }
       return;
     }
     setCountdown(60);
@@ -489,6 +529,8 @@ export function AuthDialog({
                     }}
                     type="text"
                     inputMode="numeric"
+                    autoComplete={i === 0 ? "one-time-code" : "off"}
+                    aria-label={`Digit ${i + 1} of 6`}
                     maxLength={1}
                     value={digit}
                     onChange={(e) => handleOtpChange(i, e.target.value)}
@@ -526,12 +568,15 @@ export function AuthDialog({
                 style={{ color: "var(--text-secondary, #6b7280)" }}
               >
                 Didn&apos;t receive a code?{" "}
-                {countdown > 0 ? (
+                {rateLimited ? (
+                  <span>Try again in 1 hour</span>
+                ) : countdown > 0 ? (
                   <span>Resend in {countdown}s</span>
                 ) : (
                   <button
                     onClick={handleResend}
-                    className="underline font-medium"
+                    disabled={loading}
+                    className="underline font-medium disabled:opacity-50"
                     style={{ color: "var(--primary, #2DD4BF)" }}
                   >
                     Resend

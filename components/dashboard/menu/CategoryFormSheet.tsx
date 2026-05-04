@@ -321,6 +321,8 @@ export function CategoryFormSheet({
           : `"${values.name}" has been added to your menu.`,
       });
       queryClient.invalidateQueries({ queryKey: ["categories"] });
+      queryClient.invalidateQueries({ queryKey: ["categories-with-items"] });
+      queryClient.invalidateQueries({ queryKey: ["menus"] });
       form.reset();
       setSelectedMenu(null);
       setSelectedSchedules([]);

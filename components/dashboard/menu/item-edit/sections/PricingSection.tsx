@@ -64,6 +64,8 @@ export function PricingSection({ itemId, item, scope }: SectionRenderCtx) {
       toast.success("Pricing saved");
       queryClient.invalidateQueries({ queryKey: ["menu-item", itemId] });
       queryClient.invalidateQueries({ queryKey: ["menu-items"] });
+      queryClient.invalidateQueries({ queryKey: ["menu-items-flat"] });
+      queryClient.invalidateQueries({ queryKey: ["categories-with-items"] });
       queryClient.invalidateQueries({ queryKey: ["item-price-matrix", itemId] });
     },
     onError: (err) =>

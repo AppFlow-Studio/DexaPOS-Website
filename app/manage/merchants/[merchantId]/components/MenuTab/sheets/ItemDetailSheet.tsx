@@ -368,6 +368,7 @@ export function ItemDetailSheet({
                         cashPrice={item.effective_cash_price || undefined}
                         image={item.image || undefined}
                         categories={item.categories?.map((c) => c.name)}
+                        allergens={item.allergens ?? []}
                         availability={item.effective_availability}
                       />
                     </div>

@@ -474,6 +474,7 @@ export default function CategoriesPage() {
         description: "Item has been removed from the category.",
       });
       queryClient.invalidateQueries({ queryKey: ["categories-with-items"] });
+      queryClient.invalidateQueries({ queryKey: ["menu-items"] });
       refetch();
     } catch {
       toast.error("Remove Failed", {

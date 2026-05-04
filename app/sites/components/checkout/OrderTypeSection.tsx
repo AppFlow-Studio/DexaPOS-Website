@@ -20,13 +20,22 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CalendarIcon, MapPin, Plus } from "lucide-react";
+import { CalendarIcon, MapPin, Plus, CheckCircle2, XCircle, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { Checkbox } from "@/components/ui/checkbox";
 import { StoreMapEmbed } from "./StoreMapEmbed";
 import type { SavedAddress } from "../../customer-actions";
 import type { WeeklySchedule } from "@/types/site";
+
+const DAY_NAMES = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"] as const;
+
+/** Returns true if the store is closed on the weekday of the given date. */
+function isClosedDay(date: Date, operatingHours: WeeklySchedule | undefined): boolean {
+  if (!operatingHours) return false;
+  const daySchedule = operatingHours[DAY_NAMES[date.getDay()]];
+  return !!daySchedule && !daySchedule.enabled;
+}
 
 // Generates 30-min time slots within the store's operating hours for the selected day.
 // Falls back to 8 AM–9 PM if no hours configured.
@@ -36,7 +45,6 @@ function getTimeSlots(
   operatingHours: WeeklySchedule | undefined,
   prepTime: number
 ): string[] {
-  const DAY_NAMES = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"] as const;
   const date = scheduledDate ?? new Date();
   const dayName = DAY_NAMES[date.getDay()];
   const daySchedule = operatingHours?.[dayName];
@@ -108,6 +116,9 @@ interface OrderTypeSectionProps {
   isAuthenticated?: boolean;
   saveNewAddress?: boolean;
   onSaveNewAddressChange?: (v: boolean) => void;
+  // Delivery zone eligibility feedback
+  zoneCheckState?: "idle" | "checking" | "valid" | "invalid";
+  zoneCheckMessage?: string;
 }
 
 export function OrderTypeSection({
@@ -137,6 +148,8 @@ export function OrderTypeSection({
   isAuthenticated,
   saveNewAddress,
   onSaveNewAddressChange,
+  zoneCheckState = "idle",
+  zoneCheckMessage,
 }: OrderTypeSectionProps) {
   const [datePickerOpen, setDatePickerOpen] = useState(false);
 
@@ -272,6 +285,50 @@ export function OrderTypeSection({
                 autoComplete="off"
                 style={{ borderColor: "var(--border)", backgroundColor: "var(--card)", color: "var(--text)" }}
               />
+              {/* Zone eligibility feedback */}
+              {zoneCheckState !== "idle" && (
+                <div
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm"
+                  style={
+                    zoneCheckState === "valid"
+                      ? {
+                          backgroundColor: "color-mix(in srgb, #22c55e 12%, var(--bg))",
+                          color: "#15803d",
+                          border: "1px solid color-mix(in srgb, #22c55e 40%, transparent)",
+                          borderRadius: "var(--radius)",
+                        }
+                      : zoneCheckState === "invalid"
+                        ? {
+                            backgroundColor: "color-mix(in srgb, #ef4444 10%, var(--bg))",
+                            color: "#dc2626",
+                            border: "1px solid color-mix(in srgb, #ef4444 40%, transparent)",
+                            borderRadius: "var(--radius)",
+                          }
+                        : {
+                            backgroundColor: "var(--card)",
+                            color: "var(--text-secondary)",
+                            border: "1px solid var(--border)",
+                            borderRadius: "var(--radius)",
+                          }
+                  }
+                >
+                  {zoneCheckState === "checking" && (
+                    <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+                  )}
+                  {zoneCheckState === "valid" && (
+                    <CheckCircle2 className="h-4 w-4 shrink-0" />
+                  )}
+                  {zoneCheckState === "invalid" && (
+                    <XCircle className="h-4 w-4 shrink-0" />
+                  )}
+                  <span>
+                    {zoneCheckState === "checking"
+                      ? "Checking delivery availability…"
+                      : zoneCheckMessage}
+                  </span>
+                </div>
+              )}
+
               {isAuthenticated && onSaveNewAddressChange && (
                 <div className="flex items-center gap-2 pt-1">
                   <Checkbox
@@ -357,7 +414,8 @@ export function OrderTypeSection({
                       today.setHours(0, 0, 0, 0);
                       const maxDate = new Date(today);
                       maxDate.setDate(maxDate.getDate() + maxFutureDays);
-                      return date < today || date > maxDate;
+                      if (date < today || date > maxDate) return true;
+                      return isClosedDay(date, operatingHours);
                     }}
                   />
                 </PopoverContent>

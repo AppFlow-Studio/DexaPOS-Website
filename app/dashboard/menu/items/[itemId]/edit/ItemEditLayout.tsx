@@ -12,6 +12,7 @@ import { CategoriesSection } from "@/components/dashboard/menu/item-edit/section
 import { ModifiersSection } from "@/components/dashboard/menu/item-edit/sections/ModifiersSection";
 import { AvailabilitySection } from "@/components/dashboard/menu/item-edit/sections/AvailabilitySection";
 import { AllergensSection } from "@/components/dashboard/menu/item-edit/sections/AllergensSection";
+import { DietaryFlagsSection } from "@/components/dashboard/menu/item-edit/sections/DietaryFlagsSection";
 import { AdvancedSection } from "@/components/dashboard/menu/item-edit/sections/AdvancedSection";
 import { useMenuItemWithLocationContext } from "@/app/dashboard/hooks/useLocationScoped";
 import {
@@ -75,6 +76,12 @@ const SECTIONS: SectionDef[] = [
     label: "Allergens",
     locationAware: false,
     render: (c) => <AllergensSection {...c} />,
+  },
+  {
+    id: "dietary",
+    label: "Dietary",
+    locationAware: false,
+    render: (c) => <DietaryFlagsSection {...c} />,
   },
   {
     id: "advanced",
