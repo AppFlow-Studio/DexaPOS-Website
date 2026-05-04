@@ -29,6 +29,9 @@ importers:
       '@hookform/resolvers':
         specifier: ^3.10.0
         version: 3.10.0(react-hook-form@7.73.1(react@19.1.0))
+      '@nmipayments/nmi-pay-react':
+        specifier: ^1.0.1
+        version: 1.0.1(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       '@radix-ui/react-avatar':
         specifier: ^1.1.11
         version: 1.1.11(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
@@ -812,6 +815,18 @@ packages:
     engines: {node: '>= 10'}
     cpu: [x64]
     os: [win32]
+
+  '@nmipayments/nmi-core@1.0.1':
+    resolution: {integrity: sha512-hHCQOfKQRwN7qTuZGg4pWOeGdVsLmVL8ldfM3H1DkWT7CoWiDlp47ryiwLix/CXcdy+SFlj6UZkMFfDP1mqcIQ==}
+
+  '@nmipayments/nmi-pay-react@1.0.1':
+    resolution: {integrity: sha512-KxJvgdJevbH2hhtn3wFICc60KXhXrclOnLjU3dalmZC1O2XZBVIARBdIIoWFXMFjTdCl90l0U94VT3Y2qtMFMA==}
+    peerDependencies:
+      react: '>=16.8.0 || ^19.0.0'
+      react-dom: '>=16.8.0 || ^19.0.0'
+
+  '@nmipayments/nmi-pay@1.0.1':
+    resolution: {integrity: sha512-vbnKjAJLFtteVmpSJWwW6MMxcC55givR80JH36yLkQmWhaSFlVVRNWxbiJUiJM7tUWPem6E8OmbxHdWXupZIJg==}
 
   '@nodelib/fs.scandir@2.1.5':
     resolution: {integrity: sha512-vq24Bq3ym5HEQm2NKCr3yXDwjc7vTsEThRDnkp2DK9p1uqLR+DHurm/NOTo0KG7HYHU7eppKZj3MyqYuMBf62g==}
@@ -5467,6 +5482,18 @@ snapshots:
 
   '@next/swc-win32-x64-msvc@15.5.15':
     optional: true
+
+  '@nmipayments/nmi-core@1.0.1': {}
+
+  '@nmipayments/nmi-pay-react@1.0.1(react-dom@19.1.0(react@19.1.0))(react@19.1.0)':
+    dependencies:
+      '@nmipayments/nmi-pay': 1.0.1
+      react: 19.1.0
+      react-dom: 19.1.0(react@19.1.0)
+
+  '@nmipayments/nmi-pay@1.0.1':
+    dependencies:
+      '@nmipayments/nmi-core': 1.0.1
 
   '@nodelib/fs.scandir@2.1.5':
     dependencies:

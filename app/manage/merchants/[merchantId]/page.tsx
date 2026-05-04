@@ -317,9 +317,7 @@ export default function MerchantDetailsPage() {
                             {activeTab === 'online-store' && (
                                 <OnlineStoreTab
                                     merchantId={merchantDetails.id}
-                                    clerkOrgId={merchantDetails.clerk_org_id}
                                     merchantName={merchantDetails.name}
-                                    externalMerchantId={merchantDetails.external_merchant_id ?? null}
                                     locations={merchantDetails.locations as any[]}
                                     locationsLoading={false}
                                 />

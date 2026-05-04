@@ -2,12 +2,9 @@
 // create-online-order Edge Function
 // ============================================================================
 // Validates stock, hours, delivery zone, recalculates prices server-side,
-// creates a payment intent, and processes payment via iPOS Pays (HPP or
-// card token). On successful card token charge, calls process_online_order
-// RPC to create the order immediately.
-//
-// For HPP flow, the order is created later by the ipospays-payment-webhook
-// after the customer completes payment on the hosted page.
+// creates a payment intent, and processes payment through NMI using a
+// tokenized storefront payment token. On successful card charge, calls
+// process_online_order RPC to create the order immediately.
 // ============================================================================
 
 import { createClient } from 'npm:@supabase/supabase-js'
@@ -27,18 +24,14 @@ import {
   validateMinimumOrder,
 } from './validators.ts'
 import {
-  authenticateIPOS,
-  chargePaymentToken,
-  extractProcessorDetails,
-} from './ipospays.ts'
+  createSale,
+} from '../_shared/nmi.ts'
 // ============================================================================
 // ENV
 // ============================================================================
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-const DEJAVOO_IPOS_API_KEY = Deno.env.get('DEJAVOO_IPOS_API_KEY') ?? ''
-const DEJAVOO_IPOS_SECRET_KEY = Deno.env.get('DEJAVOO_IPOS_SECRET_KEY') ?? ''
 // ============================================================================
 // REQUEST TYPES
 // ============================================================================
@@ -75,8 +68,8 @@ interface CreateOnlineOrderRequest {
   tip: number                     // dollars
   special_instructions?: string
   card_token?: string             // for returning customers with saved cards
-  payment_token_id?: string       // from FTD (Freedom to Design) card tokenization
-  payment_device_id?: string      // selected payment device used during tokenization
+  payment_token?: string          // NMI payment token from the embedded payment component
+  payment_token_id?: string       // legacy alias accepted during NMI cutover
   pay_cash_in_store?: boolean
   payment_card_type?: string | null
   payment_card_last_four?: string | null
@@ -87,6 +80,26 @@ interface CreateOnlineOrderRequest {
   // Client-supplied idempotency key. Header `Idempotency-Key` takes precedence over this.
   // Reused across retries of the same logical order so the server dedupes.
   transaction_reference_id?: string
+}
+
+interface MenuItemPriceRow {
+  id: string
+  price: number | null
+  delivery_price: number | null
+}
+
+interface LocationItemOverrideRow {
+  menu_item_id: string
+  custom_price: number | null
+}
+
+interface MerchantPaymentCredentialSecret {
+  credential_id: string
+  merchant_id: string
+  provider: string
+  tokenization_key: string
+  decrypted_secret: string
+  is_active: boolean
 }
 
 // ============================================================================
@@ -103,7 +116,7 @@ const corsHeaders = {
 // RESPONSE HELPERS
 // ============================================================================
 
-function successResponse(data: unknown, status = 200): Response {
+function successResponse(data: Record<string, unknown>, status = 200): Response {
   return new Response(
     JSON.stringify({ success: true, ...data }),
     { status, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
@@ -184,8 +197,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
     itemCount: body.items.length,
     orderType: body.order_type,
     hasCardToken: !!body.card_token,
+    hasNmiPaymentToken: !!body.payment_token,
     hasPaymentToken: !!body.payment_token_id,
-    paymentDeviceId: body.payment_device_id ?? null,
     hasDeliveryAddress: !!body.delivery_address,
   })
 
@@ -241,7 +254,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       .select(`
         *,
         online_store_config!inner(
-          id, location_id, merchant_id, ipospays_tpn, is_active,
+          id, location_id, merchant_id, is_active,
           operating_hours, accepts_pickup, accepts_delivery,
           min_order_cents, estimated_prep_minutes,
           delivery_radius_miles, delivery_fee_cents,
@@ -266,7 +279,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const { data: configData, error: configError } = await supabase
       .from('online_store_config')
       .select(`
-        id, location_id, merchant_id, ipospays_tpn, is_active,
+        id, location_id, merchant_id, is_active,
         operating_hours, accepts_pickup, accepts_delivery,
         min_order_cents, estimated_prep_minutes,
         delivery_radius_miles, delivery_fee_cents,
@@ -291,7 +304,6 @@ Deno.serve(async (req: Request): Promise<Response> => {
   const locationId: string = storeConfig.location_id
   const merchantId: string = storeConfig.merchant_id
   const storeConfigId: string = storeConfig.id
-  const ipospaysTpn: string | null = storeConfig.ipospays_tpn
   const estimatedMinutes: number = storeConfig.estimated_prep_minutes ?? 20
   // Auto-create guest session if none exists (guest checkout)
   if (!session && storeConfig) {
@@ -327,7 +339,6 @@ Deno.serve(async (req: Request): Promise<Response> => {
     sessionId: session?.id ?? 'guest',
     locationId,
     merchantId,
-    hasTpn: !!ipospaysTpn,
     isGuest: !session,
   })
 
@@ -436,8 +447,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
     .eq('location_id', locationId)
     .in('menu_item_id', itemIds)
 
-  const dbItemMap = new Map((dbItems ?? []).map((i: any) => [i.id, i]))
-  const overrideMap = new Map((locationOverrides ?? []).map((o: any) => [o.menu_item_id, o]))
+  const dbItemMap = new Map(
+    ((dbItems as MenuItemPriceRow[] | null) ?? []).map((i) => [i.id, i])
+  )
+  const overrideMap = new Map(
+    ((locationOverrides as LocationItemOverrideRow[] | null) ?? []).map((o) => [o.menu_item_id, o])
+  )
 
   // Fetch tax rate — prefer 'standard'/'default', fall back to any active rate
   let { data: taxRate } = await supabase
@@ -485,7 +500,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     } else {
       // For pickup: L2 custom_price > L1 base price > cart-submitted effective price
       // If no L2 override exists, fall back to cart price (which includes L3-L5 category overrides)
-      unitPrice = override?.custom_price ?? (dbItem ? dbItem.price : cartItem.price)
+      unitPrice = override?.custom_price ?? dbItem?.price ?? cartItem.price
     }
 
     // Modifier totals (modifiers are trusted from client — they come from our DB originally)
@@ -555,49 +570,61 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
   // ---- Step 8: Resolve payment path ----
   const payCashInStore = body.pay_cash_in_store === true
-  let paymentDevice: { id: string; tpn: string } | null = null
+  const effectivePaymentToken =
+    body.payment_token?.trim() ||
+    body.payment_token_id?.trim() ||
+    body.card_token?.trim() ||
+    null
+  let merchantPaymentCredential: MerchantPaymentCredentialSecret | null = null
 
   if (!payCashInStore) {
-    let paymentDeviceQuery = supabase
-      .from('location_payment_devices')
-      .select('id, tpn')
-      .eq('location_id', locationId)
-      .eq('is_active', true)
+    const { data: credentialRows, error: credentialError } = await supabase.rpc(
+      'get_merchant_payment_api_secret',
+      {
+        p_merchant_id: merchantId,
+        p_provider: 'nmi',
+      },
+    )
 
-    if (body.payment_device_id) {
-      paymentDeviceQuery = paymentDeviceQuery.eq('id', body.payment_device_id)
-    } else {
-      paymentDeviceQuery = paymentDeviceQuery.eq('use_for_online_ordering', true)
+    if (credentialError) {
+      logError('PAYMENT_CREDENTIALS', 'Failed to resolve merchant payment credentials', credentialError)
+      return errorResponse(
+        'Payment configuration is unavailable for this store.',
+        'payment_not_configured',
+        503,
+      )
     }
 
-    const { data: paymentDeviceRow, error: paymentDeviceError } = await paymentDeviceQuery.maybeSingle()
+    merchantPaymentCredential = ((credentialRows as MerchantPaymentCredentialSecret[] | null) ?? [])[0] ?? null
 
-    if (paymentDeviceError) {
-      logError('PAYMENT_DEVICE', 'Failed to resolve payment device', paymentDeviceError)
+    if (!merchantPaymentCredential?.decrypted_secret) {
+      logError('PAYMENT', 'No active NMI credentials configured for this store', {
+        storeConfigId,
+        merchantId,
+      })
       return errorResponse(
-        'Payment device configuration is unavailable for this store.',
-        'payment_device_unavailable',
+        'Online payment is not configured for this store. Please contact the store.',
+        'payment_not_configured',
         503
       )
     }
 
-    if (paymentDeviceRow) {
-      paymentDevice = paymentDeviceRow
-    }
+    await supabase
+      .from('merchant_payment_credential_access_log')
+      .insert({
+        merchant_payment_credential_id: merchantPaymentCredential.credential_id,
+        merchant_id: merchantId,
+        function_name: 'create-online-order',
+        store_config_id: storeConfigId,
+        actor_user_id: null,
+        metadata: {
+          source: 'storefront_order_submit',
+          has_legacy_token_field: Boolean(body.payment_token_id),
+        },
+      })
   }
 
-  const effectiveIposTpn = paymentDevice?.tpn ?? ipospaysTpn
-
-  if (!payCashInStore && !effectiveIposTpn) {
-    logError('PAYMENT', 'No iPOS Pays TPN configured for this store', { storeConfigId, paymentDeviceId: body.payment_device_id ?? null })
-    return errorResponse(
-      'Online payment is not configured for this store. Please contact the store.',
-      'payment_not_configured',
-      503
-    )
-  }
-
-  if (!payCashInStore && !body.payment_token_id && !body.card_token) {
+  if (!payCashInStore && !effectivePaymentToken) {
     return errorResponse(
       'A valid payment token is required for online card payments.',
       'payment_token_required',
@@ -629,6 +656,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
   const customerPhone = session?.customer_phone || body.customer_phone || null
   const customerEmail = session?.customer_email || body.customer_email || null
 
+  const sanitizedRpcItems = sanitizeItems(recalculatedItems)
+
   const rpcParams: OnlineOrderRpcParams = {
     p_location_id: locationId,
     p_provider: 'website',
@@ -642,7 +671,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     p_total: toDollars(totalCents),
     p_gratuity: toDollars(tipCents),
     p_delivery_charge: toDollars(deliveryFeeCents),
-    p_items: sanitizeItems(recalculatedItems),
+    p_items: sanitizedRpcItems,
     p_delivery_address: deliveryAddr,
     p_order_notes: body.special_instructions ?? null,
     p_placed_at: new Date().toISOString(),
@@ -650,87 +679,89 @@ Deno.serve(async (req: Request): Promise<Response> => {
     p_auto_accept: storeConfig.auto_accept_orders ?? false,
   }
 
-  // ---- Step 10: Charge card payment via iPOS ----
-  let iposChargeDetails: {
+  // ---- Step 10: Charge card payment via NMI ----
+  let nmiChargeDetails: {
     transactionId: string
-    transactionNumber: string   // 4-digit invoice number from processor
-    processorReferenceId: string // transactionReferenceId echoed back by processor
-    rrn: string                 // retrieval reference number e.g. #219313501821
-    authCode: string            // approval code e.g. TAS164
-    batchNumber: string
     responseCode: string
     responseMessage: string
+    authCode: string
     cardType: string
     cardLastFour: string
+    gatewayFee: number | null
+    rawResponse: Record<string, unknown>
   } | null = null
 
-  if (!payCashInStore && body.payment_token_id) {
-    if (!DEJAVOO_IPOS_API_KEY || !DEJAVOO_IPOS_SECRET_KEY) {
-      logError('PAYMENT', 'iPOS API credentials not configured', { storeConfigId })
-      return errorResponse(
-        'Payment service is not configured. Please contact support.',
-        'payment_not_configured',
-        503
-      )
-    }
-
-    logEvent('PAYMENT', 'Authenticating with iPOS', { referenceId: transactionReferenceId })
-    const authResult = await authenticateIPOS(DEJAVOO_IPOS_API_KEY, DEJAVOO_IPOS_SECRET_KEY)
-    if (!authResult.success) {
-      logError('PAYMENT_AUTH', 'iPOS authentication failed', authResult.error)
-      return errorResponse(
-        'Payment service authentication failed. Please try again.',
-        'payment_auth_failed',
-        502
-      )
-    }
-
-    logEvent('PAYMENT', 'Charging payment token via iPOS', {
-      tpn: effectiveIposTpn,
+  if (!payCashInStore && effectivePaymentToken) {
+    const [billingFirstName, ...billingLastNameParts] = customerName.split(' ')
+    logEvent('PAYMENT', 'Charging payment token via NMI', {
+      merchantId,
       referenceId: transactionReferenceId,
       totalCents,
     })
 
-    const chargeResult = await chargePaymentToken(
-      { token: authResult.token, apiKey: DEJAVOO_IPOS_API_KEY, secretKey: DEJAVOO_IPOS_SECRET_KEY },
+    const chargeResult = await createSale(
+      { apiKey: merchantPaymentCredential!.decrypted_secret },
       {
-        tpn: effectiveIposTpn!,
-        referenceId: transactionReferenceId,
-        amountCents: totalCents,
-        paymentTokenId: body.payment_token_id,
-      }
+        amount: toDollars(totalCents).toFixed(2),
+        tip: toDollars(tipCents).toFixed(2),
+        paymentToken: effectivePaymentToken,
+        billingAddress: {
+          first_name: billingFirstName || customerName,
+          last_name: billingLastNameParts.join(' ') || customerName,
+          address1: deliveryAddr?.street ?? undefined,
+          city: body.delivery_address?.city ?? undefined,
+          state: body.delivery_address?.state ?? undefined,
+          postal_code: body.delivery_address?.zip ?? undefined,
+          email: customerEmail ?? undefined,
+          phone: customerPhone ?? undefined,
+        },
+        orderDetails: {
+          invoice_number: transactionReferenceId,
+        },
+        merchantDefinedFields: {
+          dexa_order_reference: transactionReferenceId,
+          dexa_store_config_id: storeConfigId,
+          dexa_location_id: locationId,
+        },
+      },
     )
 
     if (!chargeResult.success) {
-      logError('PAYMENT_CHARGE', 'iPOS card charge declined', chargeResult)
+      const declineCode = chargeResult.details.responseCode || String(chargeResult.status)
+      const declineMessage =
+        chargeResult.details.responseText ||
+        (chargeResult.status >= 500
+          ? 'Payment service is temporarily unavailable. Please try again.'
+          : 'Your card was declined. Please try a different card.')
+
+      logError('PAYMENT_CHARGE', 'NMI card charge failed', {
+        status: chargeResult.status,
+        details: chargeResult.details,
+        body: chargeResult.body,
+      })
       return errorResponse(
-        chargeResult.error || 'Your card was declined. Please try a different card.',
-        'payment_declined',
-        402,
-        { responseCode: chargeResult.responseCode, responseMessage: chargeResult.responseMessage }
+        declineMessage,
+        chargeResult.status >= 500 ? 'payment_gateway_error' : 'payment_declined',
+        chargeResult.status >= 500 ? 502 : 402,
+        { responseCode: declineCode, responseMessage: declineMessage }
       )
     }
 
-    const details = extractProcessorDetails(chargeResult.rawResponse)
-    iposChargeDetails = {
-      transactionId: chargeResult.transactionId || details.transactionId,
-      transactionNumber: details.transactionNumber,
-      processorReferenceId: details.transactionReferenceId,
-      rrn: details.rrn,
-      authCode: details.authCode,
-      batchNumber: details.batchNumber,
-      responseCode: chargeResult.responseCode,
-      responseMessage: chargeResult.responseMessage,
-      cardType: details.cardType || body.payment_card_type || '',
-      cardLastFour: details.cardLastFour || body.payment_card_last_four || '',
+    nmiChargeDetails = {
+      transactionId: chargeResult.details.transactionId || chargeResult.details.id,
+      responseCode: chargeResult.details.responseCode || chargeResult.details.response,
+      responseMessage: chargeResult.details.responseText || 'Approved',
+      authCode: chargeResult.details.authCode,
+      cardType: body.payment_card_type || '',
+      cardLastFour: body.payment_card_last_four || '',
+      gatewayFee: chargeResult.details.gatewayFee,
+      rawResponse: chargeResult.body,
     }
 
     logEvent('PAYMENT', 'Card charged successfully', {
-      transactionId: iposChargeDetails.transactionId,
-      transactionNumber: iposChargeDetails.transactionNumber,
-      rrn: iposChargeDetails.rrn,
-      authCode: iposChargeDetails.authCode,
-      responseCode: iposChargeDetails.responseCode,
+      transactionId: nmiChargeDetails.transactionId,
+      authCode: nmiChargeDetails.authCode,
+      responseCode: nmiChargeDetails.responseCode,
     })
   }
 
@@ -745,7 +776,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     totalCents,
     referenceId: transactionReferenceId,
     payCashInStore,
-    sanitizedItemsSample: rpcParams.p_items.map((it) => ({
+    sanitizedItemsSample: sanitizedRpcItems.map((it) => ({
       id: it.id,
       qty: it.quantity,
       modQtys: it.modifiers?.map((m) => m.quantity),
@@ -859,47 +890,42 @@ Deno.serve(async (req: Request): Promise<Response> => {
         dejavoo_invoice_number: null,
         metadata: {
           source: 'online_order',
-          provider: 'website',
+          provider: 'cash',
           provider_order_id: transactionReferenceId,
           payment_status_from_source: 'PENDING_CASH_IN_STORE',
-          payment_device_id: paymentDevice?.id ?? null,
-          payment_device_tpn: paymentDevice?.tpn ?? effectiveIposTpn ?? null,
+          merchant_payment_credential_id: null,
         },
       }
     : {
         payment_method: 'card',
         status: 'captured',
-        terminal_type: 'dejavoo',
-        card_type: iposChargeDetails?.cardType || body.payment_card_type || null,
-        card_last_four: iposChargeDetails?.cardLastFour || body.payment_card_last_four || null,
-        // processor's unique transaction ID (displayed as TXN.# on POS)
-        transaction_id: iposChargeDetails?.transactionId || null,
-        // processor's echoed-back transactionReferenceId (displayed as REF ID on POS)
-        reference_number: iposChargeDetails?.processorReferenceId || transactionReferenceId,
-        authorization_code: iposChargeDetails?.authCode || null,
-        auth_code: iposChargeDetails?.authCode || null,
-        // RRN — retrieval reference number e.g. #219313501821
-        rrn: iposChargeDetails?.rrn || null,
-        result_code: iposChargeDetails?.responseCode || null,
-        result_message: iposChargeDetails?.responseMessage || null,
-        batch_number: iposChargeDetails?.batchNumber || null,
+        terminal_type: 'none',
+        card_type: nmiChargeDetails?.cardType || body.payment_card_type || null,
+        card_last_four: nmiChargeDetails?.cardLastFour || body.payment_card_last_four || null,
+        transaction_id: nmiChargeDetails?.transactionId || null,
+        reference_number: transactionReferenceId,
+        authorization_code: nmiChargeDetails?.authCode || null,
+        auth_code: nmiChargeDetails?.authCode || null,
+        rrn: null,
+        result_code: nmiChargeDetails?.responseCode || null,
+        result_message: nmiChargeDetails?.responseMessage || null,
+        batch_number: null,
         approved_at: new Date().toISOString(),
         captured_at: new Date().toISOString(),
-        processor_name: 'iPOSPays',
-        processor_response: null,
+        processor_name: 'nmi',
+        processor_response: nmiChargeDetails?.rawResponse ?? null,
         terminal_response: null,
-        dejavoo_response_code: iposChargeDetails?.responseCode || null,
-        dejavoo_response_message: iposChargeDetails?.responseMessage || null,
-        dejavoo_batch_number: iposChargeDetails?.batchNumber || null,
-        // 4-digit processor invoice/transaction number from Dejavoo
-        dejavoo_invoice_number: iposChargeDetails?.transactionNumber || null,
+        gateway_fee: nmiChargeDetails?.gatewayFee ?? null,
+        dejavoo_response_code: null,
+        dejavoo_response_message: null,
+        dejavoo_batch_number: null,
+        dejavoo_invoice_number: null,
         metadata: {
           source: 'online_order',
-          provider: 'website',
+          provider: 'nmi',
           provider_order_id: transactionReferenceId,
           payment_status_from_source: 'CAPTURED',
-          payment_device_id: paymentDevice?.id ?? null,
-          payment_device_tpn: paymentDevice?.tpn ?? effectiveIposTpn ?? null,
+          merchant_payment_credential_id: merchantPaymentCredential?.credential_id ?? null,
         },
       }
 
@@ -961,7 +987,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     orderNumber: orderResult.order_number,
     displayNumber: orderResult.display_number,
     payCashInStore,
-    charged: !!iposChargeDetails,
+    charged: !!nmiChargeDetails,
   })
 
   const autoAccepted: boolean = storeConfig.auto_accept_orders ?? false

@@ -354,7 +354,7 @@ function CompletedSetupPanel({
                 <div>
                   <CardTitle>Store Details</CardTitle>
                   <CardDescription>
-                    Payment device, TPN/FTD keys, and tips are managed by HQ only.
+                    Payment credentials and tips are managed by HQ only.
                   </CardDescription>
                 </div>
               </div>
@@ -377,7 +377,7 @@ function CompletedSetupPanel({
                   readOnly
                 />
                 <p className="text-xs text-muted-foreground">
-                  Store URL changes are handled by HQ because they impact payment-domain whitelisting.
+                  Store URL changes are handled by HQ because they affect storefront payment configuration and reconciliation.
                 </p>
               </div>
               <div className="space-y-2 md:col-span-2">

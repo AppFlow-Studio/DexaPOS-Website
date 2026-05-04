@@ -88,13 +88,6 @@ export interface OnlineOrderingSettings {
   tippingEnabled: boolean;
   tipPresets: number[];
 
-  // Payment
-  ipospaysDeviceId?: string | null;
-  ipospaysDeviceLabel?: string | null;
-  ipospaysTpn: string;
-  ipospaysFtdEcomKey: string;
-  ipospaysFtdEcomKeyConfigured?: boolean;
-
   // SEO
   metaTitle: string;
   metaDescription: string;
@@ -206,12 +199,6 @@ const createDefaultSettings = (
 
   tippingEnabled: true,
   tipPresets: [15, 18, 20, 25],
-
-  ipospaysTpn: "",
-  ipospaysFtdEcomKey: "",
-  ipospaysFtdEcomKeyConfigured: false,
-  ipospaysDeviceId: null,
-  ipospaysDeviceLabel: null,
 
   headerStyle: "filled",
   headerTextColor: null,

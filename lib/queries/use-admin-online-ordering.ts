@@ -7,14 +7,13 @@ import {
   getAdminMerchantOnlineOrderingOverview,
   adminSaveOnlineOrderingSettings,
   adminToggleOnlineStore,
-  adminRetriggerDomainWhitelist,
   adminApproveOnlineStoreRequest,
   adminRejectOnlineStoreRequest,
   adminUploadMerchantW9Pdf,
   getAdminOnlineStoreRequestRequirements,
   adminSaveOnlineStoreRequestRequirements,
-  adminUpdateMerchantExternalMerchantId,
 } from '@/app/manage/actions/admin-merchant/online-ordering'
+import { reconcileNmiOrderPayment } from '@/app/manage/actions/admin-merchant/online-payment-reconciliation'
 
 // ============================================================================
 // Types (matching server action types)
@@ -93,6 +92,7 @@ export interface OnlineOrderingSettings {
   enabled: boolean
   storeName: string
   storeSlug: string
+  description?: string
   storeUrl?: string
   phone: string
   email: string
@@ -133,11 +133,9 @@ export interface OnlineOrderingSettings {
   acceptOnlinePayments?: boolean
   acceptCashOnDelivery?: boolean
   acceptCardOnDelivery?: boolean
-  ipospaysDeviceId?: string | null
-  ipospaysDeviceLabel?: string | null
-  ipospaysTpn?: string
-  ipospaysFtdEcomKey?: string
-  ipospaysFtdEcomKeyConfigured?: boolean
+  nmiTokenizationKey?: string
+  nmiPrivateApiKey?: string
+  nmiConfigured?: boolean
   tippingEnabled?: boolean
   tipConfig?: TipConfig
   baseDeliveryFee?: number
@@ -257,38 +255,6 @@ export function useAdminToggleOnlineStore() {
   })
 }
 
-export function useAdminRetriggerDomainWhitelist() {
-  return useMutation({
-    mutationFn: ({
-      merchantId,
-      locationId,
-    }: {
-      merchantId: string
-      locationId: string
-    }) => adminRetriggerDomainWhitelist(merchantId, locationId),
-  })
-}
-
-export function useAdminUpdateMerchantExternalMerchantId() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: ({
-      clerkOrgId,
-      externalMerchantId,
-    }: {
-      clerkOrgId: string
-      externalMerchantId: string | null
-    }) => adminUpdateMerchantExternalMerchantId(clerkOrgId, externalMerchantId),
-    onSuccess: (result, { clerkOrgId }) => {
-      if (result.success) {
-        queryClient.invalidateQueries({
-          queryKey: adminKeys.merchantDetail(clerkOrgId),
-        })
-      }
-    },
-  })
-}
-
 export function useAdminSaveOnlineStoreRequestRequirements() {
   const queryClient = useQueryClient()
   return useMutation({
@@ -366,5 +332,11 @@ export function useAdminUploadMerchantW9Pdf() {
         queryKey: [...adminKeys.merchants(), variables.merchantId, 'online-ordering-overview'],
       })
     },
+  })
+}
+
+export function useAdminReconcileNmiOrderPayment() {
+  return useMutation({
+    mutationFn: (orderPaymentId: string) => reconcileNmiOrderPayment(orderPaymentId),
   })
 }

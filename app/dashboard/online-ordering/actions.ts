@@ -21,25 +21,6 @@ import {
 import { createClerkClient } from "@clerk/backend";
 import { uploadMerchantDocument, uploadOrganizationDocument } from "@/lib/cdn/server";
 
-// ─── Dejavoo Management API ───────────────────────────────────────────────────
-// These env vars must be set in your deployment environment.
-// Domain whitelist is delegated to Supabase Edge Function `dejavoo-whitelist-domain`
-// The management API credentials are read from Supabase function secrets.
-//   Sandbox  → https://externalapi.ipospays.tech
-//   Production → https://externalapi.ipospays.com
-// ──────────────────────────────────────────────────────────────────────────────
-
-const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "dexaposai.com";
-
-interface PaymentDeviceSummary {
-  id: string;
-  device_label: string | null;
-  tpn: string;
-  use_for_online_ordering: boolean;
-  is_active: boolean;
-  ftd_key_configured: boolean;
-}
-
 type MissingRequestFieldKey =
   | "legalBusinessName"
   | "dbaName"
@@ -135,31 +116,6 @@ async function assertMerchantOrgAdmin(userId: string | null, organizationId: str
   if (role !== "org:admin" && role !== "org:owner") {
     throw new Error("Only merchant admins can submit an online-store setup request.");
   }
-}
-
-async function getLocationPaymentDevices(locationId: string) {
-  const supabase = createServerSupabaseClient();
-  const { data, error } = await supabase.rpc("list_location_payment_devices", {
-    p_location_id: locationId,
-  });
-
-  if (error) {
-    console.error("[ONLINE_ORDERING] Failed to load payment devices:", error);
-    return [] as PaymentDeviceSummary[];
-  }
-
-  return ((data as PaymentDeviceSummary[] | null) ?? []).filter(Boolean);
-}
-
-async function getSelectedLocationPaymentDevice(locationId: string) {
-  const devices = await getLocationPaymentDevices(locationId);
-  return (
-    devices.find(
-      (device) => device.use_for_online_ordering && device.is_active
-    ) ??
-    devices.find((device) => device.is_active) ??
-    null
-  );
 }
 
 async function buildRequestedStoreSlug(
@@ -503,71 +459,9 @@ export async function saveOnlineStoreRequestRequirements(formData: FormData) {
   }
 }
 
-/**
- * Registers/updates the allowed domain for the merchant's Dejavoo account.
- *
- * The Dejavoo "Edit Merchant" Management API (POST /v2/merchant/add-on) keys
- * whitelist-domain configuration off the 12-char `merchantId` issued by
- * Dejavoo to this merchant — sourced from public.merchants.external_merchant_id.
- *
- * Delegates to Supabase function: `dejavoo-whitelist-domain`.
- */
-export async function whitelistDejavooDomain(
-  externalMerchantId: string | null,
-  storeSlug: string
-): Promise<{
-  success: boolean
-  error?: string
-  skipped?: 'missing_merchant_id' | true
-}> {
-  if (!externalMerchantId) {
-    return {
-      success: false,
-      skipped: 'missing_merchant_id',
-      error: 'Dejavoo Merchant ID is not configured for this merchant.',
-    }
-  }
-  if (!storeSlug) {
-    return { success: false, error: 'Store slug is required' }
-  }
-
-  const isDev = ROOT_DOMAIN.includes("localhost");
-  const storeDomain = isDev
-    ? `http://${storeSlug}.localhost:3000`
-    : `https://${storeSlug}.${ROOT_DOMAIN}`;
-
-  const supabase = createServerSupabaseClient();
-  const { data, error } = await supabase.functions.invoke(
-    "dejavoo-whitelist-domain",
-    {
-      body: { merchantId: externalMerchantId, storeSlug, storeDomain },
-    }
-  );
-
-  if (error) {
-    console.error("[DEJAVOO_WHITELIST] Edge invoke error:", error);
-    return {
-      success: false,
-      error: `Domain whitelist invoke error: ${error.message}`,
-    };
-  }
-
-  const result = (data || {}) as {
-    success?: boolean;
-    skipped?: 'missing_merchant_id' | true;
-    error?: string;
-  };
-  return {
-    success: Boolean(result.success),
-    skipped: result.skipped,
-    error: result.error,
-  };
-}
-
 function mapConfigToSettings(
   config: any,
-  location: any,
-  selectedDevice: PaymentDeviceSummary | null
+  location: any
 ): Partial<OnlineOrderingSettings> {
   const setupRequestStatus = normalizeOnlineStoreRequestStatus(
     config.setup_request_status
@@ -633,12 +527,6 @@ function mapConfigToSettings(
       ? config.tip_presets
       : [15, 18, 20, 25],
 
-    ipospaysDeviceId: selectedDevice?.id ?? null,
-    ipospaysDeviceLabel: selectedDevice?.device_label ?? null,
-    ipospaysTpn: selectedDevice?.tpn ?? config.ipospays_tpn ?? "",
-    ipospaysFtdEcomKey: "",
-    ipospaysFtdEcomKeyConfigured: selectedDevice?.ftd_key_configured ?? false,
-
     headerStyle: config.header_style ?? "filled",
     headerTextColor: config.header_text_color ?? null,
     borderColor: config.border_color ?? null,
@@ -682,8 +570,7 @@ export async function getOnlineOrderingSettings(
   }
 
   if (config) {
-    const selectedDevice = await getSelectedLocationPaymentDevice(locationId);
-    return mapConfigToSettings(config, location, selectedDevice);
+    return mapConfigToSettings(config, location);
   }
 
   return {
@@ -860,10 +747,8 @@ export async function saveOnlineOrderingSettings(
 
   // Payment + tipping are HQ-only, enforced server-side to prevent UI bypass.
   const forbiddenKeys = [
-    "ipospaysTpn",
-    "ipospaysFtdEcomKey",
-    "ipospaysDeviceLabel",
-    "ipospaysDeviceId",
+    "nmiTokenizationKey",
+    "nmiPrivateApiKey",
     "tippingEnabled",
     "tipPresets",
   ] as const;
@@ -925,7 +810,7 @@ export async function saveOnlineOrderingSettings(
     configData.delivery_radius_miles = parsed === null || Number.isFinite(parsed) ? parsed : null;
   }
 
-  // Merchant cannot change payment device/TPN/whitelist.
+  // Merchant cannot change HQ-managed payment credentials or tipping.
 
   for (const key of Object.keys(configData)) {
     const newVal = configData[key];
@@ -963,15 +848,6 @@ export async function saveOnlineOrderingSettings(
 
   revalidatePath("/dashboard/online-ordering");
   return { success: true };
-}
-/**
- * Manually re-triggers the Dejavoo domain whitelist for a location's TPN.
- * Useful if the initial whitelist failed or if the domain changed.
- */
-export async function retriggerDomainWhitelist(
-  locationId: string
-): Promise<{ success: boolean; error?: string; skipped?: boolean }> {
-  throw new Error("Domain whitelisting is managed by HQ only.");
 }
 
 
