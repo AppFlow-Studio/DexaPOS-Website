@@ -4,6 +4,7 @@ import { auth } from '@clerk/nextjs/server'
 
 import { toDeviceActivityFeed } from '@/lib/device-registry/activity'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { resolveImpersonationFromCookies } from '@/lib/admin/impersonation'
 import type {
   AdminDeviceInventoryRow,
   DeviceActivityItem,
@@ -21,11 +22,27 @@ type ActionResult<T> = {
 async function requireMerchantDeviceContext() {
   const { userId, orgId } = await auth()
 
-  if (!userId || !orgId) {
+  if (!userId) {
     throw new Error('Unauthorized: merchant access required')
   }
 
   const supabase = createServerSupabaseClient() as any
+
+  // Under HQ impersonation, route every device-registry read/write to the
+  // impersonated merchant. The HQ session has no merchant org, so the
+  // legacy orgId path would fail.
+  const impersonation = await resolveImpersonationFromCookies().catch(() => null)
+  if (impersonation) {
+    return {
+      supabase,
+      merchantId: impersonation.merchantId,
+    }
+  }
+
+  if (!orgId) {
+    throw new Error('Unauthorized: merchant access required')
+  }
+
   const { data: merchant, error } = await supabase
     .from('merchants')
     .select('id, name, clerk_org_id')

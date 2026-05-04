@@ -11,6 +11,7 @@ import {
 } from "@/types/discount";
 import { discountFormSchema } from "@/lib/validations/discount";
 import { LogAuditEvent } from "./audit-logs";
+import { resolveImpersonationFromCookies } from "@/lib/admin/impersonation";
 
 type MutationResult<T> =
   | { success: true; data: T }
@@ -20,6 +21,13 @@ async function getMerchantIdFromSession() {
   const { userId, sessionClaims } = await auth();
   if (!userId) {
     throw new Error("Unauthorized");
+  }
+
+  // Active impersonation overrides every other source — the HQ admin acts
+  // as the impersonated merchant for every discount read/write.
+  const impersonation = await resolveImpersonationFromCookies().catch(() => null);
+  if (impersonation) {
+    return impersonation.merchantId;
   }
 
   const user = await currentUser();

@@ -13,6 +13,31 @@ import {
 import { TableStatus } from '@/types/floor-plan'
 import { LogAuditEvent } from './audit-logs'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
+import { resolveImpersonationFromCookies } from '@/lib/admin/impersonation'
+
+/**
+ * Resolves the active merchant id for the current request, honoring HQ
+ * impersonation. Returns null when neither a real merchant org nor an
+ * active impersonation session can be found — caller should treat that
+ * as "not authenticated for merchant scope".
+ */
+async function resolveActiveMerchantId(
+  serviceRole: ReturnType<typeof createServiceRoleClient>,
+  orgId: string | null | undefined,
+): Promise<string | null> {
+  const impersonation = await resolveImpersonationFromCookies().catch(() => null)
+  if (impersonation) return impersonation.merchantId
+
+  if (!orgId) return null
+
+  const { data: merchant } = await serviceRole
+    .from('merchants')
+    .select('id')
+    .eq('clerk_org_id', orgId)
+    .maybeSingle()
+
+  return merchant?.id ?? null
+}
 
 /**
  * Server actions for floor plan operations
@@ -735,21 +760,17 @@ export async function UpdateWaitlistEntryAction (
 ) {
   const { userId, orgId } = await auth()
 
-  if (!userId || !orgId) {
+  if (!userId) {
     throw new Error('Not authenticated')
   }
 
   const serviceRole = createServiceRoleClient()
 
-  const { data: merchant, error: merchantError } = await serviceRole
-    .from('merchants')
-    .select('id')
-    .eq('clerk_org_id', orgId)
-    .maybeSingle()
-
-  if (merchantError || !merchant?.id) {
-    throw merchantError ?? new Error('Merchant not found for organization')
+  const merchantId = await resolveActiveMerchantId(serviceRole, orgId)
+  if (!merchantId) {
+    throw new Error('Merchant not found for organization')
   }
+  const merchant = { id: merchantId }
 
   const { data: location, error: locationError } = await serviceRole
     .from('locations')
@@ -840,21 +861,17 @@ export async function DeleteWaitlistEntryAction (
 ) {
   const { userId, orgId } = await auth()
 
-  if (!userId || !orgId) {
+  if (!userId) {
     throw new Error('Not authenticated')
   }
 
   const serviceRole = createServiceRoleClient()
 
-  const { data: merchant, error: merchantError } = await serviceRole
-    .from('merchants')
-    .select('id')
-    .eq('clerk_org_id', orgId)
-    .maybeSingle()
-
-  if (merchantError || !merchant?.id) {
-    throw merchantError ?? new Error('Merchant not found for organization')
+  const merchantId = await resolveActiveMerchantId(serviceRole, orgId)
+  if (!merchantId) {
+    throw new Error('Merchant not found for organization')
   }
+  const merchant = { id: merchantId }
 
   const { data: entry, error: entryError } = await serviceRole
     .from('waitlist')

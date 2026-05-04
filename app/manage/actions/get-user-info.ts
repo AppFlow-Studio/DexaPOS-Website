@@ -4,6 +4,7 @@ import { auth } from '@clerk/nextjs/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { DebugUserRelationships } from '@/debug/debug-user'
 import type { UserWithAllMemberships } from '@/types/user'
+import { resolveImpersonationFromCookies } from '@/lib/admin/impersonation'
 
 export interface UserInfo {
     id: string
@@ -35,7 +36,62 @@ export async function GetUserInfo() {
         return new Error(error.message)
     }
 
-    return data 
+    // Under active impersonation, the HQ admin should "look like" the merchant
+    // owner to every consumer of this hook (sidebar header, role-gated UI,
+    // location switcher, etc). We synthesize a merchant.owner membership
+    // pointing at the impersonated merchant. The user's own id/name/email
+    // stay intact at the top level so the bottom-of-sidebar avatar continues
+    // to show the real HQ user — keeping "actions are logged under your HQ
+    // account" honest.
+    const impersonation = await resolveImpersonationFromCookies().catch(() => null)
+    if (impersonation && data) {
+        const { data: merchant } = await supabase
+            .from('merchants')
+            .select('id, clerk_org_id, name')
+            .eq('id', impersonation.merchantId)
+            .single()
+
+        // organizations.id IS the Clerk org id (no separate clerk_org_id column).
+        const { data: organization } = await supabase
+            .from('organizations')
+            .select('*')
+            .eq('id', impersonation.clerkOrgId)
+            .maybeSingle()
+
+        if (merchant) {
+            return {
+                ...data,
+                members: [
+                    {
+                        // Real members rows have an id; impersonation is virtual.
+                        id: `impersonation:${impersonation.sessionId}`,
+                        user_id: userId,
+                        organization_id: impersonation.clerkOrgId,
+                        role: 'merchant.owner',
+                        is_active: true,
+                        organizations: {
+                            // Spread the real org row first to preserve imageURL
+                            // (the merchant's logo lives there — see
+                            // app/manage/actions/upload-merchant-logo.ts).
+                            ...(organization ?? {}),
+                            id: impersonation.clerkOrgId,
+                            name: merchant.name,
+                            // Consumers (e.g. useLocationScopedMenuItemsWithCategories)
+                            // read `organizations.merchants.id` — it's a 1:1 join,
+                            // not an array. Match the real query's shape.
+                            merchants: {
+                                id: merchant.id,
+                                clerk_org_id: merchant.clerk_org_id,
+                                name: merchant.name,
+                            },
+                        },
+                    },
+                ],
+            }
+        }
+    }
+
+    return data
 }
 
 // app/dashboard/actions/user.ts
