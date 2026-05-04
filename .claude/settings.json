@@ -38,7 +38,8 @@
       "Bash(node -e *)",
       "Bash(curl -s \"http://localhost:3000/dashboard\")",
       "mcp__supabase__execute_sql",
-      "Bash(git fetch *)"
+      "Bash(git fetch *)",
+      "Bash(npx eslint *)"
     ],
     "additionalDirectories": [
       "C:\\Users\\HP i5\\Desktop\\mdptech\\DexaPOS-website\\DexaPOS-Website\\tasks",

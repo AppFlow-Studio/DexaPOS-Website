@@ -190,6 +190,37 @@ export async function changeAdminUserRole(params: {
   }
 }
 
+async function countActiveAdminsInOrg(
+  organizationId: string,
+  excludeUserId?: string
+): Promise<number> {
+  const supabase = createServiceRoleClient()
+  const { data, error } = await supabase
+    .from('members')
+    .select('user_id, role, users(public_metadata)')
+    .eq('organization_id', organizationId)
+
+  if (error || !data) {
+    return 0
+  }
+
+  const adminRoleCodes = new Set([
+    'hq.super_admin',
+    'hq.platform_admin',
+    'hq.manager',
+    'merchant.owner',
+    'merchant.admin',
+  ])
+
+  return data.filter((row: any) => {
+    if (excludeUserId && row.user_id === excludeUserId) return false
+    if (!row.role || !adminRoleCodes.has(row.role)) return false
+    const status =
+      (row.users?.public_metadata as Record<string, unknown> | null)?.status
+    return status !== 'Inactive'
+  }).length
+}
+
 export async function deactivateAdminUser(params: {
   userId: string
   organizationId?: string
@@ -219,6 +250,28 @@ export async function deactivateAdminUser(params: {
     )
     if (manageTargetError) {
       return { success: false, message: manageTargetError }
+    }
+
+    // Only-admin guard: never allow deactivating the last active admin of an org.
+    const adminRoleCodes = new Set([
+      'hq.super_admin',
+      'hq.platform_admin',
+      'hq.manager',
+      'merchant.owner',
+      'merchant.admin',
+    ])
+    if (target.role && adminRoleCodes.has(target.role)) {
+      const remainingActiveAdmins = await countActiveAdminsInOrg(
+        orgId,
+        params.userId
+      )
+      if (remainingActiveAdmins === 0) {
+        return {
+          success: false,
+          message:
+            'Cannot deactivate the only active admin of this organization. Promote another user to admin first.',
+        }
+      }
     }
 
     const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY! })
@@ -270,6 +323,233 @@ export async function deactivateAdminUser(params: {
     return {
       success: false,
       message: `Failed to deactivate user: ${(error as Error).message || 'Unknown error'}`,
+    }
+  }
+}
+
+export async function activateAdminUser(params: {
+  userId: string
+  organizationId?: string
+}): Promise<{ success: boolean; message: string }> {
+  try {
+    const authContext = await assertHQPermission('hq.team.manage')
+    const orgId = params.organizationId || DEXA_HQ_ORG_ID
+
+    if (!params.userId) {
+      return { success: false, message: 'User ID is required.' }
+    }
+
+    const target = await getTargetMemberAndUser(params.userId, orgId)
+    if (!target) {
+      return { success: false, message: 'Target user membership not found.' }
+    }
+
+    const actorRoleCode = authContext.role?.role_code || ''
+    const actorRoleLevel = authContext.role?.level || 0
+    const isSelf = params.userId === authContext.userId
+    const isSuperAdmin = actorRoleCode === 'hq.super_admin'
+
+    // Self-activation is allowed only for super admins (no one is above them).
+    if (isSelf && !isSuperAdmin) {
+      return {
+        success: false,
+        message:
+          'You cannot activate your own account. Ask a super admin to activate it.',
+      }
+    }
+
+    // Standard role-hierarchy check applies when activating someone else.
+    if (!isSelf) {
+      const manageTargetError = ensureActorCanManageTarget(
+        actorRoleCode,
+        actorRoleLevel,
+        target.role
+      )
+      if (manageTargetError) {
+        return { success: false, message: manageTargetError }
+      }
+    }
+
+    const existingMetadata =
+      (target.users?.public_metadata || {}) as Record<string, unknown>
+    const previousStatus = (existingMetadata.status as string) || 'Active'
+
+    if (previousStatus !== 'Inactive') {
+      return { success: true, message: 'Account is already active.' }
+    }
+
+    // Unban in Clerk so the user can sign in again.
+    try {
+      const clerkClient = createClerkClient({
+        secretKey: process.env.CLERK_SECRET_KEY!,
+      })
+      await clerkClient.users.unbanUser(params.userId)
+    } catch (clerkError) {
+      console.error('[activateAdminUser] Clerk unban failed:', clerkError)
+      return {
+        success: false,
+        message: `Failed to unban user in Clerk: ${(clerkError as Error).message || 'Unknown error'}`,
+      }
+    }
+
+    const supabase = createServiceRoleClient()
+    const nextMetadata: Record<string, unknown> = {
+      ...existingMetadata,
+      status: 'Active',
+      activated_at: new Date().toISOString(),
+      activated_by: authContext.userId,
+    }
+    delete nextMetadata.deactivated_at
+    delete nextMetadata.deactivated_by
+
+    const { error: updateError } = await supabase
+      .from('users')
+      .update({
+        public_metadata: nextMetadata,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', params.userId)
+
+    if (updateError) {
+      return { success: false, message: updateError.message }
+    }
+
+    await logAdminAction('ADMIN_ACTIVATED', {
+      clerkOrgId: orgId,
+      resourceType: 'user',
+      resourceId: params.userId,
+      resourceName: target.users?.email || params.userId,
+      changes: {
+        status: { old: 'Inactive', new: 'Active' },
+      },
+      metadata: {
+        target_user_id: params.userId,
+        activated_by: authContext.userId,
+        method: 'activateAdminUser',
+        is_self_activation: isSelf,
+        action_category: 'hq_intervention',
+      },
+    })
+
+    revalidatePath('/manage/users')
+    revalidatePath(`/manage/users/${params.userId}`)
+
+    return {
+      success: true,
+      message: isSelf
+        ? 'Your account is now active.'
+        : 'User activated successfully.',
+    }
+  } catch (error) {
+    console.error('[activateAdminUser] Error:', error)
+    return {
+      success: false,
+      message: `Failed to activate user: ${(error as Error).message || 'Unknown error'}`,
+    }
+  }
+}
+
+export async function updateAdminUserDetails(params: {
+  userId: string
+  firstName?: string
+  lastName?: string
+  organizationId?: string
+}): Promise<{ success: boolean; message: string }> {
+  try {
+    const authContext = await assertHQPermission('hq.team.manage')
+    const orgId = params.organizationId || DEXA_HQ_ORG_ID
+
+    if (!params.userId) {
+      return { success: false, message: 'User ID is required.' }
+    }
+
+    const firstName = params.firstName?.trim() ?? ''
+    const lastName = params.lastName?.trim() ?? ''
+
+    if (!firstName && !lastName) {
+      return { success: false, message: 'At least one name field is required.' }
+    }
+
+    const target = await getTargetMemberAndUser(params.userId, orgId)
+    if (!target) {
+      return { success: false, message: 'Target user membership not found.' }
+    }
+
+    const isSelf = params.userId === authContext.userId
+    if (!isSelf) {
+      const actorRoleCode = authContext.role?.role_code || ''
+      const actorRoleLevel = authContext.role?.level || 0
+      const manageTargetError = ensureActorCanManageTarget(
+        actorRoleCode,
+        actorRoleLevel,
+        target.role
+      )
+      if (manageTargetError) {
+        return { success: false, message: manageTargetError }
+      }
+    }
+
+    const previousFirstName = target.users?.first_name || ''
+    const previousLastName = target.users?.last_name || ''
+
+    if (previousFirstName === firstName && previousLastName === lastName) {
+      return { success: true, message: 'No changes to save.' }
+    }
+
+    try {
+      const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY! })
+      await clerkClient.users.updateUser(params.userId, {
+        firstName,
+        lastName,
+      })
+    } catch (clerkError) {
+      console.error('[updateAdminUserDetails] Clerk update failed:', clerkError)
+      return {
+        success: false,
+        message: `Failed to update Clerk profile: ${(clerkError as Error).message || 'Unknown error'}`,
+      }
+    }
+
+    const supabase = createServiceRoleClient()
+    const { error: updateError } = await supabase
+      .from('users')
+      .update({
+        first_name: firstName,
+        last_name: lastName,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', params.userId)
+
+    if (updateError) {
+      return { success: false, message: updateError.message }
+    }
+
+    await logAdminAction('ADMIN_PROFILE_UPDATED', {
+      clerkOrgId: orgId,
+      resourceType: 'user',
+      resourceId: params.userId,
+      resourceName: target.users?.email || params.userId,
+      changes: {
+        first_name: { old: previousFirstName, new: firstName },
+        last_name: { old: previousLastName, new: lastName },
+      },
+      metadata: {
+        target_user_id: params.userId,
+        updated_by: authContext.userId,
+        method: 'updateAdminUserDetails',
+        action_category: 'hq_intervention',
+      },
+    })
+
+    revalidatePath('/manage/users')
+    revalidatePath(`/manage/users/${params.userId}`)
+
+    return { success: true, message: 'User details updated successfully.' }
+  } catch (error) {
+    console.error('[updateAdminUserDetails] Error:', error)
+    return {
+      success: false,
+      message: `Failed to update user details: ${(error as Error).message || 'Unknown error'}`,
     }
   }
 }

@@ -45,7 +45,10 @@ import {
     UserX,
     KeyRound,
     Copy,
+    Shield,
+    CheckCircle2,
 } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { useOrganizationUsers } from '../hooks/useOrganizationUsers'
 import { useAuth, useUser } from '@clerk/nextjs'
 // import { SendOrganizationMembersInviteButton } from '../organizations/[organizationId]/components/SendOrganizationMembersInviteButton'
@@ -57,6 +60,7 @@ import { ClerkResendInvitationAdmin } from '../organizations/actions/clerk-resen
 import { ClerkRevokeInvitation } from '../organizations/actions/clerk-revoke-invitation'
 import { toast } from 'sonner'
 import {
+    activateAdminUser,
     changeAdminUserRole,
     deactivateAdminUser,
     resetAdminUserPassword,
@@ -229,6 +233,31 @@ export default function UsersPage() {
         } catch (error) {
             console.error('[UsersPage] Failed to deactivate user:', error)
             toast.error('Failed to deactivate user')
+        } finally {
+            setUserActionId(null)
+        }
+    }
+
+    const handleActivateUser = async (member: any) => {
+        const userIdToActivate = member?.users?.id as string | undefined
+        if (!userIdToActivate) return
+
+        const actionId = `activate:${userIdToActivate}`
+        setUserActionId(actionId)
+        try {
+            const result = await activateAdminUser({
+                userId: userIdToActivate,
+                organizationId: resolvedOrganizationId,
+            })
+            if (!result.success) {
+                toast.error(result.message || 'Failed to activate user')
+                return
+            }
+            toast.success(result.message || 'User activated')
+            await refetchUsers()
+        } catch (error) {
+            console.error('[UsersPage] Failed to activate user:', error)
+            toast.error('Failed to activate user')
         } finally {
             setUserActionId(null)
         }
@@ -599,20 +628,31 @@ export default function UsersPage() {
                                                                 Reset Password
                                                             </DropdownMenuItem>
                                                             <DropdownMenuSeparator />
-                                                            <DropdownMenuItem
-                                                                className="text-yellow-600"
-                                                                onClick={(event) => {
-                                                                    event.stopPropagation()
-                                                                    void handleDeactivateUser(user)
-                                                                }}
-                                                                disabled={
-                                                                    userActionId === `deactivate:${user.users.id}` ||
-                                                                    (user?.users?.public_metadata?.status || 'Active') === 'Inactive'
-                                                                }
-                                                            >
-                                                        <UserX className="mr-2 h-4 w-4" />
-                                                        Deactivate
-                                                            </DropdownMenuItem>
+                                                            {(user?.users?.public_metadata?.status || 'Active') === 'Inactive' ? (
+                                                                <DropdownMenuItem
+                                                                    className="text-green-600"
+                                                                    onClick={(event) => {
+                                                                        event.stopPropagation()
+                                                                        void handleActivateUser(user)
+                                                                    }}
+                                                                    disabled={userActionId === `activate:${user.users.id}`}
+                                                                >
+                                                                    <UserCheck className="mr-2 h-4 w-4" />
+                                                                    {userActionId === `activate:${user.users.id}` ? 'Activating...' : 'Activate'}
+                                                                </DropdownMenuItem>
+                                                            ) : (
+                                                                <DropdownMenuItem
+                                                                    className="text-yellow-600"
+                                                                    onClick={(event) => {
+                                                                        event.stopPropagation()
+                                                                        void handleDeactivateUser(user)
+                                                                    }}
+                                                                    disabled={userActionId === `deactivate:${user.users.id}`}
+                                                                >
+                                                                    <UserX className="mr-2 h-4 w-4" />
+                                                                    {userActionId === `deactivate:${user.users.id}` ? 'Deactivating...' : 'Deactivate'}
+                                                                </DropdownMenuItem>
+                                                            )}
                                                     </DropdownMenuContent>
                                                 </DropdownMenu>
                                             </TableCell>
@@ -778,44 +818,111 @@ export default function UsersPage() {
             />
 
             <Dialog open={isEditRoleDialogOpen} onOpenChange={setIsEditRoleDialogOpen}>
-                <DialogContent onClick={(event) => event.stopPropagation()}>
+                <DialogContent
+                    onClick={(event) => event.stopPropagation()}
+                    className="sm:max-w-115"
+                >
                     <DialogHeader>
-                        <DialogTitle>Edit User Role</DialogTitle>
-                        <DialogDescription>
-                            Update the HQ role for{' '}
-                            <span className="font-medium">
-                                {selectedMemberForRoleEdit?.users?.email || 'selected user'}
-                            </span>
-                            .
-                        </DialogDescription>
+                        <div className="flex items-center gap-3 mb-1">
+                            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 shrink-0">
+                                <Shield className="h-4 w-4 text-primary" />
+                            </div>
+                            <div className="min-w-0">
+                                <DialogTitle className="text-base">Edit user role</DialogTitle>
+                                <DialogDescription className="text-xs mt-0.5 truncate">
+                                    {selectedMemberForRoleEdit?.users?.email || 'selected user'}
+                                </DialogDescription>
+                            </div>
+                        </div>
                     </DialogHeader>
-                    <div className="space-y-2 py-2">
-                        <Label htmlFor="role-code">Role</Label>
-                        <Select value={selectedRoleCode} onValueChange={(value) => setSelectedRoleCode(value as HQRoleCode)}>
-                            <SelectTrigger id="role-code">
-                                <SelectValue placeholder="Select role" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {Object.values(HQ_ROLES)
-                                    .filter((role) => role.level <= role_level)
-                                    .sort((a, b) => b.level - a.level)
-                                    .map((role) => (
-                                        <SelectItem key={role.code} value={role.code}>
-                                            {role.name} ({role.code})
-                                        </SelectItem>
-                                    ))}
-                            </SelectContent>
-                        </Select>
+
+                    <div className="space-y-2">
+                        {Object.values(HQ_ROLES)
+                            .filter((role) => role.level <= role_level)
+                            .sort((a, b) => b.level - a.level)
+                            .map((role) => {
+                                const isSelected = selectedRoleCode === role.code
+                                const isCurrent = selectedMemberForRoleEdit?.role === role.code
+                                const isSaving = userActionId === `role:${selectedMemberForRoleEdit?.users?.id}`
+
+                                const colors =
+                                    role.level >= 10
+                                        ? { ring: 'border-red-400 bg-red-50/40', dot: 'bg-red-500', badge: 'bg-red-50 text-red-700 border-red-200' }
+                                        : role.level >= 8
+                                            ? { ring: 'border-orange-400 bg-orange-50/40', dot: 'bg-orange-500', badge: 'bg-orange-50 text-orange-700 border-orange-200' }
+                                            : { ring: 'border-blue-400 bg-blue-50/40', dot: 'bg-blue-500', badge: 'bg-blue-50 text-blue-700 border-blue-200' }
+
+                                return (
+                                    <button
+                                        key={role.code}
+                                        type="button"
+                                        disabled={isSaving}
+                                        onClick={() => setSelectedRoleCode(role.code)}
+                                        className={cn(
+                                            'w-full text-left rounded-lg border px-4 py-3 transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
+                                            'disabled:opacity-50 disabled:cursor-not-allowed',
+                                            isSelected
+                                                ? `${colors.ring} shadow-sm`
+                                                : 'border-border hover:border-muted-foreground/40 hover:bg-muted/30'
+                                        )}
+                                    >
+                                        <div className="flex items-center justify-between gap-3">
+                                            <div className="flex items-start gap-3 min-w-0">
+                                                <div className={cn('h-2.5 w-2.5 rounded-full shrink-0 mt-1.5', colors.dot)} />
+                                                <div className="min-w-0">
+                                                    <div className="flex items-center gap-2 flex-wrap">
+                                                        <span className="text-sm font-semibold leading-none">
+                                                            {role.name}
+                                                        </span>
+                                                        {isCurrent && (
+                                                            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground border">
+                                                                Current
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <p className="text-xs text-muted-foreground mt-1 leading-snug">
+                                                        {role.description}
+                                                    </p>
+                                                    <span
+                                                        className={cn(
+                                                            'inline-flex items-center mt-1.5 text-[10px] font-mono px-1.5 py-0.5 rounded border',
+                                                            colors.badge
+                                                        )}
+                                                    >
+                                                        {role.code} · level {role.level}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <div
+                                                className={cn(
+                                                    'h-4 w-4 rounded-full border-2 shrink-0 flex items-center justify-center transition-colors',
+                                                    isSelected
+                                                        ? 'border-primary bg-primary'
+                                                        : 'border-muted-foreground/30'
+                                                )}
+                                            >
+                                                {isSelected && <CheckCircle2 className="h-3 w-3 text-white" />}
+                                            </div>
+                                        </div>
+                                    </button>
+                                )
+                            })}
                     </div>
-                    <DialogFooter>
+
+                    <DialogFooter className="gap-2 sm:gap-2 justify-between sm:justify-between">
                         <Button variant="outline" onClick={() => setIsEditRoleDialogOpen(false)}>
                             Cancel
                         </Button>
                         <Button
                             onClick={() => void handleSaveRole()}
-                            disabled={!selectedMemberForRoleEdit || userActionId === `role:${selectedMemberForRoleEdit?.users?.id}`}
+                            disabled={
+                                !selectedMemberForRoleEdit ||
+                                !selectedRoleCode ||
+                                selectedRoleCode === selectedMemberForRoleEdit?.role ||
+                                userActionId === `role:${selectedMemberForRoleEdit?.users?.id}`
+                            }
                         >
-                            {userActionId === `role:${selectedMemberForRoleEdit?.users?.id}` ? 'Saving...' : 'Save Role'}
+                            {userActionId === `role:${selectedMemberForRoleEdit?.users?.id}` ? 'Saving...' : 'Save role'}
                         </Button>
                     </DialogFooter>
                 </DialogContent>

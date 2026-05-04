@@ -32,13 +32,6 @@ import {
     DialogTrigger,
 } from '@/components/ui/dialog'
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select'
-import {
     User,
     Mail,
     Shield,
@@ -56,6 +49,9 @@ import {
     Lock,
 } from 'lucide-react'
 import Link from 'next/link'
+import { EditUserDetailsDialog } from './components/edit-user-details-dialog'
+import { EditMembershipDialog } from './components/edit-membership-dialog'
+import { GrantMerchantAccessDialog } from './components/grant-merchant-access-dialog'
 
 export default function UserInfoPage() {
     const { userId: targetUserId } = useParams()
@@ -64,8 +60,15 @@ export default function UserInfoPage() {
     const { data: user, isLoading, error } = useGetInfoOfUser(targetUserId as string)
     
     // Merchant access management state
-    const [selectedMerchantToGrant, setSelectedMerchantToGrant] = useState<string>('')
     const [isGrantDialogOpen, setIsGrantDialogOpen] = useState(false)
+
+    // Edit dialog state
+    const [isEditDetailsOpen, setIsEditDetailsOpen] = useState(false)
+    const [editingMembership, setEditingMembership] = useState<{
+        organizationId: string
+        organizationName: string
+        role: string | null
+    } | null>(null)
     
     // Fetch target user's merchant access
     const { data: targetUserMerchantAccess, isLoading: accessLoading } = useAdminMerchantAccess(targetUserId as string)
@@ -123,16 +126,15 @@ export default function UserInfoPage() {
         (merchant) => !targetUserMerchantAccess?.some((access) => access.merchantId === merchant.id)
     ) || []
 
-    const handleGrantAccess = async () => {
-        if (!selectedMerchantToGrant) return
-        
+    const handleGrantAccess = async (merchantId: string) => {
+        if (!merchantId) return
+
         try {
             await grantAccessMutation.mutateAsync({
                 adminUserId: targetUserId as string,
-                merchantId: selectedMerchantToGrant,
+                merchantId,
                 grantedBy: currentUserId || undefined,
             })
-            setSelectedMerchantToGrant('')
             setIsGrantDialogOpen(false)
         } catch (error) {
             console.error('Error granting merchant access:', error)
@@ -282,7 +284,10 @@ export default function UserInfoPage() {
                                     </div>
 
                                     <div className="mt-6 pt-4 border-t">
-                                        <Button variant="outline">
+                                        <Button
+                                            variant="outline"
+                                            onClick={() => setIsEditDetailsOpen(true)}
+                                        >
                                             <Edit className="mr-2 h-4 w-4" />
                                             Edit user details
                                         </Button>
@@ -324,7 +329,16 @@ export default function UserInfoPage() {
                                                             </DropdownMenuTrigger>
                                                             <DropdownMenuContent align="end">
                                                                 <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                                                <DropdownMenuItem>
+                                                                <DropdownMenuItem
+                                                                    onSelect={(event) => {
+                                                                        event.preventDefault()
+                                                                        setEditingMembership({
+                                                                            organizationId: member.organization_id,
+                                                                            organizationName: member.organizations?.name || 'organization',
+                                                                            role: member.role || null,
+                                                                        })
+                                                                    }}
+                                                                >
                                                                     <Edit className="mr-2 h-4 w-4" />
                                                                     Edit membership
                                                                 </DropdownMenuItem>
@@ -395,51 +409,10 @@ export default function UserInfoPage() {
                                             </CardDescription>
                                         </div>
                                         {canEditMerchantAccess && (
-                                            <Dialog open={isGrantDialogOpen} onOpenChange={setIsGrantDialogOpen}>
-                                                <DialogTrigger asChild>
-                                                    <Button>
-                                                        <Plus className="mr-2 h-4 w-4" />
-                                                        Grant Access
-                                                    </Button>
-                                                </DialogTrigger>
-                                                <DialogContent>
-                                                    <DialogHeader>
-                                                        <DialogTitle>Grant Merchant Access</DialogTitle>
-                                                        <DialogDescription>
-                                                            Select a merchant to grant access to {user.first_name} {user.last_name}
-                                                        </DialogDescription>
-                                                    </DialogHeader>
-                                                    <div className="py-4">
-                                                        <Select value={selectedMerchantToGrant} onValueChange={setSelectedMerchantToGrant}>
-                                                            <SelectTrigger>
-                                                                <SelectValue placeholder="Select a merchant" />
-                                                            </SelectTrigger>
-                                                            <SelectContent>
-                                                                {availableMerchantsToGrant.length === 0 ? (
-                                                                    <SelectItem value="none" disabled>No merchants available</SelectItem>
-                                                                ) : (
-                                                                    availableMerchantsToGrant.map((merchant) => (
-                                                                        <SelectItem key={merchant.id} value={merchant.id}>
-                                                                            {merchant.name}
-                                                                        </SelectItem>
-                                                                    ))
-                                                                )}
-                                                            </SelectContent>
-                                                        </Select>
-                                                    </div>
-                                                    <DialogFooter>
-                                                        <Button variant="outline" onClick={() => setIsGrantDialogOpen(false)}>
-                                                            Cancel
-                                                        </Button>
-                                                        <Button 
-                                                            onClick={handleGrantAccess} 
-                                                            disabled={!selectedMerchantToGrant || grantAccessMutation.isPending}
-                                                        >
-                                                            {grantAccessMutation.isPending ? 'Granting...' : 'Grant Access'}
-                                                        </Button>
-                                                    </DialogFooter>
-                                                </DialogContent>
-                                            </Dialog>
+                                            <Button onClick={() => setIsGrantDialogOpen(true)}>
+                                                <Plus className="mr-2 h-4 w-4" />
+                                                Grant Access
+                                            </Button>
                                         )}
                                     </div>
                                 </CardHeader>
@@ -544,6 +517,39 @@ export default function UserInfoPage() {
                     </Tabs>
                 </div>
             </div>
+
+            <GrantMerchantAccessDialog
+                open={isGrantDialogOpen}
+                onOpenChange={setIsGrantDialogOpen}
+                userName={`${user.first_name} ${user.last_name}`.trim()}
+                availableMerchants={availableMerchantsToGrant}
+                isPending={grantAccessMutation.isPending}
+                onGrant={(merchantId) => void handleGrantAccess(merchantId)}
+            />
+
+            <EditUserDetailsDialog
+                open={isEditDetailsOpen}
+                onOpenChange={setIsEditDetailsOpen}
+                userId={targetUserId as string}
+                initialFirstName={user.first_name || ''}
+                initialLastName={user.last_name || ''}
+                email={user.email || ''}
+            />
+
+            {editingMembership && (
+                <EditMembershipDialog
+                    open={!!editingMembership}
+                    onOpenChange={(open) => {
+                        if (!open) setEditingMembership(null)
+                    }}
+                    userId={targetUserId as string}
+                    organizationId={editingMembership.organizationId}
+                    organizationName={editingMembership.organizationName}
+                    currentRole={editingMembership.role}
+                    actorRoleLevel={currentUserRoleLevel}
+                    isSuperAdmin={isSuperAdmin}
+                />
+            )}
         </div>
     )
 }

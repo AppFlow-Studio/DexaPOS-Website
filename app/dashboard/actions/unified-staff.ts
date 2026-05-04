@@ -747,6 +747,33 @@ export async function InviteClerkStaff(
 
     const merchantId = merchant.id;
 
+    // Bug A fix: if a staff_profiles row already exists for this email at this
+    // merchant (e.g. POS-only profile created earlier), thread its id through
+    // the invite's publicMetadata so the webhook's promotion path UPDATEs the
+    // existing row instead of inserting a duplicate. We match on lower(email)
+    // because there is no unique constraint on (merchant_id, email) yet.
+    const normalizedInviteEmail = formData.email.trim().toLowerCase();
+    const { data: existingProfileByEmail } = await supabase
+      .from("staff_profiles")
+      .select("id, user_id")
+      .eq("merchant_id", merchantId)
+      .ilike("email", normalizedInviteEmail)
+      .maybeSingle();
+
+    // Only reuse the row if it has no Clerk user_id yet — a row already linked
+    // to a different Clerk user means we'd be hijacking someone's account.
+    const existingPosOnlyProfileId =
+      existingProfileByEmail && !existingProfileByEmail.user_id
+        ? existingProfileByEmail.id
+        : null;
+
+    if (existingProfileByEmail && existingProfileByEmail.user_id) {
+      console.warn(
+        "[InviteClerkStaff] staff_profiles row exists with user_id for this email — webhook will dedupe by (merchant_id,user_id)",
+        { merchantId, email: normalizedInviteEmail, profileId: existingProfileByEmail.id },
+      );
+    }
+
     // Owners/admins are auto-provisioned to every location
     const resolvedLocationIds = await resolveLocationIds(
       supabase,
@@ -833,6 +860,11 @@ export async function InviteClerkStaff(
           firstName: formData.first_name,
           lastName: formData.last_name,
           phone: formData.phone,
+          // If a POS-only profile already exists for this email, the webhook
+          // will UPDATE it instead of inserting a duplicate row.
+          ...(existingPosOnlyProfileId && {
+            staffProfileId: existingPosOnlyProfileId,
+          }),
         },
       });
     } finally {

@@ -86,6 +86,9 @@ import { AdminCreateStaffWizard } from './AdminCreateStaffWizard'
 import { BulkPinResetDialog } from './BulkPinResetDialog'
 import { BulkPasswordResetDialog } from './BulkPasswordResetDialog'
 import { AdminStaffDetailSheet } from './AdminStaffDetailSheet'
+import { EditStaffProfileDialog } from './EditStaffProfileDialog'
+import { EditStaffLocationsDialog } from './EditStaffLocationsDialog'
+import { PendingStaffInvitesDialog } from './PendingStaffInvitesDialog'
 
 interface StaffTabProps {
   merchantInfo: MerchantInfoModel
@@ -112,6 +115,9 @@ export function StaffTab({ merchantInfo, merchantDetails, refetchMerchantInfo }:
   const [bulkConfirmOpen, setBulkConfirmOpen] = React.useState(false)
   const [selectedStaffId, setSelectedStaffId] = React.useState<string | null>(null)
   const [detailOpen, setDetailOpen] = React.useState(false)
+  const [editProfileStaff, setEditProfileStaff] = React.useState<AdminStaffMember | null>(null)
+  const [editLocationsStaff, setEditLocationsStaff] = React.useState<AdminStaffMember | null>(null)
+  const [pendingInvitesOpen, setPendingInvitesOpen] = React.useState(false)
 
   // Data
   const {
@@ -422,6 +428,14 @@ export function StaffTab({ merchantInfo, merchantDetails, refetchMerchantInfo }:
                 <Users className="mr-2 h-4 w-4" />
                 View Details
               </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setEditProfileStaff(member)}>
+                <UserPlus className="mr-2 h-4 w-4" />
+                Edit Profile
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setEditLocationsStaff(member)}>
+                <MapPin className="mr-2 h-4 w-4" />
+                Edit Locations & Roles
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               {member.account_type !== 'clerk' && primary && (
                 <>
@@ -514,6 +528,10 @@ export function StaffTab({ merchantInfo, merchantDetails, refetchMerchantInfo }:
 
         {canManageMerchantTeam && (
           <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => setPendingInvitesOpen(true)}>
+              <Mail className="h-4 w-4 mr-2" />
+              Pending Invites
+            </Button>
             <Button variant="outline" onClick={() => setShowBulkPinDialog(true)}>
               <Key className="h-4 w-4 mr-2" />
               Bulk Reset PINs
@@ -688,6 +706,29 @@ export function StaffTab({ merchantInfo, merchantDetails, refetchMerchantInfo }:
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Edit Profile Dialog */}
+      <EditStaffProfileDialog
+        open={!!editProfileStaff}
+        onOpenChange={(open) => !open && setEditProfileStaff(null)}
+        merchantId={merchantId}
+        staff={editProfileStaff}
+      />
+
+      {/* Edit Locations Dialog */}
+      <EditStaffLocationsDialog
+        open={!!editLocationsStaff}
+        onOpenChange={(open) => !open && setEditLocationsStaff(null)}
+        merchantId={merchantId}
+        staff={editLocationsStaff}
+      />
+
+      {/* Pending Invites Dialog */}
+      <PendingStaffInvitesDialog
+        open={pendingInvitesOpen}
+        onOpenChange={setPendingInvitesOpen}
+        merchantId={merchantId}
+      />
     </div>
   )
 }
