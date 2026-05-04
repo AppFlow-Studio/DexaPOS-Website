@@ -58,7 +58,6 @@ export interface CreateMerchantOnboardingParams {
   ownerEmail: string
   ownerPhone: string
   ownerDob: string
-  ownerSsn: string
   businessAddress?: {
     line1: string
     line2?: string
@@ -95,10 +94,6 @@ function isValidEinTaxId(value: string): boolean {
   return /^\d{9}$/.test(normalizeDigits(value))
 }
 
-function isValidSsn(value: string): boolean {
-  return /^\d{9}$/.test(normalizeDigits(value))
-}
-
 function isValidEmail(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
 }
@@ -114,7 +109,6 @@ export async function createMerchantOnboarding(
   const ownerEmail = normalizeEmail(params.ownerEmail || '')
   const ownerPhone = params.ownerPhone?.trim()
   const ownerDob = params.ownerDob?.trim()
-  const ownerSsn = normalizeDigits(params.ownerSsn || '')
   const einTaxId = normalizeDigits(params.einTaxId || '')
   const carrierId = params.carrierId?.trim() || null
 
@@ -130,11 +124,7 @@ export async function createMerchantOnboarding(
     return { success: false, error: 'EIN / Tax ID must be 9 digits.' }
   }
 
-  if (!isValidSsn(ownerSsn)) {
-    return { success: false, error: 'Owner SSN must be 9 digits.' }
-  }
-
-  const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY! })
+const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY! })
 
   let organizationId: string | null = null
 
@@ -153,9 +143,7 @@ export async function createMerchantOnboarding(
         owner_email: ownerEmail,
         owner_phone: ownerPhone,
         owner_dob: ownerDob,
-        owner_ssn: ownerSsn,
         online_store_owner_dob: ownerDob,
-        online_store_owner_ssn: ownerSsn,
         ein_last_four: einTaxId.slice(-4),
         ein_tax_id: einTaxId,
         online_store_ein_tax_id: einTaxId,
