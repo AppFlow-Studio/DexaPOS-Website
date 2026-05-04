@@ -821,6 +821,13 @@ export async function adminInviteClerkStaff(
         phone: data.phone,
       },
     })
+  } catch (err: any) {
+    console.error('[adminInviteClerkStaff] Clerk createOrganizationInvitation failed:', {
+      status: err?.status,
+      clerkTraceId: err?.clerkTraceId,
+      errors: err?.errors,
+    })
+    throw err
   } finally {
     if (temporarilyPromoted && promotedUserId) {
       try {

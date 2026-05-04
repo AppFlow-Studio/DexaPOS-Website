@@ -14,6 +14,12 @@ import { TableStatus } from '@/types/floor-plan'
 import { LogAuditEvent } from './audit-logs'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { resolveImpersonationFromCookies } from '@/lib/admin/impersonation'
+import { notifyWaitlistAdded } from '@/app/actions/notifications/waitlist'
+import {
+  notifyReservationConfirmed,
+  notifyReservationCancelled,
+} from '@/app/actions/notifications/reservation'
+import { normalizeToE164 } from '@/lib/phone'
 
 /**
  * Resolves the active merchant id for the current request, honoring HQ
@@ -704,11 +710,16 @@ export async function AddToWaitlistAction (
 ) {
   const supabase = createServerSupabaseClient()
 
+  const normalizedPhone = params.phone ? normalizeToE164(params.phone) : null
+  if (params.phone && !normalizedPhone) {
+    throw new Error('Invalid phone number — please enter 10 digits')
+  }
+
   const { data, error } = await supabase.rpc('add_to_waitlist', {
     p_location_id: locationId,
     p_party_name: params.partyName,
     p_party_size: params.partySize,
-    p_phone: params.phone || null,
+    p_phone: normalizedPhone,
     p_notes: params.notes || null,
     p_preferred_section: params.preferredSection || null,
     p_quoted_wait_minutes: params.quotedWaitMinutes || null
@@ -736,6 +747,13 @@ export async function AddToWaitlistAction (
     },
     changes: { after: params as unknown as Record<string, unknown> }
   })
+
+  // Best-effort welcome notification (SMS / email if available on the entry).
+  if (params.phone) {
+    notifyWaitlistAdded(waitlistId).catch((err) => {
+      console.error('[notifyWaitlistAdded] failed:', err)
+    })
+  }
 
   return {
     waitlistId,
@@ -804,7 +822,17 @@ export async function UpdateWaitlistEntryAction (
   const updateData: Record<string, unknown> = {}
   if (params.partyName !== undefined) updateData.party_name = params.partyName
   if (params.partySize !== undefined) updateData.party_size = params.partySize
-  if (params.phone !== undefined) updateData.phone = params.phone || null
+  if (params.phone !== undefined) {
+    if (params.phone) {
+      const normalized = normalizeToE164(params.phone)
+      if (!normalized) {
+        throw new Error('Invalid phone number — please enter 10 digits')
+      }
+      updateData.phone = normalized
+    } else {
+      updateData.phone = null
+    }
+  }
   if (params.notes !== undefined) updateData.notes = params.notes || null
   if (params.preferredSection !== undefined) {
     updateData.preferred_section = params.preferredSection || null
@@ -938,11 +966,17 @@ export async function CreateReservationAction (
   }
 ) {
   const supabase = createServerSupabaseClient()
+
+  const normalizedPhone = normalizeToE164(params.phone)
+  if (!normalizedPhone) {
+    throw new Error('Invalid phone number — please enter 10 digits')
+  }
+
   const { data, error } = await supabase.rpc('create_reservation', {
     p_location_id: locationId,
     p_party_name: params.partyName,
     p_party_size: params.partySize,
-    p_phone: params.phone,
+    p_phone: normalizedPhone,
     p_email: params.email ?? null,
     p_reservation_date: params.reservationDate,
     p_reservation_time: params.reservationTime,
@@ -956,6 +990,7 @@ export async function CreateReservationAction (
     p_source: params.source ?? 'web_dashboard'
   })
   if (error) throw error
+  const reservationId = (data as any)?.reservation_id as string | undefined
   await LogAuditEvent({
     clerkOrgId,
     locationId,
@@ -963,9 +998,14 @@ export async function CreateReservationAction (
     actionCategory: 'reservations',
     severity: 'info',
     resourceType: 'reservation',
-    resourceId: (data as any)?.reservation_id,
+    resourceId: reservationId,
     resourceName: params.partyName
   })
+  if (reservationId && (params.phone || params.email)) {
+    notifyReservationConfirmed(reservationId).catch((err) => {
+      console.error('[notifyReservationConfirmed] failed:', err)
+    })
+  }
   return data as { reservation_id: string; confirmation_number: string }
 }
 
@@ -1033,7 +1073,13 @@ export async function UpdateReservationAction (
 
   if (params.partyName !== undefined) updateData.party_name = params.partyName
   if (params.partySize !== undefined) updateData.party_size = params.partySize
-  if (params.phone !== undefined) updateData.phone = params.phone
+  if (params.phone !== undefined) {
+    const normalized = normalizeToE164(params.phone)
+    if (!normalized) {
+      throw new Error('Invalid phone number — please enter 10 digits')
+    }
+    updateData.phone = normalized
+  }
   if (params.email !== undefined) updateData.email = params.email || null
   if (params.reservationDate !== undefined) {
     updateData.reservation_date = params.reservationDate
@@ -1111,6 +1157,11 @@ export async function CancelReservationAction (
     resourceId: reservationId,
     resourceName: cancellationReason ?? 'no reason'
   })
+  notifyReservationCancelled(reservationId, cancellationReason ?? null).catch(
+    (err) => {
+      console.error('[notifyReservationCancelled] failed:', err)
+    }
+  )
   return data
 }
 

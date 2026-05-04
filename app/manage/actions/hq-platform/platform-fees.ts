@@ -2,7 +2,6 @@
 
 import { assertHQPermission } from '@/lib/admin/auth'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
-import { LogAuditEvent } from '@/app/dashboard/actions/audit-logs'
 
 export interface PlatformFeeTotals {
   gross_dual_pricing_fee: number
@@ -37,6 +36,7 @@ export interface MerchantFeeRow {
 export interface LocationFeeRow {
   location_id: string
   location_name: string
+  location_address: string | null
   tip_surcharge_percentage: number
   dual_pricing_percentage: number
   gross_dual_pricing_fee: number
@@ -47,6 +47,17 @@ export interface LocationFeeRow {
   payment_count: number
 }
 
+export interface RecentActivityEntry {
+  payment_id: string
+  captured_at: string
+  location_id: string | null
+  location_name: string | null
+  amount: number
+  card_fee: number
+  status: string
+  is_returned: boolean
+}
+
 export interface PlatformFeesOverview {
   totals: PlatformFeeTotals
   byDay: PlatformFeeDayPoint[]
@@ -54,10 +65,37 @@ export interface PlatformFeesOverview {
 }
 
 export interface MerchantPlatformFeesDetail {
-  merchant: { id: string; name: string }
+  merchant: {
+    id: string
+    name: string
+    type: string | null
+    onboarding_status: string | null
+    dual_pricing_percentage: number
+  }
   totals: PlatformFeeTotals
   byDay: PlatformFeeDayPoint[]
   byLocation: LocationFeeRow[]
+  recentActivity: RecentActivityEntry[]
+}
+
+export interface MerchantPaymentRow {
+  id: string
+  captured_at: string
+  location_id: string | null
+  location_name: string | null
+  card_type: string | null
+  card_last_four: string | null
+  subtotal_portion: number
+  tip_amount: number
+  total_amount: number
+  dual_pricing_fee: number
+  status: string
+  is_returned: boolean
+}
+
+export interface MerchantPaymentsResult {
+  rows: MerchantPaymentRow[]
+  totalCount: number
 }
 
 const PAYMENT_STATUS_FILTER = ['captured', 'partially_refunded', 'refunded']
@@ -186,8 +224,8 @@ export async function getPlatformFeesOverview(args: {
   }
 
   const merchantIds = Array.from(byMerchantMap.keys())
-  let merchantNames = new Map<string, string>()
-  let merchantLocationCounts = new Map<string, number>()
+  const merchantNames = new Map<string, string>()
+  const merchantLocationCounts = new Map<string, number>()
   if (merchantIds.length > 0) {
     const supabase = createServiceRoleClient()
     const { data: merchants } = await supabase
@@ -243,7 +281,7 @@ export async function getMerchantPlatformFees(args: {
   const supabase = createServiceRoleClient()
   const { data: merchant, error: merchantError } = await supabase
     .from('merchants')
-    .select('id, name')
+    .select('id, name, type, onboarding_status, dual_pricing_percentage')
     .eq('id', args.merchantId)
     .single()
   if (merchantError || !merchant) return null
@@ -291,7 +329,7 @@ export async function getMerchantPlatformFees(args: {
 
   const { data: allLocations } = await supabase
     .from('locations')
-    .select('id, name, tip_surcharge_percentage, dual_pricing_percentage')
+    .select('id, name, address_line1, city, state, dual_pricing_percentage')
     .eq('merchant_id', args.merchantId)
     .order('name', { ascending: true })
 
@@ -299,15 +337,19 @@ export async function getMerchantPlatformFees(args: {
     const l = loc as {
       id: string
       name: string
-      tip_surcharge_percentage: number | null
+      address_line1: string | null
+      city: string | null
+      state: string | null
       dual_pricing_percentage: number | null
     }
     const t = byLocationMap.get(l.id)
     const totals = t ? round2(t) : emptyTotals()
+    const addressParts = [l.address_line1, l.city, l.state].filter(Boolean)
     return {
       location_id: l.id,
       location_name: l.name || 'Unnamed',
-      tip_surcharge_percentage: Number(l.tip_surcharge_percentage ?? 0),
+      location_address: addressParts.length ? addressParts.join(', ') : null,
+      tip_surcharge_percentage: 0,
       dual_pricing_percentage: Number(l.dual_pricing_percentage ?? 0),
       ...totals,
     }
@@ -324,165 +366,153 @@ export async function getMerchantPlatformFees(args: {
     }))
     .sort((a, b) => a.day.localeCompare(b.day))
 
-  const m = merchant as { id: string; name: string }
+  const { data: activity } = await supabase
+    .from('order_payments')
+    .select(
+      'id, captured_at, location_id, total_amount, dual_pricing_fee, status, is_returned'
+    )
+    .eq('merchant_id', args.merchantId)
+    .gte('captured_at', args.from)
+    .lt('captured_at', args.to)
+    .order('captured_at', { ascending: false })
+    .limit(10)
+
+  const locationNameById = new Map(byLocation.map((l) => [l.location_id, l.location_name]))
+  const recentActivity: RecentActivityEntry[] = ((activity as unknown as Array<{
+    id: string
+    captured_at: string | null
+    location_id: string | null
+    total_amount: number | null
+    dual_pricing_fee: number | null
+    status: string | null
+    is_returned: boolean | null
+  }>) || []).map((p) => ({
+    payment_id: p.id,
+    captured_at: p.captured_at || '',
+    location_id: p.location_id,
+    location_name: p.location_id ? locationNameById.get(p.location_id) ?? null : null,
+    amount: Number(p.total_amount || 0),
+    card_fee: Number(p.dual_pricing_fee || 0),
+    status: p.status || 'unknown',
+    is_returned: !!p.is_returned,
+  }))
+
+  const m = merchant as {
+    id: string
+    name: string | null
+    type: string | null
+    onboarding_status: string | null
+    dual_pricing_percentage: number | null
+  }
   return {
-    merchant: { id: m.id, name: m.name || 'Unknown' },
+    merchant: {
+      id: m.id,
+      name: m.name || 'Unknown',
+      type: m.type,
+      onboarding_status: m.onboarding_status,
+      dual_pricing_percentage: Number(m.dual_pricing_percentage ?? 0),
+    },
     totals: round2(totals),
     byDay,
     byLocation,
+    recentActivity,
   }
 }
 
-export interface UpdateLocationFeeConfigParams {
-  locationId: string
-  tipSurchargePercentage?: number
-  dualPricingPercentage?: number
-}
-
-export async function updateLocationFeeConfig(
-  params: UpdateLocationFeeConfigParams
-): Promise<{ success: boolean; error?: string }> {
-  const auth = await assertHQPermission('hq.merchant.update')
-  if (auth.role.level < 10) {
-    return { success: false, error: 'Super Admin role required' }
-  }
-
-  const updates: Record<string, number> = {}
-  if (params.tipSurchargePercentage !== undefined) {
-    if (params.tipSurchargePercentage < 0 || params.tipSurchargePercentage > 50) {
-      return { success: false, error: 'Tip surcharge must be between 0 and 50' }
-    }
-    updates.tip_surcharge_percentage = params.tipSurchargePercentage
-  }
-  if (params.dualPricingPercentage !== undefined) {
-    if (params.dualPricingPercentage < 0 || params.dualPricingPercentage > 50) {
-      return { success: false, error: 'Dual pricing percentage must be between 0 and 50' }
-    }
-    updates.dual_pricing_percentage = params.dualPricingPercentage
-  }
-  if (Object.keys(updates).length === 0) {
-    return { success: false, error: 'No fields to update' }
-  }
-
-  const supabase = createServiceRoleClient()
-  const { data: before, error: readErr } = await supabase
-    .from('locations')
-    .select('id, merchant_id, tip_surcharge_percentage, dual_pricing_percentage')
-    .eq('id', params.locationId)
-    .single()
-  if (readErr || !before) return { success: false, error: 'Location not found' }
-
-  const { error: updateErr } = await supabase
-    .from('locations')
-    .update(updates)
-    .eq('id', params.locationId)
-  if (updateErr) {
-    console.error('[updateLocationFeeConfig] update error:', updateErr)
-    return { success: false, error: updateErr.message }
-  }
-
-  const beforeRow = before as { merchant_id: string; tip_surcharge_percentage: number | null; dual_pricing_percentage: number | null }
-  const { data: merchant } = await supabase
-    .from('merchants')
-    .select('clerk_org_id')
-    .eq('id', beforeRow.merchant_id)
-    .single()
-  const clerkOrgId = (merchant as { clerk_org_id?: string } | null)?.clerk_org_id
-  if (clerkOrgId) {
-    await LogAuditEvent({
-      clerkOrgId,
-      locationId: params.locationId,
-      action: 'updated_platform_fee_config',
-      actionCategory: 'settings',
-      severity: 'info',
-      resourceType: 'location',
-      resourceId: params.locationId,
-      changes: {
-        before: {
-          tip_surcharge_percentage: beforeRow.tip_surcharge_percentage,
-          dual_pricing_percentage: beforeRow.dual_pricing_percentage,
-        },
-        after: updates,
-      },
-    })
-  }
-
-  return { success: true }
-}
-
-export async function bulkUpdateMerchantLocationFees(args: {
+export interface GetMerchantPaymentsParams {
   merchantId: string
-  tipSurchargePercentage?: number
-  dualPricingPercentage?: number
-}): Promise<{ success: boolean; updated: number; error?: string }> {
-  const auth = await assertHQPermission('hq.merchant.update')
-  if (auth.role.level < 10) {
-    return { success: false, updated: 0, error: 'Super Admin role required' }
-  }
+  from: string
+  to: string
+  status?: 'all' | 'collected' | 'refunded' | 'disputed'
+  locationId?: string
+  limit?: number
+  offset?: number
+}
 
-  const updates: Record<string, number> = {}
-  if (args.tipSurchargePercentage !== undefined) {
-    if (args.tipSurchargePercentage < 0 || args.tipSurchargePercentage > 50) {
-      return { success: false, updated: 0, error: 'Tip surcharge must be between 0 and 50' }
-    }
-    updates.tip_surcharge_percentage = args.tipSurchargePercentage
-  }
-  if (args.dualPricingPercentage !== undefined) {
-    if (args.dualPricingPercentage < 0 || args.dualPricingPercentage > 50) {
-      return { success: false, updated: 0, error: 'Dual pricing percentage must be between 0 and 50' }
-    }
-    updates.dual_pricing_percentage = args.dualPricingPercentage
-  }
-  if (Object.keys(updates).length === 0) {
-    return { success: false, updated: 0, error: 'No fields to update' }
-  }
+export async function getMerchantPayments(
+  args: GetMerchantPaymentsParams
+): Promise<MerchantPaymentsResult> {
+  await assertHQPermission('hq.merchant.transactions')
 
   const supabase = createServiceRoleClient()
-  const { data: locations, error: readErr } = await supabase
-    .from('locations')
-    .select('id, tip_surcharge_percentage, dual_pricing_percentage')
+  const limit = Math.min(Math.max(args.limit ?? 25, 1), 200)
+  const offset = Math.max(args.offset ?? 0, 0)
+
+  const baseSelect =
+    'id, captured_at, location_id, card_type, card_last_four, subtotal_portion, tip_amount, total_amount, dual_pricing_fee, status, is_returned'
+
+  let query = supabase
+    .from('order_payments')
+    .select(baseSelect, { count: 'exact' })
     .eq('merchant_id', args.merchantId)
-  if (readErr || !locations) {
-    return { success: false, updated: 0, error: readErr?.message || 'No locations' }
+    .gte('captured_at', args.from)
+    .lt('captured_at', args.to)
+    .order('captured_at', { ascending: false })
+    .range(offset, offset + limit - 1)
+
+  if (args.locationId) query = query.eq('location_id', args.locationId)
+
+  if (args.status === 'collected') {
+    query = query.eq('status', 'captured')
+  } else if (args.status === 'refunded') {
+    query = query.in('status', ['refunded', 'partially_refunded'])
+  } else if (args.status === 'disputed') {
+    query = query.eq('status', 'disputed')
+  } else {
+    query = query.in('status', ['captured', 'partially_refunded', 'refunded', 'disputed'])
   }
 
-  const { error: updateErr } = await supabase
-    .from('locations')
-    .update(updates)
-    .eq('merchant_id', args.merchantId)
-  if (updateErr) {
-    return { success: false, updated: 0, error: updateErr.message }
+  const { data, error, count } = await query
+  if (error) {
+    console.error('[platform-fees] getMerchantPayments error:', error)
+    return { rows: [], totalCount: 0 }
   }
 
-  const { data: merchant } = await supabase
-    .from('merchants')
-    .select('clerk_org_id')
-    .eq('id', args.merchantId)
-    .single()
-  const clerkOrgId = (merchant as { clerk_org_id?: string } | null)?.clerk_org_id
-  if (clerkOrgId) {
-    const bulkOperationId = crypto.randomUUID()
-    for (const loc of locations) {
-      const l = loc as { id: string; tip_surcharge_percentage: number | null; dual_pricing_percentage: number | null }
-      await LogAuditEvent({
-        clerkOrgId,
-        locationId: l.id,
-        action: 'bulk_updated_platform_fee_config',
-        actionCategory: 'settings',
-        severity: 'info',
-        resourceType: 'location',
-        resourceId: l.id,
-        changes: {
-          before: {
-            tip_surcharge_percentage: l.tip_surcharge_percentage,
-            dual_pricing_percentage: l.dual_pricing_percentage,
-          },
-          after: updates,
-        },
-        metadata: { bulk_operation_id: bulkOperationId },
-      })
+  const locIds = Array.from(
+    new Set(
+      ((data || []) as Array<{ location_id: string | null }>)
+        .map((r) => r.location_id)
+        .filter((v): v is string => !!v)
+    )
+  )
+  const locationNames = new Map<string, string>()
+  if (locIds.length > 0) {
+    const { data: locs } = await supabase
+      .from('locations')
+      .select('id, name')
+      .in('id', locIds)
+    for (const l of locs || []) {
+      const lr = l as { id: string; name: string | null }
+      locationNames.set(lr.id, lr.name || 'Unnamed')
     }
   }
 
-  return { success: true, updated: locations.length }
+  const rows: MerchantPaymentRow[] = ((data as unknown as Array<{
+    id: string
+    captured_at: string | null
+    location_id: string | null
+    card_type: string | null
+    card_last_four: string | null
+    subtotal_portion: number | null
+    tip_amount: number | null
+    total_amount: number | null
+    dual_pricing_fee: number | null
+    status: string | null
+    is_returned: boolean | null
+  }>) || []).map((r) => ({
+    id: r.id,
+    captured_at: r.captured_at || '',
+    location_id: r.location_id,
+    location_name: r.location_id ? locationNames.get(r.location_id) ?? null : null,
+    card_type: r.card_type,
+    card_last_four: r.card_last_four,
+    subtotal_portion: Number(r.subtotal_portion || 0),
+    tip_amount: Number(r.tip_amount || 0),
+    total_amount: Number(r.total_amount || 0),
+    dual_pricing_fee: Number(r.dual_pricing_fee || 0),
+    status: r.status || 'unknown',
+    is_returned: !!r.is_returned,
+  }))
+
+  return { rows, totalCount: count ?? rows.length }
 }
