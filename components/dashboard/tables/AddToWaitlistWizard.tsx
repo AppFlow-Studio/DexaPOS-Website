@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/bottom-sheet'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { PhoneInput } from '@/components/ui/phone-input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Users, Phone, FileText, MapPin, Clock } from 'lucide-react'
@@ -145,12 +146,10 @@ export function AddToWaitlistWizard({ locationId, onSuccess, children }: AddToWa
                                 <Phone className="h-4 w-4" />
                                 Phone Number
                             </Label>
-                            <Input
+                            <PhoneInput
                                 id="phone"
-                                type="tel"
-                                placeholder="(555) 123-4567"
                                 value={phone}
-                                onChange={(e) => setPhone(e.target.value)}
+                                onChange={({ digits }) => setPhone(digits)}
                             />
                         </div>
 

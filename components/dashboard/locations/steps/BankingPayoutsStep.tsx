@@ -3,7 +3,6 @@
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Switch } from '@/components/ui/switch'
 import { LocationFormStep4 } from '@/types/merchant_locations'
@@ -21,22 +20,6 @@ function onlyDigits(value: string, maxLength: number): string {
     return value.replace(/\D/g, '').slice(0, maxLength)
 }
 
-function formatCurrencyInput(value: string): string {
-    const cleaned = value.replace(/[^0-9.]/g, '')
-    const parts = cleaned.split('.')
-    if (parts.length === 1) return parts[0]
-    return `${parts[0]}.${(parts[1] ?? '').slice(0, 2)}`
-}
-
-const dayOfWeekOptions = [
-    { value: '0', label: 'Sunday' },
-    { value: '1', label: 'Monday' },
-    { value: '2', label: 'Tuesday' },
-    { value: '3', label: 'Wednesday' },
-    { value: '4', label: 'Thursday' },
-    { value: '5', label: 'Friday' },
-    { value: '6', label: 'Saturday' },
-]
 
 export function BankingPayoutsStep({
     data,
@@ -206,86 +189,6 @@ export function BankingPayoutsStep({
                     </label>
                 </RadioGroup>
             </div>
-
-            <div className="grid gap-6 md:grid-cols-2">
-                <div className="space-y-2">
-                    <Label>Payout Frequency</Label>
-                    <Select
-                        value={data.payout_frequency}
-                        onValueChange={(value: 'daily' | 'weekly' | 'monthly') => onChange({ payout_frequency: value })}
-                    >
-                        <SelectTrigger className={errors?.payout_frequency ? 'border-destructive' : ''}>
-                            <SelectValue placeholder="Select frequency" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="daily">Daily</SelectItem>
-                            <SelectItem value="weekly">Weekly</SelectItem>
-                            <SelectItem value="monthly">Monthly</SelectItem>
-                        </SelectContent>
-                    </Select>
-                    {errors?.payout_frequency && <p className="text-sm text-destructive">{errors.payout_frequency}</p>}
-                </div>
-
-                <div className="space-y-2">
-                    <Label htmlFor="minimum_payout_amount">Minimum Payout Amount</Label>
-                    <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
-                        <Input
-                            id="minimum_payout_amount"
-                            value={data.minimum_payout_amount}
-                            onChange={(event) => onChange({ minimum_payout_amount: formatCurrencyInput(event.target.value) })}
-                            placeholder="0.00"
-                            className={errors?.minimum_payout_amount ? 'border-destructive pl-7' : 'pl-7'}
-                        />
-                    </div>
-                    {errors?.minimum_payout_amount && <p className="text-sm text-destructive">{errors.minimum_payout_amount}</p>}
-                </div>
-            </div>
-
-            {data.payout_frequency === 'weekly' && (
-                <div className="space-y-2">
-                    <Label>Weekly Payout Day</Label>
-                    <Select
-                        value={data.payout_day_of_week}
-                        onValueChange={(value) => onChange({ payout_day_of_week: value })}
-                    >
-                        <SelectTrigger>
-                            <SelectValue placeholder="Select day" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {dayOfWeekOptions.map((option) => (
-                                <SelectItem key={option.value} value={option.value}>
-                                    {option.label}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                </div>
-            )}
-
-            {data.payout_frequency === 'monthly' && (
-                <div className="space-y-2">
-                    <Label>Monthly Payout Day</Label>
-                    <Select
-                        value={data.payout_day_of_month}
-                        onValueChange={(value) => onChange({ payout_day_of_month: value })}
-                    >
-                        <SelectTrigger>
-                            <SelectValue placeholder="Select day of month" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {Array.from({ length: 28 }, (_, index) => {
-                                const day = String(index + 1)
-                                return (
-                                    <SelectItem key={day} value={day}>
-                                        Day {day}
-                                    </SelectItem>
-                                )
-                            })}
-                        </SelectContent>
-                    </Select>
-                </div>
-            )}
 
             <div className="rounded-lg bg-muted/50 p-4">
                 <p className="text-xs text-muted-foreground">

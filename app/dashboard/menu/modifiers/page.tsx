@@ -228,6 +228,8 @@ export default function ModifiersPage() {
       } else {
         toast.success("Modifier group deleted");
         queryClient.invalidateQueries({ queryKey: ["modifier-groups"] });
+      queryClient.invalidateQueries({ queryKey: ["menu-items"] });
+      queryClient.invalidateQueries({ queryKey: ["categories-with-items"] });
       }
     } finally {
       setDeletingGroup(null);
@@ -256,6 +258,8 @@ export default function ModifiersPage() {
       }
       toast.success("Group updated");
       queryClient.invalidateQueries({ queryKey: ["modifier-groups"] });
+      queryClient.invalidateQueries({ queryKey: ["menu-items"] });
+      queryClient.invalidateQueries({ queryKey: ["categories-with-items"] });
     } catch (e: any) {
       toast.error("Update failed", { description: e?.message || "Try again" });
     } finally {
@@ -273,6 +277,8 @@ export default function ModifiersPage() {
       if (res?.error) throw new Error(res.error);
       toast.success("Reset to global");
       queryClient.invalidateQueries({ queryKey: ["modifier-groups"] });
+      queryClient.invalidateQueries({ queryKey: ["menu-items"] });
+      queryClient.invalidateQueries({ queryKey: ["categories-with-items"] });
     } catch (e: any) {
       toast.error("Reset failed", { description: e?.message || "Try again" });
     }
@@ -330,6 +336,8 @@ export default function ModifiersPage() {
       }
       toast.success("Option saved");
       queryClient.invalidateQueries({ queryKey: ["modifier-groups"] });
+      queryClient.invalidateQueries({ queryKey: ["menu-items"] });
+      queryClient.invalidateQueries({ queryKey: ["categories-with-items"] });
     } catch (e: any) {
       toast.error("Save failed", { description: e?.message || "Try again" });
     } finally {
@@ -347,6 +355,8 @@ export default function ModifiersPage() {
       if (res?.error) throw new Error(res.error);
       toast.success("Reset to global");
       queryClient.invalidateQueries({ queryKey: ["modifier-groups"] });
+      queryClient.invalidateQueries({ queryKey: ["menu-items"] });
+      queryClient.invalidateQueries({ queryKey: ["categories-with-items"] });
     } catch (e: any) {
       toast.error("Reset failed", { description: e?.message || "Try again" });
     }
@@ -366,6 +376,8 @@ export default function ModifiersPage() {
       if (res?.error) throw new Error(res.error);
       toast.success("Option deleted");
       queryClient.invalidateQueries({ queryKey: ["modifier-groups"] });
+      queryClient.invalidateQueries({ queryKey: ["menu-items"] });
+      queryClient.invalidateQueries({ queryKey: ["categories-with-items"] });
     } catch (e: any) {
       toast.error("Delete failed", { description: e?.message || "Try again" });
     }
@@ -401,6 +413,8 @@ export default function ModifiersPage() {
       if (res?.error) throw new Error(res.error);
       toast.success("Option created");
       queryClient.invalidateQueries({ queryKey: ["modifier-groups"] });
+      queryClient.invalidateQueries({ queryKey: ["menu-items"] });
+      queryClient.invalidateQueries({ queryKey: ["categories-with-items"] });
       setNewItemDrafts((prev) => ({
         ...prev,
         [group.id]: { name: "", price: 0, isDefault: false, description: "" },
@@ -1028,6 +1042,8 @@ export default function ModifiersPage() {
           onSuccess={() => {
             setAssignItemsGroup(null);
             queryClient.invalidateQueries({ queryKey: ["modifier-groups"] });
+      queryClient.invalidateQueries({ queryKey: ["menu-items"] });
+      queryClient.invalidateQueries({ queryKey: ["categories-with-items"] });
           }}
         />
       )}
@@ -1045,6 +1061,8 @@ export default function ModifiersPage() {
           onSuccess={() => {
             setAssignCategoryGroup(null);
             queryClient.invalidateQueries({ queryKey: ["modifier-groups"] });
+      queryClient.invalidateQueries({ queryKey: ["menu-items"] });
+      queryClient.invalidateQueries({ queryKey: ["categories-with-items"] });
             queryClient.invalidateQueries({
               queryKey: ["categories-with-items"],
             });

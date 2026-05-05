@@ -97,15 +97,6 @@ function maskLastFour(value: string): string {
     return `****${digits.slice(-4).padStart(4, '*')}`
 }
 
-function getPayoutLabel(data: LocationFormData): string {
-    if (data.payout_frequency === 'weekly') {
-        return `Weekly (day ${data.payout_day_of_week})`
-    }
-    if (data.payout_frequency === 'monthly') {
-        return `Monthly (day ${data.payout_day_of_month})`
-    }
-    return 'Daily'
-}
 
 export function ReviewStep({ data, onEditStep }: ReviewStepProps) {
     const stateName = US_STATES.find(s => s.code === data.state)?.name || data.state
@@ -158,11 +149,6 @@ export function ReviewStep({ data, onEditStep }: ReviewStepProps) {
                     <InfoRow label="Account" value={maskLastFour(data.account_number)} />
                     <InfoRow label="Bank Support Document" value={data.bank_support_document_name || '-'} />
                     <InfoRow label="Account Type" value={data.account_type} />
-                    <InfoRow label="Payout Frequency" value={getPayoutLabel(data)} />
-                    <InfoRow
-                        label="Minimum Payout"
-                        value={data.minimum_payout_amount ? `$${data.minimum_payout_amount}` : '$0.00'}
-                    />
                 </div>
                 <p className="text-xs text-muted-foreground mt-3">
                     Banking entries are captured in UI for now. Save/tokenization wiring is deferred.

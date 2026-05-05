@@ -18,7 +18,6 @@
 -- =============================================================================
 
 BEGIN;
-
 -- =============================================================================
 -- 1. Schema changes
 -- =============================================================================
@@ -27,33 +26,26 @@ ALTER TABLE public.tip_distribution_sessions
   ADD COLUMN IF NOT EXISTS data_start_after TIMESTAMPTZ,
   ADD COLUMN IF NOT EXISTS data_cutoff_at   TIMESTAMPTZ,
   ADD COLUMN IF NOT EXISTS sequence_number  INTEGER NOT NULL DEFAULT 1;
-
 COMMENT ON COLUMN public.tip_distribution_sessions.data_start_after IS
   'Only include orders/shifts created after this timestamp. '
   'NULL means start of business day (first session of the day).';
-
 COMMENT ON COLUMN public.tip_distribution_sessions.data_cutoff_at IS
   'Timestamp when this session captured its data. '
   'The next session uses this as its data_start_after.';
-
 COMMENT ON COLUMN public.tip_distribution_sessions.sequence_number IS
   'Sequence within the same date+shift_period. '
   '1 = first session, 2 = second, etc.';
-
 -- 2. Replace unique constraint
 ALTER TABLE public.tip_distribution_sessions
   DROP CONSTRAINT IF EXISTS "tip_distribution_sessions_location_id_session_date_shift_pe_key";
-
 ALTER TABLE public.tip_distribution_sessions
   ADD CONSTRAINT tip_distribution_sessions_loc_date_shift_seq_key
   UNIQUE (location_id, session_date, shift_period, sequence_number);
-
 -- 3. Business day end hour on locations (overnight shift support)
 -- 0 = midnight (default, current behavior). 4 = 4 AM (bars/late-night restaurants).
 -- "Monday" with end_hour=4 runs from Mon 4:00 AM → Tue 4:00 AM.
 ALTER TABLE public.locations
   ADD COLUMN IF NOT EXISTS business_day_end_hour INTEGER NOT NULL DEFAULT 0;
-
 DO $$
 BEGIN
   IF NOT EXISTS (
@@ -64,7 +56,6 @@ BEGIN
       CHECK (business_day_end_hour >= 0 AND business_day_end_hour <= 23);
   END IF;
 END $$;
-
 -- =============================================================================
 -- 4. Rewrite calculate_tip_distribution_v2
 --    Key changes vs v1.1:
@@ -657,7 +648,6 @@ BEGIN
   );
 END;
 $$;
-
 -- =============================================================================
 -- 5. Update rebuild_employee_daily_tips to use business day boundaries
 -- =============================================================================
@@ -769,7 +759,6 @@ BEGIN
   RETURN v_rows;
 END;
 $$;
-
 -- =============================================================================
 -- 6. Update declare_cash_tips_for_shift to compute business day date
 -- =============================================================================
@@ -844,5 +833,4 @@ BEGIN
   );
 END;
 $$;
-
 COMMIT;

@@ -190,6 +190,11 @@ function formatCents(cents: number | null): string {
   return `$${(cents / 100).toFixed(2)}`
 }
 
+function formatDollars(dollars: number | null): string {
+  if (dollars === null || dollars === undefined) return 'N/A'
+  return `$${Number(dollars).toFixed(2)}`
+}
+
 function renderSpecsSummary(specs: Record<string, unknown>, category: DeviceCategory): string {
   const parts: string[] = []
   if (category === 'pos_tablet' || category === 'cfd' || category === 'kds') {
@@ -566,11 +571,11 @@ export default function DeviceCatalogPage() {
 
                               {/* Pricing */}
                               <div className="hidden md:flex flex-col items-end text-right shrink-0">
-                                {device.unit_cost_cents !== null && (
-                                  <span className="text-sm font-medium">{formatCents(device.unit_cost_cents)}</span>
+                                {device.unit_cost !== null && (
+                                  <span className="text-sm font-medium">{formatDollars(device.unit_cost)}</span>
                                 )}
-                                {device.monthly_fee_cents !== null && (
-                                  <span className="text-[11px] text-muted-foreground">{formatCents(device.monthly_fee_cents)}/mo</span>
+                                {device.monthly_fee !== null && (
+                                  <span className="text-[11px] text-muted-foreground">{formatDollars(device.monthly_fee)}/mo</span>
                                 )}
                               </div>
 
@@ -716,8 +721,8 @@ function DeviceFormDialog({
       setModelName(device.model_name)
       setModelSku(device.model_sku ?? '')
       setHardwareRevision(device.hardware_revision ?? '')
-      setUnitCost(device.unit_cost_cents !== null ? String(device.unit_cost_cents / 100) : '')
-      setMonthlyFee(device.monthly_fee_cents !== null ? String(device.monthly_fee_cents / 100) : '')
+      setUnitCost(device.unit_cost !== null ? String(Number(device.unit_cost)) : '')
+      setMonthlyFee(device.monthly_fee !== null ? String(Number(device.monthly_fee)) : '')
       setImageUrl(device.image_url ?? '')
       setNotes(device.notes ?? '')
       setIsActive(device.is_active)
@@ -756,6 +761,8 @@ function DeviceFormDialog({
       specs,
       unit_cost_cents: unitCost ? Math.round(parseFloat(unitCost) * 100) : null,
       monthly_fee_cents: monthlyFee ? Math.round(parseFloat(monthlyFee) * 100) : null,
+      unit_cost: unitCost ? parseFloat(unitCost) : null,
+      monthly_fee: monthlyFee ? parseFloat(monthlyFee) : null,
       is_active: isActive,
       image_url: imageUrl.trim() || null,
       notes: notes.trim() || null,

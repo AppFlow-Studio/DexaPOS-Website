@@ -670,7 +670,7 @@ export async function getAdminOnlineOrderingSettings(
       settings.deliveryEnabled = config.accepts_delivery
       settings.preparationLeadTime = config.estimated_prep_minutes
       settings.futureOrderMaxDays = config.max_future_order_days
-      settings.minimumOrderAmount = config.min_order_cents ? config.min_order_cents / 100 : 0
+      settings.minimumOrderAmount = Number(config.min_order ?? 0)
       settings.tippingEnabled = config.tip_enabled
       if (config.tip_presets) {
         settings.tipConfig = {
@@ -682,10 +682,8 @@ export async function getAdminOnlineOrderingSettings(
           allowCustomTip: true,
         }
       }
-      settings.baseDeliveryFee = config.delivery_fee_cents ? config.delivery_fee_cents / 100 : 0
-      settings.freeDeliveryThreshold = config.free_delivery_threshold_cents
-        ? config.free_delivery_threshold_cents / 100
-        : 0
+      settings.baseDeliveryFee = Number(config.delivery_fee ?? 0)
+      settings.freeDeliveryThreshold = Number(config.free_delivery_threshold ?? 0)
       settings.acceptOnlinePayments = config.accepts_online_payments ?? true
       settings.acceptCashOnDelivery = config.accepts_cash_on_delivery ?? false
       settings.acceptCardOnDelivery = config.accepts_card_on_delivery ?? false
@@ -1140,19 +1138,23 @@ export async function adminSaveOnlineOrderingSettings(
     if (settings.operatingHours !== undefined) configData.operating_hours = settings.operatingHours
     if (settings.pickupEnabled !== undefined) configData.accepts_pickup = settings.pickupEnabled
     if (settings.deliveryEnabled !== undefined) configData.accepts_delivery = settings.deliveryEnabled
-    if (settings.minimumOrderAmount !== undefined)
+    if (settings.minimumOrderAmount !== undefined) {
       configData.min_order_cents = Math.round(settings.minimumOrderAmount * 100)
+      configData.min_order = settings.minimumOrderAmount
+    }
     if (settings.preparationLeadTime !== undefined)
       configData.estimated_prep_minutes = settings.preparationLeadTime
     if (settings.futureOrderMaxDays !== undefined)
       configData.max_future_order_days = settings.futureOrderMaxDays
-    if (settings.baseDeliveryFee !== undefined)
+    if (settings.baseDeliveryFee !== undefined) {
       configData.delivery_fee_cents = Math.round(settings.baseDeliveryFee * 100)
-    if (settings.freeDeliveryThreshold !== undefined)
-      configData.free_delivery_threshold_cents =
-        settings.freeDeliveryThreshold > 0
-          ? Math.round(settings.freeDeliveryThreshold * 100)
-          : null
+      configData.delivery_fee = settings.baseDeliveryFee
+    }
+    if (settings.freeDeliveryThreshold !== undefined) {
+      const v = settings.freeDeliveryThreshold > 0 ? settings.freeDeliveryThreshold : null
+      configData.free_delivery_threshold_cents = v !== null ? Math.round(v * 100) : null
+      configData.free_delivery_threshold = v
+    }
     if (settings.tippingEnabled !== undefined) configData.tip_enabled = settings.tippingEnabled
     if (settings.tipConfig?.presetPercentages !== undefined)
       configData.tip_presets = settings.tipConfig.presetPercentages
@@ -1408,6 +1410,7 @@ export async function adminCreateOnlineStore(
         accepts_delivery: false,
         estimated_prep_minutes: 15,
         min_order_cents: 0,
+        min_order: 0,
         tip_enabled: true,
         tip_presets: [15, 18, 20],
       })

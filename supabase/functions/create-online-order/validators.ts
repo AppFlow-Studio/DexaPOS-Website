@@ -271,6 +271,24 @@ interface DeliveryZoneFailure {
 
 export type DeliveryZoneResult = DeliveryZoneSuccess | DeliveryZoneFailure
 
+/** Geocode a text address to lat/lng using Google Maps Geocoding API. */
+async function geocodeAddress(address: string): Promise<{ lat: number; lng: number } | null> {
+  const apiKey = Deno.env.get('GOOGLE_MAPS_API_KEY') ?? Deno.env.get('NEXT_PUBLIC_GOOGLE_MAPS_API_KEY')
+  if (!apiKey) return null
+
+  try {
+    const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${apiKey}`
+    const res = await fetch(url)
+    if (!res.ok) return null
+    const data = await res.json()
+    if (data.status !== 'OK' || !data.results?.[0]) return null
+    const loc = data.results[0].geometry.location
+    return { lat: loc.lat, lng: loc.lng }
+  } catch {
+    return null
+  }
+}
+
 export async function validateDeliveryZone(
   supabase: SupabaseClient,
   storeConfigId: string,
@@ -289,57 +307,12 @@ export async function validateDeliveryZone(
     .eq('is_active', true)
     .order('display_order', { ascending: true })
 
-  // If customer has lat/lng, check against zones
-  if (customerAddress.lat && customerAddress.lng && storeAddress?.lat && storeAddress?.lng) {
-    // Check each zone
-    for (const zone of (zones ?? [])) {
-      if (zone.zone_type === 'radius' && zone.radius_miles) {
-        const distance = haversineDistance(
-          storeAddress.lat,
-          storeAddress.lng,
-          customerAddress.lat,
-          customerAddress.lng
-        )
-        if (distance <= zone.radius_miles) {
-          return {
-            valid: true,
-            zone: { id: zone.id, zone_name: zone.zone_name },
-            deliveryFeeCents: zone.delivery_fee_cents ?? 0,
-            minOrderCents: zone.min_order_cents ?? 0,
-            freeDeliveryThresholdCents: zone.free_delivery_threshold_cents ?? null,
-          }
-        }
-      }
-      // polygon zones would be checked here in the future
-    }
+  const hasZones = zones && zones.length > 0
+  const hasStoreRadius = !!deliveryRadiusMiles && deliveryRadiusMiles > 0
 
-    // No zone matched — check store-level radius fallback
-    if (deliveryRadiusMiles) {
-      const distance = haversineDistance(
-        storeAddress.lat,
-        storeAddress.lng,
-        customerAddress.lat,
-        customerAddress.lng
-      )
-      if (distance <= deliveryRadiusMiles) {
-        return {
-          valid: true,
-          deliveryFeeCents: storeDeliveryFeeCents ?? 0,
-          minOrderCents: storeMinOrderCents ?? 0,
-          freeDeliveryThresholdCents: storeFreeDeliveryThresholdCents ?? null,
-        }
-      }
-
-      return {
-        valid: false,
-        reason: `Delivery address is outside our delivery area (${deliveryRadiusMiles} mile radius)`,
-      }
-    }
-  }
-
-  // No lat/lng or no zones configured — allow delivery with store-level defaults
-  // (address will be validated by the driver)
-  if (!zones || zones.length === 0) {
+  // If no zone configuration at all, allow delivery with store-level defaults.
+  // (Merchant hasn't set up zone restrictions — driver validates on arrival.)
+  if (!hasZones && !hasStoreRadius) {
     return {
       valid: true,
       deliveryFeeCents: storeDeliveryFeeCents ?? 0,
@@ -348,10 +321,91 @@ export async function validateDeliveryZone(
     }
   }
 
-  // Zones exist but we couldn't match (no coordinates) — reject
+  // Resolve customer coordinates — use provided lat/lng or geocode the address.
+  let customerLat = customerAddress.lat
+  let customerLng = customerAddress.lng
+
+  if ((!customerLat || !customerLng) && (hasZones || hasStoreRadius)) {
+    const parts = [
+      (customerAddress as Record<string, unknown>).street,
+      (customerAddress as Record<string, unknown>).city,
+      (customerAddress as Record<string, unknown>).state,
+      (customerAddress as Record<string, unknown>).zip,
+    ].filter(Boolean).join(', ')
+
+    if (parts) {
+      const geocoded = await geocodeAddress(parts)
+      if (geocoded) {
+        customerLat = geocoded.lat
+        customerLng = geocoded.lng
+      }
+    }
+  }
+
+  // If we still have no coordinates and zone enforcement is configured, reject.
+  if (!customerLat || !customerLng) {
+    return {
+      valid: false,
+      reason: 'Could not verify your delivery address location. Please enter a more specific address.',
+    }
+  }
+
+  // Store coordinates are required to measure distance.
+  if (!storeAddress?.lat || !storeAddress?.lng) {
+    // Store has no coordinates configured — fall back to allowing delivery.
+    return {
+      valid: true,
+      deliveryFeeCents: storeDeliveryFeeCents ?? 0,
+      minOrderCents: storeMinOrderCents ?? 0,
+      freeDeliveryThresholdCents: storeFreeDeliveryThresholdCents ?? null,
+    }
+  }
+
+  // Check each named delivery zone (tightest match wins).
+  for (const zone of (zones ?? [])) {
+    if (zone.zone_type === 'radius' && zone.radius_miles) {
+      const distance = haversineDistance(
+        storeAddress.lat,
+        storeAddress.lng,
+        customerLat,
+        customerLng
+      )
+      if (distance <= zone.radius_miles) {
+        return {
+          valid: true,
+          zone: { id: zone.id, zone_name: zone.zone_name },
+          deliveryFeeCents: Math.round((zone.delivery_fee ?? 0) * 100),
+          minOrderCents: Math.round((zone.min_order ?? 0) * 100),
+          freeDeliveryThresholdCents: zone.free_delivery_threshold != null
+            ? Math.round(zone.free_delivery_threshold * 100)
+            : null,
+        }
+      }
+    }
+    // polygon zones would be checked here in the future
+  }
+
+  // No named zone matched — check store-level radius fallback.
+  if (hasStoreRadius) {
+    const distance = haversineDistance(
+      storeAddress.lat,
+      storeAddress.lng,
+      customerLat,
+      customerLng
+    )
+    if (distance <= deliveryRadiusMiles!) {
+      return {
+        valid: true,
+        deliveryFeeCents: storeDeliveryFeeCents ?? 0,
+        minOrderCents: storeMinOrderCents ?? 0,
+        freeDeliveryThresholdCents: storeFreeDeliveryThresholdCents ?? null,
+      }
+    }
+  }
+
   return {
     valid: false,
-    reason: 'Could not verify delivery address. Please ensure your address includes valid coordinates.',
+    reason: "We don't deliver to this address. Please check our delivery area or choose pickup.",
   }
 }
 

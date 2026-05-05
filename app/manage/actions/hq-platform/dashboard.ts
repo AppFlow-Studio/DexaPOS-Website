@@ -46,14 +46,26 @@ export interface MerchantStationGroup {
   stations: StationHealth[]
 }
 
+export interface GroupedDevice {
+  stationId: string
+  stationName: string
+  lastHeartbeatAt: string | null
+}
+
 export interface PlatformAlert {
   id: string
   severity: 'high' | 'medium' | 'low'
   message: string
-  resourceType: 'station' | 'merchant' | 'order' | 'payment' | 'support'
+  resourceType: 'station' | 'merchant' | 'order' | 'payment' | 'support' | 'location'
   resourceId?: string
   link?: string
   createdAt: string
+  // Populated when this is a correlated multi-device alert (A9).
+  // UI should render the count + expandable device list and skip the
+  // individual per-station alerts (they are suppressed on the server side).
+  groupedDevices?: GroupedDevice[]
+  locationId?: string
+  merchantId?: string
 }
 
 export interface ActivityFeedEvent {
@@ -359,29 +371,100 @@ export async function getPlatformAlerts(): Promise<PlatformAlert[]> {
   const alerts: PlatformAlert[] = []
   const now = new Date()
 
-  // 1. Stations offline during business hours (8 AM - 10 PM)
-  // A station is considered offline if is_online=false OR last_heartbeat_at > 5 minutes ago
+  // 1. Stations offline during business hours (8 AM - 10 PM) — A9 correlation.
+  //    If >=50% of a location's active stations are offline AND at least 2 are
+  //    offline, collapse to a single grouped alert per location. Otherwise
+  //    emit per-station alerts as before.
   const currentHour = now.getHours()
   if (currentHour >= 8 && currentHour < 22) {
-    const fiveMinutesAgo = new Date(now.getTime() - 5 * 60 * 1000)
+    const fiveMinutesAgo = new Date(now.getTime() - 5 * 60 * 1000).toISOString()
 
-    const { data: offlineStations } = await supabase
+    // Pull every active station with its online state in one round-trip so we
+    // know the per-location denominator without a second query.
+    const { data: stations } = await supabase
       .from('stations')
-      .select('id, station_name, merchant_id, location_id, last_heartbeat_at, merchants(name), locations(name)')
+      .select('id, station_name, merchant_id, location_id, is_online, last_heartbeat_at, merchants(name), locations(name)')
       .eq('is_active', true)
-      .or(`is_online.eq.false,last_heartbeat_at.lt.${fiveMinutesAgo.toISOString()}`)
 
-    offlineStations?.forEach((station: any) => {
-      alerts.push({
-        id: `offline-${station.id}`,
-        severity: 'high',
-        message: `Station "${station.station_name}" at ${station.locations?.name} (${station.merchants?.name}) went offline`,
-        resourceType: 'station',
-        resourceId: station.id,
-        link: `/manage/merchants/${station.merchant_id}?tab=devices`,
-        createdAt: now.toISOString(),
-      })
-    })
+    if (stations && stations.length > 0) {
+      type StationRow = {
+        id: string
+        station_name: string
+        merchant_id: string
+        location_id: string
+        is_online: boolean
+        last_heartbeat_at: string | null
+        merchants?: { name?: string } | null
+        locations?: { name?: string } | null
+      }
+
+      const isOffline = (s: StationRow) =>
+        s.is_online === false ||
+        (s.last_heartbeat_at !== null && s.last_heartbeat_at < fiveMinutesAgo)
+
+      // Bucket by location: { total active, offline rows }.
+      const byLocation = new Map<
+        string,
+        { total: number; offline: StationRow[]; locationName: string; merchantId: string; merchantName: string }
+      >()
+
+      for (const raw of stations as unknown as StationRow[]) {
+        const bucket = byLocation.get(raw.location_id) ?? {
+          total: 0,
+          offline: [],
+          locationName: raw.locations?.name ?? 'Unknown location',
+          merchantId: raw.merchant_id,
+          merchantName: raw.merchants?.name ?? 'Unknown merchant',
+        }
+        bucket.total += 1
+        if (isOffline(raw)) bucket.offline.push(raw)
+        byLocation.set(raw.location_id, bucket)
+      }
+
+      const GROUP_RATIO = 0.5
+      const GROUP_MIN_COUNT = 2 // avoid grouping a 1-station location with itself
+
+      for (const [locationId, bucket] of byLocation) {
+        if (bucket.offline.length === 0) continue
+
+        const ratio = bucket.offline.length / bucket.total
+        const shouldGroup =
+          bucket.offline.length >= GROUP_MIN_COUNT && ratio >= GROUP_RATIO
+
+        if (shouldGroup) {
+          alerts.push({
+            id: `offline-location-${locationId}`,
+            severity: 'high',
+            message: `${bucket.offline.length} of ${bucket.total} devices offline at ${bucket.locationName} (${bucket.merchantName})`,
+            resourceType: 'location',
+            resourceId: locationId,
+            locationId,
+            merchantId: bucket.merchantId,
+            link: `/manage/merchants/${bucket.merchantId}?tab=devices&location=${locationId}`,
+            createdAt: now.toISOString(),
+            groupedDevices: bucket.offline.map((s) => ({
+              stationId: s.id,
+              stationName: s.station_name,
+              lastHeartbeatAt: s.last_heartbeat_at,
+            })),
+          })
+        } else {
+          for (const s of bucket.offline) {
+            alerts.push({
+              id: `offline-${s.id}`,
+              severity: 'high',
+              message: `Station "${s.station_name}" at ${bucket.locationName} (${bucket.merchantName}) went offline`,
+              resourceType: 'station',
+              resourceId: s.id,
+              locationId,
+              merchantId: bucket.merchantId,
+              link: `/manage/merchants/${bucket.merchantId}?tab=devices`,
+              createdAt: now.toISOString(),
+            })
+          }
+        }
+      }
+    }
   }
 
   // 2. Merchants with zero orders today (had orders yesterday, past noon)

@@ -13,6 +13,7 @@ import {
   useSelectedLocation,
 } from "@/stores/location-store";
 import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
+import { useImpersonatedMerchant } from "@/stores/impersonation-store";
 import { GetMenus, GetMenuWithLocationContext } from "../actions/menus";
 import {
   GetMenuItems,
@@ -38,7 +39,11 @@ import { getItemsForLocationFlat } from "../actions/menu-items-rpc";
 
 export function useClerkOrgId() {
   const { data: userInfo } = useUserInfo();
-  return userInfo?.members?.[0]?.organizations?.id || "";
+  const impersonated = useImpersonatedMerchant();
+  // While an HQ admin is impersonating, every dashboard query keys off the
+  // impersonated merchant's clerk_org_id. Server actions re-validate via
+  // getEffectiveClerkOrgId before honoring it.
+  return impersonated?.clerkOrgId || userInfo?.members?.[0]?.organizations?.id || "";
 }
 
 function useEffectiveLocationId() {

@@ -9,7 +9,6 @@
 -- =============================================================================
 
 BEGIN;
-
 -- ─── Insert new roles ───────────────────────────────────────────────────────
 
 INSERT INTO public.roles (id, code, name, description, organization_type, level, is_system_role, level_type, requires_clerk_account, created_at, updated_at)
@@ -19,8 +18,6 @@ VALUES
   (gen_random_uuid(), 'merchant.cook',      'Cook',      'Kitchen food preparation',         'merchant', 2, true, 'member', 'pos_only', now(), now()),
   (gen_random_uuid(), 'merchant.line_cook', 'Line Cook', 'Prepare food items on the line',   'merchant', 2, true, 'member', 'pos_only', now(), now())
 ON CONFLICT (code) DO NOTHING;
-
-
 -- ─── merchant.server permissions (same as cashier — full FOH access) ────────
 
 INSERT INTO public.role_permissions (id, role_code, permission_code, created_at) VALUES
@@ -38,8 +35,6 @@ INSERT INTO public.role_permissions (id, role_code, permission_code, created_at)
   (gen_random_uuid(), 'merchant.server', 'location.orders.view',       now()),
   (gen_random_uuid(), 'merchant.server', 'location.orders.manage',     now()),
   (gen_random_uuid(), 'merchant.server', 'location.transactions.view', now());
-
-
 -- ─── merchant.busser permissions (minimal FOH) ─────────────────────────────
 
 INSERT INTO public.role_permissions (id, role_code, permission_code, created_at) VALUES
@@ -49,8 +44,6 @@ INSERT INTO public.role_permissions (id, role_code, permission_code, created_at)
   -- Location-level
   (gen_random_uuid(), 'merchant.busser', 'location.view',          now()),
   (gen_random_uuid(), 'merchant.busser', 'location.orders.view',   now());
-
-
 -- ─── merchant.cook permissions (BOH — kitchen-focused) ─────────────────────
 
 INSERT INTO public.role_permissions (id, role_code, permission_code, created_at) VALUES
@@ -62,8 +55,6 @@ INSERT INTO public.role_permissions (id, role_code, permission_code, created_at)
   (gen_random_uuid(), 'merchant.cook', 'location.view',          now()),
   (gen_random_uuid(), 'merchant.cook', 'location.menu.view',     now()),
   (gen_random_uuid(), 'merchant.cook', 'location.orders.view',   now());
-
-
 -- ─── merchant.line_cook permissions (BOH — same as cook) ───────────────────
 
 INSERT INTO public.role_permissions (id, role_code, permission_code, created_at) VALUES
@@ -75,5 +66,4 @@ INSERT INTO public.role_permissions (id, role_code, permission_code, created_at)
   (gen_random_uuid(), 'merchant.line_cook', 'location.view',          now()),
   (gen_random_uuid(), 'merchant.line_cook', 'location.menu.view',     now()),
   (gen_random_uuid(), 'merchant.line_cook', 'location.orders.view',   now());
-
 COMMIT;

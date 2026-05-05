@@ -30,7 +30,6 @@ export default function Home() {
           <SignedOut>
             <div className="mb-6">
               <SignIn
-                signUpUrl='/sign-up'
                 signInUrl='/'
                 appearance={{
                   elements: {

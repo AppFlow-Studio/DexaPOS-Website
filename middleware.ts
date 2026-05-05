@@ -163,6 +163,17 @@ export default clerkMiddleware(async (auth, req) => {
 
   const IsUserHQTeam = UserSession.orgId === process.env.DEXA_POS_INTERNAL_TEAM_ID;
   if (IsUserHQTeam && req.nextUrl.pathname !== '/manage') {
+    // Allow HQ admins onto /dashboard/* when an impersonation cookie is
+    // present (and well-formed). The cookie alone is NOT a security boundary
+    // — server actions re-validate via touch_impersonation_session before
+    // honoring it. Middleware's only job here is to suppress the redirect.
+    if (isMerchantRoutes(req)) {
+      const cookie = req.cookies.get('x-impersonate-merchant-id')?.value;
+      const isUuid = !!cookie && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(cookie);
+      if (isUuid) {
+        return NextResponse.next();
+      }
+    }
     return NextResponse.redirect(new URL('/manage', req.url));
   }
 

@@ -10,6 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PhoneDigitsInput } from "@/components/ui/phone-digits-input";
 import {
   Select,
   SelectContent,
@@ -34,9 +35,15 @@ function isValidEmail(value: string): boolean {
   return EMAIL_REGEX.test(value.trim());
 }
 
-function isValidPhone(value: string): boolean {
-  const digits = value.replace(/\D/g, "");
-  return digits.length >= 10;
+function isValidPhone(digits: string): boolean {
+  return digits.replace(/\D/g, "").length === 10;
+}
+
+/** Strip non-digits and drop a leading "1" so we can preset 10 US digits. */
+function extractTenDigits(raw: string | null | undefined): string {
+  const digits = (raw ?? "").replace(/\D/g, "");
+  if (digits.length === 11 && digits.startsWith("1")) return digits.slice(1);
+  return digits.slice(-10);
 }
 
 // ─── Props ───
@@ -77,7 +84,7 @@ export function SendReceiptModal({
       setRecipient(customerEmail);
     } else if (customerPhone) {
       setMethod("sms");
-      setRecipient(customerPhone);
+      setRecipient(extractTenDigits(customerPhone));
     } else {
       setMethod("email");
       setRecipient("");
@@ -111,10 +118,14 @@ export function SendReceiptModal({
     if (!isValid) return;
     setIsSending(true);
     try {
+      const recipientFormatted =
+        method === "sms"
+          ? `+1${recipient.replace(/\D/g, "")}`
+          : recipient.trim();
       const params: SendReceiptParams = {
         orderId: order.id,
         deliveryMethod: method,
-        recipient: recipient.trim(),
+        recipient: recipientFormatted,
         receiptTemplateId: undefined,
       };
       const result = await sendReceipt(params);
@@ -162,7 +173,9 @@ export function SendReceiptModal({
                 className="flex-1"
                 onClick={() => {
                   setMethod("sms");
-                  if (customerPhone) setRecipient(customerPhone);
+                  setRecipient(
+                    customerPhone ? extractTenDigits(customerPhone) : ""
+                  );
                 }}
               >
                 <MessageSquare className="h-4 w-4 mr-2" />
@@ -175,24 +188,32 @@ export function SendReceiptModal({
             <Label htmlFor="recipient">
               {method === "email" ? "Email" : "Phone"}
             </Label>
-            <Input
-              id="recipient"
-              type={method === "email" ? "email" : "tel"}
-              placeholder={
-                method === "email"
-                  ? "john@example.com"
-                  : "+1 555 123 4567"
-              }
-              value={recipient}
-              onChange={(e) => setRecipient(e.target.value)}
-              className={cn(
-                !recipient
-                  ? ""
-                  : isValid
-                    ? "border-green-500/50"
-                    : "border-amber-500/50"
-              )}
-            />
+            {method === "email" ? (
+              <Input
+                id="recipient"
+                type="email"
+                placeholder="john@example.com"
+                value={recipient}
+                onChange={(e) => setRecipient(e.target.value)}
+                className={cn(
+                  !recipient
+                    ? ""
+                    : isValid
+                      ? "border-green-500/50"
+                      : "border-amber-500/50"
+                )}
+              />
+            ) : (
+              <>
+                <PhoneDigitsInput
+                  value={recipient.replace(/\D/g, "")}
+                  onChange={setRecipient}
+                />
+                <p className="text-xs text-muted-foreground">
+                  US numbers only · we&apos;ll add the +1 for you
+                </p>
+              </>
+            )}
           </div>
 
           <div className="space-y-2">

@@ -122,6 +122,8 @@ export function PaymentTerminalTab({ station }: PaymentTerminalTabProps) {
   const [localIpAddress, setLocalIpAddress] = useState("");
   const [localPort, setLocalPort] = useState("8080");
   const [terminalModel, setTerminalModel] = useState("");
+  const [serialNumber, setSerialNumber] = useState("");
+  const [firmwareVersion, setFirmwareVersion] = useState("");
 
   // Fetch ALL terminals for this station
   const { data: terminals = [], isLoading: isLoadingTerminals } =
@@ -156,6 +158,8 @@ export function PaymentTerminalTab({ station }: PaymentTerminalTabProps) {
     setLocalIpAddress("");
     setLocalPort("8080");
     setTerminalModel("");
+    setSerialNumber("");
+    setFirmwareVersion("");
   };
 
   const isCastlesCreate = createType === "castles";
@@ -226,6 +230,8 @@ export function PaymentTerminalTab({ station }: PaymentTerminalTabProps) {
           local_ip_address: isCastlesCreate ? localIpAddress : null,
           local_port: isCastlesCreate ? parseInt(localPort) || 8080 : null,
           terminal_model: isCastlesCreate ? terminalModel || null : null,
+          serial_number: isCastlesCreate ? serialNumber.trim() || null : null,
+          firmware_version: isCastlesCreate ? firmwareVersion.trim() || null : null,
         },
       });
       setIsCreateDialogOpen(false);
@@ -757,7 +763,7 @@ export function PaymentTerminalTab({ station }: PaymentTerminalTabProps) {
 
       {/* Create Terminal Dialog */}
       <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent >
           <DialogHeader>
             <DialogTitle>
               Register {getTerminalTypeLabel(createType)} Terminal
@@ -813,9 +819,30 @@ export function PaymentTerminalTab({ station }: PaymentTerminalTabProps) {
                   </div>
                 </div>
 
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="grid gap-2">
+                    <Label htmlFor="serialNumber">Serial Number</Label>
+                    <Input
+                      id="serialNumber"
+                      value={serialNumber}
+                      onChange={(e) => setSerialNumber(e.target.value)}
+                      placeholder="Printed on terminal"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="firmwareVersion">Firmware Version</Label>
+                    <Input
+                      id="firmwareVersion"
+                      value={firmwareVersion}
+                      onChange={(e) => setFirmwareVersion(e.target.value)}
+                      placeholder="e.g., 1.4.2"
+                    />
+                  </div>
+                </div>
+
                 <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-800 dark:bg-blue-950/30">
                   <p className="text-xs text-blue-700 dark:text-blue-300">
-                    Castles terminals connect via local TCP. Connection testing is done from the POS tablet app.
+                    Castles terminals connect via local TCP. Connection testing is done from the POS tablet app, which will refresh serial number and firmware on first successful connection.
                   </p>
                 </div>
               </>

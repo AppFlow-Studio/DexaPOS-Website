@@ -166,6 +166,7 @@ export function QuickCreateItemDialog({
       });
       queryClient.invalidateQueries({ queryKey: ["menu-items"] });
       queryClient.invalidateQueries({ queryKey: ["menu-items-flat"] });
+      queryClient.invalidateQueries({ queryKey: ["categories-with-items"] });
       onCreated?.(itemId);
       onOpenChange(false);
       if (redirectToEdit) {

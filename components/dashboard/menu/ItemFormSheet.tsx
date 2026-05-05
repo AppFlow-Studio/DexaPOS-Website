@@ -860,6 +860,7 @@ export function ItemFormSheet({
                                     categories={selectedCategories.map(id =>
                                         categories.find(c => c.id === id)?.name || ''
                                     ).filter(Boolean)}
+                                    allergens={watchedValues.allergens ?? []}
                                     availability={watchedValues.availability}
                                     className="shadow-xl"
                                 />

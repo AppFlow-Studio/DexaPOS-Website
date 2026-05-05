@@ -20,6 +20,8 @@ import {
   FormMessage
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
+import { PhoneInput } from '@/components/ui/phone-input'
+import { isValidPhone, tenDigits } from '@/lib/phone'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
@@ -29,12 +31,15 @@ import type { Reservation } from '@/types/floor-plan'
 
 const schema = z.object({
   partyName: z.string().min(1, 'Name required'),
-  partySize: z.number().int().min(1).max(20),
-  phone: z.string().min(7, 'Valid phone required'),
+  partySize: z.coerce.number().int().min(1, 'Min 1').max(20, 'Max 20'),
+  phone: z
+    .string()
+    .min(1, 'Phone required')
+    .refine(isValidPhone, 'Enter a valid 10-digit US phone number'),
   email: z.string().email('Invalid email').or(z.literal('')).optional(),
   reservationDate: z.string().min(1, 'Date required'),
   reservationTime: z.string().min(1, 'Time required'),
-  durationMinutes: z.number().int().min(15).max(480),
+  durationMinutes: z.coerce.number().int().min(15, 'Min 15 min').max(480, 'Max 480 min'),
   isVip: z.boolean().default(false),
   preferredSection: z.string().optional(),
   seatingPreference: z.string().optional(),
@@ -94,7 +99,7 @@ export default function EditReservationDialog ({
     form.reset({
       partyName: reservation.party_name,
       partySize: reservation.party_size,
-      phone: reservation.phone,
+      phone: tenDigits(reservation.phone),
       email: reservation.email ?? '',
       reservationDate: reservation.reservation_date ?? date,
       reservationTime: normalizeTimeValue(reservation.reservation_time),
@@ -169,9 +174,9 @@ export default function EditReservationDialog ({
                         type='number'
                         min={1}
                         max={20}
-                        value={field.value}
+                        value={field.value ?? ''}
                         onChange={e =>
-                          field.onChange(parseInt(e.target.value, 10) || 1)
+                          field.onChange(e.target.value === '' ? '' : parseInt(e.target.value, 10))
                         }
                       />
                     </FormControl>
@@ -187,7 +192,10 @@ export default function EditReservationDialog ({
                   <FormItem>
                     <FormLabel>Phone</FormLabel>
                     <FormControl>
-                      <Input placeholder='+1 555 000 0000' {...field} />
+                      <PhoneInput
+                        value={field.value}
+                        onChange={({ digits }) => field.onChange(digits)}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -254,9 +262,9 @@ export default function EditReservationDialog ({
                       type='number'
                       min={15}
                       max={480}
-                      value={field.value}
+                      value={field.value ?? ''}
                       onChange={e =>
-                        field.onChange(parseInt(e.target.value, 10) || 90)
+                        field.onChange(e.target.value === '' ? '' : parseInt(e.target.value, 10))
                       }
                     />
                   </FormControl>

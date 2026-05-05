@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import * as SheetPrimitive from "@radix-ui/react-dialog";
 import { motion, AnimatePresence } from "motion/react";
 import {
   User,
@@ -858,38 +859,26 @@ export function AccountDrawer({
 
   return (
     <>
-      <AnimatePresence>
-        {isOpen && (
-          <>
-            {/* Backdrop */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              onClick={() => onOpenChange(false)}
-              className="fixed inset-0 z-60"
-              style={{
-                backgroundColor: "rgba(0,0,0,0.5)",
-                backdropFilter: "blur(4px)",
-              }}
-            />
+      <SheetPrimitive.Root open={isOpen} onOpenChange={onOpenChange}>
+        <SheetPrimitive.Portal>
+          {/* Backdrop */}
+          <SheetPrimitive.Overlay
+            className="fixed inset-0 z-[60] transition-opacity duration-200 data-[state=open]:opacity-100 data-[state=closed]:opacity-0"
+            style={{ backgroundColor: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }}
+          />
 
-            {/* Bottom Sheet */}
-            <motion.div
-              initial={{ y: "100%" }}
-              animate={{ y: 0 }}
-              exit={{ y: "100%" }}
-              transition={{ type: "spring", damping: 30, stiffness: 300 }}
-              className="fixed bottom-0 left-0 right-0 z-70 flex flex-col"
-              style={{
-                maxHeight: "85vh",
-                backgroundColor: "var(--bg)",
-                borderRadius: "20px 20px 0 0",
-                fontFamily: "var(--font)",
-                boxShadow: "0 -8px 40px rgba(0,0,0,0.15)",
-              }}
-            >
+          {/* Bottom Sheet */}
+          <SheetPrimitive.Content
+            aria-label="Account"
+            className="fixed bottom-0 left-0 right-0 z-[70] flex flex-col transition-transform duration-300 ease-out data-[state=open]:translate-y-0 data-[state=closed]:translate-y-full"
+            style={{
+              maxHeight: "85vh",
+              backgroundColor: "var(--bg)",
+              borderRadius: "20px 20px 0 0",
+              fontFamily: "var(--font)",
+              boxShadow: "0 -8px 40px rgba(0,0,0,0.15)",
+            }}
+          >
               {/* Drag Handle */}
               <div className="flex justify-center pt-3 pb-1 shrink-0">
                 <div
@@ -903,7 +892,7 @@ export function AccountDrawer({
                 className="px-6 py-3 flex items-center justify-between shrink-0"
                 style={{ borderBottom: "1px solid var(--border)" }}
               >
-                <h2
+                <SheetPrimitive.Title
                   className="text-xl font-bold"
                   style={{
                     color: "var(--text)",
@@ -911,7 +900,7 @@ export function AccountDrawer({
                   }}
                 >
                   Account
-                </h2>
+                </SheetPrimitive.Title>
                 <button
                   onClick={() => onOpenChange(false)}
                   className="p-2 rounded-xl transition-colors"
@@ -929,10 +918,9 @@ export function AccountDrawer({
               <ScrollArea className="flex-1 overflow-auto">
                 {renderContent()}
               </ScrollArea>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
+          </SheetPrimitive.Content>
+        </SheetPrimitive.Portal>
+      </SheetPrimitive.Root>
 
       <AuthDialog
         isOpen={showAuth}
