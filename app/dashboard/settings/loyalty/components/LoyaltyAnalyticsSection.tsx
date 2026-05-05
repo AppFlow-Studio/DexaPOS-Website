@@ -38,6 +38,7 @@ import {
 } from "lucide-react";
 import { useLoyaltyAnalytics } from "../hooks/useLoyaltyPrograms";
 import type { LoyaltyAnalytics } from "@/app/dashboard/actions/loyalty-programs";
+import { formatPhoneForDisplay } from "@/lib/phone";
 
 interface LoyaltyAnalyticsSectionProps {
   clerkOrgId: string | undefined;
@@ -318,7 +319,7 @@ export function LoyaltyAnalyticsSection({
                       <TableCell className="text-sm font-medium">
                         <div>{customer.customer_name}</div>
                         <div className="text-xs text-muted-foreground">
-                          {customer.phone}
+                          {formatPhoneForDisplay(customer.phone)}
                         </div>
                       </TableCell>
                       <TableCell className="text-sm">

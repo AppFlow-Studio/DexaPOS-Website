@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { LocationFormData, US_STATES, US_TIMEZONES, BusinessHours, DayHours } from '@/types/merchant_locations'
 import { Building2, MapPin, ShieldCheck, Landmark, Clock, UserCog, Edit2 } from 'lucide-react'
+import { formatPhoneForDisplay } from '@/lib/phone'
 
 interface ReviewStepProps {
     data: LocationFormData
@@ -113,7 +114,7 @@ export function ReviewStep({ data, onEditStep }: ReviewStepProps) {
                 <div className="space-y-0">
                     <InfoRow label="Name" value={data.name} />
                     <InfoRow label="Code" value={data.code} />
-                    <InfoRow label="Phone" value={data.phone} />
+                    <InfoRow label="Phone" value={formatPhoneForDisplay(data.phone)} />
                     <InfoRow label="Email" value={data.email} />
                 </div>
             </ReviewSection>
@@ -147,7 +148,6 @@ export function ReviewStep({ data, onEditStep }: ReviewStepProps) {
                     <InfoRow label="Account Holder" value={data.account_holder_name} />
                     <InfoRow label="Routing" value={maskLastFour(data.routing_number)} />
                     <InfoRow label="Account" value={maskLastFour(data.account_number)} />
-                    <InfoRow label="Bank Support Document" value={data.bank_support_document_name || '-'} />
                     <InfoRow label="Account Type" value={data.account_type} />
                 </div>
                 <p className="text-xs text-muted-foreground mt-3">

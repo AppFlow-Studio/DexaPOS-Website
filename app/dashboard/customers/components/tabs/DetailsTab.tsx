@@ -14,6 +14,8 @@ import {
   SelectValue
 } from '@/components/ui/select'
 import { X, Plus, Edit2, Trash2, Loader2, Save } from 'lucide-react'
+import { PhoneInput } from '@/components/ui/phone-input'
+import { formatPhoneForDisplay, normalizePhone } from '@/lib/phone'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useUserInfo } from '@/app/manage/hooks/useUserInfo.'
 import {
@@ -130,7 +132,7 @@ export function DetailsTab ({ customer, merchantId }: DetailsTabProps) {
       customerId: customerId!,
       updates: {
         name,
-        phone,
+        phone: normalizePhone(phone) ?? phone || null,
         email,
         address,
         birthday: birthday || null,
@@ -252,7 +254,7 @@ export function DetailsTab ({ customer, merchantId }: DetailsTabProps) {
                 <p className='text-xs font-medium text-muted-foreground'>
                   Phone
                 </p>
-                <p className='text-sm'>{phone || '—'}</p>
+                <p className='text-sm'>{phone ? formatPhoneForDisplay(phone) : '—'}</p>
               </div>
               <div>
                 <p className='text-xs font-medium text-muted-foreground'>
@@ -275,7 +277,7 @@ export function DetailsTab ({ customer, merchantId }: DetailsTabProps) {
               </div>
               <div>
                 <label className='text-sm font-medium'>Phone</label>
-                <Input value={phone} onChange={e => setPhone(e.target.value)} />
+                <PhoneInput value={phone} onChange={setPhone} />
               </div>
               <div>
                 <label className='text-sm font-medium'>Email</label>

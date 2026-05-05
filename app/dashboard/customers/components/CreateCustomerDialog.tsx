@@ -28,6 +28,8 @@ import { Badge } from "@/components/ui/badge";
 import { Loader2, UserPlus, X } from "lucide-react";
 import { toast } from "sonner";
 import { useCreateCustomer } from "../hooks/useCustomers";
+import { PhoneInput } from "@/components/ui/phone-input";
+import { isValidPhone, normalizePhone } from "@/lib/phone";
 
 const SUGGESTED_TAGS = [
   "VIP",
@@ -62,10 +64,7 @@ const DIETARY_PREFERENCES = [
 const createCustomerSchema = z.object({
   // Contact
   name: z.string().min(1, "Name is required").max(100),
-  phone: z
-    .string()
-    .min(1, "Phone is required")
-    .refine((val) => val.replace(/\D/g, "").length >= 7, "Phone must be at least 7 digits"),
+  phone: z.string().min(1, "Phone is required").refine(v => isValidPhone(v), { message: 'Enter a valid phone number' }),
   email: z.string().email("Invalid email address").optional().or(z.literal("")),
   address: z.string().optional(),
 
@@ -167,7 +166,7 @@ export function CreateCustomerDialog({ open, onOpenChange }: CreateCustomerDialo
     try {
       const result = await createCustomer.mutateAsync({
         name: values.name,
-        phone: values.phone,
+        phone: normalizePhone(values.phone) ?? values.phone,
         email: values.email || undefined,
         address: values.address || undefined,
         birthday: values.birthday || undefined,
@@ -247,7 +246,7 @@ export function CreateCustomerDialog({ open, onOpenChange }: CreateCustomerDialo
                     <FormItem>
                       <FormLabel>Phone <span className="text-destructive">*</span></FormLabel>
                       <FormControl>
-                        <Input placeholder="555-0100" {...field} />
+                        <PhoneInput value={field.value} onChange={field.onChange} onBlur={field.onBlur} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>

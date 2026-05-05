@@ -125,6 +125,9 @@ interface FloorPlanState {
 
     // Internal
     setupRealtimeSubscriptions: (locationId: string) => void;
+
+    // Auth reset — clears all persisted and in-memory state
+    reset: () => void;
 }
 
 export const useFloorPlanStore = create<FloorPlanState>()(
@@ -272,6 +275,34 @@ export const useFloorPlanStore = create<FloorPlanState>()(
                         tables: [],
                         waitlist: [],
                         reservations: []
+                    });
+                },
+
+                reset: () => {
+                    const channel = get().realtimeChannel;
+                    if (channel) {
+                        const supabaseClient = createAuthenticatedClient();
+                        supabaseClient.removeChannel(channel);
+                    }
+                    set({
+                        realtimeChannel: null,
+                        locationId: null,
+                        floorPlans: [],
+                        activeFloorPlanId: null,
+                        tables: [],
+                        waitlist: [],
+                        reservations: [],
+                        selectedTableIds: [],
+                        isDesignMode: false,
+                        isLoading: false,
+                        error: null,
+                        lastSyncAt: null,
+                        draftTables: [],
+                        originalTables: [],
+                        lastDraftSavedAt: null,
+                        past: [],
+                        future: [],
+                        isOnline: true,
                     });
                 },
 

@@ -14,6 +14,8 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { useClerkOrgId } from "@/app/dashboard/hooks/useLocationScoped";
 import type { CustomerListItem } from "@/types/customer";
+import { PhoneInput } from "@/components/ui/phone-input";
+import { normalizePhone } from "@/lib/phone";
 
 interface QuickAddCustomerDialogProps {
   open: boolean;
@@ -53,7 +55,7 @@ export function QuickAddCustomerDialog({
       const result = await CreateCustomerQuick(clerkOrgId, {
         name: name.trim() || null,
         email: email.trim() || null,
-        phone: phone.trim() || null,
+        phone: normalizePhone(phone) ?? phone.trim() || null,
       });
 
       if (result.error) {
@@ -111,12 +113,10 @@ export function QuickAddCustomerDialog({
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="new-cust-phone">Phone</Label>
-            <Input
+            <PhoneInput
               id="new-cust-phone"
-              type="tel"
-              placeholder="+1 (555) 000-0000"
               value={phone}
-              onChange={(e) => setPhone(e.target.value)}
+              onChange={setPhone}
             />
           </div>
           <p className="text-xs text-muted-foreground">

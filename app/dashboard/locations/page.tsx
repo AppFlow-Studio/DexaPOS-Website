@@ -31,6 +31,7 @@ import {
 import { US_TIMEZONES, Location } from '@/types/merchant_locations'
 import { useLocationStore } from '@/stores/location-store'
 import { LocationDetailSheet } from '@/components/dashboard/locations/LocationDetailSheet'
+import { formatPhoneForDisplay } from '@/lib/phone'
 
 type ViewMode = 'grid' | 'list'
 type StatusFilter = 'active' | 'archived' | 'all'
@@ -424,7 +425,7 @@ export default function LocationsPage() {
                             <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground mb-4">
                                 {location.phone && (
                                     <span className="flex items-center gap-1">
-                                        <Phone className="h-3 w-3" />{location.phone}
+                                        <Phone className="h-3 w-3" />{formatPhoneForDisplay(location.phone)}
                                     </span>
                                 )}
                                 {location.timezone && (

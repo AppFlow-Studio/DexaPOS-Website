@@ -43,6 +43,7 @@ import {
 import { Card, CardContent} from "@/components/ui/card";
 
 import { cn } from "@/lib/utils";
+import { formatPhoneForDisplay } from "@/lib/phone";
 import {
   useCustomerProfile,
   useAddCustomerTag,
@@ -542,7 +543,7 @@ export function CustomerProfileSheet({
                 <div className="flex flex-col items-end gap-2.5 text-sm bg-muted/30 rounded-lg p-4 border border-muted/50">
                   <div className="flex items-center gap-2.5 text-foreground font-semibold">
                     <Phone className="h-4 w-4 text-primary" />
-                    {customerData.phone || <span className="text-muted-foreground">No phone</span>}
+                    {customerData.phone ? formatPhoneForDisplay(customerData.phone) : <span className="text-muted-foreground">No phone</span>}
                   </div>
                   <div className="flex items-center gap-2.5 text-foreground font-semibold">
                     <Mail className="h-4 w-4 text-primary" />

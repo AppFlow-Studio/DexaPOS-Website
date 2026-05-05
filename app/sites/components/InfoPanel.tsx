@@ -14,6 +14,7 @@ import {
   BadgeDollarSign,
 } from "lucide-react";
 import { OpenClosedIndicator } from "./OpenClosedIndicator";
+import { formatPhoneForDisplay } from "@/lib/phone";
 
 interface InfoPanelProps {
   site: Site | null;
@@ -216,7 +217,7 @@ export function InfoPanel({ site, location }: InfoPanelProps) {
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-medium uppercase tracking-wide" style={label}>Phone</p>
                 <p className="text-sm font-medium truncate mt-0.5" style={{ color: "#111827" }}>
-                  {location.phone}
+                  {formatPhoneForDisplay(location.phone)}
                 </p>
               </div>
               <ChevronRight className="h-5 w-5 shrink-0" style={muted} />

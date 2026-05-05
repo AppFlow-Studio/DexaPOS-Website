@@ -2,6 +2,7 @@
 
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { PhoneInput } from '@/components/ui/phone-input'
 import { LocationFormStep1 } from '@/types/merchant_locations'
 
 interface BasicInfoStepProps {
@@ -29,24 +30,6 @@ export function BasicInfoStep({ data, onChange, errors }: BasicInfoStepProps) {
         }
     }
 
-    const formatPhoneNumber = (value: string) => {
-        // Remove all non-digits
-        const digits = value.replace(/\D/g, '')
-
-        // Format as (XXX) XXX-XXXX
-        if (digits.length <= 3) {
-            return digits
-        } else if (digits.length <= 6) {
-            return `(${digits.slice(0, 3)}) ${digits.slice(3)}`
-        } else {
-            return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6, 10)}`
-        }
-    }
-
-    const handlePhoneChange = (value: string) => {
-        const formatted = formatPhoneNumber(value)
-        onChange({ phone: formatted })
-    }
 
     return (
         <div className="space-y-6">
@@ -94,13 +77,11 @@ export function BasicInfoStep({ data, onChange, errors }: BasicInfoStepProps) {
                     <Label htmlFor="phone">
                         Phone number
                     </Label>
-                    <Input
+                    <PhoneInput
                         id="phone"
-                        type="tel"
                         value={data.phone}
-                        onChange={(e) => handlePhoneChange(e.target.value)}
-                        placeholder="(555) 123-4567"
-                        className={errors?.phone ? 'border-destructive' : ''}
+                        onChange={(e164) => onChange({ phone: e164 })}
+                        aria-invalid={!!errors?.phone}
                     />
                     {errors?.phone && (
                         <p className="text-sm text-destructive">{errors.phone}</p>
