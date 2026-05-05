@@ -1,6 +1,6 @@
 "use client";
 
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import {
@@ -18,23 +18,14 @@ import { Badge } from "@/components/ui/badge";
 import { AddressAutocomplete } from "@/components/ui/address-autocomplete";
 import { Truck, Loader2, Globe, MapPin } from "lucide-react";
 import { useCreateVendor } from "../hooks/useInventoryManagement";
+import { PhoneInput } from "@/components/ui/phone-input";
+import { isValidPhone, normalizePhone } from "@/lib/phone";
 import { useLocationStore, useSelectedLocation } from "@/stores/location-store";
 
 const formSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
   contact_name: z.string().optional(),
-  phone: z
-    .string()
-    .optional()
-    .refine(
-      (val) => {
-        if (!val || val === "") return true; // Optional - allow empty
-        // Strip all non-digit characters and check for 10 digits
-        const digitsOnly = val.replace(/\D/g, "");
-        return digitsOnly.length === 10;
-      },
-      { message: "Phone must be 10 digits" }
-    ),
+  phone: z.string().optional().refine(v => !v || isValidPhone(v), { message: 'Enter a valid phone number' }),
   email: z.string().email().optional().or(z.literal("")),
   address_line1: z.string().optional(),
   city: z.string().optional(),
@@ -75,7 +66,7 @@ export function AddVendorDialog({ open, onOpenChange }: AddVendorDialogProps) {
     await createVendor.mutateAsync({
       name: values.name,
       contact_name: values.contact_name || undefined,
-      phone: values.phone || undefined,
+      phone: normalizePhone(values.phone) ?? values.phone || undefined,
       email: values.email || undefined,
       address_line1: values.address_line1 || undefined,
       city: values.city || undefined,
@@ -169,11 +160,18 @@ export function AddVendorDialog({ open, onOpenChange }: AddVendorDialogProps) {
             </div>
             <div className="space-y-2">
               <Label htmlFor="phone">Phone</Label>
-              <Input
-                id="phone"
-                type="tel"
-                placeholder="(555) 123-4567"
-                {...form.register("phone")}
+              <Controller
+                control={form.control}
+                name="phone"
+                render={({ field }) => (
+                  <PhoneInput
+                    id="phone"
+                    value={field.value ?? ''}
+                    onChange={field.onChange}
+                    onBlur={field.onBlur}
+                    aria-invalid={!!form.formState.errors.phone}
+                  />
+                )}
               />
               {form.formState.errors.phone && (
                 <p className="text-sm text-destructive">

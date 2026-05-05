@@ -782,8 +782,6 @@ export interface LocationFormStep4 {
   routing_number: string;
   account_number: string;
   confirm_account_number: string;
-  bank_support_document_name: string;
-  bank_support_document_url?: string;
   account_type: 'checking' | 'savings';
   use_merchant_billing_profile: boolean;
   /** Luqra acquiring MID (8-20 digits). Optional at create. */

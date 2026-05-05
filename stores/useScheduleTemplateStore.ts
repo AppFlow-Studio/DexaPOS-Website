@@ -15,6 +15,7 @@ interface ScheduleTemplateState {
     duplicateTemplate: (templateId: string) => void;
     setActiveTemplateIds: (templateIds: string[]) => void;
   };
+  reset: () => void;
 }
 
 export const useScheduleTemplateStore = create<ScheduleTemplateState>()(
@@ -71,6 +72,7 @@ export const useScheduleTemplateStore = create<ScheduleTemplateState>()(
             activeTemplateIds: templateIds,
           })),
       },
+      reset: () => set({ templates: [], activeTemplateIds: [] }),
     }),
     {
       name: "schedule-template-storage",

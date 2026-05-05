@@ -19,6 +19,7 @@ import {
 import CancelReservationDialog from './CancelReservationDialog'
 import EditReservationDialog from './EditReservationDialog'
 import type { Reservation } from '@/types/floor-plan'
+import { formatPhoneForDisplay } from '@/lib/phone'
 
 const STATUS_COLORS: Record<Reservation['status'], string> = {
   pending: 'bg-yellow-100 text-yellow-800',
@@ -165,7 +166,7 @@ export default function ReservationDetailSheet ({
                 label='Party Size'
                 value={String(displayedReservation.party_size)}
               />
-              <InfoRow label='Phone' value={displayedReservation.phone} />
+              <InfoRow label='Phone' value={formatPhoneForDisplay(displayedReservation.phone)} />
               <InfoRow label='Email' value={displayedReservation.email} />
             </div>
 

@@ -3,10 +3,12 @@
 import { useEffect, useRef } from 'react'
 import { useSession } from '@clerk/nextjs'
 import { useQueryClient } from '@tanstack/react-query'
+import { resetClientSession } from '@/lib/auth/session-reset'
 
 /**
- * Hook to monitor Clerk session state and prevent unnecessary query invalidation
- * during normal session refresh. Only invalidates queries if session is actually lost.
+ * Monitors Clerk session state. On an actual session change or loss,
+ * performs a full client-side reset (QueryClient + all Zustand stores + localStorage).
+ * Does NOT reset on routine token refreshes (same session ID).
  */
 export function useSessionSync() {
     const { session, isLoaded } = useSession()
@@ -18,32 +20,22 @@ export function useSessionSync() {
 
         const currentSessionId = session?.id || null
 
-        // On initial load, just store the session ID
+        // On initial load, just record the current session ID
         if (previousSessionIdRef.current === null) {
             previousSessionIdRef.current = currentSessionId
             return
         }
 
-        // If session ID changed (not just refreshed, but actually changed)
-        // This typically means the user signed out and back in
-        if (previousSessionIdRef.current !== currentSessionId) {
-            // Session actually changed - invalidate queries
-            queryClient.invalidateQueries()
+        const sessionChanged = previousSessionIdRef.current !== currentSessionId
+        const sessionLost = !!previousSessionIdRef.current && !currentSessionId
+
+        if (sessionChanged || sessionLost) {
+            // Full reset — removes stale data from previous user
+            resetClientSession(queryClient)
             previousSessionIdRef.current = currentSessionId
-            return
         }
 
-        // If session is lost (was logged in, now not)
-        if (previousSessionIdRef.current && !currentSessionId) {
-            // Session expired/lost - invalidate queries
-            queryClient.invalidateQueries()
-            previousSessionIdRef.current = null
-            return
-        }
-
-        // Normal session refresh (same session ID, token refreshed)
-        // Don't invalidate queries - session is still valid
-        previousSessionIdRef.current = currentSessionId
+        // Normal token refresh (same session ID) — do nothing
     }, [session?.id, isLoaded, queryClient])
 }
 

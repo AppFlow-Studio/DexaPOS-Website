@@ -22,6 +22,7 @@ import {
 } from 'lucide-react'
 import { AddToWaitlistWizard } from './AddToWaitlistWizard'
 import { EditWaitlistDialog } from './EditWaitlistDialog'
+import { formatPhoneForDisplay } from '@/lib/phone'
 // Date formatting helper
 function formatDistanceToNow (dateString: string): string {
   const date = new Date(dateString)
@@ -121,7 +122,7 @@ export function WaitlistPanel ({
                   {entry.phone && (
                     <span className='flex items-center gap-1'>
                       <Phone className='h-3 w-3' />
-                      {entry.phone}
+                      {formatPhoneForDisplay(entry.phone)}
                     </span>
                   )}
                 </CardDescription>
