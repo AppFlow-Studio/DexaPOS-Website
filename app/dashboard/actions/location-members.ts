@@ -5,6 +5,9 @@ import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { auth, clerkClient } from '@clerk/nextjs/server'
 import { LocationMemberWithDetails, LocationInviteWithDetails } from '@/types/merchant_locations'
 import { LogAuditEvent } from './audit-logs'
+import { isValidEmail, normalizeEmail } from '@/lib/utils/email'
+import { findEmailConflict } from '@/app/manage/actions/email-duplicates'
+import { emailConflictMessage } from '@/lib/utils/email'
 
 export interface ManagerAssignableUser {
     user_id: string
@@ -352,6 +355,11 @@ export async function CreateLocationInvite(
         return { error: 'All fields are required' }
     }
 
+    const normalizedEmail = normalizeEmail(data.email)
+    if (!isValidEmail(normalizedEmail)) {
+        return { error: 'Invalid email' }
+    }
+
     const supabase = createServerSupabaseClient()
     const serviceRoleSupabase = createServiceRoleClient()
     const { userId: actorUserId } = await auth()
@@ -389,17 +397,11 @@ export async function CreateLocationInvite(
         return { error: 'Location not found.' }
     }
 
-    // Check for existing pending invite
-    const { data: existing } = await serviceRoleSupabase
-        .from('location_invites')
-        .select('id')
-        .eq('location_id', locationId)
-        .eq('email', data.email)
-        .eq('status', 'pending')
-        .single()
-
-    if (existing) {
-        return { error: 'An invitation has already been sent to this email' }
+    const conflict = await findEmailConflict(normalizedEmail, {
+        scope: { merchantId: location.merchant_id },
+    })
+    if (conflict) {
+        return { error: emailConflictMessage(conflict) }
     }
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL
@@ -410,7 +412,7 @@ export async function CreateLocationInvite(
         const invitation = await clerk.organizations.createOrganizationInvitation({
             organizationId: clerkOrgId,
             inviterUserId: actorUserId,
-            emailAddress: data.email.trim(),
+            emailAddress: normalizedEmail,
             role: 'org:member',
             ...(appUrl && { redirectUrl: `${appUrl}/dashboard` }),
             publicMetadata: {
@@ -444,7 +446,7 @@ export async function CreateLocationInvite(
         .insert({
             location_id: locationId,
             merchant_id: location.merchant_id,
-            email: data.email,
+            email: normalizedEmail,
             role_code: data.role_code,
             invited_by_user_id: actorUserId,
             invite_type: 'clerk',

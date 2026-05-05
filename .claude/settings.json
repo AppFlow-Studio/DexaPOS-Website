@@ -38,28 +38,15 @@
       "Bash(node -e *)",
       "Bash(curl -s \"http://localhost:3000/dashboard\")",
       "mcp__supabase__execute_sql",
-      "Bash(npx tsc *)",
-      "Bash(Get-ChildItem -Recurse -Include \"*delivery*zone*\", \"*zone*delivery*\" -ErrorAction SilentlyContinue)",
-      "Bash(Select-Object -ExpandProperty FullName)",
-      "Bash(git stash *)",
-      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\saleh\\\\OneDrive - Lebanese American University\\\\Apps\\\\Dexa\\\\DexaPOS-Website\\\\components\" -Recurse -Filter \"*.tsx\")",
-      "Bash(Select-Object -First 30)",
-      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\saleh\\\\OneDrive - Lebanese American University\\\\Apps\\\\Dexa\\\\DexaPOS-Website\\\\app\\\\sites\\\\components\" -Filter \"*.tsx\")",
-      "Bash(Select-Object Name)",
-      "Bash(Head -20)",
-      "Bash(npm run *)",
-      "Bash(npx vitest *)",
-      "Bash(copy vitest.config.ts vitest.config.mts)",
-      "Bash(copy vitest.a11y.config.ts vitest.a11y.config.mts)",
-      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\saleh\\\\OneDrive - Lebanese American University\\\\Apps\\\\Dexa\\\\DexaPOS-Website\" -Directory)",
-      "Bash(Select-Object -First 20)",
-      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\saleh\\\\OneDrive - Lebanese American University\\\\Apps\\\\Dexa\\\\DexaPOS-Website\" -Depth 2)",
-      "Bash(Select-Object -Property FullName, PSIsContainer)",
-      "Bash(grep -E \"\\\\.\\(ts|tsx|js\\)$\")"
+      "Bash(git fetch *)",
+      "Bash(npx eslint *)",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\HP i5\\\\Desktop\\\\mdptech\\\\DexaPOS-website\\\\DexaPOS-Website\" -Recurse -Directory -Name)",
+      "Bash(Select-Object -First 30)"
     ],
     "additionalDirectories": [
       "C:\\Users\\HP i5\\Desktop\\mdptech\\DexaPOS-website\\DexaPOS-Website\\tasks",
-      "c:\\Users\\saleh\\OneDrive - Lebanese American University\\Apps\\Dexa\\DexaPOS-Website\\app\\sites\\[slug]"
+      "c:\\Users\\saleh\\OneDrive - Lebanese American University\\Apps\\Dexa\\DexaPOS-Website\\app\\sites\\[slug]",
+      "C:\\Users\\HP i5\\.claude\\projects\\c--Users-HP-i5-Desktop-mdptech-DexaPOS-website-DexaPOS-Website"
     ]
   },
   "hooks": {

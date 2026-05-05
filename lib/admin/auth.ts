@@ -132,6 +132,37 @@ export async function assertHQPermission(
 }
 
 /**
+ * For server actions — asserts the caller is an HQ super admin (`hq.super_admin`).
+ * Throws if not.
+ */
+export async function assertSuperAdmin(): Promise<ServerAdminAuth> {
+  const { userId, orgId } = await auth()
+
+  if (!userId || orgId !== DEXA_HQ_ORG_ID) {
+    throw new Error('Unauthorized: HQ admin access required')
+  }
+
+  const supabase = createServerSupabaseClient()
+  const { data: roleData } = await supabase.rpc('get_my_hq_role').single()
+  const role = roleData as HQRole | null
+
+  if (!role || role.role_code !== 'hq.super_admin') {
+    throw new Error('Unauthorized: Super admin access required')
+  }
+
+  const { data: permissions } = await supabase.rpc('get_my_hq_permissions')
+  const permissionList = (permissions as HQPermission[]) || []
+
+  return {
+    userId,
+    orgId,
+    role,
+    permissions: permissionList,
+    hasPermission: (p: HQPermission) => permissionList.includes(p),
+  }
+}
+
+/**
  * Check if current user is an HQ admin without redirecting.
  * Useful for conditional logic in server components.
  *

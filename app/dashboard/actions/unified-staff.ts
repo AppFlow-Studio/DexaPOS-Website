@@ -14,6 +14,9 @@ import {
 import { clerkClient, auth } from "@clerk/nextjs/server";
 import { LogAuditEvent } from "./audit-logs";
 import { revalidatePath } from "next/cache";
+import { isValidEmail, normalizeEmail } from "@/lib/utils/email";
+import { findEmailConflict } from "@/app/manage/actions/email-duplicates";
+import { emailConflictMessage } from "@/lib/utils/email";
 
 // ============================================================================
 // CONSTANTS
@@ -447,6 +450,11 @@ export async function CreateClerkUserDirectly(
     return { error: "Email is required for Clerk users" };
   }
 
+  const normalizedEmail = normalizeEmail(formData.email);
+  if (!isValidEmail(normalizedEmail)) {
+    return { error: "Invalid email" };
+  }
+
   const supabase = createServerSupabaseClient();
 
   try {
@@ -462,6 +470,13 @@ export async function CreateClerkUserDirectly(
     }
 
     const merchantId = merchant.id;
+
+    const conflict = await findEmailConflict(normalizedEmail, {
+      scope: { merchantId },
+    });
+    if (conflict) {
+      return { error: emailConflictMessage(conflict) };
+    }
 
     // Owners/admins are auto-provisioned to every location
     const resolvedLocationIds = await resolveLocationIds(
@@ -747,6 +762,44 @@ export async function InviteClerkStaff(
 
     const merchantId = merchant.id;
 
+    const normalizedInviteEmail = normalizeEmail(formData.email);
+    if (!isValidEmail(normalizedInviteEmail)) {
+      return { error: "Invalid email" };
+    }
+
+    // Cross-table conflict check. Allow only the POS-only-profile-reuse path
+    // (Bug A): a staff_profiles row at this merchant with no Clerk user_id is
+    // not treated as a conflict — it gets threaded through the invite metadata
+    // so the webhook UPDATEs that row instead of inserting a duplicate.
+    const conflict = await findEmailConflict(normalizedInviteEmail, {
+      scope: { merchantId },
+    });
+    if (
+      conflict &&
+      !(conflict.table === "staff_profiles" && conflict.isPosOnlyProfile)
+    ) {
+      return { error: emailConflictMessage(conflict) };
+    }
+
+    const { data: existingProfileByEmail } = await supabase
+      .from("staff_profiles")
+      .select("id, user_id")
+      .eq("merchant_id", merchantId)
+      .ilike("email", normalizedInviteEmail)
+      .maybeSingle();
+
+    const existingPosOnlyProfileId =
+      existingProfileByEmail && !existingProfileByEmail.user_id
+        ? existingProfileByEmail.id
+        : null;
+
+    if (existingProfileByEmail && existingProfileByEmail.user_id) {
+      console.warn(
+        "[InviteClerkStaff] staff_profiles row exists with user_id for this email — webhook will dedupe by (merchant_id,user_id)",
+        { merchantId, email: normalizedInviteEmail, profileId: existingProfileByEmail.id },
+      );
+    }
+
     // Owners/admins are auto-provisioned to every location
     const resolvedLocationIds = await resolveLocationIds(
       supabase,
@@ -833,6 +886,11 @@ export async function InviteClerkStaff(
           firstName: formData.first_name,
           lastName: formData.last_name,
           phone: formData.phone,
+          // If a POS-only profile already exists for this email, the webhook
+          // will UPDATE it instead of inserting a duplicate row.
+          ...(existingPosOnlyProfileId && {
+            staffProfileId: existingPosOnlyProfileId,
+          }),
         },
       });
     } finally {

@@ -1,16 +1,32 @@
 'use client'
 
-import { useSignUp, useSignIn } from '@clerk/nextjs'
+import { useSignUp, useSignIn, useClerk, useAuth } from '@clerk/nextjs'
 import { Shield, Eye, EyeOff, Loader2 } from 'lucide-react'
 import Link from 'next/link'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
 import { useState, Suspense } from 'react'
 
 function AcceptInvitationContent() {
     const { signUp, setActive: setActiveSignUp, isLoaded: signUpLoaded } = useSignUp()
     const { signIn, setActive: setActiveSignIn, isLoaded: signInLoaded } = useSignIn()
-    const router = useRouter()
+    const { signOut } = useClerk()
+    const { isSignedIn } = useAuth()
     const searchParams = useSearchParams()
+
+    // Bug B fix: any prior session (e.g. logged into Merchant A) must be
+    // cleared before processing a ticket-strategy invite, otherwise Clerk's
+    // last-active-organization heuristic can land the invitee back on the
+    // wrong merchant. We sign out without redirecting, then proceed with the
+    // ticket flow on a clean slate.
+    const clearPriorSessionIfAny = async () => {
+        if (isSignedIn) {
+            try {
+                await signOut({ redirectUrl: undefined })
+            } catch (err) {
+                console.error('[accept-invitation] signOut failed (continuing):', err)
+            }
+        }
+    }
 
     const ticket = searchParams.get('__clerk_ticket')
     const clerkStatus = searchParams.get('__clerk_status')
@@ -61,13 +77,17 @@ function AcceptInvitationContent() {
             setIsSubmitting(true)
             setError('')
             try {
+                await clearPriorSessionIfAny()
                 const result = await signIn.create({
                     strategy: 'ticket',
                     ticket,
                 })
                 if (result.status === 'complete') {
                     await setActiveSignIn({ session: result.createdSessionId })
-                    router.push('/dashboard')
+                    // Hard navigation so middleware re-evaluates org context
+                    // with the freshly activated session, instead of relying on
+                    // any cached client state from the prior user.
+                    window.location.href = '/dashboard'
                 }
             } catch (err: unknown) {
                 const clerkError = err as { errors?: Array<{ longMessage?: string; message?: string }> }
@@ -143,6 +163,7 @@ function AcceptInvitationContent() {
         setError('')
 
         try {
+            await clearPriorSessionIfAny()
             const result = await signUp.create({
                 strategy: 'ticket',
                 ticket,
@@ -153,7 +174,9 @@ function AcceptInvitationContent() {
 
             if (result.status === 'complete') {
                 await setActiveSignUp({ session: result.createdSessionId })
-                router.push('/dashboard')
+                // Hard navigation so middleware re-evaluates org context with
+                // the freshly activated session.
+                window.location.href = '/dashboard'
             } else {
                 setError('Something went wrong completing your sign up. Please try again.')
             }
