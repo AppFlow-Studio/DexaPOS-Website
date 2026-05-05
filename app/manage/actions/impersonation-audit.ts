@@ -7,12 +7,15 @@
 // audit_logs rows. Required for SOC2 evidence and merchant disputes.
 // =============================================================================
 
+import { createClerkClient } from "@clerk/backend";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { requireAdminAuth } from "@/lib/admin/auth";
 
 export interface ImpersonationSessionRow {
   id: string;
   hq_user_id: string;
+  hq_user_name: string | null;
+  hq_user_email: string | null;
   target_merchant_id: string;
   target_merchant_name: string | null;
   started_at: string;
@@ -98,9 +101,38 @@ export async function ListImpersonationSessions(
     }, new Map<string, number>());
   }
 
+  // Resolve HQ user IDs (Clerk) → human-readable name/email.
+  const uniqueHqIds = Array.from(
+    new Set((data ?? []).map((r: any) => r.hq_user_id).filter(Boolean)),
+  );
+  const hqUsersById = new Map<string, { name: string | null; email: string | null }>();
+  if (uniqueHqIds.length > 0) {
+    const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY! });
+    await Promise.all(
+      uniqueHqIds.map(async (id) => {
+        try {
+          const u = await clerk.users.getUser(id);
+          const email =
+            u.emailAddresses.find((e) => e.id === u.primaryEmailAddressId)?.emailAddress ??
+            u.emailAddresses[0]?.emailAddress ??
+            null;
+          const name =
+            [u.firstName, u.lastName].filter(Boolean).join(" ").trim() ||
+            u.username ||
+            null;
+          hqUsersById.set(id, { name, email });
+        } catch {
+          hqUsersById.set(id, { name: null, email: null });
+        }
+      }),
+    );
+  }
+
   const rows: ImpersonationSessionRow[] = (data ?? []).map((r: any) => ({
     id: r.id,
     hq_user_id: r.hq_user_id,
+    hq_user_name: hqUsersById.get(r.hq_user_id)?.name ?? null,
+    hq_user_email: hqUsersById.get(r.hq_user_id)?.email ?? null,
     target_merchant_id: r.target_merchant_id,
     target_merchant_name: r.target_merchant?.name ?? null,
     started_at: r.started_at,

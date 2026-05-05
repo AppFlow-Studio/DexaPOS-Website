@@ -244,6 +244,10 @@ export async function adminCreateLocation(
         onboarding_completed: input.onboarding_completed ?? false,
         uses_global_menu: input.uses_global_menu ?? true,
         public_metadata: input.public_metadata || {},
+        luqra_mid: input.luqra_mid || null,
+        luqra_mid_descriptor: input.luqra_mid_descriptor || null,
+        luqra_mid_status: input.luqra_mid ? input.luqra_mid_status || 'pending' : 'pending',
+        luqra_mid_assigned_at: input.luqra_mid ? new Date().toISOString() : null,
       })
       .select()
       .single()
@@ -362,6 +366,22 @@ export async function adminUpdateLocation(
     }
     if (input.uses_global_menu !== undefined) updateData.uses_global_menu = input.uses_global_menu
     if (input.public_metadata !== undefined) updateData.public_metadata = input.public_metadata
+    if (input.luqra_mid !== undefined) {
+      const nextMid = input.luqra_mid || null
+      const prevMid = (currentLocation as { luqra_mid?: string | null }).luqra_mid ?? null
+      updateData.luqra_mid = nextMid
+      if (nextMid && nextMid !== prevMid) {
+        updateData.luqra_mid_assigned_at = new Date().toISOString()
+      } else if (!nextMid) {
+        updateData.luqra_mid_assigned_at = null
+      }
+    }
+    if (input.luqra_mid_descriptor !== undefined) {
+      updateData.luqra_mid_descriptor = input.luqra_mid_descriptor || null
+    }
+    if (input.luqra_mid_status !== undefined) {
+      updateData.luqra_mid_status = input.luqra_mid_status
+    }
 
     const { data, error } = await supabase
       .from('locations')

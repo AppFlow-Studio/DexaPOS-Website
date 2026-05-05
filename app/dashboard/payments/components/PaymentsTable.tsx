@@ -280,13 +280,21 @@ function PaymentDetailPanel({ payment }: { payment: PaymentRecord }) {
           {(payment.terminal_id || ct?.terminalId) && (
             <div className="flex gap-2 justify-between">
               <dt className="text-muted-foreground shrink-0">Terminal ID</dt>
-              <dd className="font-mono text-right break-all">{payment.terminal_id || ct?.terminalId}</dd>
+              <dd
+                className="font-mono text-right truncate min-w-0 max-w-[160px]"
+                title={payment.terminal_id || ct?.terminalId || ''}
+              >
+                {payment.terminal_id || ct?.terminalId}
+              </dd>
             </div>
           )}
           {payment.device_id && (
             <div className="flex gap-2 justify-between">
               <dt className="text-muted-foreground shrink-0">Device ID</dt>
-              <dd className="font-mono text-right break-all">
+              <dd
+                className="font-mono text-right truncate min-w-0 max-w-[160px]"
+                title={payment.device_id}
+              >
                 {payment.device_id}
               </dd>
             </div>
@@ -294,7 +302,10 @@ function PaymentDetailPanel({ payment }: { payment: PaymentRecord }) {
           {payment.processor_response?.serial_number && (
             <div className="flex gap-2 justify-between">
               <dt className="text-muted-foreground shrink-0">Serial #</dt>
-              <dd className="font-mono text-right break-all">
+              <dd
+                className="font-mono text-right truncate min-w-0 max-w-[160px]"
+                title={String(payment.processor_response.serial_number)}
+              >
                 {payment.processor_response.serial_number}
               </dd>
             </div>

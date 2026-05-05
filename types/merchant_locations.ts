@@ -354,6 +354,15 @@ export const createLocationSchema = z.object({
   onboarding_completed: z.boolean().default(false),
   uses_global_menu: z.boolean().default(true),
   public_metadata: z.record(z.unknown()).default({}),
+  luqra_mid: z
+    .string()
+    .regex(/^[0-9]{8,20}$/, 'MID must be 8-20 digits')
+    .nullable()
+    .optional(),
+  luqra_mid_descriptor: z.string().max(100).nullable().optional(),
+  luqra_mid_status: z
+    .enum(['pending', 'review', 'live', 'offline'])
+    .default('pending'),
 });
 
 export type CreateLocationInput = z.infer<typeof createLocationSchema>;
@@ -777,6 +786,10 @@ export interface LocationFormStep4 {
   bank_support_document_url?: string;
   account_type: 'checking' | 'savings';
   use_merchant_billing_profile: boolean;
+  /** Luqra acquiring MID (8-20 digits). Optional at create. */
+  luqra_mid?: string;
+  /** Free-text descriptor surfaced on Luqra reports. */
+  luqra_mid_descriptor?: string;
 }
 
 export interface LocationFormStep5 {
