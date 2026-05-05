@@ -7,6 +7,8 @@ import { randomBytes } from "crypto";
 import bcrypt from "bcryptjs";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { LogAuditEvent } from "./audit-logs";
+import { findEmailConflict } from "@/app/manage/actions/email-duplicates";
+import { emailConflictMessage, normalizeEmail, isValidEmail } from "@/lib/utils/email";
 
 // ============================================================================
 // TYPES
@@ -86,6 +88,20 @@ export async function inviteStaffMember(
   }
 
   const inviteType = role.requires_clerk_account ? "clerk" : "pos_only";
+
+  // Pre-flight: block duplicate emails (case-insensitive) before any Clerk or DB writes.
+  if (params.email) {
+    const normalized = normalizeEmail(params.email);
+    if (!isValidEmail(normalized)) {
+      return { success: false, error: "Invalid email address" };
+    }
+    const conflict = await findEmailConflict(normalized, {
+      scope: { merchantId: params.merchantId },
+    });
+    if (conflict) {
+      return { success: false, error: emailConflictMessage(conflict) };
+    }
+  }
 
   try {
     if (inviteType === "clerk") {

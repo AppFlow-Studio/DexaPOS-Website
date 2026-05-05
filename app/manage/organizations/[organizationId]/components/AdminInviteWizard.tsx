@@ -55,6 +55,7 @@ import { createInvitationAdmin } from "../../actions/clerk-create-invitation-adm
 import { createBulkInvitationAdmin } from "../../actions/clerk-create-bulk-invitiation-admin";
 import { createAdminDirectly } from "../../actions/clerk-create-admin-directly";
 import { GetMerchants } from "@/app/manage/actions/get-merchants";
+import { useEmailAvailability } from "@/app/dashboard/hooks/useEmailAvailability";
 
 interface AdminInviteWizardProps {
   organizationId: string;
@@ -111,6 +112,10 @@ export function AdminInviteWizard({
   const [lastName, setLastName] = React.useState("");
   const [email, setEmail] = React.useState("");
   const [bulkEmails, setBulkEmails] = React.useState("");
+  // HQ admin creation is global-scope (omit clerkOrgId).
+  const emailCheck = useEmailAvailability(email, {
+    enabled: email.trim().length > 0,
+  });
   const [selectedRoleCode, setSelectedRoleCode] = React.useState<HQRoleCode>("hq.manager");
   const [selectedMerchants, setSelectedMerchants] = React.useState<Set<string>>(new Set());
   const [merchantSearchQuery, setMerchantSearchQuery] = React.useState("");
@@ -243,6 +248,10 @@ export function AdminInviteWizard({
         if (inviteMode === "bulk") {
           return parsedBulkEmails.valid.length > 0 && parsedBulkEmails.invalid.length === 0;
         }
+        // Block while live email check is pending or has flagged a conflict (single-email modes).
+        if (emailCheck.isChecking || emailCheck.hasConflict) {
+          return false;
+        }
         if (inviteMode === "direct") {
           return (
             firstName.trim().length > 0 &&
@@ -252,9 +261,9 @@ export function AdminInviteWizard({
           );
         }
         return (
-          firstName.trim() &&
-          lastName.trim() &&
-          email.trim() &&
+          !!firstName.trim() &&
+          !!lastName.trim() &&
+          !!email.trim() &&
           emailRegex.test(email)
         );
       case "role":
@@ -628,13 +637,31 @@ export function AdminInviteWizard({
                                 className="pl-10"
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
+                                aria-invalid={emailCheck.hasConflict || undefined}
                               />
                             </div>
-                            <p className="text-xs text-muted-foreground">
-                              {inviteMode === "direct"
-                                ? "Account will be created immediately with a one-time temporary password."
-                                : "An invitation email will be sent to this address."}
-                            </p>
+                            {email.trim().length > 0 && emailCheck.isChecking && (
+                              <p className="text-xs text-muted-foreground">
+                                Checking availability…
+                              </p>
+                            )}
+                            {emailCheck.hasConflict && (
+                              <p className="text-xs text-destructive">
+                                {emailCheck.message}
+                              </p>
+                            )}
+                            {emailCheck.isAvailable && (
+                              <p className="text-xs text-emerald-600">
+                                Email is available.
+                              </p>
+                            )}
+                            {!emailCheck.hasConflict && !emailCheck.isAvailable && !emailCheck.isChecking && (
+                              <p className="text-xs text-muted-foreground">
+                                {inviteMode === "direct"
+                                  ? "Account will be created immediately with a one-time temporary password."
+                                  : "An invitation email will be sent to this address."}
+                              </p>
+                            )}
                           </div>
                         </>
                       )}

@@ -118,6 +118,7 @@ export default function UserInfoPage() {
     // own access via this UI.
     const isSelf = !!currentUserId && currentUserId === targetUserId
     const canEditMerchantAccess = isSuperAdmin && !isSelf
+    const isTargetSuperAdmin = targetUserRoleCode === 'hq.super_admin'
     // Suppress unused warnings for legacy variables left in place for context.
     void currentUserRoleLevel; void targetUserRoleLevel
     
