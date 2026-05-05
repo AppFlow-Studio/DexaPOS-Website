@@ -103,6 +103,7 @@ export function InlinePriceEditor({
       toast.success("Price updated");
       queryClient.invalidateQueries({ queryKey: ["menu-items"] });
       queryClient.invalidateQueries({ queryKey: ["menu-items-flat"] });
+      queryClient.invalidateQueries({ queryKey: ["categories-with-items"] });
       queryClient.invalidateQueries({ queryKey: ["item-price-matrix", itemId] });
       queryClient.invalidateQueries({ queryKey: ["menu-item", itemId] });
       onSaved?.();

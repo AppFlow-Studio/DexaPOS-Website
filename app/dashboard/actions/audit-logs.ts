@@ -12,6 +12,7 @@ import {
 } from "@/types/audit-log";
 import { auth } from "@clerk/nextjs/server";
 import { cookies } from "next/headers";
+import { resolveImpersonationFromCookies } from "@/lib/admin/impersonation";
 
 // ============================================================================
 // GET AUDIT LOGS
@@ -217,6 +218,12 @@ export async function LogAuditEvent(
   let merchantId = params.merchantId;
   let locationId = params.locationId;
 
+  // Resolve impersonation context (httpOnly cookies + server-validated session).
+  // When active, force merchantId to the impersonated merchant so callers can't
+  // accidentally write a misattributed log row, and stamp impersonation fields
+  // on the RPC call. Best-effort — never block the log on resolution errors.
+  const impersonation = await resolveImpersonationFromCookies().catch(() => null);
+
   // If locationId is not provided, try to get it from cookies
   if (locationId === undefined || locationId === null) {
     const cookieStore = await cookies();
@@ -229,6 +236,12 @@ export async function LogAuditEvent(
   // Final validation for locationId: "all" should be treated as null (global)
   if (locationId === "all") {
     locationId = null;
+  }
+
+  // Active impersonation overrides any caller-provided merchantId so we never
+  // misattribute an action performed during a session.
+  if (impersonation) {
+    merchantId = impersonation.merchantId;
   }
 
   // If merchantId is not provided, try to look it up via Clerk Org ID.
@@ -332,7 +345,10 @@ export async function LogAuditEvent(
     };
   }
 
-  // Call RPC
+  // Call RPC. When impersonation is active, p_impersonation_session_id flips
+  // is_impersonation=true server-side and links the row to the session.
+  // actor_user_id remains the real Clerk user (the HQ admin) per the audit
+  // identity contract documented in the migration.
   const { data, error } = await supabase.rpc("log_audit_event", {
     p_merchant_id: merchantId || null,
     p_location_id: locationId || null,
@@ -349,6 +365,8 @@ export async function LogAuditEvent(
     p_metadata:
       sanitizeRecord(params.metadata as Record<string, unknown>) || null,
     p_pii_access_type: params.piiAccessType ?? null,
+    p_impersonation_session_id: impersonation?.sessionId ?? null,
+    p_impersonator_user_id: impersonation ? impersonation.hqUserId : null,
   });
 
   if (error) {

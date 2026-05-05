@@ -267,7 +267,13 @@ export async function createAdminDirectly(params: CreateAdminDirectlyParams): Pr
     }
   } catch (error) {
     const message = getErrorMessage(error)
-    console.error('[createAdminDirectly] Error:', error)
+    const typed = error as { status?: number; clerkTraceId?: string; errors?: unknown }
+    console.error('[createAdminDirectly] Error:', {
+      status: typed?.status,
+      clerkTraceId: typed?.clerkTraceId,
+      errors: typed?.errors,
+      raw: error,
+    })
 
     if (createdUserId) {
       try {

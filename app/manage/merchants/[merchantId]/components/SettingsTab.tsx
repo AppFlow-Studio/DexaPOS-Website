@@ -561,7 +561,7 @@ export function SettingsTab({ merchantInfo, refetchMerchantInfo, canManageStatus
                                                 onBlur={async (e) => {
                                                     const val = parseFloat(e.target.value)
                                                     if (isNaN(val)) return
-                                                    if (val === merchantInfo.dual_pricing_percentage) return
+                                                    if (val === parseFloat(String(merchantInfo.dual_pricing_percentage ?? 0))) return
 
                                                     try {
                                                         const result = await updateMerchantMutation.mutateAsync({
@@ -753,7 +753,7 @@ export function SettingsTab({ merchantInfo, refetchMerchantInfo, canManageStatus
                                                              onBlur={async (e) => {
                                                                  const val = parseFloat(e.target.value)
                                                                  if (isNaN(val)) return
-                                                                 if (val === currentLocation.dual_pricing_percentage) return
+                                                                 if (val === parseFloat(String(currentLocation.dual_pricing_percentage ?? 0))) return
 
                                                                  const result = await UpdateLocation(currentLocation.id, { dual_pricing_percentage: val })
                                                                  if (result.data) {

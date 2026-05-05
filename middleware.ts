@@ -168,6 +168,16 @@ export default clerkMiddleware(async (auth, req) => {
     !req.nextUrl.pathname.startsWith('/api/') &&
     !req.nextUrl.pathname.startsWith('/trpc/')
   ) {
+    // Allow HQ admins onto /dashboard/* when a valid impersonation cookie is
+    // present. Server actions re-validate via touch_impersonation_session;
+    // middleware's only job is to suppress the redirect.
+    if (isMerchantRoutes(req)) {
+      const cookie = req.cookies.get('x-impersonate-merchant-id')?.value;
+      const isUuid = !!cookie && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(cookie);
+      if (isUuid) {
+        return NextResponse.next();
+      }
+    }
     return NextResponse.redirect(new URL('/manage', req.url));
   }
 

@@ -58,6 +58,7 @@ import { MerchantLogoUpload } from './components/MerchantLogoUpload'
 import { PaymentsTab } from './components/PaymentsTab'
 import { InvoicesTab } from './components/InvoicesTab'
 import { TipsTab } from './components/TipsTab'
+import { ImpersonateMerchantButton } from '@/components/admin/ImpersonateMerchantButton'
 
 // ─── Sidebar nav primitives ──────────────────────────────────────────────────
 
@@ -177,6 +178,10 @@ export default function MerchantDetailsPage() {
                                 </div>
                             </div>
                         </div>
+                        <ImpersonateMerchantButton
+                            merchantId={merchantDetails.id}
+                            merchantName={merchantDetails.name}
+                        />
                     </div>
                 </CardHeader>
 

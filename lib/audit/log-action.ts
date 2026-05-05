@@ -17,6 +17,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { currentUser } from "@clerk/nextjs/server";
 import { auth } from "@clerk/nextjs/server";
 import { cookies } from "next/headers";
+import { resolveImpersonationFromCookies } from "@/lib/admin/impersonation";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -118,6 +119,15 @@ export async function logAuditAction(params: LogActionParams): Promise<void> {
     }
     if (locationId === "all") locationId = undefined;
 
+    // ── Resolve impersonation ──────────────────────────────────────────────
+    // When active, force merchant_id to the impersonated merchant so the row
+    // can never be misattributed, and stamp the impersonation columns.
+    // actor_user_id stays the real human (the HQ admin).
+    const impersonation = await resolveImpersonationFromCookies().catch(() => null);
+    if (impersonation) {
+      merchantId = impersonation.merchantId;
+    }
+
     // ── Write log ──────────────────────────────────────────────────────────
     await supabase.from("audit_logs").insert({
       action: params.action,
@@ -137,6 +147,9 @@ export async function logAuditAction(params: LogActionParams): Promise<void> {
       location_id: locationId ?? null,
       organization_id: params.organization_id ?? null,
       staff_profile_id: params.staff_profile_id ?? null,
+      impersonation_session_id: impersonation?.sessionId ?? null,
+      is_impersonation: !!impersonation,
+      impersonator_user_id: impersonation?.hqUserId ?? null,
     });
   } catch (error) {
     // Logging must NEVER crash the main operation
