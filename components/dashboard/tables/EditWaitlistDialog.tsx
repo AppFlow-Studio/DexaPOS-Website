@@ -13,7 +13,6 @@ import {
 } from '@/components/ui/bottom-sheet'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { PhoneInput } from '@/components/ui/phone-input'
 import { tenDigits } from '@/lib/phone'
 import { Label } from '@/components/ui/label'
 import { PhoneInput } from '@/components/ui/phone-input'
@@ -112,7 +111,7 @@ export function EditWaitlistDialog ({
       await UpdateWaitlistEntryAction(locationId, entry.id, {
         partyName: partyName.trim(),
         partySize: size,
-        phone: normalizePhone(phone) ?? phone.trim() || undefined,
+        phone: (normalizePhone(phone) ?? phone.trim()) || undefined,
         notes: notes.trim() || undefined,
         preferredSection: preferredSection.trim() || undefined,
         seatingPreference: seatingPreference.trim() || undefined,
