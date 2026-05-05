@@ -22,8 +22,8 @@ export function formatPhoneForDisplay(e164: string | null | undefined): string {
     const parsed = parsePhoneNumber(e164)
     if (!parsed) return e164
     return parsed.country === 'US'
-      ? parsed.formatNational()       // (347) 695-1499
-      : parsed.formatInternational()  // +44 20 1234 5678
+      ? parsed.formatNational()
+      : parsed.formatInternational()
   } catch {
     return e164
   }

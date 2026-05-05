@@ -18,11 +18,6 @@ interface PhoneInputProps {
   'aria-invalid'?: boolean
 }
 
-/**
- * Phone input that wraps react-international-phone.
- * `onChange` fires with the E.164-normalized value (or raw dial+partial if not yet valid).
- * Always normalizes to E.164 on blur.
- */
 function PhoneInput({
   value,
   onChange,
