@@ -33,10 +33,10 @@ ALTER TABLE public.reversals
 
 -- 2. Partial unique index — prevents double-insert on RPC retry
 --    Cannot be wrapped in a transaction; see header note above.
-CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS
-  reversals_idempotency_key_pos_uniq
-  ON public.reversals (idempotency_key)
-  WHERE idempotency_key IS NOT NULL;
+-- CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS
+--   reversals_idempotency_key_pos_uniq
+--   ON public.reversals (idempotency_key)
+--   WHERE idempotency_key IS NOT NULL;
 
 -- 3. Update create_reversal_v2 to persist the key into the new column.
 CREATE OR REPLACE FUNCTION public.create_reversal_v2(
