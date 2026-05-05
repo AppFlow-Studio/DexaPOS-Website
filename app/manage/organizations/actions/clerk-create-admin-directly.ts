@@ -2,11 +2,14 @@
 
 import crypto from 'crypto'
 import { createClerkClient } from '@clerk/backend'
-import { assertHQPermission } from '@/lib/admin/auth'
+import { assertSuperAdmin } from '@/lib/admin/auth'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { logAdminAction } from '@/lib/admin/log-admin-action'
 import { MerchantAccessAssignment } from '@/types/admin'
 import { revalidatePath } from 'next/cache'
+import { isValidEmail, normalizeEmail } from '@/lib/utils/email'
+import { findEmailConflict } from '@/app/manage/actions/email-duplicates'
+import { emailConflictMessage } from '@/lib/utils/email'
 
 interface CreateAdminDirectlyParams {
   organizationId: string
@@ -51,8 +54,8 @@ export async function createAdminDirectly(params: CreateAdminDirectlyParams): Pr
   const createdAt = new Date().toISOString()
 
   try {
-    const authContext = await assertHQPermission('hq.team.manage')
-    const normalizedEmail = params.email.trim().toLowerCase()
+    const authContext = await assertSuperAdmin()
+    const normalizedEmail = normalizeEmail(params.email)
     const firstName = params.firstName.trim()
     const lastName = params.lastName.trim()
     const merchantAccess = (params.merchantAccess || []).filter((entry) => Boolean(entry?.merchantId))
@@ -63,8 +66,12 @@ export async function createAdminDirectly(params: CreateAdminDirectlyParams): Pr
     if (!firstName || !lastName) {
       return { success: false, message: 'First name and last name are required.' }
     }
-    if (!normalizedEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+    if (!isValidEmail(normalizedEmail)) {
       return { success: false, message: 'A valid email is required.' }
+    }
+    const emailConflict = await findEmailConflict(normalizedEmail, { scope: 'global' })
+    if (emailConflict) {
+      return { success: false, message: emailConflictMessage(emailConflict) }
     }
     if (!params.roleCode) {
       return { success: false, message: 'Role is required.' }

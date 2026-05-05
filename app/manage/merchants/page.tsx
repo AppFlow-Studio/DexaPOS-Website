@@ -56,7 +56,8 @@ export default function MerchantsPage() {
     const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
     const [filters, setFilters] = useState<MerchantFilters>(DEFAULT_MERCHANT_FILTERS)
 
-    const isManagerScoped = role?.role_code === 'hq.manager'
+    // Anyone who is not super admin is scoped to their assigned merchants.
+    const isManagerScoped = !!role?.role_code && role.role_code !== 'hq.super_admin'
     const scopedAdminUserId = isManagerScoped ? (userId || '') : ''
 
     // Fetch accessible merchant IDs for non-super-admins

@@ -52,6 +52,7 @@ import Link from 'next/link'
 import { EditUserDetailsDialog } from './components/edit-user-details-dialog'
 import { EditMembershipDialog } from './components/edit-membership-dialog'
 import { GrantMerchantAccessDialog } from './components/grant-merchant-access-dialog'
+import { PageLoader } from '@/components/ui/page-loader'
 
 export default function UserInfoPage() {
     const { userId: targetUserId } = useParams()
@@ -80,13 +81,7 @@ export default function UserInfoPage() {
     const grantAccessMutation = useGrantMerchantAccess()
     const revokeAccessMutation = useRevokeMerchantAccess()
 
-    if (isLoading) {
-        return (
-            <div className="flex h-screen items-center justify-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-            </div>
-        )
-    }
+    if (isLoading) return <PageLoader />
 
     if (error) {
         return (
@@ -118,8 +113,13 @@ export default function UserInfoPage() {
     const targetUserRoleLevel = targetUserRoleCode ? (HQ_ROLES[targetUserRoleCode]?.level || 0) : 0
     const currentUserRoleLevel = currentUserRole?.level || 0
     
-    // Can edit if current user has higher role level than target user
-    const canEditMerchantAccess = isSuperAdmin || currentUserRoleLevel > targetUserRoleLevel
+    // Only super admins can assign merchants. They also cannot assign merchants
+    // to themselves — that prevents a super admin from silently scoping their
+    // own access via this UI.
+    const isSelf = !!currentUserId && currentUserId === targetUserId
+    const canEditMerchantAccess = isSuperAdmin && !isSelf
+    // Suppress unused warnings for legacy variables left in place for context.
+    void currentUserRoleLevel; void targetUserRoleLevel
     
     // Filter out merchants the target user already has access to
     const availableMerchantsToGrant = allMerchantsData?.merchants?.filter(

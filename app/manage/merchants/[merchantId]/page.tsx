@@ -3,6 +3,7 @@
 import { useParams, useSearchParams } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { PageLoader } from '@/components/ui/page-loader'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -120,14 +121,7 @@ export default function MerchantDetailsPage() {
         }
     }, [requestedTab])
 
-    if (isLoading) {
-        return (
-            <div className="flex flex-col items-center justify-center py-20">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mb-3"></div>
-                <span className="text-muted-foreground text-sm font-medium">Loading merchant details...</span>
-            </div>
-        )
-    }
+    if (isLoading) return <PageLoader message="Loading merchant details..." />
 
     if (isError || !merchantDetails) {
         return (

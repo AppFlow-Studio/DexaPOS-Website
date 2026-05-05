@@ -131,10 +131,8 @@ export function AdminInviteWizard({
     return maxLevel || 10;
   }, [user]);
 
-  // Filter roles based on current user's level (can only invite same or lower level)
-  const invitableRoles = React.useMemo(() => {
-    return AVAILABLE_ROLES.filter(role => role.level <= currentUserRoleLevel);
-  }, [currentUserRoleLevel]);
+  // Platform admins and above can invite any role including super admin
+  const invitableRoles = AVAILABLE_ROLES;
 
   // Load merchants when component opens
   React.useEffect(() => {
@@ -158,13 +156,12 @@ export function AdminInviteWizard({
     }
   };
 
-  // Reset form when closing
+  // Reset form when closing — but don't wipe credentials while the credential dialog is still open
   React.useEffect(() => {
-    if (!open) {
+    if (!open && !isCredentialDialogOpen) {
       setCurrentStep("details");
       setInviteMode("single");
       setDirectCreateCredentials(null);
-      setIsCredentialDialogOpen(false);
       setFirstName("");
       setLastName("");
       setEmail("");
@@ -173,7 +170,7 @@ export function AdminInviteWizard({
       setSelectedMerchants(new Set());
       setMerchantSearchQuery("");
     }
-  }, [open]);
+  }, [open, isCredentialDialogOpen]);
 
   const selectedRole = HQ_ROLES[selectedRoleCode];
   const flowSteps = React.useMemo(() => {

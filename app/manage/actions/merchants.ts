@@ -19,11 +19,13 @@ import type {
   MerchantHealthSummary,
 } from '@/types/merchant'
 
-async function getManagerScopedMerchantIds(
+async function getScopedMerchantIds(
   userId: string,
   roleCode: string | null | undefined
 ): Promise<string[] | undefined> {
-  if (roleCode !== 'hq.manager') {
+  // Super admin sees all merchants; everyone else (platform_admin, manager) is
+  // scoped to their assigned merchants in admin_merchant_access.
+  if (!roleCode || roleCode === 'hq.super_admin') {
     return undefined
   }
 
@@ -35,7 +37,7 @@ async function getManagerScopedMerchantIds(
     .eq('is_active', true)
 
   if (error) {
-    console.error('[getManagerScopedMerchantIds] Error:', error)
+    console.error('[getScopedMerchantIds] Error:', error)
     return []
   }
 
@@ -63,7 +65,7 @@ export async function getMerchants(
   const supabase = createServerSupabaseClient()
   const offset = (page - 1) * pageSize
 
-  const managerScopedIds = await getManagerScopedMerchantIds(userId, role?.role_code)
+  const managerScopedIds = await getScopedMerchantIds(userId, role?.role_code)
 
   let effectiveMerchantIds = managerScopedIds
   if (accessibleMerchantIds !== undefined) {
@@ -198,7 +200,7 @@ export async function getMerchantDetails(
   // `is_dexapos_admin()` return NULL and RLS block direct merchants reads.
   // Manager scoping is still enforced application-side via managerScopedIds below.
   const supabase = createServiceRoleClient()
-  const managerScopedIds = await getManagerScopedMerchantIds(userId, role?.role_code)
+  const managerScopedIds = await getScopedMerchantIds(userId, role?.role_code)
 
   if (managerScopedIds && managerScopedIds.length === 0) {
     return null
@@ -781,7 +783,7 @@ export async function getMerchantStats(): Promise<{
   const { userId, role } = await assertHQPermission('hq.merchant.view')
 
   const supabase = createServerSupabaseClient()
-  const managerScopedIds = await getManagerScopedMerchantIds(userId, role?.role_code)
+  const managerScopedIds = await getScopedMerchantIds(userId, role?.role_code)
 
   let query = supabase
     .from('admin_merchant_summary')

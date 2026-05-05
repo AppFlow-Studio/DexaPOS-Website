@@ -6,6 +6,9 @@ import { logAdminAction } from '@/lib/admin/log-admin-action'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { verifyDefaultEntitiesForMerchant } from '@/app/manage/actions/admin-merchant/verify-default-entities'
 import { revalidatePath } from 'next/cache'
+import { normalizeEmail, isValidEmail } from '@/lib/utils/email'
+import { findEmailConflict } from '@/app/manage/actions/email-duplicates'
+import { emailConflictMessage } from '@/lib/utils/email'
 
 export async function updateMerchantLogo(
   organizationId: string,
@@ -77,10 +80,6 @@ export interface CreateMerchantOnboardingResult {
   error?: string
 }
 
-function normalizeEmail(value: string): string {
-  return value.trim().toLowerCase()
-}
-
 function normalizeValue(value?: string | null): string | null {
   if (!value) return null
   const trimmed = value.trim()
@@ -93,10 +92,6 @@ function normalizeDigits(value: string): string {
 
 function isValidEinTaxId(value: string): boolean {
   return /^\d{9}$/.test(normalizeDigits(value))
-}
-
-function isValidEmail(value: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
 }
 
 export async function createMerchantOnboarding(
@@ -119,6 +114,11 @@ export async function createMerchantOnboarding(
 
   if (!isValidEmail(ownerEmail)) {
     return { success: false, error: 'Owner email is invalid.' }
+  }
+
+  const ownerConflict = await findEmailConflict(ownerEmail, { scope: 'global' })
+  if (ownerConflict) {
+    return { success: false, error: emailConflictMessage(ownerConflict) }
   }
 
   if (!isValidEinTaxId(einTaxId)) {

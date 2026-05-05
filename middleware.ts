@@ -162,7 +162,12 @@ export default clerkMiddleware(async (auth, req) => {
   }
 
   const IsUserHQTeam = UserSession.orgId === process.env.DEXA_POS_INTERNAL_TEAM_ID;
-  if (IsUserHQTeam && req.nextUrl.pathname !== '/manage') {
+  if (
+    IsUserHQTeam &&
+    req.nextUrl.pathname !== '/manage' &&
+    !req.nextUrl.pathname.startsWith('/api/') &&
+    !req.nextUrl.pathname.startsWith('/trpc/')
+  ) {
     return NextResponse.redirect(new URL('/manage', req.url));
   }
 

@@ -39,7 +39,9 @@
       "Bash(curl -s \"http://localhost:3000/dashboard\")",
       "mcp__supabase__execute_sql",
       "Bash(git fetch *)",
-      "Bash(npx eslint *)"
+      "Bash(npx eslint *)",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\HP i5\\\\Desktop\\\\mdptech\\\\DexaPOS-website\\\\DexaPOS-Website\" -Recurse -Directory -Name)",
+      "Bash(Select-Object -First 30)"
     ],
     "additionalDirectories": [
       "C:\\Users\\HP i5\\Desktop\\mdptech\\DexaPOS-website\\DexaPOS-Website\\tasks",

@@ -66,6 +66,7 @@ import {
     resetAdminUserPassword,
 } from '../actions/admin-user-management'
 import { HQ_ROLES, type HQRoleCode } from '@/types/admin'
+import { PageLoader } from '@/components/ui/page-loader'
 
 const DEXA_HQ_ORG_ID = process.env.NEXT_PUBLIC_DEXA_POS_INTERNAL_TEAM_ID ?? ''
 
@@ -93,8 +94,10 @@ const inviteStatusVariants: Record<string, "default" | "destructive" | "outline"
 export default function UsersPage() {
     const router = useRouter()
     const { userId, orgId } = useAuth()
-    const { hasPermission, role_level, isLoading: permissionsLoading } = useAdminPermissions()
-    const canManageUsers = hasPermission('users.manage')
+    const { hasPermission, role_level, isSuperAdmin, isAtLeast, isLoading: permissionsLoading } = useAdminPermissions()
+    // Any HQ admin may view this list; mutations are restricted to super admins.
+    const canManageUsers = isSuperAdmin
+    void hasPermission
     const [searchTerm, setSearchTerm] = useState('')
     const [roleFilter, setRoleFilter] = useState('all')
     const [statusFilter, setStatusFilter] = useState('all')
@@ -119,17 +122,7 @@ export default function UsersPage() {
     const { data: organizationInfo, refetch: refetchOrganizationInfo } = useOrganizationInfo(resolvedOrganizationId as string)
     const adminInvites = organizationInfo?.pending_org_admin_invites || []
 
-    useEffect(() => {
-        if (permissionsLoading) return
-        if (!canManageUsers) {
-            router.replace('/manage?denied=1&required=users.manage')
-        }
-    }, [canManageUsers, permissionsLoading, router])
-
-    if (permissionsLoading) return <div>Loading...</div>
-    if (!canManageUsers) return <div>Redirecting...</div>
-
-    if (isLoading) return <div>Loading...</div>
+    if (permissionsLoading || isLoading) return <PageLoader />
     if (error) return <div>Error: {error.message}</div>
     if (!users) return <div>No users found</div>
     if (users instanceof Error) return <div>Error: {users.message}</div>
@@ -351,13 +344,15 @@ export default function UsersPage() {
                     </p>
                 </div>
                 <div className="flex items-center gap-2">
-                    <Button 
-                        variant="outline"
-                        onClick={() => setIsAdminInviteOpen(true)}
-                    >
-                        <UserPlus className="h-4 w-4 mr-2" />
-                        Invite Admin
-                    </Button>
+                    {(isSuperAdmin || isAtLeast(8)) && (
+                        <Button
+                            variant="outline"
+                            onClick={() => setIsAdminInviteOpen(true)}
+                        >
+                            <UserPlus className="h-4 w-4 mr-2" />
+                            Invite Admin
+                        </Button>
+                    )}
                 </div>
                 <Dialog open={isAddUserOpen} onOpenChange={setIsAddUserOpen}>
                     <DialogTrigger asChild>
@@ -607,51 +602,55 @@ export default function UsersPage() {
                                                                 <Eye className="mr-2 h-4 w-4" />
                                                                 View Details
                                                             </DropdownMenuItem>
-                                                            <DropdownMenuItem
-                                                                onClick={(event) => {
-                                                                    event.stopPropagation()
-                                                                    openEditRoleDialog(user)
-                                                                }}
-                                                                disabled={userActionId === `role:${user.users.id}`}
-                                                            >
-                                                                <Edit className="mr-2 h-4 w-4" />
-                                                                Edit Role
-                                                            </DropdownMenuItem>
-                                                            <DropdownMenuItem
-                                                                onClick={(event) => {
-                                                                    event.stopPropagation()
-                                                                    void handleResetPassword(user)
-                                                                }}
-                                                                disabled={userActionId === `reset:${user.users.id}`}
-                                                            >
-                                                                <KeyRound className="mr-2 h-4 w-4" />
-                                                                Reset Password
-                                                            </DropdownMenuItem>
-                                                            <DropdownMenuSeparator />
-                                                            {(user?.users?.public_metadata?.status || 'Active') === 'Inactive' ? (
-                                                                <DropdownMenuItem
-                                                                    className="text-green-600"
-                                                                    onClick={(event) => {
-                                                                        event.stopPropagation()
-                                                                        void handleActivateUser(user)
-                                                                    }}
-                                                                    disabled={userActionId === `activate:${user.users.id}`}
-                                                                >
-                                                                    <UserCheck className="mr-2 h-4 w-4" />
-                                                                    {userActionId === `activate:${user.users.id}` ? 'Activating...' : 'Activate'}
-                                                                </DropdownMenuItem>
-                                                            ) : (
-                                                                <DropdownMenuItem
-                                                                    className="text-yellow-600"
-                                                                    onClick={(event) => {
-                                                                        event.stopPropagation()
-                                                                        void handleDeactivateUser(user)
-                                                                    }}
-                                                                    disabled={userActionId === `deactivate:${user.users.id}`}
-                                                                >
-                                                                    <UserX className="mr-2 h-4 w-4" />
-                                                                    {userActionId === `deactivate:${user.users.id}` ? 'Deactivating...' : 'Deactivate'}
-                                                                </DropdownMenuItem>
+                                                            {(isSuperAdmin || isAtLeast(8)) && (
+                                                                <>
+                                                                    <DropdownMenuItem
+                                                                        onClick={(event) => {
+                                                                            event.stopPropagation()
+                                                                            openEditRoleDialog(user)
+                                                                        }}
+                                                                        disabled={userActionId === `role:${user.users.id}`}
+                                                                    >
+                                                                        <Edit className="mr-2 h-4 w-4" />
+                                                                        Edit Role
+                                                                    </DropdownMenuItem>
+                                                                    <DropdownMenuItem
+                                                                        onClick={(event) => {
+                                                                            event.stopPropagation()
+                                                                            void handleResetPassword(user)
+                                                                        }}
+                                                                        disabled={userActionId === `reset:${user.users.id}`}
+                                                                    >
+                                                                        <KeyRound className="mr-2 h-4 w-4" />
+                                                                        Reset Password
+                                                                    </DropdownMenuItem>
+                                                                    <DropdownMenuSeparator />
+                                                                    {(user?.users?.public_metadata?.status || 'Active') === 'Inactive' ? (
+                                                                        <DropdownMenuItem
+                                                                            className="text-green-600"
+                                                                            onClick={(event) => {
+                                                                                event.stopPropagation()
+                                                                                void handleActivateUser(user)
+                                                                            }}
+                                                                            disabled={userActionId === `activate:${user.users.id}`}
+                                                                        >
+                                                                            <UserCheck className="mr-2 h-4 w-4" />
+                                                                            {userActionId === `activate:${user.users.id}` ? 'Activating...' : 'Activate'}
+                                                                        </DropdownMenuItem>
+                                                                    ) : (
+                                                                        <DropdownMenuItem
+                                                                            className="text-yellow-600"
+                                                                            onClick={(event) => {
+                                                                                event.stopPropagation()
+                                                                                void handleDeactivateUser(user)
+                                                                            }}
+                                                                            disabled={userActionId === `deactivate:${user.users.id}`}
+                                                                        >
+                                                                            <UserX className="mr-2 h-4 w-4" />
+                                                                            {userActionId === `deactivate:${user.users.id}` ? 'Deactivating...' : 'Deactivate'}
+                                                                        </DropdownMenuItem>
+                                                                    )}
+                                                                </>
                                                             )}
                                                     </DropdownMenuContent>
                                                 </DropdownMenu>
@@ -674,13 +673,15 @@ export default function UsersPage() {
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <Input placeholder="Search invites..." className="w-72" />
-                                    <Button 
-                                        variant="outline"
-                                        onClick={() => setIsAdminInviteOpen(true)}
-                                    >
-                                        <UserPlus className="h-4 w-4 mr-2" />
-                                        Invite Admin
-                                    </Button>
+                                    {(isSuperAdmin || isAtLeast(8)) && (
+                                        <Button
+                                            variant="outline"
+                                            onClick={() => setIsAdminInviteOpen(true)}
+                                        >
+                                            <UserPlus className="h-4 w-4 mr-2" />
+                                            Invite Admin
+                                        </Button>
+                                    )}
                                 </div>
                             </div>
                         </CardHeader>
@@ -732,28 +733,32 @@ export default function UsersPage() {
                                                         <DropdownMenuContent align="end">
                                                             <DropdownMenuLabel>Actions</DropdownMenuLabel>
                                                             <DropdownMenuItem>Copy invite link</DropdownMenuItem>
-                                                            <DropdownMenuItem
-                                                                disabled={
-                                                                    !inv.clerk_invite_id ||
-                                                                    inviteActionId === inv.clerk_invite_id ||
-                                                                    inv.status !== 'pending'
-                                                                }
-                                                                onClick={() => void handleResendInvite(inv.clerk_invite_id)}
-                                                            >
-                                                                Resend
-                                                            </DropdownMenuItem>
-                                                            <DropdownMenuSeparator />
-                                                            <DropdownMenuItem
-                                                                className="text-red-600"
-                                                                disabled={
-                                                                    !inv.clerk_invite_id ||
-                                                                    inviteActionId === inv.clerk_invite_id ||
-                                                                    inv.status !== 'pending'
-                                                                }
-                                                                onClick={() => void handleRevokeInvite(inv.clerk_invite_id)}
-                                                            >
-                                                                Revoke
-                                                            </DropdownMenuItem>
+                                                            {(isSuperAdmin || isAtLeast(8)) && (
+                                                                <>
+                                                                    <DropdownMenuItem
+                                                                        disabled={
+                                                                            !inv.clerk_invite_id ||
+                                                                            inviteActionId === inv.clerk_invite_id ||
+                                                                            inv.status !== 'pending'
+                                                                        }
+                                                                        onClick={() => void handleResendInvite(inv.clerk_invite_id)}
+                                                                    >
+                                                                        Resend
+                                                                    </DropdownMenuItem>
+                                                                    <DropdownMenuSeparator />
+                                                                    <DropdownMenuItem
+                                                                        className="text-red-600"
+                                                                        disabled={
+                                                                            !inv.clerk_invite_id ||
+                                                                            inviteActionId === inv.clerk_invite_id ||
+                                                                            inv.status !== 'pending'
+                                                                        }
+                                                                        onClick={() => void handleRevokeInvite(inv.clerk_invite_id)}
+                                                                    >
+                                                                        Revoke
+                                                                    </DropdownMenuItem>
+                                                                </>
+                                                            )}
                                                         </DropdownMenuContent>
                                                     </DropdownMenu>
                                                 </div>

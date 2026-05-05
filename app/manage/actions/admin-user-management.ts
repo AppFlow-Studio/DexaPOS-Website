@@ -3,7 +3,7 @@
 import crypto from 'crypto'
 import { createClerkClient } from '@clerk/backend'
 import { revalidatePath } from 'next/cache'
-import { assertHQPermission } from '@/lib/admin/auth'
+import { assertHQPermission, assertSuperAdmin } from '@/lib/admin/auth'
 import { logAdminAction } from '@/lib/admin/log-admin-action'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { HQ_ROLES } from '@/types/admin'
@@ -94,7 +94,7 @@ export async function changeAdminUserRole(params: {
   organizationId?: string
 }): Promise<{ success: boolean; message: string }> {
   try {
-    const authContext = await assertHQPermission('hq.team.manage')
+    const authContext = await assertSuperAdmin()
     const orgId = params.organizationId || DEXA_HQ_ORG_ID
 
     if (!params.userId) {
@@ -226,7 +226,7 @@ export async function deactivateAdminUser(params: {
   organizationId?: string
 }): Promise<{ success: boolean; message: string }> {
   try {
-    const authContext = await assertHQPermission('hq.team.manage')
+    const authContext = await assertSuperAdmin()
     const orgId = params.organizationId || DEXA_HQ_ORG_ID
 
     if (!params.userId) {
@@ -332,7 +332,7 @@ export async function activateAdminUser(params: {
   organizationId?: string
 }): Promise<{ success: boolean; message: string }> {
   try {
-    const authContext = await assertHQPermission('hq.team.manage')
+    const authContext = await assertSuperAdmin()
     const orgId = params.organizationId || DEXA_HQ_ORG_ID
 
     if (!params.userId) {
@@ -559,7 +559,7 @@ export async function resetAdminUserPassword(params: {
   organizationId?: string
 }): Promise<{ success: boolean; message: string; tempPassword?: string }> {
   try {
-    const authContext = await assertHQPermission('hq.team.manage')
+    const authContext = await assertSuperAdmin()
     const orgId = params.organizationId || DEXA_HQ_ORG_ID
 
     if (!params.userId) {

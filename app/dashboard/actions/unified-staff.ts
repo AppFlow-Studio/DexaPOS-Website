@@ -14,6 +14,9 @@ import {
 import { clerkClient, auth } from "@clerk/nextjs/server";
 import { LogAuditEvent } from "./audit-logs";
 import { revalidatePath } from "next/cache";
+import { isValidEmail, normalizeEmail } from "@/lib/utils/email";
+import { findEmailConflict } from "@/app/manage/actions/email-duplicates";
+import { emailConflictMessage } from "@/lib/utils/email";
 
 // ============================================================================
 // CONSTANTS
@@ -447,6 +450,11 @@ export async function CreateClerkUserDirectly(
     return { error: "Email is required for Clerk users" };
   }
 
+  const normalizedEmail = normalizeEmail(formData.email);
+  if (!isValidEmail(normalizedEmail)) {
+    return { error: "Invalid email" };
+  }
+
   const supabase = createServerSupabaseClient();
 
   try {
@@ -462,6 +470,13 @@ export async function CreateClerkUserDirectly(
     }
 
     const merchantId = merchant.id;
+
+    const conflict = await findEmailConflict(normalizedEmail, {
+      scope: { merchantId },
+    });
+    if (conflict) {
+      return { error: emailConflictMessage(conflict) };
+    }
 
     // Owners/admins are auto-provisioned to every location
     const resolvedLocationIds = await resolveLocationIds(
@@ -747,12 +762,25 @@ export async function InviteClerkStaff(
 
     const merchantId = merchant.id;
 
-    // Bug A fix: if a staff_profiles row already exists for this email at this
-    // merchant (e.g. POS-only profile created earlier), thread its id through
-    // the invite's publicMetadata so the webhook's promotion path UPDATEs the
-    // existing row instead of inserting a duplicate. We match on lower(email)
-    // because there is no unique constraint on (merchant_id, email) yet.
-    const normalizedInviteEmail = formData.email.trim().toLowerCase();
+    const normalizedInviteEmail = normalizeEmail(formData.email);
+    if (!isValidEmail(normalizedInviteEmail)) {
+      return { error: "Invalid email" };
+    }
+
+    // Cross-table conflict check. Allow only the POS-only-profile-reuse path
+    // (Bug A): a staff_profiles row at this merchant with no Clerk user_id is
+    // not treated as a conflict — it gets threaded through the invite metadata
+    // so the webhook UPDATEs that row instead of inserting a duplicate.
+    const conflict = await findEmailConflict(normalizedInviteEmail, {
+      scope: { merchantId },
+    });
+    if (
+      conflict &&
+      !(conflict.table === "staff_profiles" && conflict.isPosOnlyProfile)
+    ) {
+      return { error: emailConflictMessage(conflict) };
+    }
+
     const { data: existingProfileByEmail } = await supabase
       .from("staff_profiles")
       .select("id, user_id")
@@ -760,8 +788,6 @@ export async function InviteClerkStaff(
       .ilike("email", normalizedInviteEmail)
       .maybeSingle();
 
-    // Only reuse the row if it has no Clerk user_id yet — a row already linked
-    // to a different Clerk user means we'd be hijacking someone's account.
     const existingPosOnlyProfileId =
       existingProfileByEmail && !existingProfileByEmail.user_id
         ? existingProfileByEmail.id

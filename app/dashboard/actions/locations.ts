@@ -7,6 +7,9 @@ import {
   UpdateLocationInput,
 } from "@/types/merchant_locations";
 import { LogAuditEvent } from "./audit-logs";
+import { isValidEmail, normalizeEmail } from "@/lib/utils/email";
+import { findEmailConflict } from "@/app/manage/actions/email-duplicates";
+import { emailConflictMessage } from "@/lib/utils/email";
 
 // ============================================================================
 // GET OPERATIONS
@@ -92,6 +95,19 @@ export async function CreateLocation(
     return { error: "Merchant not found" };
   }
 
+  const normalizedLocationEmail = data.email ? normalizeEmail(data.email) : null;
+  if (normalizedLocationEmail) {
+    if (!isValidEmail(normalizedLocationEmail)) {
+      return { error: "Invalid email" };
+    }
+    const conflict = await findEmailConflict(normalizedLocationEmail, {
+      scope: "global",
+    });
+    if (conflict) {
+      return { error: emailConflictMessage(conflict) };
+    }
+  }
+
   // Check for duplicate code if provided
   if (data.code) {
     const { data: existingLocation } = await supabase
@@ -114,7 +130,7 @@ export async function CreateLocation(
       code: data.code || null,
       description: data.description || null,
       phone: data.phone || null,
-      email: data.email || null,
+      email: normalizedLocationEmail,
       address_line1: data.address_line1,
       address_line2: data.address_line2 || null,
       city: data.city,

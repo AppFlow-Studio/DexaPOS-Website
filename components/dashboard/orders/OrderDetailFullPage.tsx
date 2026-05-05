@@ -843,8 +843,7 @@ function PricingBreakdown({
       ? Number(fullHistoryOrder.amount_due)
       : Number(order.amount_due) ?? 0;
 
-  // Show actual balance: when overpaid, API often returns 0 — display (total - paid) so overpaid shows as negative
-  const displayAmountDue = effectiveTotal - amountPaid;
+  const displayAmountDue = Math.max(0, effectiveTotal - amountPaid);
 
   const cardTotal =
     Number(order.card_total) || effectiveTotal;
@@ -869,8 +868,7 @@ function PricingBreakdown({
               label="Amount Due"
               value={formatMoney(displayAmountDue)}
               valueClassName={cn(
-                displayAmountDue > 0 && "text-red-600 dark:text-red-400 font-semibold",
-                displayAmountDue < 0 && "text-amber-600 dark:text-amber-400 font-semibold"
+                displayAmountDue > 0 && "text-red-600 dark:text-red-400 font-semibold"
               )}
             />
           </div>
@@ -929,8 +927,7 @@ function PricingBreakdown({
                     label="Amount Due"
                     value={formatMoney(displayAmountDue)}
                     valueClassName={cn(
-                      displayAmountDue > 0 && "text-red-600 dark:text-red-400 font-semibold",
-                      displayAmountDue < 0 && "text-amber-600 dark:text-amber-400 font-semibold"
+                      displayAmountDue > 0 && "text-red-600 dark:text-red-400 font-semibold"
                     )}
                   />
                 </div>
@@ -966,8 +963,7 @@ function PricingBreakdown({
                   label="Amount Due"
                   value={formatMoney(displayAmountDue)}
                   valueClassName={cn(
-                    displayAmountDue > 0 && "text-red-600 dark:text-red-400 font-semibold",
-                    displayAmountDue < 0 && "text-amber-600 dark:text-amber-400 font-semibold"
+                    displayAmountDue > 0 && "text-red-600 dark:text-red-400 font-semibold"
                   )}
                 />
               </div>

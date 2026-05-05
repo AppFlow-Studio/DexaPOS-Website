@@ -200,7 +200,8 @@ export function StaffTab({ merchantInfo, merchantDetails, refetchMerchantInfo }:
 
   const handleToggleStatus = React.useCallback((member: AdminStaffMember) => {
     const primary = member.location_assignments.find((a) => a.is_primary) || member.location_assignments[0]
-    if (!primary || !member.staff_profile_id) {
+    const locationId = primary?.location_id || member.primary_location_id
+    if (!locationId || !member.staff_profile_id) {
       toast.error('Cannot update status: missing required info')
       return
     }
@@ -208,8 +209,8 @@ export function StaffTab({ merchantInfo, merchantDetails, refetchMerchantInfo }:
       {
         merchantId,
         staffProfileId: member.staff_profile_id,
-        locationId: primary.location_id,
-        newStatus: !primary.is_active,
+        locationId,
+        newStatus: !member.overall_is_active,
       },
       {
         onSuccess: (result) => {
@@ -383,7 +384,7 @@ export function StaffTab({ merchantInfo, merchantDetails, refetchMerchantInfo }:
             <Switch
               checked={member.overall_is_active}
               onCheckedChange={() => handleToggleStatus(member)}
-              disabled={!primary || !canManageMerchantTeam || toggleStatusMutation.isPending}
+              disabled={(!primary && !member.primary_location_id) || !canManageMerchantTeam || toggleStatusMutation.isPending}
             />
             <span className={cn('text-sm font-medium', member.overall_is_active ? 'text-green-600' : 'text-muted-foreground')}>
               {member.overall_is_active ? 'Active' : 'Inactive'}

@@ -1,6 +1,7 @@
 'use server'
 
 import { assertHQPermission } from '@/lib/admin/auth'
+import { assertMerchantInScope } from '@/lib/admin/scope'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { logAdminAction } from '@/lib/admin/log-admin-action'
@@ -82,6 +83,7 @@ export async function adminResetStaffPin(
   customPin?: string
 ): Promise<AdminPinResetResult> {
   await assertHQPermission('hq.merchant.manage_team')
+  await assertMerchantInScope(merchantId)
 
   const supabase = createServerSupabaseClient()
 
@@ -132,6 +134,7 @@ export async function adminBulkResetPins(
   customPin?: string,
 ): Promise<{ success: boolean; results?: BulkPinResetResult[]; error?: string }> {
   await assertHQPermission('hq.merchant.manage_team')
+  await assertMerchantInScope(merchantId)
 
   if (customPin !== undefined && !/^\d{4,6}$/.test(customPin)) {
     return { success: false, error: 'Custom PIN must be 4–6 digits' }
@@ -228,6 +231,7 @@ export async function adminToggleStaffStatus(
   newStatus: boolean
 ): Promise<AdminToggleStatusResult> {
   await assertHQPermission('hq.merchant.manage_team')
+  await assertMerchantInScope(merchantId)
 
   const supabase = createServerSupabaseClient()
 
@@ -285,6 +289,7 @@ export async function adminCreateStaff(
   data: AdminCreateStaffData
 ): Promise<AdminCreateStaffResult> {
   const { userId } = await assertHQPermission('hq.merchant.manage_team')
+  await assertMerchantInScope(merchantId)
 
   // Use Service Role client to bypass RLS, since we already verified permissions via assertHQPermission
   const supabase = createServiceRoleClient()
@@ -405,6 +410,7 @@ export async function adminUpdateStaffProfile(
   },
 ): Promise<{ success: boolean; error?: string }> {
   const { userId: adminUserId } = await assertHQPermission('hq.merchant.manage_team')
+  await assertMerchantInScope(merchantId)
   const supabase = createServiceRoleClient()
 
   const firstName = changes.firstName?.trim()
@@ -531,6 +537,7 @@ export async function adminUpdateStaffRole(
   newRoleCode: string,
 ): Promise<{ success: boolean; error?: string }> {
   const { userId: adminUserId } = await assertHQPermission('hq.merchant.manage_team')
+  await assertMerchantInScope(merchantId)
   const supabase = createServiceRoleClient()
 
   if (!newRoleCode) {
@@ -640,6 +647,7 @@ export async function adminUpdateStaffLocations(
   assignments: AdminStaffLocationAssignmentInput[],
 ): Promise<{ success: boolean; error?: string }> {
   const { userId: adminUserId } = await assertHQPermission('hq.merchant.manage_team')
+  await assertMerchantInScope(merchantId)
   const supabase = createServiceRoleClient()
 
   if (!Array.isArray(assignments) || assignments.length === 0) {
@@ -809,6 +817,7 @@ export async function adminResendStaffInvite(
   inviteId: string,
 ): Promise<{ success: boolean; error?: string; clerkInviteId?: string }> {
   const { userId: adminUserId } = await assertHQPermission('hq.merchant.manage_team')
+  await assertMerchantInScope(merchantId)
   const supabase = createServiceRoleClient()
 
   const { data: invite, error: loadError } = await supabase
@@ -1032,6 +1041,7 @@ export async function adminBulkDeactivateStaff(
   staffProfileIds: string[]
 ): Promise<{ success: boolean; deactivated: number; errors: string[] }> {
   await assertHQPermission('hq.merchant.manage_team')
+  await assertMerchantInScope(merchantId)
 
   const supabase = createServiceRoleClient()
 
@@ -1083,6 +1093,7 @@ export async function adminCreateClerkStaff(
   data: AdminCreateClerkStaffData
 ): Promise<AdminCreateClerkStaffResult> {
   const { userId: adminUserId } = await assertHQPermission('hq.merchant.manage_team')
+  await assertMerchantInScope(merchantId)
 
   const supabase = createServerSupabaseClient()
   const srClient = createServiceRoleClient()
@@ -1296,6 +1307,7 @@ export async function adminInviteClerkStaff(
   data: AdminInviteClerkStaffData
 ): Promise<AdminInviteClerkStaffResult> {
   const { userId: adminUserId } = await assertHQPermission('hq.merchant.manage_team')
+  await assertMerchantInScope(merchantId)
 
   const srClient = createServiceRoleClient()
 
@@ -1522,6 +1534,7 @@ export async function adminResetStaffPassword(
   customPassword?: string,
 ): Promise<{ success: boolean; password?: string; error?: string }> {
   await assertHQPermission('hq.merchant.manage_team')
+  await assertMerchantInScope(merchantId)
 
   if (customPassword !== undefined && customPassword.length < 8) {
     return { success: false, error: 'Password must be at least 8 characters' }
@@ -1575,6 +1588,7 @@ export async function adminBulkResetPasswords(
   error?: string
 }> {
   await assertHQPermission('hq.merchant.manage_team')
+  await assertMerchantInScope(merchantId)
 
   const allStaff = await getAdminMerchantStaff(merchantId, locationId)
   const clerkStaff = allStaff.filter(
