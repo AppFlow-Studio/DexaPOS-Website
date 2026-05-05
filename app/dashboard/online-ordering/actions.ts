@@ -448,6 +448,27 @@ export async function saveOnlineStoreRequestRequirements(formData: FormData) {
       publicMetadata: metadataUpdates,
     });
 
+    const merchantColumnUpdates: Record<string, unknown> = {};
+    if (businessLegalName) merchantColumnUpdates.business_legal_name = businessLegalName;
+    if (dbaName) merchantColumnUpdates.dba_name = dbaName;
+    if (einTaxId) merchantColumnUpdates.ein_last_four = einTaxId.slice(-4);
+    if (ownerFirstName) merchantColumnUpdates.owner_first_name = ownerFirstName;
+    if (ownerLastName) merchantColumnUpdates.owner_last_name = ownerLastName;
+
+    if (Object.keys(merchantColumnUpdates).length > 0) {
+      const { error: merchantUpdateError } = await supabase
+        .from("merchants")
+        .update({
+          ...merchantColumnUpdates,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", merchant.id);
+
+      if (merchantUpdateError) {
+        return { success: false, error: merchantUpdateError.message };
+      }
+    }
+
     const bankName = readFormText(formData, "bankName");
     const accountHolderName = readFormText(formData, "accountHolderName");
     const ddaAccountNumber = readFormText(formData, "ddaAccountNumber");
@@ -612,18 +633,12 @@ function mapConfigToSettings(
     pickupEnabled: config.accepts_pickup ?? true,
     deliveryEnabled: config.accepts_delivery ?? false,
     autoAcceptOrders: config.auto_accept_orders ?? false,
-    minimumOrderAmount: config.min_order_cents
-      ? config.min_order_cents / 100
-      : 0,
+    minimumOrderAmount: Number(config.min_order ?? 0),
     preparationLeadTime: config.estimated_prep_minutes ?? 20,
     futureOrderMaxDays: config.max_future_order_days ?? 0,
 
-    baseDeliveryFee: config.delivery_fee_cents
-      ? config.delivery_fee_cents / 100
-      : 0,
-    freeDeliveryThreshold: config.free_delivery_threshold_cents
-      ? config.free_delivery_threshold_cents / 100
-      : 0,
+    baseDeliveryFee: Number(config.delivery_fee ?? 0),
+    freeDeliveryThreshold: Number(config.free_delivery_threshold ?? 0),
     deliveryRadiusMiles: config.delivery_radius_miles
       ? Number(config.delivery_radius_miles)
       : null,
@@ -790,6 +805,7 @@ export async function requestOnlineOrderingSetup(locationId: string) {
         accepts_delivery: false,
         estimated_prep_minutes: 20,
         min_order_cents: 0,
+        min_order: 0,
         tip_enabled: true,
         tip_presets: [15, 18, 20, 25],
         setup_request_status: "pending_review",
@@ -915,11 +931,23 @@ export async function saveOnlineOrderingSettings(
   if (settings.autoAcceptOrders !== undefined) configData.auto_accept_orders = Boolean(settings.autoAcceptOrders);
   if (settings.preparationLeadTime !== undefined) configData.estimated_prep_minutes = Number(settings.preparationLeadTime) || 0;
   if (settings.futureOrderMaxDays !== undefined) configData.max_future_order_days = Number(settings.futureOrderMaxDays) || 0;
-  if (settings.minimumOrderAmount !== undefined) configData.min_order_cents = Math.round(Number(settings.minimumOrderAmount || 0) * 100);
+  if (settings.minimumOrderAmount !== undefined) {
+    const v = Number(settings.minimumOrderAmount || 0);
+    configData.min_order_cents = Math.round(v * 100);
+    configData.min_order = v;
+  }
 
   // Delivery
-  if (settings.baseDeliveryFee !== undefined) configData.delivery_fee_cents = Math.round(Number(settings.baseDeliveryFee || 0) * 100);
-  if (settings.freeDeliveryThreshold !== undefined) configData.free_delivery_threshold_cents = Math.round(Number(settings.freeDeliveryThreshold || 0) * 100);
+  if (settings.baseDeliveryFee !== undefined) {
+    const v = Number(settings.baseDeliveryFee || 0);
+    configData.delivery_fee_cents = Math.round(v * 100);
+    configData.delivery_fee = v;
+  }
+  if (settings.freeDeliveryThreshold !== undefined) {
+    const v = Number(settings.freeDeliveryThreshold || 0);
+    configData.free_delivery_threshold_cents = Math.round(v * 100);
+    configData.free_delivery_threshold = v;
+  }
   if (settings.deliveryRadiusMiles !== undefined) {
     const parsed = settings.deliveryRadiusMiles === null ? null : Number(settings.deliveryRadiusMiles);
     configData.delivery_radius_miles = parsed === null || Number.isFinite(parsed) ? parsed : null;

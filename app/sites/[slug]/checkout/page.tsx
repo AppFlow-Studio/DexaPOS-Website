@@ -19,7 +19,7 @@ interface PageProps {
 export default async function CheckoutRoute({ params, searchParams }: PageProps) {
   const { slug } = await params;
   const { recover } = await searchParams;
-  const { site, location } = await getStorefrontData(slug);
+  const { site, location, pricingDisclosureText } = await getStorefrontData(slug);
 
   if (!location) {
     notFound();
@@ -69,6 +69,7 @@ export default async function CheckoutRoute({ params, searchParams }: PageProps)
           storeConfigId={storeConfigId}
           slug={slug}
           taxRate={taxRate}
+          pricingDisclosureText={pricingDisclosureText}
         />
       </StorefrontRoot>
     </>

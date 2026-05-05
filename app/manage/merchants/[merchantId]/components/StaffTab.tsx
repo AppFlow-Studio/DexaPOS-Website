@@ -74,6 +74,7 @@ import {
   UserX,
   UserCheck,
   X,
+  AlertTriangle,
 } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { toast } from 'sonner'
@@ -82,10 +83,14 @@ import { CredentialToast } from '@/components/ui/credential-toast'
 import type { AdminStaffMember } from '@/types/staff'
 import type { MerchantInfoModel } from '@/types/db-modles'
 import type { MerchantDetails } from '@/types/merchant'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { AdminCreateStaffWizard } from './AdminCreateStaffWizard'
 import { BulkPinResetDialog } from './BulkPinResetDialog'
 import { BulkPasswordResetDialog } from './BulkPasswordResetDialog'
 import { AdminStaffDetailSheet } from './AdminStaffDetailSheet'
+import { EditStaffProfileDialog } from './EditStaffProfileDialog'
+import { EditStaffLocationsDialog } from './EditStaffLocationsDialog'
+import { PendingStaffInvitesDialog } from './PendingStaffInvitesDialog'
 
 interface StaffTabProps {
   merchantInfo: MerchantInfoModel
@@ -112,6 +117,9 @@ export function StaffTab({ merchantInfo, merchantDetails, refetchMerchantInfo }:
   const [bulkConfirmOpen, setBulkConfirmOpen] = React.useState(false)
   const [selectedStaffId, setSelectedStaffId] = React.useState<string | null>(null)
   const [detailOpen, setDetailOpen] = React.useState(false)
+  const [editProfileStaff, setEditProfileStaff] = React.useState<AdminStaffMember | null>(null)
+  const [editLocationsStaff, setEditLocationsStaff] = React.useState<AdminStaffMember | null>(null)
+  const [pendingInvitesOpen, setPendingInvitesOpen] = React.useState(false)
 
   // Data
   const {
@@ -194,16 +202,33 @@ export function StaffTab({ merchantInfo, merchantDetails, refetchMerchantInfo }:
 
   const handleToggleStatus = React.useCallback((member: AdminStaffMember) => {
     const primary = member.location_assignments.find((a) => a.is_primary) || member.location_assignments[0]
-    if (!primary || !member.staff_profile_id) {
+    const locationId = primary?.location_id || member.primary_location_id
+    if (!locationId || !member.staff_profile_id) {
       toast.error('Cannot update status: missing required info')
       return
     }
+
+    // Block activation of incomplete records
+    const isActivating = !primary.is_active
+    if (isActivating) {
+      const missing: string[] = []
+      if (!primary.role_code) missing.push('role')
+      if (!primary.location_id) missing.push('location')
+      if (!primary.has_pin) missing.push('PIN')
+      if (missing.length > 0) {
+        toast.error(
+          `This record is incomplete — set ${missing.join(', ')} first before activating.`
+        )
+        return
+      }
+    }
+
     toggleStatusMutation.mutate(
       {
         merchantId,
         staffProfileId: member.staff_profile_id,
-        locationId: primary.location_id,
-        newStatus: !primary.is_active,
+        locationId,
+        newStatus: !member.overall_is_active,
       },
       {
         onSuccess: (result) => {
@@ -377,7 +402,7 @@ export function StaffTab({ merchantInfo, merchantDetails, refetchMerchantInfo }:
             <Switch
               checked={member.overall_is_active}
               onCheckedChange={() => handleToggleStatus(member)}
-              disabled={!primary || !canManageMerchantTeam || toggleStatusMutation.isPending}
+              disabled={(!primary && !member.primary_location_id) || !canManageMerchantTeam || toggleStatusMutation.isPending}
             />
             <span className={cn('text-sm font-medium', member.overall_is_active ? 'text-green-600' : 'text-muted-foreground')}>
               {member.overall_is_active ? 'Active' : 'Inactive'}
@@ -421,6 +446,14 @@ export function StaffTab({ merchantInfo, merchantDetails, refetchMerchantInfo }:
               <DropdownMenuItem onClick={() => handleRowClick(member)}>
                 <Users className="mr-2 h-4 w-4" />
                 View Details
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setEditProfileStaff(member)}>
+                <UserPlus className="mr-2 h-4 w-4" />
+                Edit Profile
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setEditLocationsStaff(member)}>
+                <MapPin className="mr-2 h-4 w-4" />
+                Edit Locations & Roles
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               {member.account_type !== 'clerk' && primary && (
@@ -471,6 +504,15 @@ export function StaffTab({ merchantInfo, merchantDetails, refetchMerchantInfo }:
   return (
     <div className="space-y-4">
 
+      {/* HQ intervention banner */}
+      <Alert className="border-amber-500/50 bg-amber-50 dark:bg-amber-950/20">
+        <AlertTriangle className="h-4 w-4 text-amber-600" />
+        <AlertDescription className="text-amber-800 dark:text-amber-200">
+          <span className="font-semibold">Acting as HQ on behalf of {merchantInfo.name}.</span>{' '}
+          All staff actions are logged as HQ interventions and attributed to your admin account.
+        </AlertDescription>
+      </Alert>
+
       {/* Stats Cards */}
       <div className="grid grid-cols-4 gap-4">
         <StatsCard title="Total Staff" value={stats.total} icon={<Users className="h-4 w-4" />} />
@@ -514,6 +556,10 @@ export function StaffTab({ merchantInfo, merchantDetails, refetchMerchantInfo }:
 
         {canManageMerchantTeam && (
           <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => setPendingInvitesOpen(true)}>
+              <Mail className="h-4 w-4 mr-2" />
+              Pending Invites
+            </Button>
             <Button variant="outline" onClick={() => setShowBulkPinDialog(true)}>
               <Key className="h-4 w-4 mr-2" />
               Bulk Reset PINs
@@ -688,6 +734,29 @@ export function StaffTab({ merchantInfo, merchantDetails, refetchMerchantInfo }:
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Edit Profile Dialog */}
+      <EditStaffProfileDialog
+        open={!!editProfileStaff}
+        onOpenChange={(open) => !open && setEditProfileStaff(null)}
+        merchantId={merchantId}
+        staff={editProfileStaff}
+      />
+
+      {/* Edit Locations Dialog */}
+      <EditStaffLocationsDialog
+        open={!!editLocationsStaff}
+        onOpenChange={(open) => !open && setEditLocationsStaff(null)}
+        merchantId={merchantId}
+        staff={editLocationsStaff}
+      />
+
+      {/* Pending Invites Dialog */}
+      <PendingStaffInvitesDialog
+        open={pendingInvitesOpen}
+        onOpenChange={setPendingInvitesOpen}
+        merchantId={merchantId}
+      />
     </div>
   )
 }

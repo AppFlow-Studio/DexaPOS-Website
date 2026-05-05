@@ -320,7 +320,7 @@ export function AdminLocationDetailSheet({
   const handleDualPercentageBlur = async (value: string) => {
     if (!currentLocation) return
     const parsed = Number(value)
-    if (Number.isNaN(parsed) || parsed === currentLocation.dual_pricing_percentage) return
+    if (Number.isNaN(parsed) || parsed === parseFloat(String(currentLocation.dual_pricing_percentage ?? 0))) return
     const result = await adminUpdateLocation(merchantId, currentLocation.id, {
       dual_pricing_percentage: parsed,
     })

@@ -80,6 +80,116 @@ function CopyValue({ label, value }: { label: string; value?: string }) {
   )
 }
 
+function PlatformFeeBreakdownSection({
+  data,
+}: {
+  data: {
+    subtotal_portion?: number
+    tax_portion?: number
+    dual_pricing_fee?: number
+    tip_fee?: number
+    refunded_dual_pricing_fee?: number
+    refunded_tip_fee?: number
+    original_tip_fee?: number
+    dual_pricing_percentage_snapshot?: number
+    tip_surcharge_percentage_snapshot?: number
+  }
+}) {
+  const dualFee = Number(data.dual_pricing_fee ?? 0)
+  const tipFee = Number(data.tip_fee ?? 0)
+  const refundedDualFee = Number(data.refunded_dual_pricing_fee ?? 0)
+  const refundedTipFee = Number(data.refunded_tip_fee ?? 0)
+  const dualPct = Number(data.dual_pricing_percentage_snapshot ?? 0)
+  const tipPct = Number(data.tip_surcharge_percentage_snapshot ?? 0)
+  const subtotalPortion = data.subtotal_portion
+  const taxPortion = data.tax_portion
+  const originalTipFee = data.original_tip_fee
+  const tipFeeAdjusted =
+    originalTipFee !== undefined && Math.abs(Number(originalTipFee) - tipFee) > 0.001
+
+  const hasAnyFee =
+    dualFee > 0 ||
+    tipFee > 0 ||
+    refundedDualFee > 0 ||
+    refundedTipFee > 0 ||
+    dualPct > 0 ||
+    tipPct > 0 ||
+    (subtotalPortion !== undefined && Number(subtotalPortion) > 0) ||
+    (taxPortion !== undefined && Number(taxPortion) > 0)
+  if (!hasAnyFee) return null
+
+  const netDualFee = Math.max(0, dualFee - refundedDualFee)
+  const netTipFee = Math.max(0, tipFee - refundedTipFee)
+  const netTotal = netDualFee + netTipFee
+
+  return (
+    <section className="rounded-md border bg-emerald-50/30 dark:bg-emerald-950/10 p-3">
+      <div className="mb-3 flex items-center justify-between">
+        <h4 className="text-sm font-semibold">Fees & Surcharges</h4>
+        {netTotal > 0 && (
+          <Badge variant="outline" className="text-xs border-emerald-300 text-emerald-800 dark:text-emerald-300">
+            Net platform fee {formatCurrency(netTotal)}
+          </Badge>
+        )}
+      </div>
+      <div className="grid gap-1 text-xs md:grid-cols-2">
+        {subtotalPortion !== undefined && (
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Subtotal Portion</span>
+            <span className="font-mono">{formatCurrency(Number(subtotalPortion))}</span>
+          </div>
+        )}
+        {taxPortion !== undefined && (
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Tax Portion</span>
+            <span className="font-mono">{formatCurrency(Number(taxPortion))}</span>
+          </div>
+        )}
+        {(dualFee > 0 || dualPct > 0) && (
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">
+              Card Surcharge{dualPct > 0 ? ` (${dualPct}%)` : ''}
+            </span>
+            <span className="font-mono">{formatCurrency(dualFee)}</span>
+          </div>
+        )}
+        {refundedDualFee > 0 && (
+          <div className="flex justify-between">
+            <span className="text-muted-foreground pl-3">↳ Refunded</span>
+            <span className="font-mono text-rose-600 dark:text-rose-400">
+              -{formatCurrency(refundedDualFee)}
+            </span>
+          </div>
+        )}
+        {(tipFee > 0 || tipPct > 0) && (
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">
+              Tip Surcharge{tipPct > 0 ? ` (${tipPct}%)` : ''}
+            </span>
+            <span className="font-mono">{formatCurrency(tipFee)}</span>
+          </div>
+        )}
+        {tipFeeAdjusted && originalTipFee !== undefined && (
+          <div className="flex justify-between">
+            <span className="text-muted-foreground pl-3">↳ Original</span>
+            <span className="font-mono line-through text-muted-foreground">
+              {formatCurrency(Number(originalTipFee))}
+            </span>
+          </div>
+        )}
+        {refundedTipFee > 0 && (
+          <div className="flex justify-between">
+            <span className="text-muted-foreground pl-3">↳ Refunded</span>
+            <span className="font-mono text-rose-600 dark:text-rose-400">
+              -{formatCurrency(refundedTipFee)}
+            </span>
+          </div>
+        )}
+      </div>
+    </section>
+  )
+}
+
 function getTimelineIcon(eventType?: string, newStatus?: string) {
   const type = `${eventType || ''} ${newStatus || ''}`.toLowerCase()
   if (type.includes('fail') || type.includes('declin') || type.includes('error')) {
@@ -492,6 +602,8 @@ export function TransactionDetailInlinePanel({ transactionId }: TransactionDetai
           </div>
         </div>
       </section>
+
+      <PlatformFeeBreakdownSection data={data} />
 
       <section className="rounded-md border p-3">
         <h4 className="mb-3 text-sm font-semibold">Adjustments & Reversals</h4>

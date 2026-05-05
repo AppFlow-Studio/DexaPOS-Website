@@ -19,11 +19,13 @@ import type {
   MerchantHealthSummary,
 } from '@/types/merchant'
 
-async function getManagerScopedMerchantIds(
+async function getScopedMerchantIds(
   userId: string,
   roleCode: string | null | undefined
 ): Promise<string[] | undefined> {
-  if (roleCode !== 'hq.manager') {
+  // Super admin sees all merchants; everyone else (platform_admin, manager) is
+  // scoped to their assigned merchants in admin_merchant_access.
+  if (!roleCode || roleCode === 'hq.super_admin') {
     return undefined
   }
 
@@ -35,7 +37,7 @@ async function getManagerScopedMerchantIds(
     .eq('is_active', true)
 
   if (error) {
-    console.error('[getManagerScopedMerchantIds] Error:', error)
+    console.error('[getScopedMerchantIds] Error:', error)
     return []
   }
 
@@ -63,7 +65,7 @@ export async function getMerchants(
   const supabase = createServerSupabaseClient()
   const offset = (page - 1) * pageSize
 
-  const managerScopedIds = await getManagerScopedMerchantIds(userId, role?.role_code)
+  const managerScopedIds = await getScopedMerchantIds(userId, role?.role_code)
 
   let effectiveMerchantIds = managerScopedIds
   if (accessibleMerchantIds !== undefined) {
@@ -94,44 +96,11 @@ export async function getMerchants(
     query = query.ilike('name', `%${filters.search.trim()}%`)
   }
 
-  // Apply status filter
+  // Apply status filter — always via derived_status on the view.
+  // onboarding_status is a separate lifecycle field with different semantics;
+  // using it here caused the wrong merchants to appear for 'active'/'onboarding'.
   if (filters.status !== 'all') {
-    if (filters.status === 'inactive') {
-      query = query.eq('derived_status', 'inactive')
-    } else {
-      let statusScopeQuery = supabase
-        .from('merchants')
-        .select('id')
-        .eq('onboarding_status', filters.status)
-
-      if (effectiveMerchantIds !== undefined) {
-        if (effectiveMerchantIds.length === 0) {
-          return { merchants: [], total: 0 }
-        }
-        statusScopeQuery = statusScopeQuery.in('id', effectiveMerchantIds)
-      }
-
-      const { data: statusScopedRows, error: statusScopedError } = await statusScopeQuery
-
-      if (statusScopedError) {
-        console.error('[getMerchants] Status scope error:', statusScopedError)
-        throw new Error('Failed to filter merchants by onboarding status')
-      }
-
-      const statusScopedMerchantIds = Array.from(
-        new Set(
-          (statusScopedRows || [])
-            .map((row) => row.id)
-            .filter((id): id is string => typeof id === 'string' && id.length > 0)
-        )
-      )
-
-      if (statusScopedMerchantIds.length === 0) {
-        return { merchants: [], total: 0 }
-      }
-
-      query = query.in('id', statusScopedMerchantIds)
-    }
+    query = query.eq('derived_status', filters.status)
   }
 
   // Apply sorting
@@ -231,7 +200,7 @@ export async function getMerchantDetails(
   // `is_dexapos_admin()` return NULL and RLS block direct merchants reads.
   // Manager scoping is still enforced application-side via managerScopedIds below.
   const supabase = createServiceRoleClient()
-  const managerScopedIds = await getManagerScopedMerchantIds(userId, role?.role_code)
+  const managerScopedIds = await getScopedMerchantIds(userId, role?.role_code)
 
   if (managerScopedIds && managerScopedIds.length === 0) {
     return null
@@ -583,6 +552,162 @@ export async function updateMerchantOnboardingStatus(params: {
 }
 
 // ============================================================================
+// GRACEFUL SUSPENSION (A7)
+// ============================================================================
+
+export interface MerchantDrainStatus {
+  merchant_id: string
+  status: string
+  open_orders: number
+  open_drawer_sessions: number
+  fully_drained: boolean
+  suspension_initiated_at: string | null
+}
+
+export interface SuspensionResult {
+  success: boolean
+  error?: string
+  status?: string
+  open_orders?: number
+  open_drawer_sessions?: number
+  fully_drained?: boolean
+  forced?: boolean
+}
+
+export async function requestMerchantSuspension(params: {
+  merchantId: string
+  force?: boolean
+  reason?: string
+}): Promise<SuspensionResult> {
+  const { userId } = await assertHQPermission('hq.merchant.update')
+  const supabase = createServerSupabaseClient()
+
+  const { data: merchant } = await supabase
+    .from('merchants')
+    .select('id, name, clerk_org_id, onboarding_status')
+    .eq('id', params.merchantId)
+    .single()
+
+  if (!merchant) return { success: false, error: 'Merchant not found.' }
+
+  const { data, error } = await supabase.rpc('request_merchant_suspension', {
+    p_merchant_id: params.merchantId,
+    p_force: params.force ?? false,
+    p_reason: params.reason ?? null,
+    p_initiated_by: userId,
+  })
+
+  if (error) {
+    console.error('[requestMerchantSuspension] RPC error:', error)
+    return { success: false, error: error.message }
+  }
+
+  const result = data as Record<string, unknown> | null
+  const finalStatus = (result?.status as string) || 'unknown'
+  const openOrders = (result?.open_orders as number) ?? 0
+  const openDrawers = (result?.open_drawer_sessions as number) ?? 0
+
+  await logAdminAction(
+    params.force && (openOrders > 0 || openDrawers > 0)
+      ? 'MERCHANT_SUSPENSION_FORCED'
+      : 'MERCHANT_SUSPENSION_REQUESTED',
+    {
+      merchantId: params.merchantId,
+      clerkOrgId: merchant.clerk_org_id ?? undefined,
+      resourceType: 'merchant',
+      resourceId: params.merchantId,
+      resourceName: merchant.name || params.merchantId,
+      changes: {
+        before: { onboarding_status: merchant.onboarding_status },
+        after: { onboarding_status: finalStatus },
+        reason: params.reason,
+      },
+      metadata: {
+        source: 'requestMerchantSuspension',
+        initiated_by_user_id: userId,
+        forced: params.force ?? false,
+        open_orders: openOrders,
+        open_drawer_sessions: openDrawers,
+      },
+    }
+  )
+
+  revalidatePath('/manage/merchants')
+  revalidatePath(`/manage/merchants/${params.merchantId}`)
+
+  return {
+    success: true,
+    status: finalStatus,
+    open_orders: openOrders,
+    open_drawer_sessions: openDrawers,
+    fully_drained: Boolean(result?.fully_drained),
+    forced: params.force ?? false,
+  }
+}
+
+export async function cancelMerchantSuspension(merchantId: string): Promise<SuspensionResult> {
+  const { userId } = await assertHQPermission('hq.merchant.update')
+  const supabase = createServerSupabaseClient()
+
+  const { data: merchant } = await supabase
+    .from('merchants')
+    .select('id, name, clerk_org_id, onboarding_status')
+    .eq('id', merchantId)
+    .single()
+
+  if (!merchant) return { success: false, error: 'Merchant not found.' }
+
+  const { data, error } = await supabase.rpc('cancel_merchant_suspension', {
+    p_merchant_id: merchantId,
+    p_initiated_by: userId,
+  })
+
+  if (error) {
+    console.error('[cancelMerchantSuspension] RPC error:', error)
+    return { success: false, error: error.message }
+  }
+
+  const result = data as Record<string, unknown> | null
+  const finalStatus = (result?.status as string) || 'active'
+
+  await logAdminAction('MERCHANT_SUSPENSION_CANCELLED', {
+    merchantId,
+    clerkOrgId: merchant.clerk_org_id ?? undefined,
+    resourceType: 'merchant',
+    resourceId: merchantId,
+    resourceName: merchant.name || merchantId,
+    changes: {
+      before: { onboarding_status: merchant.onboarding_status },
+      after: { onboarding_status: finalStatus },
+    },
+    metadata: { source: 'cancelMerchantSuspension', initiated_by_user_id: userId },
+  })
+
+  revalidatePath('/manage/merchants')
+  revalidatePath(`/manage/merchants/${merchantId}`)
+
+  return { success: true, status: finalStatus }
+}
+
+export async function getMerchantDrainStatus(
+  merchantId: string
+): Promise<MerchantDrainStatus | null> {
+  await assertHQPermission('hq.merchant.view')
+  const supabase = createServerSupabaseClient()
+
+  const { data, error } = await supabase.rpc('get_merchant_drain_status', {
+    p_merchant_id: merchantId,
+  })
+
+  if (error) {
+    console.error('[getMerchantDrainStatus] RPC error:', error)
+    return null
+  }
+
+  return data as unknown as MerchantDrainStatus
+}
+
+// ============================================================================
 // TOGGLE LOCATION STATUS
 // ============================================================================
 
@@ -658,7 +783,7 @@ export async function getMerchantStats(): Promise<{
   const { userId, role } = await assertHQPermission('hq.merchant.view')
 
   const supabase = createServerSupabaseClient()
-  const managerScopedIds = await getManagerScopedMerchantIds(userId, role?.role_code)
+  const managerScopedIds = await getScopedMerchantIds(userId, role?.role_code)
 
   let query = supabase
     .from('admin_merchant_summary')

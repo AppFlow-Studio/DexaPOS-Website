@@ -15,6 +15,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PhoneInput } from "@/components/ui/phone-input";
+import { normalizePhone, formatPhoneForDisplay } from "@/lib/phone";
 import { Badge } from "@/components/ui/badge";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -56,6 +58,7 @@ import {
 } from "@/app/dashboard/hooks/useStaff";
 import { InviteStaffFormData, StaffType, EmploymentType } from "@/types/staff";
 import { useClerkOrgId } from "@/app/dashboard/hooks/useLocationScoped";
+import { useEmailAvailability } from "@/app/dashboard/hooks/useEmailAvailability";
 import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
 
 interface InviteUserWizardProps {
@@ -63,6 +66,7 @@ interface InviteUserWizardProps {
   onOpenChange?: (open: boolean) => void;
   onSuccess?: () => void;
   children?: React.ReactNode;
+  defaultLocationId?: string;
 }
 
 type Step = "type" | "details" | "role" | "locations" | "pos_config" | "review";
@@ -106,6 +110,7 @@ export function InviteUserWizard({
   onOpenChange: controlledOnOpenChange,
   onSuccess,
   children,
+  defaultLocationId,
 }: InviteUserWizardProps) {
   const clerkOrgId = useClerkOrgId();
   const { data: userInfo } = useUserInfo();
@@ -148,8 +153,11 @@ export function InviteUserWizard({
   const [firstName, setFirstName] = React.useState("");
   const [lastName, setLastName] = React.useState("");
   const [email, setEmail] = React.useState("");
+  const emailCheck = useEmailAvailability(email, {
+    clerkOrgId,
+    enabled: email.trim().length > 0,
+  });
   const [phone, setPhone] = React.useState("");
-  const [phoneError, setPhoneError] = React.useState("");
   const [selectedRoleCode, setSelectedRoleCode] = React.useState<string>("");
   const [selectedLocationIds, setSelectedLocationIds] = React.useState<
     Set<string>
@@ -175,6 +183,14 @@ export function InviteUserWizard({
     }
   }, [open, roles, selectedRoleCode]);
 
+  // Pre-select location when opened from a location context
+  React.useEffect(() => {
+    if (open && defaultLocationId) {
+      setSelectedLocationIds(new Set([defaultLocationId]));
+      setPrimaryLocationId(defaultLocationId);
+    }
+  }, [open, defaultLocationId]);
+
   // Reset form when closing
   React.useEffect(() => {
     if (!open) {
@@ -184,7 +200,6 @@ export function InviteUserWizard({
       setLastName("");
       setEmail("");
       setPhone("");
-      setPhoneError("");
       setSelectedRoleCode("");
       setSelectedLocationIds(new Set());
       setPrimaryLocationId(null);
@@ -230,11 +245,13 @@ export function InviteUserWizard({
       case "details":
         // Name is always required
         if (!firstName.trim() || !lastName.trim()) return false;
-        // Block if phone has a format error
-        if (phoneError) return false;
+        // Block while live email check is pending or has flagged a conflict
+        if (email.trim().length > 0 && (emailCheck.isChecking || emailCheck.hasConflict)) {
+          return false;
+        }
         // Email is required for Clerk, optional for POS
         if (staffType === "clerk") {
-          return email.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+          return !!email.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
         }
         return true; // POS staff can proceed without email
       case "role":
@@ -285,7 +302,7 @@ export function InviteUserWizard({
       first_name: firstName,
       last_name: lastName,
       email: email || null,
-      phone: phone || null,
+      phone: normalizePhone(phone) ?? phone || null,
       role_code: selectedRoleCode,
       location_ids: Array.from(selectedLocationIds),
       primary_location_id: primaryLocationId,
@@ -722,8 +739,24 @@ export function InviteUserWizard({
                           placeholder="john.doe@example.com"
                           value={email}
                           onChange={(e) => setEmail(e.target.value)}
+                          aria-invalid={emailCheck.hasConflict || undefined}
                         />
-                        {staffType === "clerk" && (
+                        {email.trim().length > 0 && emailCheck.isChecking && (
+                          <p className="text-xs text-muted-foreground">
+                            Checking availability…
+                          </p>
+                        )}
+                        {emailCheck.hasConflict && (
+                          <p className="text-xs text-destructive">
+                            {emailCheck.message}
+                          </p>
+                        )}
+                        {emailCheck.isAvailable && (
+                          <p className="text-xs text-emerald-600">
+                            Email is available.
+                          </p>
+                        )}
+                        {staffType === "clerk" && !emailCheck.hasConflict && !emailCheck.isAvailable && !emailCheck.isChecking && (
                           <p className="text-xs text-muted-foreground">
                             An invitation will be sent to this email address.
                           </p>
@@ -736,31 +769,11 @@ export function InviteUserWizard({
                             (optional)
                           </span>
                         </Label>
-                        <Input
+                        <PhoneInput
                           id="phone"
-                          type="tel"
-                          placeholder="+15551234567"
                           value={phone}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setPhone(val);
-                            if (val && !/^\+[1-9]\d{7,14}$/.test(val)) {
-                              setPhoneError(
-                                "Must be E.164 format — start with + and country code, e.g. +15551234567",
-                              );
-                            } else {
-                              setPhoneError("");
-                            }
-                          }}
-                          className={phoneError ? "border-destructive" : ""}
+                          onChange={setPhone}
                         />
-                        {phoneError ? (
-                          <p className="text-xs text-destructive">{phoneError}</p>
-                        ) : (
-                          <p className="text-xs text-muted-foreground">
-                            Include country code, e.g. +1 for US, +44 for UK
-                          </p>
-                        )}
                       </div>
                     </div>
                   )}
@@ -1168,7 +1181,7 @@ export function InviteUserWizard({
                             )}
                             {phone && (
                               <div className="text-sm text-muted-foreground mt-0.5">
-                                {phone}
+                                {formatPhoneForDisplay(phone)}
                               </div>
                             )}
                           </div>

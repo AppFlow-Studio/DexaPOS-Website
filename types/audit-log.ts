@@ -25,6 +25,24 @@ export type AuditCategory = (typeof AUDIT_CATEGORIES)[number];
 export const AUDIT_SEVERITIES = ["info", "warning", "critical"] as const;
 export type AuditSeverity = (typeof AUDIT_SEVERITIES)[number];
 
+// PII access categories. NULL = non-PII row (the default).
+export const PII_ACCESS_TYPES = [
+  "attachment_view",
+  "customer_pii_view",
+  "customer_pii_export",
+  "staff_pii_view",
+  "merchant_billing_view",
+] as const;
+export type PiiAccessType = (typeof PII_ACCESS_TYPES)[number];
+
+export const PII_ACCESS_TYPE_LABELS: Record<PiiAccessType, string> = {
+  attachment_view: "Attachment view",
+  customer_pii_view: "Customer PII view",
+  customer_pii_export: "Customer PII export",
+  staff_pii_view: "Staff PII view",
+  merchant_billing_view: "Billing data view",
+};
+
 // Resource types that can be audited
 export const AUDIT_RESOURCE_TYPES = [
   "inventory_item",
@@ -98,6 +116,9 @@ export interface AuditLog {
     reason?: string;
   } | null;
   metadata: Record<string, unknown> | null;
+
+  // PII access tracking — NULL for normal rows
+  pii_access_type: PiiAccessType | null;
 
   // Timestamp
   created_at: string;

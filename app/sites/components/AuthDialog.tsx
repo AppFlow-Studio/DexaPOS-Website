@@ -15,6 +15,8 @@ import { toast } from "sonner";
 import { sendOtp, verifyOtp } from "../auth-actions";
 import { updateCustomerProfile } from "../customer-actions";
 import { useSession } from "../hooks/useSession";
+import { PhoneInput } from "@/components/ui/phone-input";
+import { normalizePhone, isValidPhone } from "@/lib/phone";
 
 interface AuthDialogProps {
   isOpen: boolean;
@@ -38,6 +40,7 @@ export function AuthDialog({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [countdown, setCountdown] = useState(0);
+  const [rateLimited, setRateLimited] = useState(false);
   const [pendingAuth, setPendingAuth] = useState<{
     sessionToken: string;
     customer: { id: string; name: string | null; phone: string | null; email: string | null };
@@ -71,6 +74,8 @@ export function AuthDialog({
       setOtp(["", "", "", "", "", ""]);
       setError("");
       setLoading(false);
+      setCountdown(0);
+      setRateLimited(false);
       setPendingAuth(null);
       setProfileName("");
       setProfileEmail("");
@@ -80,22 +85,10 @@ export function AuthDialog({
     }
   }, [isOpen, defaultMode]);
 
-  const formatPhone = (value: string) => {
-    const digits = value.replace(/\D/g, "").slice(0, 10);
-    if (digits.length <= 3) return digits;
-    if (digits.length <= 6) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
-    return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
-  };
-
-  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setPhone(formatPhone(e.target.value));
-    setError("");
-  };
-
-  const rawPhone = phone.replace(/\D/g, "");
+  const e164Phone = normalizePhone(phone)
 
   const handleSendOtp = async () => {
-    if (rawPhone.length < 10) {
+    if (!isValidPhone(phone)) {
       setError("Please enter a valid phone number");
       return;
     }
@@ -114,14 +107,25 @@ export function AuthDialog({
     setLoading(true);
     setError("");
 
-    const result = await sendOtp(rawPhone, storeConfigId);
+    const result = await sendOtp(e164Phone ?? phone, storeConfigId);
     setLoading(false);
 
     if (!result.success) {
-      setError(result.error ?? "Failed to send code");
+      if (result.code === "rate_limited_phone" || result.code === "rate_limited_ip") {
+        setRateLimited(true);
+        // Stay on phone step so they see the error clearly, not a frozen OTP screen.
+        setError(
+          result.code === "rate_limited_phone"
+            ? "Too many codes sent to this number. Please wait an hour before trying again."
+            : "Too many requests from your network. Please wait an hour before trying again."
+        );
+      } else {
+        setError(result.error ?? "Failed to send code");
+      }
       return;
     }
 
+    setRateLimited(false);
     setStep("otp");
     setCountdown(60);
     setTimeout(() => otpRefs.current[0]?.focus(), 100);
@@ -186,11 +190,28 @@ export function AuthDialog({
     setError("");
 
     const { sessionToken: existingToken } = useSession.getState();
-    const result = await verifyOtp(rawPhone, fullCode, storeConfigId, existingToken ?? undefined);
+    const result = await verifyOtp(e164Phone ?? phone, fullCode, storeConfigId, existingToken ?? undefined);
     setLoading(false);
 
     if (!result.success || !result.sessionToken || !result.customer) {
-      setError(result.error ?? "Verification failed");
+      if (result.code === "max_attempts") {
+        // Code is burned — force back to phone step so they request a new one.
+        setError("Too many incorrect attempts. Please request a new code.");
+        setStep("phone");
+        setOtp(["", "", "", "", "", ""]);
+        setCountdown(0);
+      } else if (result.code === "expired") {
+        setError("That code has expired. Please request a new one.");
+        setStep("phone");
+        setOtp(["", "", "", "", "", ""]);
+        setCountdown(0);
+      } else if (result.remainingAttempts !== undefined && result.remainingAttempts > 0) {
+        setError(
+          `Incorrect code — ${result.remainingAttempts} attempt${result.remainingAttempts === 1 ? "" : "s"} remaining.`
+        );
+      } else {
+        setError(result.error ?? "Verification failed");
+      }
       return;
     }
 
@@ -242,16 +263,25 @@ export function AuthDialog({
   };
 
   const handleResend = async () => {
-    if (countdown > 0) return;
+    if (countdown > 0 || rateLimited) return;
     setLoading(true);
     setError("");
     setOtp(["", "", "", "", "", ""]);
 
-    const result = await sendOtp(rawPhone, storeConfigId);
+    const result = await sendOtp(e164Phone ?? phone, storeConfigId);
     setLoading(false);
 
     if (!result.success) {
-      setError(result.error ?? "Failed to resend code");
+      if (result.code === "rate_limited_phone" || result.code === "rate_limited_ip") {
+        setRateLimited(true);
+        setError(
+          result.code === "rate_limited_phone"
+            ? "Too many codes sent to this number. Please wait an hour before trying again."
+            : "Too many requests from your network. Please wait an hour before trying again."
+        );
+      } else {
+        setError(result.error ?? "Failed to resend code");
+      }
       return;
     }
     setCountdown(60);
@@ -435,23 +465,11 @@ export function AuthDialog({
 
               <div className="space-y-2">
                 <Label htmlFor="auth-phone">Phone Number <span className="text-red-500">*</span></Label>
-                <div className="relative">
-                  <Phone
-                    className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4"
-                    style={{ color: "var(--text-secondary, #6b7280)" }}
-                  />
-                  <Input
-                    id="auth-phone"
-                    type="tel"
-                    value={phone}
-                    onChange={handlePhoneChange}
-                    placeholder="(555) 123-4567"
-                    className="pl-10"
-                    onKeyDown={(e) => e.key === "Enter" && handleSendOtp()}
-                    autoFocus={mode === "signin"}
-                    style={inputStyle}
-                  />
-                </div>
+                <PhoneInput
+                  id="auth-phone"
+                  value={phone}
+                  onChange={(e164) => { setPhone(e164); setError(""); }}
+                />
               </div>
 
               {error && (
@@ -460,7 +478,7 @@ export function AuthDialog({
 
               <Button
                 onClick={handleSendOtp}
-                disabled={loading || rawPhone.length < 10}
+                disabled={loading || !isValidPhone(phone)}
                 className="w-full"
                 style={primaryButtonStyle}
               >
@@ -489,6 +507,8 @@ export function AuthDialog({
                     }}
                     type="text"
                     inputMode="numeric"
+                    autoComplete={i === 0 ? "one-time-code" : "off"}
+                    aria-label={`Digit ${i + 1} of 6`}
                     maxLength={1}
                     value={digit}
                     onChange={(e) => handleOtpChange(i, e.target.value)}
@@ -526,12 +546,15 @@ export function AuthDialog({
                 style={{ color: "var(--text-secondary, #6b7280)" }}
               >
                 Didn&apos;t receive a code?{" "}
-                {countdown > 0 ? (
+                {rateLimited ? (
+                  <span>Try again in 1 hour</span>
+                ) : countdown > 0 ? (
                   <span>Resend in {countdown}s</span>
                 ) : (
                   <button
                     onClick={handleResend}
-                    className="underline font-medium"
+                    disabled={loading}
+                    className="underline font-medium disabled:opacity-50"
                     style={{ color: "var(--primary, #2DD4BF)" }}
                   >
                     Resend

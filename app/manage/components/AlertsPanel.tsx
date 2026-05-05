@@ -7,12 +7,13 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { usePlatformAlerts } from '@/lib/queries/use-platform-dashboard'
 import Link from 'next/link'
 import { PlatformAlert } from '@/app/manage/actions/hq-platform/dashboard'
-import { X, CheckCircle, AlertCircle, AlertTriangle, Info } from 'lucide-react'
+import { X, CheckCircle, AlertCircle, AlertTriangle, Info, ChevronDown, ChevronRight } from 'lucide-react'
 
 export function AlertsPanel() {
   const { data: allAlerts, isLoading, error } = usePlatformAlerts()
   const [dismissedAlerts, setDismissedAlerts] = useState<Set<string>>(new Set())
   const [alerts, setAlerts] = useState<PlatformAlert[]>([])
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
 
   // Load dismissed alerts from localStorage
   useEffect(() => {
@@ -146,38 +147,77 @@ export function AlertsPanel() {
           </div>
         ) : (
           <div className="space-y-2">
-            {alerts.map((alert) => (
-              <div
-                key={alert.id}
-                className="group flex gap-3 p-3 rounded-lg border border-blue-100/50 bg-white/50 hover:bg-white/80 transition-all duration-200 hover:shadow-sm"
-              >
-                <div className="flex-shrink-0 mt-0.5">
-                  {getSeverityIcon(alert.severity)}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    {getSeverityBadge(alert.severity)}
-                  </div>
-                  {alert.link ? (
-                    <Link
-                      href={alert.link}
-                      className="text-sm text-slate-700 hover:text-blue-600 hover:underline transition-colors"
+            {alerts.map((alert) => {
+              const isGrouped = (alert.groupedDevices?.length ?? 0) > 0
+              const isExpanded = expandedGroups.has(alert.id)
+              return (
+                <div
+                  key={alert.id}
+                  className="group flex flex-col gap-2 p-3 rounded-lg border border-blue-100/50 bg-white/50 hover:bg-white/80 transition-all duration-200 hover:shadow-sm"
+                >
+                  <div className="flex gap-3">
+                    <div className="shrink-0 mt-0.5">{getSeverityIcon(alert.severity)}</div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        {getSeverityBadge(alert.severity)}
+                        {isGrouped && (
+                          <Badge variant="outline" className="bg-slate-100 text-slate-700 border-slate-200">
+                            {alert.groupedDevices!.length} devices
+                          </Badge>
+                        )}
+                      </div>
+                      {alert.link ? (
+                        <Link
+                          href={alert.link}
+                          className="text-sm text-slate-700 hover:text-blue-600 hover:underline transition-colors"
+                        >
+                          {alert.message}
+                        </Link>
+                      ) : (
+                        <p className="text-sm text-slate-700">{alert.message}</p>
+                      )}
+                      {isGrouped && (
+                        <button
+                          onClick={() =>
+                            setExpandedGroups((prev) => {
+                              const next = new Set(prev)
+                              if (next.has(alert.id)) next.delete(alert.id)
+                              else next.add(alert.id)
+                              return next
+                            })
+                          }
+                          className="mt-1 inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800"
+                        >
+                          {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                          {isExpanded ? 'Hide devices' : 'Show devices'}
+                        </button>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => dismissAlert(alert.id)}
+                      className="shrink-0 text-muted-foreground hover:text-foreground transition-colors hover:bg-blue-100/50 p-1 rounded-md self-start"
+                      aria-label="Dismiss alert"
                     >
-                      {alert.message}
-                    </Link>
-                  ) : (
-                    <p className="text-sm text-slate-700">{alert.message}</p>
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                  {isGrouped && isExpanded && (
+                    <ul className="ml-7 border-l border-slate-200 pl-3 text-xs text-slate-600 space-y-1">
+                      {alert.groupedDevices!.map((d) => (
+                        <li key={d.stationId} className="flex justify-between gap-3">
+                          <span className="font-medium text-slate-700">{d.stationName}</span>
+                          <span className="text-slate-500">
+                            {d.lastHeartbeatAt
+                              ? `last seen ${new Date(d.lastHeartbeatAt).toLocaleTimeString()}`
+                              : 'no heartbeat'}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
                   )}
                 </div>
-                <button
-                  onClick={() => dismissAlert(alert.id)}
-                  className="flex-shrink-0 text-muted-foreground hover:text-foreground transition-colors hover:bg-blue-100/50 p-1 rounded-md"
-                  aria-label="Dismiss alert"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </CardContent>

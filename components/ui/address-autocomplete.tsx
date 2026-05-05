@@ -50,18 +50,26 @@ function ensureGoogleMapsLoaded(): Promise<void> | null {
   notify('loading')
 
   loaderPromise = new Promise<void>((resolve, reject) => {
+    // Use the async bootstrap URL (no `libraries` param) so the Maps JS SDK
+    // initialises without eagerly loading any legacy library bundle.
+    // We then call importLibrary("places") to get the new Places API classes
+    // (AutocompleteSuggestion, AutocompleteSessionToken, etc.) which are NOT
+    // available via the legacy `libraries=places` query-param load path.
     const callbackName = `__gmapsReady_${Math.random().toString(36).slice(2)}`
     ;(window as unknown as Record<string, unknown>)[callbackName] = () => {
       delete (window as unknown as Record<string, unknown>)[callbackName]
       resolve()
     }
     const script = document.createElement('script')
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&v=weekly&libraries=places&callback=${callbackName}`
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&v=weekly&loading=async&callback=${callbackName}`
     script.async = true
     script.onerror = () => reject(new Error('Failed to load Google Maps script'))
     document.head.appendChild(script)
   })
-    .then(() => {
+    .then(async () => {
+      // Bootstrap the new Places library so google.maps.places.AutocompleteSuggestion
+      // and AutocompleteSessionToken are available before we set state to 'loaded'.
+      await (window as unknown as { google: typeof google }).google.maps.importLibrary('places')
       notify('loaded')
     })
     .catch((err: unknown) => {
@@ -308,7 +316,12 @@ function AddressAutocompleteInner({
       />
       {open && suggestions.length > 0 && (
         <div
-          className="absolute left-0 right-0 top-full z-50 mt-1 overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md"
+          className="absolute left-0 right-0 top-full z-50 mt-1 overflow-hidden rounded-md border shadow-md"
+          style={{
+            backgroundColor: 'var(--card, #ffffff)',
+            borderColor: 'var(--border, #e5e7eb)',
+            color: 'var(--text, #111827)',
+          }}
           // Prevent the input from blurring when clicking inside the dropdown.
           onMouseDown={(e) => e.preventDefault()}
         >
@@ -321,17 +334,27 @@ function AddressAutocompleteInner({
                 onMouseEnter={() => setActiveIndex(idx)}
                 onClick={() => handleSelect(suggestion)}
                 className={cn(
-                  'flex cursor-pointer select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none',
-                  idx === activeIndex && 'bg-accent text-accent-foreground',
+                  'flex cursor-pointer select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none transition-colors',
                 )}
+                style={
+                  idx === activeIndex
+                    ? {
+                        backgroundColor: 'color-mix(in srgb, var(--primary, #6366f1) 12%, var(--card, #ffffff))',
+                        color: 'var(--text, #111827)',
+                      }
+                    : undefined
+                }
               >
-                <MapPin className="h-4 w-4 shrink-0 text-muted-foreground" />
+                <MapPin
+                  className="h-4 w-4 shrink-0"
+                  style={{ color: idx === activeIndex ? 'var(--primary, #6366f1)' : 'var(--text-secondary, #6b7280)' }}
+                />
                 <div className="flex-1 min-w-0">
-                  <div className="truncate text-sm">
+                  <div className="truncate text-sm" style={{ color: 'var(--text, #111827)' }}>
                     {suggestion.mainText || suggestion.text}
                   </div>
                   {suggestion.secondaryText && (
-                    <div className="truncate text-xs text-muted-foreground">
+                    <div className="truncate text-xs" style={{ color: 'var(--text-secondary, #6b7280)' }}>
                       {suggestion.secondaryText}
                     </div>
                   )}

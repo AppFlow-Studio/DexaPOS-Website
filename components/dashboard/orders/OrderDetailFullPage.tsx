@@ -64,14 +64,11 @@ import {
 import { GetOrderDetails } from "@/app/dashboard/actions/order";
 import { useOrderFullHistory } from "@/app/dashboard/hooks/useOrderFullHistory";
 import { OrderFullHistoryDebugViewer } from "@/components/dashboard/orders/OrderFullHistoryDebugViewer";
-import { RefundModal } from "@/components/dashboard/orders/RefundModal";
-import { VoidModal } from "@/components/dashboard/orders/VoidModal";
 import { SendReceiptModal } from "@/components/dashboard/orders/SendReceiptModal";
 import { AssignCustomerModal } from "@/components/dashboard/orders/AssignCustomerModal";
 import { AdjustTipModal } from "@/components/dashboard/orders/AdjustTipModal";
 import { OrderActionBar } from "@/components/dashboard/orders/OrderActionBar";
 import { assignCustomerToOrder } from "@/app/actions/orders/assign-customer";
-import { getPrintersForLocation } from "@/app/actions/orders/reprint-receipt";
 import { useOrderActions } from "@/app/dashboard/hooks/useOrderActions";
 import type { OrderActionsUserRole } from "@/app/dashboard/hooks/useOrderActions";
 import { toast } from "sonner";
@@ -843,8 +840,7 @@ function PricingBreakdown({
       ? Number(fullHistoryOrder.amount_due)
       : Number(order.amount_due) ?? 0;
 
-  // Show actual balance: when overpaid, API often returns 0 — display (total - paid) so overpaid shows as negative
-  const displayAmountDue = effectiveTotal - amountPaid;
+  const displayAmountDue = Math.max(0, effectiveTotal - amountPaid);
 
   const cardTotal =
     Number(order.card_total) || effectiveTotal;
@@ -869,8 +865,7 @@ function PricingBreakdown({
               label="Amount Due"
               value={formatMoney(displayAmountDue)}
               valueClassName={cn(
-                displayAmountDue > 0 && "text-red-600 dark:text-red-400 font-semibold",
-                displayAmountDue < 0 && "text-amber-600 dark:text-amber-400 font-semibold"
+                displayAmountDue > 0 && "text-red-600 dark:text-red-400 font-semibold"
               )}
             />
           </div>
@@ -929,8 +924,7 @@ function PricingBreakdown({
                     label="Amount Due"
                     value={formatMoney(displayAmountDue)}
                     valueClassName={cn(
-                      displayAmountDue > 0 && "text-red-600 dark:text-red-400 font-semibold",
-                      displayAmountDue < 0 && "text-amber-600 dark:text-amber-400 font-semibold"
+                      displayAmountDue > 0 && "text-red-600 dark:text-red-400 font-semibold"
                     )}
                   />
                 </div>
@@ -966,8 +960,7 @@ function PricingBreakdown({
                   label="Amount Due"
                   value={formatMoney(displayAmountDue)}
                   valueClassName={cn(
-                    displayAmountDue > 0 && "text-red-600 dark:text-red-400 font-semibold",
-                    displayAmountDue < 0 && "text-amber-600 dark:text-amber-400 font-semibold"
+                    displayAmountDue > 0 && "text-red-600 dark:text-red-400 font-semibold"
                   )}
                 />
               </div>
@@ -1104,8 +1097,6 @@ export function OrderDetailFullPage({
   const queryClient = useQueryClient();
   const searchParams = useSearchParams();
   const pathname = usePathname();
-  const [isRefundOpen, setIsRefundOpen] = React.useState(false);
-  const [isVoidOpen, setIsVoidOpen] = React.useState(false);
   const [isAdjustTipOpen, setIsAdjustTipOpen] = React.useState(false);
   const [assignCustomerOpen, setAssignCustomerOpen] = React.useState(false);
   const [removingCustomer, setRemovingCustomer] = React.useState(false);
@@ -1145,17 +1136,6 @@ export function OrderDetailFullPage({
   } = useOrderFullHistory(orderId);
 
   const order = orderDetails as OrderResponse | null;
-  const locationId = order?.location_id ?? null;
-
-  const { data: printersData } = useQuery({
-    queryKey: ["printers", locationId],
-    queryFn: async () => {
-      const res = await getPrintersForLocation(locationId);
-      return res;
-    },
-    enabled: !!locationId,
-  });
-  const printersConfigured = (printersData?.printers?.length ?? 0) > 0;
 
   const derivedUserRole: OrderActionsUserRole =
     userRoleProp ??
@@ -1189,7 +1169,6 @@ export function OrderDetailFullPage({
     payments: paymentsForActions,
     userRole: derivedUserRole,
     permissions,
-    printersConfigured,
     readOnly: !!readOnly,
   });
 
@@ -1275,11 +1254,6 @@ export function OrderDetailFullPage({
       return true;
     });
   }, [payments]);
-
-  const handleRefundSuccess = React.useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: ["order-details", orderId] });
-    queryClient.invalidateQueries({ queryKey: ["order-full-history", orderId] });
-  }, [queryClient, orderId]);
 
   const handleAssignCustomerSuccess = React.useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ["order-details", orderId] });
@@ -1448,26 +1422,6 @@ export function OrderDetailFullPage({
                 <DropdownMenuItem onClick={() => setIsAdjustTipOpen(true)}>
                   <DollarSign className="h-4 w-4 mr-2" />
                   Adjust Tip
-                </DropdownMenuItem>
-              )}
-              {orderActions.showRefund && (
-                <DropdownMenuItem
-                  onClick={() => orderActions.canRefund && setIsRefundOpen(true)}
-                  disabled={!orderActions.canRefund}
-                  className="text-amber-700 dark:text-amber-400"
-                >
-                  <RotateCcw className="h-4 w-4 mr-2 text-amber-700 dark:text-amber-400" />
-                  Refund
-                </DropdownMenuItem>
-              )}
-              {orderActions.showVoid && (
-                <DropdownMenuItem
-                  variant="destructive"
-                  onClick={() => orderActions.canVoid && setIsVoidOpen(true)}
-                  disabled={!orderActions.canVoid}
-                >
-                  <Ban className="h-4 w-4 mr-2" />
-                  Void Order
                 </DropdownMenuItem>
               )}
             </DropdownMenuContent>
@@ -1817,14 +1771,10 @@ export function OrderDetailFullPage({
         <div className="border-t bg-background">
           <div className="max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
             <OrderActionBar
-              orderId={order.id}
-              locationId={order.location_id ?? null}
               actions={orderActions}
               onSendReceipt={() => setIsSendReceiptOpen(true)}
               onAssignCustomer={() => setAssignCustomerOpen(true)}
               onAdjustTip={() => setIsAdjustTipOpen(true)}
-              onRefund={() => setIsRefundOpen(true)}
-              onVoid={() => setIsVoidOpen(true)}
             />
           </div>
         </div>
@@ -1833,19 +1783,6 @@ export function OrderDetailFullPage({
         order={order}
         open={isSendReceiptOpen}
         onOpenChange={setIsSendReceiptOpen}
-      />
-      <RefundModal
-        order={order}
-        fullHistory={fullHistory ?? undefined}
-        open={isRefundOpen}
-        onOpenChange={setIsRefundOpen}
-        onSuccess={handleRefundSuccess}
-      />
-      <VoidModal
-        order={order}
-        open={isVoidOpen}
-        onOpenChange={setIsVoidOpen}
-        onSuccess={handleRefundSuccess}
       />
       {order && (
         <AssignCustomerModal

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { PageLoader } from '@/components/ui/page-loader'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -175,13 +176,7 @@ export default function RolesPermissionsPage() {
     //     setSelectedRole(filteredRoles[0])
     // }
 
-    if (isLoading) {
-        return (
-            <div className="flex h-screen items-center justify-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-            </div>
-        )
-    }
+    if (isLoading) return <PageLoader />
 
     return (
         <div className="h-screen flex flex-col">

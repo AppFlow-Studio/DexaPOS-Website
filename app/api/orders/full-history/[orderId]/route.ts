@@ -4,10 +4,10 @@ import { GetOrderFullHistory } from "@/app/dashboard/actions/order";
 
 export async function GET(
   _req: Request,
-  context: { params: { orderId: string } }
+  context: { params: Promise<{ orderId: string }> }
 ) {
   try {
-    const { orderId } = context.params;
+    const { orderId } = await context.params;
     if (!orderId) {
       return NextResponse.json(
         { error: "Missing orderId" },

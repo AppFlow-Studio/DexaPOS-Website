@@ -2582,6 +2582,15 @@ export interface PlatformTransactionDetails {
   settled_at?: string
   settlement_batch_id?: string
   gateway_fee?: number
+  subtotal_portion?: number
+  tax_portion?: number
+  dual_pricing_fee?: number
+  tip_fee?: number
+  refunded_dual_pricing_fee?: number
+  refunded_tip_fee?: number
+  original_tip_fee?: number
+  dual_pricing_percentage_snapshot?: number
+  tip_surcharge_percentage_snapshot?: number
   original_amount?: number
   refunded_amount?: number
   refund_reason?: string
@@ -2907,6 +2916,15 @@ async function getPlatformTransactionDetailsFromRpc(
     settlement_batch_id:
       selectedPayment?.settlement_batch_id || (selectedSettlement as any)?.settlement_batch_id || undefined,
     gateway_fee: selectedPayment?.gateway_fee !== null ? Number(selectedPayment?.gateway_fee) : undefined,
+    subtotal_portion: selectedPayment?.subtotal_portion != null ? Number(selectedPayment.subtotal_portion) : undefined,
+    tax_portion: selectedPayment?.tax_portion != null ? Number(selectedPayment.tax_portion) : undefined,
+    dual_pricing_fee: selectedPayment?.dual_pricing_fee != null ? Number(selectedPayment.dual_pricing_fee) : undefined,
+    tip_fee: selectedPayment?.tip_fee != null ? Number(selectedPayment.tip_fee) : undefined,
+    refunded_dual_pricing_fee: selectedPayment?.refunded_dual_pricing_fee != null ? Number(selectedPayment.refunded_dual_pricing_fee) : undefined,
+    refunded_tip_fee: selectedPayment?.refunded_tip_fee != null ? Number(selectedPayment.refunded_tip_fee) : undefined,
+    original_tip_fee: selectedPayment?.original_tip_fee != null ? Number(selectedPayment.original_tip_fee) : undefined,
+    dual_pricing_percentage_snapshot: selectedPayment?.dual_pricing_percentage_snapshot != null ? Number(selectedPayment.dual_pricing_percentage_snapshot) : undefined,
+    tip_surcharge_percentage_snapshot: selectedPayment?.tip_surcharge_percentage_snapshot != null ? Number(selectedPayment.tip_surcharge_percentage_snapshot) : undefined,
     original_amount: selectedPayment?.original_amount !== null ? Number(selectedPayment?.original_amount) : undefined,
     refunded_amount: selectedPayment?.refunded_amount !== null ? Number(selectedPayment?.refunded_amount) : undefined,
     refund_reason: selectedPayment?.refund_reason || undefined,
@@ -3311,6 +3329,15 @@ async function getPlatformTransactionDetailsLegacy(
     settled_at: data.settled_at || undefined,
     settlement_batch_id: data.settlement_batch_id || undefined,
     gateway_fee: data.gateway_fee !== null ? Number(data.gateway_fee) : undefined,
+    subtotal_portion: data.subtotal_portion != null ? Number(data.subtotal_portion) : undefined,
+    tax_portion: data.tax_portion != null ? Number(data.tax_portion) : undefined,
+    dual_pricing_fee: data.dual_pricing_fee != null ? Number(data.dual_pricing_fee) : undefined,
+    tip_fee: data.tip_fee != null ? Number(data.tip_fee) : undefined,
+    refunded_dual_pricing_fee: data.refunded_dual_pricing_fee != null ? Number(data.refunded_dual_pricing_fee) : undefined,
+    refunded_tip_fee: data.refunded_tip_fee != null ? Number(data.refunded_tip_fee) : undefined,
+    original_tip_fee: data.original_tip_fee != null ? Number(data.original_tip_fee) : undefined,
+    dual_pricing_percentage_snapshot: data.dual_pricing_percentage_snapshot != null ? Number(data.dual_pricing_percentage_snapshot) : undefined,
+    tip_surcharge_percentage_snapshot: data.tip_surcharge_percentage_snapshot != null ? Number(data.tip_surcharge_percentage_snapshot) : undefined,
     original_amount: data.original_amount !== null ? Number(data.original_amount) : undefined,
     refunded_amount: data.refunded_amount !== null ? Number(data.refunded_amount) : undefined,
     refund_reason: data.refund_reason || undefined,
@@ -3490,6 +3517,65 @@ export async function getPlatformMerchants(): Promise<PlatformMerchant[]> {
   }
 
   return (data ?? []).map((m: any) => ({ id: m.id, name: m.name }))
+}
+
+// Search-as-you-type for merchant pickers. Backs <MerchantSearchSelect />.
+// Static dropdowns hit PostgREST's max_rows=1000 cap silently — for HQs with
+// more merchants than that, the dropdown was missing entries. This endpoint
+// is paginated/searched server-side instead.
+export async function searchPlatformMerchants(
+  query: string = '',
+  limit: number = 20,
+): Promise<PlatformMerchant[]> {
+  const { userId, role } = await assertHQPermission('hq.merchant.view')
+  const merchantScope = await getAssignedMerchantScope(userId, role?.role_code)
+
+  const supabase = createServerSupabaseClient()
+  const cappedLimit = Math.max(1, Math.min(limit, 50))
+
+  let q = supabase
+    .from('merchants')
+    .select('id, name')
+    .order('name')
+    .limit(cappedLimit)
+
+  const term = query.trim()
+  if (term.length > 0) {
+    q = q.ilike('name', `%${term}%`)
+  }
+
+  if (merchantScope !== null) {
+    if (merchantScope.length === 0) return []
+    q = q.in('id', merchantScope)
+  }
+
+  const { data, error } = await q
+  if (error) {
+    console.error('[searchPlatformMerchants] Error:', error)
+    return []
+  }
+  return (data ?? []).map((m: any) => ({ id: m.id, name: m.name }))
+}
+
+// Lookup a single merchant by id — used by <MerchantSearchSelect /> to render
+// the currently-selected label without forcing the parent to keep the name.
+export async function getPlatformMerchantById(
+  id: string,
+): Promise<PlatformMerchant | null> {
+  const { userId, role } = await assertHQPermission('hq.merchant.view')
+  const merchantScope = await getAssignedMerchantScope(userId, role?.role_code)
+
+  if (merchantScope !== null && !merchantScope.includes(id)) return null
+
+  const supabase = createServerSupabaseClient()
+  const { data, error } = await supabase
+    .from('merchants')
+    .select('id, name')
+    .eq('id', id)
+    .maybeSingle()
+
+  if (error || !data) return null
+  return { id: data.id, name: data.name }
 }
 
 // Locations for filter dropdown

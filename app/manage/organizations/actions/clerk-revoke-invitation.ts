@@ -1,6 +1,7 @@
 'use server'
 
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { createClerkClient } from '@clerk/backend'
 import { logAdminAction } from '@/lib/admin/log-admin-action'
 import { auth } from '@clerk/nextjs/server'
@@ -38,7 +39,11 @@ export async function ClerkRevokeInvitation(invitationId: string) {
             requestingUserId: userId || '',
         })
 
-        const { data: updatedInvite, error: updateError } = await supabase
+        // RLS on pending_org_admin_invites can silently no-op the UPDATE for
+        // the Clerk-authed client when the actor's claims don't match the
+        // policy. Auth was enforced above; use service role for the write.
+        const admin = createServiceRoleClient()
+        const { data: updatedInvite, error: updateError } = await admin
             .from('pending_org_admin_invites')
             .update({
                 status: 'revoked',
@@ -52,6 +57,12 @@ export async function ClerkRevokeInvitation(invitationId: string) {
             return {
                 success: false,
                 message: 'Error revoking invitation: ' + updateError.message,
+            }
+        }
+        if (!updatedInvite) {
+            return {
+                success: false,
+                message: 'Failed to mark invitation revoked in database',
             }
         }
 

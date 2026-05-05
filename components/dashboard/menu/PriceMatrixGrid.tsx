@@ -444,6 +444,9 @@ function L5MatrixCell({
       });
       queryClient.invalidateQueries({ queryKey: ["item-price-matrix", itemId] });
       queryClient.invalidateQueries({ queryKey: ["menu-items"] });
+      queryClient.invalidateQueries({ queryKey: ["menu-items-flat"] });
+      queryClient.invalidateQueries({ queryKey: ["categories-with-items"] });
+      queryClient.invalidateQueries({ queryKey: ["menu-item", itemId] });
       setOpen(false);
     },
     onError: (err) => {

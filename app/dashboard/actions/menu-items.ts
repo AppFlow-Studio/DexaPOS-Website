@@ -565,6 +565,7 @@ export async function UpdateMenuItem(
     image?: string;
     meal_types?: ("Lunch" | "Dinner" | "Brunch" | "Specials")[];
     allergens?: string[];
+    dietary_flags?: string[];
     card_bg_color?: string;
     availability?: boolean;
     stock_tracking_mode?: "in_stock" | "out_of_stock" | "quantity";
@@ -747,6 +748,7 @@ export async function UpdateMenuItem(
     if (data.image !== undefined) updateData.image = data.image;
     if (data.meal_types !== undefined) updateData.meal_types = data.meal_types;
     if (data.allergens !== undefined) updateData.allergens = data.allergens;
+    if (data.dietary_flags !== undefined) updateData.dietary_flags = data.dietary_flags;
     if (data.card_bg_color !== undefined)
       updateData.card_bg_color = data.card_bg_color;
     if (data.stock_tracking_mode !== undefined)
@@ -765,6 +767,7 @@ export async function UpdateMenuItem(
     if (data.image !== undefined) updateData.image = data.image;
     if (data.meal_types !== undefined) updateData.meal_types = data.meal_types;
     if (data.allergens !== undefined) updateData.allergens = data.allergens;
+    if (data.dietary_flags !== undefined) updateData.dietary_flags = data.dietary_flags;
     if (data.card_bg_color !== undefined)
       updateData.card_bg_color = data.card_bg_color;
   }

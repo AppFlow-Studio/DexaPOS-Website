@@ -5,6 +5,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import twilio from "twilio";
 import { assertHQPermission } from "@/lib/admin/auth";
+import { resolveImpersonationFromCookies } from "@/lib/admin/impersonation";
 import {
   Order,
   OrderItem,
@@ -29,6 +30,20 @@ async function getUserOrderAccess(): Promise<{
   if (!userId) return null;
 
   const supabase = createServerSupabaseClient();
+
+  // Under HQ impersonation, the active merchant is the impersonated one and
+  // the HQ admin acts as merchant.owner — they see every location.
+  const impersonation = await resolveImpersonationFromCookies().catch(() => null);
+  if (impersonation) {
+    const { data: locations } = await supabase
+      .from("locations")
+      .select("id")
+      .eq("merchant_id", impersonation.merchantId);
+    return {
+      merchantId: impersonation.merchantId,
+      locationIds: (locations ?? []).map((l) => l.id),
+    };
+  }
 
   let merchantId: string | null = null;
   let clerkOrgId: string | null = orgId ?? null;

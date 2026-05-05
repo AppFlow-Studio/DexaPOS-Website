@@ -129,6 +129,15 @@ export interface OrderFullHistory {
     tip_adjusted_at: string | null;
     original_tip_amount: number | null;
     tip_adjusted_by_name: string | null;
+    subtotal_portion?: number | null;
+    tax_portion?: number | null;
+    dual_pricing_fee?: number | null;
+    tip_fee?: number | null;
+    refunded_dual_pricing_fee?: number | null;
+    refunded_tip_fee?: number | null;
+    original_tip_fee?: number | null;
+    dual_pricing_percentage_snapshot?: number | null;
+    tip_surcharge_percentage_snapshot?: number | null;
     result_code: string | null;
     response_message: string | null;
     split_count: number | null;

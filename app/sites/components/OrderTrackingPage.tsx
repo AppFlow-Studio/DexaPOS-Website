@@ -15,11 +15,13 @@ import {
   Loader2,
   Hourglass,
   XCircle,
+  CalendarClock,
 } from "lucide-react";
 import { useStorefrontPath } from "../lib/use-storefront-path";
 import { getOrderTracking, cancelOnlineOrder, type OrderTrackingData } from "../order-actions";
 import { useSession } from "../hooks/useSession";
 import { OrderStatusWatcher } from "./OrderStatusWatcher";
+import { formatScheduledTime } from "../lib/format-scheduled-time";
 
 interface OrderTrackingPageProps {
   initialOrder: OrderTrackingData;
@@ -324,6 +326,28 @@ export function OrderTrackingPage({
             )}
           </div>
         </div>
+
+        {/* Scheduled time banner */}
+        {order.requestedTime && (
+          <div
+            className="flex items-center gap-3 px-4 py-3 rounded-xl"
+            style={{
+              backgroundColor: "var(--card)",
+              border: "1px solid var(--border)",
+              borderRadius: "var(--radius)",
+            }}
+          >
+            <CalendarClock className="h-5 w-5 flex-shrink-0" style={{ color: "var(--primary)" }} />
+            <div>
+              <p className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
+                Scheduled for
+              </p>
+              <p className="text-sm font-semibold" style={{ color: "var(--text)" }}>
+                {formatScheduledTime(order.requestedTime, order.locationTimezone)}
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Pending countdown + cancel — single amber card */}
         {isPending && pendingCountdown !== null && (

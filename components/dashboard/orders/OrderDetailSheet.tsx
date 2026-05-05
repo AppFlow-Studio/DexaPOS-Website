@@ -34,7 +34,6 @@ import {
   Globe,
   ChefHat,
   DollarSign,
-  Printer,
   RotateCcw,
   MapPin,
   Store,
@@ -67,7 +66,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ArrowRight, ChevronDown, ChevronUp } from "lucide-react";
 import { OrderFullTimeline } from "./OrderFullTimeline";
-import { ReceiptModal } from "./ReceiptModal";
 import { useSelectedLocation } from "@/stores/location-store";
 import type { OrderFullHistory } from "@/types/order-full-history";
 import {
@@ -76,12 +74,9 @@ import {
 } from "./EnhancedPayments";
 import { ReversalsList } from "./ReversalsSection";
 import { KitchenSection, hasKitchenData } from "./KitchenSection";
-import { RefundModal } from "./RefundModal";
-import { VoidModal } from "./VoidModal";
 import { SendReceiptModal } from "./SendReceiptModal";
 import { AssignCustomerModal } from "./AssignCustomerModal";
 import { AdjustTipModal } from "./AdjustTipModal";
-import { ReprintDropdown } from "./ReprintDropdown";
 import { assignCustomerToOrder } from "@/app/actions/orders/assign-customer";
 import { toast } from "sonner";
 
@@ -91,12 +86,8 @@ interface OrderDetailSheetProps {
   onOpenChange: (open: boolean) => void;
   /** Override the full-details page URL. Defaults to `/dashboard/orders/{id}` */
   fullPageUrlPattern?: (orderId: string) => string;
-  /** When true (e.g. HQ/Carrier admin view), hide Refund/Void actions */
+  /** When true (e.g. HQ/Carrier admin view), hide merchant-only actions */
   readOnly?: boolean;
-  /** When true, show Refund button (requires refund permission). Defaults to true. */
-  canRefund?: boolean;
-  /** When true, show Void button (requires void permission). Defaults to true. Hidden for admins. */
-  canVoid?: boolean;
 }
 
 function formatCurrency(amount: number): string {
@@ -864,16 +855,11 @@ export function OrderDetailSheet({
   onOpenChange,
   fullPageUrlPattern,
   readOnly = false,
-  canRefund = true,
-  canVoid = true,
 }: OrderDetailSheetProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const selectedLocation = useSelectedLocation();
-  const [isReceiptOpen, setIsReceiptOpen] = React.useState(false);
   const [isSendReceiptOpen, setIsSendReceiptOpen] = React.useState(false);
-  const [isRefundOpen, setIsRefundOpen] = React.useState(false);
-  const [isVoidOpen, setIsVoidOpen] = React.useState(false);
   const [isAdjustTipOpen, setIsAdjustTipOpen] = React.useState(false);
   const [assignCustomerOpen, setAssignCustomerOpen] = React.useState(false);
   const [removingCustomer, setRemovingCustomer] = React.useState(false);
@@ -905,13 +891,6 @@ export function OrderDetailSheet({
     },
     enabled: !!order && open,
   });
-
-  const handleRefundSuccess = React.useCallback(() => {
-    const orderId = order?.id;
-    if (!orderId) return;
-    queryClient.invalidateQueries({ queryKey: ["order-details", orderId] });
-    queryClient.invalidateQueries({ queryKey: ["order-full-history", orderId] });
-  }, [queryClient, order?.id]);
 
   const handleAssignCustomerSuccess = React.useCallback(() => {
     const orderId = order?.id;
@@ -1092,29 +1071,11 @@ export function OrderDetailSheet({
     });
   }
 
-  const hasRefundablePayment = (payments as OrderPayment[]).some((p) =>
-    ["captured", "paid"].includes(p.status)
-  );
-
   const canShowAdjustTip =
     !readOnly &&
     eligibleTipPayments.length > 0 &&
     displayOrder.status !== "void" &&
     displayOrder.status !== "cancelled";
-
-  const canShowRefund =
-    canRefund &&
-    !readOnly &&
-    displayOrder.status !== "void" &&
-    displayOrder.status !== "refunded" &&
-    displayOrder.status !== "cancelled" &&
-    hasRefundablePayment;
-
-  const VOID_DISABLED_STATUSES = ["completed", "void", "cancelled", "refunded"];
-  const canShowVoid =
-    canVoid &&
-    !readOnly &&
-    !VOID_DISABLED_STATUSES.includes(displayOrder.status);
 
   return (
     <>
@@ -1164,20 +1125,6 @@ export function OrderDetailSheet({
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2 pr-8 xl:max-w-[360px] xl:justify-end">
-                  <ReprintDropdown
-                    orderId={displayOrder.id}
-                    locationId={displayOrder.location_id ?? null}
-                    dialogElevation="high"
-                  />
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="rounded-xl border-border/60 bg-background/80 hover:bg-background"
-                    onClick={() => setIsReceiptOpen(true)}
-                  >
-                    <Printer className="mr-1.5 h-4 w-4" />
-                    Receipt
-                  </Button>
                   <Button
                     variant="outline"
                     size="sm"
@@ -1734,56 +1681,21 @@ export function OrderDetailSheet({
                   variant="outline"
                   className="rounded-xl border-border/60 bg-background/80 hover:bg-background"
                   size="sm"
-                  onClick={() => setIsReceiptOpen(true)}
-                >
-                  <Printer className="mr-1.5 h-4 w-4" />
-                  Receipt
-                </Button>
-                <Button
-                  variant="outline"
-                  className="rounded-xl border-border/60 bg-background/80 hover:bg-background"
-                  size="sm"
                   onClick={() => setIsSendReceiptOpen(true)}
                 >
                   <Mail className="mr-1.5 h-4 w-4" />
                   Send Receipt
                 </Button>
-                {!readOnly && (canShowRefund || canShowVoid || canShowAdjustTip) && (
-                  <>
-                    {canShowAdjustTip && (
-                      <Button
-                        variant="outline"
-                        className="rounded-xl border-border/60 bg-background/80 hover:bg-background"
-                        size="sm"
-                        onClick={() => setIsAdjustTipOpen(true)}
-                      >
-                        <DollarSign className="mr-1.5 h-4 w-4" />
-                        Adjust Tip
-                      </Button>
-                    )}
-                    {canShowRefund && (
-                      <Button
-                        variant="outline"
-                        className="rounded-xl border-border/60 bg-background/80 hover:bg-background"
-                        size="sm"
-                        onClick={() => setIsRefundOpen(true)}
-                      >
-                        <RotateCcw className="mr-1.5 h-4 w-4" />
-                        Refund
-                      </Button>
-                    )}
-                    {canShowVoid && (
-                      <Button
-                        variant="destructive"
-                        className="rounded-xl"
-                        size="sm"
-                        onClick={() => setIsVoidOpen(true)}
-                      >
-                        <Ban className="mr-1.5 h-4 w-4" />
-                        Void Order
-                      </Button>
-                    )}
-                  </>
+                {!readOnly && canShowAdjustTip && (
+                  <Button
+                    variant="outline"
+                    className="rounded-xl border-border/60 bg-background/80 hover:bg-background"
+                    size="sm"
+                    onClick={() => setIsAdjustTipOpen(true)}
+                  >
+                    <DollarSign className="mr-1.5 h-4 w-4" />
+                    Adjust Tip
+                  </Button>
                 )}
               </div>
             </div>
@@ -1791,29 +1703,10 @@ export function OrderDetailSheet({
         </BottomSheetContent>
       </BottomSheet>
 
-      <ReceiptModal
-        order={displayOrder}
-        location={selectedLocation}
-        open={isReceiptOpen}
-        onOpenChange={setIsReceiptOpen}
-      />
       <SendReceiptModal
         order={displayOrder}
         open={isSendReceiptOpen}
         onOpenChange={setIsSendReceiptOpen}
-      />
-      <RefundModal
-        order={displayOrder}
-        fullHistory={fullHistory ?? undefined}
-        open={isRefundOpen}
-        onOpenChange={setIsRefundOpen}
-        onSuccess={handleRefundSuccess}
-      />
-      <VoidModal
-        order={displayOrder}
-        open={isVoidOpen}
-        onOpenChange={setIsVoidOpen}
-        onSuccess={handleRefundSuccess}
       />
       <AssignCustomerModal
         order={displayOrder as OrderResponse & { merchant_id?: string }}

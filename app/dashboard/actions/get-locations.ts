@@ -3,6 +3,7 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { LocationsModel } from "@/types/db-modles";
 import { GetUserRole } from "@/utils/get-user-role";
+import { resolveImpersonationFromCookies } from "@/lib/admin/impersonation";
 
 export interface LocationWithPrimary extends LocationsModel {
   is_primary_location?: boolean;
@@ -12,6 +13,16 @@ export async function GetUserRoleInMerchant(
   clerk_org_id: string,
   userId: string
 ) {
+  // Under active impersonation, the HQ admin acts as the merchant owner for
+  // the impersonated merchant. Every consumer that branches on role
+  // (GetLocations is the immediate one; others may follow the same pattern)
+  // should see merchant.owner so the dashboard renders the merchant's data
+  // instead of the empty non-member fallback.
+  const impersonation = await resolveImpersonationFromCookies().catch(() => null);
+  if (impersonation && impersonation.clerkOrgId === clerk_org_id) {
+    return { role: "merchant.owner" };
+  }
+
   const supabase = createServerSupabaseClient();
 
   const { data: userRole, error: userRoleError } = await supabase

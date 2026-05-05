@@ -6,7 +6,7 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: process.cwd(),
   },
-  serverExternalPackages: ["resend", "twilio"],
+  serverExternalPackages: ["resend", "twilio", "telnyx"],
   eslint: {
     ignoreDuringBuilds: true,
   },

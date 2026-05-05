@@ -15,7 +15,7 @@ import {
   OrderItemModifier,
 } from "@/types/order-management";
 import { Location } from "@/types/merchant_locations";
-import { Printer, X, RotateCcw, Ban, Loader2 } from "lucide-react";
+import { X, RotateCcw, Ban, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { refundAdminOrder, voidAdminOrder } from "@/app/manage/actions/admin-merchant/transactions";
 import { toast } from "sonner";
@@ -134,7 +134,6 @@ export function ReceiptModal({
   showAdminActions = false,
   onOrderUpdate,
 }: ReceiptModalProps & { showAdminActions?: boolean; onOrderUpdate?: () => void }) {
-  const receiptRef = React.useRef<HTMLDivElement>(null);
   const [isRefunding, setIsRefunding] = React.useState(false);
   const [isVoiding, setIsVoiding] = React.useState(false);
   const [confirmRefundOpen, setConfirmRefundOpen] = React.useState(false);
@@ -200,146 +199,6 @@ export function ReceiptModal({
         .join("\n")
     : "";
 
-  // Handle print
-  const handlePrint = () => {
-    if (receiptRef.current) {
-      const printWindow = window.open("", "_blank");
-      if (printWindow) {
-        printWindow.document.write(`
-                    <!DOCTYPE html>
-                    <html>
-                    <head>
-                        <title>Receipt - Order #${
-                          order.display_number || order.order_number
-                        }</title>
-                        <style>
-                            @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap');
-                            
-                            * {
-                                margin: 0;
-                                padding: 0;
-                                box-sizing: border-box;
-                            }
-                            
-                            body {
-                                font-family: 'IBM Plex Mono', 'Courier New', monospace;
-                                font-size: 12px;
-                                line-height: 1.4;
-                                padding: 10px;
-                                max-width: 300px;
-                                margin: 0 auto;
-                            }
-                            
-                            .receipt-header {
-                                text-align: center;
-                                margin-bottom: 16px;
-                            }
-                            
-                            .business-name {
-                                font-size: 16px;
-                                font-weight: 600;
-                                margin-bottom: 4px;
-                            }
-                            
-                            .business-address {
-                                font-size: 11px;
-                                white-space: pre-line;
-                            }
-                            
-                            .order-info {
-                                margin-bottom: 12px;
-                            }
-                            
-                            .order-info-row {
-                                display: flex;
-                                justify-content: space-between;
-                            }
-                            
-                            .dotted-line {
-                                border-bottom: 1px dashed #666;
-                                margin: 8px 0;
-                            }
-                            
-                            .double-line {
-                                border-top: 1px solid #666;
-                                border-bottom: 1px solid #666;
-                                height: 3px;
-                                margin: 8px 0;
-                            }
-                            
-                            .item-row {
-                                margin-bottom: 4px;
-                            }
-                            
-                            .item-main {
-                                display: flex;
-                                justify-content: space-between;
-                            }
-                            
-                            .item-name {
-                                flex: 1;
-                                padding-right: 8px;
-                            }
-                            
-                            .item-modifier {
-                                font-size: 10px;
-                                padding-left: 12px;
-                                color: #666;
-                            }
-                            
-                            .totals-section {
-                                margin-top: 8px;
-                            }
-                            
-                            .totals-row {
-                                display: flex;
-                                justify-content: space-between;
-                                margin-bottom: 2px;
-                            }
-                            
-                            .totals-row.grand-total {
-                                font-weight: 600;
-                                font-size: 14px;
-                                margin-top: 8px;
-                            }
-                            
-                            .payment-section {
-                                margin-top: 12px;
-                            }
-                            
-                            .footer {
-                                text-align: center;
-                                margin-top: 16px;
-                                font-size: 11px;
-                            }
-                            
-                            .footer-thanks {
-                                font-weight: 600;
-                                margin-bottom: 4px;
-                            }
-                            
-                            @media print {
-                                body {
-                                    padding: 0;
-                                }
-                            }
-                        </style>
-                    </head>
-                    <body>
-                        ${receiptRef.current.innerHTML}
-                    </body>
-                    </html>
-                `);
-        printWindow.document.close();
-        printWindow.focus();
-        setTimeout(() => {
-          printWindow.print();
-          printWindow.close();
-        }, 250);
-      }
-    }
-  };
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
@@ -363,7 +222,6 @@ export function ReceiptModal({
 
           {/* Receipt Paper */}
           <div
-            ref={receiptRef}
             className={cn(
               "relative mx-auto w-full max-w-[350px]",
               "bg-[#faf9f6] dark:bg-zinc-900",
@@ -586,11 +444,6 @@ export function ReceiptModal({
             <X className="h-4 w-4 mr-2" />
             Close
           </Button>
-          <Button size="sm" onClick={handlePrint}>
-            <Printer className="h-4 w-4 mr-2" />
-            Print Receipt
-          </Button>
-          
           {showAdminActions && order.status !== 'refunded' && order.status !== 'void' && (
             <>
               <Button 

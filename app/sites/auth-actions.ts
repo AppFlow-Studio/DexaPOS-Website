@@ -42,7 +42,7 @@ async function getRequestIp(): Promise<string | null> {
 export async function sendOtp(
   phone: string,
   storeConfigId: string
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; code?: "rate_limited_phone" | "rate_limited_ip" | "sms_failed" | "not_configured" }> {
   const supabase = createServiceRoleClient();
 
   const normalized = normalizePhone(phone);
@@ -81,10 +81,14 @@ export async function sendOtp(
 
   const verificationResult = issueResult as PhoneVerificationRpcResult | null;
   if (issueError || !verificationResult?.success || !verificationResult.verification_id) {
-    return {
-      success: false,
-      error: verificationResult?.error || "Failed to create verification",
-    };
+    const msg = verificationResult?.error ?? "";
+    if (msg.includes("Too many attempts")) {
+      return { success: false, error: msg, code: "rate_limited_phone" };
+    }
+    if (msg.includes("Too many requests from this network")) {
+      return { success: false, error: msg, code: "rate_limited_ip" };
+    }
+    return { success: false, error: msg || "Failed to create verification" };
   }
 
   const verificationId = verificationResult.verification_id;
@@ -95,34 +99,36 @@ export async function sendOtp(
   const fromNumber = process.env.TWILIO_PHONE_NUMBER;
 
   if (!accountSid || !authToken || !fromNumber) {
-    console.error("Twilio not configured");
-    // In dev, log the code instead of failing
+    console.error("[sendOtp] Twilio env vars missing (TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN / TWILIO_PHONE_NUMBER)");
+    // In dev, log the code to terminal instead of failing so you can test the flow.
     if (process.env.NODE_ENV === "development") {
-      console.log(`[DEV] OTP for ${normalized}: ${code}`);
+      console.log(`[DEV OTP] ${normalized} → ${code}`);
       return { success: true };
     }
     await supabase.from("phone_verifications").delete().eq("id", verificationId);
-    return { success: false, error: "SMS service not configured" };
+    return { success: false, error: "SMS service is not configured. Please contact support.", code: "not_configured" };
   }
 
   try {
     const client = twilio(accountSid, authToken);
     await client.messages.create({
-      body: `Your verification code is: ${code}`,
+      body: `Your verification code is: ${code}. It expires in ${OTP_EXPIRY_MINUTES} minutes.`,
       from: fromNumber,
       to: normalized,
     });
     return { success: true };
   } catch (err: any) {
-    console.error("Twilio send error:", err?.message);
+    console.error("[sendOtp] Twilio error:", err?.message, err?.code);
     await supabase.from("phone_verifications").delete().eq("id", verificationId);
-    return { success: false, error: "Failed to send verification code" };
+    return { success: false, error: "Failed to send SMS. Please check your number and try again.", code: "sms_failed" };
   }
 }
 
 export interface VerifyOtpResult {
   success: boolean;
   error?: string;
+  code?: "max_attempts" | "expired" | "invalid_code";
+  remainingAttempts?: number;
   sessionToken?: string;
   customer?: {
     id: string;
@@ -165,9 +171,18 @@ export async function verifyOtp(
 
   const verificationResult = verifyResult as PhoneVerificationRpcResult | null;
   if (verifyError || !verificationResult?.success) {
+    const msg = verificationResult?.error ?? "";
+    if (msg.includes("Too many failed attempts")) {
+      return { success: false, error: msg, code: "max_attempts" };
+    }
+    if (msg.includes("No active verification")) {
+      return { success: false, error: msg, code: "expired" };
+    }
     return {
       success: false,
-      error: verificationResult?.error || "Invalid code",
+      error: msg || "Invalid code",
+      code: "invalid_code",
+      remainingAttempts: verificationResult?.remaining_attempts,
     };
   }
 

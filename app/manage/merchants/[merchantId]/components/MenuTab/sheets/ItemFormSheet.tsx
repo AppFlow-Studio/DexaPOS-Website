@@ -1173,6 +1173,7 @@ export function ItemFormSheet({
                             }
                             availability={isLocationView && isEdit ? (watchedValues.override_availability ?? true) : watchedValues.availability}
                             categories={selectedCategoryNames}
+                            allergens={watchedValues.allergens ?? []}
                             expandDescription
                         />
                          <div>

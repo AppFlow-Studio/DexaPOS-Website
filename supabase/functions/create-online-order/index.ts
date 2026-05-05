@@ -1,4 +1,4 @@
-// ============================================================================
+﻿﻿﻿// ============================================================================
 // create-online-order Edge Function
 // ============================================================================
 // Validates stock, hours, delivery zone, recalculates prices server-side,
@@ -47,11 +47,13 @@ interface CreateOnlineOrderRequest {
   session_token?: string           // optional — authenticated customers
   store_config_id?: string         // required for guest checkout (no session)
   items: Array<{
-    id: string          // menu_item_id
+    id: string           // menu_item_id
     name: string
-    price: number       // unit price in dollars
+    price: number        // effective unit price shown to customer (full cascade)
     quantity: number
     notes?: string
+    menu_id?: string     // optional — enables L5 server-side price verification
+    category_id?: string // optional — enables L3/L4/L5 server-side price verification
     modifiers?: Array<{
       id: string | null
       name: string
@@ -243,9 +245,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
         online_store_config!inner(
           id, location_id, merchant_id, ipospays_tpn, is_active,
           operating_hours, accepts_pickup, accepts_delivery,
-          min_order_cents, estimated_prep_minutes,
-          delivery_radius_miles, delivery_fee_cents,
-          free_delivery_threshold_cents, address,
+          min_order, estimated_prep_minutes,
+          delivery_radius_miles, delivery_fee,
+          free_delivery_threshold, address,
           slug, auto_accept_orders
         )
       `)
@@ -268,9 +270,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
       .select(`
         id, location_id, merchant_id, ipospays_tpn, is_active,
         operating_hours, accepts_pickup, accepts_delivery,
-        min_order_cents, estimated_prep_minutes,
-        delivery_radius_miles, delivery_fee_cents,
-        free_delivery_threshold_cents, address,
+        min_order, estimated_prep_minutes,
+        delivery_radius_miles, delivery_fee,
+        free_delivery_threshold, address,
         slug, auto_accept_orders
       `)
       .eq('id', body.store_config_id)
@@ -392,9 +394,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
       storeConfig.address,
       body.delivery_address,
       storeConfig.delivery_radius_miles,
-      storeConfig.delivery_fee_cents,
-      storeConfig.min_order_cents,
-      storeConfig.free_delivery_threshold_cents
+      Math.round((storeConfig.delivery_fee ?? 0) * 100),
+      Math.round((storeConfig.min_order ?? 0) * 100),
+      storeConfig.free_delivery_threshold != null
+        ? Math.round(storeConfig.free_delivery_threshold * 100)
+        : null
     )
 
     if (!zoneResult.valid) {
@@ -421,23 +425,21 @@ Deno.serve(async (req: Request): Promise<Response> => {
   }
 
   // ---- Step 6: Server-side price recalculation ----
-  const itemIds = body.items.map((i) => i.id)
-
-  // Fetch actual prices from DB
-  const { data: dbItems } = await supabase
-    .from('menu_items')
-    .select('id, price, delivery_price')
-    .in('id', itemIds)
-
-  // custom_price is the correct column name in location_item_overrides (not 'price')
-  const { data: locationOverrides } = await supabase
-    .from('location_item_overrides')
-    .select('menu_item_id, custom_price')
-    .eq('location_id', locationId)
-    .in('menu_item_id', itemIds)
-
-  const dbItemMap = new Map((dbItems ?? []).map((i: any) => [i.id, i]))
-  const overrideMap = new Map((locationOverrides ?? []).map((o: any) => [o.menu_item_id, o]))
+  // Use get_effective_price() — the canonical 5-level cascade (L5>L4>L3>L2>L1).
+  // menu_id and category_id are optional; when absent the function falls back to
+  // L2>L1, which still correctly applies L2 modifier math (add/percent).
+  const effectivePrices = await Promise.all(
+    body.items.map(async (cartItem) => {
+      const { data } = await supabase.rpc('get_effective_price', {
+        p_item_id:     cartItem.id,
+        p_location_id: locationId,
+        p_menu_id:     cartItem.menu_id     ?? null,
+        p_category_id: cartItem.category_id ?? null,
+      })
+      return { id: cartItem.id, prices: data as { effective_price: number; effective_cash_price: number; effective_delivery_price: number } | null }
+    })
+  )
+  const effectivePriceMap = new Map(effectivePrices.map(({ id, prices }) => [id, prices]))
 
   // Fetch tax rate — prefer 'standard'/'default', fall back to any active rate
   let { data: taxRate } = await supabase
@@ -470,22 +472,16 @@ Deno.serve(async (req: Request): Promise<Response> => {
   const recalculatedItems: Partial<OnlineOrderItem>[] = []
 
   for (const cartItem of body.items) {
-    const dbItem = dbItemMap.get(cartItem.id)
-    const override = overrideMap.get(cartItem.id)
+    const serverPrices = effectivePriceMap.get(cartItem.id)
 
-    // Determine the correct base price.
-    // The storefront already applies the full 5-level price cascade (including category overrides L3-L5)
-    // via the get_menu_with_categories RPC. We trust the cart-submitted price as the effective price,
-    // but still verify against L2 (location override) and L1 (base price) for security.
-    // cartItem.price already reflects the full effective_price shown to the customer.
+    // Use the canonical DB price from get_effective_price() (full 5-level cascade).
+    // Falls back to the cart-submitted price only if the RPC returned nothing
+    // (item not found in DB — should not happen in practice).
     let unitPrice: number
     if (body.order_type === 'delivery') {
-      // For delivery: L2 custom_price > L1 delivery_price > L1 base price > cart-submitted effective price
-      unitPrice = override?.custom_price ?? dbItem?.delivery_price ?? dbItem?.price ?? cartItem.price
+      unitPrice = serverPrices?.effective_delivery_price ?? serverPrices?.effective_price ?? cartItem.price
     } else {
-      // For pickup: L2 custom_price > L1 base price > cart-submitted effective price
-      // If no L2 override exists, fall back to cart price (which includes L3-L5 category overrides)
-      unitPrice = override?.custom_price ?? (dbItem ? dbItem.price : cartItem.price)
+      unitPrice = serverPrices?.effective_price ?? cartItem.price
     }
 
     // Modifier totals (modifiers are trusted from client — they come from our DB originally)
@@ -539,9 +535,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
   })
 
   // ---- Step 7: Validate minimum order ----
+  const storeMinOrderCents = Math.round((storeConfig.min_order ?? 0) * 100)
   const effectiveMinOrderCents = body.order_type === 'delivery'
-    ? Math.max(deliveryMinOrderCents, storeConfig.min_order_cents ?? 0)
-    : (storeConfig.min_order_cents ?? 0)
+    ? Math.max(deliveryMinOrderCents, storeMinOrderCents)
+    : storeMinOrderCents
 
   const minResult = validateMinimumOrder(subtotalCents, effectiveMinOrderCents)
   if (!minResult.valid) {

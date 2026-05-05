@@ -14,6 +14,8 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { PhoneInput } from '@/components/ui/phone-input'
+import { normalizePhone } from '@/lib/phone'
 import { Badge } from '@/components/ui/badge'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -204,7 +206,7 @@ export function AdminCreateStaffWizard({
               firstName,
               lastName,
               email,
-              phone: phone || undefined,
+              phone: normalizePhone(phone) ?? phone || undefined,
               locationIds: Array.from(selectedLocationIds),
               primaryLocationId,
               roleCode: selectedRoleCode,
@@ -234,7 +236,7 @@ export function AdminCreateStaffWizard({
               firstName,
               lastName,
               email,
-              phone: phone || undefined,
+              phone: normalizePhone(phone) ?? phone || undefined,
               locationId: primaryLocationId ?? undefined,
               roleCode: selectedRoleCode,
               hourlyRate: hourlyRate ? parseFloat(hourlyRate) : undefined,
@@ -498,12 +500,10 @@ export function AdminCreateStaffWizard({
 
                     <div className="space-y-2">
                       <Label htmlFor="phone">Phone (Optional)</Label>
-                      <Input
+                      <PhoneInput
                         id="phone"
-                        type="tel"
                         value={phone}
-                        onChange={(e) => setPhone(e.target.value)}
-                        placeholder="+1 (555) 123-4567"
+                        onChange={setPhone}
                       />
                     </div>
                   </div>

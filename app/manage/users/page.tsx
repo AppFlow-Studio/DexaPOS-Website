@@ -45,7 +45,10 @@ import {
     UserX,
     KeyRound,
     Copy,
+    Shield,
+    CheckCircle2,
 } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { useOrganizationUsers } from '../hooks/useOrganizationUsers'
 import { useAuth, useUser } from '@clerk/nextjs'
 // import { SendOrganizationMembersInviteButton } from '../organizations/[organizationId]/components/SendOrganizationMembersInviteButton'
@@ -57,11 +60,13 @@ import { ClerkResendInvitationAdmin } from '../organizations/actions/clerk-resen
 import { ClerkRevokeInvitation } from '../organizations/actions/clerk-revoke-invitation'
 import { toast } from 'sonner'
 import {
+    activateAdminUser,
     changeAdminUserRole,
     deactivateAdminUser,
     resetAdminUserPassword,
 } from '../actions/admin-user-management'
 import { HQ_ROLES, type HQRoleCode } from '@/types/admin'
+import { PageLoader } from '@/components/ui/page-loader'
 
 const DEXA_HQ_ORG_ID = process.env.NEXT_PUBLIC_DEXA_POS_INTERNAL_TEAM_ID ?? ''
 
@@ -89,8 +94,10 @@ const inviteStatusVariants: Record<string, "default" | "destructive" | "outline"
 export default function UsersPage() {
     const router = useRouter()
     const { userId, orgId } = useAuth()
-    const { hasPermission, role_level, isLoading: permissionsLoading } = useAdminPermissions()
-    const canManageUsers = hasPermission('users.manage')
+    const { hasPermission, role_level, isSuperAdmin, isAtLeast, isLoading: permissionsLoading } = useAdminPermissions()
+    // Any HQ admin may view this list; mutations are restricted to super admins.
+    const canManageUsers = isSuperAdmin
+    void hasPermission
     const [searchTerm, setSearchTerm] = useState('')
     const [roleFilter, setRoleFilter] = useState('all')
     const [statusFilter, setStatusFilter] = useState('all')
@@ -115,17 +122,7 @@ export default function UsersPage() {
     const { data: organizationInfo, refetch: refetchOrganizationInfo } = useOrganizationInfo(resolvedOrganizationId as string)
     const adminInvites = organizationInfo?.pending_org_admin_invites || []
 
-    useEffect(() => {
-        if (permissionsLoading) return
-        if (!canManageUsers) {
-            router.replace('/manage?denied=1&required=users.manage')
-        }
-    }, [canManageUsers, permissionsLoading, router])
-
-    if (permissionsLoading) return <div>Loading...</div>
-    if (!canManageUsers) return <div>Redirecting...</div>
-
-    if (isLoading) return <div>Loading...</div>
+    if (permissionsLoading || isLoading) return <PageLoader />
     if (error) return <div>Error: {error.message}</div>
     if (!users) return <div>No users found</div>
     if (users instanceof Error) return <div>Error: {users.message}</div>
@@ -234,6 +231,31 @@ export default function UsersPage() {
         }
     }
 
+    const handleActivateUser = async (member: any) => {
+        const userIdToActivate = member?.users?.id as string | undefined
+        if (!userIdToActivate) return
+
+        const actionId = `activate:${userIdToActivate}`
+        setUserActionId(actionId)
+        try {
+            const result = await activateAdminUser({
+                userId: userIdToActivate,
+                organizationId: resolvedOrganizationId,
+            })
+            if (!result.success) {
+                toast.error(result.message || 'Failed to activate user')
+                return
+            }
+            toast.success(result.message || 'User activated')
+            await refetchUsers()
+        } catch (error) {
+            console.error('[UsersPage] Failed to activate user:', error)
+            toast.error('Failed to activate user')
+        } finally {
+            setUserActionId(null)
+        }
+    }
+
     const handleResetPassword = async (member: any) => {
         const userIdToReset = member?.users?.id as string | undefined
         if (!userIdToReset) return
@@ -322,13 +344,15 @@ export default function UsersPage() {
                     </p>
                 </div>
                 <div className="flex items-center gap-2">
-                    <Button 
-                        variant="outline"
-                        onClick={() => setIsAdminInviteOpen(true)}
-                    >
-                        <UserPlus className="h-4 w-4 mr-2" />
-                        Invite Admin
-                    </Button>
+                    {(isSuperAdmin || isAtLeast(8)) && (
+                        <Button
+                            variant="outline"
+                            onClick={() => setIsAdminInviteOpen(true)}
+                        >
+                            <UserPlus className="h-4 w-4 mr-2" />
+                            Invite Admin
+                        </Button>
+                    )}
                 </div>
                 <Dialog open={isAddUserOpen} onOpenChange={setIsAddUserOpen}>
                     <DialogTrigger asChild>
@@ -578,41 +602,56 @@ export default function UsersPage() {
                                                                 <Eye className="mr-2 h-4 w-4" />
                                                                 View Details
                                                             </DropdownMenuItem>
-                                                            <DropdownMenuItem
-                                                                onClick={(event) => {
-                                                                    event.stopPropagation()
-                                                                    openEditRoleDialog(user)
-                                                                }}
-                                                                disabled={userActionId === `role:${user.users.id}`}
-                                                            >
-                                                                <Edit className="mr-2 h-4 w-4" />
-                                                                Edit Role
-                                                            </DropdownMenuItem>
-                                                            <DropdownMenuItem
-                                                                onClick={(event) => {
-                                                                    event.stopPropagation()
-                                                                    void handleResetPassword(user)
-                                                                }}
-                                                                disabled={userActionId === `reset:${user.users.id}`}
-                                                            >
-                                                                <KeyRound className="mr-2 h-4 w-4" />
-                                                                Reset Password
-                                                            </DropdownMenuItem>
-                                                            <DropdownMenuSeparator />
-                                                            <DropdownMenuItem
-                                                                className="text-yellow-600"
-                                                                onClick={(event) => {
-                                                                    event.stopPropagation()
-                                                                    void handleDeactivateUser(user)
-                                                                }}
-                                                                disabled={
-                                                                    userActionId === `deactivate:${user.users.id}` ||
-                                                                    (user?.users?.public_metadata?.status || 'Active') === 'Inactive'
-                                                                }
-                                                            >
-                                                        <UserX className="mr-2 h-4 w-4" />
-                                                        Deactivate
-                                                            </DropdownMenuItem>
+                                                            {(isSuperAdmin || isAtLeast(8)) && (
+                                                                <>
+                                                                    <DropdownMenuItem
+                                                                        onClick={(event) => {
+                                                                            event.stopPropagation()
+                                                                            openEditRoleDialog(user)
+                                                                        }}
+                                                                        disabled={userActionId === `role:${user.users.id}`}
+                                                                    >
+                                                                        <Edit className="mr-2 h-4 w-4" />
+                                                                        Edit Role
+                                                                    </DropdownMenuItem>
+                                                                    <DropdownMenuItem
+                                                                        onClick={(event) => {
+                                                                            event.stopPropagation()
+                                                                            void handleResetPassword(user)
+                                                                        }}
+                                                                        disabled={userActionId === `reset:${user.users.id}`}
+                                                                    >
+                                                                        <KeyRound className="mr-2 h-4 w-4" />
+                                                                        Reset Password
+                                                                    </DropdownMenuItem>
+                                                                    <DropdownMenuSeparator />
+                                                                    {(user?.users?.public_metadata?.status || 'Active') === 'Inactive' ? (
+                                                                        <DropdownMenuItem
+                                                                            className="text-green-600"
+                                                                            onClick={(event) => {
+                                                                                event.stopPropagation()
+                                                                                void handleActivateUser(user)
+                                                                            }}
+                                                                            disabled={userActionId === `activate:${user.users.id}`}
+                                                                        >
+                                                                            <UserCheck className="mr-2 h-4 w-4" />
+                                                                            {userActionId === `activate:${user.users.id}` ? 'Activating...' : 'Activate'}
+                                                                        </DropdownMenuItem>
+                                                                    ) : (
+                                                                        <DropdownMenuItem
+                                                                            className="text-yellow-600"
+                                                                            onClick={(event) => {
+                                                                                event.stopPropagation()
+                                                                                void handleDeactivateUser(user)
+                                                                            }}
+                                                                            disabled={userActionId === `deactivate:${user.users.id}`}
+                                                                        >
+                                                                            <UserX className="mr-2 h-4 w-4" />
+                                                                            {userActionId === `deactivate:${user.users.id}` ? 'Deactivating...' : 'Deactivate'}
+                                                                        </DropdownMenuItem>
+                                                                    )}
+                                                                </>
+                                                            )}
                                                     </DropdownMenuContent>
                                                 </DropdownMenu>
                                             </TableCell>
@@ -634,13 +673,15 @@ export default function UsersPage() {
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <Input placeholder="Search invites..." className="w-72" />
-                                    <Button 
-                                        variant="outline"
-                                        onClick={() => setIsAdminInviteOpen(true)}
-                                    >
-                                        <UserPlus className="h-4 w-4 mr-2" />
-                                        Invite Admin
-                                    </Button>
+                                    {(isSuperAdmin || isAtLeast(8)) && (
+                                        <Button
+                                            variant="outline"
+                                            onClick={() => setIsAdminInviteOpen(true)}
+                                        >
+                                            <UserPlus className="h-4 w-4 mr-2" />
+                                            Invite Admin
+                                        </Button>
+                                    )}
                                 </div>
                             </div>
                         </CardHeader>
@@ -692,28 +733,32 @@ export default function UsersPage() {
                                                         <DropdownMenuContent align="end">
                                                             <DropdownMenuLabel>Actions</DropdownMenuLabel>
                                                             <DropdownMenuItem>Copy invite link</DropdownMenuItem>
-                                                            <DropdownMenuItem
-                                                                disabled={
-                                                                    !inv.clerk_invite_id ||
-                                                                    inviteActionId === inv.clerk_invite_id ||
-                                                                    inv.status !== 'pending'
-                                                                }
-                                                                onClick={() => void handleResendInvite(inv.clerk_invite_id)}
-                                                            >
-                                                                Resend
-                                                            </DropdownMenuItem>
-                                                            <DropdownMenuSeparator />
-                                                            <DropdownMenuItem
-                                                                className="text-red-600"
-                                                                disabled={
-                                                                    !inv.clerk_invite_id ||
-                                                                    inviteActionId === inv.clerk_invite_id ||
-                                                                    inv.status !== 'pending'
-                                                                }
-                                                                onClick={() => void handleRevokeInvite(inv.clerk_invite_id)}
-                                                            >
-                                                                Revoke
-                                                            </DropdownMenuItem>
+                                                            {(isSuperAdmin || isAtLeast(8)) && (
+                                                                <>
+                                                                    <DropdownMenuItem
+                                                                        disabled={
+                                                                            !inv.clerk_invite_id ||
+                                                                            inviteActionId === inv.clerk_invite_id ||
+                                                                            inv.status !== 'pending'
+                                                                        }
+                                                                        onClick={() => void handleResendInvite(inv.clerk_invite_id)}
+                                                                    >
+                                                                        Resend
+                                                                    </DropdownMenuItem>
+                                                                    <DropdownMenuSeparator />
+                                                                    <DropdownMenuItem
+                                                                        className="text-red-600"
+                                                                        disabled={
+                                                                            !inv.clerk_invite_id ||
+                                                                            inviteActionId === inv.clerk_invite_id ||
+                                                                            inv.status !== 'pending'
+                                                                        }
+                                                                        onClick={() => void handleRevokeInvite(inv.clerk_invite_id)}
+                                                                    >
+                                                                        Revoke
+                                                                    </DropdownMenuItem>
+                                                                </>
+                                                            )}
                                                         </DropdownMenuContent>
                                                     </DropdownMenu>
                                                 </div>
@@ -778,44 +823,111 @@ export default function UsersPage() {
             />
 
             <Dialog open={isEditRoleDialogOpen} onOpenChange={setIsEditRoleDialogOpen}>
-                <DialogContent onClick={(event) => event.stopPropagation()}>
+                <DialogContent
+                    onClick={(event) => event.stopPropagation()}
+                    className="sm:max-w-115"
+                >
                     <DialogHeader>
-                        <DialogTitle>Edit User Role</DialogTitle>
-                        <DialogDescription>
-                            Update the HQ role for{' '}
-                            <span className="font-medium">
-                                {selectedMemberForRoleEdit?.users?.email || 'selected user'}
-                            </span>
-                            .
-                        </DialogDescription>
+                        <div className="flex items-center gap-3 mb-1">
+                            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 shrink-0">
+                                <Shield className="h-4 w-4 text-primary" />
+                            </div>
+                            <div className="min-w-0">
+                                <DialogTitle className="text-base">Edit user role</DialogTitle>
+                                <DialogDescription className="text-xs mt-0.5 truncate">
+                                    {selectedMemberForRoleEdit?.users?.email || 'selected user'}
+                                </DialogDescription>
+                            </div>
+                        </div>
                     </DialogHeader>
-                    <div className="space-y-2 py-2">
-                        <Label htmlFor="role-code">Role</Label>
-                        <Select value={selectedRoleCode} onValueChange={(value) => setSelectedRoleCode(value as HQRoleCode)}>
-                            <SelectTrigger id="role-code">
-                                <SelectValue placeholder="Select role" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {Object.values(HQ_ROLES)
-                                    .filter((role) => role.level <= role_level)
-                                    .sort((a, b) => b.level - a.level)
-                                    .map((role) => (
-                                        <SelectItem key={role.code} value={role.code}>
-                                            {role.name} ({role.code})
-                                        </SelectItem>
-                                    ))}
-                            </SelectContent>
-                        </Select>
+
+                    <div className="space-y-2">
+                        {Object.values(HQ_ROLES)
+                            .filter((role) => role.level <= role_level)
+                            .sort((a, b) => b.level - a.level)
+                            .map((role) => {
+                                const isSelected = selectedRoleCode === role.code
+                                const isCurrent = selectedMemberForRoleEdit?.role === role.code
+                                const isSaving = userActionId === `role:${selectedMemberForRoleEdit?.users?.id}`
+
+                                const colors =
+                                    role.level >= 10
+                                        ? { ring: 'border-red-400 bg-red-50/40', dot: 'bg-red-500', badge: 'bg-red-50 text-red-700 border-red-200' }
+                                        : role.level >= 8
+                                            ? { ring: 'border-orange-400 bg-orange-50/40', dot: 'bg-orange-500', badge: 'bg-orange-50 text-orange-700 border-orange-200' }
+                                            : { ring: 'border-blue-400 bg-blue-50/40', dot: 'bg-blue-500', badge: 'bg-blue-50 text-blue-700 border-blue-200' }
+
+                                return (
+                                    <button
+                                        key={role.code}
+                                        type="button"
+                                        disabled={isSaving}
+                                        onClick={() => setSelectedRoleCode(role.code)}
+                                        className={cn(
+                                            'w-full text-left rounded-lg border px-4 py-3 transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
+                                            'disabled:opacity-50 disabled:cursor-not-allowed',
+                                            isSelected
+                                                ? `${colors.ring} shadow-sm`
+                                                : 'border-border hover:border-muted-foreground/40 hover:bg-muted/30'
+                                        )}
+                                    >
+                                        <div className="flex items-center justify-between gap-3">
+                                            <div className="flex items-start gap-3 min-w-0">
+                                                <div className={cn('h-2.5 w-2.5 rounded-full shrink-0 mt-1.5', colors.dot)} />
+                                                <div className="min-w-0">
+                                                    <div className="flex items-center gap-2 flex-wrap">
+                                                        <span className="text-sm font-semibold leading-none">
+                                                            {role.name}
+                                                        </span>
+                                                        {isCurrent && (
+                                                            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground border">
+                                                                Current
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <p className="text-xs text-muted-foreground mt-1 leading-snug">
+                                                        {role.description}
+                                                    </p>
+                                                    <span
+                                                        className={cn(
+                                                            'inline-flex items-center mt-1.5 text-[10px] font-mono px-1.5 py-0.5 rounded border',
+                                                            colors.badge
+                                                        )}
+                                                    >
+                                                        {role.code} · level {role.level}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <div
+                                                className={cn(
+                                                    'h-4 w-4 rounded-full border-2 shrink-0 flex items-center justify-center transition-colors',
+                                                    isSelected
+                                                        ? 'border-primary bg-primary'
+                                                        : 'border-muted-foreground/30'
+                                                )}
+                                            >
+                                                {isSelected && <CheckCircle2 className="h-3 w-3 text-white" />}
+                                            </div>
+                                        </div>
+                                    </button>
+                                )
+                            })}
                     </div>
-                    <DialogFooter>
+
+                    <DialogFooter className="gap-2 sm:gap-2 justify-between sm:justify-between">
                         <Button variant="outline" onClick={() => setIsEditRoleDialogOpen(false)}>
                             Cancel
                         </Button>
                         <Button
                             onClick={() => void handleSaveRole()}
-                            disabled={!selectedMemberForRoleEdit || userActionId === `role:${selectedMemberForRoleEdit?.users?.id}`}
+                            disabled={
+                                !selectedMemberForRoleEdit ||
+                                !selectedRoleCode ||
+                                selectedRoleCode === selectedMemberForRoleEdit?.role ||
+                                userActionId === `role:${selectedMemberForRoleEdit?.users?.id}`
+                            }
                         >
-                            {userActionId === `role:${selectedMemberForRoleEdit?.users?.id}` ? 'Saving...' : 'Save Role'}
+                            {userActionId === `role:${selectedMemberForRoleEdit?.users?.id}` ? 'Saving...' : 'Save role'}
                         </Button>
                     </DialogFooter>
                 </DialogContent>

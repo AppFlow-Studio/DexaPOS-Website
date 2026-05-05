@@ -34,6 +34,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { formatPhoneForDisplay } from "@/lib/phone";
 import { toast } from "sonner";
 import { VendorWithStats } from "../hooks/useInventoryManagement";
 import {
@@ -322,7 +323,7 @@ export function VendorDetailSheet({
                       <div className="grid gap-3 text-sm">
                         <div className="flex items-center gap-3">
                           <Phone className="h-4 w-4 text-muted-foreground" />
-                          <span>{vendor.phone || "N/A"}</span>
+                          <span>{vendor.phone ? formatPhoneForDisplay(vendor.phone) : "N/A"}</span>
                         </div>
                         <div className="flex items-center gap-3">
                           <Mail className="h-4 w-4 text-muted-foreground" />

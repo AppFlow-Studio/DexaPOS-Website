@@ -4,7 +4,11 @@ import { createClerkClient } from '@clerk/backend'
 import { assertHQPermission } from '@/lib/admin/auth'
 import { logAdminAction } from '@/lib/admin/log-admin-action'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
+import { verifyDefaultEntitiesForMerchant } from '@/app/manage/actions/admin-merchant/verify-default-entities'
 import { revalidatePath } from 'next/cache'
+import { normalizeEmail, isValidEmail } from '@/lib/utils/email'
+import { findEmailConflict } from '@/app/manage/actions/email-duplicates'
+import { emailConflictMessage } from '@/lib/utils/email'
 
 export async function updateMerchantLogo(
   organizationId: string,
@@ -58,7 +62,6 @@ export interface CreateMerchantOnboardingParams {
   ownerEmail: string
   ownerPhone: string
   ownerDob: string
-  ownerSsn: string
   businessAddress?: {
     line1: string
     line2?: string
@@ -77,10 +80,6 @@ export interface CreateMerchantOnboardingResult {
   error?: string
 }
 
-function normalizeEmail(value: string): string {
-  return value.trim().toLowerCase()
-}
-
 function normalizeValue(value?: string | null): string | null {
   if (!value) return null
   const trimmed = value.trim()
@@ -95,14 +94,6 @@ function isValidEinTaxId(value: string): boolean {
   return /^\d{9}$/.test(normalizeDigits(value))
 }
 
-function isValidSsn(value: string): boolean {
-  return /^\d{9}$/.test(normalizeDigits(value))
-}
-
-function isValidEmail(value: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
-}
-
 export async function createMerchantOnboarding(
   params: CreateMerchantOnboardingParams
 ): Promise<CreateMerchantOnboardingResult> {
@@ -114,7 +105,6 @@ export async function createMerchantOnboarding(
   const ownerEmail = normalizeEmail(params.ownerEmail || '')
   const ownerPhone = params.ownerPhone?.trim()
   const ownerDob = params.ownerDob?.trim()
-  const ownerSsn = normalizeDigits(params.ownerSsn || '')
   const einTaxId = normalizeDigits(params.einTaxId || '')
   const carrierId = params.carrierId?.trim() || null
 
@@ -126,15 +116,16 @@ export async function createMerchantOnboarding(
     return { success: false, error: 'Owner email is invalid.' }
   }
 
+  const ownerConflict = await findEmailConflict(ownerEmail, { scope: 'global' })
+  if (ownerConflict) {
+    return { success: false, error: emailConflictMessage(ownerConflict) }
+  }
+
   if (!isValidEinTaxId(einTaxId)) {
     return { success: false, error: 'EIN / Tax ID must be 9 digits.' }
   }
 
-  if (!isValidSsn(ownerSsn)) {
-    return { success: false, error: 'Owner SSN must be 9 digits.' }
-  }
-
-  const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY! })
+const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY! })
 
   let organizationId: string | null = null
 
@@ -153,9 +144,7 @@ export async function createMerchantOnboarding(
         owner_email: ownerEmail,
         owner_phone: ownerPhone,
         owner_dob: ownerDob,
-        owner_ssn: ownerSsn,
         online_store_owner_dob: ownerDob,
-        online_store_owner_ssn: ownerSsn,
         ein_last_four: einTaxId.slice(-4),
         ein_tax_id: einTaxId,
         online_store_ein_tax_id: einTaxId,
@@ -188,35 +177,64 @@ export async function createMerchantOnboarding(
       { onConflict: 'id' }
     )
 
-    await supabase.from('merchants').upsert(
-      [{
-        name: organization.name,
-        clerk_org_id: organization.id,
-        carrier_id: carrierId || null,
-        public_metadata: (organization.publicMetadata as Record<string, unknown>) || {},
-        type: params.businessType,
-        business_legal_name: businessLegalName,
-        dba_name: normalizeValue(params.dbaName),
-        business_type: params.businessType || null,
-        ein_last_four: einTaxId.slice(-4),
-        owner_first_name: ownerFirstName,
-        owner_last_name: ownerLastName,
-        owner_email: ownerEmail,
-        owner_phone: ownerPhone,
-        business_address_line1: normalizeValue(params.businessAddress?.line1),
-        business_address_line2: normalizeValue(params.businessAddress?.line2),
-        business_city: normalizeValue(params.businessAddress?.city),
-        business_state: normalizeValue(params.businessAddress?.state),
-        business_postal_code: normalizeValue(params.businessAddress?.postalCode),
-        business_country: normalizeValue(params.businessAddress?.country) || 'US',
-        onboarding_status: 'onboarding',
-        created_at: orgTs,
-        updated_at: orgTs,
-      }],
-      { onConflict: 'clerk_org_id' }
-    )
+    const { data: merchantRow } = await supabase
+      .from('merchants')
+      .upsert(
+        [{
+          name: organization.name,
+          clerk_org_id: organization.id,
+          carrier_id: carrierId || null,
+          public_metadata: (organization.publicMetadata as Record<string, unknown>) || {},
+          type: params.businessType,
+          business_legal_name: businessLegalName,
+          dba_name: normalizeValue(params.dbaName),
+          business_type: params.businessType || null,
+          ein_last_four: einTaxId.slice(-4),
+          owner_first_name: ownerFirstName,
+          owner_last_name: ownerLastName,
+          owner_email: ownerEmail,
+          owner_phone: ownerPhone,
+          business_address_line1: normalizeValue(params.businessAddress?.line1),
+          business_address_line2: normalizeValue(params.businessAddress?.line2),
+          business_city: normalizeValue(params.businessAddress?.city),
+          business_state: normalizeValue(params.businessAddress?.state),
+          business_postal_code: normalizeValue(params.businessAddress?.postalCode),
+          business_country: normalizeValue(params.businessAddress?.country) || 'US',
+          onboarding_status: 'onboarding',
+          created_at: orgTs,
+          updated_at: orgTs,
+        }],
+        { onConflict: 'clerk_org_id' }
+      )
+      .select('id')
+      .single()
 
-    // 2. Send owner invite — they'll land at /join-organization after accepting
+    // 2b. Verify the auto-provisioning DB trigger populated default entities
+    //     (default station / payment terminal / prep station). The trigger is
+    //     the source of truth — we only read & log a warning if anything is
+    //     missing, never re-insert. Onboarding still proceeds either way.
+    if (merchantRow?.id) {
+      const report = await verifyDefaultEntitiesForMerchant(merchantRow.id)
+      if (!report.ok) {
+        await logAdminAction('MERCHANT_DEFAULT_ENTITIES_MISSING', {
+          clerkOrgId: organization.id,
+          merchantId: merchantRow.id,
+          resourceType: 'merchant',
+          resourceId: merchantRow.id,
+          resourceName: normalizeValue(params.dbaName) || businessLegalName,
+          metadata: {
+            missing: report.missing,
+            counts: report.counts,
+            source: 'createMerchantOnboarding',
+          },
+          severity: 'warning',
+        })
+      }
+    }
+
+    // 2. Send owner invite — they'll land at /join-organization after accepting.
+    //    The first admin of a merchant must be auto-active: there's no one
+    //    above them in the merchant org to manually activate them.
     await clerkClient.organizations.createOrganizationInvitation({
       organizationId: organization.id,
       emailAddress: ownerEmail,
@@ -227,6 +245,10 @@ export async function createMerchantOnboarding(
         level_type: 'org:admin',
         firstName: ownerFirstName,
         lastName: ownerLastName,
+        status: 'Active',
+        auto_activated: true,
+        auto_activated_reason: 'first_merchant_admin',
+        auto_activated_at: new Date().toISOString(),
       },
     })
 

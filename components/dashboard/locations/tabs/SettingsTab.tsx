@@ -57,6 +57,7 @@ export function SettingsTab({ location, onUpdate, onClose }: SettingsTabProps) {
     const { pricingStrategy: merchantStrategy, dualPricingPercentage: merchantPercentage } = useEffectivePricing()
 
     const [isTogglingOrders, setIsTogglingOrders] = useState(false)
+    const [isTogglingDefaults, setIsTogglingDefaults] = useState(false)
     const [isDeactivating, setIsDeactivating] = useState(false)
     const [showDeactivateDialog, setShowDeactivateDialog] = useState(false)
     const [confirmName, setConfirmName] = useState('')
@@ -109,6 +110,7 @@ export function SettingsTab({ location, onUpdate, onClose }: SettingsTabProps) {
 
     const handleToggleMerchantDefaults = async (checked: boolean) => {
         setUseMerchantDefaults(checked)
+        setIsTogglingDefaults(true)
         try {
             const result = await UpdateLocation(location.id, {
                 use_merchant_pricing_defaults: checked,
@@ -119,12 +121,16 @@ export function SettingsTab({ location, onUpdate, onClose }: SettingsTabProps) {
                 return
             }
             toast.success(checked ? 'Using Organization Defaults' : 'Using Custom Pricing')
-            queryClient.invalidateQueries({ queryKey: ['locations'] })
-            queryClient.invalidateQueries({ queryKey: ['merchant-pricing-defaults'] })
+            void Promise.all([
+                queryClient.invalidateQueries({ queryKey: ['locations'] }),
+                queryClient.invalidateQueries({ queryKey: ['merchant-pricing-defaults'] }),
+            ])
             onUpdate?.()
         } catch (error) {
             setUseMerchantDefaults(!checked)
             toast.error('Update Failed', { description: 'An unexpected error occurred' })
+        } finally {
+            setIsTogglingDefaults(false)
         }
     }
 
@@ -269,10 +275,14 @@ export function SettingsTab({ location, onUpdate, onClose }: SettingsTabProps) {
                                     </p>
                                 </div>
                             </div>
-                            <Switch
-                                checked={useMerchantDefaults}
-                                onCheckedChange={handleToggleMerchantDefaults}
-                            />
+                            <div className="flex items-center gap-2">
+                                {isTogglingDefaults && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
+                                <Switch
+                                    checked={useMerchantDefaults}
+                                    onCheckedChange={handleToggleMerchantDefaults}
+                                    disabled={isTogglingDefaults}
+                                />
+                            </div>
                         </div>
 
                         {useMerchantDefaults ? (
@@ -326,18 +336,28 @@ export function SettingsTab({ location, onUpdate, onClose }: SettingsTabProps) {
 
                                 {location.pricing_strategy === 'dual' && (
                                     <div className="grid gap-2 animate-in fade-in slide-in-from-top-2">
-                                        <Label>Dual Pricing Percentage (%)</Label>
+                                        <Label>Cash Discount Percentage (%)</Label>
                                         <div className="relative">
                                             <Input
                                                 type="number"
                                                 step="0.01"
                                                 min="0"
-                                                max="100"
+                                                max="4"
                                                 defaultValue={location.dual_pricing_percentage ?? 4.0}
                                                 onBlur={async (e) => {
                                                     const val = parseFloat(e.target.value);
                                                     if (isNaN(val)) return;
-                                                    if (val === location.dual_pricing_percentage) return;
+                                                    if (val > 4) {
+                                                        toast.error('Percentage cannot exceed 4% per card brand surcharge rules.');
+                                                        e.target.value = String(location.dual_pricing_percentage ?? 4.0);
+                                                        return;
+                                                    }
+                                                    if (val < 0) {
+                                                        toast.error('Percentage cannot be negative.');
+                                                        e.target.value = String(location.dual_pricing_percentage ?? 4.0);
+                                                        return;
+                                                    }
+                                                    if (val === parseFloat(String(location.dual_pricing_percentage ?? 0))) return;
 
                                                     try {
                                                         const result = await UpdateLocation(location.id, {
@@ -358,7 +378,7 @@ export function SettingsTab({ location, onUpdate, onClose }: SettingsTabProps) {
                                             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">%</span>
                                         </div>
                                         <p className="text-xs text-muted-foreground">
-                                            Typical values range from 3.5% to 4.0%
+                                            Maximum 4% per Visa/Mastercard surcharge rules.
                                         </p>
                                     </div>
                                 )}

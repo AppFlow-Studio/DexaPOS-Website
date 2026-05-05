@@ -13,6 +13,7 @@ interface ItemPreviewCardProps {
     cashPrice?: number
     image?: string
     categories?: string[]
+    allergens?: string[]
     availability?: boolean
     expandDescription?: boolean
     className?: string
@@ -25,6 +26,7 @@ export function ItemPreviewCard({
     cashPrice,
     image,
     categories = [],
+    allergens = [],
     availability = true,
     expandDescription = false,
     className,
@@ -129,6 +131,26 @@ export function ItemPreviewCard({
                         </span>
                     )}
                 </div>
+
+                {/* Allergens */}
+                {allergens.length > 0 && (
+                    <div className="pt-2 border-t border-orange-200/50">
+                        <p className="text-[10px] font-bold uppercase tracking-wide text-orange-600 mb-1">
+                            Contains
+                        </p>
+                        <div className="flex flex-wrap gap-1">
+                            {allergens.map((a) => (
+                                <Badge
+                                    key={a}
+                                    variant="secondary"
+                                    className="text-[10px] bg-orange-500/10 text-orange-600 border-orange-200"
+                                >
+                                    {a}
+                                </Badge>
+                            ))}
+                        </div>
+                    </div>
+                )}
             </CardContent>
         </Card>
     )

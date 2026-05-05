@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { PhoneInput } from "@/components/ui/phone-input";
+import { isValidPhone, normalizePhone } from "@/lib/phone";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -34,7 +36,7 @@ const onboardingSchema = z.object({
   restaurantManagerEmail: z.string().email("Valid email required"),
   restaurantManagerFirstname: z.string().min(1, "First name is required"),
   restaurantManagerLastname: z.string().min(1, "Last name is required"),
-  restaurantManagerPhone: z.string().min(1, "Phone number is required"),
+  restaurantManagerPhone: z.string().min(1, "Phone number is required").refine(v => isValidPhone(v), { message: 'Enter a valid phone number' }),
 });
 
 export type OnboardingFormData = z.infer<typeof onboardingSchema>;
@@ -64,6 +66,7 @@ export function OrderOutOnboardingForm({
   const {
     register,
     handleSubmit,
+    control,
     formState: { errors },
   } = useForm<OnboardingFormData>({
     resolver: zodResolver(onboardingSchema),
@@ -89,7 +92,10 @@ export function OrderOutOnboardingForm({
 
   const handleConfirm = () => {
     if (pendingData) {
-      onSubmit(pendingData);
+      onSubmit({
+        ...pendingData,
+        restaurantManagerPhone: normalizePhone(pendingData.restaurantManagerPhone) ?? pendingData.restaurantManagerPhone,
+      });
       setPendingData(null);
     }
   };
@@ -252,11 +258,18 @@ export function OrderOutOnboardingForm({
         </div>
         <div className="space-y-2">
           <Label htmlFor="restaurantManagerPhone">Phone *</Label>
-          <Input
-            id="restaurantManagerPhone"
-            type="tel"
-            {...register("restaurantManagerPhone")}
-            placeholder="5551234567"
+          <Controller
+            control={control}
+            name="restaurantManagerPhone"
+            render={({ field }) => (
+              <PhoneInput
+                id="restaurantManagerPhone"
+                value={field.value}
+                onChange={field.onChange}
+                onBlur={field.onBlur}
+                aria-invalid={!!errors.restaurantManagerPhone}
+              />
+            )}
           />
           {errors.restaurantManagerPhone && (
             <p className="text-sm text-destructive">

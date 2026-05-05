@@ -8,6 +8,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { PageLoader } from "@/components/ui/page-loader";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -27,6 +28,7 @@ import {
 import { format } from "date-fns";
 import type { CustomerListItem } from "@/types/customer";
 import { getCustomerDisplayName } from "@/types/customer";
+import { formatPhoneForDisplay } from "@/lib/phone";
 
 interface CustomerListProps {
   customers: CustomerListItem[];
@@ -66,8 +68,8 @@ export function CustomerList({
 }: CustomerListProps) {
   if (isLoading) {
     return (
-      <div className="w-full h-96 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      <div className="w-full h-96">
+        <PageLoader variant="fill" />
       </div>
     );
   }
@@ -114,7 +116,7 @@ export function CustomerList({
                       {getCustomerDisplayName(customer)}
                     </span>
                     <span className="text-xs text-muted-foreground">
-                      {customer.phone || customer.email || "No contact info"}
+                      {formatPhoneForDisplay(customer.phone) || customer.email || "No contact info"}
                     </span>
                   </div>
                   {customer.tags && customer.tags.length > 0 && (

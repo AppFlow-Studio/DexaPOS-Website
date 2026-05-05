@@ -1163,6 +1163,7 @@ export default function MenuItemsPage() {
         description: `"${deletingItem.name}" will now use global pricing at this location.`,
       });
 
+      queryClient.invalidateQueries({ queryKey: ["menu-items"] });
       queryClient.invalidateQueries({ queryKey: ["menu-items-flat"] });
       queryClient.invalidateQueries({ queryKey: ["categories-with-items"] });
       refetch();
@@ -1212,6 +1213,7 @@ export default function MenuItemsPage() {
           : `"${deletingItem.name}" has been permanently deleted.`,
       });
 
+      queryClient.invalidateQueries({ queryKey: ["menu-items"] });
       queryClient.invalidateQueries({ queryKey: ["menu-items-flat"] });
       queryClient.invalidateQueries({ queryKey: ["categories-with-items"] });
       refetch();
@@ -1762,10 +1764,9 @@ export default function MenuItemsPage() {
         onSuccess={() => {
           setIsCreateSheetOpen(false);
           setEditingItem(null);
+          queryClient.invalidateQueries({ queryKey: ["menu-items"] });
           queryClient.invalidateQueries({ queryKey: ["menu-items-flat"] });
-          queryClient.invalidateQueries({
-            queryKey: ["categories-with-items"],
-          });
+          queryClient.invalidateQueries({ queryKey: ["categories-with-items"] });
           refetch();
         }}
       />
@@ -1846,10 +1847,9 @@ export default function MenuItemsPage() {
           selectedLocationId={selectedLocationId}
           onSuccess={() => {
             setIsCreateWizardOpen(false);
+            queryClient.invalidateQueries({ queryKey: ["menu-items"] });
             queryClient.invalidateQueries({ queryKey: ["menu-items-flat"] });
-            queryClient.invalidateQueries({
-              queryKey: ["categories-with-items"],
-            });
+            queryClient.invalidateQueries({ queryKey: ["categories-with-items"] });
             refetch();
           }}
         />
