@@ -236,10 +236,10 @@ export function AddStationDialog({
         case "register":
           setCanCreateOrders(true);
           setCanProcessPayments(true);
-          setCanVoidOrders(false);
+          setCanVoidOrders(true);
           setCanApplyDiscounts(true);
-          setCanUpdateKitchenStatus(false);
-          setViewScope("own");
+          setCanUpdateKitchenStatus(true);
+          setViewScope("location");
           break;
         case "checkout":
           setCanCreateOrders(false);
@@ -304,12 +304,12 @@ export function AddStationDialog({
     setDeviceName("");
     setHardwareModel("");
     setSyncRole("follower");
-    setViewScope("own");
+    setViewScope("location");
     setCanCreateOrders(true);
-    setCanProcessPayments(false);
-    setCanVoidOrders(false);
+    setCanProcessPayments(true);
+    setCanVoidOrders(true);
     setCanApplyDiscounts(true);
-    setCanUpdateKitchenStatus(false);
+    setCanUpdateKitchenStatus(true);
     resetKdsFields();
     setActiveTab("basic");
   };
@@ -533,22 +533,6 @@ export function AddStationDialog({
                   }
                   placeholder="Auto-assigned"
                 />
-              </div>
-
-              <div className="grid gap-2">
-                <Label htmlFor="syncRole">Sync Role</Label>
-                <Select value={syncRole} onValueChange={(v) => setSyncRole(v as SyncRole)}>
-                  <SelectTrigger id="syncRole">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="leader">Leader</SelectItem>
-                    <SelectItem value="follower">Follower</SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">
-                  Leader stations sync data to other stations
-                </p>
               </div>
             </div>
           </TabsContent>

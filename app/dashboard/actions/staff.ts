@@ -97,6 +97,7 @@ export async function inviteStaffMember(
     }
     const conflict = await findEmailConflict(normalized, {
       scope: { merchantId: params.merchantId },
+      tables: ["users", "staff_profiles", "location_invites", "pending_org_admin_invites"],
     });
     if (conflict) {
       return { success: false, error: emailConflictMessage(conflict) };
@@ -157,7 +158,23 @@ export async function inviteStaffMember(
             status: "pending",
           });
 
-        if (inviteError) throw inviteError;
+        if (inviteError) {
+          // DB insert failed — revoke the Clerk invitation so we don't leave
+          // an orphan that the user could still accept.
+          try {
+            await clerk.organizations.revokeOrganizationInvitation({
+              organizationId: clerkOrgId,
+              invitationId: invitation.id,
+              requestingUserId: userId,
+            });
+          } catch (revokeErr) {
+            console.warn(
+              "[inviteStaffMember] Failed to revoke orphan Clerk invite:",
+              revokeErr,
+            );
+          }
+          throw inviteError;
+        }
 
         // Log audit event
         await LogAuditEvent({

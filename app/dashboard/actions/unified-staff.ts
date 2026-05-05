@@ -517,14 +517,19 @@ export async function CreateClerkUserDirectly(
       pinCode,
     }));
 
-    // 3. Create Clerk user with password
+    // 3. Create Clerk user with password.
+    //    Phone is GLOBALLY unique on Clerk's side. If a phone is rejected
+    //    (already attached to another Clerk user / org), don't fail the whole
+    //    create — retry without the phone and still store it on staff_profiles
+    //    so the merchant has it for contact purposes.
     const clerk = await clerkClient();
-    const clerkUser = await clerk.users.createUser({
+    const buildCreateUserPayload = (includePhone: boolean) => ({
       emailAddress: [formData.email],
       password: tempPassword,
       firstName: formData.first_name,
       lastName: formData.last_name,
-      phoneNumber: formData?.phone ? [formData.phone] : undefined,
+      phoneNumber:
+        includePhone && formData?.phone ? [formData.phone] : undefined,
       publicMetadata: {
         creationType: "direct",
         organizationId: clerkOrgId,
@@ -532,10 +537,39 @@ export async function CreateClerkUserDirectly(
         roleCode: formData.role_code,
         locationAssignments,
         phone: formData.phone,
+        phoneNotLinkedToClerk: !includePhone && !!formData?.phone,
       },
       skipPasswordRequirement: false,
       skipPasswordChecks: false,
     });
+
+    const isPhoneConflict = (err: any) =>
+      Array.isArray(err?.errors) &&
+      err.errors.some((e: any) => {
+        const code: string = e?.code ?? "";
+        const msg: string = (e?.longMessage || e?.message || "").toLowerCase();
+        return (
+          code === "form_identifier_exists" &&
+          (e?.meta?.paramName === "phone_number" ||
+            msg.includes("phone"))
+        );
+      });
+
+    let clerkUser;
+    let phoneSkippedDueToConflict = false;
+    try {
+      clerkUser = await clerk.users.createUser(buildCreateUserPayload(true));
+    } catch (createErr: any) {
+      if (formData?.phone && isPhoneConflict(createErr)) {
+        console.warn(
+          "[CreateClerkUserDirectly] Phone already used in Clerk — retrying create without phone",
+        );
+        phoneSkippedDueToConflict = true;
+        clerkUser = await clerk.users.createUser(buildCreateUserPayload(false));
+      } else {
+        throw createErr;
+      }
+    }
 
     if (!clerkUser || !clerkUser.id) {
       return { error: "Failed to create Clerk user" };
@@ -651,19 +685,38 @@ export async function CreateClerkUserDirectly(
         employment_type: formData.employment_type,
       }));
 
-      const { error: assignmentError } = await supabase
+      // Use service role for the insert — location_members RLS may not have an
+      // INSERT policy reachable from the Clerk-authed client mid-flow, and the
+      // webhook also writes here using service role.
+      const { error: assignmentError } = await createServiceRoleClient()
         .from("location_members")
         .insert(locationMembersData);
 
       if (assignmentError) {
-        console.error(
-          "[CreateClerkUserDirectly] Failed to create location assignments:",
-          assignmentError,
-        );
-        await supabase.from("members").delete().eq("id", member.id);
-        await supabase.from("staff_profiles").delete().eq("id", staffProfile.id);
-        await clerk.users.deleteUser(clerkUser.id);
-        return { error: "Failed to create location assignments" };
+        // 23505 = unique_violation. The Clerk org-membership webhook fires in
+        // parallel and also inserts into location_members. If it landed first,
+        // the rows are already there — treat that as success rather than
+        // tearing down the whole user.
+        if ((assignmentError as any).code === "23505") {
+          console.warn(
+            "[CreateClerkUserDirectly] location_members already inserted (likely by webhook race) — continuing",
+          );
+        } else {
+          console.error(
+            "[CreateClerkUserDirectly] Failed to create location assignments:",
+            assignmentError,
+          );
+          await supabase.from("members").delete().eq("id", member.id);
+          await supabase.from("staff_profiles").delete().eq("id", staffProfile.id);
+          await clerk.users.deleteUser(clerkUser.id);
+          // Surface the underlying reason instead of a generic message.
+          const detail =
+            (assignmentError as any).code === "23503"
+              ? "One of the selected locations no longer exists."
+              : assignmentError.message ||
+                "Failed to create location assignments";
+          return { error: detail };
+        }
       }
     }
 
@@ -711,6 +764,7 @@ export async function CreateClerkUserDirectly(
         user_id: clerkUser.id,
         generated_pin: generatedPin,
         temp_password: tempPassword,
+        phone_skipped: phoneSkippedDueToConflict,
       },
     };
   } catch (error) {
@@ -726,7 +780,11 @@ export async function CreateClerkUserDirectly(
         .join("; ");
       return { error: msg };
     }
-    return { error: "An unexpected error occurred" };
+    // Surface DB / unknown error messages instead of swallowing them.
+    const fallback =
+      (error as any)?.message ||
+      (typeof error === "string" ? error : "An unexpected error occurred");
+    return { error: fallback };
   }
 }
 

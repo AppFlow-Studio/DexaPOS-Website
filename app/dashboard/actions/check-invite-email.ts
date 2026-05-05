@@ -39,10 +39,12 @@ export async function checkInviteEmail(
     merchantId = data?.id ?? null
   }
 
-  const conflict = await findEmailConflict(
-    normalized,
-    merchantId ? { scope: { merchantId } } : { scope: 'global' }
-  )
+  // Identity-only conflict check: ignore organizational contact emails
+  // (locations.email, merchants.owner_email) — those are not user identities.
+  const conflict = await findEmailConflict(normalized, {
+    scope: merchantId ? { merchantId } : 'global',
+    tables: ['users', 'staff_profiles', 'location_invites', 'pending_org_admin_invites'],
+  })
 
   if (conflict) {
     return {
