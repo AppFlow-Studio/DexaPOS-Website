@@ -48,6 +48,11 @@ async function getActorAndTargetNames(
 export async function grantAdminMerchantAccess(input: GrantAccessInput): Promise<{ success: boolean; message?: string }> {
   try {
     const authContext = await assertHQPermission('hq.team.manage')
+
+    if (authContext.userId === input.adminUserId) {
+      return { success: false, message: 'You cannot grant merchant access to yourself.' }
+    }
+
     const supabase = createServiceRoleClient()
     const now = new Date().toISOString()
 
@@ -161,6 +166,11 @@ export async function bulkGrantAdminMerchantAccess(
 ): Promise<{ success: boolean; message?: string }> {
   try {
     const authContext = await assertHQPermission('hq.team.manage')
+
+    if (authContext.userId === adminUserId) {
+      return { success: false, message: 'You cannot grant merchant access to yourself.' }
+    }
+
     const supabase = createServiceRoleClient()
     const now = new Date().toISOString()
 

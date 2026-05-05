@@ -26,6 +26,8 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { AddressAutocomplete } from '@/components/ui/address-autocomplete'
+import { PhoneInput } from '@/components/ui/phone-input'
+import { isValidPhone, normalizePhone, formatPhoneForDisplay } from '@/lib/phone'
 import { ImagePlus, X, Loader2 } from 'lucide-react'
 import {
   createMerchantOnboarding,
@@ -43,7 +45,7 @@ const createMerchantSchema = z.object({
   ownerFirstName: z.string().min(1, 'Owner first name is required.'),
   ownerLastName: z.string().min(1, 'Owner last name is required.'),
   ownerEmail: z.string().email('Valid owner email is required.'),
-  ownerPhone: z.string().min(7, 'Owner phone is required.'),
+  ownerPhone: z.string().refine(v => !v || isValidPhone(v), { message: 'Enter a valid phone number' }),
   ownerDob: z.string().min(1, 'Owner date of birth is required.'),
   businessAddressLine1: z.string().min(1, 'Address line 1 is required.'),
   businessAddressLine2: z.string().optional(),
@@ -237,7 +239,7 @@ export function CreateMerchantWizard() {
         ownerFirstName: data.ownerFirstName,
         ownerLastName: data.ownerLastName,
         ownerEmail: data.ownerEmail,
-        ownerPhone: data.ownerPhone,
+        ownerPhone: normalizePhone(data.ownerPhone) ?? data.ownerPhone,
         ownerDob: data.ownerDob,
         businessAddress: {
           line1: data.businessAddressLine1,
@@ -516,7 +518,11 @@ export function CreateMerchantWizard() {
                       <FormItem>
                         <FormLabel>Owner Phone</FormLabel>
                         <FormControl>
-                          <Input {...field} placeholder="(555) 123-4567" />
+                          <PhoneInput
+                            value={field.value}
+                            onChange={field.onChange}
+                            onBlur={field.onBlur}
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -727,7 +733,7 @@ export function CreateMerchantWizard() {
                         {values.ownerLastName} — {values.ownerEmail}
                       </p>
                       <p>
-                        <span className="font-medium text-foreground">Phone:</span> {values.ownerPhone}
+                        <span className="font-medium text-foreground">Phone:</span> {formatPhoneForDisplay(values.ownerPhone)}
                       </p>
                       <p>
                         <span className="font-medium text-foreground">DOB:</span> {values.ownerDob}

@@ -74,6 +74,7 @@ import {
   UserX,
   UserCheck,
   X,
+  AlertTriangle,
 } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { toast } from 'sonner'
@@ -82,6 +83,7 @@ import { CredentialToast } from '@/components/ui/credential-toast'
 import type { AdminStaffMember } from '@/types/staff'
 import type { MerchantInfoModel } from '@/types/db-modles'
 import type { MerchantDetails } from '@/types/merchant'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { AdminCreateStaffWizard } from './AdminCreateStaffWizard'
 import { BulkPinResetDialog } from './BulkPinResetDialog'
 import { BulkPasswordResetDialog } from './BulkPasswordResetDialog'
@@ -198,6 +200,22 @@ export function StaffTab({ merchantInfo, merchantDetails, refetchMerchantInfo }:
       toast.error('Cannot update status: missing required info')
       return
     }
+
+    // Block activation of incomplete records
+    const isActivating = !primary.is_active
+    if (isActivating) {
+      const missing: string[] = []
+      if (!primary.role_code) missing.push('role')
+      if (!primary.location_id) missing.push('location')
+      if (!primary.has_pin) missing.push('PIN')
+      if (missing.length > 0) {
+        toast.error(
+          `This record is incomplete — set ${missing.join(', ')} first before activating.`
+        )
+        return
+      }
+    }
+
     toggleStatusMutation.mutate(
       {
         merchantId,
@@ -470,6 +488,15 @@ export function StaffTab({ merchantInfo, merchantDetails, refetchMerchantInfo }:
 
   return (
     <div className="space-y-4">
+
+      {/* HQ intervention banner */}
+      <Alert className="border-amber-500/50 bg-amber-50 dark:bg-amber-950/20">
+        <AlertTriangle className="h-4 w-4 text-amber-600" />
+        <AlertDescription className="text-amber-800 dark:text-amber-200">
+          <span className="font-semibold">Acting as HQ on behalf of {merchantInfo.name}.</span>{' '}
+          All staff actions are logged as HQ interventions and attributed to your admin account.
+        </AlertDescription>
+      </Alert>
 
       {/* Stats Cards */}
       <div className="grid grid-cols-4 gap-4">

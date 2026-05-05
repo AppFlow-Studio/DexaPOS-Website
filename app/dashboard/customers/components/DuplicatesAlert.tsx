@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
 import { useFindDuplicateCustomers, useMergeCustomers } from "../hooks/useCustomers";
+import { formatPhoneForDisplay } from "@/lib/phone";
 import type { CustomerListItem } from "@/types/customer";
 import { getCustomerDisplayName } from "@/types/customer";
 
@@ -187,7 +188,7 @@ function DuplicateGroupCard({
                     {getCustomerDisplayName(customer)}
                   </p>
                   <p className="text-sm text-muted-foreground mt-1.5">
-                    {customer.phone} {customer.email && `• ${customer.email}`}
+                    {formatPhoneForDisplay(customer.phone)} {customer.email && `• ${customer.email}`}
                   </p>
                   <div className="mt-3 flex gap-3 text-xs font-medium text-muted-foreground">
                     <span className="flex items-center gap-1"><TrendingUp className="h-3 w-3 text-green-600" /> {customer.visits} visits</span>

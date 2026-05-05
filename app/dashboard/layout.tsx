@@ -1,6 +1,6 @@
 "use client";
 
-import { SignOutButton, useClerk, useSession } from "@clerk/nextjs";
+import { useClerk, useSession } from "@clerk/nextjs";
 import { redirect, usePathname } from "next/navigation";
 import { useEffect } from "react";
 import {
@@ -85,6 +85,8 @@ import {
   useIsAllLocations,
 } from "@/stores/location-store";
 import { useSessionSync } from "./hooks/useSessionSync";
+import { useQueryClient } from "@tanstack/react-query";
+import { resetClientSession } from "@/lib/auth/session-reset";
 import {
   Collapsible,
   CollapsibleContent,
@@ -298,6 +300,13 @@ function MerchantSidebar() {
   const { data: userInfo, isLoading } = useUserInfo();
   const pathname = usePathname();
   const { signOut } = useClerk();
+  const queryClient = useQueryClient();
+
+  const handleSignOut = async () => {
+    await resetClientSession(queryClient);
+    await signOut();
+    window.location.href = "/sign-in";
+  };
 
   return (
     <Sidebar variant="inset">
@@ -701,14 +710,12 @@ function MerchantSidebar() {
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem>
-                <SignOutButton>
-                  <Button variant="ghost">
-                    <div className="flex items-center gap-2">
-                      <LogOut className="mr-2 h-4 w-4" />
-                      Log out
-                    </div>
-                  </Button>
-                </SignOutButton>
+                <button onClick={handleSignOut}>
+                  <div className="flex items-center gap-2">
+                    <LogOut className="mr-2 h-4 w-4" />
+                    Log out
+                  </div>
+                </button>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
