@@ -15,6 +15,8 @@ export function normalizePhone(
   }
 }
 
+export const normalizeToE164 = normalizePhone
+
 /** Format an E.164 string for human display. Falls back to the raw value. */
 export function formatPhoneForDisplay(e164: string | null | undefined): string {
   if (!e164) return ''
