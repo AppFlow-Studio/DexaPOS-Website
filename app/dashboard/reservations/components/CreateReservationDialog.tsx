@@ -27,6 +27,8 @@ import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { AlertTriangle, Loader2 } from 'lucide-react'
+import { PhoneInput } from '@/components/ui/phone-input'
+import { isValidPhone, normalizePhone } from '@/lib/phone'
 import { useCreateReservation } from '@/app/dashboard/hooks/useReservations'
 import { detectReservationConflict } from '@/lib/reservations/conflict-detection'
 import type { ConflictResult } from '@/lib/reservations/conflict-detection'
@@ -35,10 +37,7 @@ import type { Reservation } from '@/types/floor-plan'
 const schema = z.object({
   partyName: z.string().min(1, 'Name required'),
   partySize: z.coerce.number().int().min(1, 'Min 1').max(20, 'Max 20'),
-  phone: z
-    .string()
-    .min(1, 'Phone required')
-    .refine(isValidPhone, 'Enter a valid 10-digit US phone number'),
+  phone: z.string().refine(v => !v || isValidPhone(v), { message: 'Enter a valid phone number' }),
   email: z.string().email('Invalid email').or(z.literal('')).optional(),
   reservationDate: z.string(),
   reservationTime: z.string(),
@@ -110,7 +109,7 @@ export default function CreateReservationDialog ({
     await mutation.mutateAsync({
       partyName: values.partyName,
       partySize: values.partySize,
-      phone: values.phone,
+      phone: normalizePhone(values.phone) ?? values.phone,
       email: values.email || undefined,
       reservationDate: values.reservationDate,
       reservationTime: values.reservationTime,
@@ -206,7 +205,8 @@ export default function CreateReservationDialog ({
                     <FormControl>
                       <PhoneInput
                         value={field.value}
-                        onChange={({ digits }) => field.onChange(digits)}
+                        onChange={field.onChange}
+                        onBlur={field.onBlur}
                       />
                     </FormControl>
                     <FormMessage />

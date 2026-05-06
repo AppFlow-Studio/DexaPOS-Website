@@ -28,6 +28,7 @@ import {
 import { format } from "date-fns";
 import type { CustomerListItem } from "@/types/customer";
 import { getCustomerDisplayName } from "@/types/customer";
+import { formatPhoneForDisplay } from "@/lib/phone";
 
 interface CustomerListProps {
   customers: CustomerListItem[];
@@ -115,7 +116,7 @@ export function CustomerList({
                       {getCustomerDisplayName(customer)}
                     </span>
                     <span className="text-xs text-muted-foreground">
-                      {customer.phone || customer.email || "No contact info"}
+                      {formatPhoneForDisplay(customer.phone) || customer.email || "No contact info"}
                     </span>
                   </div>
                   {customer.tags && customer.tags.length > 0 && (

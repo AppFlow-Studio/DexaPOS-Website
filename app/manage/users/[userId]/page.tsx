@@ -106,7 +106,7 @@ export default function UserInfoPage() {
     }
 
     // Get target user's HQ role from their membership
-    const targetUserHQMembership = user.members?.find((m: any) => 
+    const targetUserHQMembership = user.members?.find((m: any) =>
         m.role && (m.role.startsWith('hq.') || Object.keys(HQ_ROLES).includes(m.role))
     )
     const targetUserRoleCode = targetUserHQMembership?.role as HQRoleCode | undefined
@@ -403,7 +403,7 @@ export default function UserInfoPage() {
                                             <CardTitle>Merchant Access</CardTitle>
                                             <CardDescription>
                                                 Merchants this user can access and manage
-                                                {!canEditMerchantAccess && (
+                                                {!canEditMerchantAccess && !isTargetSuperAdmin && (
                                                     <span className="ml-2 text-yellow-600">(View only)</span>
                                                 )}
                                             </CardDescription>
@@ -417,7 +417,17 @@ export default function UserInfoPage() {
                                     </div>
                                 </CardHeader>
                                 <CardContent>
-                                    {accessLoading ? (
+                                    {isTargetSuperAdmin ? (
+                                        <div className="flex items-start gap-3 rounded-lg border border-blue-200 bg-blue-50 p-4 text-blue-800">
+                                            <Shield className="mt-0.5 h-5 w-5 shrink-0 text-blue-600" />
+                                            <div>
+                                                <p className="font-medium text-sm">Super Admin — universal access</p>
+                                                <p className="mt-1 text-sm text-blue-700">
+                                                    Super Admins have access to all merchants on the platform. Individual grants are not required and are not tracked for this role.
+                                                </p>
+                                            </div>
+                                        </div>
+                                    ) : accessLoading ? (
                                         <div className="flex items-center justify-center py-8">
                                             <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
                                         </div>
@@ -434,8 +444,8 @@ export default function UserInfoPage() {
                                     ) : (
                                         <div className="space-y-3">
                                             {targetUserMerchantAccess.map((access) => (
-                                                <div 
-                                                    key={access.id} 
+                                                <div
+                                                    key={access.id}
                                                     className="flex items-center justify-between p-4 rounded-lg border bg-muted/30"
                                                 >
                                                     <div className="flex items-center space-x-3">
@@ -455,8 +465,8 @@ export default function UserInfoPage() {
                                                             Active
                                                         </Badge>
                                                         {canEditMerchantAccess ? (
-                                                            <Button 
-                                                                variant="ghost" 
+                                                            <Button
+                                                                variant="ghost"
                                                                 size="sm"
                                                                 className="text-red-600 hover:text-red-700 hover:bg-red-100"
                                                                 onClick={() => handleRevokeAccess(access.merchantId)}
@@ -472,8 +482,8 @@ export default function UserInfoPage() {
                                             ))}
                                         </div>
                                     )}
-                                    
-                                    {!canEditMerchantAccess && targetUserMerchantAccess && targetUserMerchantAccess.length > 0 && (
+
+                                    {!canEditMerchantAccess && !isTargetSuperAdmin && targetUserMerchantAccess && targetUserMerchantAccess.length > 0 && (
                                         <div className="mt-4 p-3 rounded-lg bg-yellow-50 border border-yellow-200 text-yellow-800 text-sm flex items-center gap-2">
                                             <Lock className="h-4 w-4" />
                                             <span>

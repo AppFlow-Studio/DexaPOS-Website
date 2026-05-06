@@ -123,6 +123,17 @@ interface ScheduleState {
     employeeId: string,
     employeeName: string
   ) => void;
+  reset: () => void;
+}
+
+const scheduleInitialState = {
+  schedulePeriods: [] as SchedulePeriod[],
+  weeklySchedules: [] as WeeklySchedule[],
+  currentViewDate: new Date().toISOString(),
+  viewUnsaved: false,
+  dropRequests: [] as DropRequest[],
+  swapRequests: [] as SwapRequest[],
+  ptoRequests: [] as PTORequest[],
 }
 
 export const useScheduleStore = create<ScheduleState>()(
@@ -920,6 +931,8 @@ export const useScheduleStore = create<ScheduleState>()(
           ),
         }));
       },
+
+      reset: () => set(scheduleInitialState),
     }),
     {
       name: "schedule-storage",

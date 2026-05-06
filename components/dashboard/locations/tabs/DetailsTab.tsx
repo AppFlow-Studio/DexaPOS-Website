@@ -5,6 +5,8 @@ import { Location, US_STATES, US_TIMEZONES, UpdateLocationInput } from '@/types/
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { PhoneInput } from '@/components/ui/phone-input'
+import { normalizePhone, formatPhoneForDisplay } from '@/lib/phone'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -117,7 +119,7 @@ export function DetailsTab({ location, onUpdate, setHasUnsavedChanges }: Details
             }
         } else if (section === 'contact') {
             updateData = {
-                phone: contactInfo.phone.trim() || undefined,
+                phone: normalizePhone(contactInfo.phone) ?? contactInfo.phone.trim() || undefined,
                 email: contactInfo.email.trim() || undefined,
             }
         } else if (section === 'address') {
@@ -275,12 +277,10 @@ export function DetailsTab({ location, onUpdate, setHasUnsavedChanges }: Details
                         <div className="space-y-4 animate-in fade-in duration-200">
                             <div className="space-y-2">
                                 <Label htmlFor="phone">Phone Number</Label>
-                                <Input
+                                <PhoneInput
                                     id="phone"
                                     value={contactInfo.phone}
-                                    onChange={(e) => setContactInfo(prev => ({ ...prev, phone: e.target.value }))}
-                                    placeholder="(123) 456-7890"
-                                    type="tel"
+                                    onChange={(e164) => setContactInfo(prev => ({ ...prev, phone: e164 }))}
                                 />
                             </div>
                             <div className="space-y-2">
@@ -313,7 +313,7 @@ export function DetailsTab({ location, onUpdate, setHasUnsavedChanges }: Details
                             {location.phone ? (
                                 <div className="flex items-center gap-2 text-sm">
                                     <Phone className="h-4 w-4 text-muted-foreground" />
-                                    <span>{location.phone}</span>
+                                    <span>{formatPhoneForDisplay(location.phone)}</span>
                                 </div>
                             ) : (
                                 <p className="text-sm text-muted-foreground">No phone number</p>

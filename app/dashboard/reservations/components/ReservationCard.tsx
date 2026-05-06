@@ -4,6 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Users, Phone, Clock, Star } from "lucide-react";
 import type { Reservation } from "@/types/floor-plan";
+import { formatPhoneForDisplay } from "@/lib/phone";
 
 const STATUS_COLORS: Record<Reservation["status"], string> = {
   pending: "bg-yellow-100 text-yellow-800",
@@ -58,7 +59,7 @@ export default function ReservationCard({
           {reservation.phone && (
             <span className="flex items-center gap-1">
               <Phone className="h-3.5 w-3.5" />
-              {reservation.phone}
+              {formatPhoneForDisplay(reservation.phone)}
             </span>
           )}
         </div>

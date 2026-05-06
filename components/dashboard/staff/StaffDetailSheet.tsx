@@ -24,6 +24,8 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PhoneInput } from "@/components/ui/phone-input";
+import { normalizePhone, formatPhoneForDisplay } from "@/lib/phone";
 import { UnifiedStaffMember, EmploymentType } from "@/types/staff";
 import { RolesModel } from "@/types/db-modles";
 import { cn } from "@/lib/utils";
@@ -390,7 +392,7 @@ export function StaffDetailSheet({
     if ((editedEmail || null) !== (staff.email || null))
       updates.email = editedEmail || null;
     if ((editedPhone || null) !== (staff.phone || null))
-      updates.phone = editedPhone || null;
+      updates.phone = normalizePhone(editedPhone) ?? editedPhone || null;
 
     if (Object.keys(updates).length === 0) {
       setIsProfileEditMode(false);
@@ -505,7 +507,7 @@ export function StaffDetailSheet({
                       </div>
                       <div className="flex items-center gap-2">
                         <Phone className="h-4 w-4" />
-                        <span>{displayStaff.phone || "No phone"}</span>
+                        <span>{displayStaff.phone ? formatPhoneForDisplay(displayStaff.phone) : "No phone"}</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <MapPin className="h-4 w-4" />
@@ -607,12 +609,9 @@ export function StaffDetailSheet({
                       <Label className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
                         Phone
                       </Label>
-                      <Input
-                        type="tel"
+                      <PhoneInput
                         value={editedPhone}
-                        onChange={(e) => setEditedPhone(e.target.value)}
-                        className="h-10"
-                        placeholder="+1234567890"
+                        onChange={setEditedPhone}
                       />
                     </div>
                   </div>

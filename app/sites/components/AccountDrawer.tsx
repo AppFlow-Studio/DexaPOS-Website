@@ -41,6 +41,7 @@ import {
   type OrderHistoryEntry,
 } from "../order-actions";
 import { AuthDialog } from "./AuthDialog";
+import { formatPhoneForDisplay } from "@/lib/phone";
 
 type Section = "main" | "orders" | "addresses" | "loyalty" | "profile";
 
@@ -286,7 +287,7 @@ export function AccountDrawer({
                 {customer?.name || "Guest"}
               </p>
               <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
-                {customer?.phone}
+                {formatPhoneForDisplay(customer?.phone)}
               </p>
             </div>
           </div>

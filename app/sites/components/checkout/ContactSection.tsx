@@ -5,6 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Phone } from "lucide-react";
+import { PhoneInput } from "@/components/ui/phone-input";
+import { isValidPhone, formatPhoneForDisplay, normalizePhone } from "@/lib/phone";
 
 interface ContactSectionProps {
   isAuthenticated: boolean;
@@ -39,7 +41,7 @@ export function ContactSection({
 
   const firstNameError = touched.firstName && firstName.trim().length === 0 ? "First name is required" : null;
   const emailError = touched.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) ? "A valid email is required" : null;
-  const phoneError = touched.phone && !customerPhone && phone.trim().length < 7 ? "A valid phone number is required" : null;
+  const phoneError = touched.phone && !customerPhone && !isValidPhone(phone) ? "A valid phone number is required" : null;
 
   return (
     <section className="space-y-4">
@@ -99,7 +101,7 @@ export function ContactSection({
       {isAuthenticated && customerPhone ? (
         <div className="flex items-center gap-2 text-sm" style={{ color: "var(--text-secondary)" }}>
           <Phone className="h-4 w-4" />
-          <span>{customerPhone}</span>
+          <span>{formatPhoneForDisplay(customerPhone)}</span>
         </div>
       ) : null}
 
@@ -162,17 +164,12 @@ export function ContactSection({
           <Label htmlFor="checkout-phone" className="text-sm">
             Phone <span className="text-red-500">*</span>
           </Label>
-          <Input
+          <PhoneInput
             id="checkout-phone"
-            type="tel"
             value={phone}
-            onChange={(e) => onPhoneChange(e.target.value)}
+            onChange={(e164) => onPhoneChange(normalizePhone(e164) ?? e164)}
             onBlur={() => setTouched((t) => ({ ...t, phone: true }))}
-            placeholder="+1 (555) 000-0000"
-            style={{
-              borderColor: phoneError ? "#ef4444" : "var(--border)",
-              backgroundColor: "var(--bg)",
-            }}
+            aria-invalid={!!phoneError}
           />
           {phoneError && <p className="text-xs text-red-500">{phoneError}</p>}
         </div>

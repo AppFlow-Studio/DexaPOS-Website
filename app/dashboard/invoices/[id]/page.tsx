@@ -19,6 +19,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useState } from "react";
+import { formatPhoneForDisplay } from "@/lib/phone";
 import { useInvoice, useUpdateInvoiceStatus, useDeleteInvoice } from "../hooks/useInvoices";
 import { InvoiceStatusBadge } from "../components/InvoiceStatusBadge";
 import { InvoiceForm } from "../components/InvoiceForm";
@@ -207,7 +208,7 @@ export default function InvoiceDetailPage({
                   )}
                   {invoice.customer.phone && (
                     <p className="text-muted-foreground text-xs">
-                      {invoice.customer.phone}
+                      {formatPhoneForDisplay(invoice.customer.phone)}
                     </p>
                   )}
                 </div>

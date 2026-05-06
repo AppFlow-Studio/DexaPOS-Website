@@ -367,3 +367,22 @@ html:has([data-template]) body[data-scroll-locked] {
   animation: none;
   mix-blend-mode: normal;
 }
+
+/* react-international-phone dark mode overrides */
+.dark .react-international-phone-country-selector-dropdown {
+  background-color: var(--popover);
+  color: var(--popover-foreground);
+}
+.dark .react-international-phone-country-selector-button {
+  background-color: var(--input);
+  border-color: var(--border);
+  color: var(--foreground);
+}
+.dark .react-international-phone-country-selector-button:hover {
+  background-color: var(--accent);
+}
+.dark .react-international-phone-input-container .react-international-phone-input {
+  background-color: var(--input);
+  color: var(--foreground);
+  border-color: var(--border);
+}

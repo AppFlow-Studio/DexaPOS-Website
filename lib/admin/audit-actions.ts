@@ -201,6 +201,16 @@ export const ADMIN_ACTIONS = {
     category: 'notes',
     severity: 'info',
   },
+  LOCATION_LUQRA_MID_ASSIGNED: {
+    action: 'location.luqra_mid_assigned',
+    category: 'merchant',
+    severity: 'info',
+  },
+  LOCATION_LUQRA_MID_CLEARED: {
+    action: 'location.luqra_mid_cleared',
+    category: 'merchant',
+    severity: 'info',
+  },
 } as const satisfies Record<string, AdminActionDefinition>
 
 export type AdminActionKey = keyof typeof ADMIN_ACTIONS

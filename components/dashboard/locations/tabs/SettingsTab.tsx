@@ -336,17 +336,27 @@ export function SettingsTab({ location, onUpdate, onClose }: SettingsTabProps) {
 
                                 {location.pricing_strategy === 'dual' && (
                                     <div className="grid gap-2 animate-in fade-in slide-in-from-top-2">
-                                        <Label>Dual Pricing Percentage (%)</Label>
+                                        <Label>Cash Discount Percentage (%)</Label>
                                         <div className="relative">
                                             <Input
                                                 type="number"
                                                 step="0.01"
                                                 min="0"
-                                                max="100"
+                                                max="4"
                                                 defaultValue={location.dual_pricing_percentage ?? 4.0}
                                                 onBlur={async (e) => {
                                                     const val = parseFloat(e.target.value);
                                                     if (isNaN(val)) return;
+                                                    if (val > 4) {
+                                                        toast.error('Percentage cannot exceed 4% per card brand surcharge rules.');
+                                                        e.target.value = String(location.dual_pricing_percentage ?? 4.0);
+                                                        return;
+                                                    }
+                                                    if (val < 0) {
+                                                        toast.error('Percentage cannot be negative.');
+                                                        e.target.value = String(location.dual_pricing_percentage ?? 4.0);
+                                                        return;
+                                                    }
                                                     if (val === parseFloat(String(location.dual_pricing_percentage ?? 0))) return;
 
                                                     try {
@@ -368,7 +378,7 @@ export function SettingsTab({ location, onUpdate, onClose }: SettingsTabProps) {
                                             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">%</span>
                                         </div>
                                         <p className="text-xs text-muted-foreground">
-                                            Typical values range from 3.5% to 4.0%
+                                            Maximum 4% per Visa/Mastercard surcharge rules.
                                         </p>
                                     </div>
                                 )}
