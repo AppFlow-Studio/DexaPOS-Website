@@ -486,11 +486,56 @@ export async function CancelLocationInvite(inviteId: string) {
         return { error: 'Invite ID is required' }
     }
 
+    const { userId: actorUserId } = await auth()
+    if (!actorUserId) {
+        return { error: 'Unauthorized' }
+    }
     const supabase = createServerSupabaseClient()
 
-    const { data: invite, error } = await supabase
+    // Look up the Clerk invite + org so we can revoke upstream too.
+    // Without this, the email stays "in use" on Clerk's side and re-inviting
+    // the same address fails even though our DB row is marked cancelled.
+    const { data: existing, error: fetchError } = await supabase
         .from('location_invites')
-        .update({ status: 'cancelled' })
+        .select('clerk_invite_id, status, merchant_id')
+        .eq('id', inviteId)
+        .single()
+
+    if (fetchError || !existing) {
+        return { error: 'Invite not found' }
+    }
+    if (existing.status !== 'pending') {
+        return { error: 'Only pending invites can be cancelled' }
+    }
+
+    if (existing.clerk_invite_id) {
+        try {
+            const { data: merchant } = await supabase
+                .from('merchants')
+                .select('clerk_org_id')
+                .eq('id', existing.merchant_id)
+                .single()
+
+            if (merchant?.clerk_org_id) {
+                const clerk = await clerkClient()
+                await clerk.organizations.revokeOrganizationInvitation({
+                    organizationId: merchant.clerk_org_id,
+                    invitationId: existing.clerk_invite_id,
+                    requestingUserId: actorUserId,
+                })
+            }
+        } catch (revokeErr) {
+            // Best-effort: a Clerk invite may already be expired/accepted.
+            console.warn('[CancelLocationInvite] Clerk revoke failed (continuing):', revokeErr)
+        }
+    }
+
+    // RLS on location_invites has no UPDATE policy → an authed update silently
+    // no-ops. Use the service-role client; auth was enforced above.
+    const admin = createServiceRoleClient()
+    const { data: invite, error } = await admin
+        .from('location_invites')
+        .update({ status: 'cancelled', updated_at: new Date().toISOString() })
         .eq('id', inviteId)
         .select()
         .single()
@@ -498,6 +543,9 @@ export async function CancelLocationInvite(inviteId: string) {
     if (error) {
         console.error('Error cancelling location invite:', error)
         return { error: error.message }
+    }
+    if (!invite) {
+        return { error: 'Failed to cancel invitation in database' }
     }
 
     return { data: invite }

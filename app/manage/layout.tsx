@@ -185,12 +185,12 @@ const navMain: NavGroup[] = [
                 icon: Monitor,
                 requiredPermission: 'system.config.manage' as PermissionCode,
             },
-            {
-                title: 'Integrations',
-                url: '/manage/settings/integrations',
-                icon: Plug,
-                requiredPermission: 'hq.merchant.update' as PermissionCode,
-            },
+            // {
+            //     title: 'Integrations',
+            //     url: '/manage/settings/integrations',
+            //     icon: Plug,
+            //     requiredPermission: 'hq.merchant.update' as PermissionCode,
+            // },
         ]
     }
 ]

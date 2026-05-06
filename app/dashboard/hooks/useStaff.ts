@@ -22,6 +22,7 @@ import {
   UpdateStaffProfileData,
   AddStaffToLocation,
   RemoveStaffFromLocation,
+  SetPrimaryLocation,
   BulkDeactivateStaff,
   BulkResetPINs,
   BulkResetPasswords,
@@ -209,6 +210,15 @@ export function useCreateClerkUserDirectly() {
         });
       }
 
+      // Soft warning when Clerk rejected the phone (already linked to another
+      // account). The user was still created; phone is stored on staff_profiles.
+      if (result.data?.phone_skipped) {
+        toast.warning("Phone not linked to login", {
+          description:
+            "This phone is already on another account. Saved on staff profile only.",
+        });
+      }
+
       queryClient.invalidateQueries({ queryKey: ["unified-staff"] });
       queryClient.invalidateQueries({ queryKey: ["staff-member"] });
     },
@@ -252,12 +262,51 @@ export function useInviteClerkStaff() {
 
       queryClient.invalidateQueries({ queryKey: ["unified-staff"] });
       queryClient.invalidateQueries({ queryKey: ["staff-member"] });
+      queryClient.invalidateQueries({ queryKey: ["pending-invites"] });
     },
     onError: (error) => {
       toast.error("Failed to send invite", {
         description: "An unexpected error occurred",
       });
       console.error("Invite Clerk staff error:", error);
+    },
+  });
+}
+
+/**
+ * Set a location as the staff member's primary
+ */
+export function useSetPrimaryLocation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      memberId,
+      locationId,
+    }: {
+      memberId: string;
+      locationId: string;
+    }) => SetPrimaryLocation(memberId, locationId),
+    onSuccess: async (result, variables) => {
+      if (result.error) {
+        toast.error("Couldn't set primary location", { description: result.error });
+        return;
+      }
+
+      await queryClient.refetchQueries({
+        queryKey: ["staff-member", variables.memberId],
+        type: "active",
+        exact: true,
+      });
+
+      toast.success("Primary location updated");
+      queryClient.invalidateQueries({ queryKey: ["unified-staff"] });
+    },
+    onError: (error) => {
+      toast.error("Couldn't set primary location", {
+        description: "An unexpected error occurred",
+      });
+      console.error("Set primary location error:", error);
     },
   });
 }

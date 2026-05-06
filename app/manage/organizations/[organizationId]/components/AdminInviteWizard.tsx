@@ -21,7 +21,6 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -52,9 +51,9 @@ import {
   HQRoleCode,
 } from "@/types/admin";
 import { createInvitationAdmin } from "../../actions/clerk-create-invitation-admin";
-import { createBulkInvitationAdmin } from "../../actions/clerk-create-bulk-invitiation-admin";
 import { createAdminDirectly } from "../../actions/clerk-create-admin-directly";
 import { GetMerchants } from "@/app/manage/actions/get-merchants";
+import { useEmailAvailability } from "@/app/dashboard/hooks/useEmailAvailability";
 
 interface AdminInviteWizardProps {
   organizationId: string;
@@ -66,7 +65,7 @@ interface AdminInviteWizardProps {
 }
 
 type Step = "details" | "role" | "merchants" | "review";
-type InviteMode = "single" | "bulk" | "direct";
+type InviteMode = "single" | "direct";
 
 const BASE_STEPS: { key: Step; label: string; icon: React.ReactNode }[] = [
   { key: "details", label: "Details", icon: <User className="h-4 w-4" /> },
@@ -110,7 +109,10 @@ export function AdminInviteWizard({
   const [firstName, setFirstName] = React.useState("");
   const [lastName, setLastName] = React.useState("");
   const [email, setEmail] = React.useState("");
-  const [bulkEmails, setBulkEmails] = React.useState("");
+  // HQ admin creation is global-scope (omit clerkOrgId).
+  const emailCheck = useEmailAvailability(email, {
+    enabled: email.trim().length > 0,
+  });
   const [selectedRoleCode, setSelectedRoleCode] = React.useState<HQRoleCode>("hq.manager");
   const [selectedMerchants, setSelectedMerchants] = React.useState<Set<string>>(new Set());
   const [merchantSearchQuery, setMerchantSearchQuery] = React.useState("");
@@ -165,7 +167,6 @@ export function AdminInviteWizard({
       setFirstName("");
       setLastName("");
       setEmail("");
-      setBulkEmails("");
       setSelectedRoleCode("hq.manager");
       setSelectedMerchants(new Set());
       setMerchantSearchQuery("");
@@ -188,31 +189,6 @@ export function AdminInviteWizard({
 
   const currentStepIndex = flowSteps.findIndex((s) => s.key === currentStep);
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-  const parsedBulkEmails = React.useMemo(() => {
-    const tokens = bulkEmails
-      .split(/[\n,;]+/)
-      .map((value) => value.trim())
-      .filter(Boolean);
-
-    const unique = new Set<string>();
-    const valid: string[] = [];
-    const invalid: string[] = [];
-
-    for (const token of tokens) {
-      const normalized = token.toLowerCase();
-      if (unique.has(normalized)) continue;
-      unique.add(normalized);
-
-      if (emailRegex.test(token)) {
-        valid.push(token);
-      } else {
-        invalid.push(token);
-      }
-    }
-
-    return { valid, invalid };
-  }, [bulkEmails]);
 
   const filteredMerchants = React.useMemo(() => {
     if (!merchantSearchQuery.trim()) return merchants;
@@ -240,22 +216,15 @@ export function AdminInviteWizard({
   const canGoNext = () => {
     switch (currentStep) {
       case "details":
-        if (inviteMode === "bulk") {
-          return parsedBulkEmails.valid.length > 0 && parsedBulkEmails.invalid.length === 0;
-        }
-        if (inviteMode === "direct") {
-          return (
-            firstName.trim().length > 0 &&
-            lastName.trim().length > 0 &&
-            email.trim().length > 0 &&
-            emailRegex.test(email.trim())
-          );
+        // Block while live email check is pending or has flagged a conflict.
+        if (emailCheck.isChecking || emailCheck.hasConflict) {
+          return false;
         }
         return (
-          firstName.trim() &&
-          lastName.trim() &&
-          email.trim() &&
-          emailRegex.test(email)
+          !!firstName.trim() &&
+          !!lastName.trim() &&
+          !!email.trim() &&
+          emailRegex.test(email.trim())
         );
       case "role":
         return !!selectedRoleCode;
@@ -355,33 +324,6 @@ export function AdminInviteWizard({
             description: result?.message || "Unable to create the admin account.",
           });
         }
-      } else if (inviteMode === "bulk") {
-        const invitations = parsedBulkEmails.valid.map((bulkEmail) => ({
-          email: bulkEmail,
-          role: selectedRoleCode,
-          level_type: orgType,
-        }));
-        const result = await createBulkInvitationAdmin(organizationId, invitations, {
-          merchantAccess: merchantAccessArray,
-          invitedBy: user?.id,
-          firstName: firstName.trim() || undefined,
-          lastName: lastName.trim() || undefined,
-          orgType,
-        });
-
-        if (result?.success) {
-          toast.success("Bulk invitations sent", {
-            description: `${parsedBulkEmails.valid.length} invite${parsedBulkEmails.valid.length > 1 ? "s" : ""} queued.`,
-          });
-          onOpenChange(false);
-          if (onSuccess) {
-            onSuccess();
-          }
-        } else {
-          toast.error("Bulk invitation failed", {
-            description: result?.message || "Unable to send bulk invitations. Please try again.",
-          });
-        }
       } else {
         const params: CreateAdminInviteParams = {
           organizationId,
@@ -414,13 +356,9 @@ export function AdminInviteWizard({
     } catch (error: any) {
       console.error("Submit error:", error);
       toast.error(
-        inviteMode === "direct"
-          ? "Direct create failed"
-          : inviteMode === "bulk"
-            ? "Bulk invitation failed"
-            : "Invitation Failed",
+        inviteMode === "direct" ? "Direct create failed" : "Invitation Failed",
         {
-        description: error?.message || "An unexpected error occurred.",
+          description: error?.message || "An unexpected error occurred.",
         }
       );
     } finally {
@@ -527,7 +465,7 @@ export function AdminInviteWizard({
                         <RadioGroup
                           value={inviteMode}
                           onValueChange={(value) => setInviteMode(value as InviteMode)}
-                          className="grid grid-cols-1 md:grid-cols-3 gap-3"
+                          className="grid grid-cols-1 md:grid-cols-2 gap-3"
                         >
                           <label
                             htmlFor="invite-mode-single"
@@ -540,19 +478,6 @@ export function AdminInviteWizard({
                             <div>
                               <div className="text-sm font-medium">Single invite</div>
                               <p className="text-xs text-muted-foreground">Invite one admin with full profile fields.</p>
-                            </div>
-                          </label>
-                          <label
-                            htmlFor="invite-mode-bulk"
-                            className={cn(
-                              "flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors",
-                              inviteMode === "bulk" ? "border-primary bg-primary/5" : "border-muted"
-                            )}
-                          >
-                            <RadioGroupItem id="invite-mode-bulk" value="bulk" className="mt-1" />
-                            <div>
-                              <div className="text-sm font-medium">Bulk invite</div>
-                              <p className="text-xs text-muted-foreground">Paste multiple emails (comma or newline separated).</p>
                             </div>
                           </label>
                           <label
@@ -571,32 +496,7 @@ export function AdminInviteWizard({
                         </RadioGroup>
                       </div>
 
-                      {inviteMode === "bulk" ? (
-                        <div className="space-y-2">
-                          <Label htmlFor="bulkEmails">Email addresses *</Label>
-                          <Textarea
-                            id="bulkEmails"
-                            placeholder={"ali@example.com\nmanager@example.com"}
-                            rows={8}
-                            value={bulkEmails}
-                            onChange={(e) => setBulkEmails(e.target.value)}
-                          />
-                          <p className="text-xs text-muted-foreground">
-                            Separate with commas or new lines. Duplicates are removed automatically.
-                          </p>
-                          {parsedBulkEmails.invalid.length > 0 && (
-                            <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
-                              Invalid emails: {parsedBulkEmails.invalid.join(", ")}
-                            </div>
-                          )}
-                          {parsedBulkEmails.valid.length > 0 && (
-                            <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-                              {parsedBulkEmails.valid.length} valid email{parsedBulkEmails.valid.length > 1 ? "s" : ""} ready.
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        <>
+                      <>
                           <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
                               <Label htmlFor="firstName">First name *</Label>
@@ -628,16 +528,33 @@ export function AdminInviteWizard({
                                 className="pl-10"
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
+                                aria-invalid={emailCheck.hasConflict || undefined}
                               />
                             </div>
-                            <p className="text-xs text-muted-foreground">
-                              {inviteMode === "direct"
-                                ? "Account will be created immediately with a one-time temporary password."
-                                : "An invitation email will be sent to this address."}
-                            </p>
+                            {email.trim().length > 0 && emailCheck.isChecking && (
+                              <p className="text-xs text-muted-foreground">
+                                Checking availability…
+                              </p>
+                            )}
+                            {emailCheck.hasConflict && (
+                              <p className="text-xs text-destructive">
+                                {emailCheck.message}
+                              </p>
+                            )}
+                            {emailCheck.isAvailable && (
+                              <p className="text-xs text-emerald-600">
+                                Email is available.
+                              </p>
+                            )}
+                            {!emailCheck.hasConflict && !emailCheck.isAvailable && !emailCheck.isChecking && (
+                              <p className="text-xs text-muted-foreground">
+                                {inviteMode === "direct"
+                                  ? "Account will be created immediately with a one-time temporary password."
+                                  : "An invitation email will be sent to this address."}
+                              </p>
+                            )}
                           </div>
                         </>
-                      )}
                     </div>
                   )}
 
@@ -788,42 +705,25 @@ export function AdminInviteWizard({
                   {currentStep === "review" && (
                     <div className="space-y-6">
                       {/* Admin Info */}
-                      {inviteMode !== "bulk" ? (
-                        <div className="p-4 rounded-lg border bg-muted/30">
-                          <div className="flex items-center gap-3">
-                            <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
-                              <span className="text-lg font-semibold text-primary">
-                                {firstName.charAt(0)}
-                                {lastName.charAt(0)}
-                              </span>
+                      <div className="p-4 rounded-lg border bg-muted/30">
+                        <div className="flex items-center gap-3">
+                          <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+                            <span className="text-lg font-semibold text-primary">
+                              {firstName.charAt(0)}
+                              {lastName.charAt(0)}
+                            </span>
+                          </div>
+                          <div className="flex-1">
+                            <div className="font-medium">
+                              {firstName} {lastName}
                             </div>
-                            <div className="flex-1">
-                              <div className="font-medium">
-                                {firstName} {lastName}
-                              </div>
-                              <div className="text-sm text-muted-foreground flex items-center gap-1">
-                                <Mail className="h-3 w-3" />
-                                {email}
-                              </div>
+                            <div className="text-sm text-muted-foreground flex items-center gap-1">
+                              <Mail className="h-3 w-3" />
+                              {email}
                             </div>
                           </div>
                         </div>
-                      ) : (
-                        <div className="p-4 rounded-lg border bg-muted/30">
-                          <div className="font-medium mb-2">Bulk invite recipients</div>
-                          <div className="text-sm text-muted-foreground mb-3">
-                            {parsedBulkEmails.valid.length} email{parsedBulkEmails.valid.length > 1 ? "s" : ""} will receive invites.
-                          </div>
-                          <div className="max-h-[160px] overflow-y-auto space-y-2">
-                            {parsedBulkEmails.valid.map((bulkEmail) => (
-                              <div key={bulkEmail} className="flex items-center gap-2 text-sm">
-                                <Mail className="h-3.5 w-3.5 text-muted-foreground" />
-                                <span>{bulkEmail}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
+                      </div>
 
                       {/* Role */}
                       <div>
@@ -877,16 +777,7 @@ export function AdminInviteWizard({
 
                       {/* Summary */}
                       <div className="text-sm text-muted-foreground">
-                        {inviteMode === "bulk" ? (
-                          <>
-                            Invitations will be sent to <strong>{parsedBulkEmails.valid.length}</strong> recipients with <strong>{selectedRole?.name}</strong> access
-                            {selectedMerchantCount > 0
-                              ? ` to ${selectedMerchantCount} merchant(s).`
-                              : selectedRole?.code === 'hq.super_admin'
-                                ? " to all merchants."
-                                : "."}
-                          </>
-                        ) : inviteMode === "direct" ? (
+                        {inviteMode === "direct" ? (
                           <>
                             An account will be created directly for <strong>{email}</strong> with <strong>{selectedRole?.name}</strong> access.
                             A one-time temporary password will be shown after creation.
@@ -930,9 +821,7 @@ export function AdminInviteWizard({
                         ? "Sending..."
                         : inviteMode === "direct"
                           ? "Create Account"
-                          : inviteMode === "bulk"
-                            ? "Send Invitations"
-                            : "Send Invitation"}
+                          : "Send Invitation"}
                       {isSubmitting ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
                       ) : (

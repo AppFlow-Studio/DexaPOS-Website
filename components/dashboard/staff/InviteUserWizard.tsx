@@ -58,6 +58,7 @@ import {
 } from "@/app/dashboard/hooks/useStaff";
 import { InviteStaffFormData, StaffType, EmploymentType } from "@/types/staff";
 import { useClerkOrgId } from "@/app/dashboard/hooks/useLocationScoped";
+import { useEmailAvailability } from "@/app/dashboard/hooks/useEmailAvailability";
 import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
 
 interface InviteUserWizardProps {
@@ -152,6 +153,10 @@ export function InviteUserWizard({
   const [firstName, setFirstName] = React.useState("");
   const [lastName, setLastName] = React.useState("");
   const [email, setEmail] = React.useState("");
+  const emailCheck = useEmailAvailability(email, {
+    clerkOrgId,
+    enabled: email.trim().length > 0,
+  });
   const [phone, setPhone] = React.useState("");
   const [selectedRoleCode, setSelectedRoleCode] = React.useState<string>("");
   const [selectedLocationIds, setSelectedLocationIds] = React.useState<
@@ -240,9 +245,13 @@ export function InviteUserWizard({
       case "details":
         // Name is always required
         if (!firstName.trim() || !lastName.trim()) return false;
+        // Block while live email check is pending or has flagged a conflict
+        if (email.trim().length > 0 && (emailCheck.isChecking || emailCheck.hasConflict)) {
+          return false;
+        }
         // Email is required for Clerk, optional for POS
         if (staffType === "clerk") {
-          return email.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+          return !!email.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
         }
         return true; // POS staff can proceed without email
       case "role":
@@ -730,8 +739,24 @@ export function InviteUserWizard({
                           placeholder="john.doe@example.com"
                           value={email}
                           onChange={(e) => setEmail(e.target.value)}
+                          aria-invalid={emailCheck.hasConflict || undefined}
                         />
-                        {staffType === "clerk" && (
+                        {email.trim().length > 0 && emailCheck.isChecking && (
+                          <p className="text-xs text-muted-foreground">
+                            Checking availability…
+                          </p>
+                        )}
+                        {emailCheck.hasConflict && (
+                          <p className="text-xs text-destructive">
+                            {emailCheck.message}
+                          </p>
+                        )}
+                        {emailCheck.isAvailable && (
+                          <p className="text-xs text-emerald-600">
+                            Email is available.
+                          </p>
+                        )}
+                        {staffType === "clerk" && !emailCheck.hasConflict && !emailCheck.isAvailable && !emailCheck.isChecking && (
                           <p className="text-xs text-muted-foreground">
                             An invitation will be sent to this email address.
                           </p>

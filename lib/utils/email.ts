@@ -8,6 +8,7 @@ export type EmailConflictTable =
   | 'merchants'
   | 'locations'
   | 'location_invites'
+  | 'pending_org_admin_invites'
 
 export interface EmailConflict {
   table: EmailConflictTable
@@ -27,6 +28,8 @@ export function emailConflictMessage(conflict: EmailConflict): string {
       return 'This email is already used by a staff member.'
     case 'location_invites':
       return 'An invitation has already been sent to this email.'
+    case 'pending_org_admin_invites':
+      return 'An admin invitation is already pending for this email.'
   }
 }
 

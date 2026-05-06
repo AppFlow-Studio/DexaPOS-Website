@@ -48,3 +48,8 @@ export function phoneDigits(value: string | null | undefined): string {
   if (!value) return ''
   return value.replace(/\D/g, '')
 }
+
+/** Return the last 10 digits of a phone value (US national number). */
+export function tenDigits(value: string | null | undefined): string {
+  return phoneDigits(value).slice(-10)
+}
