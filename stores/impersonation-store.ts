@@ -20,6 +20,8 @@ export interface ImpersonationContext {
   clerkOrgId: string;
   merchantName: string;
   expiresAt: string; // ISO timestamp
+  startedAt: string; // ISO; fixed at session creation
+  reason: string | null;
 }
 
 interface ImpersonationState {

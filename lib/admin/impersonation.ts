@@ -70,6 +70,8 @@ export interface ImpersonationContext {
   clerkOrgId: string;
   merchantName: string;
   expiresAt: string; // ISO; client uses for countdown
+  startedAt: string; // ISO; fixed at session creation
+  reason: string | null;
 }
 
 export interface StartImpersonationResult {
@@ -181,11 +183,18 @@ export async function getImpersonationContext(): Promise<ImpersonationContext | 
   if (!resolved) return null;
 
   const supabase = createServerSupabaseClient();
-  const { data: merchant } = await supabase
-    .from("merchants")
-    .select("name")
-    .eq("id", resolved.merchantId)
-    .single();
+  const [{ data: merchant }, { data: session }] = await Promise.all([
+    supabase
+      .from("merchants")
+      .select("name")
+      .eq("id", resolved.merchantId)
+      .single(),
+    supabase
+      .from("impersonation_sessions")
+      .select("started_at, reason")
+      .eq("id", resolved.sessionId)
+      .single(),
+  ]);
 
   if (!merchant?.name) return null;
 
@@ -195,6 +204,8 @@ export async function getImpersonationContext(): Promise<ImpersonationContext | 
     clerkOrgId: resolved.clerkOrgId,
     merchantName: merchant.name,
     expiresAt: new Date(Date.now() + SESSION_TTL_SECONDS * 1000).toISOString(),
+    startedAt: session?.started_at ?? new Date().toISOString(),
+    reason: session?.reason ?? null,
   };
 }
 
@@ -291,6 +302,7 @@ export async function startImpersonation(
   // TODO(impersonation-pr3): notify merchant owner via email. Wiring to the
   // transactional email path will land alongside the UI PR.
 
+  const nowIso = new Date().toISOString();
   return {
     context: {
       sessionId: sessionId as string,
@@ -300,6 +312,8 @@ export async function startImpersonation(
       expiresAt: new Date(
         Date.now() + SESSION_TTL_SECONDS * 1000,
       ).toISOString(),
+      startedAt: nowIso,
+      reason: reason ?? null,
     },
   };
 }
