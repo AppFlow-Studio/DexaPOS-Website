@@ -902,12 +902,30 @@ export default function MerchantDashboardLayout({
   const { isLoaded, isSignedIn } = useSession();
   const { data: userInfo } = useUserInfo();
   const router = useRouter();
+  const pathname = usePathname();
+  const isOnboardingRoute = pathname?.startsWith("/dashboard/onboarding") ?? false;
   const clerkOrgId = userInfo?.members?.[0]?.organizations?.id;
   const userRole = userInfo?.members?.[0]?.role;
   const { data: locations, isLoading: locationsLoading } = useLocations(
     clerkOrgId || "",
     userInfo?.id || ""
   );
+
+  // First-location gate: any merchant with zero locations is forced into the
+  // onboarding wizard before they can access the rest of the dashboard.
+  useEffect(() => {
+    if (
+      !clerkOrgId ||
+      locationsLoading ||
+      !Array.isArray(locations) ||
+      isOnboardingRoute
+    ) {
+      return;
+    }
+    if (locations.length === 0) {
+      router.replace("/dashboard/onboarding/first-location");
+    }
+  }, [clerkOrgId, locations, locationsLoading, isOnboardingRoute, router]);
 
   // Zustand store
   const {
@@ -1013,6 +1031,18 @@ export default function MerchantDashboardLayout({
 
   if (!isSignedIn) {
     return null;
+  }
+
+  if (isOnboardingRoute) {
+    return (
+      <>
+        <ImpersonationHydrator />
+        <ImpersonationBanner />
+        <main aria-label="Onboarding" className="min-h-screen">
+          {children}
+        </main>
+      </>
+    );
   }
 
   return (

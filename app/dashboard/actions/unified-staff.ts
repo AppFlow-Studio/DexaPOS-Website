@@ -232,10 +232,33 @@ export async function GetStaffMember(
       return null;
     }
 
-    return {
+    const result = {
       ...(data as any),
       staff_profile_id: memberBasic.staff_profile_id,
     } as UnifiedStaffMember;
+
+    // Runtime backfill: if the member has active assignments but none is
+    // marked primary (legacy rows created before the auto-default rule), set
+    // the earliest active one as primary so PIN/edit UI isn't disabled.
+    const assignments = (result as any).location_assignments ?? [];
+    const activeAssignments = assignments.filter((a: any) => a.is_active);
+    const hasPrimary = activeAssignments.some((a: any) => a.is_primary);
+    if (!hasPrimary && activeAssignments.length > 0) {
+      const sorted = [...activeAssignments].sort(
+        (a: any, b: any) =>
+          new Date(a.assigned_at || 0).getTime() -
+          new Date(b.assigned_at || 0).getTime(),
+      );
+      const target = sorted[0];
+      const fix = await SetPrimaryLocation(memberId, target.location_id);
+      if (!fix.error) {
+        for (const a of assignments) {
+          a.is_primary = a.location_id === target.location_id;
+        }
+      }
+    }
+
+    return result;
   } catch (error) {
     console.error("[GetStaffMember] Unexpected error:", error);
     return null;
@@ -340,13 +363,20 @@ export async function CreatePOSStaff(
 
     // 5. Create location assignments (skip if merchant has no locations yet)
     if (formData.location_ids.length > 0) {
+      // Fall back to first assigned location if no explicit primary was sent,
+      // so the staff always has exactly one primary on creation.
+      const primaryLocationId =
+        formData.primary_location_id &&
+        formData.location_ids.includes(formData.primary_location_id)
+          ? formData.primary_location_id
+          : formData.location_ids[0];
       const locationAssignments = formData.location_ids.map((locationId) => ({
         location_id: locationId,
         merchant_id: merchant.id,
         user_id: null, // POS staff has no user_id
         staff_profile_id: staffProfile.id,
         role_code: formData.role_code,
-        is_primary_location: locationId === formData.primary_location_id,
+        is_primary_location: locationId === primaryLocationId,
         is_active: true,
         pin_plain: pinCode,
         pin_hashed: null,
@@ -670,13 +700,18 @@ export async function CreateClerkUserDirectly(
 
     // 7. Eagerly create location_members records (skip if merchant has no locations yet)
     if (resolvedLocationIds.length > 0) {
+      const primaryLocationId =
+        formData.primary_location_id &&
+        resolvedLocationIds.includes(formData.primary_location_id)
+          ? formData.primary_location_id
+          : resolvedLocationIds[0];
       const locationMembersData = resolvedLocationIds.map((locationId) => ({
         location_id: locationId,
         merchant_id: merchantId,
         user_id: clerkUser.id,
         staff_profile_id: staffProfile.id,
         role_code: formData.role_code,
-        is_primary_location: locationId === formData.primary_location_id,
+        is_primary_location: locationId === primaryLocationId,
         is_active: true,
         pin_plain: pinCode,
         pin_hashed: null,
@@ -2146,6 +2181,15 @@ export async function AddStaffToLocation(
     const matchCol = member.user_id ? "user_id" : "staff_profile_id";
     const matchVal = member.user_id || member.staff_profile_id;
 
+    // Force-primary the staff's first active location so they always have one.
+    const { count: activeCount } = await supabase
+      .from("location_members")
+      .select("id", { count: "exact", head: true })
+      .eq(matchCol, matchVal)
+      .eq("is_active", true);
+    const isFirstActive = (activeCount ?? 0) === 0;
+    const finalIsPrimary = isFirstActive ? true : (isPrimary ?? false);
+
     const { data: existing } = await supabase
       .from("location_members")
       .select("id, is_active")
@@ -2163,7 +2207,7 @@ export async function AddStaffToLocation(
         .update({
           is_active: true,
           role_code: roleCode,
-          is_primary_location: isPrimary ?? false,
+          is_primary_location: finalIsPrimary,
           updated_at: new Date().toISOString(),
         })
         .eq("id", existing.id);
@@ -2175,7 +2219,7 @@ export async function AddStaffToLocation(
         location_id: locationId,
         merchant_id: location.merchant_id,
         role_code: roleCode,
-        is_primary_location: isPrimary ?? false,
+        is_primary_location: finalIsPrimary,
         is_active: true,
       };
 
@@ -2278,6 +2322,90 @@ export async function RemoveStaffFromLocation(
   }
 
   return DeactivateStaffMember(memberId, locationId);
+}
+
+/**
+ * Mark a location as the staff member's primary, demoting any other primary
+ * row for the same member. The target row must be active.
+ */
+export async function SetPrimaryLocation(
+  memberId: string,
+  locationId: string,
+): Promise<StaffActionResponse<{ success: boolean }>> {
+  const supabase = createServerSupabaseClient();
+
+  try {
+    const { data: member } = await supabase
+      .from("members")
+      .select("user_id, staff_profile_id, organization_id")
+      .eq("id", memberId)
+      .single();
+    if (!member) return { error: "Member not found" };
+
+    const matchCol = member.user_id ? "user_id" : "staff_profile_id";
+    const matchVal = member.user_id || member.staff_profile_id;
+    if (!matchVal) return { error: "Invalid member record" };
+
+    const { data: target } = await supabase
+      .from("location_members")
+      .select("id, is_active")
+      .eq("location_id", locationId)
+      .eq(matchCol, matchVal)
+      .maybeSingle();
+    if (!target) return { error: "Assignment not found" };
+    if (!target.is_active) {
+      return { error: "Cannot make an inactive location primary" };
+    }
+
+    const { error: demoteErr } = await supabase
+      .from("location_members")
+      .update({ is_primary_location: false })
+      .eq(matchCol, matchVal)
+      .eq("is_primary_location", true);
+    if (demoteErr) return { error: demoteErr.message };
+
+    const { error: promoteErr } = await supabase
+      .from("location_members")
+      .update({ is_primary_location: true })
+      .eq("id", target.id);
+    if (promoteErr) return { error: promoteErr.message };
+
+    revalidatePath("/dashboard/staff");
+
+    if (member.organization_id) {
+      let staffName = "Staff Member";
+      if (member.staff_profile_id) {
+        const { data: sp } = await supabase
+          .from("staff_profiles")
+          .select("first_name, last_name, display_name")
+          .eq("id", member.staff_profile_id)
+          .single();
+        if (sp)
+          staffName = sp.display_name || `${sp.first_name} ${sp.last_name}`;
+      }
+      const { data: loc } = await supabase
+        .from("locations")
+        .select("name")
+        .eq("id", locationId)
+        .single();
+
+      await LogAuditEvent({
+        clerkOrgId: member.organization_id,
+        locationId,
+        action: `Set Primary Location: ${staffName} → ${loc?.name ?? "location"}`,
+        actionCategory: "staff",
+        resourceType: "staff_member",
+        resourceId: member.staff_profile_id || member.user_id || memberId,
+        resourceName: staffName,
+        metadata: { primary_location_id: locationId },
+      });
+    }
+
+    return { data: { success: true } };
+  } catch (error) {
+    console.error("[SetPrimaryLocation] Unexpected error:", error);
+    return { error: "An unexpected error occurred" };
+  }
 }
 
 // ============================================================================

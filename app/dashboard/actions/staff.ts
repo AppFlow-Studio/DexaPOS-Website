@@ -115,10 +115,11 @@ export async function inviteStaffMember(
         return { success: false, error: "Email required for this role" };
       }
 
-      // Detect HQ admin impersonation. When impersonating, the Clerk auth()
-      // user is the HQ admin — not a member of the merchant org — so Clerk
-      // rejects the invite call. Borrow an existing org:admin's identity for
-      // the duration of the call (matches adminInviteClerkStaff pattern).
+      // Always resolve an inviter from the merchant org. Clerk requires
+      // inviterUserId to be a member of the target org; under HQ admin
+      // impersonation the auth() user is not a member, and even outside
+      // impersonation this is a safe no-op (we just pick an existing admin).
+      // Mirrors the adminInviteClerkStaff pattern.
       let impersonationCtx: Awaited<ReturnType<typeof getEffectiveMerchantContext>> | null = null;
       try {
         impersonationCtx = await getEffectiveMerchantContext(clerkOrgId);
@@ -127,19 +128,17 @@ export async function inviteStaffMember(
       }
       const isImpersonating = impersonationCtx?.isImpersonating === true;
 
-      let inviterCleanup: (() => Promise<void>) | null = null;
-      let resolvedInviterUserId: string | null = null;
-      if (isImpersonating) {
-        try {
-          const resolved = await resolveOrgInviterUserId(clerkOrgId);
-          resolvedInviterUserId = resolved.inviterUserId;
-          inviterCleanup = resolved.cleanup;
-        } catch (e: any) {
-          return {
-            success: false,
-            error: e?.message ?? "No eligible inviter found in this merchant org",
-          };
-        }
+      let resolvedInviterUserId: string;
+      let inviterCleanup: () => Promise<void>;
+      try {
+        const resolved = await resolveOrgInviterUserId(clerkOrgId);
+        resolvedInviterUserId = resolved.inviterUserId;
+        inviterCleanup = resolved.cleanup;
+      } catch (e: any) {
+        return {
+          success: false,
+          error: e?.message ?? "No eligible inviter found in this merchant org",
+        };
       }
 
       const clerk = await clerkClient();
@@ -149,7 +148,7 @@ export async function inviteStaffMember(
           organizationId: clerkOrgId,
           emailAddress: params.email,
           role: role.level_type === "admin" ? "org:admin" : "org:member",
-          ...(resolvedInviterUserId ? { inviterUserId: resolvedInviterUserId } : {}),
+          inviterUserId: resolvedInviterUserId,
           publicMetadata: {
             role: params.roleCode,
             merchantId: params.merchantId,
@@ -166,7 +165,7 @@ export async function inviteStaffMember(
           },
         });
       } finally {
-        if (inviterCleanup) await inviterCleanup();
+        await inviterCleanup();
       }
 
       if (invitation.id) {
@@ -191,25 +190,18 @@ export async function inviteStaffMember(
 
         if (inviteError) {
           // DB insert failed — revoke the Clerk invitation so we don't leave
-          // an orphan that the user could still accept. Under impersonation,
-          // the HQ admin's userId isn't an org member, so re-resolve a valid
-          // requester from the merchant org.
+          // an orphan. Clerk's revoke also requires requestingUserId to be an
+          // org member, so always re-resolve from the merchant org.
           try {
-            let revokeRequesterId = userId;
-            let revokeCleanup: (() => Promise<void>) | null = null;
-            if (isImpersonating) {
-              const r = await resolveOrgInviterUserId(clerkOrgId);
-              revokeRequesterId = r.inviterUserId;
-              revokeCleanup = r.cleanup;
-            }
+            const r = await resolveOrgInviterUserId(clerkOrgId);
             try {
               await clerk.organizations.revokeOrganizationInvitation({
                 organizationId: clerkOrgId,
                 invitationId: invitation.id,
-                requestingUserId: revokeRequesterId,
+                requestingUserId: r.inviterUserId,
               });
             } finally {
-              if (revokeCleanup) await revokeCleanup();
+              await r.cleanup();
             }
           } catch (revokeErr) {
             console.warn(
