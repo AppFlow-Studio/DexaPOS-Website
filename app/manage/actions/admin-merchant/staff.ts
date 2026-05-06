@@ -7,6 +7,7 @@ import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { logAdminAction } from '@/lib/admin/log-admin-action'
 import { revalidatePath } from 'next/cache'
 import { clerkClient } from '@clerk/nextjs/server'
+import { resolveOrgInviterUserId } from '@/lib/clerk/org-inviter'
 import type {
   AdminStaffMember,
   BulkPinResetResult,
@@ -1349,43 +1350,20 @@ export async function adminInviteClerkStaff(
   }))
 
   // 4. Create Clerk org invitation
-  //    Clerk requires inviterUserId to be an org:admin of that org.
-  //    HQ admins are not org members, so find one who is, or temporarily promote someone.
+  //    Clerk requires inviterUserId to be a member of that org. HQ admins are
+  //    not org members, so resolveOrgInviterUserId borrows an org:admin (or
+  //    temporarily promotes a member) for the call.
   const clerk = await clerkClient()
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? ''
 
-  let inviterUserId: string | null = null
-  let temporarilyPromoted = false
-  let promotedUserId: string | null = null
-
+  let inviterUserId: string
+  let cleanup: () => Promise<void>
   try {
-    const memberships = await clerk.organizations.getOrganizationMembershipList({
-      organizationId: clerkOrgId,
-      limit: 50,
-    })
-    const adminMember = memberships.data.find((m) => m.role === 'org:admin')
-    if (adminMember?.publicUserData?.userId) {
-      inviterUserId = adminMember.publicUserData.userId
-    } else if (memberships.data.length > 0) {
-      // No org:admin — temporarily promote the first member
-      const firstMember = memberships.data[0]
-      if (firstMember?.publicUserData?.userId) {
-        promotedUserId = firstMember.publicUserData.userId
-        await clerk.organizations.updateOrganizationMembership({
-          organizationId: clerkOrgId,
-          userId: promotedUserId,
-          role: 'org:admin',
-        })
-        inviterUserId = promotedUserId
-        temporarilyPromoted = true
-      }
-    }
-  } catch {
-    // Non-fatal — inviterUserId stays null; Clerk may still accept without it
-  }
-
-  if (!inviterUserId) {
-    return { success: false, error: 'No eligible inviter found in this merchant org' }
+    const resolved = await resolveOrgInviterUserId(clerkOrgId)
+    inviterUserId = resolved.inviterUserId
+    cleanup = resolved.cleanup
+  } catch (e: any) {
+    return { success: false, error: e?.message ?? 'No eligible inviter found in this merchant org' }
   }
 
   let invitation: Awaited<ReturnType<typeof clerk.organizations.createOrganizationInvitation>> | undefined
@@ -1417,17 +1395,7 @@ export async function adminInviteClerkStaff(
     })
     throw err
   } finally {
-    if (temporarilyPromoted && promotedUserId) {
-      try {
-        await clerk.organizations.updateOrganizationMembership({
-          organizationId: clerkOrgId,
-          userId: promotedUserId,
-          role: 'org:member',
-        })
-      } catch {
-        // Non-fatal
-      }
-    }
+    await cleanup()
   }
 
   if (!invitation?.id) {
