@@ -1,5 +1,5 @@
-import { parsePhoneNumber, isValidPhoneNumber } from 'libphonenumber-js/min'
-import type { CountryCode } from 'libphonenumber-js/min'
+import { parsePhoneNumber, isValidPhoneNumber } from 'libphonenumber-js'
+import type { CountryCode } from 'libphonenumber-js'
 
 /** Normalize raw user input to E.164. Returns null if invalid or empty. */
 export function normalizePhone(

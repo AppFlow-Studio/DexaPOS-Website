@@ -165,7 +165,6 @@ export function StaffDetailSheet({
     (a) => a.is_primary
   );
   const hasPin = displayStaff?.location_assignments?.some((a) => a.has_pin) ?? false;
-  const primaryPin = primaryLocation?.pin_code || null;
 
   // Get current user's role level for filtering assignable roles
   const currentUserLevel = React.useMemo(() => {
@@ -176,14 +175,26 @@ export function StaffDetailSheet({
     return role?.level || 100;
   }, [userInfo, roles]);
 
-  // Load roles when edit mode is enabled
+  // PIN reveal permission: owner and admin can always reveal;
+  // managers (level ≤ 75) can too. Cashier-level roles cannot.
+  const canRevealPin = React.useMemo(() => {
+    if (!userInfo?.members?.[0]) return false;
+    const member = userInfo.members[0];
+    const roleCode = (member.role_code || member.role) ?? "";
+    if (["merchant.owner", "merchant.admin"].includes(roleCode)) return true;
+    // Fall back to level check once roles are loaded
+    if (roles.length > 0) return currentUserLevel <= 75;
+    return false;
+  }, [userInfo, roles, currentUserLevel]);
+
+  // Load roles when the sheet opens
   React.useEffect(() => {
-    if (open && (isEditMode || showAddLocation)) {
+    if (open) {
       GetMerchantRoles().then((rolesData) => {
         setRoles(rolesData);
       });
     }
-  }, [open, isEditMode, showAddLocation]);
+  }, [open]);
 
   // Reset edit state when staff changes
   React.useEffect(() => {
@@ -395,7 +406,7 @@ export function StaffDetailSheet({
     if ((editedEmail || null) !== (staff.email || null))
       updates.email = editedEmail || null;
     if ((editedPhone || null) !== (staff.phone || null))
-      updates.phone = normalizePhone(editedPhone) ?? editedPhone || null;
+      updates.phone = normalizePhone(editedPhone) ?? (editedPhone || null);
 
     if (Object.keys(updates).length === 0) {
       setIsProfileEditMode(false);
@@ -689,7 +700,11 @@ export function StaffDetailSheet({
                         {isEditMode ? (
                           <Select value={editedRole} onValueChange={setEditedRole}>
                             <SelectTrigger className="h-10">
-                              <SelectValue />
+                              <SelectValue placeholder="Select role">
+                                {editedRole
+                                  ? (roles.find((r) => r.code === editedRole)?.name ?? editedRole)
+                                  : "Select role"}
+                              </SelectValue>
                             </SelectTrigger>
                             <SelectContent>
                               {roles
@@ -860,18 +875,16 @@ export function StaffDetailSheet({
 
                   <div className="space-y-4">
                     <StaffPinField
-                      pin={primaryPin}
+                      memberId={displayStaff?.member_id ?? ""}
+                      locationId={primaryLocation?.location_id ?? ""}
+                      locationName={primaryLocation?.location_name}
                       hasPin={Boolean(primaryLocation?.has_pin)}
+                      canReveal={canRevealPin}
                       onGenerate={handleResetPIN}
                       isGenerating={resetPIN.isPending}
                       disabled={!primaryLocation}
                       buttonLabel={
                         primaryLocation?.has_pin ? "Generate New PIN" : "Generate PIN"
-                      }
-                      visibleDescription={
-                        primaryLocation
-                          ? `Primary location: ${primaryLocation.location_name}`
-                          : undefined
                       }
                     />
 
