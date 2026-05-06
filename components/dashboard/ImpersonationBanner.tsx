@@ -43,9 +43,12 @@ const FIVE_MIN_MS = 5 * 60 * 1000;
 function formatRemaining(ms: number): string {
   if (ms <= 0) return "0:00";
   const total = Math.floor(ms / 1000);
-  const m = Math.floor(total / 60);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
   const s = total % 60;
-  return `${m}:${s.toString().padStart(2, "0")}`;
+  const mm = m.toString().padStart(2, "0");
+  const ss = s.toString().padStart(2, "0");
+  return h > 0 ? `${h}:${mm}:${ss}` : `${m}:${ss}`;
 }
 
 function formatRelative(fromIso: string, now: number): string {
@@ -187,7 +190,7 @@ export function ImpersonationBanner() {
                       <li>Every action you take is audit-logged under your HQ account.</li>
                       <li>RLS still applies — you only see what the merchant owner sees.</li>
                       <li>Refunds and voids remain POS-only and aren't available here.</li>
-                      <li>The session auto-expires after 30 minutes of inactivity.</li>
+                      <li>The session auto-expires after 24 hours of inactivity.</li>
                     </ul>
                   </PopoverContent>
                 </Popover>

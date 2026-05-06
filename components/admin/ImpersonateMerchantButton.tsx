@@ -122,7 +122,7 @@ export function ImpersonateMerchantButton({
             <DialogDescription>
               You will navigate the merchant&apos;s dashboard as if you were
               them. Every action is audit-logged under your HQ account and
-              flagged as impersonation. Session expires after 30 minutes of
+              flagged as impersonation. Session expires after 24 hours of
               inactivity.
             </DialogDescription>
           </DialogHeader>

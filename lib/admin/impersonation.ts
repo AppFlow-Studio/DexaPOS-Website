@@ -36,9 +36,9 @@ import { LogAuditEvent } from "@/app/dashboard/actions/audit-logs";
 const COOKIE_MERCHANT_ID = "x-impersonate-merchant-id";
 const COOKIE_SESSION_ID = "x-impersonate-session-id";
 
-// 30-minute sliding TTL. Mirrors the value enforced server-side in
+// 24-hour sliding TTL. Mirrors the value enforced server-side in
 // touch_impersonation_session and is_merchant_admin_or_impersonating.
-const SESSION_TTL_SECONDS = 30 * 60;
+const SESSION_TTL_SECONDS = 24 * 60 * 60;
 
 // UUID v4-ish regex. Cheap middleware/cookie validation.
 const UUID_REGEX =
@@ -134,7 +134,7 @@ export const resolveImpersonationFromCookies = cache(
 
     // touch_impersonation_session does the work in one round-trip:
     //   * verifies the session belongs to the calling admin
-    //   * checks 30-min sliding TTL (ends session as 'idle_timeout' if past)
+    //   * checks 24-hour sliding TTL (ends session as 'idle_timeout' if past)
     //   * re-checks hq_can_impersonate_merchant (ends as 'revoked_access')
     //   * slides last_validated_at forward
     const { data: stillValid, error: touchError } = await supabase.rpc(
