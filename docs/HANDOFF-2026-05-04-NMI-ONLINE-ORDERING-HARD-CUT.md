@@ -71,22 +71,28 @@ File:
 - `supabase/functions/process-online-payment/index.ts`
 
 ### 3. Storefront card widget
-The old client-side Dejavoo/FTD payment form was replaced with NMI React checkout.
-
-Package added:
-- `@nmipayments/nmi-pay-react`
+The old client-side Dejavoo/FTD payment form was replaced with NMI Collect.js inline tokenization.
 
 Files:
 - `package.json`
 - `app/sites/components/checkout/PaymentCardForm.tsx`
 - `app/sites/components/checkout/CheckoutPage.tsx`
+- `app/sites/components/checkout/PlaceOrderButton.tsx`
 
 Behavior:
 - checkout requests NMI bootstrap config
-- NMI component tokenizes card details in-browser
+- Collect.js tokenizes card details in-browser
+- inline hosted fields are limited to:
+  - card number
+  - expiration
+  - CVV
 - checkout stores the latest `payment_token`
 - order submission sends `payment_token`
 - `payment_token_id` is still accepted as a legacy alias during cutover
+
+Why:
+- the `@nmipayments/nmi-pay-react` embedded component path produced runtime compatibility issues in this Next/Turbopack app
+- Collect.js removed the Apple Pay / Google Pay initialization problems and gave a stable tokenization path
 
 ### 4. Online order charge flow
 The online-order edge function now charges NMI synchronously before final order creation.
@@ -100,6 +106,17 @@ Implemented:
 - uses location device secret from `get_nmi_device_credentials`
 - persists the selected `payment_device_id`
 - persists NMI results into generic `order_payments` fields
+
+Important runtime corrections:
+- NMI v5 payment calls for this merchant flow use:
+  - host: `https://secure.nmi.com`
+  - header: `Authorization: <privateApiKey>`
+- this merchant is in NMI Test Mode; that is not the same thing as using `sandbox.nmi.com`
+- the sale payload was reduced to the minimum working shape:
+  - `amount`
+  - `currency`
+  - `industry: 'ecommerce'`
+  - `payment_details.payment_token`
 
 Persisted fields include:
 - `processor_name = 'nmi'`
@@ -223,16 +240,26 @@ Dejavoo terminal/in-store code outside online ordering was not changed.
 - `supabase/functions/dejavoo-whitelist-domain/deno.json`
 
 ## Validation Performed
-- package install completed for `@nmipayments/nmi-pay-react`
-- targeted TypeScript scan on the touched NMI/admin/storefront files returned no matches
-- repo-wide `tsc` still has unrelated existing errors outside this workstream
+- senior NMI location-device schema and RPCs were verified as already present on staging
+- edge functions were deployed:
+  - `process-online-payment`
+  - `create-online-order`
+  - `cancel-online-order`
+- Next app was redeployed locally for test iteration
+- Collect.js tokenization completed successfully in storefront checkout
+- a real NMI test-mode website payment succeeded end-to-end
+- Dexa `order_payments` amount matched the NMI transaction amount
+- NMI dashboard showed the same:
+  - amount
+  - card brand
+  - last four
+- targeted TypeScript checks on touched NMI files were clean enough for this workstream
 
-Not performed yet:
-- migration apply on staging
-- edge-function deploy
-- Next app redeploy
-- real NMI sandbox checkout
-- real refund/void test
+Known unrelated repo state:
+- repo-wide `tsc` still has unrelated existing errors outside this workstream
+- browser console may still show:
+  - `Could not create PaymentRequestAbstraction. Please verify the provided options are valid.`
+  - this did not block successful tokenization or successful sale processing in the current Collect.js flow
 
 ## Remaining Gaps
 These are still open:
@@ -241,13 +268,22 @@ These are still open:
 - on-demand reconciliation exists
 - scheduled reconciliation is not implemented yet
 
-2. Staging rollout
-- migration still needs to be applied
-- functions still need deployment
-- app still needs redeploy
+2. Runtime coverage
+- success path is verified
+- decline path still needs explicit testing
+- void/refund path still needs explicit testing
 
-3. Runtime verification
-- no real sandbox sale/decline/refund/void test has been executed yet
+3. Payload enrichment
+- the current working sale payload is intentionally minimal
+- optional NMI fields should be reintroduced one group at a time only if needed:
+  - tip
+  - billing address
+  - order details
+  - merchant defined fields
+
+4. Key rotation
+- multiple test keys were exposed in local terminal output and screenshots during debugging
+- rotate those NMI keys after validation is complete
 
 ## Rollout Steps
 1. Confirm the senior NMI migrations are already present in the target environment:
@@ -261,9 +297,12 @@ These are still open:
    - `process-online-payment`
    - `create-online-order`
    - `cancel-online-order`
-3. Redeploy Next app
-4. Configure the target location's NMI tokenization key and private API key in HQ
-5. Run sandbox verification
+3. Ensure edge-function env uses:
+   - `NMI_API_BASE_URL=https://secure.nmi.com`
+4. Redeploy Next app
+5. Configure the target location's NMI tokenization key and private API key in HQ
+6. Put the merchant account in NMI Test Mode
+7. Run verification checkout
 
 ## Detailed Test Runbook
 Use one of the two locations that already has an online store request/setup path complete.
@@ -336,14 +375,14 @@ Expected response:
 ```
 
 Expected meaning:
-- `tokenization_key` is the browser-safe key used by the NMI React component
+- `tokenization_key` is the browser-safe key used by Collect.js
 - `payment_device_id` is the active location device that the backend will also use for the private key
 
 ### 5. Verify card tokenization
 This is directly related to the tokenization key.
 
 What happens:
-- `PaymentCardForm` mounts the NMI React component
+- `PaymentCardForm` loads `https://secure.nmi.com/token/Collect.js`
 - the component uses `tokenization_key`
 - when the card fields are complete, it emits a `payment_token`
 - checkout sends that `payment_token` to `create-online-order`
@@ -386,6 +425,12 @@ Expected:
 - `transaction_id` populated
 - `card_last_four` populated
 - `status = 'captured'` or equivalent paid state
+
+Verified successful example:
+- `order_id = '6053288a-4a0d-48cf-ab9b-5a378c503cb2'`
+- HTTP response from `create-online-order` returned `success: true`
+- Dexa stored amount matched NMI dashboard amount
+- NMI dashboard showed matching Visa last four
 
 ### 7. Run a decline test
 Use the sandbox/test scenario from your NMI account and place a payment expected to fail.
@@ -484,7 +529,7 @@ limit 50;
   - `payment_device_id` exists
 
 3. Tokenization
-- NMI React component loads
+- Collect.js inline fields load
 - card details complete successfully
 - checkout receives a `payment_token`
 
@@ -516,7 +561,18 @@ limit 50;
 - in-store POS payment flows remain untouched
 
 ## Current Status
-Implementation is largely complete for the hard cut and has been refactored to the senior location-device NMI model.
+Implementation is complete enough to process live test-mode storefront payments and is refactored to the senior location-device NMI model.
+
+Working now:
+- HQ can save location-scoped NMI keys
+- storefront bootstrap returns NMI config
+- Collect.js tokenizes successfully
+- `create-online-order` charges and creates the order successfully
+
+Still to finish:
+- decline validation
+- void/refund validation
+- optional metadata/tip reintroduction if required
 
 Not ready to call fully done yet because:
 - scheduled reconciliation is still pending

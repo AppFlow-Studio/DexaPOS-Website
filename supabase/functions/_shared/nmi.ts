@@ -112,14 +112,10 @@ async function callNmi(
 export async function createSale(
   config: NmiRequestConfig,
   params: {
-    amount: string
-    tip?: string
+    amount: number
     currency?: string
     paymentToken: string
-    billingAddress?: JsonRecord
-    shippingAddress?: JsonRecord
-    orderDetails?: JsonRecord
-    merchantDefinedFields?: JsonRecord
+    industry?: 'retail' | 'restaurant' | 'ecommerce' | 'moto' | 'lodging'
   },
 ) {
   const result = await callNmi(
@@ -128,15 +124,11 @@ export async function createSale(
       method: 'POST',
       body: JSON.stringify({
         amount: params.amount,
-        ...(params.tip ? { tip: params.tip } : {}),
         currency: params.currency ?? 'USD',
+        industry: params.industry ?? 'ecommerce',
         payment_details: {
           payment_token: params.paymentToken,
         },
-        ...(params.billingAddress ? { billing_address: params.billingAddress } : {}),
-        ...(params.shippingAddress ? { shipping_address: params.shippingAddress } : {}),
-        ...(params.orderDetails ? { order_details: params.orderDetails } : {}),
-        ...(params.merchantDefinedFields ? { merchant_defined_fields: params.merchantDefinedFields } : {}),
       }),
     },
     config,
@@ -172,7 +164,7 @@ export async function refundSale(
   config: NmiRequestConfig,
   transactionId: string,
   params: {
-    amount?: string
+    amount?: number
     payment?: 'creditcard' | 'check'
   } = {},
 ) {

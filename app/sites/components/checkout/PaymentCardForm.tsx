@@ -3,11 +3,12 @@
 import {
   forwardRef,
   useCallback,
+  useEffect,
   useImperativeHandle,
+  useRef,
   useState,
 } from "react";
 import { AlertCircle, Lock } from "lucide-react";
-import { NmiPayments, type PaymentChangeEvent } from "@nmipayments/nmi-pay-react";
 
 export interface PaymentCardFormHandle {
   validateCardInput: () => { valid: boolean; error?: string };
@@ -23,6 +24,40 @@ interface PaymentCardFormProps {
   onError: (error: string) => void;
   disabled?: boolean;
 }
+
+interface CollectJsFieldState {
+  ccnumber: boolean;
+  ccexp: boolean;
+  cvv: boolean;
+}
+
+interface CollectJsLookupCard {
+  type?: string | null;
+  number?: string | null;
+}
+
+interface CollectJsResponse {
+  token?: string;
+  error?: string;
+  card?: CollectJsLookupCard | null;
+}
+
+interface CollectJsGlobal {
+  configure: (config: Record<string, unknown>) => void;
+  startPaymentRequest: (event?: Event) => void;
+  clearInputs?: () => void;
+}
+
+declare global {
+  interface Window {
+    CollectJS?: CollectJsGlobal;
+  }
+}
+
+const COLLECT_JS_SCRIPT_ID = "nmi-collect-js";
+const COLLECT_JS_SCRIPT_SRC = "https://secure.nmi.com/token/Collect.js";
+
+let collectJsLoader: Promise<void> | null = null;
 
 function toDisplayCardType(cardType: string | null | undefined): string | null {
   if (!cardType) return null;
@@ -48,10 +83,72 @@ function getLastFour(maskedNumber: string | null | undefined): string | null {
   return digits.length >= 4 ? digits.slice(-4) : null;
 }
 
+function loadCollectJs(tokenizationKey: string): Promise<void> {
+  if (typeof window === "undefined") {
+    return Promise.reject(new Error("Collect.js can only load in the browser."));
+  }
+
+  const existingScript = document.getElementById(
+    COLLECT_JS_SCRIPT_ID
+  ) as HTMLScriptElement | null;
+
+  const existingKey = existingScript?.dataset.tokenizationKey;
+  if (existingScript && existingKey && existingKey !== tokenizationKey) {
+    existingScript.remove();
+    collectJsLoader = null;
+    delete window.CollectJS;
+  }
+
+  if (window.CollectJS && collectJsLoader) {
+    return collectJsLoader;
+  }
+
+  if (!collectJsLoader) {
+    collectJsLoader = new Promise<void>((resolve, reject) => {
+      const script =
+        (document.getElementById(COLLECT_JS_SCRIPT_ID) as HTMLScriptElement | null) ??
+        document.createElement("script");
+
+      script.id = COLLECT_JS_SCRIPT_ID;
+      script.src = COLLECT_JS_SCRIPT_SRC;
+      script.async = true;
+      script.dataset.tokenizationKey = tokenizationKey;
+
+      script.onload = () => resolve();
+      script.onerror = () => {
+        collectJsLoader = null;
+        reject(new Error("Failed to load NMI Collect.js."));
+      };
+
+      if (!script.parentNode) {
+        document.head.appendChild(script);
+      }
+    });
+  }
+
+  return collectJsLoader;
+}
+
 export const PaymentCardForm = forwardRef<
   PaymentCardFormHandle,
   PaymentCardFormProps
 >(function PaymentCardForm({ tokenizationKey, onError, disabled }, ref) {
+  const collectIdRef = useRef(`collect-${Math.random().toString(36).slice(2, 10)}`);
+  const pendingTokenizeRef = useRef<{
+    resolve: (value: {
+      tokenId: string;
+      cardType: string | null;
+      cardLastFour: string | null;
+    }) => void;
+    reject: (reason?: unknown) => void;
+  } | null>(null);
+
+  const [collectReady, setCollectReady] = useState(false);
+  const [fieldState, setFieldState] = useState<CollectJsFieldState>({
+    ccnumber: false,
+    ccexp: false,
+    cvv: false,
+  });
   const [paymentState, setPaymentState] = useState<{
     complete: boolean;
     token: string | null;
@@ -64,6 +161,130 @@ export const PaymentCardForm = forwardRef<
     cardLastFour: null,
   });
 
+  const ccNumberId = `${collectIdRef.current}-ccnumber`;
+  const ccExpId = `${collectIdRef.current}-ccexp`;
+  const cvvId = `${collectIdRef.current}-cvv`;
+  const paymentButtonId = `${collectIdRef.current}-pay`;
+
+  useEffect(() => {
+    if (!tokenizationKey) {
+      setCollectReady(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    loadCollectJs(tokenizationKey)
+      .then(() => {
+        if (cancelled || !window.CollectJS) return;
+
+        window.CollectJS.configure({
+          variant: "inline",
+          paymentSelector: `#${paymentButtonId}`,
+          fields: {
+            ccnumber: {
+              selector: `#${ccNumberId}`,
+              title: "Card Number",
+              placeholder: "0000 0000 0000 0000",
+            },
+            ccexp: {
+              selector: `#${ccExpId}`,
+              title: "Card Expiration",
+              placeholder: "MM / YY",
+            },
+            cvv: {
+              selector: `#${cvvId}`,
+              title: "CVV",
+              placeholder: "CVV",
+            },
+          },
+          styleSniffer: false,
+          invalidCss: {
+            color: "#0f172a",
+            "border-color": "#ef4444",
+          },
+          validCss: {
+            color: "#0f172a",
+            "border-color": "#10b981",
+          },
+          focusCss: {
+            color: "#0f172a",
+            "border-color": "#6366f1",
+          },
+          placeholderCss: {
+            color: "#94a3b8",
+          },
+          fieldsAvailableCallback: () => {
+            if (cancelled) return;
+            setCollectReady(true);
+            onError("");
+          },
+          validationCallback: (
+            field: keyof CollectJsFieldState,
+            status: boolean,
+            _message: string
+          ) => {
+            if (cancelled) return;
+
+            if (field === "ccnumber" || field === "ccexp" || field === "cvv") {
+              setFieldState((current) => ({ ...current, [field]: status }));
+            }
+
+            if (!status) {
+              setPaymentState((current) => ({
+                ...current,
+                complete: false,
+                token: null,
+              }));
+              onError("");
+            }
+          },
+          callback: (response: CollectJsResponse) => {
+            if (cancelled) return;
+
+            if (!response?.token) {
+              const message =
+                response?.error || "Card tokenization failed. Please try again.";
+              setPaymentState((current) => ({
+                ...current,
+                complete: false,
+                token: null,
+              }));
+              onError(message);
+              pendingTokenizeRef.current?.reject(new Error(message));
+              pendingTokenizeRef.current = null;
+              return;
+            }
+
+            const tokenized = {
+              tokenId: response.token,
+              cardType: toDisplayCardType(response.card?.type),
+              cardLastFour: getLastFour(response.card?.number),
+            };
+
+            setPaymentState({
+              complete: true,
+              token: response.token,
+              cardType: tokenized.cardType,
+              cardLastFour: tokenized.cardLastFour,
+            });
+            onError("");
+            pendingTokenizeRef.current?.resolve(tokenized);
+            pendingTokenizeRef.current = null;
+          },
+        });
+      })
+      .catch((error: Error) => {
+        if (cancelled) return;
+        setCollectReady(false);
+        onError(error.message || "Failed to load NMI card fields.");
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [ccExpId, ccNumberId, cvvId, onError, paymentButtonId, tokenizationKey]);
+
   const validateCardInput = useCallback((): { valid: boolean; error?: string } => {
     if (!tokenizationKey) {
       return {
@@ -72,28 +293,51 @@ export const PaymentCardForm = forwardRef<
       };
     }
 
-    if (!paymentState.complete || !paymentState.token) {
+    if (!collectReady) {
       return {
         valid: false,
-        error: "Please complete your card details.",
+        error: "Secure card fields are still loading.",
       };
     }
 
-    return { valid: true };
-  }, [paymentState.complete, paymentState.token, tokenizationKey]);
-
-  const tokenize = useCallback(async () => {
-    const validation = validateCardInput();
-    if (!validation.valid || !paymentState.token) {
-      throw new Error(validation.error || "Card tokenization failed.");
+    if (fieldState.ccnumber && fieldState.ccexp && fieldState.cvv) {
+      return { valid: true };
     }
 
     return {
-      tokenId: paymentState.token,
-      cardType: paymentState.cardType,
-      cardLastFour: paymentState.cardLastFour,
+      valid: false,
+      error: "Please complete your card details.",
     };
-  }, [paymentState, validateCardInput]);
+  }, [collectReady, fieldState, tokenizationKey]);
+
+  const tokenize = useCallback(async () => {
+    if (!window.CollectJS) {
+      throw new Error("NMI Collect.js is not available.");
+    }
+
+    if (!collectReady) {
+      throw new Error("Secure card fields are still loading.");
+    }
+
+    return new Promise<{
+      tokenId: string;
+      cardType: string | null;
+      cardLastFour: string | null;
+    }>((resolve, reject) => {
+      pendingTokenizeRef.current = { resolve, reject };
+
+      try {
+        window.CollectJS?.startPaymentRequest();
+      } catch (error) {
+        pendingTokenizeRef.current = null;
+        reject(
+          error instanceof Error
+            ? error
+            : new Error("Failed to start NMI tokenization.")
+        );
+      }
+    });
+  }, [collectReady]);
 
   useImperativeHandle(
     ref,
@@ -102,24 +346,6 @@ export const PaymentCardForm = forwardRef<
       tokenize,
     }),
     [tokenize, validateCardInput]
-  );
-
-  const handleChange = useCallback(
-    (event: PaymentChangeEvent) => {
-      const nextState = {
-        complete: Boolean(event.complete && event.token),
-        token: event.token || null,
-        cardType: toDisplayCardType(event.lookupData?.card?.type),
-        cardLastFour: getLastFour(event.lookupData?.card?.number),
-      };
-
-      setPaymentState(nextState);
-
-      if (!event.complete) {
-        onError("");
-      }
-    },
-    [onError]
   );
 
   if (!tokenizationKey) {
@@ -139,7 +365,7 @@ export const PaymentCardForm = forwardRef<
             Secure card payment
           </div>
           <p className="mt-1 text-xs text-slate-500">
-            Card entry and tokenization are handled directly by NMI.
+            Card entry and tokenization are handled directly by NMI Collect.js.
           </p>
         </div>
         {paymentState.complete ? (
@@ -148,17 +374,48 @@ export const PaymentCardForm = forwardRef<
           </span>
         ) : (
           <span className="rounded-full bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-600">
-            Awaiting details
+            {collectReady ? "Awaiting details" : "Loading fields"}
           </span>
         )}
       </div>
 
       <div className={disabled ? "pointer-events-none opacity-60" : ""}>
-        <NmiPayments
-          tokenizationKey={tokenizationKey}
-          onChange={handleChange}
-          onFieldsAvailable={() => onError("")}
-          showDivider={false}
+        <div className="grid gap-3 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)]">
+          <div>
+            <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">
+              Card Number
+            </label>
+            <div
+              id={ccNumberId}
+              className="min-h-[48px] rounded-xl border border-slate-300 bg-white px-3 py-3"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">
+              Expiration
+            </label>
+            <div
+              id={ccExpId}
+              className="min-h-[48px] rounded-xl border border-slate-300 bg-white px-3 py-3"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">
+              CVV
+            </label>
+            <div
+              id={cvvId}
+              className="min-h-[48px] rounded-xl border border-slate-300 bg-white px-3 py-3"
+            />
+          </div>
+        </div>
+
+        <button
+          id={paymentButtonId}
+          type="button"
+          className="hidden"
+          aria-hidden="true"
+          tabIndex={-1}
         />
       </div>
 

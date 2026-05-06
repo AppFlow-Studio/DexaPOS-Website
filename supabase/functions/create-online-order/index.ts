@@ -739,7 +739,6 @@ Deno.serve(async (req: Request): Promise<Response> => {
   } | null = null
 
   if (!payCashInStore && effectivePaymentToken) {
-    const [billingFirstName, ...billingLastNameParts] = customerName.split(' ')
     logEvent('PAYMENT', 'Charging payment token via NMI', {
       merchantId,
       referenceId: transactionReferenceId,
@@ -749,27 +748,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const chargeResult = await createSale(
       { apiKey: nmiDeviceCredential!.decrypted_security_key },
       {
-        amount: toDollars(totalCents).toFixed(2),
-        tip: toDollars(tipCents).toFixed(2),
+        amount: Number(toDollars(totalCents).toFixed(2)),
         paymentToken: effectivePaymentToken,
-        billingAddress: {
-          first_name: billingFirstName || customerName,
-          last_name: billingLastNameParts.join(' ') || customerName,
-          address1: deliveryAddr?.street ?? undefined,
-          city: body.delivery_address?.city ?? undefined,
-          state: body.delivery_address?.state ?? undefined,
-          postal_code: body.delivery_address?.zip ?? undefined,
-          email: customerEmail ?? undefined,
-          phone: customerPhone ?? undefined,
-        },
-        orderDetails: {
-          invoice_number: transactionReferenceId,
-        },
-        merchantDefinedFields: {
-          dexa_order_reference: transactionReferenceId,
-          dexa_store_config_id: storeConfigId,
-          dexa_location_id: locationId,
-        },
+        industry: 'ecommerce',
       },
     )
 

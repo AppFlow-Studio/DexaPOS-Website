@@ -921,7 +921,7 @@ export function CheckoutPage({
                 promoCode={appliedPromo?.code}
                 pricingDisclosureText={pricingDisclosureText}
               />
-              <div className="hidden lg:block">
+              <div className="pt-2">
                 <PlaceOrderButton
                   layout="inline"
                   total={total}
@@ -936,14 +936,13 @@ export function CheckoutPage({
         </div>
       </main>
 
-      {/* Mobile: full-width fixed bar; desktop uses sidebar button above */}
-      <div className="lg:hidden">
+      <div className="hidden">
         <PlaceOrderButton
           total={total}
           loading={loading}
           disabled={!canPlaceOrder}
           onClick={handleCheckout}
-            isTestMode={!tokenizationKey && !payCashInStore}
+          isTestMode={!tokenizationKey && !payCashInStore}
           layout="fixed"
         />
       </div>

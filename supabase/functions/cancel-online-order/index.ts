@@ -196,7 +196,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         })
 
       const shouldRefund = Boolean(payment.is_settled || payment.settled_at)
-      const amount = Number(payment.total_amount ?? order.total_amount ?? 0).toFixed(2)
+      const amount = Number(Number(payment.total_amount ?? order.total_amount ?? 0).toFixed(2))
       const reversalResult = shouldRefund
         ? await refundSale(
           { apiKey: nmiDeviceCredential.decrypted_security_key },
