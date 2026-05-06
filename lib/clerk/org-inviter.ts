@@ -25,7 +25,9 @@ export async function resolveOrgInviterUserId(
     limit: 50,
   });
 
-  const adminMember = memberships.data.find((m) => m.role === "org:admin");
+  const adminMember = memberships.data.find(
+    (m) => m.role === "org:admin" && m.publicUserData?.userId,
+  );
   if (adminMember?.publicUserData?.userId) {
     return {
       inviterUserId: adminMember.publicUserData.userId,
@@ -33,7 +35,7 @@ export async function resolveOrgInviterUserId(
     };
   }
 
-  const firstMember = memberships.data[0];
+  const firstMember = memberships.data.find((m) => m.publicUserData?.userId);
   const promotedUserId = firstMember?.publicUserData?.userId;
   if (!promotedUserId) {
     throw new Error("No eligible inviter found in this merchant org");
