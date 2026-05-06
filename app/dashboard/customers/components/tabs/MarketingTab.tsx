@@ -30,6 +30,7 @@ import {
   useUnsubscribeFromMarketing,
 } from "../../hooks/useCustomerMarketing";
 import type { CustomerListItem } from "@/types/customer";
+import { formatPhoneForDisplay } from "@/lib/phone";
 
 interface MarketingTabProps {
   customer: CustomerListItem | null;
@@ -153,7 +154,7 @@ export function MarketingTab({ customer, merchantId }: MarketingTabProps) {
                   SMS Marketing
                 </p>
                 <p className="text-xs text-muted-foreground mt-2">
-                  {customer?.phone || "No phone on file"}
+                  {customer?.phone ? formatPhoneForDisplay(customer.phone) : "No phone on file"}
                 </p>
               </div>
               <div className="text-right">

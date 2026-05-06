@@ -1,6 +1,6 @@
 'use server'
 
-import { assertHQPermission } from '@/lib/admin/auth'
+import { assertSuperAdmin } from '@/lib/admin/auth'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { logAdminAction } from '@/lib/admin/log-admin-action'
 
@@ -47,7 +47,12 @@ async function getActorAndTargetNames(
 
 export async function grantAdminMerchantAccess(input: GrantAccessInput): Promise<{ success: boolean; message?: string }> {
   try {
-    const authContext = await assertHQPermission('hq.team.manage')
+    const authContext = await assertSuperAdmin()
+
+    if (input.adminUserId === authContext.userId) {
+      return { success: false, message: 'Cannot assign merchants to yourself.' }
+    }
+
     const supabase = createServiceRoleClient()
     const now = new Date().toISOString()
 
@@ -103,7 +108,7 @@ export async function grantAdminMerchantAccess(input: GrantAccessInput): Promise
 
 export async function revokeAdminMerchantAccess(input: RevokeAccessInput): Promise<{ success: boolean; message?: string }> {
   try {
-    await assertHQPermission('hq.team.manage')
+    await assertSuperAdmin()
     const supabase = createServiceRoleClient()
 
     const { data: existing } = await supabase
@@ -160,7 +165,11 @@ export async function bulkGrantAdminMerchantAccess(
   notes?: string
 ): Promise<{ success: boolean; message?: string }> {
   try {
-    const authContext = await assertHQPermission('hq.team.manage')
+    const authContext = await assertSuperAdmin()
+
+    if (adminUserId === authContext.userId) {
+      return { success: false, message: 'Cannot assign merchants to yourself.' }
+    }
     const supabase = createServiceRoleClient()
     const now = new Date().toISOString()
 
@@ -223,7 +232,7 @@ export async function bulkRevokeAdminMerchantAccess(
   merchantIds: string[]
 ): Promise<{ success: boolean; message?: string }> {
   try {
-    await assertHQPermission('hq.team.manage')
+    await assertSuperAdmin()
     const supabase = createServiceRoleClient()
 
     if (!merchantIds.length) {

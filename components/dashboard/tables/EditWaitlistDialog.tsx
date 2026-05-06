@@ -13,9 +13,10 @@ import {
 } from '@/components/ui/bottom-sheet'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { PhoneInput } from '@/components/ui/phone-input'
 import { tenDigits } from '@/lib/phone'
 import { Label } from '@/components/ui/label'
+import { PhoneInput } from '@/components/ui/phone-input'
+import { normalizePhone } from '@/lib/phone'
 import { Textarea } from '@/components/ui/textarea'
 import {
   Users,
@@ -110,7 +111,7 @@ export function EditWaitlistDialog ({
       await UpdateWaitlistEntryAction(locationId, entry.id, {
         partyName: partyName.trim(),
         partySize: size,
-        phone: phone.trim() || undefined,
+        phone: (normalizePhone(phone) ?? phone.trim()) || undefined,
         notes: notes.trim() || undefined,
         preferredSection: preferredSection.trim() || undefined,
         seatingPreference: seatingPreference.trim() || undefined,
@@ -219,7 +220,7 @@ export function EditWaitlistDialog ({
               <PhoneInput
                 id='edit-phone'
                 value={phone}
-                onChange={({ digits }) => setPhone(digits)}
+                onChange={setPhone}
               />
             </div>
 

@@ -21,7 +21,7 @@ import { BankingPayoutsStep } from './steps/BankingPayoutsStep'
 import { BusinessHoursStep } from './steps/BusinessHoursStep'
 import { AssignManagerStep } from './steps/AssignManagerStep'
 import { ReviewStep } from './steps/ReviewStep'
-import { CreateLocation, UpdateLocation } from '@/app/dashboard/actions/locations'
+import { CreateLocation } from '@/app/dashboard/actions/locations'
 import {
     ApplyLocationManagerAssignment,
     GetManagerAssignableUsers,
@@ -40,7 +40,7 @@ import {
     createLocationSchema
 } from '@/types/merchant_locations'
 import { useQueryClient } from '@tanstack/react-query'
-import { uploadMerchantDocument } from '@/lib/cdn/server'
+import { isValidPhone, normalizePhone } from '@/lib/phone'
 
 interface CreateLocationWizardProps {
     clerkOrgId: string
@@ -81,7 +81,6 @@ const initialFormData: LocationFormData = {
     routing_number: '',
     account_number: '',
     confirm_account_number: '',
-    bank_support_document_name: '',
     account_type: 'checking',
     use_merchant_billing_profile: false,
     business_hours: DEFAULT_BUSINESS_HOURS,
@@ -116,7 +115,6 @@ export function CreateLocationWizard({ clerkOrgId, actorUserId }: CreateLocation
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [showExitDialog, setShowExitDialog] = useState(false)
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
-    const [bankSupportFile, setBankSupportFile] = useState<File | null>(null)
     const [managerCandidates, setManagerCandidates] = useState<ManagerAssignableUser[]>([])
     const [isLoadingManagerCandidates, setIsLoadingManagerCandidates] = useState(false)
     const [managerCandidatesError, setManagerCandidatesError] = useState<string | null>(null)
@@ -190,8 +188,8 @@ export function CreateLocationWizard({ clerkOrgId, actorUserId }: CreateLocation
                 if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
                     newErrors.email = 'Invalid email format'
                 }
-                if (formData.phone && formData.phone.replace(/\D/g, '').length < 10) {
-                    newErrors.phone = 'Phone number must be at least 10 digits'
+                if (formData.phone && !isValidPhone(formData.phone)) {
+                    newErrors.phone = 'Enter a valid phone number'
                 }
                 break
 
@@ -237,9 +235,6 @@ export function CreateLocationWizard({ clerkOrgId, actorUserId }: CreateLocation
                 ) {
                     newErrors.confirm_account_number = 'Account number confirmation must match'
                 }
-                if (!bankSupportFile) {
-                    newErrors.bank_support_document_name = 'Bank letter or voided check is required'
-                }
                 break
 
             case 5:
@@ -276,7 +271,7 @@ export function CreateLocationWizard({ clerkOrgId, actorUserId }: CreateLocation
 
                     createLocationSchema.parse({
                         ...formData,
-                        phone: formData.phone || undefined,
+                        phone: normalizePhone(formData.phone) ?? formData.phone || undefined,
                         email: formData.email || undefined,
                         code: formData.code || undefined,
                         address_line2: formData.address_line2 || undefined,
@@ -372,29 +367,6 @@ export function CreateLocationWizard({ clerkOrgId, actorUserId }: CreateLocation
                     description: result.error
                 })
                 return
-            }
-
-            if (result.data && bankSupportFile) {
-                const uploadResult = await uploadMerchantDocument(
-                    bankSupportFile,
-                    result.data.merchant_id,
-                    'online-store-bank-support'
-                )
-
-                if (uploadResult.success && uploadResult.cdnUrl) {
-                    await UpdateLocation(result.data.id, {
-                        public_metadata: {
-                            ...(result.data.public_metadata || {}),
-                            ...buildOnlineStoreLocationMetadata(formData),
-                            online_store_bank_support_document_url: uploadResult.cdnUrl,
-                            bank_support_document_url: uploadResult.cdnUrl,
-                        },
-                    })
-                } else if (!uploadResult.success) {
-                    toast.warning('Location created but bank support document upload failed', {
-                        description: uploadResult.error || 'Unknown error',
-                    })
-                }
             }
 
             if (result.data && formData.manager_assignment_type !== 'skip') {
@@ -495,8 +467,6 @@ export function CreateLocationWizard({ clerkOrgId, actorUserId }: CreateLocation
                         data={formData as LocationFormStep4}
                         onChange={updateFormData}
                         errors={errors}
-                        onBankSupportDocumentSelect={setBankSupportFile}
-                        onClearBankSupportDocument={() => setBankSupportFile(null)}
                     />
                 )
             case 5:

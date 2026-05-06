@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { useProgramAnalytics } from "../hooks/useLoyaltyProgram";
 import type { ProgramAnalytics } from "../../../actions/loyalty-programs";
+import { formatPhoneForDisplay } from "@/lib/phone";
 
 interface ProgramAnalyticsSheetProps {
   open: boolean;
@@ -165,7 +166,7 @@ export function ProgramAnalyticsSheet({
                           <TableCell className="text-xs font-medium">
                             <div>{customer.customer_name}</div>
                             <div className="text-xs text-muted-foreground">
-                              {customer.phone}
+                              {formatPhoneForDisplay(customer.phone)}
                             </div>
                           </TableCell>
                           <TableCell className="text-right text-xs font-medium">

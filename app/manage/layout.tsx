@@ -60,6 +60,8 @@ import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { AnimatedThemeToggler } from '@/components/ui/animated-theme-toggler'
 import { useUserInfo } from './hooks/useUserInfo.'
+import { useQueryClient } from '@tanstack/react-query'
+import { resetClientSession } from '@/lib/auth/session-reset'
 import { useAdminPermissions } from '@/lib/hooks/useAdminPermissions'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
@@ -183,12 +185,12 @@ const navMain: NavGroup[] = [
                 icon: Monitor,
                 requiredPermission: 'system.config.manage' as PermissionCode,
             },
-            {
-                title: 'Integrations',
-                url: '/manage/settings/integrations',
-                icon: Plug,
-                requiredPermission: 'hq.merchant.update' as PermissionCode,
-            },
+            // {
+            //     title: 'Integrations',
+            //     url: '/manage/settings/integrations',
+            //     icon: Plug,
+            //     requiredPermission: 'hq.merchant.update' as PermissionCode,
+            // },
         ]
     }
 ]
@@ -213,7 +215,14 @@ function AppSidebar() {
     const pathname = usePathname()
     
     const { signOut } = useClerk()
+    const queryClient = useQueryClient()
     const canCreateMerchants = hasPermission('merchants.create')
+
+    const handleSignOut = async () => {
+        await resetClientSession(queryClient)
+        await signOut()
+        window.location.href = '/sign-in'
+    }
 
     const isLoading = userInfoLoading || authLoading
     // Filter navigation items based on user permissions
@@ -379,7 +388,7 @@ function AppSidebar() {
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem>
-                                <button onClick={() => signOut({ redirectUrl: '/' })}>
+                                <button onClick={handleSignOut}>
                                     <div className='flex items-center gap-2'>
                                         <LogOut className="mr-2 h-4 w-4" />
                                         Log out

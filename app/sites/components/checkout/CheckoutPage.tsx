@@ -17,6 +17,7 @@ import { OrderDetailsSection } from "./OrderDetailsSection";
 import { TipSection } from "./TipSection";
 import { OrderSummarySection } from "./OrderSummarySection";
 import { PromoCodeSection } from "./PromoCodeSection";
+import { isValidPhone, normalizePhone } from "@/lib/phone";
 import { PlaceOrderButton } from "./PlaceOrderButton";
 import { OrderConfirmation } from "./OrderConfirmation";
 import { PaymentCardForm, type PaymentCardFormHandle } from "./PaymentCardForm";
@@ -463,7 +464,7 @@ export function CheckoutPage({
             ...(paymentCardLastFour ? { payment_card_last_four: paymentCardLastFour } : {}),
             // Contact info (always sent — edge function uses session data if available)
             customer_name: `${firstName} ${lastName}`.trim() || undefined,
-            customer_phone: customer?.phone || phone.trim() || undefined,
+            customer_phone: customer?.phone || normalizePhone(phone) || phone.trim() || undefined,
             customer_email: email || undefined,
           }),
         }
@@ -602,7 +603,7 @@ export function CheckoutPage({
   }
 
   const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
-  const phoneValid = !!(customer?.phone) || phone.trim().length >= 7;
+  const phoneValid = !!(customer?.phone) || isValidPhone(phone);
   const deliveryAddressValid =
     orderType !== "delivery" ||
     (selectedAddressId !== "new"

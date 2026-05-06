@@ -15,6 +15,8 @@ import { toast } from "sonner";
 import { sendOtp, verifyOtp } from "../auth-actions";
 import { updateCustomerProfile } from "../customer-actions";
 import { useSession } from "../hooks/useSession";
+import { PhoneInput } from "@/components/ui/phone-input";
+import { normalizePhone, isValidPhone } from "@/lib/phone";
 
 interface AuthDialogProps {
   isOpen: boolean;
@@ -83,22 +85,10 @@ export function AuthDialog({
     }
   }, [isOpen, defaultMode]);
 
-  const formatPhone = (value: string) => {
-    const digits = value.replace(/\D/g, "").slice(0, 10);
-    if (digits.length <= 3) return digits;
-    if (digits.length <= 6) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
-    return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
-  };
-
-  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setPhone(formatPhone(e.target.value));
-    setError("");
-  };
-
-  const rawPhone = phone.replace(/\D/g, "");
+  const e164Phone = normalizePhone(phone)
 
   const handleSendOtp = async () => {
-    if (rawPhone.length < 10) {
+    if (!isValidPhone(phone)) {
       setError("Please enter a valid phone number");
       return;
     }
@@ -117,7 +107,7 @@ export function AuthDialog({
     setLoading(true);
     setError("");
 
-    const result = await sendOtp(rawPhone, storeConfigId);
+    const result = await sendOtp(e164Phone ?? phone, storeConfigId);
     setLoading(false);
 
     if (!result.success) {
@@ -200,7 +190,7 @@ export function AuthDialog({
     setError("");
 
     const { sessionToken: existingToken } = useSession.getState();
-    const result = await verifyOtp(rawPhone, fullCode, storeConfigId, existingToken ?? undefined);
+    const result = await verifyOtp(e164Phone ?? phone, fullCode, storeConfigId, existingToken ?? undefined);
     setLoading(false);
 
     if (!result.success || !result.sessionToken || !result.customer) {
@@ -278,7 +268,7 @@ export function AuthDialog({
     setError("");
     setOtp(["", "", "", "", "", ""]);
 
-    const result = await sendOtp(rawPhone, storeConfigId);
+    const result = await sendOtp(e164Phone ?? phone, storeConfigId);
     setLoading(false);
 
     if (!result.success) {
@@ -475,23 +465,11 @@ export function AuthDialog({
 
               <div className="space-y-2">
                 <Label htmlFor="auth-phone">Phone Number <span className="text-red-500">*</span></Label>
-                <div className="relative">
-                  <Phone
-                    className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4"
-                    style={{ color: "var(--text-secondary, #6b7280)" }}
-                  />
-                  <Input
-                    id="auth-phone"
-                    type="tel"
-                    value={phone}
-                    onChange={handlePhoneChange}
-                    placeholder="(555) 123-4567"
-                    className="pl-10"
-                    onKeyDown={(e) => e.key === "Enter" && handleSendOtp()}
-                    autoFocus={mode === "signin"}
-                    style={inputStyle}
-                  />
-                </div>
+                <PhoneInput
+                  id="auth-phone"
+                  value={phone}
+                  onChange={(e164) => { setPhone(e164); setError(""); }}
+                />
               </div>
 
               {error && (
@@ -500,7 +478,7 @@ export function AuthDialog({
 
               <Button
                 onClick={handleSendOtp}
-                disabled={loading || rawPhone.length < 10}
+                disabled={loading || !isValidPhone(phone)}
                 className="w-full"
                 style={primaryButtonStyle}
               >

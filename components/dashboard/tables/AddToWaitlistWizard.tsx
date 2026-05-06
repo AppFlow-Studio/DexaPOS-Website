@@ -18,6 +18,7 @@ import { PhoneInput } from '@/components/ui/phone-input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Users, Phone, FileText, MapPin, Clock } from 'lucide-react'
+import { normalizePhone } from '@/lib/phone'
 import { AddToWaitlistAction } from '@/app/dashboard/actions/floor-plan-actions'
 import { useQueryClient } from '@tanstack/react-query'
 
@@ -73,7 +74,7 @@ export function AddToWaitlistWizard({ locationId, onSuccess, children }: AddToWa
             const result = await AddToWaitlistAction(locationId, {
                 partyName: partyName.trim(),
                 partySize: size,
-                phone: phone.trim() || undefined,
+                phone: normalizePhone(phone) ?? phone.trim() || undefined,
                 notes: notes.trim() || undefined,
                 preferredSection: preferredSection.trim() || undefined,
                 quotedWaitMinutes: quotedWaitMinutes ? parseInt(quotedWaitMinutes, 10) : undefined,
@@ -149,7 +150,7 @@ export function AddToWaitlistWizard({ locationId, onSuccess, children }: AddToWa
                             <PhoneInput
                                 id="phone"
                                 value={phone}
-                                onChange={({ digits }) => setPhone(digits)}
+                                onChange={setPhone}
                             />
                         </div>
 

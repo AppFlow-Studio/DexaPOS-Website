@@ -132,8 +132,23 @@ export default function ImpersonationAuditPage() {
                       <TableCell className="text-sm tabular-nums">
                         {format(started, "yyyy-MM-dd HH:mm:ss")}
                       </TableCell>
-                      <TableCell className="font-mono text-xs text-muted-foreground">
-                        {row.hq_user_id}
+                      <TableCell className="text-sm">
+                        {row.hq_user_name || row.hq_user_email ? (
+                          <div className="flex flex-col">
+                            <span className="font-medium">
+                              {row.hq_user_name ?? row.hq_user_email}
+                            </span>
+                            {row.hq_user_name && row.hq_user_email ? (
+                              <span className="text-xs text-muted-foreground">
+                                {row.hq_user_email}
+                              </span>
+                            ) : null}
+                          </div>
+                        ) : (
+                          <span className="font-mono text-xs text-muted-foreground">
+                            {row.hq_user_id}
+                          </span>
+                        )}
                       </TableCell>
                       <TableCell>
                         <Link

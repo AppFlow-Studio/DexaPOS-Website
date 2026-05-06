@@ -1,6 +1,7 @@
 'use server'
 
 import { assertHQPermission } from '@/lib/admin/auth'
+import { assertMerchantInScope } from '@/lib/admin/scope'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { logAdminAction } from '@/lib/admin/log-admin-action'
@@ -82,6 +83,7 @@ export async function adminResetStaffPin(
   customPin?: string
 ): Promise<AdminPinResetResult> {
   await assertHQPermission('hq.merchant.manage_team')
+  await assertMerchantInScope(merchantId)
 
   const supabase = createServerSupabaseClient()
 
@@ -132,6 +134,7 @@ export async function adminBulkResetPins(
   customPin?: string,
 ): Promise<{ success: boolean; results?: BulkPinResetResult[]; error?: string }> {
   await assertHQPermission('hq.merchant.manage_team')
+  await assertMerchantInScope(merchantId)
 
   if (customPin !== undefined && !/^\d{4,6}$/.test(customPin)) {
     return { success: false, error: 'Custom PIN must be 4–6 digits' }
@@ -228,6 +231,7 @@ export async function adminToggleStaffStatus(
   newStatus: boolean
 ): Promise<AdminToggleStatusResult> {
   await assertHQPermission('hq.merchant.manage_team')
+  await assertMerchantInScope(merchantId)
 
   const supabase = createServerSupabaseClient()
 
@@ -285,6 +289,7 @@ export async function adminCreateStaff(
   data: AdminCreateStaffData
 ): Promise<AdminCreateStaffResult> {
   const { userId } = await assertHQPermission('hq.merchant.manage_team')
+  await assertMerchantInScope(merchantId)
 
   // Use Service Role client to bypass RLS, since we already verified permissions via assertHQPermission
   const supabase = createServiceRoleClient()
@@ -388,6 +393,586 @@ export async function adminCreateStaff(
 }
 
 // ============================================================================
+// UPDATE STAFF PROFILE (name / email / phone)
+// ============================================================================
+/**
+ * Update the basic profile fields of a staff member from HQ context.
+ * Syncs across staff_profiles, users (if Clerk user), and Clerk itself.
+ */
+export async function adminUpdateStaffProfile(
+  merchantId: string,
+  staffProfileId: string,
+  changes: {
+    firstName?: string
+    lastName?: string
+    email?: string | null
+    phone?: string | null
+  },
+): Promise<{ success: boolean; error?: string }> {
+  const { userId: adminUserId } = await assertHQPermission('hq.merchant.manage_team')
+  await assertMerchantInScope(merchantId)
+  const supabase = createServiceRoleClient()
+
+  const firstName = changes.firstName?.trim()
+  const lastName = changes.lastName?.trim()
+  const email =
+    changes.email === undefined ? undefined : (changes.email?.trim() || null)
+  const phone =
+    changes.phone === undefined ? undefined : (changes.phone?.trim() || null)
+
+  if (
+    firstName === undefined &&
+    lastName === undefined &&
+    email === undefined &&
+    phone === undefined
+  ) {
+    return { success: false, error: 'Nothing to update.' }
+  }
+
+  // Load current profile (also enforces merchant scope)
+  const { data: profile, error: loadError } = await supabase
+    .from('staff_profiles')
+    .select('id, merchant_id, user_id, first_name, last_name, email, phone, account_type')
+    .eq('id', staffProfileId)
+    .eq('merchant_id', merchantId)
+    .single()
+
+  if (loadError || !profile) {
+    return { success: false, error: 'Staff profile not found for this merchant.' }
+  }
+
+  const before = {
+    first_name: profile.first_name,
+    last_name: profile.last_name,
+    email: profile.email,
+    phone: profile.phone,
+  }
+  const after = {
+    first_name: firstName ?? profile.first_name,
+    last_name: lastName ?? profile.last_name,
+    email: email === undefined ? profile.email : email,
+    phone: phone === undefined ? profile.phone : phone,
+  }
+
+  if (
+    before.first_name === after.first_name &&
+    before.last_name === after.last_name &&
+    before.email === after.email &&
+    before.phone === after.phone
+  ) {
+    return { success: true }
+  }
+
+  if (!after.first_name || !after.last_name) {
+    return { success: false, error: 'First and last name are required.' }
+  }
+
+  const { error: updateError } = await supabase
+    .from('staff_profiles')
+    .update({
+      first_name: after.first_name,
+      last_name: after.last_name,
+      email: after.email,
+      phone: after.phone,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', staffProfileId)
+
+  if (updateError) {
+    return { success: false, error: updateError.message }
+  }
+
+  // Sync the public users row when the staff is also a Clerk dashboard user.
+  if (profile.user_id) {
+    await supabase
+      .from('users')
+      .update({
+        first_name: after.first_name,
+        last_name: after.last_name,
+        ...(after.email ? { email: after.email } : {}),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', profile.user_id)
+
+    // Best-effort Clerk sync for name/phone (email changes need verification → skip).
+    try {
+      const clerk = await clerkClient()
+      await clerk.users.updateUser(profile.user_id, {
+        firstName: after.first_name,
+        lastName: after.last_name,
+      })
+    } catch (clerkError) {
+      console.warn('[adminUpdateStaffProfile] Clerk sync failed:', clerkError)
+    }
+  }
+
+  await logAdminAction('MERCHANT_STAFF_PROFILE_UPDATED', {
+    merchantId,
+    resourceType: 'staff_member',
+    resourceId: staffProfileId,
+    resourceName: `${after.first_name} ${after.last_name}`,
+    changes: { before, after },
+    metadata: {
+      hq_admin_id: adminUserId,
+      action_category: 'hq_intervention',
+      source: 'adminUpdateStaffProfile',
+    },
+  })
+
+  revalidatePath(`/manage/merchants/${merchantId}`)
+  return { success: true }
+}
+
+// ============================================================================
+// UPDATE STAFF ROLE (per location)
+// ============================================================================
+/**
+ * Update the role assigned to a staff member at a specific location.
+ * Optionally syncs members.role when this is the primary location.
+ */
+export async function adminUpdateStaffRole(
+  merchantId: string,
+  staffProfileId: string,
+  locationId: string,
+  newRoleCode: string,
+): Promise<{ success: boolean; error?: string }> {
+  const { userId: adminUserId } = await assertHQPermission('hq.merchant.manage_team')
+  await assertMerchantInScope(merchantId)
+  const supabase = createServiceRoleClient()
+
+  if (!newRoleCode) {
+    return { success: false, error: 'Role code is required.' }
+  }
+
+  // Verify role exists and is a merchant-scoped role.
+  const { data: role, error: roleError } = await supabase
+    .from('roles')
+    .select('code, name, organization_type')
+    .eq('code', newRoleCode)
+    .single()
+
+  if (roleError || !role) {
+    return { success: false, error: 'Role not found.' }
+  }
+  if (role.organization_type !== 'merchant') {
+    return { success: false, error: 'Selected role is not a merchant role.' }
+  }
+
+  // Load current location_members row.
+  const { data: assignment, error: loadError } = await supabase
+    .from('location_members')
+    .select('id, role_code, is_primary_location, staff_profile_id, user_id, merchant_id')
+    .eq('staff_profile_id', staffProfileId)
+    .eq('location_id', locationId)
+    .eq('merchant_id', merchantId)
+    .maybeSingle()
+
+  if (loadError) {
+    return { success: false, error: loadError.message }
+  }
+  if (!assignment) {
+    return { success: false, error: 'Staff is not assigned to this location.' }
+  }
+
+  if (assignment.role_code === newRoleCode) {
+    return { success: true }
+  }
+
+  const { error: updateError } = await supabase
+    .from('location_members')
+    .update({ role_code: newRoleCode })
+    .eq('id', assignment.id)
+
+  if (updateError) {
+    return { success: false, error: updateError.message }
+  }
+
+  // Sync members.role for the merchant org if this is the primary location and the
+  // staff is a Clerk dashboard user.
+  if (assignment.is_primary_location && assignment.user_id) {
+    const { data: merchant } = await supabase
+      .from('merchants')
+      .select('clerk_org_id')
+      .eq('id', merchantId)
+      .single()
+    if (merchant?.clerk_org_id) {
+      await supabase
+        .from('members')
+        .update({ role: newRoleCode, updated_at: new Date().toISOString() })
+        .eq('user_id', assignment.user_id)
+        .eq('organization_id', merchant.clerk_org_id)
+    }
+  }
+
+  await logAdminAction('MERCHANT_STAFF_ROLE_UPDATED', {
+    merchantId,
+    locationId,
+    resourceType: 'staff_member',
+    resourceId: staffProfileId,
+    resourceName: role.name || newRoleCode,
+    changes: {
+      role_code: { old: assignment.role_code, new: newRoleCode },
+    },
+    metadata: {
+      hq_admin_id: adminUserId,
+      action_category: 'hq_intervention',
+      source: 'adminUpdateStaffRole',
+    },
+  })
+
+  revalidatePath(`/manage/merchants/${merchantId}`)
+  return { success: true }
+}
+
+// ============================================================================
+// UPDATE STAFF LOCATION ASSIGNMENTS
+// ============================================================================
+export interface AdminStaffLocationAssignmentInput {
+  locationId: string
+  roleCode: string
+  isPrimary?: boolean
+  hourlyRate?: number | null
+  employmentType?: string | null
+}
+
+/**
+ * Replace a staff member's location assignments. Diffs against existing rows:
+ *  - Adds new locations (insert with is_active = true)
+ *  - Updates existing rows (role_code, is_primary, etc.)
+ *  - Soft-removes (is_active = false) any location no longer in the input
+ */
+export async function adminUpdateStaffLocations(
+  merchantId: string,
+  staffProfileId: string,
+  assignments: AdminStaffLocationAssignmentInput[],
+): Promise<{ success: boolean; error?: string }> {
+  const { userId: adminUserId } = await assertHQPermission('hq.merchant.manage_team')
+  await assertMerchantInScope(merchantId)
+  const supabase = createServiceRoleClient()
+
+  if (!Array.isArray(assignments) || assignments.length === 0) {
+    return { success: false, error: 'At least one location assignment is required.' }
+  }
+
+  // Validate exactly one primary
+  const primaries = assignments.filter((a) => a.isPrimary)
+  if (primaries.length !== 1) {
+    return { success: false, error: 'Exactly one assignment must be marked primary.' }
+  }
+
+  // Validate scope: locations must belong to the merchant.
+  const locationIds = assignments.map((a) => a.locationId)
+  const { data: locs, error: locsError } = await supabase
+    .from('locations')
+    .select('id')
+    .eq('merchant_id', merchantId)
+    .in('id', locationIds)
+
+  if (locsError) {
+    return { success: false, error: locsError.message }
+  }
+  if (!locs || locs.length !== locationIds.length) {
+    return { success: false, error: 'One or more locations are invalid for this merchant.' }
+  }
+
+  // Load existing rows
+  const { data: existing, error: existingError } = await supabase
+    .from('location_members')
+    .select('id, location_id, role_code, is_primary_location, is_active, hourly_rate, employment_type, user_id')
+    .eq('staff_profile_id', staffProfileId)
+    .eq('merchant_id', merchantId)
+
+  if (existingError) {
+    return { success: false, error: existingError.message }
+  }
+
+  const existingByLocation = new Map(
+    (existing || []).map((row) => [row.location_id, row]),
+  )
+
+  // Carry user_id across new rows so dashboard users keep linkage.
+  const sampleUserId = (existing || []).find((r) => r.user_id)?.user_id || null
+
+  const inputLocationIds = new Set(locationIds)
+
+  // 1. Upserts for items in input
+  for (const a of assignments) {
+    const existingRow = existingByLocation.get(a.locationId)
+    if (existingRow) {
+      const { error } = await supabase
+        .from('location_members')
+        .update({
+          role_code: a.roleCode,
+          is_primary_location: !!a.isPrimary,
+          is_active: true,
+          ...(a.hourlyRate !== undefined ? { hourly_rate: a.hourlyRate ?? 0 } : {}),
+          ...(a.employmentType !== undefined ? { employment_type: a.employmentType } : {}),
+        })
+        .eq('id', existingRow.id)
+      if (error) {
+        return { success: false, error: error.message }
+      }
+    } else {
+      const { error } = await supabase.from('location_members').insert({
+        staff_profile_id: staffProfileId,
+        location_id: a.locationId,
+        merchant_id: merchantId,
+        user_id: sampleUserId,
+        role_code: a.roleCode,
+        is_primary_location: !!a.isPrimary,
+        is_active: true,
+        hourly_rate: a.hourlyRate ?? 0,
+        employment_type: a.employmentType ?? null,
+        assigned_at: new Date().toISOString(),
+      })
+      if (error) {
+        return { success: false, error: error.message }
+      }
+    }
+  }
+
+  // 2. Soft-remove rows no longer assigned
+  const toDeactivate = (existing || []).filter(
+    (row) => !inputLocationIds.has(row.location_id) && row.is_active,
+  )
+  for (const row of toDeactivate) {
+    await supabase
+      .from('location_members')
+      .update({ is_active: false, is_primary_location: false })
+      .eq('id', row.id)
+  }
+
+  await logAdminAction('MERCHANT_STAFF_LOCATIONS_UPDATED', {
+    merchantId,
+    resourceType: 'staff_member',
+    resourceId: staffProfileId,
+    changes: {
+      before: {
+        location_ids: (existing || []).filter((r) => r.is_active).map((r) => r.location_id),
+      },
+      after: {
+        location_ids: locationIds,
+        primary_location_id: primaries[0].locationId,
+      },
+    },
+    metadata: {
+      hq_admin_id: adminUserId,
+      action_category: 'hq_intervention',
+      source: 'adminUpdateStaffLocations',
+      removed: toDeactivate.map((r) => r.location_id),
+    },
+  })
+
+  revalidatePath(`/manage/merchants/${merchantId}`)
+  return { success: true }
+}
+
+// ============================================================================
+// PENDING STAFF INVITES (for resend UI)
+// ============================================================================
+export interface PendingStaffInvite {
+  id: string
+  email: string
+  first_name: string | null
+  last_name: string | null
+  role_code: string
+  clerk_invite_id: string | null
+  status: string
+  created_at: string
+  expires_at: string
+}
+
+export async function getMerchantPendingStaffInvites(
+  merchantId: string,
+): Promise<PendingStaffInvite[]> {
+  await assertHQPermission('hq.merchant.view')
+
+  const supabase = createServerSupabaseClient()
+  const { data, error } = await supabase
+    .from('location_invites')
+    .select(
+      'id, email, first_name, last_name, role_code, clerk_invite_id, status, created_at, expires_at',
+    )
+    .eq('merchant_id', merchantId)
+    .eq('status', 'pending')
+    .order('created_at', { ascending: false })
+
+  if (error) {
+    console.error('[getMerchantPendingStaffInvites] Error:', error)
+    return []
+  }
+
+  return (data || []) as PendingStaffInvite[]
+}
+
+// ============================================================================
+// RESEND STAFF INVITE
+// ============================================================================
+/**
+ * Revoke the existing Clerk invitation for a pending staff invite and create a
+ * new one with the same metadata. Updates the location_invites row in place.
+ */
+export async function adminResendStaffInvite(
+  merchantId: string,
+  inviteId: string,
+): Promise<{ success: boolean; error?: string; clerkInviteId?: string }> {
+  const { userId: adminUserId } = await assertHQPermission('hq.merchant.manage_team')
+  await assertMerchantInScope(merchantId)
+  const supabase = createServiceRoleClient()
+
+  const { data: invite, error: loadError } = await supabase
+    .from('location_invites')
+    .select('*')
+    .eq('id', inviteId)
+    .eq('merchant_id', merchantId)
+    .single()
+
+  if (loadError || !invite) {
+    return { success: false, error: 'Invite not found.' }
+  }
+  if (invite.status !== 'pending') {
+    return { success: false, error: `Cannot resend an invite in status "${invite.status}".` }
+  }
+
+  const { data: merchant } = await supabase
+    .from('merchants')
+    .select('clerk_org_id')
+    .eq('id', merchantId)
+    .single()
+
+  if (!merchant?.clerk_org_id) {
+    return { success: false, error: 'Merchant is missing Clerk organization id.' }
+  }
+  const clerkOrgId = merchant.clerk_org_id
+
+  const clerk = await clerkClient()
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? ''
+
+  // Find an eligible inviter (Clerk requires org:admin)
+  let inviterUserId: string | null = null
+  let temporarilyPromoted = false
+  let promotedUserId: string | null = null
+  try {
+    const memberships = await clerk.organizations.getOrganizationMembershipList({
+      organizationId: clerkOrgId,
+      limit: 50,
+    })
+    const adminMember = memberships.data.find((m) => m.role === 'org:admin')
+    if (adminMember?.publicUserData?.userId) {
+      inviterUserId = adminMember.publicUserData.userId
+    } else if (memberships.data.length > 0) {
+      const first = memberships.data[0]
+      if (first?.publicUserData?.userId) {
+        promotedUserId = first.publicUserData.userId
+        await clerk.organizations.updateOrganizationMembership({
+          organizationId: clerkOrgId,
+          userId: promotedUserId,
+          role: 'org:admin',
+        })
+        inviterUserId = promotedUserId
+        temporarilyPromoted = true
+      }
+    }
+  } catch (err) {
+    console.warn('[adminResendStaffInvite] inviter lookup failed:', err)
+  }
+
+  if (!inviterUserId) {
+    return { success: false, error: 'No eligible inviter found in this merchant org.' }
+  }
+
+  // Revoke previous Clerk invite (best-effort)
+  if (invite.clerk_invite_id) {
+    try {
+      await clerk.organizations.revokeOrganizationInvitation({
+        organizationId: clerkOrgId,
+        invitationId: invite.clerk_invite_id,
+        requestingUserId: inviterUserId,
+      })
+    } catch (err) {
+      console.warn('[adminResendStaffInvite] Failed to revoke old invite (continuing):', err)
+    }
+  }
+
+  let newInvitation: Awaited<ReturnType<typeof clerk.organizations.createOrganizationInvitation>> | undefined
+  try {
+    newInvitation = await clerk.organizations.createOrganizationInvitation({
+      organizationId: clerkOrgId,
+      inviterUserId,
+      emailAddress: invite.email,
+      role: 'org:member',
+      ...(appUrl && {
+        redirectUrl: `${appUrl}/accept-invitation?email=${encodeURIComponent(invite.email)}&firstName=${encodeURIComponent(invite.first_name || '')}&lastName=${encodeURIComponent(invite.last_name || '')}`,
+      }),
+      publicMetadata: {
+        creationType: 'invitation',
+        roleCode: invite.role_code,
+        organizationId: clerkOrgId,
+        merchantId,
+        locationAssignments: invite.location_assignments,
+        firstName: invite.first_name,
+        lastName: invite.last_name,
+        phone: invite.phone,
+      },
+    })
+  } catch (err) {
+    return {
+      success: false,
+      error: `Failed to create replacement invitation: ${(err as Error).message || 'Unknown error'}`,
+    }
+  } finally {
+    if (temporarilyPromoted && promotedUserId) {
+      try {
+        await clerk.organizations.updateOrganizationMembership({
+          organizationId: clerkOrgId,
+          userId: promotedUserId,
+          role: 'org:member',
+        })
+      } catch {
+        // Non-fatal
+      }
+    }
+  }
+
+  if (!newInvitation?.id) {
+    return { success: false, error: 'Failed to create replacement invitation.' }
+  }
+
+  const { error: updateError } = await supabase
+    .from('location_invites')
+    .update({
+      clerk_invite_id: newInvitation.id,
+      status: 'pending',
+      expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', inviteId)
+
+  if (updateError) {
+    return { success: false, error: updateError.message }
+  }
+
+  await logAdminAction('MERCHANT_STAFF_INVITE_RESENT', {
+    merchantId,
+    resourceType: 'staff_invite',
+    resourceId: inviteId,
+    resourceName: invite.email,
+    changes: {
+      before: { clerk_invite_id: invite.clerk_invite_id, status: 'pending' },
+      after: { clerk_invite_id: newInvitation.id, status: 'pending' },
+    },
+    metadata: {
+      hq_admin_id: adminUserId,
+      action_category: 'hq_intervention',
+      source: 'adminResendStaffInvite',
+    },
+  })
+
+  revalidatePath(`/manage/merchants/${merchantId}`)
+  return { success: true, clerkInviteId: newInvitation.id }
+}
+
+// ============================================================================
 // GET MERCHANT LOCATIONS (for dropdowns)
 // ============================================================================
 /**
@@ -456,6 +1041,7 @@ export async function adminBulkDeactivateStaff(
   staffProfileIds: string[]
 ): Promise<{ success: boolean; deactivated: number; errors: string[] }> {
   await assertHQPermission('hq.merchant.manage_team')
+  await assertMerchantInScope(merchantId)
 
   const supabase = createServiceRoleClient()
 
@@ -507,6 +1093,7 @@ export async function adminCreateClerkStaff(
   data: AdminCreateClerkStaffData
 ): Promise<AdminCreateClerkStaffResult> {
   const { userId: adminUserId } = await assertHQPermission('hq.merchant.manage_team')
+  await assertMerchantInScope(merchantId)
 
   const supabase = createServerSupabaseClient()
   const srClient = createServiceRoleClient()
@@ -720,6 +1307,7 @@ export async function adminInviteClerkStaff(
   data: AdminInviteClerkStaffData
 ): Promise<AdminInviteClerkStaffResult> {
   const { userId: adminUserId } = await assertHQPermission('hq.merchant.manage_team')
+  await assertMerchantInScope(merchantId)
 
   const srClient = createServiceRoleClient()
 
@@ -953,6 +1541,7 @@ export async function adminResetStaffPassword(
   customPassword?: string,
 ): Promise<{ success: boolean; password?: string; error?: string }> {
   await assertHQPermission('hq.merchant.manage_team')
+  await assertMerchantInScope(merchantId)
 
   if (customPassword !== undefined && customPassword.length < 8) {
     return { success: false, error: 'Password must be at least 8 characters' }
@@ -1006,6 +1595,7 @@ export async function adminBulkResetPasswords(
   error?: string
 }> {
   await assertHQPermission('hq.merchant.manage_team')
+  await assertMerchantInScope(merchantId)
 
   const allStaff = await getAdminMerchantStaff(merchantId, locationId)
   const clerkStaff = allStaff.filter(

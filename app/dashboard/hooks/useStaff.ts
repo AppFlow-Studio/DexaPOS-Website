@@ -209,6 +209,15 @@ export function useCreateClerkUserDirectly() {
         });
       }
 
+      // Soft warning when Clerk rejected the phone (already linked to another
+      // account). The user was still created; phone is stored on staff_profiles.
+      if (result.data?.phone_skipped) {
+        toast.warning("Phone not linked to login", {
+          description:
+            "This phone is already on another account. Saved on staff profile only.",
+        });
+      }
+
       queryClient.invalidateQueries({ queryKey: ["unified-staff"] });
       queryClient.invalidateQueries({ queryKey: ["staff-member"] });
     },

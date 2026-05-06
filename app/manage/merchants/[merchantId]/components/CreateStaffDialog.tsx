@@ -13,6 +13,8 @@ import {
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
+import { PhoneInput } from '@/components/ui/phone-input'
+import { normalizePhone } from '@/lib/phone'
 import {
   Select,
   SelectContent,
@@ -107,7 +109,7 @@ export function CreateStaffDialog({
           firstName: firstName.trim(),
           lastName: lastName.trim(),
           email: email.trim() || undefined,
-          phone: phone.trim() || undefined,
+          phone: normalizePhone(phone) ?? phone.trim() || undefined,
           locationId,
           roleCode,
           hourlyRate: hourlyRate ? parseFloat(hourlyRate) : undefined,
@@ -218,12 +220,10 @@ export function CreateStaffDialog({
           {/* Phone (optional) */}
           <div className="space-y-2">
             <Label htmlFor="phone">Phone (Optional)</Label>
-            <Input
+            <PhoneInput
               id="phone"
-              type="tel"
               value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              placeholder="+1 (555) 123-4567"
+              onChange={setPhone}
             />
           </div>
           </div>
