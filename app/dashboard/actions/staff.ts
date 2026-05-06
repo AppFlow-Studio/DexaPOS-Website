@@ -9,6 +9,8 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { LogAuditEvent } from "./audit-logs";
 import { findEmailConflict } from "@/app/manage/actions/email-duplicates";
 import { emailConflictMessage, normalizeEmail, isValidEmail } from "@/lib/utils/email";
+import { getEffectiveMerchantContext } from "@/lib/admin/merchant-context";
+import { resolveOrgInviterUserId } from "@/lib/clerk/org-inviter";
 
 // ============================================================================
 // TYPES
@@ -113,13 +115,41 @@ export async function inviteStaffMember(
         return { success: false, error: "Email required for this role" };
       }
 
-      // Create Clerk organization invitation
+      // Detect HQ admin impersonation. When impersonating, the Clerk auth()
+      // user is the HQ admin — not a member of the merchant org — so Clerk
+      // rejects the invite call. Borrow an existing org:admin's identity for
+      // the duration of the call (matches adminInviteClerkStaff pattern).
+      let impersonationCtx: Awaited<ReturnType<typeof getEffectiveMerchantContext>> | null = null;
+      try {
+        impersonationCtx = await getEffectiveMerchantContext(clerkOrgId);
+      } catch {
+        impersonationCtx = null;
+      }
+      const isImpersonating = impersonationCtx?.isImpersonating === true;
+
+      let inviterCleanup: (() => Promise<void>) | null = null;
+      let resolvedInviterUserId: string | null = null;
+      if (isImpersonating) {
+        try {
+          const resolved = await resolveOrgInviterUserId(clerkOrgId);
+          resolvedInviterUserId = resolved.inviterUserId;
+          inviterCleanup = resolved.cleanup;
+        } catch (e: any) {
+          return {
+            success: false,
+            error: e?.message ?? "No eligible inviter found in this merchant org",
+          };
+        }
+      }
+
       const clerk = await clerkClient();
-      const invitation = await clerk.organizations.createOrganizationInvitation(
-        {
+      let invitation: Awaited<ReturnType<typeof clerk.organizations.createOrganizationInvitation>>;
+      try {
+        invitation = await clerk.organizations.createOrganizationInvitation({
           organizationId: clerkOrgId,
           emailAddress: params.email,
           role: role.level_type === "admin" ? "org:admin" : "org:member",
+          ...(resolvedInviterUserId ? { inviterUserId: resolvedInviterUserId } : {}),
           publicMetadata: {
             role: params.roleCode,
             merchantId: params.merchantId,
@@ -134,9 +164,10 @@ export async function inviteStaffMember(
               }),
             ),
           },
-        },
-      );
-      console.log("Clerk invitation:", invitation);
+        });
+      } finally {
+        if (inviterCleanup) await inviterCleanup();
+      }
 
       if (invitation.id) {
         // Store invite in our DB
@@ -160,13 +191,26 @@ export async function inviteStaffMember(
 
         if (inviteError) {
           // DB insert failed — revoke the Clerk invitation so we don't leave
-          // an orphan that the user could still accept.
+          // an orphan that the user could still accept. Under impersonation,
+          // the HQ admin's userId isn't an org member, so re-resolve a valid
+          // requester from the merchant org.
           try {
-            await clerk.organizations.revokeOrganizationInvitation({
-              organizationId: clerkOrgId,
-              invitationId: invitation.id,
-              requestingUserId: userId,
-            });
+            let revokeRequesterId = userId;
+            let revokeCleanup: (() => Promise<void>) | null = null;
+            if (isImpersonating) {
+              const r = await resolveOrgInviterUserId(clerkOrgId);
+              revokeRequesterId = r.inviterUserId;
+              revokeCleanup = r.cleanup;
+            }
+            try {
+              await clerk.organizations.revokeOrganizationInvitation({
+                organizationId: clerkOrgId,
+                invitationId: invitation.id,
+                requestingUserId: revokeRequesterId,
+              });
+            } finally {
+              if (revokeCleanup) await revokeCleanup();
+            }
           } catch (revokeErr) {
             console.warn(
               "[inviteStaffMember] Failed to revoke orphan Clerk invite:",
@@ -188,6 +232,7 @@ export async function inviteStaffMember(
             email: params.email,
             role_code: params.roleCode,
             locations: params.locationAssignments.map((l) => l.locationId),
+            ...(isImpersonating ? { via: "impersonation", hq_admin_id: userId } : {}),
           },
         });
 
