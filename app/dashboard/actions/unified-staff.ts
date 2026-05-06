@@ -17,6 +17,7 @@ import { revalidatePath } from "next/cache";
 import { isValidEmail, normalizeEmail } from "@/lib/utils/email";
 import { findEmailConflict } from "@/app/manage/actions/email-duplicates";
 import { emailConflictMessage } from "@/lib/utils/email";
+import { resolveOrgInviterUserId } from "@/lib/clerk/org-inviter";
 
 // ============================================================================
 // CONSTANTS
@@ -935,29 +936,22 @@ export async function InviteClerkStaff(
     const clerk = await clerkClient();
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
 
-    // Clerk requires inviterUserId to be an org:admin.
-    // Find the first org:admin member; if none, temporarily promote the current user.
-    let inviterUserId = userId;
-    let temporarilyPromoted = false;
+    // Clerk requires inviterUserId to be a member of the org. Under HQ admin
+    // impersonation `userId` is NOT a member of the merchant org, so always
+    // resolve a real inviter from the merchant org (org:admin / org:owner, or
+    // a temporarily-promoted member). Mirrors inviteStaffMember /
+    // adminInviteClerkStaff.
+    let inviterUserId: string;
+    let inviterCleanup: () => Promise<void>;
     try {
-      const memberships = await clerk.organizations.getOrganizationMembershipList({
-        organizationId: clerkOrgId,
-        limit: 50,
-      });
-      const adminMember = memberships.data.find((m) => m.role === "org:admin");
-      if (adminMember?.publicUserData?.userId) {
-        inviterUserId = adminMember.publicUserData.userId;
-      } else {
-        // No org:admin exists — promote current user temporarily so Clerk accepts the invite
-        await clerk.organizations.updateOrganizationMembership({
-          organizationId: clerkOrgId,
-          userId: inviterUserId,
-          role: "org:admin",
-        });
-        temporarilyPromoted = true;
-      }
-    } catch {
-      // Non-fatal — use current userId as fallback
+      const resolved = await resolveOrgInviterUserId(clerkOrgId);
+      inviterUserId = resolved.inviterUserId;
+      inviterCleanup = resolved.cleanup;
+    } catch (e: any) {
+      return {
+        error:
+          e?.message ?? "No eligible inviter found in this merchant org",
+      };
     }
 
     let invitation: Awaited<ReturnType<typeof clerk.organizations.createOrganizationInvitation>> | undefined;
@@ -987,18 +981,7 @@ export async function InviteClerkStaff(
         },
       });
     } finally {
-      // Revert temporary promotion if we made it
-      if (temporarilyPromoted) {
-        try {
-          await clerk.organizations.updateOrganizationMembership({
-            organizationId: clerkOrgId,
-            userId: inviterUserId,
-            role: "org:member",
-          });
-        } catch {
-          // Non-fatal — leave as org:admin if revert fails
-        }
-      }
+      await inviterCleanup();
     }
 
     if (!invitation || !invitation.id) {
