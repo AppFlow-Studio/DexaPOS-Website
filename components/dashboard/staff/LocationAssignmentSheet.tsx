@@ -41,7 +41,9 @@ import {
   useUpdateStaffAssignment,
   useDeactivateStaff,
   useReactivateStaff,
+  useSetPrimaryLocation,
 } from "@/app/dashboard/hooks/useStaff";
+import { Star } from "lucide-react";
 import { toast } from "sonner";
 import { GetMerchantRoles } from "@/app/dashboard/actions/staff-invite";
 
@@ -68,6 +70,7 @@ export function LocationAssignmentSheet({
   const updateAssignment = useUpdateStaffAssignment();
   const deactivateStaff = useDeactivateStaff();
   const reactivateStaff = useReactivateStaff();
+  const setPrimary = useSetPrimaryLocation();
 
   // Form state
   const [editedRole, setEditedRole] = React.useState<string>(
@@ -219,11 +222,19 @@ export function LocationAssignmentSheet({
     onOpenChange(false);
   };
 
+  const handleSetPrimary = () => {
+    setPrimary.mutate({
+      memberId,
+      locationId: assignment.location_id,
+    });
+  };
+
   const isPending =
     resetPIN.isPending ||
     updateAssignment.isPending ||
     deactivateStaff.isPending ||
-    reactivateStaff.isPending;
+    reactivateStaff.isPending ||
+    setPrimary.isPending;
 
   // Filter roles to only show those at or below current user's level
   const availableRoles = roles.filter((r) => r.level <= currentUserRoleLevel);
@@ -232,7 +243,7 @@ export function LocationAssignmentSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="right"
-        className="w-full sm:max-w-md flex flex-col px-4"
+        className="w-full sm:max-w-md flex flex-col px-4 z-[200]"
       >
         <SheetHeader>
           <div className="flex items-center gap-2">
@@ -258,14 +269,33 @@ export function LocationAssignmentSheet({
 
         <div className="flex-1 overflow-y-auto py-6 space-y-6">
           {/* Status Badge */}
-          <div className="flex items-center gap-2">
-            <Badge variant={editedIsActive ? "default" : "secondary"}>
-              {editedIsActive ? "Active" : "Inactive"}
-            </Badge>
-            {assignment.is_primary && (
-              <Badge variant="outline" className="gap-1">
-                Primary
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant={editedIsActive ? "default" : "secondary"}>
+                {editedIsActive ? "Active" : "Inactive"}
               </Badge>
+              {assignment.is_primary && (
+                <Badge variant="outline" className="gap-1">
+                  <Star className="h-3 w-3" />
+                  Primary
+                </Badge>
+              )}
+            </div>
+            {!assignment.is_primary && assignment.is_active && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1"
+                onClick={handleSetPrimary}
+                disabled={isPending}
+              >
+                {setPrimary.isPending ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <Star className="h-3 w-3" />
+                )}
+                Set as primary
+              </Button>
             )}
           </div>
 

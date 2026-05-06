@@ -49,6 +49,7 @@ import {
   Loader2,
   ChevronRight,
   Shield,
+  Star,
 } from "lucide-react";
 import { CredentialToast } from "@/components/ui/credential-toast";
 import { LocationAssignmentSheet } from "./LocationAssignmentSheet";
@@ -64,6 +65,7 @@ import {
   useUpdateStaffProfile,
   useAddStaffToLocation,
   useRemoveStaffFromLocation,
+  useSetPrimaryLocation,
 } from "@/app/dashboard/hooks/useStaff";
 import { toast } from "sonner";
 import { GetMerchantRoles } from "@/app/dashboard/actions/staff-invite";
@@ -94,6 +96,7 @@ export function StaffDetailSheet({
   const updateProfile = useUpdateStaffProfile();
   const addToLocation = useAddStaffToLocation();
   const removeFromLocation = useRemoveStaffFromLocation();
+  const setPrimary = useSetPrimaryLocation();
   const { data: userInfo } = useUserInfo();
   const { locations: allLocations } = useLocationStore();
 
@@ -443,6 +446,13 @@ export function StaffDetailSheet({
 
   const handleRemoveFromLocation = (locationId: string) => {
     removeFromLocation.mutate({
+      memberId: staff.member_id,
+      locationId,
+    });
+  };
+
+  const handleSetPrimary = (locationId: string) => {
+    setPrimary.mutate({
       memberId: staff.member_id,
       locationId,
     });
@@ -1226,6 +1236,26 @@ export function StaffDetailSheet({
                         </div>
 
                         <div className="flex items-center gap-2">
+                          {assignment.is_active && !assignment.is_primary && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 gap-1 px-2"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleSetPrimary(assignment.location_id);
+                              }}
+                              disabled={setPrimary.isPending}
+                              title="Set as primary location"
+                            >
+                              {setPrimary.isPending ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Star className="h-4 w-4" />
+                              )}
+                              <span className="hidden sm:inline">Set primary</span>
+                            </Button>
+                          )}
                           {assignment.is_active && !assignment.is_primary && (
                             <Button
                               variant="ghost"
