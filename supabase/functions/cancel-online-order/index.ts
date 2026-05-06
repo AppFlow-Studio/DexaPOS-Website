@@ -88,6 +88,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         transaction_id,
         reference_number,
         processor_name,
+        payment_device_id,
         is_settled,
         settled_at
       `)
@@ -130,37 +131,60 @@ Deno.serve(async (req: Request): Promise<Response> => {
         )
       }
 
+      let paymentDeviceId = payment.payment_device_id as string | null
+
+      if (!paymentDeviceId) {
+        const { data: storefrontPaymentConfigRows, error: storefrontPaymentConfigError } =
+          await supabase.rpc('get_storefront_payment_config', {
+            p_location_id: order.location_id,
+          })
+
+        if (storefrontPaymentConfigError) {
+          console.error('[CANCEL_ORDER] Failed to resolve storefront payment config:', storefrontPaymentConfigError)
+          return jsonResponse({ success: false, error: 'Payment configuration is unavailable.' }, 502)
+        }
+
+        paymentDeviceId =
+          ((storefrontPaymentConfigRows as Array<{ device_id: string; provider: string }> | null) ?? [])
+            .find((row) => row.provider === 'nmi')
+            ?.device_id ?? null
+      }
+
+      if (!paymentDeviceId) {
+        return jsonResponse({ success: false, error: 'NMI payment device is not configured.' }, 502)
+      }
+
       const { data: credentialRows, error: credentialError } = await supabase.rpc(
-        'get_merchant_payment_api_secret',
+        'get_nmi_device_credentials',
         {
-          p_merchant_id: order.merchant_id,
-          p_provider: 'nmi',
+          p_device_id: paymentDeviceId,
         },
       )
 
       if (credentialError) {
-        console.error('[CANCEL_ORDER] Failed to resolve NMI credentials:', credentialError)
+        console.error('[CANCEL_ORDER] Failed to resolve NMI device credentials:', credentialError)
         return jsonResponse({ success: false, error: 'Payment configuration is unavailable.' }, 502)
       }
 
-      const merchantCredential = ((credentialRows as Array<{
-        credential_id: string
+      const nmiDeviceCredential = ((credentialRows as Array<{
+        device_id: string
         merchant_id: string
-        provider: string
-        tokenization_key: string
-        decrypted_secret: string
-        is_active: boolean
+        location_id: string
+        environment: string
+        provider_merchant_id: string | null
+        provider_gateway_id: string | null
+        provider_public_key: string | null
+        decrypted_security_key: string
       }> | null) ?? [])[0] ?? null
 
-      if (!merchantCredential?.decrypted_secret) {
+      if (!nmiDeviceCredential?.decrypted_security_key) {
         return jsonResponse({ success: false, error: 'NMI credentials are not configured.' }, 502)
       }
 
       await supabase
-        .from('merchant_payment_credential_access_log')
+        .from('payment_credential_access_log')
         .insert({
-          merchant_payment_credential_id: merchantCredential.credential_id,
-          merchant_id: order.merchant_id,
+          device_id: paymentDeviceId,
           function_name: 'cancel-online-order',
           store_config_id: session.store_config_id,
           actor_user_id: null,
@@ -175,12 +199,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
       const amount = Number(payment.total_amount ?? order.total_amount ?? 0).toFixed(2)
       const reversalResult = shouldRefund
         ? await refundSale(
-          { apiKey: merchantCredential.decrypted_secret },
+          { apiKey: nmiDeviceCredential.decrypted_security_key },
           payment.transaction_id,
           { amount },
         )
         : await voidSale(
-          { apiKey: merchantCredential.decrypted_secret },
+          { apiKey: nmiDeviceCredential.decrypted_security_key },
           payment.transaction_id,
           reason,
         )

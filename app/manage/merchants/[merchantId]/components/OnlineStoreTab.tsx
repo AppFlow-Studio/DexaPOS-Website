@@ -835,7 +835,7 @@ export function OnlineStoreTab({
                                     <p className="text-sm font-medium">Card Payment Readiness</p>
                                     <p className="text-xs text-muted-foreground">
                                         {hasNmiTokenizationKey && hasNmiPrivateApiKey
-                                            ? 'NMI tokenization and private API keys are configured for this merchant.'
+                                            ? 'NMI tokenization and private API keys are configured for this location.'
                                             : 'Online card payments require both the NMI tokenization key and private API key.'}
                                     </p>
                                 </div>
@@ -847,14 +847,14 @@ export function OnlineStoreTab({
                                 <div className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-amber-900">
                                     <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                                     <p className="text-xs">
-                                        Add the merchant&apos;s NMI tokenization key and private API key in the Payment &amp; Tips tab before enabling online card checkout.
+                                        Add the location&apos;s NMI tokenization key and private API key in the Payment &amp; Tips tab before enabling online card checkout.
                                     </p>
                                 </div>
                             )}
                             <div className="rounded-md border p-3">
                                 <p className="text-sm font-medium">Provider</p>
                                 <p className="text-xs text-muted-foreground">
-                                    Storefront card checkout now uses NMI. Merchant-level credentials replace the old location-device whitelist and TPN routing path.
+                                    Storefront card checkout now uses NMI through the active location payment device. The old Dejavoo whitelist and TPN routing path are no longer used for online checkout.
                                 </p>
                             </div>
                         </CardContent>

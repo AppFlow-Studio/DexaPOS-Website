@@ -95,13 +95,31 @@ interface LocationItemOverrideRow {
   custom_price: number | null
 }
 
-interface MerchantPaymentCredentialSecret {
-  credential_id: string
-  merchant_id: string
+interface StorefrontPaymentConfig {
+  device_id: string
   provider: string
-  tokenization_key: string
-  decrypted_secret: string
-  is_active: boolean
+  environment: string
+  provider_public_key: string | null
+  supports_apple_pay: boolean
+  supports_google_pay: boolean
+  supports_customer_vault: boolean
+}
+
+interface NmiDeviceCredential {
+  merchant_id: string
+  location_id: string
+  device_id: string
+  environment: string
+  provider_merchant_id: string | null
+  provider_gateway_id: string | null
+  provider_public_key: string | null
+  decrypted_security_key: string
+}
+
+interface StorefrontPaymentDeviceAccessLog {
+  device_id: string
+  provider: string
+  environment: string
 }
 
 // ============================================================================
@@ -568,19 +586,19 @@ Deno.serve(async (req: Request): Promise<Response> => {
     body.payment_token_id?.trim() ||
     body.card_token?.trim() ||
     null
-  let merchantPaymentCredential: MerchantPaymentCredentialSecret | null = null
+  let storefrontPaymentConfig: StorefrontPaymentConfig | null = null
+  let nmiDeviceCredential: NmiDeviceCredential | null = null
 
   if (!payCashInStore) {
-    const { data: credentialRows, error: credentialError } = await supabase.rpc(
-      'get_merchant_payment_api_secret',
+    const { data: paymentConfigRows, error: paymentConfigError } = await supabase.rpc(
+      'get_storefront_payment_config',
       {
-        p_merchant_id: merchantId,
-        p_provider: 'nmi',
+        p_location_id: locationId,
       },
     )
 
-    if (credentialError) {
-      logError('PAYMENT_CREDENTIALS', 'Failed to resolve merchant payment credentials', credentialError)
+    if (paymentConfigError) {
+      logError('PAYMENT_CONFIG', 'Failed to resolve storefront payment config', paymentConfigError)
       return errorResponse(
         'Payment configuration is unavailable for this store.',
         'payment_not_configured',
@@ -588,11 +606,15 @@ Deno.serve(async (req: Request): Promise<Response> => {
       )
     }
 
-    merchantPaymentCredential = ((credentialRows as MerchantPaymentCredentialSecret[] | null) ?? [])[0] ?? null
+    storefrontPaymentConfig =
+      ((paymentConfigRows as StorefrontPaymentConfig[] | null) ?? []).find(
+        (row) => row.provider === 'nmi',
+      ) ?? null
 
-    if (!merchantPaymentCredential?.decrypted_secret) {
-      logError('PAYMENT', 'No active NMI credentials configured for this store', {
+    if (!storefrontPaymentConfig?.device_id) {
+      logError('PAYMENT', 'No active NMI payment device configured for this store', {
         storeConfigId,
+        locationId,
         merchantId,
       })
       return errorResponse(
@@ -602,17 +624,49 @@ Deno.serve(async (req: Request): Promise<Response> => {
       )
     }
 
+    const { data: credentialRows, error: credentialError } = await supabase.rpc(
+      'get_nmi_device_credentials',
+      {
+        p_device_id: storefrontPaymentConfig.device_id,
+      },
+    )
+
+    if (credentialError) {
+      logError('PAYMENT_DEVICE', 'Failed to resolve NMI device credentials', credentialError)
+      return errorResponse(
+        'Payment configuration is unavailable for this store.',
+        'payment_not_configured',
+        503,
+      )
+    }
+
+    nmiDeviceCredential = ((credentialRows as NmiDeviceCredential[] | null) ?? [])[0] ?? null
+
+    if (!nmiDeviceCredential?.decrypted_security_key) {
+      logError('PAYMENT', 'No active NMI device secret configured for this store', {
+        storeConfigId,
+        locationId,
+        merchantId,
+        paymentDeviceId: storefrontPaymentConfig.device_id,
+      })
+      return errorResponse(
+        'Online payment is not configured for this store. Please contact the store.',
+        'payment_not_configured',
+        503
+      )
+    }
+
     await supabase
-      .from('merchant_payment_credential_access_log')
+      .from('payment_credential_access_log')
       .insert({
-        merchant_payment_credential_id: merchantPaymentCredential.credential_id,
-        merchant_id: merchantId,
+        device_id: storefrontPaymentConfig.device_id,
         function_name: 'create-online-order',
         store_config_id: storeConfigId,
         actor_user_id: null,
         metadata: {
           source: 'storefront_order_submit',
           has_legacy_token_field: Boolean(body.payment_token_id),
+          order_type: body.order_type,
         },
       })
   }
@@ -693,7 +747,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     })
 
     const chargeResult = await createSale(
-      { apiKey: merchantPaymentCredential!.decrypted_secret },
+      { apiKey: nmiDeviceCredential!.decrypted_security_key },
       {
         amount: toDollars(totalCents).toFixed(2),
         tip: toDollars(tipCents).toFixed(2),
@@ -875,6 +929,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         approved_at: null,
         captured_at: null,
         processor_name: null,
+        payment_device_id: null,
         processor_response: null,
         terminal_response: null,
         dejavoo_response_code: null,
@@ -886,7 +941,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
           provider: 'cash',
           provider_order_id: transactionReferenceId,
           payment_status_from_source: 'PENDING_CASH_IN_STORE',
-          merchant_payment_credential_id: null,
+          payment_device_id: null,
         },
       }
     : {
@@ -906,6 +961,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         approved_at: new Date().toISOString(),
         captured_at: new Date().toISOString(),
         processor_name: 'nmi',
+        payment_device_id: storefrontPaymentConfig?.device_id ?? null,
         processor_response: nmiChargeDetails?.rawResponse ?? null,
         terminal_response: null,
         gateway_fee: nmiChargeDetails?.gatewayFee ?? null,
@@ -918,7 +974,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
           provider: 'nmi',
           provider_order_id: transactionReferenceId,
           payment_status_from_source: 'CAPTURED',
-          merchant_payment_credential_id: merchantPaymentCredential?.credential_id ?? null,
+          payment_device_id: storefrontPaymentConfig?.device_id ?? null,
         },
       }
 

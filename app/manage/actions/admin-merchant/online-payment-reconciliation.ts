@@ -51,7 +51,7 @@ export async function reconcileNmiOrderPayment(orderPaymentId: string): Promise<
     const { data: payment, error: paymentError } = await supabase
       .from("order_payments")
       .select(
-        "id, merchant_id, order_id, transaction_id, processor_name, is_settled, settled_at, status"
+        "id, merchant_id, order_id, payment_device_id, transaction_id, processor_name, is_settled, settled_at, status"
       )
       .eq("id", orderPaymentId)
       .single();
@@ -67,29 +67,65 @@ export async function reconcileNmiOrderPayment(orderPaymentId: string): Promise<
       };
     }
 
+    let paymentDeviceId = payment.payment_device_id as string | null;
+
+    if (!paymentDeviceId) {
+      const { data: orderRow, error: orderRowError } = await supabase
+        .from("orders")
+        .select("location_id")
+        .eq("id", payment.order_id)
+        .single();
+
+      if (orderRowError || !orderRow?.location_id) {
+        return {
+          success: false,
+          error: "Unable to resolve the order location for NMI reconciliation.",
+        };
+      }
+
+      const { data: storefrontPaymentConfigRows, error: storefrontPaymentConfigError } =
+        await supabase.rpc("get_storefront_payment_config", {
+          p_location_id: orderRow.location_id,
+        });
+
+      if (storefrontPaymentConfigError) {
+        return {
+          success: false,
+          error: `Failed to load NMI storefront config: ${storefrontPaymentConfigError.message}`,
+        };
+      }
+
+      paymentDeviceId =
+        ((storefrontPaymentConfigRows as Array<{ device_id: string; provider: string }> | null) ?? [])
+          .find((row) => row.provider === "nmi")
+          ?.device_id ?? null;
+    }
+
+    if (!paymentDeviceId) {
+      return { success: false, error: "No NMI payment device is associated with this payment." };
+    }
+
     const { data: credentialRows, error: credentialError } = await supabase.rpc(
-      "get_merchant_payment_api_secret",
+      "get_nmi_device_credentials",
       {
-        p_merchant_id: payment.merchant_id,
-        p_provider: "nmi",
+        p_device_id: paymentDeviceId,
       }
     );
 
     if (credentialError) {
       return {
         success: false,
-        error: `Failed to load NMI credentials: ${credentialError.message}`,
+        error: `Failed to load NMI device credentials: ${credentialError.message}`,
       };
     }
 
     const credential = (credentialRows ?? [])[0] ?? null;
-    if (!credential?.decrypted_secret) {
+    if (!credential?.decrypted_security_key) {
       return { success: false, error: "NMI credentials are not configured." };
     }
 
-    await supabase.from("merchant_payment_credential_access_log").insert({
-      merchant_payment_credential_id: credential.credential_id,
-      merchant_id: payment.merchant_id,
+    await supabase.from("payment_credential_access_log").insert({
+      device_id: paymentDeviceId,
       function_name: "reconcile-nmi-order-payment",
       actor_user_id: null,
       metadata: {
@@ -99,7 +135,7 @@ export async function reconcileNmiOrderPayment(orderPaymentId: string): Promise<
     });
 
     const lookup = await getNmiTransaction(
-      { apiKey: credential.decrypted_secret },
+      { apiKey: credential.decrypted_security_key },
       payment.transaction_id
     );
 

@@ -142,12 +142,18 @@ interface TipConfig {
   allowCustomTip: boolean
 }
 
-interface MerchantPaymentCredentialSummary {
+interface LocationNmiPaymentDeviceSummary {
   id: string
+  location_id: string
   provider: string
-  tokenization_key: string
+  provider_public_key: string | null
   is_active: boolean
-  api_key_configured: boolean
+  use_for_online_ordering: boolean
+  status: string
+  environment: string
+  provider_merchant_id: string | null
+  provider_gateway_id: string | null
+  has_provider_secret: boolean
 }
 
 interface OnlineOrderingSettings {
@@ -220,22 +226,26 @@ interface OnlineOrderingSettings {
   convenienceFeeFlat?: number
 }
 
-async function getMerchantPaymentCredential(
-  merchantId: string
+async function getLocationNmiPaymentDevice(
+  locationId: string
 ) {
   const supabase = createServerSupabaseClient() as any
-  const { data, error } = await supabase.rpc('list_merchant_payment_credentials', {
-    p_merchant_id: merchantId,
+  const { data, error } = await supabase.rpc('list_location_payment_devices', {
+    p_location_id: locationId,
   })
 
   if (error) {
-    console.error('[HQ_ONLINE_ORDERING] Failed to load merchant payment credentials:', error)
+    console.error('[HQ_ONLINE_ORDERING] Failed to load location payment devices:', error)
     return null
   }
 
-  return (((data as MerchantPaymentCredentialSummary[] | null) ?? []).find(
-    (credential) => credential.provider === 'nmi' && credential.is_active
-  ) ?? null)
+  const devices = ((data as LocationNmiPaymentDeviceSummary[] | null) ?? [])
+    .filter((device) => device.provider === 'nmi')
+
+  return (
+    devices.find((device) => device.use_for_online_ordering) ??
+    null
+  )
 }
 
 async function buildRequestedStoreSlug(
@@ -607,7 +617,7 @@ export async function getAdminOnlineOrderingSettings(
       console.error('[getAdminOnlineOrderingSettings] Config error:', configError)
     }
 
-    const merchantPaymentCredential = await getMerchantPaymentCredential(merchantId)
+    const locationPaymentDevice = await getLocationNmiPaymentDevice(locationId)
 
     const settings: Partial<OnlineOrderingSettings> = {
       locationId,
@@ -687,9 +697,13 @@ export async function getAdminOnlineOrderingSettings(
       settings.acceptOnlinePayments = config.accepts_online_payments ?? true
       settings.acceptCashOnDelivery = config.accepts_cash_on_delivery ?? false
       settings.acceptCardOnDelivery = config.accepts_card_on_delivery ?? false
-      settings.nmiTokenizationKey = merchantPaymentCredential?.tokenization_key ?? ''
+      settings.nmiTokenizationKey = locationPaymentDevice?.provider_public_key ?? ''
       settings.nmiPrivateApiKey = ''
-      settings.nmiConfigured = merchantPaymentCredential?.api_key_configured ?? false
+      settings.nmiConfigured = Boolean(
+        locationPaymentDevice?.provider_public_key &&
+        locationPaymentDevice?.has_provider_secret &&
+        locationPaymentDevice?.status === 'active'
+      )
     }
 
     return { success: true, data: settings, error: null }
@@ -1105,7 +1119,7 @@ export async function adminSaveOnlineOrderingSettings(
       }
     }
 
-    const existingMerchantPaymentCredential = await getMerchantPaymentCredential(merchantId)
+    const existingLocationPaymentDevice = await getLocationNmiPaymentDevice(locationId)
 
     const configData: Record<string, unknown> = {
       updated_at: new Date().toISOString(),
@@ -1168,16 +1182,16 @@ export async function adminSaveOnlineOrderingSettings(
     const nextTokenizationKey =
       settings.nmiTokenizationKey !== undefined
         ? settings.nmiTokenizationKey.trim()
-        : existingMerchantPaymentCredential?.tokenization_key ?? ''
+        : existingLocationPaymentDevice?.provider_public_key ?? ''
     const providedPrivateApiKey = settings.nmiPrivateApiKey?.trim() ?? ''
     const tokenizationKeyChanged =
       settings.nmiTokenizationKey !== undefined &&
-      nextTokenizationKey !== (existingMerchantPaymentCredential?.tokenization_key ?? '')
-    const shouldUpsertMerchantPaymentCredential =
+      nextTokenizationKey !== (existingLocationPaymentDevice?.provider_public_key ?? '')
+    const shouldUpsertLocationPaymentDevice =
       tokenizationKeyChanged ||
       providedPrivateApiKey.length > 0
 
-    if (shouldUpsertMerchantPaymentCredential && nextTokenizationKey.length === 0) {
+    if (shouldUpsertLocationPaymentDevice && nextTokenizationKey.length === 0) {
       return {
         success: false,
         error: 'NMI tokenization key is required to configure online card payments.',
@@ -1185,13 +1199,26 @@ export async function adminSaveOnlineOrderingSettings(
     }
 
     if (
-      shouldUpsertMerchantPaymentCredential &&
-      !existingMerchantPaymentCredential &&
+      shouldUpsertLocationPaymentDevice &&
+      !existingLocationPaymentDevice &&
       providedPrivateApiKey.length === 0
     ) {
       return {
         success: false,
         error: 'NMI private API key is required for a new online-ordering payment configuration.',
+      }
+    }
+
+    if (
+      shouldUpsertLocationPaymentDevice &&
+      existingLocationPaymentDevice &&
+      tokenizationKeyChanged &&
+      providedPrivateApiKey.length === 0
+    ) {
+      return {
+        success: false,
+        error:
+          'NMI private API key is required when updating the tokenization key for the existing online-ordering device.',
       }
     }
 
@@ -1223,22 +1250,53 @@ export async function adminSaveOnlineOrderingSettings(
       return { success: false, error: updateError.message }
     }
 
-    if (shouldUpsertMerchantPaymentCredential) {
-      const { error: paymentCredentialError } = await (supabase as any).rpc(
-        'upsert_merchant_payment_credentials',
+    if (shouldUpsertLocationPaymentDevice) {
+      let paymentDeviceId = existingLocationPaymentDevice?.id ?? null
+
+      if (!paymentDeviceId) {
+        const { data: createdDeviceId, error: createDeviceError } = await (supabase as any).rpc(
+          'create_nmi_payment_device',
+          {
+            p_location_id: locationId,
+            p_device_label: 'Online Ordering',
+            p_environment: 'production',
+            p_use_for_online_ordering: true,
+          }
+        )
+
+        if (createDeviceError || !createdDeviceId) {
+          return {
+            success: false,
+            error: `NMI device creation failed: ${createDeviceError?.message ?? 'Unknown error'}`,
+          }
+        }
+
+        paymentDeviceId = createdDeviceId
+      }
+
+      const providerMerchantId =
+        existingLocationPaymentDevice?.provider_merchant_id?.trim() ||
+        `manual:${merchantId}`
+      const providerGatewayId =
+        existingLocationPaymentDevice?.provider_gateway_id?.trim() ||
+        `manual:${locationId}`
+
+      const { error: activateDeviceError } = await (supabase as any).rpc(
+        'activate_nmi_payment_device',
         {
-          p_merchant_id: merchantId,
-          p_provider: 'nmi',
-          p_tokenization_key: nextTokenizationKey,
-          p_private_api_key: providedPrivateApiKey.length > 0 ? providedPrivateApiKey : null,
-          p_is_active: true,
+          p_device_id: paymentDeviceId,
+          p_provider_merchant_id: providerMerchantId,
+          p_provider_gateway_id: providerGatewayId,
+          p_public_key: nextTokenizationKey,
+          p_security_key: providedPrivateApiKey,
+          p_webhook_secret: null,
         }
       )
 
-      if (paymentCredentialError) {
+      if (activateDeviceError) {
         return {
           success: false,
-          error: `Merchant payment credential update failed: ${paymentCredentialError.message}`,
+          error: `NMI device activation failed: ${activateDeviceError.message}`,
         }
       }
     }
@@ -1261,9 +1319,13 @@ export async function adminSaveOnlineOrderingSettings(
         location_name: loc?.name,
         updated_by_admin: userId,
         enabled: settings.enabled,
-        nmi_configured: shouldUpsertMerchantPaymentCredential
+        nmi_configured: shouldUpsertLocationPaymentDevice
           ? true
-          : (existingMerchantPaymentCredential?.api_key_configured ?? false),
+          : Boolean(
+            existingLocationPaymentDevice?.provider_public_key &&
+            existingLocationPaymentDevice?.has_provider_secret &&
+            existingLocationPaymentDevice?.status === 'active'
+          ),
         nmi_tokenization_key_changed: tokenizationKeyChanged,
       },
     })
@@ -1315,8 +1377,12 @@ export async function adminToggleOnlineStore(
     }
 
     if (enabled && existingConfig.accepts_online_payments) {
-      const merchantPaymentCredential = await getMerchantPaymentCredential(merchantId)
-      if (!merchantPaymentCredential?.tokenization_key || !merchantPaymentCredential.api_key_configured) {
+      const locationPaymentDevice = await getLocationNmiPaymentDevice(locationId)
+      if (
+        !locationPaymentDevice?.provider_public_key ||
+        !locationPaymentDevice?.has_provider_secret ||
+        locationPaymentDevice.status !== 'active'
+      ) {
         return {
           success: false,
           error:
