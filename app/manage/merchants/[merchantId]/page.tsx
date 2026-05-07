@@ -20,6 +20,7 @@ import {
     LifeBuoy,
     Monitor,
     MapPin,
+    Globe,
     type LucideIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -31,6 +32,7 @@ import { NotesTab } from './components/NotesTab'
 import { AuditLogsTab } from './components/AuditLogsTab'
 import { DevicesTab } from './components/DevicesTab'
 import { BillingTab } from './components/BillingTab'
+import { OnlineStoreTab } from './components/OnlineStoreTab'
 import { OnboardingStatusCard } from './components/OnboardingStatusCard'
 import { MerchantHeaderBar } from './components/MerchantHeaderBar'
 import { RiskStrip } from './components/RiskStrip'
@@ -50,6 +52,7 @@ type SectionKey =
     | 'settlements'
     | 'disputes'
     | 'billing'
+    | 'online-store'
     | 'support'
     | 'devices'
     | 'locations'
@@ -63,6 +66,7 @@ const VALID_SECTIONS: SectionKey[] = [
     'settlements',
     'disputes',
     'billing',
+    'online-store',
     'support',
     'devices',
     'locations',
@@ -190,6 +194,9 @@ export default function MerchantDetailsPage() {
                             </NavGroup>
 
                             <NavGroup label="Operations">
+                                <NavItem value="online-store" icon={Globe} active={activeTab === 'online-store'} onClick={setActiveTab}>
+                                    Online Store
+                                </NavItem>
                                 <NavItem value="support" icon={LifeBuoy} active={activeTab === 'support'} onClick={setActiveTab}>
                                     Support
                                 </NavItem>
@@ -237,6 +244,15 @@ export default function MerchantDetailsPage() {
                                     merchantId={merchantDetails.id}
                                     merchantName={merchantDetails.name}
                                     canEdit={canManageMerchantStatus}
+                                />
+                            )}
+
+                            {activeTab === 'online-store' && (
+                                <OnlineStoreTab
+                                    merchantId={merchantDetails.id}
+                                    merchantName={merchantDetails.name}
+                                    locations={merchantDetails.locations}
+                                    locationsLoading={false}
                                 />
                             )}
 

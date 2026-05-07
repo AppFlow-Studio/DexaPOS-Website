@@ -117,6 +117,10 @@ Important runtime corrections:
   - `currency`
   - `industry: 'ecommerce'`
   - `payment_details.payment_token`
+- Dexa remains the source of truth for tip breakout:
+  - order/payment rows still store tip separately
+  - NMI receives only the final total charge amount
+  - no separate tip field is sent to NMI
 
 Persisted fields include:
 - `processor_name = 'nmi'`
