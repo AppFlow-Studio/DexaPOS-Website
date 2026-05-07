@@ -14,6 +14,12 @@ import { auth } from "@clerk/nextjs/server";
 import { cookies } from "next/headers";
 import { resolveImpersonationFromCookies } from "@/lib/admin/impersonation";
 
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function isUuid(v: string | null | undefined): v is string {
+  return typeof v === "string" && UUID_RE.test(v);
+}
+
 // ============================================================================
 // GET AUDIT LOGS
 // ============================================================================
@@ -359,11 +365,18 @@ export async function LogAuditEvent(
     p_action_category: params.actionCategory,
     p_severity: params.severity || "info",
     p_resource_type: params.resourceType || null,
-    p_resource_id: params.resourceId || null,
+    // resource_id is a uuid column; non-UUID identifiers (e.g. Clerk
+    // "orginv_..." invitation IDs) get redirected into metadata.external_id.
+    p_resource_id: isUuid(params.resourceId) ? params.resourceId : null,
     p_resource_name: params.resourceName || null,
     p_changes: finalChanges || null,
     p_metadata:
-      sanitizeRecord(params.metadata as Record<string, unknown>) || null,
+      sanitizeRecord({
+        ...(params.metadata as Record<string, unknown> | undefined),
+        ...(params.resourceId && !isUuid(params.resourceId)
+          ? { external_id: params.resourceId }
+          : {}),
+      } as Record<string, unknown>) || null,
     p_pii_access_type: params.piiAccessType ?? null,
     p_impersonation_session_id: impersonation?.sessionId ?? null,
     p_impersonator_user_id: impersonation ? impersonation.hqUserId : null,

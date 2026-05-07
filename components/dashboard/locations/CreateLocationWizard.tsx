@@ -45,6 +45,7 @@ import { isValidPhone, normalizePhone } from '@/lib/phone'
 interface CreateLocationWizardProps {
     clerkOrgId: string
     actorUserId?: string
+    mode?: 'standard' | 'onboarding'
 }
 
 const TOTAL_STEPS = 7
@@ -104,9 +105,10 @@ function buildOnlineStoreLocationMetadata(data: LocationFormData) {
     }
 }
 
-export function CreateLocationWizard({ clerkOrgId, actorUserId }: CreateLocationWizardProps) {
+export function CreateLocationWizard({ clerkOrgId, actorUserId, mode = 'standard' }: CreateLocationWizardProps) {
     const router = useRouter()
     const queryClient = useQueryClient()
+    const isOnboarding = mode === 'onboarding'
 
     const [currentStep, setCurrentStep] = useState(1)
     const [completedSteps, setCompletedSteps] = useState<number[]>([])
@@ -407,8 +409,9 @@ export function CreateLocationWizard({ clerkOrgId, actorUserId }: CreateLocation
             // Reset unsaved changes flag
             setHasUnsavedChanges(false)
 
-            // Redirect to locations list and immediately open the editable details sheet
-            if (result.data?.id) {
+            if (isOnboarding) {
+                router.replace('/dashboard')
+            } else if (result.data?.id) {
                 router.push(`/dashboard/locations?open=${result.data.id}`)
             } else {
                 router.push('/dashboard/locations')
@@ -522,17 +525,25 @@ export function CreateLocationWizard({ clerkOrgId, actorUserId }: CreateLocation
                             <p className="text-xs font-medium text-muted-foreground mb-0.5 md:hidden">
                                 Step {currentStep} of {TOTAL_STEPS}
                             </p>
-                            <h1 className="text-lg md:text-2xl font-semibold truncate">{STEP_TITLES[currentStep - 1].title}</h1>
-                            <p className="text-sm text-muted-foreground hidden sm:block">{STEP_TITLES[currentStep - 1].description}</p>
+                            <h1 className="text-lg md:text-2xl font-semibold truncate">
+                                {isOnboarding ? `Welcome — ${STEP_TITLES[currentStep - 1].title}` : STEP_TITLES[currentStep - 1].title}
+                            </h1>
+                            <p className="text-sm text-muted-foreground hidden sm:block">
+                                {isOnboarding
+                                    ? "Let's set up your first location to get your account ready."
+                                    : STEP_TITLES[currentStep - 1].description}
+                            </p>
                         </div>
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={handleExit}
-                            className="text-muted-foreground hover:text-foreground shrink-0"
-                        >
-                            <X className="h-5 w-5" />
-                        </Button>
+                        {!isOnboarding && (
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={handleExit}
+                                className="text-muted-foreground hover:text-foreground shrink-0"
+                            >
+                                <X className="h-5 w-5" />
+                            </Button>
+                        )}
                     </div>
 
                     {/* Mobile progress bar */}
