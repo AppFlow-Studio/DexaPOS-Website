@@ -29,11 +29,11 @@ export function PlaceOrderButton({
       disabled={disabled || loading}
       className="w-full py-4 font-bold text-base transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
       style={{
-        backgroundColor: "var(--primary)",
-        color: "#FFFFFF",
+        backgroundColor: "var(--primary, #4f46e5)",
+        color: "#111111",
         borderRadius: "var(--radius)",
-        border: "none",
-        boxShadow: "0 4px 16px color-mix(in srgb, var(--primary) 40%, transparent)",
+        border: "1px solid color-mix(in srgb, var(--primary, #4f46e5) 75%, #312e81)",
+        boxShadow: "0 4px 16px color-mix(in srgb, var(--primary, #4f46e5) 40%, transparent)",
         fontFamily: "var(--font)",
       }}
     >

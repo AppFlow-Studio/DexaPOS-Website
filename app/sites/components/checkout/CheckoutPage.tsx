@@ -166,8 +166,7 @@ export function CheckoutPage({
 
   // Payment
   const paymentFormRef = useRef<PaymentCardFormHandle>(null);
-  const [securityKey, setSecurityKey] = useState<string | null>(null);
-  const [paymentDeviceId, setPaymentDeviceId] = useState<string | null>(null);
+  const [tokenizationKey, setTokenizationKey] = useState<string | null>(null);
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [payCashInStore, setPayCashInStore] = useState(false);
 
@@ -201,12 +200,12 @@ export function CheckoutPage({
     if (customer?.email) setEmail(customer.email);
   }, [customer]);
 
-  // Fetch iPOS security key — enables the card tokenization form
+  // Fetch storefront payment bootstrap config for NMI tokenization — enables the card tokenization form
   useEffect(() => {
     if (!storeConfigId) return;
 
     setPaymentError(null);
-    setPaymentDeviceId(null);
+    setTokenizationKey(null);
     fetch(`${SUPABASE_URL}/functions/v1/process-online-payment`, {
       method: "POST",
       headers: {
@@ -219,21 +218,20 @@ export function CheckoutPage({
     })
       .then((res) => res.json())
       .then((data) => {
-        if (data.success) {
-          setSecurityKey(data.security_key);
-          setPaymentDeviceId(data.payment_device_id ?? null);
+        if (data.success && data.provider === "nmi") {
+          setTokenizationKey(data.tokenization_key ?? null);
         } else {
-          setPaymentDeviceId(null);
+          setTokenizationKey(null);
           // Don't show error if payment simply isn't configured — just hide the form
           if (data.error?.includes("not configured")) {
-            console.log("iPOS payment not configured for this store");
+            console.log("NMI payment not configured for this store");
           } else {
             setPaymentError(data.error || "Failed to initialize payment.");
           }
         }
       })
       .catch(() => {
-        setPaymentDeviceId(null);
+        setTokenizationKey(null);
         setPaymentError("Failed to connect to payment service.");
       });
   }, [storeConfigId]);
@@ -333,11 +331,11 @@ export function CheckoutPage({
     setLoading(true);
     setPaymentError(null);
 
-    // Step 1: Tokenize card via FTD (skip if no securityKey — test mode, or cash payment)
-    let paymentTokenId: string | undefined;
+    // Step 1: Tokenize card via NMI (skip if no tokenization key — test mode, or cash payment)
+    let paymentToken: string | undefined;
     let paymentCardType: string | null = null;
     let paymentCardLastFour: string | null = null;
-    if (securityKey && !payCashInStore) {
+    if (tokenizationKey && !payCashInStore) {
       try {
         if (!paymentFormRef.current) {
           throw new Error("Payment form not ready. Please wait a moment.");
@@ -347,7 +345,7 @@ export function CheckoutPage({
           throw new Error(cardValidation.error || "Please complete card details.");
         }
         const tokenizedCard = await paymentFormRef.current.tokenize();
-        paymentTokenId = tokenizedCard.tokenId;
+        paymentToken = tokenizedCard.tokenId;
         paymentCardType = tokenizedCard.cardType;
         paymentCardLastFour = tokenizedCard.cardLastFour;
       } catch (err: any) {
@@ -440,7 +438,7 @@ export function CheckoutPage({
       })),
     }));
 
-    // Step 2: Call create-online-order edge function with payment_token_id
+    // Step 2: Call create-online-order edge function with the NMI payment token
     try {
       const res = await fetch(
         `${SUPABASE_URL}/functions/v1/create-online-order`,
@@ -461,8 +459,7 @@ export function CheckoutPage({
             tip: tipAmount,
             special_instructions: instructions || undefined,
             pay_cash_in_store: payCashInStore,
-            ...(paymentDeviceId ? { payment_device_id: paymentDeviceId } : {}),
-            ...(paymentTokenId ? { payment_token_id: paymentTokenId } : {}),
+            ...(paymentToken ? { payment_token: paymentToken } : {}),
             ...(paymentCardType ? { payment_card_type: paymentCardType } : {}),
             ...(paymentCardLastFour ? { payment_card_last_four: paymentCardLastFour } : {}),
             // Contact info (always sent — edge function uses session data if available)
@@ -511,7 +508,7 @@ export function CheckoutPage({
           sendOrderConfirmationEmail(result.order_id, email).catch(() => {});
         }
       } else if (result.success && result.requires_redirect && result.payment_url) {
-        // HPP fallback (shouldn't happen with FTD, but handle gracefully)
+        // Hosted redirect fallback is not expected in the NMI embedded flow, but keep the branch safe.
         window.location.href = result.payment_url;
       } else {
         const detail =
@@ -618,6 +615,8 @@ export function CheckoutPage({
   const storeOpen = isStoreOpenNow(config?.operatingHours ?? (location as any).business_hours);
   const storeIsClosed = storeOpen === false;
   const zoneBlocked = orderType === "delivery" && selectedAddressId === "new" && zoneCheckState === "invalid";
+  const paymentMethodReady =
+    !config?.acceptOnlinePayments || payCashInStore || Boolean(tokenizationKey);
   const canPlaceOrder =
     firstName.trim().length > 0 &&
     emailValid &&
@@ -625,6 +624,7 @@ export function CheckoutPage({
     deliveryAddressValid &&
     meetsMinOrder &&
     !storeIsClosed &&
+    paymentMethodReady &&
     !zoneBlocked &&
     items.length > 0;
 
@@ -788,7 +788,7 @@ export function CheckoutPage({
                 {!payCashInStore && (
                   <PaymentCardForm
                     ref={paymentFormRef}
-                    securityKey={securityKey}
+                    tokenizationKey={tokenizationKey}
                     onError={setPaymentError}
                     disabled={loading}
                   />
@@ -922,14 +922,14 @@ export function CheckoutPage({
                 promoCode={appliedPromo?.code}
                 pricingDisclosureText={pricingDisclosureText}
               />
-              <div className="hidden lg:block">
+              <div className="pt-2">
                 <PlaceOrderButton
                   layout="inline"
                   total={total}
                   loading={loading}
                   disabled={!canPlaceOrder}
                   onClick={handleCheckout}
-                  isTestMode={!securityKey}
+                  isTestMode={!tokenizationKey && !payCashInStore}
                 />
               </div>
             </div>
@@ -937,14 +937,13 @@ export function CheckoutPage({
         </div>
       </main>
 
-      {/* Mobile: full-width fixed bar; desktop uses sidebar button above */}
-      <div className="lg:hidden">
+      <div className="hidden">
         <PlaceOrderButton
           total={total}
           loading={loading}
           disabled={!canPlaceOrder}
           onClick={handleCheckout}
-          isTestMode={!securityKey}
+          isTestMode={!tokenizationKey && !payCashInStore}
           layout="fixed"
         />
       </div>

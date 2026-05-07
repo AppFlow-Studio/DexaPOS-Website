@@ -35,20 +35,7 @@ import {
     Loader2,
     Plug,
     AlertTriangle,
-    Eye,
-    EyeOff,
-    KeyRound,
 } from 'lucide-react'
-import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import type { Location } from '@/types/merchant_locations'
@@ -59,10 +46,8 @@ import {
     useAdminApproveOnlineStoreRequest,
     useAdminRejectOnlineStoreRequest,
     useAdminUploadMerchantW9Pdf,
-    useAdminRetriggerDomainWhitelist,
     useAdminOnlineStoreRequestRequirements,
     useAdminSaveOnlineStoreRequestRequirements,
-    useAdminUpdateMerchantExternalMerchantId,
     type OnlineOrderingSettings,
     type LocationOnlineStoreOverview,
 } from '@/lib/queries/use-admin-online-ordering'
@@ -161,18 +146,14 @@ function createDefaultWeeklySchedule() {
 
 interface OnlineStoreTabProps {
     merchantId: string
-    clerkOrgId: string
     merchantName: string
-    externalMerchantId: string | null
     locations: Location[]
     locationsLoading: boolean
 }
 
 export function OnlineStoreTab({
     merchantId,
-    clerkOrgId,
     merchantName,
-    externalMerchantId,
     locations,
     locationsLoading,
 }: OnlineStoreTabProps) {
@@ -205,68 +186,7 @@ export function OnlineStoreTab({
     const approveMutation = useAdminApproveOnlineStoreRequest()
     const rejectMutation = useAdminRejectOnlineStoreRequest()
     const uploadW9Mutation = useAdminUploadMerchantW9Pdf()
-    const whitelistMutation = useAdminRetriggerDomainWhitelist()
     const saveRequirementsMutation = useAdminSaveOnlineStoreRequestRequirements()
-    const updateExternalMerchantIdMutation = useAdminUpdateMerchantExternalMerchantId()
-
-    // Dejavoo Merchant ID — per-merchant 12-char id supplied by Dejavoo.
-    // Stored on public.merchants.external_merchant_id; required for the
-    // dejavoo-whitelist-domain edge function to identify the merchant.
-    const [externalMerchantIdInput, setExternalMerchantIdInput] = useState(
-        externalMerchantId ?? ''
-    )
-    const [externalMerchantIdRevealed, setExternalMerchantIdRevealed] =
-        useState(false)
-    const [externalMerchantIdConfirmOpen, setExternalMerchantIdConfirmOpen] =
-        useState(false)
-
-    useEffect(() => {
-        setExternalMerchantIdInput(externalMerchantId ?? '')
-    }, [externalMerchantId])
-
-    const externalMerchantIdTrimmed = externalMerchantIdInput.trim()
-    const externalMerchantIdIsValid =
-        externalMerchantIdTrimmed.length === 0 ||
-        /^[A-Za-z0-9]{12}$/.test(externalMerchantIdTrimmed)
-    const externalMerchantIdNext: string | null =
-        externalMerchantIdTrimmed.length === 0 ? null : externalMerchantIdTrimmed
-    const externalMerchantIdDirty =
-        externalMerchantIdNext !== (externalMerchantId ?? null)
-    const externalMerchantIdRotating =
-        externalMerchantIdDirty && (externalMerchantId ?? null) !== null
-
-    const submitExternalMerchantIdSave = async () => {
-        if (!externalMerchantIdIsValid) return
-        try {
-            const result = await updateExternalMerchantIdMutation.mutateAsync({
-                clerkOrgId,
-                externalMerchantId: externalMerchantIdNext,
-            })
-            if (result.success) {
-                toast.success('Dejavoo Merchant ID saved')
-            } else {
-                toast.error(result.error || 'Failed to save Dejavoo Merchant ID')
-            }
-        } catch (err) {
-            toast.error(
-                err instanceof Error ? err.message : 'Failed to save Dejavoo Merchant ID'
-            )
-        }
-    }
-
-    const handleExternalMerchantIdSaveClick = () => {
-        if (!externalMerchantIdIsValid || !externalMerchantIdDirty) return
-        if (externalMerchantIdRotating) {
-            setExternalMerchantIdConfirmOpen(true)
-            return
-        }
-        void submitExternalMerchantIdSave()
-    }
-
-    const handleExternalMerchantIdConfirmRotate = async () => {
-        setExternalMerchantIdConfirmOpen(false)
-        await submitExternalMerchantIdSave()
-    }
 
     // OrderOut
     const { data: orderOutData } = useAdminOrderOutStatus(merchantId)
@@ -275,24 +195,6 @@ export function OnlineStoreTab({
     const [showOrderOutForm, setShowOrderOutForm] = useState(false)
     const { data: adminSyncedMenusData } =
         useAdminOrderOutSyncedMenusForLocation(merchantId, selectedLocationId || '')
-
-    const handleWhitelistDomain = async () => {
-        if (!selectedLocationId) return
-        try {
-            const result = await whitelistMutation.mutateAsync({ merchantId, locationId: selectedLocationId })
-            if (result.skipped) {
-                toast.info('Dejavoo whitelist request was skipped')
-                return
-            }
-            if (result.success) {
-                toast.success('Store domain was whitelisted successfully')
-                return
-            }
-            toast.error(result.error || 'Domain whitelist failed')
-        } catch {
-            toast.error('Failed to call domain whitelist')
-        }
-    }
 
     // Sync local settings when server data changes
     useEffect(() => {
@@ -321,9 +223,6 @@ export function OnlineStoreTab({
 
             if (result.success) {
                 toast.success('Settings saved successfully')
-                if (result.domainWhitelistError) {
-                    toast.error(`Settings saved, but domain whitelist failed: ${result.domainWhitelistError}`)
-                }
                 setIsDirty(false)
                 refetchSettings()
             } else {
@@ -567,12 +466,8 @@ export function OnlineStoreTab({
     const requestStatus = localSettings?.setupRequestStatus ?? 'not_requested'
     const canEditStoreSetup =
         requestStatus === 'approved' || requestStatus === 'setup_completed'
-    const hasTpn = Boolean(localSettings?.ipospaysTpn?.trim())
-    const hasFtdKey = Boolean(
-        localSettings?.ipospaysFtdEcomKey?.trim() ||
-        localSettings?.ipospaysFtdEcomKeyConfigured
-    )
-    const canRunWhitelist = Boolean(localSettings?.storeSlug && hasTpn)
+    const hasNmiTokenizationKey = Boolean(localSettings?.nmiTokenizationKey?.trim())
+    const hasNmiPrivateApiKey = Boolean(localSettings?.nmiConfigured)
 
     // Render store configuration
     return (
@@ -918,127 +813,9 @@ export function OnlineStoreTab({
 
                     <Card>
                         <CardHeader>
-                            <CardTitle className="flex items-center gap-2">
-                                <KeyRound className="h-4 w-4" />
-                                Dejavoo Merchant ID
-                            </CardTitle>
-                            <CardDescription>
-                                12-char alphanumeric ID supplied by Dejavoo for this merchant.
-                                Required for storefront domain whitelisting. One per merchant —
-                                shared across all locations and payment devices.
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-3">
-                            <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-                                <div className="flex-1 space-y-2">
-                                    <Label htmlFor="external-merchant-id">Merchant ID</Label>
-                                    <div className="relative">
-                                        <Input
-                                            id="external-merchant-id"
-                                            value={
-                                                externalMerchantIdRevealed
-                                                    ? externalMerchantIdInput
-                                                    : externalMerchantIdInput
-                                                        ? maskSensitiveValue(externalMerchantIdInput, 4)
-                                                        : ''
-                                            }
-                                            onChange={(e) => {
-                                                if (!externalMerchantIdRevealed) {
-                                                    setExternalMerchantIdRevealed(true)
-                                                }
-                                                setExternalMerchantIdInput(e.target.value)
-                                            }}
-                                            onFocus={() => setExternalMerchantIdRevealed(true)}
-                                            placeholder="e.g. abc123xyz456"
-                                            maxLength={12}
-                                            className={cn(
-                                                'pr-10 font-mono',
-                                                !externalMerchantIdIsValid &&
-                                                    'border-destructive focus-visible:ring-destructive'
-                                            )}
-                                            autoComplete="off"
-                                            spellCheck={false}
-                                        />
-                                        {externalMerchantIdInput && (
-                                            <button
-                                                type="button"
-                                                onClick={() =>
-                                                    setExternalMerchantIdRevealed((prev) => !prev)
-                                                }
-                                                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                                                aria-label={
-                                                    externalMerchantIdRevealed
-                                                        ? 'Hide merchant ID'
-                                                        : 'Reveal merchant ID'
-                                                }
-                                            >
-                                                {externalMerchantIdRevealed ? (
-                                                    <EyeOff className="h-4 w-4" />
-                                                ) : (
-                                                    <Eye className="h-4 w-4" />
-                                                )}
-                                            </button>
-                                        )}
-                                    </div>
-                                    {!externalMerchantIdIsValid && (
-                                        <p className="text-xs text-destructive">
-                                            Merchant ID must be exactly 12 alphanumeric characters.
-                                        </p>
-                                    )}
-                                </div>
-                                <Button
-                                    onClick={handleExternalMerchantIdSaveClick}
-                                    disabled={
-                                        !externalMerchantIdIsValid ||
-                                        !externalMerchantIdDirty ||
-                                        updateExternalMerchantIdMutation.isPending
-                                    }
-                                >
-                                    {updateExternalMerchantIdMutation.isPending && (
-                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    )}
-                                    Save
-                                </Button>
-                            </div>
-                            {!externalMerchantId && (
-                                <div className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-amber-900">
-                                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                                    <p className="text-xs">
-                                        No Merchant ID set. Domain whitelisting and online card
-                                        payments will be blocked until this is configured.
-                                    </p>
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
-
-                    <AlertDialog
-                        open={externalMerchantIdConfirmOpen}
-                        onOpenChange={setExternalMerchantIdConfirmOpen}
-                    >
-                        <AlertDialogContent>
-                            <AlertDialogHeader>
-                                <AlertDialogTitle>Rotate Dejavoo Merchant ID?</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                    Changing this will break storefront whitelisting until you
-                                    re-trigger the domain whitelist on each affected location.
-                                    Continue?
-                                </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction onClick={handleExternalMerchantIdConfirmRotate}>
-                                    Rotate
-                                </AlertDialogAction>
-                            </AlertDialogFooter>
-                        </AlertDialogContent>
-                    </AlertDialog>
-
-                    <Card>
-                        <CardHeader>
                             <CardTitle>Storefront Readiness</CardTitle>
                             <CardDescription>
-                                Operational checks are managed here in admin (store status, TPN presence, and domain whitelist).
+                                Operational checks for the active NMI-based online payment flow.
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
@@ -1057,41 +834,27 @@ export function OnlineStoreTab({
                                 <div>
                                     <p className="text-sm font-medium">Card Payment Readiness</p>
                                     <p className="text-xs text-muted-foreground">
-                                        {hasTpn && hasFtdKey
-                                            ? 'TPN and FTD key are configured for this branch.'
-                                            : 'Card payments need both a branch TPN and the matching FTD Ecom/TOP key.'}
+                                        {hasNmiTokenizationKey && hasNmiPrivateApiKey
+                                            ? 'NMI tokenization and private API keys are configured for this location.'
+                                            : 'Online card payments require both the NMI tokenization key and private API key.'}
                                     </p>
                                 </div>
-                                <Badge variant={hasTpn && hasFtdKey ? 'default' : 'destructive'}>
-                                    {hasTpn && hasFtdKey ? 'Ready' : 'Incomplete'}
+                                <Badge variant={hasNmiTokenizationKey && hasNmiPrivateApiKey ? 'default' : 'destructive'}>
+                                    {hasNmiTokenizationKey && hasNmiPrivateApiKey ? 'Ready' : 'Incomplete'}
                                 </Badge>
                             </div>
-                            {(!hasTpn || !hasFtdKey) && (
+                            {(!hasNmiTokenizationKey || !hasNmiPrivateApiKey) && (
                                 <div className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-amber-900">
                                     <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                                     <p className="text-xs">
-                                        Add the merchant&apos;s online-ordering TPN and the matching FTD Ecom/TOP key in the Payment &amp; Tips tab before enabling card checkout.
+                                        Add the location&apos;s NMI tokenization key and private API key in the Payment &amp; Tips tab before enabling online card checkout.
                                     </p>
                                 </div>
                             )}
-                            <div className="flex items-center gap-3">
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={handleWhitelistDomain}
-                                    disabled={!canRunWhitelist || whitelistMutation.isPending}
-                                >
-                                    {whitelistMutation.isPending ? (
-                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    ) : (
-                                        <Plug className="mr-2 h-4 w-4" />
-                                    )}
-                                    Re-Whitelist Domain
-                                </Button>
+                            <div className="rounded-md border p-3">
+                                <p className="text-sm font-medium">Provider</p>
                                 <p className="text-xs text-muted-foreground">
-                                    {canRunWhitelist
-                                        ? 'Call Dejavoo Management API for this location slug + TPN.'
-                                        : 'Requires both store slug and TPN.'}
+                                    Storefront card checkout now uses NMI through the active location payment device. The old Dejavoo whitelist and TPN routing path are no longer used for online checkout.
                                 </p>
                             </div>
                         </CardContent>
@@ -1735,29 +1498,28 @@ export function OnlineStoreTab({
                                     </div>
                                     {localSettings.acceptOnlinePayments !== false && (
                                         <div className="ml-8 space-y-2">
-                                            <Label>iPOS TPN</Label>
+                                            <Label>NMI Tokenization Key</Label>
                                             <Input
-                                                value={localSettings.ipospaysTpn || ''}
-                                                onChange={(e) => updateSettings({ ipospaysTpn: e.target.value })}
-                                                placeholder="Enter merchant TPN for Dejavoo"
+                                                value={localSettings.nmiTokenizationKey || ''}
+                                                onChange={(e) => updateSettings({ nmiTokenizationKey: e.target.value })}
+                                                placeholder="Enter NMI tokenization key"
                                             />
                                             <p className="text-xs text-muted-foreground">
-                                                This TPN is used for domain whitelist and card processing on this store.
+                                                This browser-safe key is sent to the storefront checkout to tokenize card details with NMI.
                                             </p>
-                                            <Label className="pt-2">FTD Ecom/TOP Key</Label>
+                                            <Label className="pt-2">NMI Private API Key</Label>
                                             <Input
                                                 type="password"
-                                                value={localSettings.ipospaysFtdEcomKey || ''}
-                                                onChange={(e) => updateSettings({ ipospaysFtdEcomKey: e.target.value })}
+                                                value={localSettings.nmiPrivateApiKey || ''}
+                                                onChange={(e) => updateSettings({ nmiPrivateApiKey: e.target.value })}
                                                 placeholder={
-                                                    localSettings.ipospaysFtdEcomKeyConfigured
+                                                    localSettings.nmiConfigured
                                                         ? 'Stored securely. Enter a new key only to rotate it.'
-                                                        : 'Enter branch-specific FTD Ecom/TOP key'
+                                                        : 'Enter NMI private API key'
                                                 }
                                             />
                                             <p className="text-xs text-muted-foreground">
-                                                This branch-specific key is stored securely and is not shown back in plain text.
-                                                Enter a new value only when rotating the key or switching the online-ordering device.
+                                                This private key is stored securely and is never shown back in plain text. Enter a new value only when rotating the key.
                                             </p>
                                         </div>
                                     )}

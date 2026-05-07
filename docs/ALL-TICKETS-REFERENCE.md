@@ -59,6 +59,22 @@ Single index for active ticket streams and their source trackers.
 3. Continuation state:
 - `.planning/.continue-here.md`
 
+## Stream F: Online Ordering Payments Hard Cut (NMI)
+
+1. Current implementation handoff:
+- `docs/HANDOFF-2026-05-04-NMI-ONLINE-ORDERING-HARD-CUT.md`
+
+2. Previous Dejavoo payment handoff:
+- `docs/SPRINT-2026-04-08-ONLINE-ORDERING-PAYMENTS-HANDOFF.md`
+
+3. Continuation state:
+- `.planning/.continue-here.md`
+
+4. Scope notes:
+- Online storefront checkout is now migrating to merchant-scoped NMI credentials.
+- In-store POS terminal payments remain separate and are not part of this hard cut.
+- Reconciliation exists as an on-demand admin action; scheduled reconciliation is still pending.
+
 ## Notes
 
 1. Keep this file updated whenever a new ticket stream starts.
