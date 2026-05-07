@@ -6,6 +6,7 @@ import {
   useSelectedLocation,
 } from "@/stores/location-store";
 import { useUnifiedStaff } from "../hooks/useStaff";
+import { useStaffRealtime } from "../hooks/useStaffRealtime";
 import { useOrders } from "../hooks/useOrder";
 import {
   Card,
@@ -44,6 +45,9 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 export default function MerchantStaffPage() {
   const selectedLocation = useSelectedLocation();
   const isAllLocations = useIsAllLocations();
+
+  // Live cache invalidation — fires whenever staff_profiles or members change in Supabase
+  useStaffRealtime();
 
   // Fetch unified staff data with automatic location scoping
   const { data: staffMembers, isLoading, refetch } = useUnifiedStaff();

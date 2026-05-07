@@ -253,8 +253,7 @@ export async function getAdminMenus(
       updated_at,
       locations(name),
       menu_categories(
-        category_id,
-        categories(
+        category:categories(
           category_items(count)
         )
       ),
@@ -277,13 +276,11 @@ export async function getAdminMenus(
   }
 
   return (menus || []).map((menu: any) => {
-    // Count categories, items, and schedules
-    const categoriesCount = menu.menu_categories?.length || 0
-    let itemsCount = 0
-    menu.menu_categories?.forEach((mc: any) => {
-      itemsCount += mc.categories?.category_items?.length || 0
-    })
-    const schedulesCount = menu.menu_schedules?.length || 0
+    const categoriesCount = (menu.menu_categories ?? []).length
+    const itemsCount = (menu.menu_categories ?? []).reduce((sum: number, mc: any) => {
+      return sum + (mc.category?.category_items?.[0]?.count ?? 0)
+    }, 0)
+    const schedulesCount = menu.menu_schedules?.[0]?.count ?? 0
 
     return {
       id: menu.id,

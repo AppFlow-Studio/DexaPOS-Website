@@ -52,6 +52,12 @@ import {
   Star,
 } from "lucide-react";
 import { CredentialToast } from "@/components/ui/credential-toast";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { LocationAssignmentSheet } from "./LocationAssignmentSheet";
 import {
   useDeactivateStaff,
@@ -174,6 +180,17 @@ export function StaffDetailSheet({
     const role = roles.find((r) => r.code === roleCode);
     return role?.level || 100;
   }, [userInfo, roles]);
+
+  // Staff management permission: owner, admin, and managers (level ≤ 75) can manage.
+  // Cashier-level and below cannot activate/deactivate staff or manage PINs.
+  const canManageStaff = React.useMemo(() => {
+    if (!userInfo?.members?.[0]) return true; // optimistic until loaded; server enforces
+    const member = userInfo.members[0];
+    const roleCode = (member.role_code || member.role) ?? "";
+    if (["merchant.owner", "merchant.admin"].includes(roleCode)) return true;
+    if (roles.length > 0) return currentUserLevel <= 75;
+    return true; // optimistic while roles load
+  }, [userInfo, roles, currentUserLevel]);
 
   // PIN reveal permission: owner and admin can always reveal;
   // managers (level ≤ 75) can too. Cashier-level roles cannot.
@@ -568,15 +585,30 @@ export function StaffDetailSheet({
                         Toggle staff access for the primary location.
                       </p>
                     </div>
-                    <Switch
-                      checked={staff.overall_is_active}
-                      onCheckedChange={handleStatusToggle}
-                      disabled={
-                        !primaryLocation ||
-                        deactivateStaff.isPending ||
-                        reactivateStaff.isPending
-                      }
-                    />
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          {/* span needed so Tooltip works on a disabled element */}
+                          <span className="ml-auto">
+                            <Switch
+                              checked={staff.overall_is_active}
+                              onCheckedChange={handleStatusToggle}
+                              disabled={
+                                !primaryLocation ||
+                                !canManageStaff ||
+                                deactivateStaff.isPending ||
+                                reactivateStaff.isPending
+                              }
+                            />
+                          </span>
+                        </TooltipTrigger>
+                        {!canManageStaff && (
+                          <TooltipContent side="left">
+                            You don&apos;t have permission to manage staff
+                          </TooltipContent>
+                        )}
+                      </Tooltip>
+                    </TooltipProvider>
                   </div>
                 </div>
               </div>
@@ -880,6 +912,7 @@ export function StaffDetailSheet({
                       locationName={primaryLocation?.location_name}
                       hasPin={Boolean(primaryLocation?.has_pin)}
                       canReveal={canRevealPin}
+                      canManage={canManageStaff}
                       onGenerate={handleResetPIN}
                       isGenerating={resetPIN.isPending}
                       disabled={!primaryLocation}

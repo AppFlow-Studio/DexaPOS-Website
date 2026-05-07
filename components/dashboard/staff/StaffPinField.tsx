@@ -5,6 +5,12 @@ import { Eye, EyeOff, KeyRound, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { ReauthDialog } from "./ReauthDialog";
 
 // Tracks last successful re-auth across all instances in the same page session.
@@ -24,6 +30,8 @@ interface StaffPinFieldProps {
   hasPin: boolean;
   /** Whether the current user has staff-management permission to reveal PINs */
   canReveal: boolean;
+  /** Whether the current user has staff-management permission to generate/reset PINs */
+  canManage?: boolean;
   onGenerate: () => void;
   isGenerating?: boolean;
   disabled?: boolean;
@@ -39,6 +47,7 @@ export function StaffPinField({
   locationName,
   hasPin,
   canReveal,
+  canManage = true,
   onGenerate,
   isGenerating = false,
   disabled = false,
@@ -214,20 +223,34 @@ export function StaffPinField({
               </Button>
             )}
           </div>
-          <Button
-            type="button"
-            variant="outline"
-            className="gap-2 sm:shrink-0"
-            onClick={onGenerate}
-            disabled={disabled || isGenerating}
-          >
-            {isGenerating ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <KeyRound className="h-4 w-4" />
-            )}
-            {effectiveButtonLabel}
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                {/* span needed so Tooltip works on a disabled button */}
+                <span className="sm:shrink-0">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="gap-2 w-full"
+                    onClick={onGenerate}
+                    disabled={disabled || isGenerating || !canManage}
+                  >
+                    {isGenerating ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <KeyRound className="h-4 w-4" />
+                    )}
+                    {effectiveButtonLabel}
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              {!canManage && (
+                <TooltipContent side="top">
+                  You don&apos;t have permission to manage staff
+                </TooltipContent>
+              )}
+            </Tooltip>
+          </TooltipProvider>
         </div>
         <p
           className={`text-xs ${
