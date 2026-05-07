@@ -6,6 +6,7 @@ import { useAdminPermissionsStore } from '@/stores/admin-permissions-store'
 import { useScheduleStore } from '@/stores/useScheduleStore'
 import { useScheduleTemplateStore } from '@/stores/useScheduleTemplateStore'
 import { useFloorPlanStore } from '@/stores/floor-plan-store'
+import { useImpersonationStore } from '@/stores/impersonation-store'
 
 // App-owned localStorage keys. Never include Clerk's keys here.
 const APP_STORAGE_KEYS = [
@@ -34,12 +35,18 @@ export async function resetClientSession(queryClient: QueryClient): Promise<void
   useScheduleStore.getState().reset()
   useScheduleTemplateStore.getState().reset()
   useFloorPlanStore.getState().reset()
+  useImpersonationStore.getState().clearImpersonation()
 
   // Purge app-owned persisted localStorage keys
   if (typeof localStorage !== 'undefined') {
     APP_STORAGE_KEYS.forEach((key) => {
       try { localStorage.removeItem(key) } catch {}
     })
+  }
+
+  // Clear impersonation sessionStorage (separate from localStorage above)
+  if (typeof sessionStorage !== 'undefined') {
+    try { sessionStorage.removeItem('impersonation-storage') } catch {}
   }
 
   // Clear the location cookie so SSR doesn't read a stale location
