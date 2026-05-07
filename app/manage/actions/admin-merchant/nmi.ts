@@ -14,10 +14,10 @@ import { revalidatePath } from 'next/cache'
 const NMI_API_URL = process.env.NMI_API_URL || 'https://sandbox.nmi.com/api'
 const NMI_PARTNER_API_KEY = process.env.NMI_PARTNER_API_KEY
 
-// Where HQ admins finish onboarding the merchant in NMI's partner portal.
-// Surfaced back to the UI so the "Open NMI Partner Portal" button stays in sync
-// with whatever URL was used at create time, even if the env-default changes.
-export const NMI_PARTNER_PORTAL_URL =
+// 'use server' files cannot export non-async values, so this stays module-local.
+// The default URL also lives in the OnlineStoreTab fallback; persisted records
+// carry their own copy in `merchants.public_metadata.nmi.partnerPortalUrl`.
+const NMI_PARTNER_PORTAL_URL =
   process.env.NMI_PARTNER_PORTAL_URL ||
   'https://mtech.transactiongateway.com/partners/accounts?tid=0d06b140eb69b1d4ac8a02efe71ceab0'
 

@@ -451,7 +451,11 @@ function TransactionsPageInner() {
             : 'created_at'
     const normalizedSortDirection: TransactionSortDirection = sortDirection === 'asc' ? 'asc' : 'desc'
 
-    // Parse all filter params from URL
+    // Parse all filter params from URL.
+    // Memo deps must be the URL string, not the searchParams object itself —
+    // useSearchParams() returns a new instance every render, which would
+    // invalidate this memo and cause downstream React Query keys to churn.
+    const searchParamsKey = searchParams.toString()
     const filters: PlatformTransactionFilters = useMemo(() => ({
         search: searchParams.get('search') ?? undefined,
         merchantIds: parseList(searchParams.get('merchants')).length > 0 ? parseList(searchParams.get('merchants')) : undefined,
@@ -467,7 +471,8 @@ function TransactionsPageInner() {
         dateTo: searchParams.get('dateTo') ? `${searchParams.get('dateTo')}T23:59:59` : undefined,
         sortBy: normalizedSortBy,
         sortDir: normalizedSortDirection,
-    }), [searchParams])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }), [searchParamsKey, normalizedSortBy, normalizedSortDirection])
 
     // Search state â€” local, communicated via URL
     const [searchValue, setSearchValue] = useState(searchParams.get('search') ?? '')

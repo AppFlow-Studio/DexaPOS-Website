@@ -16,6 +16,7 @@ import { KpiStrip, type KpiCell } from './KpiStrip'
 import { LuqraTransactionsTable } from './LuqraTransactionsTable'
 import { LuqraDepositsTable } from './LuqraDepositsTable'
 import { LuqraBatchesTable } from './LuqraBatchesTable'
+import { MerchantPaymentsTab } from './PaymentsTable'
 
 function formatCurrency(amount: number): string {
     return amount.toLocaleString('en-US', {
@@ -111,6 +112,10 @@ export function SettlementsSection({ merchantId }: { merchantId: string }) {
             .filter((r) => !!r.luqra_mid)
             .map((r) => ({ id: r.id, name: r.name }))
     }, [midsResult])
+    const allLocations = useMemo(() => {
+        const rows = midsResult?.success ? midsResult.data : []
+        return rows.map((r) => ({ id: r.id, name: r.name }))
+    }, [midsResult])
 
     return (
         <div className="space-y-5">
@@ -124,6 +129,7 @@ export function SettlementsSection({ merchantId }: { merchantId: string }) {
             <Tabs defaultValue="ours">
                 <TabsList>
                     <TabsTrigger value="ours">Our batches</TabsTrigger>
+                    <TabsTrigger value="payments">Payments</TabsTrigger>
                     <TabsTrigger value="luqra">Luqra transactions</TabsTrigger>
                     <TabsTrigger value="batches">Luqra batches</TabsTrigger>
                     <TabsTrigger value="deposits">Deposits</TabsTrigger>
@@ -136,6 +142,10 @@ export function SettlementsSection({ merchantId }: { merchantId: string }) {
                             <BatchCardPayments merchantId={merchantId} batchId={batch.batch_id} />
                         )}
                     />
+                </TabsContent>
+
+                <TabsContent value="payments" className="pt-4">
+                    <MerchantPaymentsTab merchantId={merchantId} locations={allLocations} />
                 </TabsContent>
 
                 <TabsContent value="luqra" className="pt-4">
