@@ -23,7 +23,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { LocationAssignment, EmploymentType } from "@/types/staff";
-import { RolesModel } from "@/types/db-modles";
 import { cn } from "@/lib/utils";
 import {
   MapPin,
@@ -45,7 +44,6 @@ import {
 } from "@/app/dashboard/hooks/useStaff";
 import { Star } from "lucide-react";
 import { toast } from "sonner";
-import { GetMerchantRoles } from "@/app/dashboard/actions/staff-invite";
 
 interface LocationAssignmentSheetProps {
   open: boolean;
@@ -72,10 +70,7 @@ export function LocationAssignmentSheet({
   const reactivateStaff = useReactivateStaff();
   const setPrimary = useSetPrimaryLocation();
 
-  // Form state
-  const [editedRole, setEditedRole] = React.useState<string>(
-    assignment.role_code
-  );
+  // Form state — role is fixed at the org/merchant level and not editable here.
   const [editedEmploymentType, setEditedEmploymentType] =
     React.useState<EmploymentType | null>(
       assignment.employment_type as EmploymentType | null
@@ -86,27 +81,9 @@ export function LocationAssignmentSheet({
   const [editedIsActive, setEditedIsActive] = React.useState<boolean>(
     assignment.is_active
   );
-  const [roles, setRoles] = React.useState<RolesModel[]>([]);
-  const [isLoadingRoles, setIsLoadingRoles] = React.useState(false);
   const [hasChanges, setHasChanges] = React.useState(false);
 
-  // Load roles when sheet opens
   React.useEffect(() => {
-    if (open) {
-      setIsLoadingRoles(true);
-      GetMerchantRoles()
-        .then((rolesData) => {
-          setRoles(rolesData);
-        })
-        .finally(() => {
-          setIsLoadingRoles(false);
-        });
-    }
-  }, [open]);
-
-  // Reset state when assignment changes
-  React.useEffect(() => {
-    setEditedRole(assignment.role_code);
     setEditedEmploymentType(
       assignment.employment_type as EmploymentType | null
     );
@@ -115,9 +92,7 @@ export function LocationAssignmentSheet({
     setHasChanges(false);
   }, [assignment]);
 
-  // Track changes
   React.useEffect(() => {
-    const roleChanged = editedRole !== assignment.role_code;
     const employmentChanged =
       editedEmploymentType !== assignment.employment_type;
     const rateChanged =
@@ -125,16 +100,8 @@ export function LocationAssignmentSheet({
       assignment.hourly_rate;
     const statusChanged = editedIsActive !== assignment.is_active;
 
-    setHasChanges(
-      roleChanged || employmentChanged || rateChanged || statusChanged
-    );
-  }, [
-    editedRole,
-    editedEmploymentType,
-    editedHourlyRate,
-    editedIsActive,
-    assignment,
-  ]);
+    setHasChanges(employmentChanged || rateChanged || statusChanged);
+  }, [editedEmploymentType, editedHourlyRate, editedIsActive, assignment]);
 
   const handleResetPIN = () => {
     resetPIN.mutate({
@@ -146,9 +113,6 @@ export function LocationAssignmentSheet({
   const handleSaveChanges = async () => {
     const updates: any = {};
 
-    if (editedRole !== assignment.role_code) {
-      updates.role_code = editedRole;
-    }
     if (editedEmploymentType !== assignment.employment_type) {
       updates.employment_type = editedEmploymentType;
     }
@@ -186,16 +150,12 @@ export function LocationAssignmentSheet({
       }
     }
 
-    // Update other fields if any
     if (Object.keys(updates).length > 0) {
-      const selectedRole = roles.find((r) => r.code === editedRole);
-
       updateAssignment.mutate(
         {
           memberId: memberId,
           locationId: assignment.location_id,
           updates,
-          roleName: selectedRole?.name,
         },
         {
           onSuccess: () => {
@@ -211,8 +171,6 @@ export function LocationAssignmentSheet({
   };
 
   const handleCancel = () => {
-    // Reset to original values
-    setEditedRole(assignment.role_code);
     setEditedEmploymentType(
       assignment.employment_type as EmploymentType | null
     );
@@ -236,8 +194,7 @@ export function LocationAssignmentSheet({
     reactivateStaff.isPending ||
     setPrimary.isPending;
 
-  // Filter roles to only show those at or below current user's level
-  const availableRoles = roles.filter((r) => r.level <= currentUserRoleLevel);
+  void currentUserRoleLevel;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -301,35 +258,15 @@ export function LocationAssignmentSheet({
 
           <Separator />
 
-          {/* Role Selection */}
+          {/* Role (read-only — set at the org level) */}
           <div className="space-y-2">
-            <Label className="text-sm font-medium">Role at this Location</Label>
-            {isLoadingRoles ? (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Loading roles...
-              </div>
-            ) : (
-              <Select value={editedRole} onValueChange={setEditedRole}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableRoles.map((role) => (
-                    <SelectItem key={role.code} value={role.code}>
-                      <div className="flex items-center gap-2">
-                        <span>{role.name}</span>
-                        <Badge variant="outline" className="text-xs">
-                          {role.code.split(".").pop()}
-                        </Badge>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
+            <Label className="text-sm font-medium">Role</Label>
+            <Badge variant="outline" className="text-sm">
+              {assignment.role_code.split(".").pop()}
+            </Badge>
             <p className="text-xs text-muted-foreground">
-              This role applies only to this location
+              A user has one role across all their locations. To change it, edit
+              the staff member's role from the team page.
             </p>
           </div>
 

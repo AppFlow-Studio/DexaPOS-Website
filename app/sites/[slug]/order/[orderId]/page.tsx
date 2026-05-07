@@ -59,6 +59,18 @@ export default async function OrderTrackingRoute({ params }: PageProps) {
           storeName={site?.title || location.name}
           logoUrl={site?.logo_url ?? undefined}
           storePhone={location.phone ?? undefined}
+          storeAddress={[
+            location.address_line1,
+            location.city,
+            location.state,
+            location.postal_code,
+          ]
+            .filter(Boolean)
+            .join(", ")}
+          storeLat={(location as { latitude?: number | null }).latitude ?? null}
+          storeLng={(location as { longitude?: number | null }).longitude ?? null}
+          storeHours={(location as { business_hours?: unknown }).business_hours ?? null}
+          storeTimezone={(location as { timezone?: string | null }).timezone ?? null}
           taxRate={taxRate}
         />
       </StorefrontRoot>

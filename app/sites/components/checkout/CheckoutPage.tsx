@@ -118,6 +118,8 @@ export function CheckoutPage({
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [emailOptIn, setEmailOptIn] = useState(true);
+  const [smsOptIn, setSmsOptIn] = useState(true);
 
   // Order type
   const pickupEnabled = config?.pickupEnabled ?? true;
@@ -438,6 +440,16 @@ export function CheckoutPage({
       })),
     }));
 
+    // Persist transactional notification opt-ins to the session so the
+    // notification helper picks them up when the order row is created.
+    if (sessionToken) {
+      const { updateSession } = await import("@/app/sites/session-actions");
+      await updateSession(sessionToken, {
+        customerEmailOptIn: emailOptIn,
+        customerSmsOptIn: smsOptIn,
+      }).catch(() => {});
+    }
+
     // Step 2: Call create-online-order edge function with the NMI payment token
     try {
       const res = await fetch(
@@ -483,6 +495,10 @@ export function CheckoutPage({
         });
         if (result.order_id) {
           useSession.getState().setActiveOrderId(result.order_id);
+          // Fire transactional receipt email + confirmation SMS.
+          import("@/app/sites/notification-actions")
+            .then(({ notifyOrderPlaced }) => notifyOrderPlaced(result.order_id))
+            .catch((err) => console.error("[checkout] notifyOrderPlaced:", err));
         }
         // Save delivery address if requested
         if (saveNewAddress && isAuthenticated && orderType === "delivery" && selectedAddressId === "new" && newAddress.street) {
@@ -686,10 +702,14 @@ export function CheckoutPage({
               lastName={lastName}
               email={email}
               phone={phone}
+              emailOptIn={emailOptIn}
+              smsOptIn={smsOptIn}
               onFirstNameChange={setFirstName}
               onLastNameChange={setLastName}
               onEmailChange={setEmail}
               onPhoneChange={setPhone}
+              onEmailOptInChange={setEmailOptIn}
+              onSmsOptInChange={setSmsOptIn}
               onSignInClick={() => { setAuthMode("signin"); setShowAuth(true); }}
               onSignUpClick={() => { setAuthMode("signup"); setShowAuth(true); }}
             />
