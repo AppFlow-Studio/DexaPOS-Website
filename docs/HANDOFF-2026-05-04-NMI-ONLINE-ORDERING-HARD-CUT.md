@@ -581,3 +581,251 @@ Still to finish:
 Not ready to call fully done yet because:
 - scheduled reconciliation is still pending
 - real sandbox payment verification still needs to be run end-to-end
+
+## Cancel / Void Status
+Current code status:
+- implemented in `supabase/functions/cancel-online-order/index.ts`
+- customer or timeout cancellation is supported only while the order is still `pending`
+- card payments on NMI follow this branch:
+  - not settled: NMI `void`
+  - settled: NMI `refund`
+- local persistence is updated through:
+  - `apply_refund_to_payment`
+  - `orders.status`
+  - `orders.payment_status`
+  - `orders.cancelled_at`
+  - `orders.voided_at` when the reversal is a void
+- storefront caller already exists:
+  - `app/sites/order-actions.ts`
+
+What still needs to happen:
+- run a real cancel test on a freshly placed pending online order
+- confirm the NMI dashboard shows a void for unsettled payments
+- confirm Dexa order/payment rows move to the expected state
+
+Conclusion:
+- this is not a greenfield implementation anymore
+- it is a runtime validation task unless the first real cancel test exposes a defect
+
+## Next NMI Workstream: SaaS Subscription Billing
+This is the next planned NMI-related workstream after online ordering.
+
+Business goal:
+- bill merchants monthly for Dexa SaaS using:
+  - base monthly location fee
+  - per-extra-station fee
+  - 4% card surcharge when billing by card
+- allow ACH or NMI customer-vault card token as the payment method
+
+Status:
+- not implemented
+- schema is not in place
+- should live in separate billing tables, not `public.invoices`
+
+### Scope
+New tables:
+- `subscription_plans`
+- `merchant_subscriptions`
+- `subscription_invoices`
+- `subscription_invoice_sequences`
+
+New edge functions:
+- `billing-generate-monthly-invoices`
+- `billing-charge-subscription`
+- `billing-mark-paid`
+- `billing-handle-failure`
+- `billing-suspend-overdue`
+
+New surfaces:
+- merchant UI: `/dashboard/billing`
+- HQ UI: `/hq/billing`
+
+### Reuse from current NMI work
+Reuse points from the online-ordering NMI implementation:
+- `supabase/functions/_shared/nmi.ts`
+- location/device-based NMI auth patterns where relevant
+- idempotency and payment result persistence patterns from `create-online-order`
+
+Billing-specific existing dependency:
+- `merchant_billing_profiles`
+- expected to hold the merchant billing method and the NMI vault token / ACH selection
+
+### Required business lock-ins before schema work
+Temur needs to lock these before implementation starts:
+- base monthly price per location
+- per-extra-station price
+- card surcharge percentage
+- ACH discount rule, if any
+- trial length
+- carrier-tier pricing rules
+
+### Recommended implementation order
+Phase 1: schema + RPCs + HQ manual subscription creation
+- create the 4 billing tables
+- add RLS
+- add helper RPCs for:
+  - create subscription
+  - update plan
+  - fetch current subscription
+  - fetch merchant invoices
+- do not build automatic charging yet
+
+Phase 2: invoice generation + manual run path
+- implement invoice-number sequencing
+- snapshot active station count per location
+- generate immutable monthly invoice rows
+- add manual HQ trigger first before cron
+
+Phase 3: charging through NMI
+- charge using the merchant billing profile payment method
+- card path:
+  - use NMI vault token
+  - apply surcharge
+- ACH path:
+  - no card surcharge
+- use idempotent invoice charge attempts
+
+Phase 4: failure lifecycle
+- mark invoice `failed`
+- increment attempt counters
+- retry on configured retry windows
+- transition subscription:
+  - `active` -> `past_due` -> `suspended`
+- restore after successful repayment
+
+Phase 5: merchant billing UI
+- current subscription state
+- current plan
+- current station count snapshot
+- invoice history
+- paid / failed / past-due status
+
+Phase 6: HQ billing UI
+- create and edit subscriptions
+- manually generate invoices
+- manually retry charge
+- manually mark paid
+- manually suspend / restore / cancel
+
+### Pricing and invoice math
+Station count source of truth at billing time:
+
+```sql
+select count(*)
+from public.stations
+where location_id = $1
+  and is_active = true
+  and deactivated_at is null;
+```
+
+Line-item math:
+
+```text
+subtotal = base_price + max(0, station_count - included_stations) * per_extra_station_price
+card_surcharge = (subtotal * surcharge_pct / 100) if billing_method = 'card' else 0
+total_amount = subtotal + card_surcharge
+```
+
+Historical rule:
+- invoice rows are immutable
+- station count is snapshotted at invoice-generation time
+- historical periods are not recomputed later
+
+### Cron plan
+- monthly invoice generation: 1st of month, 02:00 ET
+- past-due retry pass 1: 3rd of month, 04:00 ET
+- past-due retry pass 2: 7th of month, 04:00 ET
+- suspension sweep: 14th of month, 03:00 ET
+
+### Audit chain
+Every state transition should write `audit_logs` rows with `action_category = 'billing'`.
+
+Required actions:
+- `subscription_created`
+- `subscription_plan_changed`
+- `invoice_generated`
+- `invoice_charged`
+- `invoice_payment_failed`
+- `subscription_suspended`
+- `subscription_restored`
+- `subscription_canceled`
+
+### Acceptance targets
+- invoice generation is correct for 1, 2, and 3 stations
+- surcharge math is correct:
+  - `(base + station_overage) * 1.04 = total`
+- NMI test-mode subscription charge succeeds end-to-end
+- `past_due -> retry -> suspended` lifecycle works
+- successful payment after suspension restores service
+- merchant can see invoice history
+- HQ has manual override and manual charge controls
+
+### Practical starting point
+Start with:
+1. finalize pricing decisions with Temur
+2. write schema migration for the 4 new billing tables
+3. add HQ-only manual subscription creation
+4. add manual invoice generation before any cron or automatic charging
+
+### Implemented foundation in this pass
+Files added:
+- `supabase/migrations/20260507150000_subscription_billing_phase1.sql`
+- `app/manage/actions/subscription-billing.ts`
+- `supabase/functions/billing-generate-monthly-invoices/index.ts`
+- `supabase/functions/billing-charge-subscription/index.ts`
+- `supabase/functions/billing-mark-paid/index.ts`
+- `supabase/functions/billing-handle-failure/index.ts`
+- `supabase/functions/billing-suspend-overdue/index.ts`
+
+What is implemented now:
+- new billing tables:
+  - `subscription_plans`
+  - `merchant_subscriptions`
+  - `subscription_invoices`
+  - `subscription_invoice_sequences`
+- RLS and HQ/manual management policies
+- placeholder plan seed data:
+  - `STANDARD`
+  - `PRO`
+  - `FRANCHISE`
+- pricing math RPC:
+  - `calculate_subscription_amounts(...)`
+- station snapshot RPC:
+  - `get_active_station_count(...)`
+- HQ/manual RPCs:
+  - `list_subscription_plans()`
+  - `upsert_subscription_plan(...)`
+  - `upsert_merchant_subscription(...)`
+  - `list_merchant_subscriptions(...)`
+  - `list_subscription_invoices(...)`
+  - `generate_subscription_invoice_number(...)`
+  - `generate_subscription_invoice(...)`
+- billing audit helper:
+  - `log_subscription_billing_event(...)`
+- HQ server actions:
+  - fetch plans
+  - fetch merchant subscriptions
+  - upsert merchant subscription
+  - generate invoice manually
+  - list merchant invoices
+- edge-function foundation:
+  - monthly/manual invoice generation
+  - manual mark-paid
+  - failure handler -> `past_due`
+  - overdue suspension sweep
+
+What is intentionally still not implemented:
+- actual NMI subscription charge from `merchant_billing_profiles.card_token`
+- ACH debit execution
+- merchant billing UI
+- HQ billing UI
+- cron wiring
+
+Current pricing placeholders:
+- `STANDARD`: $50.00 base, 1 included station, $79 extra station, 4% card surcharge
+- `PRO`: $99.00 base, 2 included stations, $79 extra station, 4% card surcharge
+- `FRANCHISE`: $149.00 base, 3 included stations, $79 extra station, 4% card surcharge
+
+Important implementation decision:
+- placeholders are in `subscription_plans`
+- final pricing should be changed by updating plan rows, not by rewriting invoice math
