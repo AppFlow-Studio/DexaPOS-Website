@@ -4,6 +4,7 @@ import { sendOrderStatusNotifications, type OrderEvent } from "@/lib/messaging/o
 const VALID_EVENTS: OrderEvent[] = [
   "placed",
   "accepted",
+  "sent_to_kitchen",
   "preparing",
   "ready",
   "completed",

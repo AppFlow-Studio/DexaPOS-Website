@@ -1,13 +1,5 @@
--- Auto-fire customer notifications when an order_status_history row is inserted
--- for a website-originated online order. Uses pg_net to POST to the Next.js
--- internal route, which then dispatches Resend/Telnyx through the shared helper.
---
--- Required GUCs (set with `ALTER DATABASE ... SET app.<key> = '...'`):
---   app.notify_url    — e.g. https://dexapos.com/api/internal/order-status-notify
---   app.notify_secret — must match INTERNAL_NOTIFICATION_SECRET in Next.js env
--- If either is unset the trigger is a no-op.
-
-CREATE EXTENSION IF NOT EXISTS pg_net;
+-- Extend the order-status notification trigger to also forward sent_to_kitchen,
+-- so customers get a "your order is in the kitchen" update.
 
 CREATE OR REPLACE FUNCTION public.notify_order_status_change()
 RETURNS TRIGGER
@@ -25,7 +17,6 @@ BEGIN
     RETURN NEW;
   END IF;
 
-  -- Only fire for orders that have a corresponding online_orders row from the website.
   SELECT EXISTS(
     SELECT 1 FROM public.online_orders
     WHERE order_id = NEW.order_id AND provider = 'website'
@@ -62,10 +53,3 @@ BEGIN
   RETURN NEW;
 END;
 $$;
-
-DROP TRIGGER IF EXISTS trg_notify_order_status_change ON public.order_status_history;
-
-CREATE TRIGGER trg_notify_order_status_change
-  AFTER INSERT ON public.order_status_history
-  FOR EACH ROW
-  EXECUTE FUNCTION public.notify_order_status_change();

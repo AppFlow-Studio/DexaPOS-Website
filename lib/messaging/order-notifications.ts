@@ -8,6 +8,7 @@ import { renderReceiptHtml } from "@/lib/messaging/receipt-template";
 export type OrderEvent =
   | "placed"
   | "accepted"
+  | "sent_to_kitchen"
   | "preparing"
   | "ready"
   | "completed"
@@ -26,8 +27,8 @@ interface NotificationPrefs {
 const DEFAULT_PREFS: NotificationPrefs = {
   email_on_order_placed: true,
   sms_on_order_placed: true,
-  email_on_status: ["ready", "cancelled"],
-  sms_on_status: ["accepted", "ready", "cancelled"],
+  email_on_status: ["ready", "completed", "cancelled", "declined"],
+  sms_on_status: ["accepted", "preparing", "ready", "completed", "cancelled", "declined"],
   admin_test_email: null,
   admin_test_phone: null,
 };
@@ -222,12 +223,19 @@ function statusCopy(event: OrderEvent, ctx: OrderContext): { subject: string; he
         body: `${store} has accepted your order. We're firing it up now.`,
         sms: `${store}: Order ${num} accepted — kitchen is on it!`,
       };
+    case "sent_to_kitchen":
+      return {
+        subject: `Order ${num} is in the kitchen — ${store}`,
+        headline: "Sent to the kitchen",
+        body: `${store} just sent your order to the kitchen.`,
+        sms: `${store}: Order ${num} is in the kitchen.`,
+      };
     case "preparing":
       return {
         subject: `Order ${num} is being prepared — ${store}`,
         headline: "Cooking now",
         body: `${store} has started preparing your order.`,
-        sms: `${store}: Order ${num} is being prepared.`,
+        sms: `${store}: Order ${num} is being cooked!`,
       };
     case "ready":
       return {
