@@ -481,19 +481,19 @@ export async function AddCategoryToMenu(
 
   const supabase = createServerSupabaseClient();
 
-  const { data, error } = await supabase.from("menu_categories").insert({
-    menu_id: menuId,
-    category_id: categoryId,
-    merchant_id: merchantId,
-    display_order: displayOrder ?? 0,
-    custom_title: customTitle || null,
-  });
-  // const { data, error } = await supabase.rpc('add_category_to_menu', {
-  //     p_menu_id: menuId,
-  //     p_category_id: categoryId,
-  //     p_display_order: displayOrder ?? 0,
-  //     p_custom_title: customTitle || null
-  // })
+  const { data, error } = await supabase
+    .from("menu_categories")
+    .upsert(
+      {
+        menu_id: menuId,
+        category_id: categoryId,
+        merchant_id: merchantId,
+        display_order: displayOrder ?? 0,
+        custom_title: customTitle || null,
+        is_active: true,
+      },
+      { onConflict: "menu_id,category_id" },
+    );
 
   if (error) {
     console.error("Error adding category to menu:", error);

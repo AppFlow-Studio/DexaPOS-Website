@@ -28,7 +28,6 @@ import {
 } from "../../order-actions";
 import type { AppliedPromo } from "./PromoCodeSection";
 import { isStoreOpenNow } from "../StoreInfoBar";
-import { sendOrderConfirmationEmail } from "../../recovery-actions";
 import { getSavedAddresses, addSavedAddress, type SavedAddress } from "../../customer-actions";
 import type { Site, OnlineOrderingConfig } from "@/types/site";
 
@@ -518,11 +517,6 @@ export function CheckoutPage({
         }
         setStep("confirmation");
         clearCart();
-
-        // Fire-and-forget order confirmation email
-        if (result.order_id && email) {
-          sendOrderConfirmationEmail(result.order_id, email).catch(() => {});
-        }
       } else if (result.success && result.requires_redirect && result.payment_url) {
         // Hosted redirect fallback is not expected in the NMI embedded flow, but keep the branch safe.
         window.location.href = result.payment_url;

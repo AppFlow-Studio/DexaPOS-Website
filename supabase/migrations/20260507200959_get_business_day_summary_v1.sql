@@ -1,17 +1,3 @@
--- =====================================================================
--- Migration: get_business_day_summary_v1 — business-day rollup
--- =====================================================================
--- Returns every settlement_batches row whose created_at falls within
--- the business-day window (resolved via get_business_day_bounds), each
--- expanded via get_batch_summary_v1, plus rolled-up totals across the
--- whole day.
---
--- Useful for the "Print Today's Summary" action — multiple batches can
--- close in a single business day.
---
--- RLS: location must be in caller scope; per-batch RPC re-checks merchant.
--- =====================================================================
-
 CREATE OR REPLACE FUNCTION public.get_business_day_summary_v1(
   p_location_id uuid,
   p_business_date date DEFAULT NULL

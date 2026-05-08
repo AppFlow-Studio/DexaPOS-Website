@@ -1,32 +1,7 @@
--- =====================================================================
--- Migration: get_business_day_activity_summary_v1 — closing/Z-report
--- =====================================================================
--- Aggregates order_payments by business-day window, NOT by
--- settlement_batch_id. This is the cashier's end-of-day closing report
--- that has to work *before* batchout has been executed.
---
--- Phase 1 (get_business_day_summary_v1) only counted settled batches —
--- if no batchout had run, every total returned $0.00 even when the
--- terminal had captured hundreds of dollars of sales. This RPC fixes
--- that by reading directly from order_payments.
---
--- Window resolved via existing get_business_day_bounds(location, date).
--- Optional terminal filter scopes to one register's till.
---
--- entry_mode is derived inline from processor_response/terminal_response
--- JSONB (matches pci_safe_order_payments view; LEFT JOINing the view
--- forces a full scan).
---
--- Refund/void discriminator (project_voided_payment_refunded_amount):
---   * status IN ('captured','partially_refunded','refunded'): real sale
---   * status='void' AND is_returned=true: refund-via-void
---   * status='void' AND is_returned=false: pure cancellation (voids)
---
--- Returns the same JSONB shape as get_batch_summary_v1 plus an
--- `unsettled` block and a `batches` array listing any settlement_batches
--- that overlap the window — `[]` while the batch is open.
--- =====================================================================
-
+-- entry_mode for Castles + Dejavoo lives nested under
+-- processor_response.castles_transaction.entryMode (or .dejavoo_transaction.entryMode),
+-- not at the top level of processor_response. The original COALESCE only checked
+-- top-level keys, so every Castles payment fell to 'other'. Extend the chain.
 CREATE OR REPLACE FUNCTION public.get_business_day_activity_summary_v1(
   p_location_id   uuid,
   p_business_date date  DEFAULT NULL,
@@ -52,8 +27,7 @@ BEGIN
     RAISE EXCEPTION 'Access denied: location not in user scope';
   END IF;
 
-  SELECT * INTO v_bounds
-    FROM get_business_day_bounds(p_location_id, p_business_date);
+  SELECT * INTO v_bounds FROM get_business_day_bounds(p_location_id, p_business_date);
 
   IF p_terminal_id IS NOT NULL THEN
     SELECT pt.terminal_type::text, pt.terminal_name, pt.register_id
@@ -169,18 +143,11 @@ BEGIN
   INTO v_aggs, v_card_brands, v_entry_modes, v_methods
   FROM src;
 
-  -- Settlement batches that opened in this window (zero or more).
-  -- "OPEN BATCH" state is signalled by an empty array.
   SELECT COALESCE(jsonb_agg(jsonb_build_object(
-    'id',                sb.id,
-    'castles_batch_num', sb.castles_batch_num,
-    'status',            sb.status,
-    'opened_at',         sb.opened_at,
-    'closed_at',         sb.closed_at,
-    'settlement_date',   sb.settlement_date,
-    'funded_date',       sb.funded_date,
-    'net_deposit',       sb.net_deposit,
-    'transaction_count', sb.transaction_count
+    'id', sb.id, 'castles_batch_num', sb.castles_batch_num, 'status', sb.status,
+    'opened_at', sb.opened_at, 'closed_at', sb.closed_at,
+    'settlement_date', sb.settlement_date, 'funded_date', sb.funded_date,
+    'net_deposit', sb.net_deposit, 'transaction_count', sb.transaction_count
   ) ORDER BY sb.created_at), '[]'::jsonb)
     INTO v_batches
     FROM settlement_batches sb
@@ -191,16 +158,14 @@ BEGIN
 
   RETURN jsonb_build_object(
     'header', jsonb_build_object(
-      'kind',                'closing_report',
-      'business_date',       COALESCE(p_business_date, (v_bounds.start_ts AT TIME ZONE 'UTC')::date),
+      'kind','closing_report',
+      'business_date', COALESCE(p_business_date, (v_bounds.start_ts AT TIME ZONE 'UTC')::date),
       'business_date_start', v_bounds.start_ts,
       'business_date_end',   v_bounds.end_ts,
-      'terminal_id',         p_terminal_id,
-      'terminal_name',       v_terminal_name,
-      'register_id',         v_register_id,
-      'processor',           v_terminal_type,
-      'status',              CASE WHEN v_batches = '[]'::jsonb THEN 'OPEN' ELSE 'CLOSED' END,
-      'transaction_count',   COALESCE((v_aggs->>'transaction_count')::int, 0)
+      'terminal_id', p_terminal_id, 'terminal_name', v_terminal_name,
+      'register_id', v_register_id, 'processor', v_terminal_type,
+      'status', CASE WHEN v_batches = '[]'::jsonb THEN 'OPEN' ELSE 'CLOSED' END,
+      'transaction_count', COALESCE((v_aggs->>'transaction_count')::int, 0)
     ),
     'sales', jsonb_build_object(
       'credit_total', COALESCE((v_methods->'card'->>'amount')::numeric, 0),
@@ -228,18 +193,16 @@ BEGIN
       'voids',     COALESCE((v_aggs->>'voids_count')::int, 0)
     ),
     'adjustments', jsonb_build_object(
-      'voids_count',           COALESCE((v_aggs->>'voids_count')::int, 0),
-      'voids_amount',          COALESCE((v_aggs->>'voids_amount')::numeric, 0),
-      'tip_total',             COALESCE((v_aggs->>'tip_total')::numeric, 0),
-      'refunded_tip_total',    COALESCE((v_aggs->>'refunded_tip_total')::numeric, 0),
+      'voids_count', COALESCE((v_aggs->>'voids_count')::int, 0),
+      'voids_amount', COALESCE((v_aggs->>'voids_amount')::numeric, 0),
+      'tip_total',  COALESCE((v_aggs->>'tip_total')::numeric, 0),
+      'refunded_tip_total', COALESCE((v_aggs->>'refunded_tip_total')::numeric, 0),
       'tip_adjustments_count', COALESCE((v_aggs->>'tip_adjustments_count')::int, 0)
     ),
     'fees', jsonb_build_object(
-      'dual_pricing_fee',          COALESCE((v_aggs->>'dual_pricing_fee')::numeric, 0),
+      'dual_pricing_fee', COALESCE((v_aggs->>'dual_pricing_fee')::numeric, 0),
       'refunded_dual_pricing_fee', COALESCE((v_aggs->>'refunded_dual_pricing_fee')::numeric, 0),
-      'processor_fees',            null,
-      'interchange_fees',          null,
-      'assessment_fees',           null
+      'processor_fees', null, 'interchange_fees', null, 'assessment_fees', null
     ),
     'unsettled', jsonb_build_object(
       'count',  COALESCE((v_aggs->>'unsettled_count')::int, 0),
@@ -249,8 +212,3 @@ BEGIN
   );
 END;
 $function$;
-
-GRANT EXECUTE ON FUNCTION public.get_business_day_activity_summary_v1(uuid, date, uuid) TO authenticated;
-
-COMMENT ON FUNCTION public.get_business_day_activity_summary_v1 IS
-  'Closing/Z-report aggregator. Reads order_payments by captured_at in business-day window (independent of settlement_batch_id), so the cashier can print before batchout. Optional terminal_id scopes to a single register.';
