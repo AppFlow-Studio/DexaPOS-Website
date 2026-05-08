@@ -16,6 +16,10 @@ import {
   Hourglass,
   XCircle,
   CalendarClock,
+  MapPin,
+  Navigation,
+  Store as StoreIcon,
+  Clock4,
 } from "lucide-react";
 import { useStorefrontPath } from "../lib/use-storefront-path";
 import { getOrderTracking, cancelOnlineOrder, type OrderTrackingData } from "../order-actions";
@@ -30,7 +34,62 @@ interface OrderTrackingPageProps {
   storeName: string;
   logoUrl?: string;
   storePhone?: string | null;
+  storeAddress?: string | null;
+  storeLat?: number | null;
+  storeLng?: number | null;
+  storeHours?: unknown;
+  storeTimezone?: string | null;
   taxRate?: number; // decimal e.g. 0.08875 — same value used by checkout
+}
+
+interface DaySchedule {
+  enabled?: boolean;
+  from?: string;
+  to?: string;
+  is24Hours?: boolean;
+}
+type WeekHours = Partial<Record<
+  "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday",
+  DaySchedule
+>>;
+
+const DAY_KEYS: Array<keyof WeekHours> = [
+  "monday",
+  "tuesday",
+  "wednesday",
+  "thursday",
+  "friday",
+  "saturday",
+  "sunday",
+];
+
+function todayKey(timezone: string | null): keyof WeekHours {
+  const now = new Date();
+  const dayName = now
+    .toLocaleDateString("en-US", { weekday: "long", timeZone: timezone ?? undefined })
+    .toLowerCase();
+  return (DAY_KEYS.find((d) => d === dayName) ?? "monday") as keyof WeekHours;
+}
+
+function formatHourLabel(time: string | undefined): string {
+  if (!time) return "";
+  const [hStr, mStr] = time.split(":");
+  const h = Number(hStr);
+  const m = Number(mStr ?? 0);
+  if (Number.isNaN(h)) return time;
+  const period = h >= 12 ? "PM" : "AM";
+  const hour12 = h % 12 === 0 ? 12 : h % 12;
+  return m === 0 ? `${hour12} ${period}` : `${hour12}:${String(m).padStart(2, "0")} ${period}`;
+}
+
+function todayHoursLabel(hours: unknown, timezone: string | null): string | null {
+  if (!hours || typeof hours !== "object") return null;
+  const week = hours as WeekHours;
+  const day = week[todayKey(timezone)];
+  if (!day || !day.enabled) return "Closed today";
+  if (day.is24Hours) return "Open 24 hours";
+  if (!day.from || !day.to) return null;
+  return `${formatHourLabel(day.from)} – ${formatHourLabel(day.to)}`;
 }
 
 const TERMINAL_STATUSES = ["completed", "cancelled", "void", "declined"];
@@ -147,8 +206,13 @@ export function OrderTrackingPage({
   orderId,
   slug,
   storeName,
-  logoUrl,
+  logoUrl: _logoUrl,
   storePhone,
+  storeAddress,
+  storeLat,
+  storeLng,
+  storeHours,
+  storeTimezone,
   taxRate = 0,
 }: OrderTrackingPageProps) {
   const { sessionToken } = useSession();
@@ -264,10 +328,20 @@ export function OrderTrackingPage({
     : effectiveRate > 0 ? Math.round(order.subtotal * effectiveRate * 100) / 100 : 0;
   const displayedTotal = order.subtotal + displayedTax + order.tip;
 
+  const hoursLabel = todayHoursLabel(storeHours, storeTimezone ?? null);
+  const directionsHref = storeLat && storeLng
+    ? `https://www.google.com/maps/dir/?api=1&destination=${storeLat},${storeLng}`
+    : storeAddress
+      ? `https://maps.google.com/?q=${encodeURIComponent(storeAddress)}`
+      : null;
+  const mapEmbedSrc = storeLat && storeLng
+    ? `https://maps.google.com/maps?q=${storeLat},${storeLng}&z=15&output=embed`
+    : storeAddress
+      ? `https://maps.google.com/maps?q=${encodeURIComponent(storeAddress)}&z=15&output=embed`
+      : null;
+
   return (
-    <div className="min-h-screen" style={{ backgroundColor: "var(--bg)" }}>
-      {/* Realtime watcher — immediately refreshes page when merchant accepts/declines.
-          'cancelled' is silent here because we show that toast directly (avoids race condition). */}
+    <div className="min-h-screen flex flex-col lg:flex-row" style={{ backgroundColor: "var(--bg)" }}>
       {!isTerminal && (
         <OrderStatusWatcher
           orderId={orderId}
@@ -275,25 +349,42 @@ export function OrderTrackingPage({
           silentStatuses={["cancelled"]}
         />
       )}
-      {/* Header */}
-      <header
-        className="sticky top-0 z-30 px-4 py-3 flex items-center justify-between"
+
+      {/* Left panel — order details (Uber Eats style sidebar) */}
+      <section
+        className="w-full lg:w-[440px] lg:min-w-[440px] lg:h-screen lg:overflow-y-auto flex flex-col"
         style={{
           backgroundColor: "var(--bg)",
-          borderBottom: "1px solid var(--border)",
+          borderRight: "1px solid var(--border)",
         }}
       >
-        <Link
-          href={storePath()}
-          className="flex items-center gap-2 text-sm font-medium"
-          style={{ color: "var(--text)" }}
+        <header
+          className="sticky top-0 z-30 px-4 py-3 flex items-center justify-between"
+          style={{
+            backgroundColor: "var(--bg)",
+            borderBottom: "1px solid var(--border)",
+          }}
         >
-          <ArrowLeft className="h-4 w-4" style={{ color: "var(--primary)" }} />
-          Back to menu
-        </Link>
-      </header>
+          <Link
+            href={storePath()}
+            className="flex items-center gap-2 text-sm font-medium"
+            style={{ color: "var(--text)" }}
+          >
+            <ArrowLeft className="h-4 w-4" style={{ color: "var(--primary)" }} />
+            Back to menu
+          </Link>
+          <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full"
+            style={{
+              backgroundColor: "color-mix(in srgb, var(--primary) 12%, var(--bg))",
+              color: "var(--primary)",
+            }}
+          >
+            <StoreIcon className="h-3 w-3" />
+            Pickup
+          </span>
+        </header>
 
-      <main className="max-w-lg mx-auto p-4 space-y-6">
+        <main className="px-4 py-4 space-y-6">
         {/* Order banner */}
         <div className="text-center space-y-2">
           <h1
@@ -689,6 +780,37 @@ export function OrderTrackingPage({
           </div>
         </div>
 
+        {/* Pickup location card */}
+        {(storeAddress || storeLat) && (
+          <div
+            className="rounded-xl overflow-hidden lg:hidden"
+            style={{
+              backgroundColor: "var(--card)",
+              border: "1px solid var(--border)",
+              borderRadius: "var(--radius)",
+            }}
+          >
+            {mapEmbedSrc && (
+              <iframe
+                title="Pickup location"
+                width="100%"
+                height="180"
+                style={{ border: 0, display: "block" }}
+                loading="lazy"
+                referrerPolicy="no-referrer-when-downgrade"
+                src={mapEmbedSrc}
+              />
+            )}
+            <StoreInfoBlock
+              storeName={storeName}
+              storeAddress={storeAddress ?? null}
+              storePhone={storePhone ?? null}
+              hoursLabel={hoursLabel}
+              directionsHref={directionsHref}
+            />
+          </div>
+        )}
+
         {/* Continue shopping + contact */}
         <div className="text-center pb-8 space-y-3">
           <Link
@@ -698,18 +820,119 @@ export function OrderTrackingPage({
           >
             Continue Shopping
           </Link>
-          {storePhone && (
-            <a
-              href={`tel:${storePhone}`}
-              className="inline-flex items-center gap-1.5 text-sm"
-              style={{ color: "var(--text-secondary)" }}
-            >
-              <Phone className="h-4 w-4" />
-              {storePhone}
-            </a>
-          )}
         </div>
-      </main>
+        </main>
+      </section>
+
+      {/* Right panel — full-bleed Google Map (desktop only) */}
+      <section
+        className="hidden lg:block flex-1 relative"
+        style={{ backgroundColor: "#e5e7eb" }}
+      >
+        {mapEmbedSrc ? (
+          <iframe
+            title="Pickup location map"
+            className="absolute inset-0 w-full h-full"
+            style={{ border: 0 }}
+            loading="lazy"
+            referrerPolicy="no-referrer-when-downgrade"
+            src={mapEmbedSrc}
+          />
+        ) : (
+          <div className="absolute inset-0 flex items-center justify-center text-sm text-gray-500">
+            Store location unavailable
+          </div>
+        )}
+
+        {/* Floating store info card overlay */}
+        <div className="absolute top-6 right-6 w-80 rounded-2xl shadow-xl overflow-hidden"
+          style={{ backgroundColor: "#ffffff", border: "1px solid var(--border)" }}
+        >
+          <StoreInfoBlock
+            storeName={storeName}
+            storeAddress={storeAddress ?? null}
+            storePhone={storePhone ?? null}
+            hoursLabel={hoursLabel}
+            directionsHref={directionsHref}
+          />
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function StoreInfoBlock({
+  storeName,
+  storeAddress,
+  storePhone,
+  hoursLabel,
+  directionsHref,
+}: {
+  storeName: string;
+  storeAddress: string | null;
+  storePhone: string | null;
+  hoursLabel: string | null;
+  directionsHref: string | null;
+}) {
+  return (
+    <div className="p-4 space-y-3">
+      <div className="flex items-start gap-3">
+        <div
+          className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"
+          style={{
+            backgroundColor: "color-mix(in srgb, var(--primary) 14%, #ffffff)",
+            color: "var(--primary)",
+          }}
+        >
+          <StoreIcon className="h-5 w-5" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-base font-semibold leading-tight" style={{ color: "#111827" }}>
+            {storeName}
+          </p>
+          <p className="text-xs mt-0.5" style={{ color: "#6B7280" }}>
+            Pickup location
+          </p>
+        </div>
+      </div>
+
+      {storeAddress && (
+        <div className="flex items-start gap-2 text-sm" style={{ color: "#374151" }}>
+          <MapPin className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: "#6B7280" }} />
+          <span className="leading-snug">{storeAddress}</span>
+        </div>
+      )}
+
+      {hoursLabel && (
+        <div className="flex items-center gap-2 text-sm" style={{ color: "#374151" }}>
+          <Clock4 className="h-4 w-4 flex-shrink-0" style={{ color: "#6B7280" }} />
+          <span>Today: {hoursLabel}</span>
+        </div>
+      )}
+
+      {storePhone && (
+        <a
+          href={`tel:${storePhone}`}
+          className="flex items-center gap-2 text-sm hover:underline"
+          style={{ color: "#374151" }}
+        >
+          <Phone className="h-4 w-4 flex-shrink-0" style={{ color: "#6B7280" }} />
+          <span>{storePhone}</span>
+        </a>
+      )}
+
+      {directionsHref && (
+        <a
+          href={directionsHref}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center justify-center gap-2 w-full mt-1 px-4 py-2.5 rounded-lg text-sm font-semibold"
+          style={{ backgroundColor: "var(--primary)", color: "#ffffff" }}
+        >
+          <Navigation className="h-4 w-4" />
+          Get directions
+        </a>
+      )}
     </div>
   );
 }

@@ -1,8 +1,8 @@
 "use server";
 
 import { headers } from "next/headers";
-import twilio from "twilio";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
+import { sendSMS as sendTelnyxSMS } from "@/lib/messaging/telnyx";
 
 const OTP_LENGTH = 6;
 const OTP_EXPIRY_MINUTES = 5;
@@ -52,7 +52,7 @@ export async function sendOtp(
 
   const { data: storeConfig } = await supabase
     .from("online_store_config")
-    .select("merchant_id, is_active")
+    .select("merchant_id, is_active, store_name")
     .eq("id", storeConfigId)
     .single();
 
@@ -61,6 +61,7 @@ export async function sendOtp(
   }
 
   const merchantId = storeConfig.merchant_id;
+  const storeName = (storeConfig as { store_name?: string }).store_name || "your order";
 
   const code = generateOtp();
   const expiresAt = new Date(
@@ -93,35 +94,24 @@ export async function sendOtp(
 
   const verificationId = verificationResult.verification_id;
 
-  // Send via Twilio
-  const accountSid = process.env.TWILIO_ACCOUNT_SID;
-  const authToken = process.env.TWILIO_AUTH_TOKEN;
-  const fromNumber = process.env.TWILIO_PHONE_NUMBER;
+  // Verification SMS = transactional → Telnyx (Twilio is reserved for marketing).
+  const body = `Your ${storeName} verification code is ${code}. It expires in ${OTP_EXPIRY_MINUTES} minutes.`;
+  const result = await sendTelnyxSMS(normalized, body);
 
-  if (!accountSid || !authToken || !fromNumber) {
-    console.error("[sendOtp] Twilio env vars missing (TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN / TWILIO_PHONE_NUMBER)");
-    // In dev, log the code to terminal instead of failing so you can test the flow.
+  if ("error" in result) {
+    console.error("[sendOtp] Telnyx error:", result.error);
     if (process.env.NODE_ENV === "development") {
       console.log(`[DEV OTP] ${normalized} → ${code}`);
       return { success: true };
     }
     await supabase.from("phone_verifications").delete().eq("id", verificationId);
-    return { success: false, error: "SMS service is not configured. Please contact support.", code: "not_configured" };
-  }
-
-  try {
-    const client = twilio(accountSid, authToken);
-    await client.messages.create({
-      body: `Your verification code is: ${code}. It expires in ${OTP_EXPIRY_MINUTES} minutes.`,
-      from: fromNumber,
-      to: normalized,
-    });
-    return { success: true };
-  } catch (err: any) {
-    console.error("[sendOtp] Twilio error:", err?.message, err?.code);
-    await supabase.from("phone_verifications").delete().eq("id", verificationId);
+    if (result.error.includes("not configured")) {
+      return { success: false, error: "SMS service is not configured. Please contact support.", code: "not_configured" };
+    }
     return { success: false, error: "Failed to send SMS. Please check your number and try again.", code: "sms_failed" };
   }
+
+  return { success: true };
 }
 
 export interface VerifyOtpResult {

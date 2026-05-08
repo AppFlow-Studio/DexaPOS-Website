@@ -5,7 +5,16 @@ const nextConfig: NextConfig = {
   /* config options here */
   turbopack: {
     root: process.cwd(),
+    resolveAlias: {
+      // Turbopack follows the exports map `import` condition and resolves
+      // `zustand/vanilla` → `./esm/vanilla.mjs` which doesn't exist in zustand 5.
+      // A `./`-prefixed path is resolved from the project root by Turbopack
+      // directly as a file path, bypassing the exports map entirely.
+      'zustand/vanilla': './node_modules/zustand/vanilla.js',
+      'zustand/vanilla/shallow': './node_modules/zustand/vanilla/shallow.js',
+    },
   },
+  transpilePackages: ["zustand"],
   serverExternalPackages: ["resend", "twilio", "telnyx"],
   eslint: {
     ignoreDuringBuilds: true,

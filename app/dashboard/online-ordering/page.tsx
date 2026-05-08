@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, Globe, Clock3, CheckCircle2, AlertTriangle, Ban, ExternalLink, Building2, Store, Palette, Truck, Plug, LayoutTemplate, LayoutGrid, Columns2, ImageOff, Check } from "lucide-react";
+import { Loader2, Globe, Clock3, CheckCircle2, AlertTriangle, Ban, ExternalLink, Building2, Store, Palette, Truck, Plug, LayoutTemplate, LayoutGrid, Columns2, ImageOff, Check, Bell } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
@@ -30,6 +30,7 @@ import { uploadStoreImage } from "@/lib/storage/actions";
 import { useAuth } from "@clerk/nextjs";
 import { cn } from "@/lib/utils";
 import { OrderOutTab } from "@/components/dashboard/orderout/OrderOutTab";
+import { NotificationsTab } from "./components/NotificationsTab";
 import { useOrderOutStatus, useOnboardOrderOut } from "./hooks/useOrderOutStatus";
 import { FONT_GOOGLE_URLS } from "@/app/sites/lib/theme-utils";
 import {
@@ -344,6 +345,10 @@ function CompletedSetupPanel({
             <Plug className="h-4 w-4" />
             OrderOut
           </TabsTrigger>
+          <TabsTrigger value="notifications" className="gap-2">
+            <Bell className="h-4 w-4" />
+            Notifications
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="store" className="space-y-6">
@@ -354,7 +359,7 @@ function CompletedSetupPanel({
                 <div>
                   <CardTitle>Store Details</CardTitle>
                   <CardDescription>
-                    Payment device, TPN/FTD keys, and tips are managed by HQ only.
+                    Payment credentials and tips are managed by HQ only.
                   </CardDescription>
                 </div>
               </div>
@@ -377,7 +382,7 @@ function CompletedSetupPanel({
                   readOnly
                 />
                 <p className="text-xs text-muted-foreground">
-                  Store URL changes are handled by HQ because they impact payment-domain whitelisting.
+                  Store URL changes are handled by HQ because they affect storefront payment configuration and reconciliation.
                 </p>
               </div>
               <div className="space-y-2 md:col-span-2">
@@ -808,6 +813,14 @@ function CompletedSetupPanel({
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="notifications" className="space-y-6">
+          <NotificationsTab
+            settings={settings}
+            onUpdate={onUpdate}
+            locationId={selectedLocationId}
+          />
         </TabsContent>
       </Tabs>
     </div>

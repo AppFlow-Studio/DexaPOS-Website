@@ -174,7 +174,7 @@ export function LocationTaxComplianceCard({ location, onUpdated }: LocationTaxCo
       </Card>
 
       <Dialog open={showTaxDialog} onOpenChange={setShowTaxDialog}>
-        <DialogContent>
+        <DialogContent elevation="above-sheet">
           <DialogHeader>
             <DialogTitle>Edit Tax & Compliance</DialogTitle>
             <DialogDescription>
@@ -231,7 +231,7 @@ export function LocationTaxComplianceCard({ location, onUpdated }: LocationTaxCo
                 <SelectTrigger>
                   <SelectValue placeholder="Select tax status" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="z-[220]">
                   <SelectItem value="pending">Pending</SelectItem>
                   <SelectItem value="verified">Verified</SelectItem>
                   <SelectItem value="expired">Expired</SelectItem>

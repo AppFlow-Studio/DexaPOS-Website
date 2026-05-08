@@ -20,25 +20,7 @@ import {
 } from "@/lib/online-store/setup-flow";
 import { createClerkClient } from "@clerk/backend";
 import { uploadMerchantDocument, uploadOrganizationDocument } from "@/lib/cdn/server";
-
-// ─── Dejavoo Management API ───────────────────────────────────────────────────
-// These env vars must be set in your deployment environment.
-// Domain whitelist is delegated to Supabase Edge Function `dejavoo-whitelist-domain`
-// The management API credentials are read from Supabase function secrets.
-//   Sandbox  → https://externalapi.ipospays.tech
-//   Production → https://externalapi.ipospays.com
-// ──────────────────────────────────────────────────────────────────────────────
-
-const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "dexaposai.com";
-
-interface PaymentDeviceSummary {
-  id: string;
-  device_label: string | null;
-  tpn: string;
-  use_for_online_ordering: boolean;
-  is_active: boolean;
-  ftd_key_configured: boolean;
-}
+import { getCurrentUserMerchantRole } from "@/app/dashboard/actions/role-check";
 
 type MissingRequestFieldKey =
   | "legalBusinessName"
@@ -123,43 +105,14 @@ async function getClerkOrgPublicMetadata(organizationId: string | null) {
   }
 }
 
-async function assertMerchantOrgAdmin(userId: string | null, organizationId: string | null) {
-  if (!userId || !organizationId) throw new Error("Unauthorized");
-  const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY! });
-  const memberships = await clerk.organizations.getOrganizationMembershipList({
-    organizationId,
-    limit: 100,
-  });
-  const membership = memberships.data.find((m) => m.publicUserData?.userId === userId);
-  const role = membership?.role ?? "";
-  if (role !== "org:admin" && role !== "org:owner") {
+async function assertMerchantOrgAdmin(organizationId: string | null) {
+  if (!organizationId) throw new Error("Unauthorized");
+  const info = await getCurrentUserMerchantRole();
+  if (!info) throw new Error("Unauthorized");
+  if (info.clerkOrgId !== organizationId) throw new Error("Unauthorized");
+  if (!info.isOwnerOrAdmin) {
     throw new Error("Only merchant admins can submit an online-store setup request.");
   }
-}
-
-async function getLocationPaymentDevices(locationId: string) {
-  const supabase = createServerSupabaseClient();
-  const { data, error } = await supabase.rpc("list_location_payment_devices", {
-    p_location_id: locationId,
-  });
-
-  if (error) {
-    console.error("[ONLINE_ORDERING] Failed to load payment devices:", error);
-    return [] as PaymentDeviceSummary[];
-  }
-
-  return ((data as PaymentDeviceSummary[] | null) ?? []).filter(Boolean);
-}
-
-async function getSelectedLocationPaymentDevice(locationId: string) {
-  const devices = await getLocationPaymentDevices(locationId);
-  return (
-    devices.find(
-      (device) => device.use_for_online_ordering && device.is_active
-    ) ??
-    devices.find((device) => device.is_active) ??
-    null
-  );
 }
 
 async function buildRequestedStoreSlug(
@@ -204,7 +157,7 @@ async function computeOnlineStoreRequestRequirements(
     };
   }
 
-  await assertMerchantOrgAdmin(userId, orgId);
+  await assertMerchantOrgAdmin(orgId);
 
   const { data: location, error: locationError } = await supabase
     .from("locations")
@@ -345,7 +298,7 @@ export async function saveOnlineStoreRequestRequirements(formData: FormData) {
       return { success: false, error: "locationId is required" };
     }
 
-    await assertMerchantOrgAdmin(userId, orgId);
+    await assertMerchantOrgAdmin(orgId);
 
     const { data: location, error: locationError } = await supabase
       .from("locations")
@@ -524,71 +477,9 @@ export async function saveOnlineStoreRequestRequirements(formData: FormData) {
   }
 }
 
-/**
- * Registers/updates the allowed domain for the merchant's Dejavoo account.
- *
- * The Dejavoo "Edit Merchant" Management API (POST /v2/merchant/add-on) keys
- * whitelist-domain configuration off the 12-char `merchantId` issued by
- * Dejavoo to this merchant — sourced from public.merchants.external_merchant_id.
- *
- * Delegates to Supabase function: `dejavoo-whitelist-domain`.
- */
-export async function whitelistDejavooDomain(
-  externalMerchantId: string | null,
-  storeSlug: string
-): Promise<{
-  success: boolean
-  error?: string
-  skipped?: 'missing_merchant_id' | true
-}> {
-  if (!externalMerchantId) {
-    return {
-      success: false,
-      skipped: 'missing_merchant_id',
-      error: 'Dejavoo Merchant ID is not configured for this merchant.',
-    }
-  }
-  if (!storeSlug) {
-    return { success: false, error: 'Store slug is required' }
-  }
-
-  const isDev = ROOT_DOMAIN.includes("localhost");
-  const storeDomain = isDev
-    ? `http://${storeSlug}.localhost:3000`
-    : `https://${storeSlug}.${ROOT_DOMAIN}`;
-
-  const supabase = createServerSupabaseClient();
-  const { data, error } = await supabase.functions.invoke(
-    "dejavoo-whitelist-domain",
-    {
-      body: { merchantId: externalMerchantId, storeSlug, storeDomain },
-    }
-  );
-
-  if (error) {
-    console.error("[DEJAVOO_WHITELIST] Edge invoke error:", error);
-    return {
-      success: false,
-      error: `Domain whitelist invoke error: ${error.message}`,
-    };
-  }
-
-  const result = (data || {}) as {
-    success?: boolean;
-    skipped?: 'missing_merchant_id' | true;
-    error?: string;
-  };
-  return {
-    success: Boolean(result.success),
-    skipped: result.skipped,
-    error: result.error,
-  };
-}
-
 function mapConfigToSettings(
   config: any,
-  location: any,
-  selectedDevice: PaymentDeviceSummary | null
+  location: any
 ): Partial<OnlineOrderingSettings> {
   const setupRequestStatus = normalizeOnlineStoreRequestStatus(
     config.setup_request_status
@@ -648,12 +539,6 @@ function mapConfigToSettings(
       ? config.tip_presets
       : [15, 18, 20, 25],
 
-    ipospaysDeviceId: selectedDevice?.id ?? null,
-    ipospaysDeviceLabel: selectedDevice?.device_label ?? null,
-    ipospaysTpn: selectedDevice?.tpn ?? config.ipospays_tpn ?? "",
-    ipospaysFtdEcomKey: "",
-    ipospaysFtdEcomKeyConfigured: selectedDevice?.ftd_key_configured ?? false,
-
     headerStyle: config.header_style ?? "filled",
     headerTextColor: config.header_text_color ?? null,
     borderColor: config.border_color ?? null,
@@ -665,6 +550,16 @@ function mapConfigToSettings(
     metaDescription: config.meta_description ?? "",
     googleAnalyticsId: config.google_analytics_id ?? "",
     facebookPixelId: config.facebook_pixel_id ?? "",
+
+    notificationPrefs: {
+      email_on_order_placed: true,
+      sms_on_order_placed: true,
+      email_on_status: ["ready", "cancelled"],
+      sms_on_status: ["accepted", "ready", "cancelled"],
+      admin_test_email: null,
+      admin_test_phone: null,
+      ...((config.notification_prefs as Record<string, unknown>) ?? {}),
+    } as OnlineOrderingSettings["notificationPrefs"],
   };
 }
 
@@ -697,8 +592,7 @@ export async function getOnlineOrderingSettings(
   }
 
   if (config) {
-    const selectedDevice = await getSelectedLocationPaymentDevice(locationId);
-    return mapConfigToSettings(config, location, selectedDevice);
+    return mapConfigToSettings(config, location);
   }
 
   return {
@@ -876,10 +770,8 @@ export async function saveOnlineOrderingSettings(
 
   // Payment + tipping are HQ-only, enforced server-side to prevent UI bypass.
   const forbiddenKeys = [
-    "ipospaysTpn",
-    "ipospaysFtdEcomKey",
-    "ipospaysDeviceLabel",
-    "ipospaysDeviceId",
+    "nmiTokenizationKey",
+    "nmiPrivateApiKey",
     "tippingEnabled",
     "tipPresets",
   ] as const;
@@ -953,7 +845,11 @@ export async function saveOnlineOrderingSettings(
     configData.delivery_radius_miles = parsed === null || Number.isFinite(parsed) ? parsed : null;
   }
 
-  // Merchant cannot change payment device/TPN/whitelist.
+  if (settings.notificationPrefs !== undefined) {
+    configData.notification_prefs = settings.notificationPrefs;
+  }
+
+  // Merchant cannot change HQ-managed payment credentials or tipping.
 
   for (const key of Object.keys(configData)) {
     const newVal = configData[key];
@@ -992,14 +888,81 @@ export async function saveOnlineOrderingSettings(
   revalidatePath("/dashboard/online-ordering");
   return { success: true };
 }
-/**
- * Manually re-triggers the Dejavoo domain whitelist for a location's TPN.
- * Useful if the initial whitelist failed or if the domain changed.
- */
-export async function retriggerDomainWhitelist(
-  locationId: string
-): Promise<{ success: boolean; error?: string; skipped?: boolean }> {
-  throw new Error("Domain whitelisting is managed by HQ only.");
+
+export async function sendTestOrderNotification(
+  locationId: string,
+  channel: "email" | "sms",
+  to: string
+): Promise<{ success: boolean; error?: string }> {
+  if (!locationId || !to) {
+    return { success: false, error: "Missing recipient" };
+  }
+
+  const supabase = createServerSupabaseClient();
+  const { data: config } = await supabase
+    .from("online_store_config")
+    .select("id")
+    .eq("location_id", locationId)
+    .maybeSingle();
+
+  if (!config?.id) {
+    return { success: false, error: "Online store not configured" };
+  }
+
+  const { sendTestNotification } = await import(
+    "@/lib/messaging/order-notifications"
+  );
+  return sendTestNotification(config.id, channel, to);
 }
+
+export async function getOrderNotificationAuditLog(
+  locationId: string,
+  limit = 50
+): Promise<{
+  data: Array<{
+    id: string;
+    orderId: string;
+    channel: "email" | "sms";
+    event: string;
+    recipient: string;
+    status: "sent" | "failed" | "skipped";
+    error: string | null;
+    sentAt: string;
+  }>;
+  error?: string;
+}> {
+  if (!locationId) return { data: [], error: "Missing locationId" };
+  const supabase = createServerSupabaseClient();
+
+  const { data: location } = await supabase
+    .from("locations")
+    .select("merchant_id")
+    .eq("id", locationId)
+    .single();
+  if (!location) return { data: [], error: "Location not found" };
+
+  const { data, error } = await supabase
+    .from("order_notifications")
+    .select("id, order_id, channel, event, recipient, status, error, sent_at")
+    .eq("merchant_id", location.merchant_id)
+    .order("sent_at", { ascending: false })
+    .limit(limit);
+
+  if (error) return { data: [], error: error.message };
+
+  return {
+    data: (data ?? []).map((r) => ({
+      id: r.id as string,
+      orderId: r.order_id as string,
+      channel: r.channel as "email" | "sms",
+      event: r.event as string,
+      recipient: r.recipient as string,
+      status: r.status as "sent" | "failed" | "skipped",
+      error: (r.error as string | null) ?? null,
+      sentAt: r.sent_at as string,
+    })),
+  };
+}
+
 
 

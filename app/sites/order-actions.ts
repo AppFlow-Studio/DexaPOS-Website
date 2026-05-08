@@ -284,6 +284,19 @@ export async function placeOrder(
       .eq("id", result.order_id);
   }
 
+  // Fire transactional receipt email + confirmation SMS. Don't block the order
+  // response on notification I/O — `void` so failures don't fail the checkout.
+  void (async () => {
+    try {
+      const { sendOrderPlacedNotifications } = await import(
+        "@/lib/messaging/order-notifications"
+      );
+      await sendOrderPlacedNotifications(result.order_id);
+    } catch (err) {
+      console.error("[placeOrder] notification fire-and-forget failed:", err);
+    }
+  })();
+
   return {
     success: true,
     orderId: result.order_id,
@@ -492,10 +505,16 @@ export async function cancelOnlineOrder(
       };
     }
 
-    if (result.customer_email) {
-      const { sendOrderCancellationEmail } = await import("./recovery-actions");
-      void sendOrderCancellationEmail(orderId, result.customer_email).catch(() => {});
-    }
+    void (async () => {
+      try {
+        const { sendOrderStatusNotifications } = await import(
+          "@/lib/messaging/order-notifications"
+        );
+        await sendOrderStatusNotifications(orderId, "cancelled");
+      } catch (err) {
+        console.error("[cancelOnlineOrder] notification failed:", err);
+      }
+    })();
 
     void broadcastOrderStatus(orderId, result.status || "cancelled");
     return { success: true };
