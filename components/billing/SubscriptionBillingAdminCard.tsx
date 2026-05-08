@@ -14,6 +14,7 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
@@ -27,12 +28,15 @@ import { Separator } from '@/components/ui/separator'
 import {
   chargeSubscriptionInvoiceManually,
   generateSubscriptionInvoiceManually,
+  getBillableServices,
   getMerchantSubscriptions,
   getSubscriptionInvoices,
-  getSubscriptionPlans,
+  getSubscriptionServiceAssignments,
+  replaceSubscriptionServiceAssignments,
+  type BillableServiceRecord,
   type MerchantSubscriptionRecord,
   type SubscriptionInvoiceRecord,
-  type SubscriptionPlanRecord,
+  type SubscriptionServiceAssignmentRecord,
   upsertMerchantSubscription,
 } from '@/app/manage/actions/subscription-billing'
 
@@ -50,9 +54,7 @@ interface SubscriptionBillingAdminCardProps {
 
 type SubscriptionStatus = 'trial' | 'active' | 'past_due' | 'suspended' | 'canceled'
 
-function todayIso(): string {
-  return new Date().toISOString().slice(0, 10)
-}
+type ServiceFormState = Record<string, { enabled: boolean; quantity: string }>
 
 function startOfMonthIso(date = new Date()): string {
   return new Date(date.getFullYear(), date.getMonth(), 1).toISOString().slice(0, 10)
@@ -91,6 +93,43 @@ function statusVariant(status: string): 'default' | 'secondary' | 'outline' | 'd
   }
 }
 
+function buildInitialServiceFormState(
+  services: BillableServiceRecord[],
+  assignments: SubscriptionServiceAssignmentRecord[] = []
+): ServiceFormState {
+  const assignmentMap = new Map(assignments.map((assignment) => [assignment.service_id, assignment]))
+
+  return Object.fromEntries(
+    services.map((service) => {
+      const assignment = assignmentMap.get(service.id)
+      return [
+        service.id,
+        {
+          enabled: Boolean(assignment),
+          quantity: String(assignment?.quantity ?? 1),
+        },
+      ]
+    })
+  )
+}
+
+function summarizePricing(service: BillableServiceRecord): string {
+  if (service.pricing_model === 'flat') {
+    return `${formatMoney(service.base_price_monthly)}/mo`
+  }
+
+  if (service.pricing_model === 'per_unit') {
+    return `${formatMoney(service.base_price_monthly)}/mo per ${service.unit_label}`
+  }
+
+  return `${formatMoney(service.base_price_monthly)}/mo first, ${formatMoney(service.additional_unit_price ?? 0)}/mo each additional`
+}
+
+function serviceQuantityLabel(service: BillableServiceRecord): string {
+  if (service.pricing_model === 'flat') return 'Enabled'
+  return `Quantity (${service.unit_label})`
+}
+
 export function SubscriptionBillingAdminCard({
   merchantId,
   merchantName,
@@ -99,46 +138,77 @@ export function SubscriptionBillingAdminCard({
 }: SubscriptionBillingAdminCardProps) {
   const [isLoading, setIsLoading] = useState(true)
   const [isPending, startTransition] = useTransition()
-  const [plans, setPlans] = useState<SubscriptionPlanRecord[]>([])
+  const [services, setServices] = useState<BillableServiceRecord[]>([])
   const [subscriptions, setSubscriptions] = useState<MerchantSubscriptionRecord[]>([])
   const [invoices, setInvoices] = useState<SubscriptionInvoiceRecord[]>([])
+  const [subscriptionServiceMap, setSubscriptionServiceMap] = useState<Record<string, SubscriptionServiceAssignmentRecord[]>>({})
+  const [serviceFormState, setServiceFormState] = useState<ServiceFormState>({})
 
   const [selectedLocationId, setSelectedLocationId] = useState<string>('')
-  const [selectedPlanId, setSelectedPlanId] = useState<string>('')
   const [status, setStatus] = useState<SubscriptionStatus>('active')
   const [currentPeriodStart, setCurrentPeriodStart] = useState(startOfMonthIso())
   const [currentPeriodEnd, setCurrentPeriodEnd] = useState(endOfMonthIso())
   const [nextBillingDate, setNextBillingDate] = useState(firstDayNextMonthIso())
   const [trialEndsAt, setTrialEndsAt] = useState('')
 
-  const selectedPlan = useMemo(
-    () => plans.find((plan) => plan.id === selectedPlanId) ?? null,
-    [plans, selectedPlanId]
-  )
-
   const selectedLocationSubscription = useMemo(
     () => subscriptions.find((subscription) => subscription.location_id === selectedLocationId) ?? null,
     [subscriptions, selectedLocationId]
   )
 
+  const selectedAssignments = useMemo(
+    () => (selectedLocationSubscription ? subscriptionServiceMap[selectedLocationSubscription.id] ?? [] : []),
+    [selectedLocationSubscription, subscriptionServiceMap]
+  )
+
   const refresh = () => {
     startTransition(async () => {
       try {
-        const [nextPlans, nextSubscriptions, nextInvoices] = await Promise.all([
-          getSubscriptionPlans(),
+        const [nextServices, nextSubscriptions, nextInvoices] = await Promise.all([
+          getBillableServices(),
           getMerchantSubscriptions(merchantId),
           getSubscriptionInvoices(merchantId, null, 100),
         ])
 
-        setPlans(nextPlans)
+        const assignmentEntries = await Promise.all(
+          nextSubscriptions.map(async (subscription) => [
+            subscription.id,
+            await getSubscriptionServiceAssignments(subscription.id),
+          ] as const)
+        )
+
+        const nextAssignmentMap = Object.fromEntries(assignmentEntries)
+
+        setServices(nextServices)
         setSubscriptions(nextSubscriptions)
         setInvoices(nextInvoices)
+        setSubscriptionServiceMap(nextAssignmentMap)
 
-        if (!selectedLocationId && locations[0]) {
-          setSelectedLocationId(locations[0].id)
-        }
-        if (!selectedPlanId && nextPlans[0]) {
-          setSelectedPlanId(nextPlans[0].id)
+        const defaultLocationId = selectedLocationId || locations[0]?.id || ''
+        if (defaultLocationId) {
+          setSelectedLocationId(defaultLocationId)
+          const defaultSubscription = nextSubscriptions.find((subscription) => subscription.location_id === defaultLocationId) ?? null
+
+          if (defaultSubscription) {
+            setStatus(defaultSubscription.status)
+            setCurrentPeriodStart(defaultSubscription.current_period_start)
+            setCurrentPeriodEnd(defaultSubscription.current_period_end)
+            setNextBillingDate(defaultSubscription.next_billing_date)
+            setTrialEndsAt(defaultSubscription.trial_ends_at?.slice(0, 10) ?? '')
+            setServiceFormState(
+              buildInitialServiceFormState(
+                nextServices,
+                nextAssignmentMap[defaultSubscription.id] ?? []
+              )
+            )
+          } else {
+            setStatus('active')
+            setCurrentPeriodStart(startOfMonthIso())
+            setCurrentPeriodEnd(endOfMonthIso())
+            setNextBillingDate(firstDayNextMonthIso())
+            setTrialEndsAt('')
+            setServiceFormState(buildInitialServiceFormState(nextServices))
+          }
         }
       } catch (error: any) {
         toast.error(error?.message || 'Failed to load subscription billing data.')
@@ -154,46 +224,87 @@ export function SubscriptionBillingAdminCard({
   }, [merchantId])
 
   useEffect(() => {
+    if (!services.length || !selectedLocationId) return
+
     if (selectedLocationSubscription) {
-      setSelectedLocationId(selectedLocationSubscription.location_id)
-      setSelectedPlanId(selectedLocationSubscription.plan_id)
       setStatus(selectedLocationSubscription.status)
       setCurrentPeriodStart(selectedLocationSubscription.current_period_start)
       setCurrentPeriodEnd(selectedLocationSubscription.current_period_end)
       setNextBillingDate(selectedLocationSubscription.next_billing_date)
       setTrialEndsAt(selectedLocationSubscription.trial_ends_at?.slice(0, 10) ?? '')
+      setServiceFormState(buildInitialServiceFormState(services, selectedAssignments))
+      return
     }
-  }, [selectedLocationSubscription])
+
+    setStatus('active')
+    setCurrentPeriodStart(startOfMonthIso())
+    setCurrentPeriodEnd(endOfMonthIso())
+    setNextBillingDate(firstDayNextMonthIso())
+    setTrialEndsAt('')
+    setServiceFormState(buildInitialServiceFormState(services))
+  }, [selectedLocationId, selectedLocationSubscription, selectedAssignments, services])
 
   const handleSave = () => {
-    if (!selectedLocationId || !selectedPlanId) {
-      toast.error('Select a location and a plan first.')
+    if (!selectedLocationId) {
+      toast.error('Select a location first.')
+      return
+    }
+
+    const enabledServices = services
+      .map((service) => ({
+        serviceId: service.id,
+        serviceCode: service.service_code,
+        enabled: serviceFormState[service.id]?.enabled ?? false,
+        quantity: Number(serviceFormState[service.id]?.quantity ?? 0),
+      }))
+      .filter((service) => service.enabled && service.quantity > 0)
+
+    if (enabledServices.length === 0) {
+      toast.error('Enable at least one billable service for this location.')
       return
     }
 
     startTransition(async () => {
-      const result = await upsertMerchantSubscription({
+      const subscriptionResult = await upsertMerchantSubscription({
         subscriptionId: selectedLocationSubscription?.id,
         merchantId,
         locationId: selectedLocationId,
-        planId: selectedPlanId,
+        planId: null,
         currentPeriodStart,
         currentPeriodEnd,
         nextBillingDate,
         status,
         trialEndsAt: status === 'trial' && trialEndsAt ? `${trialEndsAt}T00:00:00.000Z` : null,
         metadata: {
-          source: 'hq_manual_billing_ui',
-          placeholderPricing: true,
+          source: 'hq_service_catalog_billing_ui',
+          pricingModel: 'service_catalog',
         },
       })
 
-      if (!result.success) {
-        toast.error(result.error || 'Failed to save subscription.')
+      if (!subscriptionResult.success || !subscriptionResult.subscriptionId) {
+        toast.error(subscriptionResult.error || 'Failed to save subscription.')
         return
       }
 
-      toast.success(selectedLocationSubscription ? 'Subscription updated.' : 'Subscription created.')
+      const serviceResult = await replaceSubscriptionServiceAssignments(
+        subscriptionResult.subscriptionId,
+        enabledServices.map((service) => ({
+          serviceId: service.serviceId,
+          quantity: service.quantity,
+          enabled: true,
+          metadata: {
+            source: 'hq_service_catalog_billing_ui',
+            serviceCode: service.serviceCode,
+          },
+        }))
+      )
+
+      if (!serviceResult.success) {
+        toast.error(serviceResult.error || 'Failed to save service assignments.')
+        return
+      }
+
+      toast.success(selectedLocationSubscription ? 'Subscription services updated.' : 'Subscription created.')
       refresh()
     })
   }
@@ -222,26 +333,36 @@ export function SubscriptionBillingAdminCard({
     })
   }
 
+  const updateServiceState = (serviceId: string, patch: Partial<{ enabled: boolean; quantity: string }>) => {
+    setServiceFormState((current) => ({
+      ...current,
+      [serviceId]: {
+        enabled: patch.enabled ?? current[serviceId]?.enabled ?? false,
+        quantity: patch.quantity ?? current[serviceId]?.quantity ?? '1',
+      },
+    }))
+  }
+
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-xl font-semibold tracking-tight">Subscription Billing</h2>
         <p className="text-sm text-muted-foreground">
-          Manual Phase 1 admin controls for {merchantName}. Pricing is currently placeholder-driven from
-          `subscription_plans`.
+          Manual HQ service-catalog billing for {merchantName}. One billing subscription exists per location,
+          and each location can have multiple billable services assigned to it.
         </p>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+      <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <CircleDollarSign className="h-5 w-5" />
-              Create or Update Subscription
+              Assign Services to a Location
             </CardTitle>
             <CardDescription>
-              One subscription per location. Active station count and invoice totals are computed from the
-              selected plan and the location’s live station count.
+              Location dropdown controls which per-location subscription you are editing. Service prices are
+              computed from the service catalog, not from a single plan row.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
@@ -263,24 +384,12 @@ export function SubscriptionBillingAdminCard({
               </div>
 
               <div className="space-y-2">
-                <Label>Plan</Label>
-                <Select value={selectedPlanId} onValueChange={setSelectedPlanId} disabled={!canManageBilling}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select plan" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {plans.map((plan) => (
-                      <SelectItem key={plan.id} value={plan.id}>
-                        {plan.display_name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
                 <Label>Status</Label>
-                <Select value={status} onValueChange={(value) => setStatus(value as SubscriptionStatus)} disabled={!canManageBilling}>
+                <Select
+                  value={status}
+                  onValueChange={(value) => setStatus(value as SubscriptionStatus)}
+                  disabled={!canManageBilling}
+                >
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -335,28 +444,56 @@ export function SubscriptionBillingAdminCard({
               </div>
             </div>
 
-            {selectedPlan && (
-              <>
-                <Separator />
-                <div className="rounded-lg border bg-muted/30 p-4 text-sm">
-                  <div className="mb-3 flex items-center gap-2 font-medium">
-                    <Receipt className="h-4 w-4" />
-                    Placeholder pricing preview
+            <Separator />
+
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 font-medium">
+                <Receipt className="h-4 w-4" />
+                Service catalog
+              </div>
+
+              {services.map((service) => {
+                const current = serviceFormState[service.id] ?? { enabled: false, quantity: '1' }
+                const quantityDisabled = !current.enabled || service.pricing_model === 'flat'
+
+                return (
+                  <div key={service.id} className="rounded-lg border p-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <Checkbox
+                            checked={current.enabled}
+                            onCheckedChange={(checked) => updateServiceState(service.id, { enabled: Boolean(checked) })}
+                            disabled={!canManageBilling}
+                          />
+                          <div className="font-medium">{service.display_name}</div>
+                          <Badge variant="outline">{service.service_code}</Badge>
+                        </div>
+                        <div className="text-sm text-muted-foreground">
+                          {summarizePricing(service)} • {service.service_category} • {service.pricing_model}
+                        </div>
+                      </div>
+                      <div className="w-28 space-y-2">
+                        <Label className="text-xs">{serviceQuantityLabel(service)}</Label>
+                        <Input
+                          type="number"
+                          min={service.pricing_model === 'flat' ? 1 : 0}
+                          step={1}
+                          value={service.pricing_model === 'flat' ? '1' : current.quantity}
+                          disabled={!canManageBilling || quantityDisabled}
+                          onChange={(event) => updateServiceState(service.id, { quantity: event.target.value })}
+                        />
+                      </div>
+                    </div>
                   </div>
-                  <div className="grid gap-2 md:grid-cols-2">
-                    <div>Base monthly: {formatMoney(Number(selectedPlan.base_price_monthly || 0))}</div>
-                    <div>Included stations: {selectedPlan.included_stations}</div>
-                    <div>Extra station: {formatMoney(Number(selectedPlan.per_extra_station_price || 0))}</div>
-                    <div>Card surcharge: {Number(selectedPlan.card_surcharge_pct || 0).toFixed(2)}%</div>
-                  </div>
-                </div>
-              </>
-            )}
+                )
+              })}
+            </div>
 
             <div className="flex items-center gap-3">
               <Button onClick={handleSave} disabled={!canManageBilling || isPending}>
                 {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {selectedLocationSubscription ? 'Update Subscription' : 'Create Subscription'}
+                {selectedLocationSubscription ? 'Update Location Services' : 'Create Location Subscription'}
               </Button>
               <Button variant="outline" onClick={refresh} disabled={isPending}>
                 <RefreshCcw className="mr-2 h-4 w-4" />
@@ -370,10 +507,10 @@ export function SubscriptionBillingAdminCard({
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Store className="h-5 w-5" />
-              Current Subscriptions
+              Current Location Subscriptions
             </CardTitle>
             <CardDescription>
-              Existing subscriptions for this merchant. Generate invoices manually from here during Phase 1.
+              One lifecycle record per location, with assigned services and quantities underneath it.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -384,53 +521,57 @@ export function SubscriptionBillingAdminCard({
                 No subscriptions yet.
               </div>
             ) : (
-              subscriptions.map((subscription) => (
-                <div key={subscription.id} className="rounded-lg border p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="space-y-1">
-                      <div className="font-medium">{subscription.location_name}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {subscription.display_name} · {subscription.plan_code}
+              subscriptions.map((subscription) => {
+                const assignmentSummary = subscriptionServiceMap[subscription.id] ?? []
+
+                return (
+                  <div key={subscription.id} className="rounded-lg border p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="space-y-1">
+                        <div className="font-medium">{subscription.location_name}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {assignmentSummary.length} assigned service{assignmentSummary.length === 1 ? '' : 's'}
+                        </div>
                       </div>
+                      <Badge variant={statusVariant(subscription.status)}>{subscription.status}</Badge>
                     </div>
-                    <Badge variant={statusVariant(subscription.status)}>{subscription.status}</Badge>
-                  </div>
-                  <div className="mt-3 grid gap-1 text-sm text-muted-foreground">
-                    <div>Monthly amount: {formatMoney(subscription.monthly_amount)}</div>
-                    <div>Station count snapshot: {subscription.station_count}</div>
-                    <div>Billing method: {subscription.billing_method || 'No primary profile'}</div>
-                    <div>
-                      Period: {subscription.current_period_start} → {subscription.current_period_end}
+                    <div className="mt-3 grid gap-1 text-sm text-muted-foreground">
+                      <div>Monthly amount: {formatMoney(subscription.monthly_amount)}</div>
+                      <div>Billing method: {subscription.billing_method || 'No primary profile'}</div>
+                      <div>
+                        Period: {subscription.current_period_start} to {subscription.current_period_end}
+                      </div>
+                      <div>Next billing date: {subscription.next_billing_date}</div>
                     </div>
-                    <div>Next billing date: {subscription.next_billing_date}</div>
+                    {assignmentSummary.length > 0 && (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {assignmentSummary.map((assignment) => (
+                          <Badge key={assignment.id} variant="secondary">
+                            {assignment.display_name} × {assignment.quantity}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                    <div className="mt-4 flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setSelectedLocationId(subscription.location_id)}
+                      >
+                        Edit
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={() => handleGenerateInvoice(subscription.id)}
+                        disabled={!canManageBilling || isPending}
+                      >
+                        {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Generate Invoice
+                      </Button>
+                    </div>
                   </div>
-                  <div className="mt-4 flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setSelectedLocationId(subscription.location_id)
-                        setSelectedPlanId(subscription.plan_id)
-                        setStatus(subscription.status)
-                        setCurrentPeriodStart(subscription.current_period_start)
-                        setCurrentPeriodEnd(subscription.current_period_end)
-                        setNextBillingDate(subscription.next_billing_date)
-                        setTrialEndsAt(subscription.trial_ends_at?.slice(0, 10) ?? '')
-                      }}
-                    >
-                      Edit
-                    </Button>
-                    <Button
-                      size="sm"
-                      onClick={() => handleGenerateInvoice(subscription.id)}
-                      disabled={!canManageBilling || isPending}
-                    >
-                      {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                      Generate Invoice
-                    </Button>
-                  </div>
-                </div>
-              ))
+                )
+              })
             )}
           </CardContent>
         </Card>
@@ -443,7 +584,7 @@ export function SubscriptionBillingAdminCard({
             Recent Subscription Invoices
           </CardTitle>
           <CardDescription>
-            Phase 1 visibility only. Charging, retries, and suspension automation are still backend-first.
+            Invoices are generated from the assigned services and quantities for each location.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -477,7 +618,7 @@ export function SubscriptionBillingAdminCard({
                         <div className="flex items-center gap-2">
                           <CalendarDays className="h-3.5 w-3.5 text-muted-foreground" />
                           <span>
-                            {invoice.billing_period_start} → {invoice.billing_period_end}
+                            {invoice.billing_period_start} to {invoice.billing_period_end}
                           </span>
                         </div>
                       </td>

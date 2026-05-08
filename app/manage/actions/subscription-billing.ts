@@ -19,6 +19,43 @@ export interface SubscriptionPlanRecord {
   updated_at: string
 }
 
+export interface BillableServiceRecord {
+  id: string
+  service_code: string
+  display_name: string
+  service_category: 'hardware' | 'software' | 'service'
+  pricing_model: 'flat' | 'per_unit' | 'tiered'
+  base_price_monthly: number
+  additional_unit_price: number | null
+  included_quantity: number
+  card_surcharge_pct: number
+  unit_label: string
+  is_active: boolean
+  metadata: Record<string, unknown>
+  created_at: string
+  updated_at: string
+}
+
+export interface SubscriptionServiceAssignmentRecord {
+  id: string
+  subscription_id: string
+  service_id: string
+  service_code: string
+  display_name: string
+  service_category: 'hardware' | 'software' | 'service'
+  pricing_model: 'flat' | 'per_unit' | 'tiered'
+  unit_label: string
+  quantity: number
+  is_enabled: boolean
+  base_price_monthly: number
+  additional_unit_price: number | null
+  included_quantity: number
+  card_surcharge_pct: number
+  metadata: Record<string, unknown>
+  created_at: string
+  updated_at: string
+}
+
 export interface MerchantSubscriptionRecord {
   id: string
   merchant_id: string
@@ -75,7 +112,7 @@ export interface UpsertMerchantSubscriptionParams {
   subscriptionId?: string
   merchantId: string
   locationId: string
-  planId: string
+  planId?: string | null
   currentPeriodStart: string
   currentPeriodEnd: string
   nextBillingDate: string
@@ -100,6 +137,31 @@ export async function getSubscriptionPlans(): Promise<SubscriptionPlanRecord[]> 
   }
 
   return (data ?? []) as SubscriptionPlanRecord[]
+}
+
+export async function getBillableServices(): Promise<BillableServiceRecord[]> {
+  await assertHQPermission('system.billing.manage')
+
+  const supabase = createServerSupabaseClient()
+  const { data, error } = await supabase
+    .from('billable_services')
+    .select('*')
+    .eq('is_active', true)
+    .order('service_category', { ascending: true })
+    .order('display_name', { ascending: true })
+
+  if (error) {
+    console.error('[getBillableServices] Error:', error)
+    throw new Error('Failed to load billable services.')
+  }
+
+  return ((data ?? []) as BillableServiceRecord[]).map((row) => ({
+    ...row,
+    base_price_monthly: Number(row.base_price_monthly || 0),
+    additional_unit_price: row.additional_unit_price === null ? null : Number(row.additional_unit_price || 0),
+    included_quantity: Number(row.included_quantity || 0),
+    card_surcharge_pct: Number(row.card_surcharge_pct || 0),
+  }))
 }
 
 export async function getMerchantSubscriptions(
@@ -138,7 +200,7 @@ export async function upsertMerchantSubscription(
     p_subscription_id: params.subscriptionId ?? null,
     p_merchant_id: params.merchantId,
     p_location_id: params.locationId,
-    p_plan_id: params.planId,
+    p_plan_id: params.planId ?? null,
     p_current_period_start: params.currentPeriodStart,
     p_current_period_end: params.currentPeriodEnd,
     p_next_billing_date: params.nextBillingDate,
@@ -158,6 +220,66 @@ export async function upsertMerchantSubscription(
   revalidatePath(`/manage/merchants/${params.merchantId}/billing`)
 
   return { success: true, subscriptionId: data as string }
+}
+
+export async function getSubscriptionServiceAssignments(
+  subscriptionId: string
+): Promise<SubscriptionServiceAssignmentRecord[]> {
+  await assertHQPermission('system.billing.manage')
+
+  const supabase = createServerSupabaseClient()
+  const { data, error } = await supabase.rpc('list_subscription_service_assignments', {
+    p_subscription_id: subscriptionId,
+  })
+
+  if (error) {
+    console.error('[getSubscriptionServiceAssignments] Error:', error)
+    throw new Error('Failed to load subscription service assignments.')
+  }
+
+  return ((data ?? []) as SubscriptionServiceAssignmentRecord[]).map((row) => ({
+    ...row,
+    quantity: Number(row.quantity || 0),
+    base_price_monthly: Number(row.base_price_monthly || 0),
+    additional_unit_price: row.additional_unit_price === null ? null : Number(row.additional_unit_price || 0),
+    included_quantity: Number(row.included_quantity || 0),
+    card_surcharge_pct: Number(row.card_surcharge_pct || 0),
+  }))
+}
+
+export async function replaceSubscriptionServiceAssignments(
+  subscriptionId: string,
+  services: Array<{
+    serviceId: string
+    quantity: number
+    enabled?: boolean
+    metadata?: Record<string, unknown>
+  }>
+): Promise<{ success: boolean; error?: string }> {
+  await assertHQPermission('system.billing.manage')
+
+  if (!subscriptionId?.trim()) {
+    return { success: false, error: 'subscriptionId is required.' }
+  }
+
+  const supabase = createServerSupabaseClient()
+  const { error } = await supabase.rpc('replace_merchant_subscription_services', {
+    p_subscription_id: subscriptionId,
+    p_services: services.map((service) => ({
+      service_id: service.serviceId,
+      quantity: service.quantity,
+      enabled: service.enabled ?? true,
+      metadata: service.metadata ?? {},
+    })),
+  })
+
+  if (error) {
+    console.error('[replaceSubscriptionServiceAssignments] Error:', error)
+    return { success: false, error: error.message }
+  }
+
+  revalidatePath('/manage/billing')
+  return { success: true }
 }
 
 export async function generateSubscriptionInvoiceManually(

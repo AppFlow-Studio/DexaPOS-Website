@@ -623,11 +623,18 @@ Status:
 - should live in separate billing tables, not `public.invoices`
 
 ### Scope
-New tables:
-- `subscription_plans`
+Billing base tables:
 - `merchant_subscriptions`
 - `subscription_invoices`
 - `subscription_invoice_sequences`
+
+Service-catalog tables:
+- `billable_services`
+- `merchant_subscription_services`
+
+Legacy compatibility:
+- `subscription_plans` remains in place as a compatibility layer / placeholder
+- `SERVICE_CATALOG` is the internal fallback plan code for service-based subscriptions
 
 New edge functions:
 - `billing-generate-monthly-invoices`
@@ -650,6 +657,15 @@ Billing-specific existing dependency:
 - `merchant_billing_profiles`
 - expected to hold the merchant billing method and the NMI vault token / ACH selection
 
+Current architecture decision:
+- Dexa is the billing source of truth
+- NMI is the charge processor
+- NMI recurring may help with future automation, but it is not the primary source of truth for:
+  - which services are enabled
+  - quantity changes
+  - tiered pricing math
+  - invoice composition
+
 ### Required business lock-ins before schema work
 Temur needs to lock these before implementation starts:
 - base monthly price per location
@@ -661,25 +677,28 @@ Temur needs to lock these before implementation starts:
 
 ### Recommended implementation order
 Phase 1: schema + RPCs + HQ manual subscription creation
-- create the 4 billing tables
+- create the billing base tables
+- add the service-catalog tables
 - add RLS
 - add helper RPCs for:
-  - create subscription
-  - update plan
+  - create/update per-location subscription container
+  - list billable services
+  - replace service assignments for a location subscription
   - fetch current subscription
   - fetch merchant invoices
 - do not build automatic charging yet
 
 Phase 2: invoice generation + manual run path
 - implement invoice-number sequencing
-- snapshot active station count per location
-- generate immutable monthly invoice rows
+- generate immutable monthly invoice rows from assigned services + quantities
+- keep station-count snapshot only as supporting metadata
 - add manual HQ trigger first before cron
 
 Phase 3: charging through NMI
 - charge using the merchant billing profile payment method
 - card path:
-  - use NMI vault token
+  - use NMI vault token as the payment source
+  - authenticate with the location's active NMI device key
   - apply surcharge
 - ACH path:
   - no card surcharge
@@ -695,41 +714,60 @@ Phase 4: failure lifecycle
 
 Phase 5: merchant billing UI
 - current subscription state
-- current plan
-- current station count snapshot
+- enabled services for the location
 - invoice history
 - paid / failed / past-due status
 
 Phase 6: HQ billing UI
-- create and edit subscriptions
+- create and edit per-location service assignments
 - manually generate invoices
 - manually retry charge
 - manually mark paid
 - manually suspend / restore / cancel
 
 ### Pricing and invoice math
-Station count source of truth at billing time:
+Current service catalog:
+- `pos_tablet`
+  - pricing model: `tiered`
+  - `$50/mo` first, `$39/mo` each additional
+- `kds`
+  - pricing model: `per_unit`
+  - `$25/mo` per device
+- `loyalty`
+  - pricing model: `flat`
+  - `$75/mo`
+- `online_ordering`
+  - pricing model: `flat`
+  - `$100/mo`
+- `orderout`
+  - pricing model: `flat`
+  - `$79.99/mo`
 
-```sql
-select count(*)
-from public.stations
-where location_id = $1
-  and is_active = true
-  and deactivated_at is null;
-```
+Current quantity source:
+- HQ manual assignment per location
+- this is intentional for the first service-catalog implementation
+- future automation can replace manual quantities where a stable system source exists
 
-Line-item math:
+Line-item math now depends on the service pricing model:
 
 ```text
-subtotal = base_price + max(0, station_count - included_stations) * per_extra_station_price
+flat:
+  subtotal = base_price_monthly
+
+per_unit:
+  subtotal = quantity * base_price_monthly
+
+tiered:
+  subtotal = base_price_monthly + max(0, quantity - included_quantity) * additional_unit_price
+
 card_surcharge = (subtotal * surcharge_pct / 100) if billing_method = 'card' else 0
 total_amount = subtotal + card_surcharge
 ```
 
 Historical rule:
 - invoice rows are immutable
-- station count is snapshotted at invoice-generation time
-- historical periods are not recomputed later
+- service quantities are snapshotted into invoice line items at invoice-generation time
+- station count remains supporting metadata only
 
 ### Cron plan
 - monthly invoice generation: 1st of month, 02:00 ET
