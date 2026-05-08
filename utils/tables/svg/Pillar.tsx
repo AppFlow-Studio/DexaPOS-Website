@@ -13,7 +13,7 @@ const Pillar: React.FC<PillarProps> = ({
   width = 40,
   height = 40,
 }) => {
-  const lightStroke = "#111827";
+  const lightStroke = color;
 
   return (
     <svg
@@ -31,7 +31,7 @@ const Pillar: React.FC<PillarProps> = ({
         width="38.5"
         height="38.5"
         rx="2"
-        fill={darkMode ? "#1E2340" : "#E5E7EB"}
+        fill={darkMode ? "#1E2340" : "#1E2340"}
         stroke={darkMode ? color : lightStroke}
         strokeWidth="1.5"
       />
@@ -44,10 +44,10 @@ const Pillar: React.FC<PillarProps> = ({
         height="28"
         rx="1"
         fill={color}
-        fillOpacity={darkMode ? 0.06 : 0.75}
+        fillOpacity={darkMode ? 0.06 : 0.06}
         stroke={darkMode ? color : lightStroke}
         strokeWidth="0.75"
-        strokeOpacity={darkMode ? 0.5 : 0.9}
+        strokeOpacity={darkMode ? 0.5 : 0.5}
       />
 
       {/* Inner core */}
@@ -58,7 +58,7 @@ const Pillar: React.FC<PillarProps> = ({
         height="18"
         rx="1"
         fill={color}
-        fillOpacity={darkMode ? 0.1 : 0.75}
+        fillOpacity={darkMode ? 0.1 : 0.1}
       />
     </svg>
   );

@@ -14,8 +14,8 @@ const TableSquare2Chair: React.FC<TableSquare2ChairProps> = ({
   width = 79,
   height = 97,
 }) => {
-  const lightStroke = "#94A3B8";
-  const strokeOpacity = darkMode ? 0.5 : 0.7;
+  const lightStroke = color;
+  const chairStrokeOpacity = darkMode ? 0.5 : 0.5;
 
   return (
     <svg
@@ -33,10 +33,10 @@ const TableSquare2Chair: React.FC<TableSquare2ChairProps> = ({
         height="11"
         rx="3"
         fill={color}
-        fillOpacity={darkMode ? 0.12 : 0.85}
+        fillOpacity={darkMode ? 0.12 : 0.12}
         stroke={darkMode ? color : lightStroke}
         strokeWidth="1"
-        strokeOpacity={strokeOpacity}
+        strokeOpacity={chairStrokeOpacity}
       />
 
       {/* Table surface */}
@@ -47,10 +47,10 @@ const TableSquare2Chair: React.FC<TableSquare2ChairProps> = ({
         height="69"
         rx="5"
         fill={color}
-        fillOpacity={darkMode ? 0.18 : 0.88}
+        fillOpacity={darkMode ? 0.18 : 0.18}
         stroke={darkMode ? color : lightStroke}
         strokeWidth="1.5"
-        strokeOpacity={darkMode ? 0.8 : 0.75}
+        strokeOpacity={darkMode ? 0.8 : 0.8}
       />
 
       {/* Chair - bottom */}
@@ -61,10 +61,10 @@ const TableSquare2Chair: React.FC<TableSquare2ChairProps> = ({
         height="11"
         rx="3"
         fill={color}
-        fillOpacity={darkMode ? 0.12 : 0.85}
+        fillOpacity={darkMode ? 0.12 : 0.12}
         stroke={darkMode ? color : lightStroke}
         strokeWidth="1"
-        strokeOpacity={strokeOpacity}
+        strokeOpacity={chairStrokeOpacity}
       />
     </svg>
   );

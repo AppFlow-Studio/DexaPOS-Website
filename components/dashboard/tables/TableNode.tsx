@@ -427,14 +427,22 @@ export function TableNode ({
           ) : (
             (table.label_override || table.name || shouldShowCapacity) && (
               <div
-                className='text-[10px] font-bold text-white text-center leading-tight'
+                className={cn(
+                  'text-[10px] font-bold text-center leading-tight',
+                  isDarkMode ? 'text-white' : 'text-slate-900'
+                )}
                 style={{ transform: `rotate(-${table.rotation || 0}deg)` }}
               >
                 {(table.label_override || table.name) && (
                   <div>{table.label_override || table.name}</div>
                 )}
                 {shouldShowCapacity && (
-                  <div className='text-[9px] font-semibold text-white/90'>
+                  <div
+                    className={cn(
+                      'text-[9px] font-semibold',
+                      isDarkMode ? 'text-white/90' : 'text-slate-700'
+                    )}
+                  >
                     Seats: {capacityValue}
                   </div>
                 )}

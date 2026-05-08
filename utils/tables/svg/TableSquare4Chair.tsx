@@ -15,7 +15,7 @@ const TableSquare4Chair: React.FC<TableSquare4ChairProps> = ({
   height = 97,
   ...props
 }) => {
-  const lightStroke = "#111827";
+  const lightStroke = color;
 
   return (
     <svg
@@ -34,10 +34,10 @@ const TableSquare4Chair: React.FC<TableSquare4ChairProps> = ({
         height="11"
         rx="3"
         fill={color}
-        fillOpacity={darkMode ? 0.12 : 0.75}
+        fillOpacity={darkMode ? 0.12 : 0.12}
         stroke={darkMode ? color : lightStroke}
         strokeWidth="1"
-        strokeOpacity={darkMode ? 0.5 : 0.9}
+        strokeOpacity={darkMode ? 0.5 : 0.5}
       />
 
       {/* Chair - bottom */}
@@ -48,10 +48,10 @@ const TableSquare4Chair: React.FC<TableSquare4ChairProps> = ({
         height="11"
         rx="3"
         fill={color}
-        fillOpacity={darkMode ? 0.12 : 0.75}
+        fillOpacity={darkMode ? 0.12 : 0.12}
         stroke={darkMode ? color : lightStroke}
         strokeWidth="1"
-        strokeOpacity={darkMode ? 0.5 : 0.9}
+        strokeOpacity={darkMode ? 0.5 : 0.5}
       />
 
       {/* Chair - left */}
@@ -62,10 +62,10 @@ const TableSquare4Chair: React.FC<TableSquare4ChairProps> = ({
         height="39"
         rx="3"
         fill={color}
-        fillOpacity={darkMode ? 0.12 : 0.75}
+        fillOpacity={darkMode ? 0.12 : 0.12}
         stroke={darkMode ? color : lightStroke}
         strokeWidth="1"
-        strokeOpacity={darkMode ? 0.5 : 0.9}
+        strokeOpacity={darkMode ? 0.5 : 0.5}
       />
 
       {/* Chair - right */}
@@ -76,10 +76,10 @@ const TableSquare4Chair: React.FC<TableSquare4ChairProps> = ({
         height="39"
         rx="3"
         fill={color}
-        fillOpacity={darkMode ? 0.12 : 0.75}
+        fillOpacity={darkMode ? 0.12 : 0.12}
         stroke={darkMode ? color : lightStroke}
         strokeWidth="1"
-        strokeOpacity={darkMode ? 0.5 : 0.9}
+        strokeOpacity={darkMode ? 0.5 : 0.5}
       />
 
       {/* Table surface */}
@@ -90,10 +90,10 @@ const TableSquare4Chair: React.FC<TableSquare4ChairProps> = ({
         height="73"
         rx="6"
         fill={color}
-        fillOpacity={darkMode ? 0.18 : 0.75}
+        fillOpacity={darkMode ? 0.18 : 0.18}
         stroke={darkMode ? color : lightStroke}
         strokeWidth="1.5"
-        strokeOpacity={darkMode ? 0.8 : 0.9}
+        strokeOpacity={darkMode ? 0.8 : 0.8}
       />
     </svg>
   );
