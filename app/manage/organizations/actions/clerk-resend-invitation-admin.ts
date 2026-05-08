@@ -1,6 +1,7 @@
 'use server'
 
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { createClerkClient } from '@clerk/backend'
 import { logAdminAction } from '@/lib/admin/log-admin-action'
 import { auth } from '@clerk/nextjs/server'
@@ -64,7 +65,10 @@ export async function ClerkResendInvitationAdmin(invitationId: string) {
             }
         }
 
-        const { data: updatedInvite, error: updateError } = await supabase
+        // RLS-safe write: service role ensures the row actually updates even
+        // when the actor's claims don't satisfy the policy's USING clause.
+        const admin = createServiceRoleClient()
+        const { data: updatedInvite, error: updateError } = await admin
             .from('pending_org_admin_invites')
             .update({
                 clerk_invite_id: resendInvitation.id,
@@ -80,6 +84,12 @@ export async function ClerkResendInvitationAdmin(invitationId: string) {
             return {
                 success: false,
                 message: 'Error saving resent invitation: ' + updateError.message,
+            }
+        }
+        if (!updatedInvite) {
+            return {
+                success: false,
+                message: 'Resent in Clerk but failed to update invitation in database',
             }
         }
 

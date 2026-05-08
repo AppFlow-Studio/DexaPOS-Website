@@ -7,9 +7,10 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Empty } from '@/components/ui/empty'
 import {
-    MapPin, Plus, Building2, Edit, Trash2, Search,
+    MapPin, Plus, Building2, Edit, Search,
     Phone, Mail, Clock, Globe, Layers, CheckCircle,
     Settings, LayoutGrid, List, XCircle,
+    Archive, RotateCcw, Loader2,
 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useLocations } from '../hooks/useLocations'
@@ -17,7 +18,7 @@ import { useUserInfo } from '../../manage/hooks/useUserInfo.'
 import { toast } from 'sonner'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
-import { DeleteLocation } from '../actions/locations'
+import { ArchiveLocation, RestoreLocation } from '../actions/locations'
 import { cn } from '@/lib/utils'
 import {
     Dialog,
@@ -30,8 +31,10 @@ import {
 import { US_TIMEZONES, Location } from '@/types/merchant_locations'
 import { useLocationStore } from '@/stores/location-store'
 import { LocationDetailSheet } from '@/components/dashboard/locations/LocationDetailSheet'
+import { formatPhoneForDisplay } from '@/lib/phone'
 
 type ViewMode = 'grid' | 'list'
+type StatusFilter = 'active' | 'archived' | 'all'
 
 export default function LocationsPage() {
     const { data: userInfo } = useUserInfo()
@@ -43,49 +46,81 @@ export default function LocationsPage() {
     const autoOpenedLocationIdRef = useRef<string | null>(null)
 
     const userRole = userInfo?.members?.[0]?.role as string | undefined
-    const canCreateLocation = userRole === 'merchant.admin' || userRole === 'merchant.owner'
+    const isOwner = userRole === 'merchant.owner'
+    const canCreateLocation = userRole === 'merchant.admin' || isOwner
 
     const { selectedLocationId, setSelectedLocation } = useLocationStore()
 
     const [searchTerm, setSearchTerm] = useState('')
     const [viewMode, setViewMode] = useState<ViewMode>('grid')
-    const [deletingLocation, setDeletingLocation] = useState<Location | null>(null)
-    const [isDeleting, setIsDeleting] = useState(false)
+    const [statusFilter, setStatusFilter] = useState<StatusFilter>('active')
+    const [archivingLocation, setArchivingLocation] = useState<Location | null>(null)
+    const [isArchiving, setIsArchiving] = useState(false)
+    const [restoringId, setRestoringId] = useState<string | null>(null)
     const [editingLocation, setEditingLocation] = useState<Location | null>(null)
     const [isSheetOpen, setIsSheetOpen] = useState(false)
 
     const locationsList = Array.isArray(locations) ? locations : []
     const autoOpenLocationId = searchParams.get('open')
-    const filteredLocations = locationsList.filter(location =>
+
+    const activeLocations = locationsList.filter(l => l.is_active)
+    const archivedLocations = locationsList.filter(l => !l.is_active)
+
+    const statusFiltered = locationsList.filter(l => {
+        if (statusFilter === 'active') return l.is_active
+        if (statusFilter === 'archived') return !l.is_active
+        return true
+    })
+
+    const filteredLocations = statusFiltered.filter(location =>
         location.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         location.city?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         location.state?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         location.code?.toLowerCase().includes(searchTerm.toLowerCase())
     )
 
-    const activeLocations = locationsList.filter(l => l.is_active).length
     const acceptingOrders = locationsList.filter(l => l.is_accepting_orders).length
 
-    const handleDelete = async () => {
-        if (!deletingLocation) return
-        setIsDeleting(true)
+    const handleArchive = async () => {
+        if (!archivingLocation) return
+        setIsArchiving(true)
         try {
-            const result = await DeleteLocation(deletingLocation.id)
+            const result = await ArchiveLocation(archivingLocation.id)
             if (result.error) {
-                toast.error('Delete Failed', { description: result.error })
+                toast.error('Archive Failed', { description: result.error })
                 return
             }
-            toast.success('Location Deleted', {
-                description: `"${deletingLocation.name}" has been permanently deleted.`
+            toast.success('Location Archived', {
+                description: `"${archivingLocation.name}" has been archived. Historical data is preserved.`
             })
             queryClient.invalidateQueries({ queryKey: ['locations'] })
             refetch()
-            if (selectedLocationId === deletingLocation.id) setSelectedLocation('all')
+            if (selectedLocationId === archivingLocation.id) setSelectedLocation('all')
         } catch {
-            toast.error('Delete Failed', { description: 'Unable to delete the location. Please try again.' })
+            toast.error('Archive Failed', { description: 'Unable to archive the location. Please try again.' })
         } finally {
-            setIsDeleting(false)
-            setDeletingLocation(null)
+            setIsArchiving(false)
+            setArchivingLocation(null)
+        }
+    }
+
+    const handleRestore = async (location: Location) => {
+        setRestoringId(location.id)
+        try {
+            const result = await RestoreLocation(location.id)
+            if (result.error) {
+                toast.error('Restore Failed', { description: result.error })
+                return
+            }
+            toast.success('Location Restored', {
+                description: `"${location.name}" is active again.`
+            })
+            queryClient.invalidateQueries({ queryKey: ['locations'] })
+            refetch()
+        } catch {
+            toast.error('Restore Failed', { description: 'Unable to restore the location. Please try again.' })
+        } finally {
+            setRestoringId(null)
         }
     }
 
@@ -93,6 +128,7 @@ export default function LocationsPage() {
         US_TIMEZONES.find(t => t.value === tz)?.label || tz
 
     const handleSelectLocation = (location: Location) => {
+        if (!location.is_active) return
         setSelectedLocation(location.id)
         toast.success(`Now viewing ${location.name}`)
     }
@@ -128,36 +164,61 @@ export default function LocationsPage() {
     const isSelected = (id: string) => selectedLocationId === id
 
     // ─── Shared action buttons ────────────────────────────────────────────────
-    const ActionButtons = ({ location, compact = false }: { location: Location; compact?: boolean }) => (
-        <div className={cn("flex items-center gap-1", compact ? "opacity-0 group-hover:opacity-100 transition-opacity" : "")}>
-            <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                onClick={(e) => { e.stopPropagation(); handleEditLocation(location) }}
-            >
-                <Edit className="h-4 w-4" />
-            </Button>
-            <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/locations/${location.id}/settings`) }}
-            >
-                <Settings className="h-4 w-4" />
-            </Button>
-            {canCreateLocation && (
+    const ActionButtons = ({ location, compact = false }: { location: Location; compact?: boolean }) => {
+        const isRestoring = restoringId === location.id
+
+        if (!location.is_active) {
+            return (
+                <div className={cn("flex items-center gap-1", compact ? "opacity-0 group-hover:opacity-100 transition-opacity" : "")}>
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 px-2 text-muted-foreground hover:text-foreground gap-1.5"
+                        onClick={(e) => { e.stopPropagation(); handleRestore(location) }}
+                        disabled={isRestoring}
+                    >
+                        {isRestoring
+                            ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            : <RotateCcw className="h-3.5 w-3.5" />
+                        }
+                        <span className="text-xs">Restore</span>
+                    </Button>
+                </div>
+            )
+        }
+
+        return (
+            <div className={cn("flex items-center gap-1", compact ? "opacity-0 group-hover:opacity-100 transition-opacity" : "")}>
                 <Button
                     variant="ghost"
                     size="icon"
-                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                    onClick={(e) => { e.stopPropagation(); setDeletingLocation(location) }}
+                    className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                    onClick={(e) => { e.stopPropagation(); handleEditLocation(location) }}
                 >
-                    <Trash2 className="h-4 w-4" />
+                    <Edit className="h-4 w-4" />
                 </Button>
-            )}
-        </div>
-    )
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                    onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/locations/${location.id}/settings`) }}
+                >
+                    <Settings className="h-4 w-4" />
+                </Button>
+                {isOwner && (
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground hover:text-amber-600"
+                        title="Archive location"
+                        onClick={(e) => { e.stopPropagation(); setArchivingLocation(location) }}
+                    >
+                        <Archive className="h-4 w-4" />
+                    </Button>
+                )}
+            </div>
+        )
+    }
 
     return (
         <div className="space-y-6 animate-in fade-in duration-500">
@@ -181,8 +242,8 @@ export default function LocationsPage() {
             {/* ── Stats ──────────────────────────────────────────────────────── */}
             <div className="grid grid-cols-3 gap-4">
                 {[
-                    { label: 'Total', value: locationsList.length, icon: Building2, color: 'text-muted-foreground' },
-                    { label: 'Active', value: activeLocations, icon: CheckCircle, color: 'text-emerald-500' },
+                    { label: 'Active', value: activeLocations.length, icon: CheckCircle, color: 'text-emerald-500' },
+                    { label: 'Archived', value: archivedLocations.length, icon: Archive, color: 'text-muted-foreground' },
                     { label: 'Taking Orders', value: acceptingOrders, icon: MapPin, color: 'text-primary' },
                 ].map(stat => (
                     <div key={stat.label} className="rounded-xl border bg-card px-4 py-3 flex items-center gap-3">
@@ -220,7 +281,29 @@ export default function LocationsPage() {
             )}
 
             {/* ── Toolbar ────────────────────────────────────────────────────── */}
-            <div className="flex items-center gap-3">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                {/* Status filter tabs */}
+                <div className="flex items-center rounded-lg border bg-muted/40 p-0.5 gap-0.5 shrink-0">
+                    {([
+                        { key: 'active', label: `Active (${activeLocations.length})` },
+                        { key: 'archived', label: `Archived (${archivedLocations.length})` },
+                        { key: 'all', label: 'All' },
+                    ] as { key: StatusFilter; label: string }[]).map(tab => (
+                        <Button
+                            key={tab.key}
+                            variant="ghost"
+                            size="sm"
+                            className={cn(
+                                "h-8 px-3 rounded-md text-xs font-medium",
+                                statusFilter === tab.key && "bg-background shadow-sm text-foreground"
+                            )}
+                            onClick={() => setStatusFilter(tab.key)}
+                        >
+                            {tab.label}
+                        </Button>
+                    ))}
+                </div>
+
                 <div className="relative flex-1 max-w-sm">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
                     <Input
@@ -230,33 +313,30 @@ export default function LocationsPage() {
                         className="pl-9"
                     />
                 </div>
-                <div className="flex items-center rounded-lg border bg-muted/40 p-0.5 gap-0.5">
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        className={cn(
-                            "h-8 w-8 p-0 rounded-md",
-                            viewMode === 'grid' && "bg-background shadow-sm text-foreground"
-                        )}
-                        onClick={() => setViewMode('grid')}
-                    >
-                        <LayoutGrid className="h-4 w-4" />
-                    </Button>
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        className={cn(
-                            "h-8 w-8 p-0 rounded-md",
-                            viewMode === 'list' && "bg-background shadow-sm text-foreground"
-                        )}
-                        onClick={() => setViewMode('list')}
-                    >
-                        <List className="h-4 w-4" />
-                    </Button>
+
+                <div className="flex items-center gap-2 ml-auto">
+                    <div className="flex items-center rounded-lg border bg-muted/40 p-0.5 gap-0.5">
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className={cn("h-8 w-8 p-0 rounded-md", viewMode === 'grid' && "bg-background shadow-sm text-foreground")}
+                            onClick={() => setViewMode('grid')}
+                        >
+                            <LayoutGrid className="h-4 w-4" />
+                        </Button>
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className={cn("h-8 w-8 p-0 rounded-md", viewMode === 'list' && "bg-background shadow-sm text-foreground")}
+                            onClick={() => setViewMode('list')}
+                        >
+                            <List className="h-4 w-4" />
+                        </Button>
+                    </div>
+                    <p className="text-sm text-muted-foreground whitespace-nowrap">
+                        {isLoading ? '' : `${filteredLocations.length} location${filteredLocations.length !== 1 ? 's' : ''}`}
+                    </p>
                 </div>
-                <p className="text-sm text-muted-foreground whitespace-nowrap">
-                    {isLoading ? '' : `${filteredLocations.length} location${filteredLocations.length !== 1 ? 's' : ''}`}
-                </p>
             </div>
 
             {/* ── Content ────────────────────────────────────────────────────── */}
@@ -274,13 +354,15 @@ export default function LocationsPage() {
                 <div className="rounded-xl border bg-card">
                     <Empty
                         icon={MapPin}
-                        title={locationsList.length === 0 ? "No locations yet" : "No locations found"}
+                        title={statusFilter === 'archived' ? "No archived locations" : locationsList.length === 0 ? "No locations yet" : "No locations found"}
                         description={
-                            locationsList.length === 0
-                                ? canCreateLocation
-                                    ? "Get started by adding your first business location"
-                                    : "Contact your admin to add a location"
-                                : "Try adjusting your search terms"
+                            statusFilter === 'archived'
+                                ? "Archived locations will appear here"
+                                : locationsList.length === 0
+                                    ? canCreateLocation
+                                        ? "Get started by adding your first business location"
+                                        : "Contact your admin to add a location"
+                                    : "Try adjusting your search or filter"
                         }
                         action={
                             locationsList.length === 0 && canCreateLocation ? (
@@ -300,10 +382,13 @@ export default function LocationsPage() {
                         <div
                             key={location.id}
                             className={cn(
-                                "group relative rounded-xl border bg-card p-5 cursor-pointer",
-                                "transition-all duration-150 hover:shadow-md hover:border-primary/30",
+                                "group relative rounded-xl border bg-card p-5",
+                                "transition-all duration-150",
                                 "animate-in fade-in slide-in-from-bottom-3",
-                                isSelected(location.id) && "border-primary ring-1 ring-primary bg-primary/[0.02]"
+                                location.is_active
+                                    ? "cursor-pointer hover:shadow-md hover:border-primary/30"
+                                    : "opacity-60 cursor-default",
+                                isSelected(location.id) && "border-primary ring-1 ring-primary bg-primary/2"
                             )}
                             style={{ animationDelay: `${index * 40}ms` }}
                             onClick={() => handleSelectLocation(location)}
@@ -340,7 +425,7 @@ export default function LocationsPage() {
                             <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground mb-4">
                                 {location.phone && (
                                     <span className="flex items-center gap-1">
-                                        <Phone className="h-3 w-3" />{location.phone}
+                                        <Phone className="h-3 w-3" />{formatPhoneForDisplay(location.phone)}
                                     </span>
                                 )}
                                 {location.timezone && (
@@ -352,12 +437,14 @@ export default function LocationsPage() {
 
                             {/* Badges */}
                             <div className="flex flex-wrap gap-1.5">
-                                <Badge
-                                    variant={location.is_active ? "default" : "secondary"}
-                                    className="text-xs px-2 py-0"
-                                >
-                                    {location.is_active ? 'Active' : 'Inactive'}
-                                </Badge>
+                                {!location.is_active ? (
+                                    <Badge variant="secondary" className="text-xs px-2 py-0 gap-1">
+                                        <Archive className="h-2.5 w-2.5" />
+                                        Archived
+                                    </Badge>
+                                ) : (
+                                    <Badge variant="default" className="text-xs px-2 py-0">Active</Badge>
+                                )}
                                 {location.is_accepting_orders && (
                                     <Badge className="text-xs px-2 py-0 bg-emerald-600 hover:bg-emerald-600">
                                         Taking Orders
@@ -389,10 +476,12 @@ export default function LocationsPage() {
                         <div
                             key={location.id}
                             className={cn(
-                                "group flex items-center gap-4 px-5 py-4 cursor-pointer",
-                                "transition-colors hover:bg-muted/40",
-                                "animate-in fade-in",
-                                isSelected(location.id) && "bg-primary/[0.03] border-l-2 border-l-primary"
+                                "group flex items-center gap-4 px-5 py-4",
+                                "transition-colors animate-in fade-in",
+                                location.is_active
+                                    ? "cursor-pointer hover:bg-muted/40"
+                                    : "opacity-60 cursor-default",
+                                isSelected(location.id) && "bg-primary/3 border-l-2 border-l-primary"
                             )}
                             style={{ animationDelay: `${index * 30}ms` }}
                             onClick={() => handleSelectLocation(location)}
@@ -434,16 +523,20 @@ export default function LocationsPage() {
 
                             {/* Badges */}
                             <div className="hidden lg:flex items-center gap-1.5 shrink-0">
-                                <Badge
-                                    variant={location.is_active ? "default" : "secondary"}
-                                    className="text-xs px-2 py-0"
-                                >
-                                    {location.is_active ? 'Active' : 'Inactive'}
-                                </Badge>
-                                {location.is_accepting_orders && (
-                                    <Badge className="text-xs px-2 py-0 bg-emerald-600 hover:bg-emerald-600">
-                                        Taking Orders
+                                {!location.is_active ? (
+                                    <Badge variant="secondary" className="text-xs px-2 py-0 gap-1">
+                                        <Archive className="h-2.5 w-2.5" />
+                                        Archived
                                     </Badge>
+                                ) : (
+                                    <>
+                                        <Badge variant="default" className="text-xs px-2 py-0">Active</Badge>
+                                        {location.is_accepting_orders && (
+                                            <Badge className="text-xs px-2 py-0 bg-emerald-600 hover:bg-emerald-600">
+                                                Taking Orders
+                                            </Badge>
+                                        )}
+                                    </>
                                 )}
                             </div>
 
@@ -454,34 +547,35 @@ export default function LocationsPage() {
                 </div>
             )}
 
-            {/* ── Delete dialog ───────────────────────────────────────────────── */}
-            <Dialog open={!!deletingLocation} onOpenChange={(open) => !open && setDeletingLocation(null)}>
+            {/* ── Archive confirmation dialog ─────────────────────────────────── */}
+            <Dialog open={!!archivingLocation} onOpenChange={(open) => !open && setArchivingLocation(null)}>
                 <DialogContent>
                     <DialogHeader>
-                        <DialogTitle className="flex items-center gap-2 text-destructive">
-                            <Trash2 className="h-5 w-5" />
-                            Delete Location
+                        <DialogTitle className="flex items-center gap-2">
+                            <Archive className="h-5 w-5 text-amber-600" />
+                            Archive Location
                         </DialogTitle>
                         <DialogDescription>
-                            Are you sure you want to delete "{deletingLocation?.name}"? This will remove all associated data including staff assignments, menu customizations, and historical data. This action cannot be undone.
+                            Archive <strong>{archivingLocation?.name}</strong>? This location will stop accepting orders,
+                            staff scoped only here will be deactivated, and any open cash drawer sessions will be flagged for
+                            close-out. Historical reports will still include this location&apos;s data.
+                            You can restore it at any time.
                         </DialogDescription>
                     </DialogHeader>
                     <DialogFooter>
-                        <Button variant="outline" onClick={() => setDeletingLocation(null)} disabled={isDeleting}>
+                        <Button variant="outline" onClick={() => setArchivingLocation(null)} disabled={isArchiving}>
                             Cancel
                         </Button>
-                        <Button variant="destructive" onClick={handleDelete} disabled={isDeleting}>
-                            {isDeleting ? (
-                                <>
-                                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24">
-                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                                    </svg>
-                                    Deleting...
-                                </>
-                            ) : (
-                                <><Trash2 className="h-4 w-4 mr-2" />Delete Location</>
-                            )}
+                        <Button
+                            variant="default"
+                            className="bg-amber-600 hover:bg-amber-700 text-white"
+                            onClick={handleArchive}
+                            disabled={isArchiving}
+                        >
+                            {isArchiving
+                                ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Archiving…</>
+                                : <><Archive className="h-4 w-4 mr-2" />Archive Location</>
+                            }
                         </Button>
                     </DialogFooter>
                 </DialogContent>

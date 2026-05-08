@@ -17,27 +17,30 @@ import {
     Star,
     Filter,
     ChevronRight,
-    Loader2
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Empty } from '@/components/ui/empty'
 import { useQuery } from '@tanstack/react-query'
 import { GetLocationMembers, GetLocationInvites } from '@/app/dashboard/actions/location-members'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet'
-import { Separator } from '@/components/ui/separator'
+import { StaffDetailSheet } from '@/components/dashboard/staff/StaffDetailSheet'
+import { InviteUserWizard } from '@/components/dashboard/staff/InviteUserWizard'
+import { useStaffMember } from '@/app/dashboard/hooks/useStaff'
 
 interface TeamTabProps {
     location: Location
 }
 
-// Role badge colors
 const ROLE_COLORS: Record<string, string> = {
     'merchant.owner': 'bg-amber-100 text-amber-800 border-amber-300',
     'merchant.admin': 'bg-purple-100 text-purple-800 border-purple-300',
     'merchant.manager': 'bg-blue-100 text-blue-800 border-blue-300',
     'merchant.shift_manager': 'bg-cyan-100 text-cyan-800 border-cyan-300',
     'merchant.cashier': 'bg-green-100 text-green-800 border-green-300',
+    'merchant.server': 'bg-emerald-100 text-emerald-800 border-emerald-300',
+    'merchant.busser': 'bg-orange-100 text-orange-800 border-orange-300',
+    'merchant.cook': 'bg-red-100 text-red-800 border-red-300',
+    'merchant.line_cook': 'bg-rose-100 text-rose-800 border-rose-300',
     'merchant.staff': 'bg-gray-100 text-gray-800 border-gray-300',
 }
 
@@ -45,57 +48,53 @@ export function TeamTab({ location }: TeamTabProps) {
     const [searchTerm, setSearchTerm] = useState('')
     const [roleFilter, setRoleFilter] = useState<string>('all')
     const [statusFilter, setStatusFilter] = useState<string>('all')
-    const [selectedMember, setSelectedMember] = useState<LocationMemberWithDetails | null>(null)
+    const [selectedMemberId, setSelectedMemberId] = useState<string | undefined>(undefined)
+    const [detailOpen, setDetailOpen] = useState(false)
+    const [inviteOpen, setInviteOpen] = useState(false)
 
-    // Fetch team members
     const { data: members, isLoading: membersLoading } = useQuery({
         queryKey: ['location-members', location.id],
         queryFn: () => GetLocationMembers(location.id),
     })
 
-    // Fetch pending invites
     const { data: invites, isLoading: invitesLoading } = useQuery({
         queryKey: ['location-invites', location.id],
         queryFn: () => GetLocationInvites(location.id),
     })
 
+    const { data: selectedStaff } = useStaffMember(selectedMemberId)
+
     const membersList = Array.isArray(members) ? members : []
     const invitesList = Array.isArray(invites) ? invites : []
     const pendingInvites = invitesList.filter(i => i.status === 'pending')
 
-    // Get unique roles for filter
     const uniqueRoles = [...new Set(membersList.map(m => m.role_code))]
 
-    // Filter members
     const filteredMembers = membersList.filter(member => {
         if (!member.user) return false
         const matchesSearch =
             `${member.user.first_name ?? ''} ${member.user.last_name ?? ''}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
             (member.user.email ?? '').toLowerCase().includes(searchTerm.toLowerCase())
-
         const matchesRole = roleFilter === 'all' || member.role_code === roleFilter
         const matchesStatus = statusFilter === 'all' ||
             (statusFilter === 'active' && member.is_active) ||
             (statusFilter === 'inactive' && !member.is_active)
-
         return matchesSearch && matchesRole && matchesStatus
     })
 
-    const getRoleBadgeClass = (roleCode: string) => {
-        return ROLE_COLORS[roleCode] || ROLE_COLORS['merchant.staff']
-    }
+    const getRoleBadgeClass = (roleCode: string) => ROLE_COLORS[roleCode] || ROLE_COLORS['merchant.staff']
 
-    const formatDate = (dateString: string) => {
-        return new Date(dateString).toLocaleDateString('en-US', {
-            month: 'short',
-            day: 'numeric',
-            year: 'numeric'
-        })
+    const formatDate = (dateString: string) => new Date(dateString).toLocaleDateString('en-US', {
+        month: 'short', day: 'numeric', year: 'numeric'
+    })
+
+    const handleMemberClick = (member: LocationMemberWithDetails) => {
+        setSelectedMemberId(member.id)
+        setDetailOpen(true)
     }
 
     return (
         <div className="space-y-4">
-            {/* Header with filters */}
             <Card>
                 <CardHeader className="pb-3">
                     <div className="flex items-center justify-between">
@@ -111,14 +110,13 @@ export function TeamTab({ location }: TeamTabProps) {
                             </CardTitle>
                             <CardDescription>Staff assigned to this location</CardDescription>
                         </div>
-                        <Button size="sm" disabled>
+                        <Button size="sm" onClick={() => setInviteOpen(true)}>
                             <UserPlus className="h-4 w-4 mr-1" />
                             Invite
                         </Button>
                     </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                    {/* Search and Filters */}
                     <div className="flex flex-col sm:flex-row gap-2">
                         <div className="relative flex-1">
                             <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -157,7 +155,6 @@ export function TeamTab({ location }: TeamTabProps) {
                         </div>
                     </div>
 
-                    {/* Members List */}
                     {membersLoading ? (
                         <div className="space-y-2">
                             {[1, 2, 3].map((i) => (
@@ -182,7 +179,7 @@ export function TeamTab({ location }: TeamTabProps) {
                             }
                             action={
                                 membersList.length === 0 ? (
-                                    <Button size="sm" disabled>
+                                    <Button size="sm" onClick={() => setInviteOpen(true)}>
                                         <UserPlus className="h-4 w-4 mr-2" />
                                         Invite Member
                                     </Button>
@@ -194,7 +191,7 @@ export function TeamTab({ location }: TeamTabProps) {
                             {filteredMembers.map((member, index) => (
                                 <button
                                     key={member.id}
-                                    onClick={() => setSelectedMember(member)}
+                                    onClick={() => handleMemberClick(member)}
                                     className={cn(
                                         "w-full flex items-center gap-3 p-3 border rounded-lg text-left",
                                         "hover:bg-muted/50 transition-colors",
@@ -236,7 +233,6 @@ export function TeamTab({ location }: TeamTabProps) {
                 </CardContent>
             </Card>
 
-            {/* Pending Invites */}
             {pendingInvites.length > 0 && (
                 <Card>
                     <CardHeader className="pb-3">
@@ -281,90 +277,20 @@ export function TeamTab({ location }: TeamTabProps) {
                 </Card>
             )}
 
-            {/* Member Detail Sheet */}
-            <Sheet open={!!selectedMember} onOpenChange={(open) => !open && setSelectedMember(null)}>
-                <SheetContent side="right" className="w-full sm:max-w-md">
-                    {selectedMember && (
-                        <>
-                            <SheetHeader>
-                                <div className="flex items-center gap-4">
-                                    <Avatar className="h-16 w-16">
-                                        <AvatarImage src={selectedMember.user?.avatar_url || undefined} />
-                                        <AvatarFallback className="text-lg">
-                                            {selectedMember.user?.first_name?.[0]}{selectedMember.user?.last_name?.[0]}
-                                        </AvatarFallback>
-                                    </Avatar>
-                                    <div>
-                                        <SheetTitle className="text-xl">
-                                            {selectedMember.user?.first_name} {selectedMember.user?.last_name}
-                                        </SheetTitle>
-                                        <SheetDescription>{selectedMember.user?.email}</SheetDescription>
-                                    </div>
-                                </div>
-                            </SheetHeader>
+            <StaffDetailSheet
+                staff={selectedStaff ?? null}
+                open={detailOpen}
+                onOpenChange={(open) => {
+                    setDetailOpen(open)
+                    if (!open) setSelectedMemberId(undefined)
+                }}
+            />
 
-                            <div className="mt-6 space-y-6">
-                                {/* Status */}
-                                <div className="flex items-center gap-2">
-                                    <Badge variant={selectedMember.is_active ? "default" : "secondary"}>
-                                        {selectedMember.is_active ? 'Active' : 'Inactive'}
-                                    </Badge>
-                                    {selectedMember.is_primary_location && (
-                                        <Badge variant="outline" className="gap-1">
-                                            <Star className="h-3 w-3 text-amber-500" />
-                                            Primary Location
-                                        </Badge>
-                                    )}
-                                </div>
-
-                                <Separator />
-
-                                {/* Role */}
-                                <div>
-                                    <h4 className="text-sm font-medium text-muted-foreground mb-2">Role</h4>
-                                    <Badge
-                                        variant="outline"
-                                        className={cn("text-sm", getRoleBadgeClass(selectedMember.role_code))}
-                                    >
-                                        {selectedMember.role_code?.split('.').pop()?.replace('_', ' ') ?? 'Staff'}
-                                    </Badge>
-                                    {selectedMember.role && typeof selectedMember.role === 'object' && (
-                                        <p className="text-sm text-muted-foreground mt-2">
-                                            Level: {selectedMember.role.level} ({selectedMember.role.level_type})
-                                        </p>
-                                    )}
-                                </div>
-
-                                <Separator />
-
-                                {/* Employment Details */}
-                                <div>
-                                    <h4 className="text-sm font-medium text-muted-foreground mb-2">Employment</h4>
-                                    <div className="space-y-2 text-sm">
-                                        <div className="flex justify-between">
-                                            <span className="text-muted-foreground">Type</span>
-                                            <span className="capitalize">
-                                                {selectedMember.employment_type?.replace('_', ' ') || 'Not specified'}
-                                            </span>
-                                        </div>
-                                        {selectedMember.hourly_rate && (
-                                            <div className="flex justify-between">
-                                                <span className="text-muted-foreground">Hourly Rate</span>
-                                                <span>${selectedMember.hourly_rate.toFixed(2)}/hr</span>
-                                            </div>
-                                        )}
-                                        <div className="flex justify-between">
-                                            <span className="text-muted-foreground">Assigned</span>
-                                            <span>{formatDate(selectedMember.assigned_at)}</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </>
-                    )}
-                </SheetContent>
-            </Sheet>
+            <InviteUserWizard
+                open={inviteOpen}
+                onOpenChange={setInviteOpen}
+                defaultLocationId={location.id}
+            />
         </div>
     )
 }
-

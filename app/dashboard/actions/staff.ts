@@ -7,6 +7,10 @@ import { randomBytes } from "crypto";
 import bcrypt from "bcryptjs";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { LogAuditEvent } from "./audit-logs";
+import { findEmailConflict } from "@/app/manage/actions/email-duplicates";
+import { emailConflictMessage, normalizeEmail, isValidEmail } from "@/lib/utils/email";
+import { getEffectiveMerchantContext } from "@/lib/admin/merchant-context";
+import { resolveOrgInviterUserId } from "@/lib/clerk/org-inviter";
 
 // ============================================================================
 // TYPES
@@ -87,6 +91,21 @@ export async function inviteStaffMember(
 
   const inviteType = role.requires_clerk_account ? "clerk" : "pos_only";
 
+  // Pre-flight: block duplicate emails (case-insensitive) before any Clerk or DB writes.
+  if (params.email) {
+    const normalized = normalizeEmail(params.email);
+    if (!isValidEmail(normalized)) {
+      return { success: false, error: "Invalid email address" };
+    }
+    const conflict = await findEmailConflict(normalized, {
+      scope: { merchantId: params.merchantId },
+      tables: ["users", "staff_profiles", "location_invites", "pending_org_admin_invites"],
+    });
+    if (conflict) {
+      return { success: false, error: emailConflictMessage(conflict) };
+    }
+  }
+
   try {
     if (inviteType === "clerk") {
       // ────────────────────────────────────────────────────────────
@@ -96,13 +115,40 @@ export async function inviteStaffMember(
         return { success: false, error: "Email required for this role" };
       }
 
-      // Create Clerk organization invitation
+      // Always resolve an inviter from the merchant org. Clerk requires
+      // inviterUserId to be a member of the target org; under HQ admin
+      // impersonation the auth() user is not a member, and even outside
+      // impersonation this is a safe no-op (we just pick an existing admin).
+      // Mirrors the adminInviteClerkStaff pattern.
+      let impersonationCtx: Awaited<ReturnType<typeof getEffectiveMerchantContext>> | null = null;
+      try {
+        impersonationCtx = await getEffectiveMerchantContext(clerkOrgId);
+      } catch {
+        impersonationCtx = null;
+      }
+      const isImpersonating = impersonationCtx?.isImpersonating === true;
+
+      let resolvedInviterUserId: string;
+      let inviterCleanup: () => Promise<void>;
+      try {
+        const resolved = await resolveOrgInviterUserId(clerkOrgId);
+        resolvedInviterUserId = resolved.inviterUserId;
+        inviterCleanup = resolved.cleanup;
+      } catch (e: any) {
+        return {
+          success: false,
+          error: e?.message ?? "No eligible inviter found in this merchant org",
+        };
+      }
+
       const clerk = await clerkClient();
-      const invitation = await clerk.organizations.createOrganizationInvitation(
-        {
+      let invitation: Awaited<ReturnType<typeof clerk.organizations.createOrganizationInvitation>>;
+      try {
+        invitation = await clerk.organizations.createOrganizationInvitation({
           organizationId: clerkOrgId,
           emailAddress: params.email,
           role: role.level_type === "admin" ? "org:admin" : "org:member",
+          inviterUserId: resolvedInviterUserId,
           publicMetadata: {
             role: params.roleCode,
             merchantId: params.merchantId,
@@ -117,9 +163,10 @@ export async function inviteStaffMember(
               }),
             ),
           },
-        },
-      );
-      console.log("Clerk invitation:", invitation);
+        });
+      } finally {
+        await inviterCleanup();
+      }
 
       if (invitation.id) {
         // Store invite in our DB
@@ -141,7 +188,29 @@ export async function inviteStaffMember(
             status: "pending",
           });
 
-        if (inviteError) throw inviteError;
+        if (inviteError) {
+          // DB insert failed — revoke the Clerk invitation so we don't leave
+          // an orphan. Clerk's revoke also requires requestingUserId to be an
+          // org member, so always re-resolve from the merchant org.
+          try {
+            const r = await resolveOrgInviterUserId(clerkOrgId);
+            try {
+              await clerk.organizations.revokeOrganizationInvitation({
+                organizationId: clerkOrgId,
+                invitationId: invitation.id,
+                requestingUserId: r.inviterUserId,
+              });
+            } finally {
+              await r.cleanup();
+            }
+          } catch (revokeErr) {
+            console.warn(
+              "[inviteStaffMember] Failed to revoke orphan Clerk invite:",
+              revokeErr,
+            );
+          }
+          throw inviteError;
+        }
 
         // Log audit event
         await LogAuditEvent({
@@ -155,6 +224,7 @@ export async function inviteStaffMember(
             email: params.email,
             role_code: params.roleCode,
             locations: params.locationAssignments.map((l) => l.locationId),
+            ...(isImpersonating ? { via: "impersonation", hq_admin_id: userId } : {}),
           },
         });
 

@@ -348,7 +348,7 @@ s3_secret_key = "env(S3_SECRET_KEY)"
 
 [functions.clerk-webhooks]
 enabled = true
-verify_jwt = true
+verify_jwt = false
 import_map = "./functions/clerk-webhooks/deno.json"
 # Uncomment to specify a custom file path to the entrypoint.
 # Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
@@ -359,7 +359,7 @@ entrypoint = "./functions/clerk-webhooks/index.ts"
 
 [functions.orderout-menu-webhook]
 enabled = true
-verify_jwt = true
+verify_jwt = false
 import_map = "./functions/orderout-menu-webhook/deno.json"
 # Uncomment to specify a custom file path to the entrypoint.
 # Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
@@ -378,3 +378,54 @@ entrypoint = "./functions/orderout-orders-webhook/index.ts"
 enabled = true
 verify_jwt = false
 entrypoint = "./functions/cdn-upload/index.ts"
+
+[functions.telnyx-messaging]
+enabled = true
+verify_jwt = false
+import_map = "./functions/telnyx-messaging/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/telnyx-messaging/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/telnyx-messaging/*.html" ]
+
+[functions.notify-waitlist-guest]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/notify-waitlist-guest/index.ts"
+
+[functions.cancel-online-order]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/cancel-online-order/index.ts"
+
+[functions.create-online-order]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/create-online-order/index.ts"
+
+[functions.dejavoo-whitelist-domain]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/dejavoo-whitelist-domain/index.ts"
+
+[functions.orderout-onboard]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/orderout-onboard/index.ts"
+
+[functions.orderout-push-menu-webhook]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/orderout-push-menu-webhook/index.ts"
+
+[functions.process-abandoned-carts]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/process-abandoned-carts/index.ts"
+
+[functions.process-online-payment]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/process-online-payment/index.ts"

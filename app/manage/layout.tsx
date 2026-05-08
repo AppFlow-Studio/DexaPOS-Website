@@ -46,11 +46,13 @@ import {
     Layers,
     UserCheck,
     ShieldCheck,
+    ShieldAlert,
     History,
     LogOut,
     Monitor,
     Plug,
     AlertOctagon,
+    Receipt,
     LucideIcon,
 } from 'lucide-react'
 import Link from 'next/link'
@@ -58,6 +60,8 @@ import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { AnimatedThemeToggler } from '@/components/ui/animated-theme-toggler'
 import { useUserInfo } from './hooks/useUserInfo.'
+import { useQueryClient } from '@tanstack/react-query'
+import { resetClientSession } from '@/lib/auth/session-reset'
 import { useAdminPermissions } from '@/lib/hooks/useAdminPermissions'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
@@ -116,6 +120,12 @@ const navMain: NavGroup[] = [
                 icon: BarChart3,
                 requiredPermission: 'analytics.view',
             },
+            {
+                title: 'Platform Fees',
+                url: '/manage/platform-fees',
+                icon: Receipt,
+                requiredPermission: 'hq.merchant.transactions' as PermissionCode,
+            },
         ]
     },
     {
@@ -138,6 +148,12 @@ const navMain: NavGroup[] = [
                 title: 'Audit Logs',
                 url: '/manage/audit-logs',
                 icon: History,
+                requiredPermission: 'audit.view',
+            },
+            {
+                title: 'Impersonation Sessions',
+                url: '/manage/audit-logs/impersonation',
+                icon: ShieldAlert,
                 requiredPermission: 'audit.view',
             },
             {
@@ -169,12 +185,12 @@ const navMain: NavGroup[] = [
                 icon: Monitor,
                 requiredPermission: 'system.config.manage' as PermissionCode,
             },
-            {
-                title: 'Integrations',
-                url: '/manage/settings/integrations',
-                icon: Plug,
-                requiredPermission: 'hq.merchant.update' as PermissionCode,
-            },
+            // {
+            //     title: 'Integrations',
+            //     url: '/manage/settings/integrations',
+            //     icon: Plug,
+            //     requiredPermission: 'hq.merchant.update' as PermissionCode,
+            // },
         ]
     }
 ]
@@ -199,7 +215,14 @@ function AppSidebar() {
     const pathname = usePathname()
     
     const { signOut } = useClerk()
+    const queryClient = useQueryClient()
     const canCreateMerchants = hasPermission('merchants.create')
+
+    const handleSignOut = async () => {
+        await resetClientSession(queryClient)
+        await signOut()
+        window.location.href = '/sign-in'
+    }
 
     const isLoading = userInfoLoading || authLoading
     // Filter navigation items based on user permissions
@@ -365,7 +388,7 @@ function AppSidebar() {
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem>
-                                <button onClick={() => signOut({ redirectUrl: '/' })}>
+                                <button onClick={handleSignOut}>
                                     <div className='flex items-center gap-2'>
                                         <LogOut className="mr-2 h-4 w-4" />
                                         Log out
@@ -430,15 +453,7 @@ export default function ManageLayout({
         }
     }, [isLoaded, isSignedIn, router])
 
-    if (!isLoaded) {
-        return (
-            <div className="flex h-screen items-center justify-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-            </div>
-        )
-    }
-
-    if (!isSignedIn) {
+    if (isLoaded && !isSignedIn) {
         return null
     }
 
@@ -449,7 +464,7 @@ export default function ManageLayout({
                     <DeniedParamHandler />
                 </Suspense>
                 <AppSidebar />
-                <main className="flex-1 flex flex-col min-w-0">
+                <main aria-label="Admin content" className="flex-1 flex flex-col min-w-0">
                     <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
                         <SidebarTrigger className="-ml-1" />
                         <div className="flex items-center gap-2">
@@ -465,7 +480,7 @@ export default function ManageLayout({
                             </Button>
                         </div>
                     </header>
-                    <div className="flex-1 overflow-y-auto overflow-x-hidden p-6 min-w-0">
+                    <div id="main-content" className="flex-1 overflow-y-auto overflow-x-hidden p-6 min-w-0">
                     {children}
                     </div>
                 </main>

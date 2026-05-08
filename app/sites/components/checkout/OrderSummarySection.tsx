@@ -9,6 +9,9 @@ interface OrderSummarySectionProps {
   itemCount: number;
   showDeliveryFee: boolean;
   taxRate?: number; // decimal e.g. 0.08875
+  discountAmount?: number;
+  promoCode?: string;
+  pricingDisclosureText?: string | null;
 }
 
 export function OrderSummarySection({
@@ -20,6 +23,9 @@ export function OrderSummarySection({
   itemCount,
   showDeliveryFee,
   taxRate,
+  discountAmount,
+  promoCode,
+  pricingDisclosureText,
 }: OrderSummarySectionProps) {
   return (
     <section>
@@ -41,6 +47,12 @@ export function OrderSummarySection({
             <span>{deliveryFee > 0 ? `$${deliveryFee.toFixed(2)}` : "Free"}</span>
           </div>
         )}
+        {discountAmount && discountAmount > 0 ? (
+          <div className="flex justify-between text-sm font-medium" style={{ color: "#16a34a" }}>
+            <span>Promo{promoCode ? ` (${promoCode})` : ""}</span>
+            <span>−${discountAmount.toFixed(2)}</span>
+          </div>
+        ) : null}
         {tipAmount > 0 && (
           <div className="flex justify-between text-sm" style={{ color: "var(--text-secondary)" }}>
             <span>Tip</span>
@@ -54,6 +66,11 @@ export function OrderSummarySection({
           <span>Total</span>
           <span>${total.toFixed(2)}</span>
         </div>
+        {pricingDisclosureText && (
+          <p className="text-[11px] text-slate-500 pt-1 leading-snug">
+            {pricingDisclosureText}
+          </p>
+        )}
       </div>
     </section>
   );

@@ -81,6 +81,7 @@ export interface CreatePaymentTerminalInput {
   terminal_type: TerminalType;
   terminal_model?: string | null;
   serial_number?: string | null;
+  firmware_version?: string | null;
   auth_key: string;
   register_id: string;
   api_environment?: ApiEnvironment;
@@ -362,6 +363,10 @@ export async function createPaymentTerminal(
     }
 
     const now = new Date().toISOString();
+    const firmwareVersion = input.firmware_version?.trim() || null;
+    const initialMetadata: Record<string, unknown> = firmwareVersion
+      ? { firmware_version: firmwareVersion }
+      : {};
 
     const { data, error } = await supabase
       .from("payment_terminals")
@@ -372,7 +377,7 @@ export async function createPaymentTerminal(
         terminal_name: input.terminal_name,
         terminal_type: input.terminal_type,
         terminal_model: input.terminal_model || null,
-        serial_number: input.serial_number || null,
+        serial_number: input.serial_number?.trim() || null,
         auth_key: input.auth_key,
         register_id: input.register_id,
         auth_key_encrypted: bcrypt.hashSync(input.auth_key) || null,
@@ -393,7 +398,7 @@ export async function createPaymentTerminal(
         supports_tip_adjust: true,
         auto_settle: false,
         spin_proxy_timeout: 120,
-        metadata: {},
+        metadata: initialMetadata,
         created_at: now,
         updated_at: now,
       })
@@ -403,6 +408,15 @@ export async function createPaymentTerminal(
     if (error) {
       console.error("[createPaymentTerminal] Error:", error);
       return { success: false, error: error.message, data: null };
+    }
+
+    // Vault the auth_key and store the secret UUID pointer
+    const { error: vaultErr } = await supabase.rpc("upsert_terminal_vault_secret", {
+      p_terminal_id: data.id,
+      p_auth_key: input.auth_key,
+    });
+    if (vaultErr) {
+      console.error("[createPaymentTerminal] Vault error:", vaultErr);
     }
 
     // Mask auth_key in response
@@ -518,6 +532,17 @@ export async function updatePaymentTerminal(
     if (error) {
       console.error("[updatePaymentTerminal] Error:", error);
       return { success: false, error: error.message, data: null };
+    }
+
+    // Re-vault auth_key if it was updated
+    if (input.auth_key !== undefined) {
+      const { error: vaultErr } = await supabase.rpc("upsert_terminal_vault_secret", {
+        p_terminal_id: terminalId,
+        p_auth_key: input.auth_key,
+      });
+      if (vaultErr) {
+        console.error("[updatePaymentTerminal] Vault error:", vaultErr);
+      }
     }
 
     // Mask auth_key in response
@@ -889,8 +914,18 @@ export async function testTerminalConnection(terminalId: string) {
       ...terminal.metadata,
       online_since: onlineSince,
     };
+    // Retrieve the real auth_key from vault — never read plaintext from the row
+    const { data: authKey, error: vaultErr } = await supabase.rpc(
+      "get_payment_terminal_credentials",
+      { p_terminal_id: terminalId },
+    );
+    if (vaultErr || !authKey) {
+      console.error("[testTerminalConnection] Vault error:", vaultErr);
+      return { success: false, status: "Error", error: "Could not retrieve terminal credentials" };
+    }
+
     const response = await fetch(
-      `${process.env.NEXT_PUBLIC_DEJAVOO_SPIN_API}/v2/Common/TerminalStatus?request.registerId=${terminal.register_id}&request.authkey=${terminal.auth_key}`,
+      `${process.env.NEXT_PUBLIC_DEJAVOO_SPIN_API}/v2/Common/TerminalStatus?request.registerId=${terminal.register_id}&request.authkey=${authKey}`,
       requestOptions as RequestInit,
     )
       .then((response) => response.json())

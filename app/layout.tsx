@@ -26,6 +26,7 @@ export const metadata: Metadata = {
   title: "DexaPOS - Modern Point of Sale Solution",
   description:
     "Transform your business operations with DexaPOS - the modern point-of-sale solution with powerful analytics and seamless user experience.",
+  icons: { icon: "/favicon.ico" },
 };
 
 export default function RootLayout({
@@ -40,6 +41,12 @@ export default function RootLayout({
           className={`${geistSans.variable} ${geistMono.variable} antialiased`}
           suppressHydrationWarning
         >
+          <a
+            href="#main-content"
+            className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-[999] focus:p-2 focus:bg-white focus:text-black focus:rounded focus:shadow-md"
+          >
+            Skip to content
+          </a>
           <TanstackProvider>
             {children}
             <Toaster

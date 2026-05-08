@@ -1,11 +1,12 @@
 'use server'
 
 import { assertHQPermission } from '@/lib/admin/auth'
-import { createServiceRoleClient } from '@/lib/supabase/service-role'
-import { revalidatePath } from 'next/cache'
 import { logAdminAction } from '@/lib/admin/log-admin-action'
+import { deleteOrganizationLogo, uploadOrganizationLogo } from '@/lib/cdn/server'
+import { createServiceRoleClient } from '@/lib/supabase/service-role'
+import { createClerkClient } from '@clerk/backend'
+import { revalidatePath } from 'next/cache'
 
-const BUCKET = 'merchant-logos'
 const MAX_SIZE_BYTES = 2 * 1024 * 1024 // 2 MB
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
 
@@ -29,11 +30,11 @@ export async function uploadMerchantLogo(
   }
 
   const supabase = createServiceRoleClient()
+  const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY! })
 
-  // Look up the merchant to get clerk_org_id
   const { data: merchant, error: merchantError } = await supabase
     .from('merchants')
-    .select('id, name, clerk_org_id')
+    .select('id, name, clerk_org_id, organizations(imageURL)')
     .eq('id', merchantId)
     .single()
 
@@ -41,63 +42,73 @@ export async function uploadMerchantLogo(
     return { success: false, error: 'Merchant not found' }
   }
 
-  const ext = file.type.split('/')[1].replace('jpeg', 'jpg')
-  const path = `${merchantId}/logo.${ext}`
+  const merchantRow = merchant as {
+    id: string
+    name: string | null
+    clerk_org_id: string
+    organizations?: { imageURL?: string | null } | { imageURL?: string | null }[] | null
+  }
 
-  const bytes = await file.arrayBuffer()
-  const buffer = Buffer.from(bytes)
+  const uploadResult = await uploadOrganizationLogo(file, merchantRow.clerk_org_id)
+  if (!uploadResult.success || !uploadResult.cdnUrl) {
+    return { success: false, error: uploadResult.error || 'Upload failed' }
+  }
 
-  // Upsert into storage (replaces existing logo)
-  const { error: uploadError } = await supabase.storage
-    .from(BUCKET)
-    .upload(path, buffer, {
-      contentType: file.type,
-      upsert: true,
+  const logoUrl = uploadResult.cdnUrl
+  const clerkOrg = await clerkClient.organizations.getOrganization({
+    organizationId: merchantRow.clerk_org_id,
+  })
+  const previousClerkLogoUrl =
+    typeof clerkOrg.publicMetadata?.imageURL === 'string' ? clerkOrg.publicMetadata.imageURL : null
+  const previousDatabaseLogoUrl =
+    merchantRow.organizations && !Array.isArray(merchantRow.organizations)
+      ? merchantRow.organizations.imageURL ?? null
+      : null
+
+  try {
+    await clerkClient.organizations.updateOrganization(merchantRow.clerk_org_id, {
+      publicMetadata: {
+        ...(clerkOrg.publicMetadata as Record<string, unknown>),
+        imageURL: logoUrl,
+      },
     })
-
-  if (uploadError) {
-    // Bucket may not exist yet — try creating it then retry
-    if (uploadError.message?.includes('Bucket not found') || uploadError.message?.includes('bucket')) {
-      const { error: bucketError } = await supabase.storage.createBucket(BUCKET, {
-        public: true,
-        fileSizeLimit: MAX_SIZE_BYTES,
-        allowedMimeTypes: ALLOWED_TYPES,
-      })
-      if (bucketError && !bucketError.message?.includes('already exists')) {
-        return { success: false, error: `Storage error: ${bucketError.message}` }
-      }
-
-      const { error: retryError } = await supabase.storage
-        .from(BUCKET)
-        .upload(path, buffer, { contentType: file.type, upsert: true })
-
-      if (retryError) {
-        return { success: false, error: `Upload failed: ${retryError.message}` }
-      }
-    } else {
-      return { success: false, error: `Upload failed: ${uploadError.message}` }
+  } catch (error) {
+    await deleteOrganizationLogo(logoUrl, merchantRow.clerk_org_id)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to update organization metadata',
     }
   }
 
-  // Get the public URL
-  const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(path)
-  const logoUrl = urlData.publicUrl
-
-  // Persist to organizations.imageURL (this is what admin_merchant_summary view reads as logo_url)
   const { error: updateError } = await supabase
     .from('organizations')
     .update({ imageURL: logoUrl, updated_at: new Date().toISOString() })
-    .eq('id', merchant.clerk_org_id)
+    .eq('id', merchantRow.clerk_org_id)
 
   if (updateError) {
+    await deleteOrganizationLogo(logoUrl, merchantRow.clerk_org_id)
+    await clerkClient.organizations.updateOrganization(merchantRow.clerk_org_id, {
+      publicMetadata: {
+        ...(clerkOrg.publicMetadata as Record<string, unknown>),
+        imageURL: previousClerkLogoUrl,
+      },
+    })
     return { success: false, error: `Failed to save logo URL: ${updateError.message}` }
   }
 
-  await logAdminAction('MERCHANT_LOGO_UPDATED', {
-    merchantId: merchant.id,
+  const previousLogoUrl = previousClerkLogoUrl || previousDatabaseLogoUrl
+  if (previousLogoUrl && previousLogoUrl !== logoUrl) {
+    const deleteResult = await deleteOrganizationLogo(previousLogoUrl, merchantRow.clerk_org_id)
+    if (!deleteResult.success) {
+      console.warn('Failed to delete previous merchant logo:', deleteResult.error)
+    }
+  }
+
+  await logAdminAction('MERCHANT_UPDATED', {
+    merchantId: merchantRow.id,
     resourceType: 'merchant',
-    resourceId: merchant.id,
-    resourceName: merchant.name,
+    resourceId: merchantRow.id,
+    resourceName: merchantRow.name ?? merchantRow.id,
     metadata: { logoUrl },
   })
 

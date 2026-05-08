@@ -12,6 +12,7 @@ import {
   InviteClerkStaff,
   UpdateStaffLocationAssignment,
   ResetStaffPIN,
+  ResetStaffPassword,
   DeactivateStaffMember,
   ReactivateStaffMember,
   UpgradePOSStaffToClerk,
@@ -21,8 +22,10 @@ import {
   UpdateStaffProfileData,
   AddStaffToLocation,
   RemoveStaffFromLocation,
+  SetPrimaryLocation,
   BulkDeactivateStaff,
   BulkResetPINs,
+  BulkResetPasswords,
   BulkAssignRole,
 } from "../actions/unified-staff";
 import {
@@ -207,6 +210,15 @@ export function useCreateClerkUserDirectly() {
         });
       }
 
+      // Soft warning when Clerk rejected the phone (already linked to another
+      // account). The user was still created; phone is stored on staff_profiles.
+      if (result.data?.phone_skipped) {
+        toast.warning("Phone not linked to login", {
+          description:
+            "This phone is already on another account. Saved on staff profile only.",
+        });
+      }
+
       queryClient.invalidateQueries({ queryKey: ["unified-staff"] });
       queryClient.invalidateQueries({ queryKey: ["staff-member"] });
     },
@@ -250,12 +262,51 @@ export function useInviteClerkStaff() {
 
       queryClient.invalidateQueries({ queryKey: ["unified-staff"] });
       queryClient.invalidateQueries({ queryKey: ["staff-member"] });
+      queryClient.invalidateQueries({ queryKey: ["pending-invites"] });
     },
     onError: (error) => {
       toast.error("Failed to send invite", {
         description: "An unexpected error occurred",
       });
       console.error("Invite Clerk staff error:", error);
+    },
+  });
+}
+
+/**
+ * Set a location as the staff member's primary
+ */
+export function useSetPrimaryLocation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      memberId,
+      locationId,
+    }: {
+      memberId: string;
+      locationId: string;
+    }) => SetPrimaryLocation(memberId, locationId),
+    onSuccess: async (result, variables) => {
+      if (result.error) {
+        toast.error("Couldn't set primary location", { description: result.error });
+        return;
+      }
+
+      await queryClient.refetchQueries({
+        queryKey: ["staff-member", variables.memberId],
+        type: "active",
+        exact: true,
+      });
+
+      toast.success("Primary location updated");
+      queryClient.invalidateQueries({ queryKey: ["unified-staff"] });
+    },
+    onError: (error) => {
+      toast.error("Couldn't set primary location", {
+        description: "An unexpected error occurred",
+      });
+      console.error("Set primary location error:", error);
     },
   });
 }
@@ -683,7 +734,8 @@ export function useBulkResetPINs() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (memberIds: string[]) => BulkResetPINs(memberIds),
+    mutationFn: ({ memberIds, customPin }: { memberIds: string[]; customPin?: string }) =>
+      BulkResetPINs(memberIds, customPin),
     onSuccess: (result) => {
       if (result.error) {
         toast.error("Bulk PIN reset failed", { description: result.error });
@@ -750,6 +802,62 @@ export function useBulkAssignRole() {
         description: "An unexpected error occurred",
       });
       console.error("Bulk assign role error:", error);
+    },
+  });
+}
+
+/**
+ * Reset dashboard password for a single Clerk staff member
+ */
+export function useResetStaffPassword() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      memberId,
+      customPassword,
+    }: {
+      memberId: string;
+      customPassword?: string;
+    }) => ResetStaffPassword(memberId, customPassword),
+    onSuccess: (result) => {
+      if (result.error) {
+        toast.error("Failed to reset password", { description: result.error });
+        return;
+      }
+      queryClient.invalidateQueries({ queryKey: ["unified-staff"] });
+      queryClient.invalidateQueries({ queryKey: ["staff-member"] });
+    },
+    onError: () => {
+      toast.error("Failed to reset password");
+    },
+  });
+}
+
+/**
+ * Bulk reset dashboard passwords for selected Clerk staff members
+ */
+export function useBulkResetPasswords() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (memberIds: string[]) => BulkResetPasswords(memberIds),
+    onSuccess: (result) => {
+      if (result.error) {
+        toast.error("Bulk password reset failed", { description: result.error });
+        return;
+      }
+      const { results, errors } = result.data!;
+      if (errors.length > 0) {
+        toast.warning(`Reset ${results.length} password(s), ${errors.length} failed`);
+      } else {
+        toast.success(`Reset ${results.length} password(s) successfully`);
+      }
+      queryClient.invalidateQueries({ queryKey: ["unified-staff"] });
+      queryClient.invalidateQueries({ queryKey: ["staff-member"] });
+    },
+    onError: () => {
+      toast.error("Bulk password reset failed");
     },
   });
 }

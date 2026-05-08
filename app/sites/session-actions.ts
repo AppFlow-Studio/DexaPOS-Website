@@ -74,6 +74,8 @@ export interface SessionUpdateData {
   requestedTime?: string | null;
   customerName?: string;
   customerEmail?: string;
+  customerEmailOptIn?: boolean;
+  customerSmsOptIn?: boolean;
 }
 
 export async function updateSession(
@@ -99,6 +101,10 @@ export async function updateSession(
     dbUpdates.customer_name = updates.customerName;
   if (updates.customerEmail !== undefined)
     dbUpdates.customer_email = updates.customerEmail;
+  if (updates.customerEmailOptIn !== undefined)
+    dbUpdates.customer_email_opt_in = updates.customerEmailOptIn;
+  if (updates.customerSmsOptIn !== undefined)
+    dbUpdates.customer_sms_opt_in = updates.customerSmsOptIn;
 
   const { error } = await supabase
     .from("online_order_sessions")

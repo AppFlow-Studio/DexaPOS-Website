@@ -1,6 +1,6 @@
 "use client";
 
-import { SignOutButton, useClerk, useSession } from "@clerk/nextjs";
+import { useClerk, useSession } from "@clerk/nextjs";
 import { redirect, usePathname } from "next/navigation";
 import { useEffect } from "react";
 import {
@@ -85,11 +85,15 @@ import {
   useIsAllLocations,
 } from "@/stores/location-store";
 import { useSessionSync } from "./hooks/useSessionSync";
+import { useQueryClient } from "@tanstack/react-query";
+import { resetClientSession } from "@/lib/auth/session-reset";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import { ImpersonationBanner } from "@/components/dashboard/ImpersonationBanner";
+import { ImpersonationHydrator } from "@/components/dashboard/ImpersonationHydrator";
 
 const navMain = [
   {
@@ -160,11 +164,11 @@ const navMain = [
         url: "/dashboard/staff",
         icon: Users,
       },
-      {
-        title: "Schedules",
-        url: "/dashboard/schedules",
-        icon: Calendar,
-      },
+      // {
+      //   title: "Schedules",
+      //   url: "/dashboard/schedules",
+      //   icon: Calendar,
+      // },
       {
         title: "Online Ordering",
         url: "/dashboard/online-ordering",
@@ -184,6 +188,11 @@ const navMain = [
         title: "Devices",
         url: "/dashboard/devices",
         icon: Monitor,
+      },
+      {
+        title: "Cash Drawers",
+        url: "/dashboard/cash-drawers",
+        icon: Banknote,
       },
       {
         title: "Audit Logs",
@@ -291,6 +300,13 @@ function MerchantSidebar() {
   const { data: userInfo, isLoading } = useUserInfo();
   const pathname = usePathname();
   const { signOut } = useClerk();
+  const queryClient = useQueryClient();
+
+  const handleSignOut = async () => {
+    await resetClientSession(queryClient);
+    await signOut();
+    window.location.href = "/sign-in";
+  };
 
   return (
     <Sidebar variant="inset">
@@ -694,14 +710,12 @@ function MerchantSidebar() {
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem>
-                <SignOutButton>
-                  <Button variant="ghost">
-                    <div className="flex items-center gap-2">
-                      <LogOut className="mr-2 h-4 w-4" />
-                      Log out
-                    </div>
-                  </Button>
-                </SignOutButton>
+                <button onClick={handleSignOut}>
+                  <div className="flex items-center gap-2">
+                    <LogOut className="mr-2 h-4 w-4" />
+                    Log out
+                  </div>
+                </button>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -888,12 +902,30 @@ export default function MerchantDashboardLayout({
   const { isLoaded, isSignedIn } = useSession();
   const { data: userInfo } = useUserInfo();
   const router = useRouter();
+  const pathname = usePathname();
+  const isOnboardingRoute = pathname?.startsWith("/dashboard/onboarding") ?? false;
   const clerkOrgId = userInfo?.members?.[0]?.organizations?.id;
   const userRole = userInfo?.members?.[0]?.role;
   const { data: locations, isLoading: locationsLoading } = useLocations(
     clerkOrgId || "",
     userInfo?.id || ""
   );
+
+  // First-location gate: any merchant with zero locations is forced into the
+  // onboarding wizard before they can access the rest of the dashboard.
+  useEffect(() => {
+    if (
+      !clerkOrgId ||
+      locationsLoading ||
+      !Array.isArray(locations) ||
+      isOnboardingRoute
+    ) {
+      return;
+    }
+    if (locations.length === 0) {
+      router.replace("/dashboard/onboarding/first-location");
+    }
+  }, [clerkOrgId, locations, locationsLoading, isOnboardingRoute, router]);
 
   // Zustand store
   const {
@@ -1001,10 +1033,24 @@ export default function MerchantDashboardLayout({
     return null;
   }
 
+  if (isOnboardingRoute) {
+    return (
+      <>
+        <ImpersonationHydrator />
+        <ImpersonationBanner />
+        <main aria-label="Onboarding" className="min-h-screen">
+          {children}
+        </main>
+      </>
+    );
+  }
+
   return (
     <SidebarProvider>
+      <ImpersonationHydrator />
       <MerchantSidebar />
-      <main className="flex-1 flex flex-col ">
+      <main aria-label="Dashboard content" className="flex-1 flex flex-col ">
+        <ImpersonationBanner />
         <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
           <SidebarTrigger className="-ml-1" />
           <div className="flex items-center gap-3">
@@ -1021,7 +1067,7 @@ export default function MerchantDashboardLayout({
             </Button>
           </div>
         </header>
-        <div className="flex-1 overflow-auto p-6">{children}</div>
+        <div id="main-content" className="flex-1 overflow-auto p-6">{children}</div>
       </main>
     </SidebarProvider>
   );

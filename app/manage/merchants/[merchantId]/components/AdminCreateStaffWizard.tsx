@@ -14,6 +14,8 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { PhoneInput } from '@/components/ui/phone-input'
+import { normalizePhone } from '@/lib/phone'
 import { Badge } from '@/components/ui/badge'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -22,6 +24,7 @@ import { Separator } from '@/components/ui/separator'
 import { cn } from '@/lib/utils'
 import {
   User,
+  Mail,
   Shield,
   MapPin,
   CheckCircle2,
@@ -35,6 +38,7 @@ import {
 import {
   useAdminCreateStaff,
   useAdminCreateClerkStaff,
+  useAdminInviteClerkStaff,
   useMerchantStaffRoles,
 } from '@/lib/queries/use-admin-staff'
 import type { LocationSummary } from '@/types/merchant'
@@ -68,13 +72,15 @@ export function AdminCreateStaffWizard({
 }: AdminCreateStaffWizardProps) {
   const [currentStep, setCurrentStep] = React.useState<Step>('type')
   const [staffType, setStaffType] = React.useState<'pos' | 'clerk'>('pos')
+  const [creationMethod, setCreationMethod] = React.useState<'direct' | 'invitation'>('direct')
 
   // Data fetching
   const { data: rolesData } = useMerchantStaffRoles()
   const createPOSMutation = useAdminCreateStaff()
   const createClerkMutation = useAdminCreateClerkStaff()
+  const inviteClerkMutation = useAdminInviteClerkStaff()
 
-  const isSubmitting = createPOSMutation.isPending || createClerkMutation.isPending
+  const isSubmitting = createPOSMutation.isPending || createClerkMutation.isPending || inviteClerkMutation.isPending
 
   // Filter roles based on type
   const availableRoles = React.useMemo(() => {
@@ -113,6 +119,7 @@ export function AdminCreateStaffWizard({
     if (open) {
       setCurrentStep('type')
       setStaffType('pos')
+      setCreationMethod('direct')
       setFirstName('')
       setLastName('')
       setEmail('')
@@ -142,7 +149,7 @@ export function AdminCreateStaffWizard({
       case 'role':
         return !!selectedRoleCode
       case 'locations':
-        return selectedLocationIds.size > 0
+        return true // location is optional when merchant has none yet
       case 'pos_config':
         // For Clerk users, PIN is optional — always can proceed
         if (staffType === 'clerk') return true
@@ -184,44 +191,71 @@ export function AdminCreateStaffWizard({
   }
 
   const handleSubmit = async () => {
-    if (!primaryLocationId) {
-      toast.error('Primary location is required')
-      return
-    }
-
     if (staffType === 'clerk') {
-      // Dashboard User creation
       if (!email) {
         toast.error('Email is required for Dashboard Users')
         return
       }
 
-      try {
-        const result = await createClerkMutation.mutateAsync({
-          merchantId,
-          data: {
-            firstName,
-            lastName,
-            email,
-            phone: phone || undefined,
-            locationId: primaryLocationId,
-            roleCode: selectedRoleCode,
-            hourlyRate: hourlyRate ? parseFloat(hourlyRate) : undefined,
-            employmentType,
-            autoGeneratePin,
-            pin: autoGeneratePin ? undefined : pinCode || undefined,
-          },
-        })
+      if (creationMethod === 'invitation') {
+        // Email invite flow
+        try {
+          const result = await inviteClerkMutation.mutateAsync({
+            merchantId,
+            data: {
+              firstName,
+              lastName,
+              email,
+              phone: normalizePhone(phone) ?? phone || undefined,
+              locationIds: Array.from(selectedLocationIds),
+              primaryLocationId,
+              roleCode: selectedRoleCode,
+              hourlyRate: hourlyRate ? parseFloat(hourlyRate) : undefined,
+              employmentType,
+              autoGeneratePin,
+              pin: autoGeneratePin ? undefined : pinCode || undefined,
+            },
+          })
 
-        if (result.success) {
-          toast.success('Dashboard user created successfully')
-          onOpenChange(false)
-          onSuccess(result.generatedPin, result.tempPassword)
-        } else {
-          toast.error(result.error || 'Failed to create dashboard user')
+          if (result.success) {
+            toast.success(`Invitation sent to ${email}`)
+            onOpenChange(false)
+            onSuccess(result.generatedPin)
+          } else {
+            toast.error(result.error || 'Failed to send invitation')
+          }
+        } catch {
+          toast.error('Failed to send invitation')
         }
-      } catch {
-        toast.error('Failed to create dashboard user')
+      } else {
+        // Direct creation flow
+        try {
+          const result = await createClerkMutation.mutateAsync({
+            merchantId,
+            data: {
+              firstName,
+              lastName,
+              email,
+              phone: normalizePhone(phone) ?? phone || undefined,
+              locationId: primaryLocationId ?? undefined,
+              roleCode: selectedRoleCode,
+              hourlyRate: hourlyRate ? parseFloat(hourlyRate) : undefined,
+              employmentType,
+              autoGeneratePin,
+              pin: autoGeneratePin ? undefined : pinCode || undefined,
+            },
+          })
+
+          if (result.success) {
+            toast.success('Dashboard user created successfully')
+            onOpenChange(false)
+            onSuccess(result.generatedPin, result.tempPassword)
+          } else {
+            toast.error(result.error || 'Failed to create dashboard user')
+          }
+        } catch {
+          toast.error('Failed to create dashboard user')
+        }
       }
     } else {
       // POS Staff creation
@@ -233,7 +267,7 @@ export function AdminCreateStaffWizard({
             lastName,
             email: email || undefined,
             phone: phone || undefined,
-            locationId: primaryLocationId,
+            locationId: primaryLocationId ?? undefined,
             roleCode: selectedRoleCode,
             hourlyRate: hourlyRate ? parseFloat(hourlyRate) : undefined,
             employmentType,
@@ -372,6 +406,59 @@ export function AdminCreateStaffWizard({
                 {/* STEP: DETAILS */}
                 {currentStep === 'details' && (
                   <div className="space-y-6">
+
+                    {/* Creation method — only for Dashboard Users */}
+                    {staffType === 'clerk' && (
+                      <>
+                        <div className="space-y-3">
+                          <Label>Account Creation Method</Label>
+                          <RadioGroup value={creationMethod} onValueChange={(v) => setCreationMethod(v as 'direct' | 'invitation')}>
+                            <div className="space-y-3">
+                              <div
+                                className={cn(
+                                  'flex items-start gap-4 p-4 rounded-lg border-2 cursor-pointer transition-all',
+                                  creationMethod === 'direct' ? 'border-primary bg-primary/5' : 'border-muted hover:border-primary/50'
+                                )}
+                                onClick={() => setCreationMethod('direct')}
+                              >
+                                <RadioGroupItem value="direct" id="method-direct" className="mt-1" />
+                                <div className="space-y-0.5">
+                                  <div className="flex items-center gap-2">
+                                    <UserCheck className="h-4 w-4" />
+                                    <span className="font-medium">Create Account Immediately</span>
+                                    <Badge variant="outline" className="text-xs">Recommended</Badge>
+                                  </div>
+                                  <p className="text-sm text-muted-foreground">
+                                    Account is created now with a temp password. The merchant shares it with staff.
+                                  </p>
+                                </div>
+                              </div>
+
+                              <div
+                                className={cn(
+                                  'flex items-start gap-4 p-4 rounded-lg border-2 cursor-pointer transition-all',
+                                  creationMethod === 'invitation' ? 'border-primary bg-primary/5' : 'border-muted hover:border-primary/50'
+                                )}
+                                onClick={() => setCreationMethod('invitation')}
+                              >
+                                <RadioGroupItem value="invitation" id="method-invitation" className="mt-1" />
+                                <div className="space-y-0.5">
+                                  <div className="flex items-center gap-2">
+                                    <Mail className="h-4 w-4" />
+                                    <span className="font-medium">Send Email Invitation</span>
+                                  </div>
+                                  <p className="text-sm text-muted-foreground">
+                                    Clerk sends an invite email. Staff sets their own password when they accept.
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          </RadioGroup>
+                        </div>
+                        <Separator />
+                      </>
+                    )}
+
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label htmlFor="firstName">First Name *</Label>
@@ -413,12 +500,10 @@ export function AdminCreateStaffWizard({
 
                     <div className="space-y-2">
                       <Label htmlFor="phone">Phone (Optional)</Label>
-                      <Input
+                      <PhoneInput
                         id="phone"
-                        type="tel"
                         value={phone}
-                        onChange={(e) => setPhone(e.target.value)}
-                        placeholder="+1 (555) 123-4567"
+                        onChange={setPhone}
                       />
                     </div>
                   </div>
@@ -461,8 +546,13 @@ export function AdminCreateStaffWizard({
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
                       <Label>Location Assignments</Label>
-                      <span className="text-sm text-muted-foreground">Select at least one</span>
+                      <span className="text-sm text-muted-foreground">Optional</span>
                     </div>
+                    {locations.length === 0 && (
+                      <p className="text-sm text-muted-foreground rounded-lg border border-dashed p-4 text-center">
+                        This merchant has no locations yet. You can assign the staff member to a location later.
+                      </p>
+                    )}
                     <div className="grid gap-3">
                       {locations.map((loc) => {
                         const isSelected = selectedLocationIds.has(loc.id)
@@ -624,7 +714,11 @@ export function AdminCreateStaffWizard({
                         </div>
                         <div>
                           <span className="text-muted-foreground">Primary Location</span>
-                          <p className="font-medium">{locations.find((l) => l.id === primaryLocationId)?.name || '—'}</p>
+                          <p className="font-medium">
+                            {primaryLocationId
+                              ? locations.find((l) => l.id === primaryLocationId)?.name || '—'
+                              : 'None (assign later)'}
+                          </p>
                         </div>
                         <div>
                           <span className="text-muted-foreground">POS PIN</span>
@@ -639,10 +733,20 @@ export function AdminCreateStaffWizard({
                       </div>
                     </div>
 
-                    {staffType === 'clerk' && (
+                    {staffType === 'clerk' && creationMethod === 'direct' && (
                       <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
                         <p className="font-medium mb-1">Temporary password will be generated</p>
                         <p>Share it securely with the staff member. They should change it on first login.</p>
+                      </div>
+                    )}
+
+                    {staffType === 'clerk' && creationMethod === 'invitation' && (
+                      <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
+                        <p className="font-medium mb-1 flex items-center gap-2">
+                          <Mail className="h-4 w-4" />
+                          Invitation email will be sent
+                        </p>
+                        <p>Clerk will email <strong>{email}</strong>. They set their own password when they accept.</p>
                       </div>
                     )}
 
@@ -671,10 +775,10 @@ export function AdminCreateStaffWizard({
                   disabled={!canGoNext() || isSubmitting}
                 >
                   {isSubmitting
-                    ? 'Creating...'
+                    ? (creationMethod === 'invitation' ? 'Sending...' : 'Creating...')
                     : currentStep === 'review'
                     ? staffType === 'clerk'
-                      ? 'Create Dashboard User'
+                      ? creationMethod === 'invitation' ? 'Send Invite' : 'Create Dashboard User'
                       : 'Create Staff'
                     : 'Next'}
                 </Button>

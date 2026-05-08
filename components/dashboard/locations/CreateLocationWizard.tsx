@@ -21,7 +21,7 @@ import { BankingPayoutsStep } from './steps/BankingPayoutsStep'
 import { BusinessHoursStep } from './steps/BusinessHoursStep'
 import { AssignManagerStep } from './steps/AssignManagerStep'
 import { ReviewStep } from './steps/ReviewStep'
-import { CreateLocation, UpdateLocation } from '@/app/dashboard/actions/locations'
+import { CreateLocation } from '@/app/dashboard/actions/locations'
 import {
     ApplyLocationManagerAssignment,
     GetManagerAssignableUsers,
@@ -40,11 +40,12 @@ import {
     createLocationSchema
 } from '@/types/merchant_locations'
 import { useQueryClient } from '@tanstack/react-query'
-import { uploadMerchantDocument } from '@/lib/cdn/server'
+import { isValidPhone, normalizePhone } from '@/lib/phone'
 
 interface CreateLocationWizardProps {
     clerkOrgId: string
     actorUserId?: string
+    mode?: 'standard' | 'onboarding'
 }
 
 const TOTAL_STEPS = 7
@@ -81,12 +82,7 @@ const initialFormData: LocationFormData = {
     routing_number: '',
     account_number: '',
     confirm_account_number: '',
-    bank_support_document_name: '',
     account_type: 'checking',
-    payout_frequency: 'daily',
-    payout_day_of_week: '1',
-    payout_day_of_month: '1',
-    minimum_payout_amount: '0.00',
     use_merchant_billing_profile: false,
     business_hours: DEFAULT_BUSINESS_HOURS,
     manager_assignment_type: 'skip',
@@ -109,9 +105,10 @@ function buildOnlineStoreLocationMetadata(data: LocationFormData) {
     }
 }
 
-export function CreateLocationWizard({ clerkOrgId, actorUserId }: CreateLocationWizardProps) {
+export function CreateLocationWizard({ clerkOrgId, actorUserId, mode = 'standard' }: CreateLocationWizardProps) {
     const router = useRouter()
     const queryClient = useQueryClient()
+    const isOnboarding = mode === 'onboarding'
 
     const [currentStep, setCurrentStep] = useState(1)
     const [completedSteps, setCompletedSteps] = useState<number[]>([])
@@ -120,7 +117,6 @@ export function CreateLocationWizard({ clerkOrgId, actorUserId }: CreateLocation
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [showExitDialog, setShowExitDialog] = useState(false)
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
-    const [bankSupportFile, setBankSupportFile] = useState<File | null>(null)
     const [managerCandidates, setManagerCandidates] = useState<ManagerAssignableUser[]>([])
     const [isLoadingManagerCandidates, setIsLoadingManagerCandidates] = useState(false)
     const [managerCandidatesError, setManagerCandidatesError] = useState<string | null>(null)
@@ -194,8 +190,8 @@ export function CreateLocationWizard({ clerkOrgId, actorUserId }: CreateLocation
                 if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
                     newErrors.email = 'Invalid email format'
                 }
-                if (formData.phone && formData.phone.replace(/\D/g, '').length < 10) {
-                    newErrors.phone = 'Phone number must be at least 10 digits'
+                if (formData.phone && !isValidPhone(formData.phone)) {
+                    newErrors.phone = 'Enter a valid phone number'
                 }
                 break
 
@@ -241,15 +237,6 @@ export function CreateLocationWizard({ clerkOrgId, actorUserId }: CreateLocation
                 ) {
                     newErrors.confirm_account_number = 'Account number confirmation must match'
                 }
-                if (
-                    formData.minimum_payout_amount &&
-                    Number.isNaN(Number(formData.minimum_payout_amount))
-                ) {
-                    newErrors.minimum_payout_amount = 'Minimum payout must be a valid amount'
-                }
-                if (!bankSupportFile) {
-                    newErrors.bank_support_document_name = 'Bank letter or voided check is required'
-                }
                 break
 
             case 5:
@@ -258,8 +245,8 @@ export function CreateLocationWizard({ clerkOrgId, actorUserId }: CreateLocation
                 days.forEach(day => {
                     const dayHours = formData.business_hours[day]
                     if (dayHours && !dayHours.is_closed) {
-                        if (dayHours.open >= dayHours.close && dayHours.close !== '00:00') {
-                            newErrors[day] = 'Close time must be after open time'
+                        if (dayHours.open >= dayHours.close && !dayHours.is_overnight) {
+                            newErrors[day] = 'Close time must be after open time (or enable overnight for next-day close)'
                         }
                     }
                 })
@@ -286,7 +273,7 @@ export function CreateLocationWizard({ clerkOrgId, actorUserId }: CreateLocation
 
                     createLocationSchema.parse({
                         ...formData,
-                        phone: formData.phone || undefined,
+                        phone: normalizePhone(formData.phone) ?? formData.phone || undefined,
                         email: formData.email || undefined,
                         code: formData.code || undefined,
                         address_line2: formData.address_line2 || undefined,
@@ -384,29 +371,6 @@ export function CreateLocationWizard({ clerkOrgId, actorUserId }: CreateLocation
                 return
             }
 
-            if (result.data && bankSupportFile) {
-                const uploadResult = await uploadMerchantDocument(
-                    bankSupportFile,
-                    result.data.merchant_id,
-                    'online-store-bank-support'
-                )
-
-                if (uploadResult.success && uploadResult.cdnUrl) {
-                    await UpdateLocation(result.data.id, {
-                        public_metadata: {
-                            ...(result.data.public_metadata || {}),
-                            ...buildOnlineStoreLocationMetadata(formData),
-                            online_store_bank_support_document_url: uploadResult.cdnUrl,
-                            bank_support_document_url: uploadResult.cdnUrl,
-                        },
-                    })
-                } else if (!uploadResult.success) {
-                    toast.warning('Location created but bank support document upload failed', {
-                        description: uploadResult.error || 'Unknown error',
-                    })
-                }
-            }
-
             if (result.data && formData.manager_assignment_type !== 'skip') {
                 const managerAssignmentResult = await ApplyLocationManagerAssignment({
                     clerkOrgId,
@@ -445,8 +409,9 @@ export function CreateLocationWizard({ clerkOrgId, actorUserId }: CreateLocation
             // Reset unsaved changes flag
             setHasUnsavedChanges(false)
 
-            // Redirect to locations list and immediately open the editable details sheet
-            if (result.data?.id) {
+            if (isOnboarding) {
+                router.replace('/dashboard')
+            } else if (result.data?.id) {
                 router.push(`/dashboard/locations?open=${result.data.id}`)
             } else {
                 router.push('/dashboard/locations')
@@ -505,8 +470,6 @@ export function CreateLocationWizard({ clerkOrgId, actorUserId }: CreateLocation
                         data={formData as LocationFormStep4}
                         onChange={updateFormData}
                         errors={errors}
-                        onBankSupportDocumentSelect={setBankSupportFile}
-                        onClearBankSupportDocument={() => setBankSupportFile(null)}
                     />
                 )
             case 5:
@@ -544,40 +507,64 @@ export function CreateLocationWizard({ clerkOrgId, actorUserId }: CreateLocation
     return (
         <>
             <div className="h-[92vh] flex">
-                {/* Sidebar */}
-                <WizardSidebar
-                    currentStep={currentStep}
-                    completedSteps={completedSteps}
-                    onStepClick={handleStepClick}
-                />
+                {/* Sidebar — hidden on mobile, visible md+ */}
+                <div className="hidden md:flex">
+                    <WizardSidebar
+                        currentStep={currentStep}
+                        completedSteps={completedSteps}
+                        onStepClick={handleStepClick}
+                    />
+                </div>
 
                 {/* Main Content */}
-                <div className=" flex-1 h-full flex-col">
+                <div className="flex flex-1 h-full flex-col min-w-0">
                     {/* Header */}
-                    <div className="border-b px-8 py-4 flex items-center justify-between">
-                        <div>
-                            <h1 className="text-2xl font-semibold">{STEP_TITLES[currentStep - 1].title}</h1>
-                            <p className="text-muted-foreground">{STEP_TITLES[currentStep - 1].description}</p>
+                    <div className="border-b px-4 md:px-8 py-4 flex items-center justify-between gap-4">
+                        <div className="min-w-0">
+                            {/* Mobile step indicator */}
+                            <p className="text-xs font-medium text-muted-foreground mb-0.5 md:hidden">
+                                Step {currentStep} of {TOTAL_STEPS}
+                            </p>
+                            <h1 className="text-lg md:text-2xl font-semibold truncate">
+                                {isOnboarding ? `Welcome — ${STEP_TITLES[currentStep - 1].title}` : STEP_TITLES[currentStep - 1].title}
+                            </h1>
+                            <p className="text-sm text-muted-foreground hidden sm:block">
+                                {isOnboarding
+                                    ? "Let's set up your first location to get your account ready."
+                                    : STEP_TITLES[currentStep - 1].description}
+                            </p>
                         </div>
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={handleExit}
-                            className="text-muted-foreground hover:text-foreground"
-                        >
-                            <X className="h-5 w-5" />
-                        </Button>
+                        {!isOnboarding && (
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={handleExit}
+                                className="text-muted-foreground hover:text-foreground shrink-0"
+                            >
+                                <X className="h-5 w-5" />
+                            </Button>
+                        )}
+                    </div>
+
+                    {/* Mobile progress bar */}
+                    <div className="md:hidden px-4 pt-2 pb-1">
+                        <div className="h-1 bg-muted rounded-full overflow-hidden">
+                            <div
+                                className="h-full bg-primary rounded-full transition-all duration-500"
+                                style={{ width: `${(currentStep / TOTAL_STEPS) * 100}%` }}
+                            />
+                        </div>
                     </div>
 
                     {/* Form Content */}
-                    <div className="flex-1 overflow-auto p-8">
+                    <div className="flex-1 overflow-auto p-4 md:p-8">
                         <div className="max-w-3xl">
                             {renderStep()}
                         </div>
                     </div>
 
                     {/* Footer */}
-                    <div className="border-t px-8 py-4 flex items-center justify-between">
+                    <div className="border-t px-4 md:px-8 py-4 flex items-center justify-between">
                         <Button
                             variant="ghost"
                             onClick={handleBack}
@@ -585,14 +572,14 @@ export function CreateLocationWizard({ clerkOrgId, actorUserId }: CreateLocation
                             className="gap-2"
                         >
                             <ArrowLeft className="h-4 w-4" />
-                            Back
+                            <span className="hidden sm:inline">Back</span>
                         </Button>
 
                         {currentStep === TOTAL_STEPS ? (
                             <Button
                                 onClick={handleSubmit}
                                 disabled={isSubmitting}
-                                className="gap-2 min-w-[160px]"
+                                className="gap-2 min-w-35 md:min-w-40"
                             >
                                 {isSubmitting ? (
                                     <>

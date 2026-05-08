@@ -24,8 +24,6 @@ import {
 } from '@/lib/online-store/setup-flow'
 import { uploadMerchantDocument, uploadOrganizationDocument } from '@/lib/cdn/server'
 
-const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'dexaposai.com'
-
 type MissingRequestFieldKey =
   | 'legalBusinessName'
   | 'dbaName'
@@ -77,15 +75,6 @@ function hasAnyMissing(missing: RequestPacketMissing): boolean {
 
 function normalizeDigits(value: string): string {
   return value.replace(/\\D/g, '')
-}
-
-interface PaymentDeviceSummary {
-  id: string
-  device_label: string | null
-  tpn: string
-  use_for_online_ordering: boolean
-  is_active: boolean
-  ftd_key_configured: boolean
 }
 
 function readMetadataString(
@@ -153,6 +142,20 @@ interface TipConfig {
   allowCustomTip: boolean
 }
 
+interface LocationNmiPaymentDeviceSummary {
+  id: string
+  location_id: string
+  provider: string
+  provider_public_key: string | null
+  is_active: boolean
+  use_for_online_ordering: boolean
+  status: string
+  environment: string
+  provider_merchant_id: string | null
+  provider_gateway_id: string | null
+  has_provider_secret: boolean
+}
+
 interface OnlineOrderingSettings {
   id?: string
   locationId: string
@@ -211,11 +214,9 @@ interface OnlineOrderingSettings {
   acceptOnlinePayments?: boolean
   acceptCashOnDelivery?: boolean
   acceptCardOnDelivery?: boolean
-  ipospaysDeviceId?: string | null
-  ipospaysDeviceLabel?: string | null
-  ipospaysTpn?: string
-  ipospaysFtdEcomKey?: string
-  ipospaysFtdEcomKeyConfigured?: boolean
+  nmiTokenizationKey?: string
+  nmiPrivateApiKey?: string
+  nmiConfigured?: boolean
   tippingEnabled?: boolean
   tipConfig?: TipConfig
   baseDeliveryFee?: number
@@ -225,63 +226,24 @@ interface OnlineOrderingSettings {
   convenienceFeeFlat?: number
 }
 
-async function whitelistDejavooDomain(
-  tpn: string,
-  storeSlug: string
-): Promise<{ success: boolean; error?: string; skipped?: boolean; domain?: string }> {
-  if (!tpn || !storeSlug) {
-    return { success: false, error: 'TPN and store slug are required' }
-  }
-
-  const isDev = ROOT_DOMAIN.includes('localhost')
-  const storeDomain = isDev
-    ? `http://${storeSlug}.localhost:3000`
-    : `https://${storeSlug}.${ROOT_DOMAIN}`
-
-  const supabase = createServerSupabaseClient()
-  const { data, error } = await supabase.functions.invoke(
-    'dejavoo-whitelist-domain',
-    {
-      body: { tpn, storeSlug, storeDomain },
-    }
-  )
-
-  if (error) {
-    console.error('[HQ_DEJAVOO_WHITELIST] Edge invoke error:', error)
-    return {
-      success: false,
-      error: `Domain whitelist invoke error: ${error.message}`,
-    }
-  }
-
-  const result = (data || {}) as { success?: boolean; skipped?: boolean; error?: string }
-  return {
-    success: Boolean(result.success),
-    skipped: result.skipped,
-    error: result.error,
-    domain: storeDomain,
-  }
-}
-
-async function getLocationPaymentDevices(locationId: string) {
-  const supabase = createServerSupabaseClient()
+async function getLocationNmiPaymentDevice(
+  locationId: string
+) {
+  const supabase = createServerSupabaseClient() as any
   const { data, error } = await supabase.rpc('list_location_payment_devices', {
     p_location_id: locationId,
   })
 
   if (error) {
-    console.error('[HQ_ONLINE_ORDERING] Failed to load payment devices:', error)
-    return [] as PaymentDeviceSummary[]
+    console.error('[HQ_ONLINE_ORDERING] Failed to load location payment devices:', error)
+    return null
   }
 
-  return ((data as PaymentDeviceSummary[] | null) ?? []).filter(Boolean)
-}
+  const devices = ((data as LocationNmiPaymentDeviceSummary[] | null) ?? [])
+    .filter((device) => device.provider === 'nmi')
 
-async function getSelectedLocationPaymentDevice(locationId: string) {
-  const devices = await getLocationPaymentDevices(locationId)
   return (
-    devices.find((device) => device.use_for_online_ordering && device.is_active) ??
-    devices.find((device) => device.is_active) ??
+    devices.find((device) => device.use_for_online_ordering) ??
     null
   )
 }
@@ -655,9 +617,7 @@ export async function getAdminOnlineOrderingSettings(
       console.error('[getAdminOnlineOrderingSettings] Config error:', configError)
     }
 
-    const selectedDevice = config
-      ? await getSelectedLocationPaymentDevice(locationId)
-      : null
+    const locationPaymentDevice = await getLocationNmiPaymentDevice(locationId)
 
     const settings: Partial<OnlineOrderingSettings> = {
       locationId,
@@ -720,7 +680,7 @@ export async function getAdminOnlineOrderingSettings(
       settings.deliveryEnabled = config.accepts_delivery
       settings.preparationLeadTime = config.estimated_prep_minutes
       settings.futureOrderMaxDays = config.max_future_order_days
-      settings.minimumOrderAmount = config.min_order_cents ? config.min_order_cents / 100 : 0
+      settings.minimumOrderAmount = Number(config.min_order ?? 0)
       settings.tippingEnabled = config.tip_enabled
       if (config.tip_presets) {
         settings.tipConfig = {
@@ -732,18 +692,18 @@ export async function getAdminOnlineOrderingSettings(
           allowCustomTip: true,
         }
       }
-      settings.baseDeliveryFee = config.delivery_fee_cents ? config.delivery_fee_cents / 100 : 0
-      settings.freeDeliveryThreshold = config.free_delivery_threshold_cents
-        ? config.free_delivery_threshold_cents / 100
-        : 0
+      settings.baseDeliveryFee = Number(config.delivery_fee ?? 0)
+      settings.freeDeliveryThreshold = Number(config.free_delivery_threshold ?? 0)
       settings.acceptOnlinePayments = config.accepts_online_payments ?? true
       settings.acceptCashOnDelivery = config.accepts_cash_on_delivery ?? false
       settings.acceptCardOnDelivery = config.accepts_card_on_delivery ?? false
-      settings.ipospaysDeviceId = selectedDevice?.id ?? null
-      settings.ipospaysDeviceLabel = selectedDevice?.device_label ?? null
-      settings.ipospaysTpn = selectedDevice?.tpn ?? config.ipospays_tpn ?? ''
-      settings.ipospaysFtdEcomKey = ''
-      settings.ipospaysFtdEcomKeyConfigured = selectedDevice?.ftd_key_configured ?? false
+      settings.nmiTokenizationKey = locationPaymentDevice?.provider_public_key ?? ''
+      settings.nmiPrivateApiKey = ''
+      settings.nmiConfigured = Boolean(
+        locationPaymentDevice?.provider_public_key &&
+        locationPaymentDevice?.has_provider_secret &&
+        locationPaymentDevice?.status === 'active'
+      )
     }
 
     return { success: true, data: settings, error: null }
@@ -1159,7 +1119,7 @@ export async function adminSaveOnlineOrderingSettings(
       }
     }
 
-    const existingPaymentDevice = await getSelectedLocationPaymentDevice(locationId)
+    const existingLocationPaymentDevice = await getLocationNmiPaymentDevice(locationId)
 
     const configData: Record<string, unknown> = {
       updated_at: new Date().toISOString(),
@@ -1192,19 +1152,23 @@ export async function adminSaveOnlineOrderingSettings(
     if (settings.operatingHours !== undefined) configData.operating_hours = settings.operatingHours
     if (settings.pickupEnabled !== undefined) configData.accepts_pickup = settings.pickupEnabled
     if (settings.deliveryEnabled !== undefined) configData.accepts_delivery = settings.deliveryEnabled
-    if (settings.minimumOrderAmount !== undefined)
+    if (settings.minimumOrderAmount !== undefined) {
       configData.min_order_cents = Math.round(settings.minimumOrderAmount * 100)
+      configData.min_order = settings.minimumOrderAmount
+    }
     if (settings.preparationLeadTime !== undefined)
       configData.estimated_prep_minutes = settings.preparationLeadTime
     if (settings.futureOrderMaxDays !== undefined)
       configData.max_future_order_days = settings.futureOrderMaxDays
-    if (settings.baseDeliveryFee !== undefined)
+    if (settings.baseDeliveryFee !== undefined) {
       configData.delivery_fee_cents = Math.round(settings.baseDeliveryFee * 100)
-    if (settings.freeDeliveryThreshold !== undefined)
-      configData.free_delivery_threshold_cents =
-        settings.freeDeliveryThreshold > 0
-          ? Math.round(settings.freeDeliveryThreshold * 100)
-          : null
+      configData.delivery_fee = settings.baseDeliveryFee
+    }
+    if (settings.freeDeliveryThreshold !== undefined) {
+      const v = settings.freeDeliveryThreshold > 0 ? settings.freeDeliveryThreshold : null
+      configData.free_delivery_threshold_cents = v !== null ? Math.round(v * 100) : null
+      configData.free_delivery_threshold = v
+    }
     if (settings.tippingEnabled !== undefined) configData.tip_enabled = settings.tippingEnabled
     if (settings.tipConfig?.presetPercentages !== undefined)
       configData.tip_presets = settings.tipConfig.presetPercentages
@@ -1214,30 +1178,47 @@ export async function adminSaveOnlineOrderingSettings(
       configData.accepts_cash_on_delivery = settings.acceptCashOnDelivery
     if (settings.acceptCardOnDelivery !== undefined)
       configData.accepts_card_on_delivery = settings.acceptCardOnDelivery
-    if (settings.ipospaysTpn !== undefined) configData.ipospays_tpn = settings.ipospaysTpn || null
 
-    const previousSlug = existingConfig?.slug ?? null
-    const nextSlugCandidate =
-      settings.storeSlug !== undefined && settings.storeSlug !== '' ? settings.storeSlug : previousSlug
-    const slugIsChanging = nextSlugCandidate !== null && nextSlugCandidate !== previousSlug
-    const nextTpn =
-      settings.ipospaysTpn !== undefined
-        ? settings.ipospaysTpn.trim() || null
-        : existingPaymentDevice?.tpn ?? existingConfig?.ipospays_tpn ?? null
-    const currentTpn =
-      existingPaymentDevice?.tpn ?? existingConfig?.ipospays_tpn ?? null
-    const tpnIsChanging = nextTpn !== currentTpn
-    const providedFtdKey = settings.ipospaysFtdEcomKey?.trim() ?? ''
-    const shouldUpsertPaymentDevice =
-      Boolean(nextTpn) &&
-      (tpnIsChanging || providedFtdKey.length > 0 || !existingPaymentDevice)
+    const nextTokenizationKey =
+      settings.nmiTokenizationKey !== undefined
+        ? settings.nmiTokenizationKey.trim()
+        : existingLocationPaymentDevice?.provider_public_key ?? ''
+    const providedPrivateApiKey = settings.nmiPrivateApiKey?.trim() ?? ''
+    const tokenizationKeyChanged =
+      settings.nmiTokenizationKey !== undefined &&
+      nextTokenizationKey !== (existingLocationPaymentDevice?.provider_public_key ?? '')
+    const shouldUpsertLocationPaymentDevice =
+      tokenizationKeyChanged ||
+      providedPrivateApiKey.length > 0
 
-    if (shouldUpsertPaymentDevice && providedFtdKey.length === 0) {
+    if (shouldUpsertLocationPaymentDevice && nextTokenizationKey.length === 0) {
       return {
         success: false,
-        error: existingPaymentDevice
-          ? 'Enter the FTD Ecom/TOP key when changing the online-ordering TPN.'
-          : 'TPN and FTD Ecom/TOP key are both required to configure online card payments.',
+        error: 'NMI tokenization key is required to configure online card payments.',
+      }
+    }
+
+    if (
+      shouldUpsertLocationPaymentDevice &&
+      !existingLocationPaymentDevice &&
+      providedPrivateApiKey.length === 0
+    ) {
+      return {
+        success: false,
+        error: 'NMI private API key is required for a new online-ordering payment configuration.',
+      }
+    }
+
+    if (
+      shouldUpsertLocationPaymentDevice &&
+      existingLocationPaymentDevice &&
+      tokenizationKeyChanged &&
+      providedPrivateApiKey.length === 0
+    ) {
+      return {
+        success: false,
+        error:
+          'NMI private API key is required when updating the tokenization key for the existing online-ordering device.',
       }
     }
 
@@ -1269,38 +1250,53 @@ export async function adminSaveOnlineOrderingSettings(
       return { success: false, error: updateError.message }
     }
 
-    if (shouldUpsertPaymentDevice && nextTpn) {
-      const { error: paymentDeviceError } = await supabase.rpc(
-        'upsert_location_payment_device',
+    if (shouldUpsertLocationPaymentDevice) {
+      let paymentDeviceId = existingLocationPaymentDevice?.id ?? null
+
+      if (!paymentDeviceId) {
+        const { data: createdDeviceId, error: createDeviceError } = await (supabase as any).rpc(
+          'create_nmi_payment_device',
+          {
+            p_location_id: locationId,
+            p_device_label: 'Online Ordering',
+            p_environment: 'production',
+            p_use_for_online_ordering: true,
+          }
+        )
+
+        if (createDeviceError || !createdDeviceId) {
+          return {
+            success: false,
+            error: `NMI device creation failed: ${createDeviceError?.message ?? 'Unknown error'}`,
+          }
+        }
+
+        paymentDeviceId = createdDeviceId
+      }
+
+      const providerMerchantId =
+        existingLocationPaymentDevice?.provider_merchant_id?.trim() ||
+        `manual:${merchantId}`
+      const providerGatewayId =
+        existingLocationPaymentDevice?.provider_gateway_id?.trim() ||
+        `manual:${locationId}`
+
+      const { error: activateDeviceError } = await (supabase as any).rpc(
+        'activate_nmi_payment_device',
         {
-          p_location_id: locationId,
-          p_tpn: nextTpn,
-          p_ftd_ecom_key: providedFtdKey,
-          p_device_label:
-            settings.ipospaysDeviceLabel?.trim() ||
-            existingPaymentDevice?.device_label ||
-            'Online ordering device',
-          p_use_for_online_ordering: true,
+          p_device_id: paymentDeviceId,
+          p_provider_merchant_id: providerMerchantId,
+          p_provider_gateway_id: providerGatewayId,
+          p_public_key: nextTokenizationKey,
+          p_security_key: providedPrivateApiKey,
+          p_webhook_secret: null,
         }
       )
 
-      if (paymentDeviceError) {
+      if (activateDeviceError) {
         return {
           success: false,
-          error: `Payment device update failed: ${paymentDeviceError.message}`,
-        }
-      }
-    } else if (settings.ipospaysTpn !== undefined && !nextTpn) {
-      const { error: clearPaymentDeviceError } = await supabase
-        .from('location_payment_devices')
-        .update({ use_for_online_ordering: false })
-        .eq('location_id', locationId)
-        .eq('use_for_online_ordering', true)
-
-      if (clearPaymentDeviceError) {
-        return {
-          success: false,
-          error: `Failed to clear selected payment device: ${clearPaymentDeviceError.message}`,
+          error: `NMI device activation failed: ${activateDeviceError.message}`,
         }
       }
     }
@@ -1323,34 +1319,25 @@ export async function adminSaveOnlineOrderingSettings(
         location_name: loc?.name,
         updated_by_admin: userId,
         enabled: settings.enabled,
+        nmi_configured: shouldUpsertLocationPaymentDevice
+          ? true
+          : Boolean(
+            existingLocationPaymentDevice?.provider_public_key &&
+            existingLocationPaymentDevice?.has_provider_secret &&
+            existingLocationPaymentDevice?.status === 'active'
+          ),
+        nmi_tokenization_key_changed: tokenizationKeyChanged,
       },
     })
-
-    const finalSlug = (configData.slug as string | undefined) ?? existingConfig?.slug ?? ''
-    const finalTpn = nextTpn
-    const shouldWhitelist = Boolean((tpnIsChanging || slugIsChanging) && finalTpn && finalSlug)
-
-    let domainWhitelistError: string | undefined
-    let domainWhitelistSkipped = false
-    if (shouldWhitelist) {
-      const whitelistResult = await whitelistDejavooDomain(finalTpn as string, finalSlug)
-      if (!whitelistResult.success && !whitelistResult.skipped) {
-        domainWhitelistError = whitelistResult.error || 'Domain whitelist failed'
-        console.error('[adminSaveOnlineOrderingSettings] Domain whitelist failed:', domainWhitelistError)
-      }
-      if (whitelistResult.skipped) {
-        domainWhitelistSkipped = true
-      }
-    }
 
     revalidateOnlineStorePaths(merchantId)
 
     return {
       success: true,
       error: null,
-      domainWhitelisted: shouldWhitelist,
-      domainWhitelistError,
-      domainWhitelistSkipped,
+      domainWhitelisted: false,
+      domainWhitelistError: undefined,
+      domainWhitelistSkipped: true,
     }
   } catch (error) {
     console.error('[adminSaveOnlineOrderingSettings] Exception:', error)
@@ -1373,11 +1360,9 @@ export async function adminToggleOnlineStore(
 
     const { data: existingConfig } = await supabase
       .from('online_store_config')
-      .select('id, slug, setup_request_status')
+      .select('id, slug, setup_request_status, accepts_online_payments')
       .eq('location_id', locationId)
       .single()
-
-    const selectedDevice = await getSelectedLocationPaymentDevice(locationId)
 
     if (!existingConfig) {
       return { success: false, error: 'Online store not configured for this location' }
@@ -1388,6 +1373,21 @@ export async function adminToggleOnlineStore(
       return {
         success: false,
         error: 'Finish HQ storefront setup before enabling this branch store.',
+      }
+    }
+
+    if (enabled && existingConfig.accepts_online_payments) {
+      const locationPaymentDevice = await getLocationNmiPaymentDevice(locationId)
+      if (
+        !locationPaymentDevice?.provider_public_key ||
+        !locationPaymentDevice?.has_provider_secret ||
+        locationPaymentDevice.status !== 'active'
+      ) {
+        return {
+          success: false,
+          error:
+            'Configure the NMI tokenization key and private API key before enabling online card payments for this storefront.',
+        }
       }
     }
 
@@ -1422,62 +1422,15 @@ export async function adminToggleOnlineStore(
       },
     })
 
-    let domainWhitelistError: string | undefined
-    let domainWhitelistSkipped = false
-    if (enabled && selectedDevice?.tpn && existingConfig.slug) {
-      const whitelistResult = await whitelistDejavooDomain(selectedDevice.tpn, existingConfig.slug)
-      if (!whitelistResult.success && !whitelistResult.skipped) {
-        domainWhitelistError = whitelistResult.error || 'Domain whitelist failed'
-        console.error('[adminToggleOnlineStore] Domain whitelist failed:', domainWhitelistError)
-      }
-      if (whitelistResult.skipped) {
-        domainWhitelistSkipped = true
-      }
-    }
-
     revalidateOnlineStorePaths(merchantId)
-    return { success: true, error: null, domainWhitelistError, domainWhitelistSkipped }
+    return {
+      success: true,
+      error: null,
+      domainWhitelistError: undefined,
+      domainWhitelistSkipped: true,
+    }
   } catch (error) {
     console.error('[adminToggleOnlineStore] Exception:', error)
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    }
-  }
-}
-
-export async function adminRetriggerDomainWhitelist(
-  merchantId: string,
-  locationId: string
-): Promise<{ success: boolean; error?: string; skipped?: boolean }> {
-  try {
-    await assertHQPermission('hq.merchant.update')
-
-    const supabase = createServerSupabaseClient()
-    const selectedDevice = await getSelectedLocationPaymentDevice(locationId)
-    const { data: config, error } = await supabase
-      .from('online_store_config')
-      .select('slug')
-      .eq('merchant_id', merchantId)
-      .eq('location_id', locationId)
-      .single()
-
-    if (error || !config) {
-      return { success: false, error: 'Store config not found for this location' }
-    }
-    if (!selectedDevice?.tpn) {
-      return { success: false, error: 'No TPN configured for this location' }
-    }
-    if (!config.slug) {
-      return { success: false, error: 'No store slug configured for this location' }
-    }
-
-    const result = await whitelistDejavooDomain(selectedDevice.tpn, config.slug)
-    if (!result.success) {
-      return { success: false, skipped: result.skipped, error: result.error || 'Domain whitelist failed' }
-    }
-    return { success: true, skipped: result.skipped }
-  } catch (error) {
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -1523,6 +1476,7 @@ export async function adminCreateOnlineStore(
         accepts_delivery: false,
         estimated_prep_minutes: 15,
         min_order_cents: 0,
+        min_order: 0,
         tip_enabled: true,
         tip_presets: [15, 18, 20],
       })

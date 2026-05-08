@@ -2,6 +2,7 @@
 
 import { auth } from "@clerk/nextjs/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { resolveImpersonationFromCookies } from "@/lib/admin/impersonation";
 
 export type MerchantRoleInfo = {
   userId: string;
@@ -24,12 +25,34 @@ export type MerchantRoleInfo = {
  *                     edit price/availability on global items (via location overrides)
  *                     cannot create/delete global entities
  *  - member         → view only
+ *
+ * Under HQ impersonation: the calling HQ admin is treated as merchant.owner
+ * for the impersonated merchant. This function is the one chokepoint every
+ * dashboard server action consults, so the override here cascades to menus,
+ * items, orderout, useManagerPermissions, etc.
  */
 export async function getCurrentUserMerchantRole(): Promise<MerchantRoleInfo | null> {
   const { userId, orgId } = await auth();
-  if (!userId || !orgId) return null;
+  if (!userId) return null;
 
   const supabase = createServerSupabaseClient();
+
+  // ── Impersonation path ────────────────────────────────────────────────────
+  const impersonation = await resolveImpersonationFromCookies().catch(() => null);
+  if (impersonation) {
+    return {
+      userId,
+      merchantId: impersonation.merchantId,
+      clerkOrgId: impersonation.clerkOrgId,
+      roleCode: "merchant.owner",
+      isOwnerOrAdmin: true,
+      isManager: false,
+      isMember: false,
+      assignedLocationIds: [], // owner sees all locations; this list is unused for owners
+    };
+  }
+
+  if (!orgId) return null;
 
   const { data: merchant } = await supabase
     .from("merchants")

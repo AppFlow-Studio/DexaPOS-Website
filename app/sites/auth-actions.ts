@@ -1,12 +1,19 @@
 "use server";
 
-import twilio from "twilio";
+import { headers } from "next/headers";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
+import { sendSMS as sendTelnyxSMS } from "@/lib/messaging/telnyx";
 
 const OTP_LENGTH = 6;
 const OTP_EXPIRY_MINUTES = 5;
-const MAX_ATTEMPTS = 3;
-const RATE_LIMIT_PER_PHONE = 5; // max OTPs per phone per hour
+
+interface PhoneVerificationRpcResult {
+  success: boolean;
+  error?: string;
+  verification_id?: string;
+  attempts?: number;
+  remaining_attempts?: number;
+}
 
 function generateOtp(): string {
   const digits = "0123456789";
@@ -25,10 +32,17 @@ function normalizePhone(phone: string): string {
   return `+${digits}`;
 }
 
+async function getRequestIp(): Promise<string | null> {
+  const requestHeaders = await headers();
+  const forwardedFor = requestHeaders.get("x-forwarded-for");
+  const realIp = requestHeaders.get("x-real-ip");
+  return forwardedFor?.split(",")[0]?.trim() || realIp?.trim() || null;
+}
+
 export async function sendOtp(
   phone: string,
   storeConfigId: string
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; code?: "rate_limited_phone" | "rate_limited_ip" | "sms_failed" | "not_configured" }> {
   const supabase = createServiceRoleClient();
 
   const normalized = normalizePhone(phone);
@@ -38,7 +52,7 @@ export async function sendOtp(
 
   const { data: storeConfig } = await supabase
     .from("online_store_config")
-    .select("merchant_id, is_active")
+    .select("merchant_id, is_active, store_name")
     .eq("id", storeConfigId)
     .single();
 
@@ -47,70 +61,64 @@ export async function sendOtp(
   }
 
   const merchantId = storeConfig.merchant_id;
-
-  // Rate limit: max OTPs per phone per hour
-  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-  const { count } = await supabase
-    .from("phone_verifications")
-    .select("id", { count: "exact", head: true })
-    .eq("phone", normalized)
-    .eq("merchant_id", merchantId)
-    .gte("created_at", oneHourAgo);
-
-  if ((count ?? 0) >= RATE_LIMIT_PER_PHONE) {
-    return { success: false, error: "Too many attempts. Try again later." };
-  }
+  const storeName = (storeConfig as { store_name?: string }).store_name || "your order";
 
   const code = generateOtp();
   const expiresAt = new Date(
     Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000
   ).toISOString();
 
-  const { error: insertError } = await supabase
-    .from("phone_verifications")
-    .insert({
-      phone: normalized,
-      code,
-      merchant_id: merchantId,
-      expires_at: expiresAt,
-    });
+  const requestIp = await getRequestIp();
+  const { data: issueResult, error: issueError } = await supabase.rpc(
+    "issue_phone_verification_otp",
+    {
+      p_phone: normalized,
+      p_merchant_id: merchantId,
+      p_code: code,
+      p_request_ip: requestIp,
+      p_expires_at: expiresAt,
+    }
+  );
 
-  if (insertError) {
-    return { success: false, error: "Failed to create verification" };
+  const verificationResult = issueResult as PhoneVerificationRpcResult | null;
+  if (issueError || !verificationResult?.success || !verificationResult.verification_id) {
+    const msg = verificationResult?.error ?? "";
+    if (msg.includes("Too many attempts")) {
+      return { success: false, error: msg, code: "rate_limited_phone" };
+    }
+    if (msg.includes("Too many requests from this network")) {
+      return { success: false, error: msg, code: "rate_limited_ip" };
+    }
+    return { success: false, error: msg || "Failed to create verification" };
   }
 
-  // Send via Twilio
-  const accountSid = process.env.TWILIO_ACCOUNT_SID;
-  const authToken = process.env.TWILIO_AUTH_TOKEN;
-  const fromNumber = process.env.TWILIO_PHONE_NUMBER;
+  const verificationId = verificationResult.verification_id;
 
-  if (!accountSid || !authToken || !fromNumber) {
-    console.error("Twilio not configured");
-    // In dev, log the code instead of failing
+  // Verification SMS = transactional → Telnyx (Twilio is reserved for marketing).
+  const body = `Your ${storeName} verification code is ${code}. It expires in ${OTP_EXPIRY_MINUTES} minutes.`;
+  const result = await sendTelnyxSMS(normalized, body);
+
+  if ("error" in result) {
+    console.error("[sendOtp] Telnyx error:", result.error);
     if (process.env.NODE_ENV === "development") {
-      console.log(`[DEV] OTP for ${normalized}: ${code}`);
+      console.log(`[DEV OTP] ${normalized} → ${code}`);
       return { success: true };
     }
-    return { success: false, error: "SMS service not configured" };
+    await supabase.from("phone_verifications").delete().eq("id", verificationId);
+    if (result.error.includes("not configured")) {
+      return { success: false, error: "SMS service is not configured. Please contact support.", code: "not_configured" };
+    }
+    return { success: false, error: "Failed to send SMS. Please check your number and try again.", code: "sms_failed" };
   }
 
-  try {
-    const client = twilio(accountSid, authToken);
-    await client.messages.create({
-      body: `Your verification code is: ${code}`,
-      from: fromNumber,
-      to: normalized,
-    });
-    return { success: true };
-  } catch (err: any) {
-    console.error("Twilio send error:", err?.message);
-    return { success: false, error: "Failed to send verification code" };
-  }
+  return { success: true };
 }
 
 export interface VerifyOtpResult {
   success: boolean;
   error?: string;
+  code?: "max_attempts" | "expired" | "invalid_code";
+  remainingAttempts?: number;
   sessionToken?: string;
   customer?: {
     id: string;
@@ -142,41 +150,31 @@ export async function verifyOtp(
 
   const merchantId = storeConfig.merchant_id;
 
-  // Find the latest unexpired, unverified code for this phone+merchant
-  const { data: verification, error: fetchError } = await supabase
-    .from("phone_verifications")
-    .select("*")
-    .eq("phone", normalized)
-    .eq("merchant_id", merchantId)
-    .is("verified_at", null)
-    .gt("expires_at", new Date().toISOString())
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .single();
+  const { data: verifyResult, error: verifyError } = await supabase.rpc(
+    "verify_phone_verification_otp",
+    {
+      p_phone: normalized,
+      p_merchant_id: merchantId,
+      p_code: code,
+    }
+  );
 
-  if (fetchError || !verification) {
-    return { success: false, error: "No active verification found. Request a new code." };
+  const verificationResult = verifyResult as PhoneVerificationRpcResult | null;
+  if (verifyError || !verificationResult?.success) {
+    const msg = verificationResult?.error ?? "";
+    if (msg.includes("Too many failed attempts")) {
+      return { success: false, error: msg, code: "max_attempts" };
+    }
+    if (msg.includes("No active verification")) {
+      return { success: false, error: msg, code: "expired" };
+    }
+    return {
+      success: false,
+      error: msg || "Invalid code",
+      code: "invalid_code",
+      remainingAttempts: verificationResult?.remaining_attempts,
+    };
   }
-
-  if (verification.attempts >= MAX_ATTEMPTS) {
-    return { success: false, error: "Too many failed attempts. Request a new code." };
-  }
-
-  // Increment attempts
-  await supabase
-    .from("phone_verifications")
-    .update({ attempts: verification.attempts + 1 })
-    .eq("id", verification.id);
-
-  if (verification.code !== code) {
-    return { success: false, error: "Invalid code" };
-  }
-
-  // Mark as verified
-  await supabase
-    .from("phone_verifications")
-    .update({ verified_at: new Date().toISOString() })
-    .eq("id", verification.id);
 
   // Find or create customer
   let { data: customer } = await supabase

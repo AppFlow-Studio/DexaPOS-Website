@@ -44,6 +44,12 @@ ADM-006-007-STATUS.md
 
 # clerk configuration (can include secrets)
 /.clerk/
-
+.mcp.json
 # Sentry Config File
 .env.sentry-build-plugin
+
+# Claude Code local settings (machine-specific paths and personal permissions)
+.claude/settings.local.json
+
+# Sprint planning / personal task notes
+tasks/sprint2-awdi-tickets.md

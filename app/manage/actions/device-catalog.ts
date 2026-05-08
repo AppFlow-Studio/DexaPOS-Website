@@ -22,6 +22,8 @@ export interface DeviceCatalogItem {
   specs: Record<string, unknown>
   unit_cost_cents: number | null
   monthly_fee_cents: number | null
+  unit_cost: number | null
+  monthly_fee: number | null
   is_active: boolean
   discontinued_at: string | null
   image_url: string | null
@@ -39,6 +41,8 @@ export interface CreateDeviceCatalogInput {
   specs?: Record<string, unknown>
   unit_cost_cents?: number | null
   monthly_fee_cents?: number | null
+  unit_cost?: number | null
+  monthly_fee?: number | null
   is_active?: boolean
   image_url?: string | null
   notes?: string | null
@@ -53,6 +57,8 @@ export interface UpdateDeviceCatalogInput {
   specs?: Record<string, unknown>
   unit_cost_cents?: number | null
   monthly_fee_cents?: number | null
+  unit_cost?: number | null
+  monthly_fee?: number | null
   is_active?: boolean
   image_url?: string | null
   notes?: string | null
@@ -178,6 +184,8 @@ export async function createDeviceCatalogItem(input: CreateDeviceCatalogInput) {
         specs: input.specs || {},
         unit_cost_cents: input.unit_cost_cents ?? null,
         monthly_fee_cents: input.monthly_fee_cents ?? null,
+        unit_cost: input.unit_cost ?? null,
+        monthly_fee: input.monthly_fee ?? null,
         is_active: input.is_active ?? true,
         image_url: input.image_url || null,
         notes: input.notes || null,
@@ -256,6 +264,8 @@ export async function updateDeviceCatalogItem(
     if (input.specs !== undefined) updateData.specs = input.specs
     if (input.unit_cost_cents !== undefined) updateData.unit_cost_cents = input.unit_cost_cents
     if (input.monthly_fee_cents !== undefined) updateData.monthly_fee_cents = input.monthly_fee_cents
+    if (input.unit_cost !== undefined) updateData.unit_cost = input.unit_cost
+    if (input.monthly_fee !== undefined) updateData.monthly_fee = input.monthly_fee
     if (input.is_active !== undefined) updateData.is_active = input.is_active
     if (input.image_url !== undefined) updateData.image_url = input.image_url || null
     if (input.notes !== undefined) updateData.notes = input.notes || null

@@ -15,6 +15,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PhoneInput } from "@/components/ui/phone-input";
+import { normalizePhone, formatPhoneForDisplay } from "@/lib/phone";
 import { Badge } from "@/components/ui/badge";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -45,6 +47,7 @@ import {
   Info,
 } from "lucide-react";
 import { GetMerchantRoles } from "@/app/dashboard/actions/staff-invite";
+import { CheckPinAvailability } from "@/app/dashboard/actions/unified-staff";
 import { RolesModel, LocationsModel } from "@/types/db-modles";
 import { useLocations } from "@/app/dashboard/hooks/useLocations";
 import { useQuery } from "@tanstack/react-query";
@@ -55,6 +58,7 @@ import {
 } from "@/app/dashboard/hooks/useStaff";
 import { InviteStaffFormData, StaffType, EmploymentType } from "@/types/staff";
 import { useClerkOrgId } from "@/app/dashboard/hooks/useLocationScoped";
+import { useEmailAvailability } from "@/app/dashboard/hooks/useEmailAvailability";
 import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
 
 interface InviteUserWizardProps {
@@ -62,6 +66,7 @@ interface InviteUserWizardProps {
   onOpenChange?: (open: boolean) => void;
   onSuccess?: () => void;
   children?: React.ReactNode;
+  defaultLocationId?: string;
 }
 
 type Step = "type" | "details" | "role" | "locations" | "pos_config" | "review";
@@ -105,6 +110,7 @@ export function InviteUserWizard({
   onOpenChange: controlledOnOpenChange,
   onSuccess,
   children,
+  defaultLocationId,
 }: InviteUserWizardProps) {
   const clerkOrgId = useClerkOrgId();
   const { data: userInfo } = useUserInfo();
@@ -147,8 +153,11 @@ export function InviteUserWizard({
   const [firstName, setFirstName] = React.useState("");
   const [lastName, setLastName] = React.useState("");
   const [email, setEmail] = React.useState("");
+  const emailCheck = useEmailAvailability(email, {
+    clerkOrgId,
+    enabled: email.trim().length > 0,
+  });
   const [phone, setPhone] = React.useState("");
-  const [phoneError, setPhoneError] = React.useState("");
   const [selectedRoleCode, setSelectedRoleCode] = React.useState<string>("");
   const [selectedLocationIds, setSelectedLocationIds] = React.useState<
     Set<string>
@@ -161,6 +170,8 @@ export function InviteUserWizard({
   const [enablePosAccess, setEnablePosAccess] = React.useState(false); // For Clerk accounts
   const [autoGeneratePin, setAutoGeneratePin] = React.useState(true);
   const [pinCode, setPinCode] = React.useState("");
+  const [pinError, setPinError] = React.useState("");
+  const [pinChecking, setPinChecking] = React.useState(false);
   const [hourlyRate, setHourlyRate] = React.useState<string>("");
   const [employmentType, setEmploymentType] =
     React.useState<EmploymentType | null>(null);
@@ -172,6 +183,14 @@ export function InviteUserWizard({
     }
   }, [open, roles, selectedRoleCode]);
 
+  // Pre-select location when opened from a location context
+  React.useEffect(() => {
+    if (open && defaultLocationId) {
+      setSelectedLocationIds(new Set([defaultLocationId]));
+      setPrimaryLocationId(defaultLocationId);
+    }
+  }, [open, defaultLocationId]);
+
   // Reset form when closing
   React.useEffect(() => {
     if (!open) {
@@ -181,17 +200,38 @@ export function InviteUserWizard({
       setLastName("");
       setEmail("");
       setPhone("");
-      setPhoneError("");
       setSelectedRoleCode("");
       setSelectedLocationIds(new Set());
       setPrimaryLocationId(null);
       setEnablePosAccess(false);
       setAutoGeneratePin(true);
       setPinCode("");
+      setPinError("");
+      setPinChecking(false);
       setHourlyRate("");
       setEmploymentType(null);
     }
   }, [open]);
+
+  // Debounced PIN availability check
+  React.useEffect(() => {
+    setPinError("");
+    if (autoGeneratePin || pinCode.length !== 4 || selectedLocationIds.size === 0) {
+      return;
+    }
+    setPinChecking(true);
+    const timeout = setTimeout(() => {
+      CheckPinAvailability(pinCode, Array.from(selectedLocationIds)).then((result) => {
+        setPinChecking(false);
+        if (!result.available) {
+          setPinError(`This PIN is already taken at ${result.conflictLocationName}`);
+        }
+      }).catch(() => {
+        setPinChecking(false);
+      });
+    }, 400);
+    return () => clearTimeout(timeout);
+  }, [pinCode, autoGeneratePin, selectedLocationIds]);
 
   // Determine which steps to show based on staff type
   const STEPS = staffType === "clerk" ? CLERK_STEPS : POS_STEPS;
@@ -205,18 +245,23 @@ export function InviteUserWizard({
       case "details":
         // Name is always required
         if (!firstName.trim() || !lastName.trim()) return false;
-        // Block if phone has a format error
-        if (phoneError) return false;
+        // Block while live email check is pending or has flagged a conflict
+        if (email.trim().length > 0 && (emailCheck.isChecking || emailCheck.hasConflict)) {
+          return false;
+        }
         // Email is required for Clerk, optional for POS
         if (staffType === "clerk") {
-          return email.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+          return !!email.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
         }
         return true; // POS staff can proceed without email
       case "role":
         return !!selectedRoleCode;
       case "locations":
-        return selectedLocationIds.size > 0;
+        // Allow proceeding if no locations exist yet (staff created without assignment)
+        return locations.length === 0 || selectedLocationIds.size > 0;
       case "pos_config":
+        // Block if PIN conflict detected or still checking
+        if (!autoGeneratePin && (pinError || pinChecking)) return false;
         // For POS staff, PIN is required
         if (staffType === "pos") {
           if (!autoGeneratePin && !pinCode.trim()) return false;
@@ -257,7 +302,7 @@ export function InviteUserWizard({
       first_name: firstName,
       last_name: lastName,
       email: email || null,
-      phone: phone || null,
+      phone: normalizePhone(phone) ?? phone || null,
       role_code: selectedRoleCode,
       location_ids: Array.from(selectedLocationIds),
       primary_location_id: primaryLocationId,
@@ -694,8 +739,24 @@ export function InviteUserWizard({
                           placeholder="john.doe@example.com"
                           value={email}
                           onChange={(e) => setEmail(e.target.value)}
+                          aria-invalid={emailCheck.hasConflict || undefined}
                         />
-                        {staffType === "clerk" && (
+                        {email.trim().length > 0 && emailCheck.isChecking && (
+                          <p className="text-xs text-muted-foreground">
+                            Checking availability…
+                          </p>
+                        )}
+                        {emailCheck.hasConflict && (
+                          <p className="text-xs text-destructive">
+                            {emailCheck.message}
+                          </p>
+                        )}
+                        {emailCheck.isAvailable && (
+                          <p className="text-xs text-emerald-600">
+                            Email is available.
+                          </p>
+                        )}
+                        {staffType === "clerk" && !emailCheck.hasConflict && !emailCheck.isAvailable && !emailCheck.isChecking && (
                           <p className="text-xs text-muted-foreground">
                             An invitation will be sent to this email address.
                           </p>
@@ -708,31 +769,11 @@ export function InviteUserWizard({
                             (optional)
                           </span>
                         </Label>
-                        <Input
+                        <PhoneInput
                           id="phone"
-                          type="tel"
-                          placeholder="+15551234567"
                           value={phone}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setPhone(val);
-                            if (val && !/^\+[1-9]\d{7,14}$/.test(val)) {
-                              setPhoneError(
-                                "Must be E.164 format — start with + and country code, e.g. +15551234567",
-                              );
-                            } else {
-                              setPhoneError("");
-                            }
-                          }}
-                          className={phoneError ? "border-destructive" : ""}
+                          onChange={setPhone}
                         />
-                        {phoneError ? (
-                          <p className="text-xs text-destructive">{phoneError}</p>
-                        ) : (
-                          <p className="text-xs text-muted-foreground">
-                            Include country code, e.g. +1 for US, +44 for UK
-                          </p>
-                        )}
                       </div>
                     </div>
                   )}
@@ -846,9 +887,16 @@ export function InviteUserWizard({
                       )}
                       <div className="space-y-2">
                         {locations.length === 0 ? (
-                          <div className="text-center py-8 text-muted-foreground">
-                            <Building2 className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                            <p>No locations available</p>
+                          <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-900/20">
+                            <Building2 className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
+                            <div>
+                              <p className="text-sm font-medium text-amber-900 dark:text-amber-100">
+                                No locations set up yet
+                              </p>
+                              <p className="mt-1 text-sm text-amber-700 dark:text-amber-300">
+                                This staff member will be added to your merchant account without a location assignment. You can assign them to a location once you create one.
+                              </p>
+                            </div>
                           </div>
                         ) : (
                           locations.map((location) => {
@@ -992,10 +1040,23 @@ export function InviteUserWizard({
                                       setPinCode(value);
                                     }
                                   }}
+                                  className={pinError ? "border-red-500 focus-visible:ring-red-500" : ""}
                                 />
-                                <p className="text-xs text-muted-foreground">
-                                  Must be 4 digits
-                                </p>
+                                {pinChecking && (
+                                  <p className="text-xs text-muted-foreground">
+                                    Checking PIN availability...
+                                  </p>
+                                )}
+                                {pinError && (
+                                  <p className="text-xs text-red-600">
+                                    {pinError}
+                                  </p>
+                                )}
+                                {!pinError && !pinChecking && (
+                                  <p className="text-xs text-muted-foreground">
+                                    Must be 4 digits
+                                  </p>
+                                )}
                               </div>
                             )}
 
@@ -1120,7 +1181,7 @@ export function InviteUserWizard({
                             )}
                             {phone && (
                               <div className="text-sm text-muted-foreground mt-0.5">
-                                {phone}
+                                {formatPhoneForDisplay(phone)}
                               </div>
                             )}
                           </div>
@@ -1193,9 +1254,15 @@ export function InviteUserWizard({
                       {/* Locations */}
                       <div>
                         <div className="text-sm font-medium mb-3">
-                          Assigning to {selectedLocations.length} location
-                          {selectedLocations.length !== 1 ? "s" : ""}
+                          {selectedLocations.length === 0
+                            ? "No location assignment"
+                            : `Assigning to ${selectedLocations.length} location${selectedLocations.length !== 1 ? "s" : ""}`}
                         </div>
+                        {selectedLocations.length === 0 && (
+                          <p className="text-sm text-muted-foreground">
+                            Staff will be added to the merchant account. Assign a location after creating one.
+                          </p>
+                        )}
                         <div className="space-y-2">
                           {selectedLocations.map((location) => {
                             const isPrimary = primaryLocationId === location.id;

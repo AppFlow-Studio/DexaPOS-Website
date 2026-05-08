@@ -25,7 +25,6 @@ import {
     adminCreateLocation,
     adminGetMerchantClerkOrgId,
     adminGetManagerAssignableUsers,
-    adminUpdateLocation,
 } from '@/app/manage/actions/admin-merchant/locations'
 import {
     ApplyLocationManagerAssignment,
@@ -44,7 +43,6 @@ import {
     createLocationSchema
 } from '@/types/merchant_locations'
 import { useQueryClient } from '@tanstack/react-query'
-import { uploadMerchantDocument } from '@/lib/cdn/server'
 
 interface AdminCreateLocationWizardProps {
     merchantId: string
@@ -83,13 +81,10 @@ const initialFormData: LocationFormData = {
     routing_number: '',
     account_number: '',
     confirm_account_number: '',
-    bank_support_document_name: '',
     account_type: 'checking',
-    payout_frequency: 'daily',
-    payout_day_of_week: '1',
-    payout_day_of_month: '1',
-    minimum_payout_amount: '0.00',
     use_merchant_billing_profile: false,
+    luqra_mid: '',
+    luqra_mid_descriptor: '',
     business_hours: DEFAULT_BUSINESS_HOURS,
     manager_assignment_type: 'skip',
     manager_invite_name: '',
@@ -122,7 +117,6 @@ export function AdminCreateLocationWizard({ merchantId, merchantName }: AdminCre
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [showExitDialog, setShowExitDialog] = useState(false)
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
-    const [bankSupportFile, setBankSupportFile] = useState<File | null>(null)
     const [managerCandidates, setManagerCandidates] = useState<ManagerAssignableUser[]>([])
     const [isLoadingManagerCandidates, setIsLoadingManagerCandidates] = useState(false)
     const [managerCandidatesError, setManagerCandidatesError] = useState<string | null>(null)
@@ -255,15 +249,6 @@ export function AdminCreateLocationWizard({ merchantId, merchantName }: AdminCre
                 ) {
                     newErrors.confirm_account_number = 'Account number confirmation must match'
                 }
-                if (
-                    formData.minimum_payout_amount &&
-                    Number.isNaN(Number(formData.minimum_payout_amount))
-                ) {
-                    newErrors.minimum_payout_amount = 'Minimum payout must be a valid amount'
-                }
-                if (!bankSupportFile) {
-                    newErrors.bank_support_document_name = 'Bank letter or voided check is required'
-                }
                 break
 
             case 5: {
@@ -271,8 +256,8 @@ export function AdminCreateLocationWizard({ merchantId, merchantName }: AdminCre
                 days.forEach(day => {
                     const dayHours = formData.business_hours[day]
                     if (dayHours && !dayHours.is_closed) {
-                        if (dayHours.open >= dayHours.close && dayHours.close !== '00:00') {
-                            newErrors[day] = 'Close time must be after open time'
+                        if (dayHours.open >= dayHours.close && !dayHours.is_overnight) {
+                            newErrors[day] = 'Close time must be after open time (or enable overnight for next-day close)'
                         }
                     }
                 })
@@ -385,6 +370,9 @@ export function AdminCreateLocationWizard({ merchantId, merchantName }: AdminCre
                 onboarding_completed: true,
                 uses_global_menu: formData.uses_global_menu,
                 public_metadata: buildOnlineStoreLocationMetadata(formData),
+                luqra_mid: formData.luqra_mid?.trim() || undefined,
+                luqra_mid_descriptor: formData.luqra_mid_descriptor?.trim() || undefined,
+                luqra_mid_status: 'pending',
             })
 
             if (result.error) {
@@ -392,29 +380,6 @@ export function AdminCreateLocationWizard({ merchantId, merchantName }: AdminCre
                     description: result.error
                 })
                 return
-            }
-
-            if (result.data && bankSupportFile) {
-                const uploadResult = await uploadMerchantDocument(
-                    bankSupportFile,
-                    result.data.merchant_id,
-                    'online-store-bank-support'
-                )
-
-                if (uploadResult.success && uploadResult.cdnUrl) {
-                    await adminUpdateLocation(merchantId, result.data.id, {
-                        public_metadata: {
-                            ...(result.data.public_metadata || {}),
-                            ...buildOnlineStoreLocationMetadata(formData),
-                            online_store_bank_support_document_url: uploadResult.cdnUrl,
-                            bank_support_document_url: uploadResult.cdnUrl,
-                        },
-                    })
-                } else if (!uploadResult.success) {
-                    toast.warning('Location created but bank support document upload failed', {
-                        description: uploadResult.error || 'Unknown error',
-                    })
-                }
             }
 
             // Manager assignment (needs clerkOrgId)
@@ -507,13 +472,66 @@ export function AdminCreateLocationWizard({ merchantId, merchantName }: AdminCre
                 )
             case 4:
                 return (
-                    <BankingPayoutsStep
-                        data={formData as LocationFormStep4}
-                        onChange={updateFormData}
-                        errors={errors}
-                        onBankSupportDocumentSelect={setBankSupportFile}
-                        onClearBankSupportDocument={() => setBankSupportFile(null)}
-                    />
+                    <div className="space-y-6">
+                        <BankingPayoutsStep
+                            data={formData as LocationFormStep4}
+                            onChange={updateFormData}
+                            errors={errors}
+                            onBankSupportDocumentSelect={setBankSupportFile}
+                            onClearBankSupportDocument={() => setBankSupportFile(null)}
+                        />
+                        <div className="space-y-3 rounded-lg border bg-card p-4">
+                            <div>
+                                <p className="text-sm font-medium">Luqra acquiring MID</p>
+                                <p className="text-xs text-muted-foreground">
+                                    Optional. Bind this location to a Luqra MID so admins can pull
+                                    transactions and chargebacks from the reports API. You can also
+                                    set this later from the merchant&apos;s MIDs section.
+                                </p>
+                            </div>
+                            <div className="grid gap-3 md:grid-cols-2">
+                                <div className="space-y-1.5">
+                                    <label htmlFor="wiz-luqra-mid" className="text-xs font-medium">
+                                        MID
+                                    </label>
+                                    <input
+                                        id="wiz-luqra-mid"
+                                        inputMode="numeric"
+                                        placeholder="584600000103655"
+                                        className="font-mono h-9 w-full rounded-md border bg-background px-2 text-sm"
+                                        value={formData.luqra_mid ?? ''}
+                                        onChange={(e) =>
+                                            updateFormData({
+                                                luqra_mid: e.target.value.replace(/\s+/g, ''),
+                                            })
+                                        }
+                                    />
+                                    {errors.luqra_mid && (
+                                        <p className="text-xs text-destructive">{errors.luqra_mid}</p>
+                                    )}
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label
+                                        htmlFor="wiz-luqra-descriptor"
+                                        className="text-xs font-medium"
+                                    >
+                                        Descriptor
+                                    </label>
+                                    <input
+                                        id="wiz-luqra-descriptor"
+                                        placeholder="MTECH DISTRIBUTORS"
+                                        className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+                                        value={formData.luqra_mid_descriptor ?? ''}
+                                        onChange={(e) =>
+                                            updateFormData({
+                                                luqra_mid_descriptor: e.target.value,
+                                            })
+                                        }
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 )
             case 5:
                 return (

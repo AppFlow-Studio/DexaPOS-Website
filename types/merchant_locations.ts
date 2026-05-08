@@ -59,9 +59,10 @@ export interface BusinessHours {
 }
 
 export interface DayHours {
-  open: string;  // "09:00" format
-  close: string; // "22:00" format
+  open: string;         // "09:00" format
+  close: string;        // "22:00" format, or "02:00" when is_overnight is true
   is_closed: boolean;
+  is_overnight?: boolean; // true = close time is on the next calendar day
 }
 
 // ----------------------------------------------------------------------------
@@ -287,9 +288,10 @@ export const dayHoursSchema = z.object({
   open: timeSchema,
   close: timeSchema,
   is_closed: z.boolean(),
+  is_overnight: z.boolean().optional().default(false),
 }).refine(
-  (data) => data.is_closed || data.open < data.close || data.close === '00:00',
-  { message: 'Close time must be after open time (or use 00:00 for midnight)' }
+  (data) => data.is_closed || data.is_overnight || data.open < data.close,
+  { message: 'Close time must be after open time (or enable overnight for next-day close)' }
 );
 
 export const businessHoursSchema = z.object({
@@ -339,6 +341,7 @@ export const createLocationSchema = z.object({
   is_active: z.boolean().default(true),
   is_accepting_orders: z.boolean().default(true),
   business_hours: businessHoursSchema.default({}),
+  business_day_end_hour: z.number().int().min(0).max(23).default(0),
   ein: z
     .string()
     .regex(/^\d{2}-?\d{7}$/, 'EIN must be 9 digits (with optional dash)')
@@ -351,6 +354,15 @@ export const createLocationSchema = z.object({
   onboarding_completed: z.boolean().default(false),
   uses_global_menu: z.boolean().default(true),
   public_metadata: z.record(z.unknown()).default({}),
+  luqra_mid: z
+    .string()
+    .regex(/^[0-9]{8,20}$/, 'MID must be 8-20 digits')
+    .nullable()
+    .optional(),
+  luqra_mid_descriptor: z.string().max(100).nullable().optional(),
+  luqra_mid_status: z
+    .enum(['pending', 'review', 'live', 'offline'])
+    .default('pending'),
 });
 
 export type CreateLocationInput = z.infer<typeof createLocationSchema>;
@@ -770,14 +782,12 @@ export interface LocationFormStep4 {
   routing_number: string;
   account_number: string;
   confirm_account_number: string;
-  bank_support_document_name: string;
-  bank_support_document_url?: string;
   account_type: 'checking' | 'savings';
-  payout_frequency: 'daily' | 'weekly' | 'monthly';
-  payout_day_of_week: string;
-  payout_day_of_month: string;
-  minimum_payout_amount: string;
   use_merchant_billing_profile: boolean;
+  /** Luqra acquiring MID (8-20 digits). Optional at create. */
+  luqra_mid?: string;
+  /** Free-text descriptor surfaced on Luqra reports. */
+  luqra_mid_descriptor?: string;
 }
 
 export interface LocationFormStep5 {

@@ -24,10 +24,14 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PhoneInput } from "@/components/ui/phone-input";
+import { normalizePhone, formatPhoneForDisplay } from "@/lib/phone";
 import { UnifiedStaffMember, EmploymentType } from "@/types/staff";
 import { RolesModel } from "@/types/db-modles";
 import { cn } from "@/lib/utils";
 import {
+  Eye,
+  EyeOff,
   Mail,
   Phone,
   MapPin,
@@ -45,12 +49,21 @@ import {
   Loader2,
   ChevronRight,
   Shield,
+  Star,
 } from "lucide-react";
+import { CredentialToast } from "@/components/ui/credential-toast";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { LocationAssignmentSheet } from "./LocationAssignmentSheet";
 import {
   useDeactivateStaff,
   useReactivateStaff,
   useResetStaffPIN,
+  useResetStaffPassword,
   useUpdateStaffAssignment,
   useUpgradePOSToClerk,
   useDemoteClerkToPOS,
@@ -58,6 +71,7 @@ import {
   useUpdateStaffProfile,
   useAddStaffToLocation,
   useRemoveStaffFromLocation,
+  useSetPrimaryLocation,
 } from "@/app/dashboard/hooks/useStaff";
 import { toast } from "sonner";
 import { GetMerchantRoles } from "@/app/dashboard/actions/staff-invite";
@@ -81,12 +95,14 @@ export function StaffDetailSheet({
   const deactivateStaff = useDeactivateStaff();
   const reactivateStaff = useReactivateStaff();
   const resetPIN = useResetStaffPIN();
+  const resetPassword = useResetStaffPassword();
   const updateAssignment = useUpdateStaffAssignment();
   const upgradePOSToClerk = useUpgradePOSToClerk();
   const demoteClerkToPOS = useDemoteClerkToPOS();
   const updateProfile = useUpdateStaffProfile();
   const addToLocation = useAddStaffToLocation();
   const removeFromLocation = useRemoveStaffFromLocation();
+  const setPrimary = useSetPrimaryLocation();
   const { data: userInfo } = useUserInfo();
   const { locations: allLocations } = useLocationStore();
 
@@ -117,6 +133,16 @@ export function StaffDetailSheet({
   const [showUpgradeDialog, setShowUpgradeDialog] = React.useState(false);
   const [upgradeEmail, setUpgradeEmail] = React.useState<string>("");
 
+  // Custom PIN state
+  const [customPinInput, setCustomPinInput] = React.useState("");
+  const [showCustomPin, setShowCustomPin] = React.useState(false);
+
+  // Password reset state (Clerk users only)
+  const [generatedPassword, setGeneratedPassword] = React.useState<string | null>(null);
+  const [customPasswordInput, setCustomPasswordInput] = React.useState("");
+  const [showCustomPassword, setShowCustomPassword] = React.useState(false);
+  const [showPasswordValue, setShowPasswordValue] = React.useState(false);
+
   // Location assignment sheet state
   const [selectedAssignmentLocationId, setSelectedAssignmentLocationId] =
     React.useState<string | null>(null);
@@ -145,7 +171,6 @@ export function StaffDetailSheet({
     (a) => a.is_primary
   );
   const hasPin = displayStaff?.location_assignments?.some((a) => a.has_pin) ?? false;
-  const primaryPin = primaryLocation?.pin_code || null;
 
   // Get current user's role level for filtering assignable roles
   const currentUserLevel = React.useMemo(() => {
@@ -156,14 +181,37 @@ export function StaffDetailSheet({
     return role?.level || 100;
   }, [userInfo, roles]);
 
-  // Load roles when edit mode is enabled
+  // Staff management permission: owner, admin, and managers (level ≤ 75) can manage.
+  // Cashier-level and below cannot activate/deactivate staff or manage PINs.
+  const canManageStaff = React.useMemo(() => {
+    if (!userInfo?.members?.[0]) return true; // optimistic until loaded; server enforces
+    const member = userInfo.members[0];
+    const roleCode = (member.role_code || member.role) ?? "";
+    if (["merchant.owner", "merchant.admin"].includes(roleCode)) return true;
+    if (roles.length > 0) return currentUserLevel <= 75;
+    return true; // optimistic while roles load
+  }, [userInfo, roles, currentUserLevel]);
+
+  // PIN reveal permission: owner and admin can always reveal;
+  // managers (level ≤ 75) can too. Cashier-level roles cannot.
+  const canRevealPin = React.useMemo(() => {
+    if (!userInfo?.members?.[0]) return false;
+    const member = userInfo.members[0];
+    const roleCode = (member.role_code || member.role) ?? "";
+    if (["merchant.owner", "merchant.admin"].includes(roleCode)) return true;
+    // Fall back to level check once roles are loaded
+    if (roles.length > 0) return currentUserLevel <= 75;
+    return false;
+  }, [userInfo, roles, currentUserLevel]);
+
+  // Load roles when the sheet opens
   React.useEffect(() => {
-    if (open && (isEditMode || showAddLocation)) {
+    if (open) {
       GetMerchantRoles().then((rolesData) => {
         setRoles(rolesData);
       });
     }
-  }, [open, isEditMode, showAddLocation]);
+  }, [open]);
 
   // Reset edit state when staff changes
   React.useEffect(() => {
@@ -233,6 +281,55 @@ export function StaffDetailSheet({
       memberId: staff.member_id,
       locationId: primaryLocation.location_id,
     });
+  };
+
+  const handleSetCustomPin = () => {
+    if (!primaryLocation) {
+      toast.error("No primary location found");
+      return;
+    }
+    if (!/^\d{4,6}$/.test(customPinInput)) {
+      toast.error("PIN must be 4–6 digits");
+      return;
+    }
+    resetPIN.mutate(
+      { memberId: staff.member_id, locationId: primaryLocation.location_id, newPin: customPinInput },
+      {
+        onSuccess: (result) => {
+          if (result.error) { toast.error(result.error); return; }
+          setShowCustomPin(false);
+          setCustomPinInput("");
+          const pin = result.data?.pin;
+          if (pin) {
+            toast.custom(
+              (t) => React.createElement(CredentialToast, { pin, duration: 15, onDismiss: () => toast.dismiss(t) }),
+              { duration: 15000, position: "top-center" }
+            );
+          }
+        },
+      }
+    );
+  };
+
+  const handleResetPassword = (custom?: string) => {
+    resetPassword.mutate(
+      { memberId: staff.member_id, customPassword: custom || undefined },
+      {
+        onSuccess: (result) => {
+          if (result.error) { toast.error(result.error); return; }
+          const pw = result.data?.password;
+          if (pw) {
+            setGeneratedPassword(pw);
+            setShowCustomPassword(false);
+            setCustomPasswordInput("");
+            toast.custom(
+              (t) => React.createElement(CredentialToast, { password: pw, duration: 15, onDismiss: () => toast.dismiss(t) }),
+              { duration: 15000, position: "top-center" }
+            );
+          }
+        },
+      }
+    );
   };
 
   const handleSaveChanges = () => {
@@ -326,7 +423,7 @@ export function StaffDetailSheet({
     if ((editedEmail || null) !== (staff.email || null))
       updates.email = editedEmail || null;
     if ((editedPhone || null) !== (staff.phone || null))
-      updates.phone = editedPhone || null;
+      updates.phone = normalizePhone(editedPhone) ?? (editedPhone || null);
 
     if (Object.keys(updates).length === 0) {
       setIsProfileEditMode(false);
@@ -377,6 +474,13 @@ export function StaffDetailSheet({
 
   const handleRemoveFromLocation = (locationId: string) => {
     removeFromLocation.mutate({
+      memberId: staff.member_id,
+      locationId,
+    });
+  };
+
+  const handleSetPrimary = (locationId: string) => {
+    setPrimary.mutate({
       memberId: staff.member_id,
       locationId,
     });
@@ -441,7 +545,7 @@ export function StaffDetailSheet({
                       </div>
                       <div className="flex items-center gap-2">
                         <Phone className="h-4 w-4" />
-                        <span>{displayStaff.phone || "No phone"}</span>
+                        <span>{displayStaff.phone ? formatPhoneForDisplay(displayStaff.phone) : "No phone"}</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <MapPin className="h-4 w-4" />
@@ -481,15 +585,30 @@ export function StaffDetailSheet({
                         Toggle staff access for the primary location.
                       </p>
                     </div>
-                    <Switch
-                      checked={staff.overall_is_active}
-                      onCheckedChange={handleStatusToggle}
-                      disabled={
-                        !primaryLocation ||
-                        deactivateStaff.isPending ||
-                        reactivateStaff.isPending
-                      }
-                    />
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          {/* span needed so Tooltip works on a disabled element */}
+                          <span className="ml-auto">
+                            <Switch
+                              checked={staff.overall_is_active}
+                              onCheckedChange={handleStatusToggle}
+                              disabled={
+                                !primaryLocation ||
+                                !canManageStaff ||
+                                deactivateStaff.isPending ||
+                                reactivateStaff.isPending
+                              }
+                            />
+                          </span>
+                        </TooltipTrigger>
+                        {!canManageStaff && (
+                          <TooltipContent side="left">
+                            You don&apos;t have permission to manage staff
+                          </TooltipContent>
+                        )}
+                      </Tooltip>
+                    </TooltipProvider>
                   </div>
                 </div>
               </div>
@@ -543,12 +662,9 @@ export function StaffDetailSheet({
                       <Label className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
                         Phone
                       </Label>
-                      <Input
-                        type="tel"
+                      <PhoneInput
                         value={editedPhone}
-                        onChange={(e) => setEditedPhone(e.target.value)}
-                        className="h-10"
-                        placeholder="+1234567890"
+                        onChange={setEditedPhone}
                       />
                     </div>
                   </div>
@@ -616,7 +732,11 @@ export function StaffDetailSheet({
                         {isEditMode ? (
                           <Select value={editedRole} onValueChange={setEditedRole}>
                             <SelectTrigger className="h-10">
-                              <SelectValue />
+                              <SelectValue placeholder="Select role">
+                                {editedRole
+                                  ? (roles.find((r) => r.code === editedRole)?.name ?? editedRole)
+                                  : "Select role"}
+                              </SelectValue>
                             </SelectTrigger>
                             <SelectContent>
                               {roles
@@ -787,20 +907,54 @@ export function StaffDetailSheet({
 
                   <div className="space-y-4">
                     <StaffPinField
-                      pin={primaryPin}
+                      memberId={displayStaff?.member_id ?? ""}
+                      locationId={primaryLocation?.location_id ?? ""}
+                      locationName={primaryLocation?.location_name}
                       hasPin={Boolean(primaryLocation?.has_pin)}
+                      canReveal={canRevealPin}
+                      canManage={canManageStaff}
                       onGenerate={handleResetPIN}
                       isGenerating={resetPIN.isPending}
                       disabled={!primaryLocation}
                       buttonLabel={
                         primaryLocation?.has_pin ? "Generate New PIN" : "Generate PIN"
                       }
-                      visibleDescription={
-                        primaryLocation
-                          ? `Primary location: ${primaryLocation.location_name}`
-                          : undefined
-                      }
                     />
+
+                    {/* Custom PIN input */}
+                    {primaryLocation && (
+                      <div className="space-y-2">
+                        <button
+                          type="button"
+                          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                          onClick={() => { setShowCustomPin((v) => !v); setCustomPinInput(""); }}
+                        >
+                          <KeyRound className="h-3 w-3" />
+                          {showCustomPin ? "Cancel custom PIN" : "Set custom PIN"}
+                        </button>
+                        {showCustomPin && (
+                          <div className="flex items-center gap-2">
+                            <Input
+                              type="text"
+                              inputMode="numeric"
+                              pattern="\d{4,6}"
+                              maxLength={6}
+                              placeholder="4–6 digit PIN"
+                              value={customPinInput}
+                              onChange={(e) => setCustomPinInput(e.target.value.replace(/\D/g, ""))}
+                              className="h-8 w-36 font-mono text-sm"
+                            />
+                            <Button
+                              size="sm"
+                              onClick={handleSetCustomPin}
+                              disabled={resetPIN.isPending || customPinInput.length < 4}
+                            >
+                              Set PIN
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    )}
 
                     <Separator />
 
@@ -820,6 +974,78 @@ export function StaffDetailSheet({
                     </div>
                   </div>
                 </section>
+
+                {/* Dashboard Password — Clerk users only */}
+                {staff.is_clerk_user && (
+                  <section className="rounded-2xl border bg-card p-5">
+                    <div className="mb-4">
+                      <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                        Dashboard Password
+                      </h3>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Reset the password used to log in to the web dashboard.
+                      </p>
+                    </div>
+                    <div className="space-y-4">
+                      {generatedPassword && (
+                        <div className="space-y-1">
+                          <Label className="text-xs text-muted-foreground">New Password</Label>
+                          <div className="relative">
+                            <Input
+                              readOnly
+                              value={showPasswordValue ? generatedPassword : "•".repeat(generatedPassword.length)}
+                              className="font-mono text-sm pr-10"
+                            />
+                            <button
+                              type="button"
+                              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                              onClick={() => setShowPasswordValue((v) => !v)}
+                            >
+                              {showPasswordValue ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleResetPassword()}
+                          disabled={resetPassword.isPending}
+                        >
+                          <Lock className="h-3.5 w-3.5 mr-1.5" />
+                          {resetPassword.isPending ? "Resetting…" : "Reset Password"}
+                        </Button>
+                        <button
+                          type="button"
+                          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                          onClick={() => { setShowCustomPassword((v) => !v); setCustomPasswordInput(""); }}
+                        >
+                          {showCustomPassword ? "Cancel" : "Set custom password"}
+                        </button>
+                      </div>
+                      {showCustomPassword && (
+                        <div className="flex items-center gap-2">
+                          <Input
+                            type="text"
+                            placeholder="Min 8 characters"
+                            value={customPasswordInput}
+                            onChange={(e) => setCustomPasswordInput(e.target.value)}
+                            className="h-8 font-mono text-sm"
+                          />
+                          <Button
+                            size="sm"
+                            onClick={() => handleResetPassword(customPasswordInput)}
+                            disabled={resetPassword.isPending || customPasswordInput.length < 8}
+                          >
+                            Set
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </section>
+                )}
+
                 {!staff.is_clerk_user && (
                   <section className="rounded-2xl border bg-card p-5">
                     <div className="mb-4">
@@ -1060,6 +1286,26 @@ export function StaffDetailSheet({
                             <Button
                               variant="ghost"
                               size="sm"
+                              className="h-8 gap-1 px-2"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleSetPrimary(assignment.location_id);
+                              }}
+                              disabled={setPrimary.isPending}
+                              title="Set as primary location"
+                            >
+                              {setPrimary.isPending ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Star className="h-4 w-4" />
+                              )}
+                              <span className="hidden sm:inline">Set primary</span>
+                            </Button>
+                          )}
+                          {assignment.is_active && !assignment.is_primary && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
                               className="h-8 px-2 text-destructive hover:text-destructive"
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -1092,7 +1338,21 @@ export function StaffDetailSheet({
                         />
                         <InfoRow
                           label="Assigned At"
-                          value={assignment.assigned_at || "-"}
+                          value={
+                            assignment.assigned_at
+                              ? new Date(assignment.assigned_at).toLocaleString(
+                                  "en-US",
+                                  {
+                                    month: "long",
+                                    day: "numeric",
+                                    year: "numeric",
+                                    hour: "numeric",
+                                    minute: "2-digit",
+                                    hour12: true,
+                                  }
+                                )
+                              : "-"
+                          }
                         />
                       </div>
                     </button>
@@ -1187,7 +1447,7 @@ function InfoRow({
       <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
         {label}
       </p>
-      <p className={cn("mt-1 text-sm font-medium", mono && "font-mono text-xs")}>
+      <p className={cn("mt-1 text-sm font-medium break-words", mono && "font-mono text-xs")}>
         {value}
       </p>
     </div>

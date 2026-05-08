@@ -5,6 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Phone } from "lucide-react";
+import { PhoneInput } from "@/components/ui/phone-input";
+import { isValidPhone, formatPhoneForDisplay, normalizePhone } from "@/lib/phone";
 
 interface ContactSectionProps {
   isAuthenticated: boolean;
@@ -13,10 +15,14 @@ interface ContactSectionProps {
   lastName: string;
   email: string;
   phone: string;
+  emailOptIn: boolean;
+  smsOptIn: boolean;
   onFirstNameChange: (v: string) => void;
   onLastNameChange: (v: string) => void;
   onEmailChange: (v: string) => void;
   onPhoneChange: (v: string) => void;
+  onEmailOptInChange: (v: boolean) => void;
+  onSmsOptInChange: (v: boolean) => void;
   onSignInClick: () => void;
   onSignUpClick?: () => void;
 }
@@ -28,10 +34,14 @@ export function ContactSection({
   lastName,
   email,
   phone,
+  emailOptIn,
+  smsOptIn,
   onFirstNameChange,
   onLastNameChange,
   onEmailChange,
   onPhoneChange,
+  onEmailOptInChange,
+  onSmsOptInChange,
   onSignInClick,
   onSignUpClick,
 }: ContactSectionProps) {
@@ -39,7 +49,7 @@ export function ContactSection({
 
   const firstNameError = touched.firstName && firstName.trim().length === 0 ? "First name is required" : null;
   const emailError = touched.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) ? "A valid email is required" : null;
-  const phoneError = touched.phone && !customerPhone && phone.trim().length < 7 ? "A valid phone number is required" : null;
+  const phoneError = touched.phone && !customerPhone && !isValidPhone(phone) ? "A valid phone number is required" : null;
 
   return (
     <section className="space-y-4">
@@ -99,7 +109,7 @@ export function ContactSection({
       {isAuthenticated && customerPhone ? (
         <div className="flex items-center gap-2 text-sm" style={{ color: "var(--text-secondary)" }}>
           <Phone className="h-4 w-4" />
-          <span>{customerPhone}</span>
+          <span>{formatPhoneForDisplay(customerPhone)}</span>
         </div>
       ) : null}
 
@@ -162,21 +172,37 @@ export function ContactSection({
           <Label htmlFor="checkout-phone" className="text-sm">
             Phone <span className="text-red-500">*</span>
           </Label>
-          <Input
+          <PhoneInput
             id="checkout-phone"
-            type="tel"
             value={phone}
-            onChange={(e) => onPhoneChange(e.target.value)}
+            onChange={(e164) => onPhoneChange(normalizePhone(e164) ?? e164)}
             onBlur={() => setTouched((t) => ({ ...t, phone: true }))}
-            placeholder="+1 (555) 000-0000"
-            style={{
-              borderColor: phoneError ? "#ef4444" : "var(--border)",
-              backgroundColor: "var(--bg)",
-            }}
+            aria-invalid={!!phoneError}
           />
           {phoneError && <p className="text-xs text-red-500">{phoneError}</p>}
         </div>
       )}
+
+      <div className="space-y-2 pt-2 border-t" style={{ borderColor: "var(--border)" }}>
+        <label className="flex items-start gap-2 text-sm cursor-pointer" style={{ color: "var(--text)" }}>
+          <input
+            type="checkbox"
+            checked={emailOptIn}
+            onChange={(e) => onEmailOptInChange(e.target.checked)}
+            className="mt-0.5"
+          />
+          <span>Email me a receipt and order updates</span>
+        </label>
+        <label className="flex items-start gap-2 text-sm cursor-pointer" style={{ color: "var(--text)" }}>
+          <input
+            type="checkbox"
+            checked={smsOptIn}
+            onChange={(e) => onSmsOptInChange(e.target.checked)}
+            className="mt-0.5"
+          />
+          <span>Text me order status updates</span>
+        </label>
+      </div>
 
       <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
         Fields marked <span className="text-red-500">*</span> are required.

@@ -76,6 +76,7 @@ import {
   CreateMenuItem,
   ResetMenuItemToGlobal,
 } from "@/app/dashboard/actions/menu-items";
+import { AddItemToCategory } from "@/app/dashboard/actions/item-assignments";
 import {
   CategoriesModel,
   ModifierGroupsModel,
@@ -1301,6 +1302,24 @@ export function NewEditItemFormSheet({
         }
         toast.error("Operation Failed", { description: result.error });
         return;
+      }
+
+      // If created from a category context, assign the new item to that category
+      if (!editItem && categoryId && result.data?.id && merchantId) {
+        const assignResult = await AddItemToCategory(
+          categoryId,
+          result.data.id,
+          merchantId,
+          0,
+          undefined,
+          undefined,
+          isAllLocations ? null : selectedLocationId,
+        );
+        if (assignResult.error) {
+          toast.warning("Item created but not assigned to category", {
+            description: assignResult.error,
+          });
+        }
       }
 
       // Success message based on context
@@ -2925,6 +2944,7 @@ export function NewEditItemFormSheet({
                       (id) => categories.find((c) => c.id === id)?.name || "",
                     )
                     .filter(Boolean)}
+                  allergens={watchedValues.allergens ?? []}
                   availability={watchedValues.availability}
                   className="shadow-xl"
                 />

@@ -74,11 +74,14 @@ function formatDate(dateString: string): string {
   return `${months[date.getMonth()]} ${date.getDate()} at ${timeString}`;
 }
 
-function formatCurrency(amount: number): string {
+function formatCurrency(amount: number | null | undefined): string {
+  if (amount === null || amount === undefined || isNaN(Number(amount))) return "$0.00";
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
-  }).format(amount);
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(Number(amount));
 }
 
 function getMethodLabel(method: string): string {
@@ -208,7 +211,7 @@ function PaymentDetailPanel({ payment }: { payment: PaymentRecord }) {
   return (
     <div className="grid gap-4 p-4 md:grid-cols-2 lg:grid-cols-4">
       {/* Transaction Details */}
-      <div className="space-y-2">
+      <div className="space-y-2 min-w-0">
         <h4 className="text-sm font-semibold">Transaction Details</h4>
         <dl className="space-y-1 text-xs">
           {payment.authorization_code && (
@@ -220,7 +223,7 @@ function PaymentDetailPanel({ payment }: { payment: PaymentRecord }) {
           {payment.transaction_id && (
             <div className="flex justify-between">
               <dt className="text-muted-foreground">Transaction ID</dt>
-              <dd className="font-mono truncate max-w-[140px]">
+              <dd className="font-mono truncate max-w-35">
                 {payment.transaction_id}
               </dd>
             </div>
@@ -265,33 +268,44 @@ function PaymentDetailPanel({ payment }: { payment: PaymentRecord }) {
       </div>
 
       {/* Terminal Info */}
-      <div className="space-y-2">
+      <div className="space-y-2 min-w-0">
         <h4 className="text-sm font-semibold">Terminal Info</h4>
         <dl className="space-y-1 text-xs">
           {payment.terminal_type && (
-            <div className="flex justify-between">
-              <dt className="text-muted-foreground">Terminal</dt>
-              <dd>{payment.terminal_type}</dd>
+            <div className="flex gap-2 justify-between">
+              <dt className="text-muted-foreground shrink-0">Terminal</dt>
+              <dd className="text-right break-all">{payment.terminal_type}</dd>
             </div>
           )}
           {(payment.terminal_id || ct?.terminalId) && (
-            <div className="flex justify-between">
-              <dt className="text-muted-foreground">Terminal ID</dt>
-              <dd className="font-mono">{payment.terminal_id || ct?.terminalId}</dd>
+            <div className="flex gap-2 justify-between">
+              <dt className="text-muted-foreground shrink-0">Terminal ID</dt>
+              <dd
+                className="font-mono text-right truncate min-w-0 max-w-[160px]"
+                title={payment.terminal_id || ct?.terminalId || ''}
+              >
+                {payment.terminal_id || ct?.terminalId}
+              </dd>
             </div>
           )}
           {payment.device_id && (
-            <div className="flex justify-between">
-              <dt className="text-muted-foreground">Device ID</dt>
-              <dd className="font-mono truncate max-w-[140px]">
+            <div className="flex gap-2 justify-between">
+              <dt className="text-muted-foreground shrink-0">Device ID</dt>
+              <dd
+                className="font-mono text-right truncate min-w-0 max-w-[160px]"
+                title={payment.device_id}
+              >
                 {payment.device_id}
               </dd>
             </div>
           )}
           {payment.processor_response?.serial_number && (
-            <div className="flex justify-between">
-              <dt className="text-muted-foreground">Serial #</dt>
-              <dd className="font-mono">
+            <div className="flex gap-2 justify-between">
+              <dt className="text-muted-foreground shrink-0">Serial #</dt>
+              <dd
+                className="font-mono text-right truncate min-w-0 max-w-[160px]"
+                title={String(payment.processor_response.serial_number)}
+              >
                 {payment.processor_response.serial_number}
               </dd>
             </div>
@@ -301,7 +315,7 @@ function PaymentDetailPanel({ payment }: { payment: PaymentRecord }) {
 
       {/* Reversal Details (conditional) */}
       {hasReversals && (
-        <div className="space-y-2">
+        <div className="space-y-2 min-w-0">
           <h4 className="text-sm font-semibold">Reversals</h4>
           <div className="space-y-2">
             {payment.reversals!.map((rev) => (
@@ -352,31 +366,31 @@ function PaymentDetailPanel({ payment }: { payment: PaymentRecord }) {
 
       {/* Items Paid For (conditional) */}
       {hasItems && (
-        <div className="space-y-2">
+        <div className="space-y-2 min-w-0">
           <h4 className="text-sm font-semibold">Items Paid</h4>
-          <div className="rounded border">
-            <table className="w-full text-xs">
+          <div className="rounded border overflow-x-auto">
+            <table className="w-full text-xs min-w-105">
               <thead>
                 <tr className="border-b text-muted-foreground">
-                  <th className="p-1.5 text-left font-medium">Item</th>
-                  <th className="p-1.5 text-right font-medium">Qty</th>
-                  <th className="p-1.5 text-right font-medium">Subtotal</th>
-                  <th className="p-1.5 text-right font-medium">Tax</th>
+                  <th className="px-2 py-1.5 text-left font-medium">Item</th>
+                  <th className="px-2 py-1.5 text-right font-medium">Qty</th>
+                  <th className="px-2 py-1.5 text-right font-medium">Subtotal</th>
+                  <th className="px-2 py-1.5 text-right font-medium">Tax</th>
                 </tr>
               </thead>
               <tbody>
                 {payment.order_payment_items!.map((item) => (
                   <tr key={item.id} className="border-b last:border-0">
-                    <td className="p-1.5">
+                    <td className="px-2 py-1.5 whitespace-nowrap">
                       {item.order_items?.item_name || "—"}
                     </td>
-                    <td className="p-1.5 text-right font-mono">
+                    <td className="px-2 py-1.5 text-right font-mono whitespace-nowrap">
                       {item.quantity_paid}
                     </td>
-                    <td className="p-1.5 text-right font-mono">
+                    <td className="px-2 py-1.5 text-right font-mono whitespace-nowrap">
                       {formatCurrency(item.subtotal_paid)}
                     </td>
-                    <td className="p-1.5 text-right font-mono">
+                    <td className="px-2 py-1.5 text-right font-mono whitespace-nowrap">
                       {formatCurrency(item.tax_paid)}
                     </td>
                   </tr>
@@ -413,7 +427,7 @@ function PaymentDetailPanel({ payment }: { payment: PaymentRecord }) {
             {emvData!.iad && (
               <div className="flex justify-between">
                 <dt className="text-muted-foreground">IAD</dt>
-                <dd className="font-mono truncate max-w-[140px]">
+                <dd className="font-mono truncate max-w-35">
                   {emvData!.iad}
                 </dd>
               </div>
@@ -584,14 +598,14 @@ export function PaymentsTable({ data, isLoading }: PaymentsTableProps) {
         <Button
           variant="ghost"
           onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-          className="h-8 px-2"
+          className="h-8 px-2 justify-between"
         >
-          Amount
+          <span className="flex-1 text-left">Amount</span>
           <ArrowUpDown className="ml-2 h-3 w-3" />
         </Button>
       ),
       cell: ({ row }) => (
-        <div className="font-mono text-sm">
+        <div className="font-mono text-sm text-right">
           {formatCurrency(row.original.amount)}
         </div>
       ),
@@ -603,15 +617,15 @@ export function PaymentsTable({ data, isLoading }: PaymentsTableProps) {
         <Button
           variant="ghost"
           onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-          className="h-8 px-2"
+          className="h-8 px-2 justify-between"
         >
-          Tip
+          <span className="flex-1 text-left">Tip</span>
           <ArrowUpDown className="ml-2 h-3 w-3" />
         </Button>
       ),
       cell: ({ row }) => (
-        <div className="font-mono text-sm text-muted-foreground">
-          {row.original.tip_amount
+        <div className="font-mono text-sm text-right text-muted-foreground">
+          {row.original.tip_amount != null
             ? formatCurrency(row.original.tip_amount)
             : "—"}
         </div>
@@ -624,14 +638,14 @@ export function PaymentsTable({ data, isLoading }: PaymentsTableProps) {
         <Button
           variant="ghost"
           onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-          className="h-8 px-2"
+          className="h-8 px-2 justify-between"
         >
-          Total
+          <span className="flex-1 text-left">Total</span>
           <ArrowUpDown className="ml-2 h-3 w-3" />
         </Button>
       ),
       cell: ({ row }) => (
-        <div className="font-mono text-sm font-semibold">
+        <div className="font-mono text-sm font-semibold text-right">
           {formatCurrency(row.original.total_amount)}
         </div>
       ),
@@ -764,7 +778,7 @@ export function PaymentsTable({ data, isLoading }: PaymentsTableProps) {
                     onClick={() => row.toggleExpanded()}
                   >
                     {row.getVisibleCells().map((cell) => (
-                      <TableCell key={cell.id}>
+                      <TableCell key={cell.id} className={cell.column.id === "amount" || cell.column.id === "tip_amount" || cell.column.id === "total_amount" ? "text-right" : undefined}>
                         {flexRender(
                           cell.column.columnDef.cell,
                           cell.getContext()

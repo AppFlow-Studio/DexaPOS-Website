@@ -129,7 +129,7 @@ export const TICKET_CATEGORY_LABELS: Record<TicketCategory, string> = {
 export const TICKET_STATUS_LABELS: Record<TicketStatus, string> = {
   open: 'Open',
   in_progress: 'In Progress',
-  waiting_on_merchant: 'Waiting on You',
+  waiting_on_merchant: 'Waiting on Merchant',
   resolved: 'Resolved',
   closed: 'Closed',
 }

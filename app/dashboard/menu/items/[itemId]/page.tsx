@@ -71,7 +71,8 @@ import { useLocationStore, useIsAllLocations } from "@/stores/location-store";
 import { LocationLibraryItem } from "@/types/menu";
 import { Switch } from "@/components/ui/switch";
 import { GetItemIsPopular, SetItemPopular, GetItemIsNew, SetItemNew } from "../../../actions/location-menu-overrides";
-import { Flame } from "lucide-react";
+import { GetItemStock } from "../../../actions/stock";
+import { Flame, Package } from "lucide-react";
 
 
 // ============================================================================
@@ -377,19 +378,21 @@ function PriceBreakdown({
               </div>
               <Building2 className="h-4 w-4 text-blue-600" />
               <div>
-                <span className="text-sm font-medium">Location Override</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium">Location Override</span>
+                  {hasLocationOverride && (
+                    <Badge
+                      variant="outline"
+                      className="text-xs bg-blue-50 text-blue-600 border-blue-200"
+                    >
+                      Override Active
+                    </Badge>
+                  )}
+                </div>
                 <p className="text-xs text-muted-foreground">
                   {currentLocationName}
                 </p>
               </div>
-              {hasLocationOverride && (
-                <Badge
-                  variant="outline"
-                  className="text-xs bg-blue-50 text-blue-600 border-blue-200"
-                >
-                  Override Active
-                </Badge>
-              )}
             </div>
             <div className="text-right">
               {hasLocationOverride ? (
@@ -466,16 +469,28 @@ export default function MenuItemDetailPage() {
   const { selectedLocationId, locations } = useLocationStore();
   const isAllLocations = useIsAllLocations();
 
+  const currentLocation = React.useMemo(
+    () => locations.find((l) => l.id === selectedLocationId) ?? null,
+    [locations, selectedLocationId]
+  );
+
   const currentLocationName = React.useMemo(() => {
     if (isAllLocations) return "All Locations";
-    const location = locations.find((l) => l.id === selectedLocationId);
-    return location?.name || "Unknown Location";
-  }, [isAllLocations, selectedLocationId, locations]);
+    return currentLocation?.name || "Unknown Location";
+  }, [isAllLocations, currentLocation]);
 
   const editingContext = React.useMemo(
     () => getEditingContext(isAllLocations),
     [isAllLocations]
   );
+
+  // Stock quantity — only meaningful when mode is 'quantity' and a location is selected
+  const { data: stockRecords } = useQuery({
+    queryKey: ["item-stock", itemId, selectedLocationId],
+    queryFn: () => GetItemStock(selectedLocationId, itemId),
+    enabled: !!itemId && !isAllLocations && !!selectedLocationId,
+  });
+  const stockRecord = stockRecords?.[0] ?? null;
 
   const [expandedModifiers, setExpandedModifiers] = React.useState<
     Record<string, boolean>
@@ -1181,6 +1196,7 @@ export default function MenuItemDetailPage() {
                 cashPrice={menuItem.effective_cash_price || undefined}
                 image={menuItem.image || undefined}
                 categories={categories.map((c) => c.name).filter(Boolean)}
+                allergens={menuItem.allergens ?? []}
                 availability={
                   menuItem.effective_availability ??
                   menuItem.base_availability ??
@@ -1226,6 +1242,25 @@ export default function MenuItemDetailPage() {
                   {menuItem.stock_tracking_mode || "in_stock"}
                 </Badge>
               </div>
+              {menuItem.stock_tracking_mode === "quantity" && !isAllLocations && (
+                <div className="flex items-center justify-between py-2 border-t">
+                  <span className="text-sm text-muted-foreground flex items-center gap-1">
+                    <Package className="h-3.5 w-3.5" />
+                    Stock Count
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium">
+                      {stockRecord != null ? stockRecord.quantity : "—"}
+                    </span>
+                    {stockRecord != null &&
+                      stockRecord.quantity <= (stockRecord.reorder_threshold ?? 5) && (
+                        <Badge variant="destructive" className="text-xs">
+                          Stock low
+                        </Badge>
+                      )}
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -1240,13 +1275,17 @@ export default function MenuItemDetailPage() {
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Created</span>
                 <span>
-                  {new Date(menuItem.created_at).toLocaleDateString()}
+                  {new Date(menuItem.created_at).toLocaleDateString(undefined, {
+                    timeZone: currentLocation?.timezone ?? undefined,
+                  })}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Updated</span>
                 <span>
-                  {new Date(menuItem.updated_at).toLocaleDateString()}
+                  {new Date(menuItem.updated_at).toLocaleDateString(undefined, {
+                    timeZone: currentLocation?.timezone ?? undefined,
+                  })}
                 </span>
               </div>
               <div className="flex justify-between">

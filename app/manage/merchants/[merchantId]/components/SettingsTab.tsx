@@ -25,7 +25,6 @@ import {
     Plus,
     Globe,
     CreditCard,
-    Percent,
     Gift,
     Box,
     ShoppingBag,
@@ -44,7 +43,6 @@ import {
 } from '@/lib/queries/use-admin-tax-rates'
 import { useAdminUpdateMerchant, useAdminUpdateMerchantStatus } from '@/lib/queries/use-admin-merchant'
 import { Switch } from '@/components/ui/switch'
-import { Separator } from '@/components/ui/separator'
 import {
     TAX_CATEGORIES,
     TAX_CATEGORY_LABELS,
@@ -123,10 +121,8 @@ export function SettingsTab({ merchantInfo, refetchMerchantInfo, canManageStatus
     const deactivateMutation = useAdminDeactivateTaxRate()
     const updateMerchantMutation = useAdminUpdateMerchant()
 
-    // General Settings State
+    // General Settings State (feature toggles only — pricing lives on the Pricing tab)
     const [generalSettings, setGeneralSettings] = useState({
-        processing_fee_mode: 'no_surcharge',
-        card_fee_percentage: '4.0',
         enable_loyalty: false,
         enable_inventory: false,
         enable_online_ordering: false
@@ -135,8 +131,6 @@ export function SettingsTab({ merchantInfo, refetchMerchantInfo, canManageStatus
     useEffect(() => {
         const metadata = (merchantInfo?.public_metadata as any) || {}
         setGeneralSettings({
-            processing_fee_mode: metadata.processing_fee_mode || 'no_surcharge',
-            card_fee_percentage: metadata.card_fee_percentage?.toString() || '4.0',
             enable_loyalty: !!metadata.enable_loyalty,
             enable_inventory: !!metadata.enable_inventory,
             enable_online_ordering: !!metadata.enable_online_ordering
@@ -145,12 +139,13 @@ export function SettingsTab({ merchantInfo, refetchMerchantInfo, canManageStatus
 
     const handleSaveGeneral = async () => {
         try {
+            const existing = (merchantInfo?.public_metadata as any) || {}
             const result = await updateMerchantMutation.mutateAsync({
                 merchantId: merchantInfo.id,
                 updates: {
                     public_metadata: {
+                        ...existing,
                         ...generalSettings,
-                        card_fee_percentage: parseFloat(generalSettings.card_fee_percentage)
                     }
                 }
             })
@@ -514,7 +509,7 @@ export function SettingsTab({ merchantInfo, refetchMerchantInfo, canManageStatus
                         <CardContent>
                             <div className="space-y-6 max-w-lg">
                                 <div className="space-y-2">
-                                    <Label>Default Strategy</Label>
+                                    <Label>Pricing Strategy</Label>
                                     <Select
                                         value={merchantInfo.pricing_strategy || 'manual'}
                                         onValueChange={async (val) => {
@@ -543,25 +538,42 @@ export function SettingsTab({ merchantInfo, refetchMerchantInfo, canManageStatus
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="manual">Manual Pricing</SelectItem>
+                                            <SelectItem value="manual">No Surcharge (Manual Pricing)</SelectItem>
                                             <SelectItem value="dual">Dual Pricing (Cash Discount)</SelectItem>
                                         </SelectContent>
                                     </Select>
+                                    <p className="text-xs text-muted-foreground">
+                                        {merchantInfo.pricing_strategy === 'dual'
+                                            ? 'Card prices are automatically higher than cash prices by the set percentage.'
+                                            : 'Cash and card prices are set independently — no automatic surcharge.'}
+                                    </p>
                                 </div>
 
                                 {merchantInfo.pricing_strategy === 'dual' && (
                                     <div className="space-y-2 animate-in fade-in slide-in-from-top-2">
-                                        <Label>Default Percentage (%)</Label>
+                                        <Label>Cash Discount Percentage (%)</Label>
                                         <div className="relative">
                                             <Input
                                                 type="number"
                                                 defaultValue={merchantInfo.dual_pricing_percentage ?? 4.0}
                                                 step="0.1"
+                                                min="0"
+                                                max="4"
                                                 className="pr-8"
                                                 onBlur={async (e) => {
                                                     const val = parseFloat(e.target.value)
                                                     if (isNaN(val)) return
-                                                    if (val === merchantInfo.dual_pricing_percentage) return
+                                                    if (val > 4) {
+                                                        toast.error('Percentage cannot exceed 4% per card brand surcharge rules.')
+                                                        e.target.value = String(merchantInfo.dual_pricing_percentage ?? 4.0)
+                                                        return
+                                                    }
+                                                    if (val < 0) {
+                                                        toast.error('Percentage cannot be negative.')
+                                                        e.target.value = String(merchantInfo.dual_pricing_percentage ?? 4.0)
+                                                        return
+                                                    }
+                                                    if (val === parseFloat(String(merchantInfo.dual_pricing_percentage ?? 0))) return
 
                                                     try {
                                                         const result = await updateMerchantMutation.mutateAsync({
@@ -582,7 +594,7 @@ export function SettingsTab({ merchantInfo, refetchMerchantInfo, canManageStatus
                                             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">%</span>
                                         </div>
                                         <p className="text-xs text-muted-foreground">
-                                            Typical values range from 3.5% to 4.0%
+                                            Maximum 4% per Visa/Mastercard surcharge rules. Typical values: 3.5%–4.0%.
                                         </p>
                                     </div>
                                 )}
@@ -593,185 +605,145 @@ export function SettingsTab({ merchantInfo, refetchMerchantInfo, canManageStatus
                     {/* Per-Location Pricing */}
                     <Card>
                         <CardHeader>
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <CardTitle>Per-Location Pricing</CardTitle>
-                                    <CardDescription>
-                                        View and override pricing for individual locations
-                                    </CardDescription>
-                                </div>
-                                <Select value={selectedLocationId} onValueChange={setSelectedLocationId}>
-                                    <SelectTrigger className="w-[250px]">
-                                        <MapPin className="h-4 w-4 mr-2 text-muted-foreground" />
-                                        <SelectValue placeholder="Select location" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">All Locations</SelectItem>
-                                        {locations.map((loc: Location) => (
-                                            <SelectItem key={loc.id} value={loc.id}>
-                                                {loc.name}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
+                            <CardTitle>Per-Location Pricing</CardTitle>
+                            <CardDescription>
+                                Override pricing strategy for individual locations. Locations using org defaults inherit the settings above.
+                            </CardDescription>
                         </CardHeader>
                         <CardContent>
-                             {selectedLocationId === 'all' ? (
-                                 <div className="space-y-4">
-                                     {locations.map((location) => {
-                                         const usesDefaults = (location as any).use_merchant_pricing_defaults !== false
-                                         const effectiveStrategy = usesDefaults
-                                             ? (merchantInfo.pricing_strategy || 'manual')
-                                             : (location.pricing_strategy || 'manual')
-                                         const effectivePercentage = usesDefaults
-                                             ? (merchantInfo.dual_pricing_percentage ?? 4.0)
-                                             : (location.dual_pricing_percentage ?? 4.0)
-                                         return (
-                                             <div key={location.id} className="flex items-center justify-between p-4 border rounded-lg">
-                                                 <div className="flex items-center gap-3">
-                                                     <MapPin className="h-5 w-5 text-muted-foreground" />
-                                                     <div>
-                                                         <p className="font-medium flex items-center gap-2">
-                                                             {location.name}
-                                                             {usesDefaults ? (
-                                                                 <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
-                                                                     Org Default
-                                                                 </Badge>
-                                                             ) : (
-                                                                 <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-200">
-                                                                     Custom
-                                                                 </Badge>
-                                                             )}
-                                                         </p>
-                                                         <p className="text-sm text-muted-foreground">
-                                                             Strategy: {effectiveStrategy === 'dual' ? 'Dual Pricing' : 'Manual'}
-                                                             {effectiveStrategy === 'dual' && ` (${effectivePercentage}%)`}
-                                                         </p>
-                                                     </div>
-                                                 </div>
-                                                 <Button variant="outline" size="sm" onClick={() => setSelectedLocationId(location.id)}>
-                                                     <Edit className="h-4 w-4 mr-2" />
-                                                     Edit
-                                                 </Button>
-                                             </div>
-                                         )
-                                     })}
-                                 </div>
-                             ) : currentLocation ? (
-                                 <div className="space-y-6 max-w-lg">
-                                     {/* Use Org Defaults Toggle */}
-                                     <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/30">
-                                         <div className="flex items-center gap-3">
-                                             <Globe className="h-4 w-4 text-muted-foreground" />
-                                             <div>
-                                                 <p className="text-sm font-medium">Use Organization Defaults</p>
-                                                 <p className="text-xs text-muted-foreground">
-                                                     Inherit pricing from organization settings
-                                                 </p>
-                                             </div>
-                                         </div>
-                                         <Switch
-                                             checked={(currentLocation as any).use_merchant_pricing_defaults !== false}
-                                             onCheckedChange={async (checked) => {
-                                                 try {
-                                                     const result = await UpdateLocation(currentLocation.id, {
-                                                         use_merchant_pricing_defaults: checked
-                                                     })
-                                                     if (result.data) {
-                                                         toast.success(checked ? 'Using Organization Defaults' : 'Using Custom Pricing')
-                                                         refetchMerchantInfo()
-                                                     } else {
-                                                         toast.error(result.error || 'Failed to update')
-                                                     }
-                                                 } catch (e) {
-                                                     toast.error('Error updating setting')
-                                                 }
-                                             }}
-                                         />
-                                     </div>
-
-                                     {(currentLocation as any).use_merchant_pricing_defaults !== false ? (
-                                         <Alert>
-                                             <AlertCircle className="h-4 w-4" />
-                                             <AlertTitle>Inherited from Organization</AlertTitle>
-                                             <AlertDescription>
-                                                 Strategy: {merchantInfo.pricing_strategy === 'dual' ? `Dual Pricing at ${merchantInfo.dual_pricing_percentage ?? 4.0}%` : 'Manual Pricing'}.
-                                                 Toggle off to set custom pricing for this location.
-                                             </AlertDescription>
-                                         </Alert>
-                                     ) : (
-                                         <>
-                                             <div className="space-y-2">
-                                                 <Label>Pricing Strategy</Label>
-                                                 <Select
-                                                     value={currentLocation.pricing_strategy || 'manual'}
-                                                     onValueChange={async (val) => {
-                                                         try {
-                                                             const result = await UpdateLocation(currentLocation.id, {
-                                                                 pricing_strategy: val as 'manual'| 'dual',
-                                                                 dual_pricing_percentage: val === 'dual' && !currentLocation.dual_pricing_percentage
-                                                                     ? 4.0
-                                                                     : currentLocation.dual_pricing_percentage
-                                                             })
-                                                             if (result.data) {
-                                                                 toast.success('Strategy Updated Successfully')
-                                                                 refetchMerchantInfo()
-                                                             } else {
-                                                                 toast.error(result.error || 'Failed to update')
-                                                             }
-                                                         } catch(e) {
-                                                             console.error(e)
-                                                             toast.error('Error updating strategy')
-                                                         }
-                                                     }}
-                                                 >
-                                                     <SelectTrigger>
-                                                         <SelectValue />
-                                                     </SelectTrigger>
-                                                     <SelectContent>
-                                                         <SelectItem value="manual">Manual Pricing</SelectItem>
-                                                         <SelectItem value="dual">Dual Pricing (Cash Discount)</SelectItem>
-                                                     </SelectContent>
-                                                 </Select>
-                                                 <p className="text-sm text-muted-foreground">
-                                                     {currentLocation.pricing_strategy === 'dual'
-                                                      ? 'Card prices are automatically higher than cash prices by the set percentage.'
-                                                      : 'Manually set Independent Cash and Card prices.'}
-                                                 </p>
-                                             </div>
-
-                                             {currentLocation.pricing_strategy === 'dual' && (
-                                                 <div className="space-y-2 animate-in fade-in slide-in-from-top-2">
-                                                     <Label>Dual Pricing Percentage (%)</Label>
-                                                     <div className="relative">
-                                                         <Input
-                                                             type="number"
-                                                             defaultValue={currentLocation.dual_pricing_percentage ?? 4.0}
-                                                             step="0.1"
-                                                             className="pr-8"
-                                                             onBlur={async (e) => {
-                                                                 const val = parseFloat(e.target.value)
-                                                                 if (isNaN(val)) return
-                                                                 if (val === currentLocation.dual_pricing_percentage) return
-
-                                                                 const result = await UpdateLocation(currentLocation.id, { dual_pricing_percentage: val })
-                                                                 if (result.data) {
-                                                                     toast.success('Percentage Updated')
-                                                                     refetchMerchantInfo()
-                                                                 } else {
-                                                                     toast.error(result.error || 'Failed to update')
-                                                                 }
-                                                             }}
-                                                         />
-                                                         <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">%</span>
-                                                     </div>
-                                                 </div>
-                                             )}
-                                         </>
-                                     )}
-                                 </div>
-                             ) : null}
+                            {locations.length === 0 ? (
+                                <p className="text-sm text-muted-foreground py-4 text-center">No locations configured for this merchant.</p>
+                            ) : (
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Location</TableHead>
+                                            <TableHead>Strategy</TableHead>
+                                            <TableHead>Percentage</TableHead>
+                                            <TableHead className="text-center">Uses Org Defaults</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {locations.map((location) => {
+                                            const usesDefaults = (location as any).use_merchant_pricing_defaults !== false
+                                            const effectiveStrategy = usesDefaults
+                                                ? (merchantInfo.pricing_strategy || 'manual')
+                                                : (location.pricing_strategy || 'manual')
+                                            const effectivePercentage = usesDefaults
+                                                ? (merchantInfo.dual_pricing_percentage ?? 4.0)
+                                                : (location.dual_pricing_percentage ?? 4.0)
+                                            return (
+                                                <TableRow key={location.id}>
+                                                    <TableCell>
+                                                        <div className="flex items-center gap-2">
+                                                            <MapPin className="h-4 w-4 text-muted-foreground shrink-0" />
+                                                            <span className="font-medium">{location.name}</span>
+                                                        </div>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        {usesDefaults ? (
+                                                            <span className="text-muted-foreground text-sm">
+                                                                {effectiveStrategy === 'dual' ? 'Dual Pricing' : 'No Surcharge'}
+                                                            </span>
+                                                        ) : (
+                                                            <Select
+                                                                value={location.pricing_strategy || 'manual'}
+                                                                onValueChange={async (val) => {
+                                                                    try {
+                                                                        const result = await UpdateLocation(location.id, {
+                                                                            pricing_strategy: val as 'manual' | 'dual',
+                                                                            dual_pricing_percentage: val === 'dual' && !location.dual_pricing_percentage
+                                                                                ? 4.0
+                                                                                : location.dual_pricing_percentage
+                                                                        })
+                                                                        if (result.data) {
+                                                                            toast.success('Strategy updated')
+                                                                            refetchMerchantInfo()
+                                                                        } else {
+                                                                            toast.error(result.error || 'Failed to update')
+                                                                        }
+                                                                    } catch (e) {
+                                                                        toast.error('Error updating strategy')
+                                                                    }
+                                                                }}
+                                                            >
+                                                                <SelectTrigger className="w-[200px]">
+                                                                    <SelectValue />
+                                                                </SelectTrigger>
+                                                                <SelectContent>
+                                                                    <SelectItem value="manual">No Surcharge</SelectItem>
+                                                                    <SelectItem value="dual">Dual Pricing (Cash Discount)</SelectItem>
+                                                                </SelectContent>
+                                                            </Select>
+                                                        )}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        {effectiveStrategy !== 'dual' ? (
+                                                            <span className="text-muted-foreground text-sm">—</span>
+                                                        ) : usesDefaults ? (
+                                                            <span className="text-muted-foreground text-sm">{effectivePercentage}%</span>
+                                                        ) : (
+                                                            <div className="relative w-28">
+                                                                <Input
+                                                                    type="number"
+                                                                    defaultValue={location.dual_pricing_percentage ?? 4.0}
+                                                                    step="0.1"
+                                                                    min="0"
+                                                                    max="4"
+                                                                    className="pr-7 h-8 text-sm"
+                                                                    onBlur={async (e) => {
+                                                                        const val = parseFloat(e.target.value)
+                                                                        if (isNaN(val)) return
+                                                                        if (val > 4) {
+                                                                            toast.error('Percentage cannot exceed 4%.')
+                                                                            e.target.value = String(location.dual_pricing_percentage ?? 4.0)
+                                                                            return
+                                                                        }
+                                                                        if (val < 0) {
+                                                                            toast.error('Percentage cannot be negative.')
+                                                                            e.target.value = String(location.dual_pricing_percentage ?? 4.0)
+                                                                            return
+                                                                        }
+                                                                        if (val === parseFloat(String(location.dual_pricing_percentage ?? 0))) return
+                                                                        const result = await UpdateLocation(location.id, { dual_pricing_percentage: val })
+                                                                        if (result.data) {
+                                                                            toast.success('Percentage updated')
+                                                                            refetchMerchantInfo()
+                                                                        } else {
+                                                                            toast.error(result.error || 'Failed to update')
+                                                                        }
+                                                                    }}
+                                                                />
+                                                                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">%</span>
+                                                            </div>
+                                                        )}
+                                                    </TableCell>
+                                                    <TableCell className="text-center">
+                                                        <Switch
+                                                            checked={usesDefaults}
+                                                            onCheckedChange={async (checked) => {
+                                                                try {
+                                                                    const result = await UpdateLocation(location.id, {
+                                                                        use_merchant_pricing_defaults: checked
+                                                                    })
+                                                                    if (result.data) {
+                                                                        toast.success(checked ? 'Using org defaults' : 'Using custom pricing')
+                                                                        refetchMerchantInfo()
+                                                                    } else {
+                                                                        toast.error(result.error || 'Failed to update')
+                                                                    }
+                                                                } catch (e) {
+                                                                    toast.error('Error updating setting')
+                                                                }
+                                                            }}
+                                                        />
+                                                    </TableCell>
+                                                </TableRow>
+                                            )
+                                        })}
+                                    </TableBody>
+                                </Table>
+                            )}
                         </CardContent>
                     </Card>
                 </TabsContent>
@@ -780,16 +752,16 @@ export function SettingsTab({ merchantInfo, refetchMerchantInfo, canManageStatus
 
                 {/* General Settings Tab */}
                 <TabsContent value="general" className="space-y-6">
-                    {/* Processing Settings */}
+                    {/* Feature Toggles */}
                     <Card>
                         <CardHeader>
                             <div className="flex items-center justify-between">
                                 <div>
-                                    <CardTitle>Processing & Fees</CardTitle>
-                                    <CardDescription>Configure how credit card fees are handled</CardDescription>
+                                    <CardTitle>Feature Toggles</CardTitle>
+                                    <CardDescription>Enable or disable merchant features</CardDescription>
                                 </div>
-                                <Button 
-                                    onClick={handleSaveGeneral} 
+                                <Button
+                                    onClick={handleSaveGeneral}
                                     disabled={updateMerchantMutation.isPending}
                                     size="sm"
                                 >
@@ -802,91 +774,48 @@ export function SettingsTab({ merchantInfo, refetchMerchantInfo, canManageStatus
                                 </Button>
                             </div>
                         </CardHeader>
-                        <CardContent className="space-y-6">
-                            <div className="grid gap-6 md:grid-cols-2">
-                                <div className="space-y-2">
-                                    <Label>Fee Mode</Label>
-                                    <Select 
-                                        value={generalSettings.processing_fee_mode}
-                                        onValueChange={(v) => setGeneralSettings({ ...generalSettings, processing_fee_mode: v })}
-                                    >
-                                        <SelectTrigger>
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="no_surcharge">No Surcharge (Absorb Fees)</SelectItem>
-                                            <SelectItem value="surcharge">Surcharge (Pass to Customer)</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                    <p className="text-xs text-muted-foreground">
-                                        Determine if the merchant absorbs fees or passes them to customers.
-                                    </p>
+                        <CardContent>
+                            <div className="grid gap-4 md:grid-cols-2">
+                                <div className="flex items-center justify-between p-4 border rounded-lg">
+                                    <div className="flex items-center gap-3">
+                                        <Gift className="h-5 w-5 text-primary" />
+                                        <div>
+                                            <Label className="text-base">Loyalty Program</Label>
+                                            <p className="text-sm text-muted-foreground">Points and rewards system</p>
+                                        </div>
+                                    </div>
+                                    <Switch
+                                        checked={generalSettings.enable_loyalty}
+                                        onCheckedChange={(checked) => setGeneralSettings({ ...generalSettings, enable_loyalty: checked })}
+                                    />
                                 </div>
 
-                                <div className="space-y-2">
-                                    <Label>Card Fee Percentage (%)</Label>
-                                    <div className="relative">
-                                        <Input 
-                                            type="number" 
-                                            step="0.1"
-                                            value={generalSettings.card_fee_percentage}
-                                            onChange={(e) => setGeneralSettings({ ...generalSettings, card_fee_percentage: e.target.value })}
-                                            className="pr-8"
-                                        />
-                                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">%</span>
+                                <div className="flex items-center justify-between p-4 border rounded-lg">
+                                    <div className="flex items-center gap-3">
+                                        <Box className="h-5 w-5 text-primary" />
+                                        <div>
+                                            <Label className="text-base">Inventory Management</Label>
+                                            <p className="text-sm text-muted-foreground">Track stock levels and vendors</p>
+                                        </div>
                                     </div>
-                                    <p className="text-xs text-muted-foreground">
-                                        The standard percentage to apply for card transactions.
-                                    </p>
+                                    <Switch
+                                        checked={generalSettings.enable_inventory}
+                                        onCheckedChange={(checked) => setGeneralSettings({ ...generalSettings, enable_inventory: checked })}
+                                    />
                                 </div>
-                            </div>
 
-                            <Separator />
-
-                            <div className="space-y-4">
-                                <h4 className="text-sm font-medium">Feature Toggles</h4>
-                                <div className="grid gap-4 md:grid-cols-2">
-                                    <div className="flex items-center justify-between p-4 border rounded-lg">
-                                        <div className="flex items-center gap-3">
-                                            <Gift className="h-5 w-5 text-primary" />
-                                            <div>
-                                                <Label className="text-base">Loyalty Program</Label>
-                                                <p className="text-sm text-muted-foreground">Points and rewards system</p>
-                                            </div>
+                                <div className="flex items-center justify-between p-4 border rounded-lg">
+                                    <div className="flex items-center gap-3">
+                                        <ShoppingBag className="h-5 w-5 text-primary" />
+                                        <div>
+                                            <Label className="text-base">Online Ordering</Label>
+                                            <p className="text-sm text-muted-foreground">Allow customers to order via web</p>
                                         </div>
-                                        <Switch 
-                                            checked={generalSettings.enable_loyalty}
-                                            onCheckedChange={(checked) => setGeneralSettings({ ...generalSettings, enable_loyalty: checked })}
-                                        />
                                     </div>
-
-                                    <div className="flex items-center justify-between p-4 border rounded-lg">
-                                        <div className="flex items-center gap-3">
-                                            <Box className="h-5 w-5 text-primary" />
-                                            <div>
-                                                <Label className="text-base">Inventory Management</Label>
-                                                <p className="text-sm text-muted-foreground">Track stock levels and vendors</p>
-                                            </div>
-                                        </div>
-                                        <Switch 
-                                            checked={generalSettings.enable_inventory}
-                                            onCheckedChange={(checked) => setGeneralSettings({ ...generalSettings, enable_inventory: checked })}
-                                        />
-                                    </div>
-
-                                    <div className="flex items-center justify-between p-4 border rounded-lg">
-                                        <div className="flex items-center gap-3">
-                                            <ShoppingBag className="h-5 w-5 text-primary" />
-                                            <div>
-                                                <Label className="text-base">Online Ordering</Label>
-                                                <p className="text-sm text-muted-foreground">Allow customers to order via web</p>
-                                            </div>
-                                        </div>
-                                        <Switch 
-                                            checked={generalSettings.enable_online_ordering}
-                                            onCheckedChange={(checked) => setGeneralSettings({ ...generalSettings, enable_online_ordering: checked })}
-                                        />
-                                    </div>
+                                    <Switch
+                                        checked={generalSettings.enable_online_ordering}
+                                        onCheckedChange={(checked) => setGeneralSettings({ ...generalSettings, enable_online_ordering: checked })}
+                                    />
                                 </div>
                             </div>
                         </CardContent>

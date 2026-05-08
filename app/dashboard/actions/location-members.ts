@@ -5,6 +5,9 @@ import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { auth, clerkClient } from '@clerk/nextjs/server'
 import { LocationMemberWithDetails, LocationInviteWithDetails } from '@/types/merchant_locations'
 import { LogAuditEvent } from './audit-logs'
+import { isValidEmail, normalizeEmail } from '@/lib/utils/email'
+import { findEmailConflict } from '@/app/manage/actions/email-duplicates'
+import { emailConflictMessage } from '@/lib/utils/email'
 
 export interface ManagerAssignableUser {
     user_id: string
@@ -352,6 +355,11 @@ export async function CreateLocationInvite(
         return { error: 'All fields are required' }
     }
 
+    const normalizedEmail = normalizeEmail(data.email)
+    if (!isValidEmail(normalizedEmail)) {
+        return { error: 'Invalid email' }
+    }
+
     const supabase = createServerSupabaseClient()
     const serviceRoleSupabase = createServiceRoleClient()
     const { userId: actorUserId } = await auth()
@@ -389,17 +397,11 @@ export async function CreateLocationInvite(
         return { error: 'Location not found.' }
     }
 
-    // Check for existing pending invite
-    const { data: existing } = await serviceRoleSupabase
-        .from('location_invites')
-        .select('id')
-        .eq('location_id', locationId)
-        .eq('email', data.email)
-        .eq('status', 'pending')
-        .single()
-
-    if (existing) {
-        return { error: 'An invitation has already been sent to this email' }
+    const conflict = await findEmailConflict(normalizedEmail, {
+        scope: { merchantId: location.merchant_id },
+    })
+    if (conflict) {
+        return { error: emailConflictMessage(conflict) }
     }
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL
@@ -410,7 +412,7 @@ export async function CreateLocationInvite(
         const invitation = await clerk.organizations.createOrganizationInvitation({
             organizationId: clerkOrgId,
             inviterUserId: actorUserId,
-            emailAddress: data.email.trim(),
+            emailAddress: normalizedEmail,
             role: 'org:member',
             ...(appUrl && { redirectUrl: `${appUrl}/dashboard` }),
             publicMetadata: {
@@ -444,7 +446,7 @@ export async function CreateLocationInvite(
         .insert({
             location_id: locationId,
             merchant_id: location.merchant_id,
-            email: data.email,
+            email: normalizedEmail,
             role_code: data.role_code,
             invited_by_user_id: actorUserId,
             invite_type: 'clerk',
@@ -484,11 +486,56 @@ export async function CancelLocationInvite(inviteId: string) {
         return { error: 'Invite ID is required' }
     }
 
+    const { userId: actorUserId } = await auth()
+    if (!actorUserId) {
+        return { error: 'Unauthorized' }
+    }
     const supabase = createServerSupabaseClient()
 
-    const { data: invite, error } = await supabase
+    // Look up the Clerk invite + org so we can revoke upstream too.
+    // Without this, the email stays "in use" on Clerk's side and re-inviting
+    // the same address fails even though our DB row is marked cancelled.
+    const { data: existing, error: fetchError } = await supabase
         .from('location_invites')
-        .update({ status: 'cancelled' })
+        .select('clerk_invite_id, status, merchant_id')
+        .eq('id', inviteId)
+        .single()
+
+    if (fetchError || !existing) {
+        return { error: 'Invite not found' }
+    }
+    if (existing.status !== 'pending') {
+        return { error: 'Only pending invites can be cancelled' }
+    }
+
+    if (existing.clerk_invite_id) {
+        try {
+            const { data: merchant } = await supabase
+                .from('merchants')
+                .select('clerk_org_id')
+                .eq('id', existing.merchant_id)
+                .single()
+
+            if (merchant?.clerk_org_id) {
+                const clerk = await clerkClient()
+                await clerk.organizations.revokeOrganizationInvitation({
+                    organizationId: merchant.clerk_org_id,
+                    invitationId: existing.clerk_invite_id,
+                    requestingUserId: actorUserId,
+                })
+            }
+        } catch (revokeErr) {
+            // Best-effort: a Clerk invite may already be expired/accepted.
+            console.warn('[CancelLocationInvite] Clerk revoke failed (continuing):', revokeErr)
+        }
+    }
+
+    // RLS on location_invites has no UPDATE policy → an authed update silently
+    // no-ops. Use the service-role client; auth was enforced above.
+    const admin = createServiceRoleClient()
+    const { data: invite, error } = await admin
+        .from('location_invites')
+        .update({ status: 'cancelled', updated_at: new Date().toISOString() })
         .eq('id', inviteId)
         .select()
         .single()
@@ -496,6 +543,9 @@ export async function CancelLocationInvite(inviteId: string) {
     if (error) {
         console.error('Error cancelling location invite:', error)
         return { error: error.message }
+    }
+    if (!invite) {
+        return { error: 'Failed to cancel invitation in database' }
     }
 
     return { data: invite }

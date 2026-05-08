@@ -180,6 +180,15 @@ export interface OrderPayment {
   card_last_four?: string;
   initiated_at: string;
   captured_at?: string;
+  subtotal_portion?: number;
+  tax_portion?: number;
+  dual_pricing_fee?: number;
+  tip_fee?: number;
+  refunded_dual_pricing_fee?: number;
+  refunded_tip_fee?: number;
+  original_tip_fee?: number | null;
+  dual_pricing_percentage_snapshot?: number;
+  tip_surcharge_percentage_snapshot?: number;
   // Junction table items
   order_payment_items?: OrderPaymentItem[];
 }

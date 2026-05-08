@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, Globe, Clock3, CheckCircle2, AlertTriangle, Ban, ExternalLink, Building2, Store, Palette, Truck, Plug, LayoutTemplate, LayoutGrid, Columns2, ImageOff, Check } from "lucide-react";
+import { Loader2, Globe, Clock3, CheckCircle2, AlertTriangle, Ban, ExternalLink, Building2, Store, Palette, Truck, Plug, LayoutTemplate, LayoutGrid, Columns2, ImageOff, Check, Bell } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
@@ -30,6 +30,7 @@ import { uploadStoreImage } from "@/lib/storage/actions";
 import { useAuth } from "@clerk/nextjs";
 import { cn } from "@/lib/utils";
 import { OrderOutTab } from "@/components/dashboard/orderout/OrderOutTab";
+import { NotificationsTab } from "./components/NotificationsTab";
 import { useOrderOutStatus, useOnboardOrderOut } from "./hooks/useOrderOutStatus";
 import { FONT_GOOGLE_URLS } from "@/app/sites/lib/theme-utils";
 import {
@@ -344,6 +345,10 @@ function CompletedSetupPanel({
             <Plug className="h-4 w-4" />
             OrderOut
           </TabsTrigger>
+          <TabsTrigger value="notifications" className="gap-2">
+            <Bell className="h-4 w-4" />
+            Notifications
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="store" className="space-y-6">
@@ -354,7 +359,7 @@ function CompletedSetupPanel({
                 <div>
                   <CardTitle>Store Details</CardTitle>
                   <CardDescription>
-                    Payment device, TPN/FTD keys, and tips are managed by HQ only.
+                    Payment credentials and tips are managed by HQ only.
                   </CardDescription>
                 </div>
               </div>
@@ -377,7 +382,7 @@ function CompletedSetupPanel({
                   readOnly
                 />
                 <p className="text-xs text-muted-foreground">
-                  Store URL changes are handled by HQ because they impact payment-domain whitelisting.
+                  Store URL changes are handled by HQ because they affect storefront payment configuration and reconciliation.
                 </p>
               </div>
               <div className="space-y-2 md:col-span-2">
@@ -609,67 +614,56 @@ function CompletedSetupPanel({
                 </div>
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>Logo</Label>
-                  <Input
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => handleUpload("logo", e.target.files?.[0] ?? null)}
-                    disabled={Boolean(uploading.logo)}
-                  />
-                  {settings.logoUrl ? (
-                    <p className="text-xs text-muted-foreground break-all">
-                      Current: {settings.logoUrl}
-                    </p>
-                  ) : null}
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Hero Image</Label>
-                  <Input
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => handleUpload("hero", e.target.files?.[0] ?? null)}
-                    disabled={Boolean(uploading.hero)}
-                  />
-                  {settings.heroImageUrl ? (
-                    <p className="text-xs text-muted-foreground break-all">
-                      Current: {settings.heroImageUrl}
-                    </p>
-                  ) : null}
-                </div>
+              {/* Row 1: Logo, Favicon, OG Image — uniform 80×80 */}
+              <div className="grid grid-cols-3 gap-4">
+                {(
+                  [
+                    { key: "logo",    label: "Logo",     url: settings.logoUrl,    assetType: "logo"    },
+                    { key: "favicon", label: "Favicon",  url: settings.faviconUrl, assetType: "favicon" },
+                    { key: "og",      label: "OG Image", url: settings.ogImageUrl, assetType: "og"      },
+                  ] as const
+                ).map(({ key, label, url, assetType }) => (
+                  <div key={key} className="space-y-2">
+                    <Label>{label}</Label>
+                    {url ? (
+                      <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-lg border bg-muted">
+                        <img src={url} alt={`${label} preview`} className="h-full w-full object-contain" />
+                      </div>
+                    ) : (
+                      <div className="flex h-20 w-20 items-center justify-center rounded-lg border bg-muted text-xs text-muted-foreground">
+                        None
+                      </div>
+                    )}
+                    <Input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => handleUpload(assetType, e.target.files?.[0] ?? null)}
+                      disabled={Boolean(uploading[key])}
+                    />
+                    {uploading[key] && <p className="text-xs text-muted-foreground">Uploading…</p>}
+                  </div>
+                ))}
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>Favicon</Label>
-                  <Input
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => handleUpload("favicon", e.target.files?.[0] ?? null)}
-                    disabled={Boolean(uploading.favicon)}
-                  />
-                  {settings.faviconUrl ? (
-                    <p className="text-xs text-muted-foreground break-all">
-                      Current: {settings.faviconUrl}
-                    </p>
-                  ) : null}
-                </div>
-                <div className="space-y-2">
-                  <Label>OG Image</Label>
-                  <Input
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => handleUpload("og", e.target.files?.[0] ?? null)}
-                    disabled={Boolean(uploading.og)}
-                  />
-                  {settings.ogImageUrl ? (
-                    <p className="text-xs text-muted-foreground break-all">
-                      Current: {settings.ogImageUrl}
-                    </p>
-                  ) : null}
-                </div>
+              {/* Row 2: Hero Image — full width, taller */}
+              <div className="space-y-2">
+                <Label>Hero Image</Label>
+                {settings.heroImageUrl ? (
+                  <div className="overflow-hidden rounded-lg border bg-muted">
+                    <img src={settings.heroImageUrl} alt="Hero preview" className="h-48 w-full object-cover" />
+                  </div>
+                ) : (
+                  <div className="flex h-48 items-center justify-center rounded-lg border bg-muted text-sm text-muted-foreground">
+                    No hero image
+                  </div>
+                )}
+                <Input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => handleUpload("hero", e.target.files?.[0] ?? null)}
+                  disabled={Boolean(uploading.hero)}
+                />
+                {uploading.hero && <p className="text-xs text-muted-foreground">Uploading…</p>}
               </div>
             </CardContent>
           </Card>
@@ -819,6 +813,14 @@ function CompletedSetupPanel({
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="notifications" className="space-y-6">
+          <NotificationsTab
+            settings={settings}
+            onUpdate={onUpdate}
+            locationId={selectedLocationId}
+          />
         </TabsContent>
       </Tabs>
     </div>

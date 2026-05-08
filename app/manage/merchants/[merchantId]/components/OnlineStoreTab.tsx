@@ -46,7 +46,6 @@ import {
     useAdminApproveOnlineStoreRequest,
     useAdminRejectOnlineStoreRequest,
     useAdminUploadMerchantW9Pdf,
-    useAdminRetriggerDomainWhitelist,
     useAdminOnlineStoreRequestRequirements,
     useAdminSaveOnlineStoreRequestRequirements,
     type OnlineOrderingSettings,
@@ -64,6 +63,8 @@ import { extractConnectedPlatforms } from '@/lib/orderout/helpers'
 import { MissingDataForm } from '@/components/online-store/MissingDataForm'
 import { HoursConfigModal } from '@/app/dashboard/online-ordering/components/HoursConfigModal'
 import { FONT_GOOGLE_URLS } from '@/app/sites/lib/theme-utils'
+import { useAdminNmiMerchantStatus } from '@/lib/queries/use-admin-online-ordering'
+import { NmiCreateMerchantDialog } from './NmiCreateMerchantDialog'
 
 const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'localhost:3000'
 
@@ -152,8 +153,19 @@ interface OnlineStoreTabProps {
     locationsLoading: boolean
 }
 
-export function OnlineStoreTab({ merchantId, merchantName, locations, locationsLoading }: OnlineStoreTabProps) {
+export function OnlineStoreTab({
+    merchantId,
+    merchantName,
+    locations,
+    locationsLoading,
+}: OnlineStoreTabProps) {
     const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null)
+    const [isNmiDialogOpen, setIsNmiDialogOpen] = useState(false)
+    const { data: nmiStatusResult } = useAdminNmiMerchantStatus(merchantId)
+    const nmiStatus = nmiStatusResult?.success ? nmiStatusResult.data : null
+    const NMI_PARTNER_PORTAL_URL =
+        'https://mtech.transactiongateway.com/partners/accounts?tid=0d06b140eb69b1d4ac8a02efe71ceab0'
+    const nmiPortalUrl = nmiStatus?.partnerPortalUrl || NMI_PARTNER_PORTAL_URL
 
     // Fetch overview of all locations
     const { data: overviewData, isLoading: overviewLoading } = useAdminOnlineOrderingOverview(merchantId)
@@ -182,7 +194,6 @@ export function OnlineStoreTab({ merchantId, merchantName, locations, locationsL
     const approveMutation = useAdminApproveOnlineStoreRequest()
     const rejectMutation = useAdminRejectOnlineStoreRequest()
     const uploadW9Mutation = useAdminUploadMerchantW9Pdf()
-    const whitelistMutation = useAdminRetriggerDomainWhitelist()
     const saveRequirementsMutation = useAdminSaveOnlineStoreRequestRequirements()
 
     // OrderOut
@@ -192,24 +203,6 @@ export function OnlineStoreTab({ merchantId, merchantName, locations, locationsL
     const [showOrderOutForm, setShowOrderOutForm] = useState(false)
     const { data: adminSyncedMenusData } =
         useAdminOrderOutSyncedMenusForLocation(merchantId, selectedLocationId || '')
-
-    const handleWhitelistDomain = async () => {
-        if (!selectedLocationId) return
-        try {
-            const result = await whitelistMutation.mutateAsync({ merchantId, locationId: selectedLocationId })
-            if (result.skipped) {
-                toast.info('Dejavoo whitelist API key is not configured, request was skipped')
-                return
-            }
-            if (result.success) {
-                toast.success('Store domain was whitelisted successfully')
-                return
-            }
-            toast.error(result.error || 'Domain whitelist failed')
-        } catch {
-            toast.error('Failed to call domain whitelist')
-        }
-    }
 
     // Sync local settings when server data changes
     useEffect(() => {
@@ -238,9 +231,6 @@ export function OnlineStoreTab({ merchantId, merchantName, locations, locationsL
 
             if (result.success) {
                 toast.success('Settings saved successfully')
-                if (result.domainWhitelistError) {
-                    toast.error(`Settings saved, but domain whitelist failed: ${result.domainWhitelistError}`)
-                }
                 setIsDirty(false)
                 refetchSettings()
             } else {
@@ -484,12 +474,8 @@ export function OnlineStoreTab({ merchantId, merchantName, locations, locationsL
     const requestStatus = localSettings?.setupRequestStatus ?? 'not_requested'
     const canEditStoreSetup =
         requestStatus === 'approved' || requestStatus === 'setup_completed'
-    const hasTpn = Boolean(localSettings?.ipospaysTpn?.trim())
-    const hasFtdKey = Boolean(
-        localSettings?.ipospaysFtdEcomKey?.trim() ||
-        localSettings?.ipospaysFtdEcomKeyConfigured
-    )
-    const canRunWhitelist = Boolean(localSettings?.storeSlug && hasTpn)
+    const hasNmiTokenizationKey = Boolean(localSettings?.nmiTokenizationKey?.trim())
+    const hasNmiPrivateApiKey = Boolean(localSettings?.nmiConfigured)
 
     // Render store configuration
     return (
@@ -837,7 +823,7 @@ export function OnlineStoreTab({ merchantId, merchantName, locations, locationsL
                         <CardHeader>
                             <CardTitle>Storefront Readiness</CardTitle>
                             <CardDescription>
-                                Operational checks are managed here in admin (store status, TPN presence, and domain whitelist).
+                                Operational checks for the active NMI-based online payment flow.
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
@@ -856,45 +842,91 @@ export function OnlineStoreTab({ merchantId, merchantName, locations, locationsL
                                 <div>
                                     <p className="text-sm font-medium">Card Payment Readiness</p>
                                     <p className="text-xs text-muted-foreground">
-                                        {hasTpn && hasFtdKey
-                                            ? 'TPN and FTD key are configured for this branch.'
-                                            : 'Card payments need both a branch TPN and the matching FTD Ecom/TOP key.'}
+                                        {hasNmiTokenizationKey && hasNmiPrivateApiKey
+                                            ? 'NMI tokenization and private API keys are configured for this location.'
+                                            : 'Online card payments require both the NMI tokenization key and private API key.'}
                                     </p>
                                 </div>
-                                <Badge variant={hasTpn && hasFtdKey ? 'default' : 'destructive'}>
-                                    {hasTpn && hasFtdKey ? 'Ready' : 'Incomplete'}
+                                <Badge variant={hasNmiTokenizationKey && hasNmiPrivateApiKey ? 'default' : 'destructive'}>
+                                    {hasNmiTokenizationKey && hasNmiPrivateApiKey ? 'Ready' : 'Incomplete'}
                                 </Badge>
                             </div>
-                            {(!hasTpn || !hasFtdKey) && (
+                            {(!hasNmiTokenizationKey || !hasNmiPrivateApiKey) && (
                                 <div className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-amber-900">
                                     <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                                     <p className="text-xs">
-                                        Add the merchant&apos;s online-ordering TPN and the matching FTD Ecom/TOP key in the Payment &amp; Tips tab before enabling card checkout.
+                                        Add the location&apos;s NMI tokenization key and private API key in the Payment &amp; Tips tab before enabling online card checkout.
                                     </p>
                                 </div>
                             )}
-                            <div className="flex items-center gap-3">
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={handleWhitelistDomain}
-                                    disabled={!canRunWhitelist || whitelistMutation.isPending}
-                                >
-                                    {whitelistMutation.isPending ? (
-                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    ) : (
-                                        <Plug className="mr-2 h-4 w-4" />
-                                    )}
-                                    Re-Whitelist Domain
-                                </Button>
+                            <div className="rounded-md border p-3">
+                                <p className="text-sm font-medium">Provider</p>
                                 <p className="text-xs text-muted-foreground">
-                                    {canRunWhitelist
-                                        ? 'Call Dejavoo Management API for this location slug + TPN.'
-                                        : 'Requires both store slug and TPN.'}
+                                    Storefront card checkout now uses NMI through the active location payment device.
                                 </p>
                             </div>
                         </CardContent>
                     </Card>
+
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>NMI Merchant Account</CardTitle>
+                            <CardDescription>
+                                Create the merchant&apos;s NMI gateway account, then finish onboarding in the
+                                partner portal.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            <div className="flex items-center justify-between rounded-md border p-3">
+                                <div className="min-w-0">
+                                    <p className="text-sm font-medium">Account Status</p>
+                                    {nmiStatus ? (
+                                        <p className="text-xs text-muted-foreground">
+                                            Created {nmiStatus.createdAt ? new Date(nmiStatus.createdAt).toLocaleDateString() : ''} · NMI ID{' '}
+                                            <span className="font-mono">{nmiStatus.nmiMerchantId}</span>
+                                            {nmiStatus.status ? ` · ${nmiStatus.status}` : ''}
+                                        </p>
+                                    ) : (
+                                        <p className="text-xs text-muted-foreground">
+                                            No NMI account on file. Pre-fill from the merchant&apos;s review packet, then confirm to create one.
+                                        </p>
+                                    )}
+                                </div>
+                                <Badge variant={nmiStatus ? 'default' : 'secondary'}>
+                                    {nmiStatus ? 'Created' : 'Not created'}
+                                </Badge>
+                            </div>
+                            <div className="flex flex-col gap-2 sm:flex-row">
+                                <Button
+                                    onClick={() => setIsNmiDialogOpen(true)}
+                                    disabled={Boolean(nmiStatus) || !selectedLocationId}
+                                    className="gap-2"
+                                >
+                                    <Plus className="h-4 w-4" />
+                                    {nmiStatus ? 'NMI account exists' : 'Create NMI merchant'}
+                                </Button>
+                                <Button variant="outline" asChild className="gap-2">
+                                    <a href={nmiPortalUrl} target="_blank" rel="noopener noreferrer">
+                                        <ExternalLink className="h-4 w-4" />
+                                        Open NMI partner portal
+                                    </a>
+                                </Button>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    {selectedLocationId ? (
+                        <NmiCreateMerchantDialog
+                            open={isNmiDialogOpen}
+                            onOpenChange={setIsNmiDialogOpen}
+                            merchantId={merchantId}
+                            merchantName={merchantName}
+                            locationId={selectedLocationId}
+                            location={selectedLocation}
+                            settings={localSettings || undefined}
+                            partnerPortalUrl={nmiPortalUrl}
+                        />
+                    ) : null}
 
                     {/* Settings Tabs */}
                     <Tabs defaultValue="store" className="space-y-6">
@@ -1534,29 +1566,28 @@ export function OnlineStoreTab({ merchantId, merchantName, locations, locationsL
                                     </div>
                                     {localSettings.acceptOnlinePayments !== false && (
                                         <div className="ml-8 space-y-2">
-                                            <Label>iPOS TPN</Label>
+                                            <Label>NMI Tokenization Key</Label>
                                             <Input
-                                                value={localSettings.ipospaysTpn || ''}
-                                                onChange={(e) => updateSettings({ ipospaysTpn: e.target.value })}
-                                                placeholder="Enter merchant TPN for Dejavoo"
+                                                value={localSettings.nmiTokenizationKey || ''}
+                                                onChange={(e) => updateSettings({ nmiTokenizationKey: e.target.value })}
+                                                placeholder="Enter NMI tokenization key"
                                             />
                                             <p className="text-xs text-muted-foreground">
-                                                This TPN is used for domain whitelist and card processing on this store.
+                                                This browser-safe key is sent to the storefront checkout to tokenize card details with NMI.
                                             </p>
-                                            <Label className="pt-2">FTD Ecom/TOP Key</Label>
+                                            <Label className="pt-2">NMI Private API Key</Label>
                                             <Input
                                                 type="password"
-                                                value={localSettings.ipospaysFtdEcomKey || ''}
-                                                onChange={(e) => updateSettings({ ipospaysFtdEcomKey: e.target.value })}
+                                                value={localSettings.nmiPrivateApiKey || ''}
+                                                onChange={(e) => updateSettings({ nmiPrivateApiKey: e.target.value })}
                                                 placeholder={
-                                                    localSettings.ipospaysFtdEcomKeyConfigured
+                                                    localSettings.nmiConfigured
                                                         ? 'Stored securely. Enter a new key only to rotate it.'
-                                                        : 'Enter branch-specific FTD Ecom/TOP key'
+                                                        : 'Enter NMI private API key'
                                                 }
                                             />
                                             <p className="text-xs text-muted-foreground">
-                                                This branch-specific key is stored securely and is not shown back in plain text.
-                                                Enter a new value only when rotating the key or switching the online-ordering device.
+                                                This private key is stored securely and is never shown back in plain text. Enter a new value only when rotating the key.
                                             </p>
                                         </div>
                                     )}

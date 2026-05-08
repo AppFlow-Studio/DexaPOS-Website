@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -22,7 +22,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, AlertTriangle } from "lucide-react";
+import { toast } from "sonner";
 import type { TipOutRule, Role } from "@/app/dashboard/actions/tips";
 
 interface TipOutRuleDialogProps {
@@ -30,8 +31,11 @@ interface TipOutRuleDialogProps {
   onOpenChange: (open: boolean) => void;
   rule?: TipOutRule | null;
   roles: Role[];
+  existingRules: TipOutRule[];
+  clerkOrgId: string | undefined;
   isLoading?: boolean;
   onSubmit: (data: TipOutRuleFormData) => void;
+  onDeactivateRule?: (ruleId: string) => void;
 }
 
 export interface TipOutRuleFormData {
@@ -59,8 +63,11 @@ export function TipOutRuleDialog({
   onOpenChange,
   rule,
   roles,
+  existingRules,
+  clerkOrgId,
   isLoading,
   onSubmit,
+  onDeactivateRule,
 }: TipOutRuleDialogProps) {
   const [formData, setFormData] = useState<TipOutRuleFormData>({ ...defaultFormData });
 
@@ -87,6 +94,21 @@ export function TipOutRuleDialog({
     }
   }, [rule, open]);
 
+  // ─── Reciprocity check (client-side) ──────────────────────
+  const conflictingRule = useMemo(() => {
+    if (!formData.from_role_code || !formData.to_role_code) return null;
+    if (formData.from_role_code === formData.to_role_code) return null;
+
+    return existingRules.find(
+      (r) =>
+        r.from_role_code === formData.to_role_code &&
+        r.to_role_code === formData.from_role_code &&
+        r.is_active &&
+        // When editing, exclude the rule being edited
+        (!rule || r.id !== rule.id)
+    ) ?? null;
+  }, [formData.from_role_code, formData.to_role_code, existingRules, rule]);
+
   const isValid = () => {
     if (!formData.from_role_code || !formData.to_role_code) return false;
     if (formData.from_role_code === formData.to_role_code) return false;
@@ -96,6 +118,8 @@ export function TipOutRuleDialog({
       formData.tip_out_value > 100
     )
       return false;
+    // Block submit if reciprocal conflict exists
+    if (conflictingRule) return false;
     return true;
   };
 
@@ -107,6 +131,22 @@ export function TipOutRuleDialog({
     if (isValid()) {
       onSubmit(formData);
     }
+  };
+
+  const handleDeactivateConflicting = () => {
+    if (conflictingRule && onDeactivateRule) {
+      onDeactivateRule(conflictingRule.id);
+      toast.success(
+        `Deactivated rule: ${conflictingRule.from_role_code} → ${conflictingRule.to_role_code}`
+      );
+    }
+  };
+
+  const getRoleName = (code: string) => roles.find((r) => r.code === code)?.name || code;
+
+  const formatRuleValue = (r: TipOutRule) => {
+    if (r.tip_out_type === "flat_amount") return `$${r.tip_out_value}`;
+    return `${r.tip_out_value}%`;
   };
 
   return (
@@ -184,6 +224,34 @@ export function TipOutRuleDialog({
               </Alert>
             )}
 
+          {/* ─── Reciprocity warning ─── */}
+          {conflictingRule && (
+            <Alert className="border-amber-500/50 bg-amber-50 dark:bg-amber-950/20">
+              <AlertTriangle className="h-4 w-4 text-amber-600" />
+              <AlertDescription className="text-amber-800 dark:text-amber-200">
+                <p className="text-sm">
+                  A rule already exists sending tips the other direction:{" "}
+                  <strong>
+                    {getRoleName(conflictingRule.from_role_code)} → {getRoleName(conflictingRule.to_role_code)}
+                  </strong>{" "}
+                  at {formatRuleValue(conflictingRule)}.
+                  Creating this rule would create a circular flow and double-charge both roles.
+                  Deactivate the existing rule first.
+                </p>
+                {onDeactivateRule && (
+                  <Button
+                    variant="link"
+                    size="sm"
+                    onClick={handleDeactivateConflicting}
+                    className="text-amber-700 dark:text-amber-300 underline p-0 h-auto mt-1"
+                  >
+                    Deactivate existing rule
+                  </Button>
+                )}
+              </AlertDescription>
+            </Alert>
+          )}
+
           <div>
             <Label>Tip-Out Type *</Label>
             <RadioGroup
@@ -199,7 +267,7 @@ export function TipOutRuleDialog({
                   id="type-tips"
                 />
                 <Label htmlFor="type-tips" className="font-normal">
-                  Percentage of Tips — % of each giver's total tips
+                  Percentage of Tips — % of each giver&apos;s total tips
                 </Label>
               </div>
               <div className="flex items-center gap-2">
@@ -208,7 +276,7 @@ export function TipOutRuleDialog({
                   id="type-sales"
                 />
                 <Label htmlFor="type-sales" className="font-normal">
-                  Percentage of Sales — % of each giver's gross sales
+                  Percentage of Sales — % of each giver&apos;s gross sales
                 </Label>
               </div>
               <div className="flex items-center gap-2">
@@ -260,10 +328,8 @@ export function TipOutRuleDialog({
                 id="effective-date"
                 type="date"
                 value={formData.effective_date}
-                min={new Date().toISOString().split("T")[0]}
                 onChange={(e) => {
                   handleChange("effective_date", e.target.value);
-                  // Clear end_date if it's now before the new effective date
                   if (formData.end_date && e.target.value >= formData.end_date) {
                     handleChange("end_date", null);
                   }
@@ -277,20 +343,9 @@ export function TipOutRuleDialog({
                 id="end-date"
                 type="date"
                 value={formData.end_date || ""}
-                min={(() => {
-                  const today = new Date().toISOString().split("T")[0];
-                  const d = new Date(formData.effective_date + "T00:00:00");
-                  d.setDate(d.getDate() + 1);
-                  const minFromEffective = d.toISOString().split("T")[0];
-                  return minFromEffective > today ? minFromEffective : today;
-                })()}
+                min={formData.effective_date}
                 onChange={(e) => {
-                  const val = e.target.value;
-                  if (!val) { handleChange("end_date", null); return; }
-                  const today = new Date().toISOString().split("T")[0];
-                  if (val < today) return;
-                  if (val <= formData.effective_date) return;
-                  handleChange("end_date", val);
+                  handleChange("end_date", e.target.value || null);
                 }}
                 className="mt-1"
               />
@@ -298,17 +353,15 @@ export function TipOutRuleDialog({
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <Checkbox
-              id="active"
+          <div className="flex items-center justify-between">
+            <Label htmlFor="rule-active">Active</Label>
+            <Switch
+              id="rule-active"
               checked={formData.is_active}
               onCheckedChange={(checked) =>
                 handleChange("is_active", checked)
               }
             />
-            <Label htmlFor="active" className="font-normal">
-              Active
-            </Label>
           </div>
         </div>
 
@@ -319,6 +372,7 @@ export function TipOutRuleDialog({
           <Button
             onClick={handleSubmit}
             disabled={!isValid() || isLoading}
+            className="bg-teal-500 hover:bg-teal-600 text-white"
           >
             {isLoading ? "Saving..." : rule ? "Update Rule" : "Create Rule"}
           </Button>

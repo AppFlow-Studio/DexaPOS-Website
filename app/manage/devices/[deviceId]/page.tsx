@@ -17,7 +17,7 @@ import { cn } from '@/lib/utils'
 import {
   formatDeviceCategory,
   formatDeviceStatus,
-  formatMoneyCents,
+  formatMoneyDollars,
   getDeviceCategoryIcon,
   getDeviceStatusClasses,
   getTimelineIcon,
@@ -118,7 +118,7 @@ export default function DeviceDetailPage() {
                 <span>|</span>
                 <span>Condition: {device.condition}</span>
                 <span>|</span>
-                <span>Monthly fee: {formatMoneyCents(device.monthly_fee_cents)}</span>
+                <span>Monthly fee: {formatMoneyDollars(device.monthly_fee)}</span>
               </div>
             </div>
           </div>

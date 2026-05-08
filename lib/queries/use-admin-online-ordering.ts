@@ -7,13 +7,18 @@ import {
   getAdminMerchantOnlineOrderingOverview,
   adminSaveOnlineOrderingSettings,
   adminToggleOnlineStore,
-  adminRetriggerDomainWhitelist,
   adminApproveOnlineStoreRequest,
   adminRejectOnlineStoreRequest,
   adminUploadMerchantW9Pdf,
   getAdminOnlineStoreRequestRequirements,
   adminSaveOnlineStoreRequestRequirements,
 } from '@/app/manage/actions/admin-merchant/online-ordering'
+import { reconcileNmiOrderPayment } from '@/app/manage/actions/admin-merchant/online-payment-reconciliation'
+import {
+  adminCreateNmiMerchant,
+  getAdminNmiMerchantStatus,
+  type AdminCreateNmiMerchantInput,
+} from '@/app/manage/actions/admin-merchant/nmi'
 
 // ============================================================================
 // Types (matching server action types)
@@ -92,6 +97,7 @@ export interface OnlineOrderingSettings {
   enabled: boolean
   storeName: string
   storeSlug: string
+  description?: string
   storeUrl?: string
   phone: string
   email: string
@@ -132,11 +138,9 @@ export interface OnlineOrderingSettings {
   acceptOnlinePayments?: boolean
   acceptCashOnDelivery?: boolean
   acceptCardOnDelivery?: boolean
-  ipospaysDeviceId?: string | null
-  ipospaysDeviceLabel?: string | null
-  ipospaysTpn?: string
-  ipospaysFtdEcomKey?: string
-  ipospaysFtdEcomKeyConfigured?: boolean
+  nmiTokenizationKey?: string
+  nmiPrivateApiKey?: string
+  nmiConfigured?: boolean
   tippingEnabled?: boolean
   tipConfig?: TipConfig
   baseDeliveryFee?: number
@@ -256,18 +260,6 @@ export function useAdminToggleOnlineStore() {
   })
 }
 
-export function useAdminRetriggerDomainWhitelist() {
-  return useMutation({
-    mutationFn: ({
-      merchantId,
-      locationId,
-    }: {
-      merchantId: string
-      locationId: string
-    }) => adminRetriggerDomainWhitelist(merchantId, locationId),
-  })
-}
-
 export function useAdminSaveOnlineStoreRequestRequirements() {
   const queryClient = useQueryClient()
   return useMutation({
@@ -347,3 +339,34 @@ export function useAdminUploadMerchantW9Pdf() {
     },
   })
 }
+
+export function useAdminReconcileNmiOrderPayment() {
+  return useMutation({
+    mutationFn: (orderPaymentId: string) => reconcileNmiOrderPayment(orderPaymentId),
+  })
+}
+
+export function useAdminNmiMerchantStatus(merchantId: string) {
+  return useQuery({
+    queryKey: [...adminKeys.merchants(), merchantId, 'nmi-status'],
+    queryFn: () => getAdminNmiMerchantStatus(merchantId),
+    enabled: !!merchantId,
+  })
+}
+
+export function useAdminCreateNmiMerchant() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (input: AdminCreateNmiMerchantInput) => adminCreateNmiMerchant(input),
+    onSuccess: (_res, vars) => {
+      queryClient.invalidateQueries({
+        queryKey: [...adminKeys.merchants(), vars.merchantId, 'nmi-status'],
+      })
+      queryClient.invalidateQueries({
+        queryKey: [...adminKeys.merchants(), vars.merchantId, 'online-ordering'],
+      })
+    },
+  })
+}
+
+export type { AdminCreateNmiMerchantInput }

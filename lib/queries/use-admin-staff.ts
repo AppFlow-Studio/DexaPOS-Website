@@ -6,15 +6,24 @@ import {
   getAdminMerchantStaff,
   adminResetStaffPin,
   adminBulkResetPins,
+  adminResetStaffPassword,
+  adminBulkResetPasswords,
   adminToggleStaffStatus,
   adminCreateStaff,
   adminCreateClerkStaff,
+  adminInviteClerkStaff,
   getMerchantLocationsForStaff,
   getMerchantStaffRoles,
   getAdminMerchantStaffStats,
   adminBulkDeactivateStaff,
+  adminUpdateStaffProfile,
+  adminUpdateStaffRole,
+  adminUpdateStaffLocations,
+  adminResendStaffInvite,
+  getMerchantPendingStaffInvites,
+  type AdminStaffLocationAssignmentInput,
 } from '@/app/manage/actions/admin-merchant/staff'
-import type { AdminCreateStaffData, AdminCreateClerkStaffData } from '@/types/staff'
+import type { AdminCreateStaffData, AdminCreateClerkStaffData, AdminInviteClerkStaffData } from '@/types/staff'
 
 // ============================================================================
 // QUERY HOOKS
@@ -107,10 +116,12 @@ export function useAdminBulkResetPins() {
     mutationFn: ({
       merchantId,
       locationId,
+      customPin,
     }: {
       merchantId: string
       locationId?: string | null
-    }) => adminBulkResetPins(merchantId, locationId),
+      customPin?: string
+    }) => adminBulkResetPins(merchantId, locationId, customPin),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
         queryKey: adminKeys.merchantStaff(variables.merchantId),
@@ -184,6 +195,172 @@ export function useAdminBulkDeactivateStaff() {
     onSuccess: (result, variables) => {
       queryClient.invalidateQueries({
         queryKey: adminKeys.merchantStaff(variables.merchantId),
+      })
+    },
+  })
+}
+
+/**
+ * Reset dashboard password for a single Clerk staff member (HQ)
+ */
+export function useAdminResetStaffPassword() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({
+      merchantId,
+      clerkUserId,
+      customPassword,
+    }: {
+      merchantId: string
+      clerkUserId: string
+      customPassword?: string
+    }) => adminResetStaffPassword(merchantId, clerkUserId, customPassword),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: adminKeys.merchantStaff(variables.merchantId),
+      })
+    },
+  })
+}
+
+/**
+ * Bulk reset dashboard passwords for all active Clerk staff at a merchant/location (HQ)
+ */
+export function useAdminBulkResetPasswords() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({
+      merchantId,
+      locationId,
+    }: {
+      merchantId: string
+      locationId?: string | null
+    }) => adminBulkResetPasswords(merchantId, locationId),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: adminKeys.merchantStaff(variables.merchantId),
+      })
+    },
+  })
+}
+
+/**
+ * Invite a Clerk dashboard user for a merchant via email (admin)
+ */
+export function useAdminInviteClerkStaff() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({
+      merchantId,
+      data,
+    }: {
+      merchantId: string
+      data: AdminInviteClerkStaffData
+    }) => adminInviteClerkStaff(merchantId, data),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: adminKeys.merchantStaff(variables.merchantId),
+      })
+    },
+  })
+}
+
+/**
+ * Update a staff member's profile (name / email / phone)
+ */
+export function useAdminUpdateStaffProfile() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      merchantId,
+      staffProfileId,
+      changes,
+    }: {
+      merchantId: string
+      staffProfileId: string
+      changes: {
+        firstName?: string
+        lastName?: string
+        email?: string | null
+        phone?: string | null
+      }
+    }) => adminUpdateStaffProfile(merchantId, staffProfileId, changes),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: adminKeys.merchantStaff(variables.merchantId) })
+    },
+  })
+}
+
+/**
+ * Update a staff member's role at a specific location
+ */
+export function useAdminUpdateStaffRole() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      merchantId,
+      staffProfileId,
+      locationId,
+      newRoleCode,
+    }: {
+      merchantId: string
+      staffProfileId: string
+      locationId: string
+      newRoleCode: string
+    }) => adminUpdateStaffRole(merchantId, staffProfileId, locationId, newRoleCode),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: adminKeys.merchantStaff(variables.merchantId) })
+    },
+  })
+}
+
+/**
+ * Replace a staff member's location assignments
+ */
+export function useAdminUpdateStaffLocations() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      merchantId,
+      staffProfileId,
+      assignments,
+    }: {
+      merchantId: string
+      staffProfileId: string
+      assignments: AdminStaffLocationAssignmentInput[]
+    }) => adminUpdateStaffLocations(merchantId, staffProfileId, assignments),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: adminKeys.merchantStaff(variables.merchantId) })
+    },
+  })
+}
+
+/**
+ * Pending invites for a merchant (for resend UI)
+ */
+export function useMerchantPendingStaffInvites(merchantId: string, enabled = true) {
+  return useQuery({
+    queryKey: [...adminKeys.merchantStaff(merchantId), 'pending-invites'],
+    queryFn: () => getMerchantPendingStaffInvites(merchantId),
+    enabled: !!merchantId && enabled,
+    staleTime: 30 * 1000,
+  })
+}
+
+/**
+ * Resend a pending staff invite
+ */
+export function useAdminResendStaffInvite() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ merchantId, inviteId }: { merchantId: string; inviteId: string }) =>
+      adminResendStaffInvite(merchantId, inviteId),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: [...adminKeys.merchantStaff(variables.merchantId), 'pending-invites'],
       })
     },
   })

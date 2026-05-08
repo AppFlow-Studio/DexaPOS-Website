@@ -14,6 +14,9 @@ import {
   SelectValue
 } from '@/components/ui/select'
 import { X, Plus, Edit2, Trash2, Loader2, Save } from 'lucide-react'
+import { PhoneInput } from '@/components/ui/phone-input'
+import { formatPhoneForDisplay, normalizePhone } from '@/lib/phone'
+import { Skeleton } from '@/components/ui/skeleton'
 import { useUserInfo } from '@/app/manage/hooks/useUserInfo.'
 import {
   useCustomerProfileDetails,
@@ -92,7 +95,7 @@ export function DetailsTab ({ customer, merchantId }: DetailsTabProps) {
   const [vipLevel, setVipLevel] = useState('None')
 
   // Queries
-  const { data: profileDetails } = useCustomerProfileDetails(customerId ?? null)
+  const { data: profileDetails, isLoading: isLoadingProfile } = useCustomerProfileDetails(customerId ?? null)
   const { data: notes } = useCustomerNotes(customerId ?? null)
   const { data: existingTags } = useMerchantCustomerTags(merchantId)
   const { data: staffProfiles } = useMerchantStaffProfiles(merchantId)
@@ -129,7 +132,7 @@ export function DetailsTab ({ customer, merchantId }: DetailsTabProps) {
       customerId: customerId!,
       updates: {
         name,
-        phone,
+        phone: normalizePhone(phone) ?? phone || null,
         email,
         address,
         birthday: birthday || null,
@@ -184,7 +187,28 @@ export function DetailsTab ({ customer, merchantId }: DetailsTabProps) {
     )
   }
 
-  if (!customer || !profileDetails) return null
+  if (!customer) return null
+
+  if (isLoadingProfile) {
+    return (
+      <div className='space-y-6'>
+        {[...Array(3)].map((_, i) => (
+          <Card key={i}>
+            <CardHeader>
+              <Skeleton className='h-4 w-32' />
+            </CardHeader>
+            <CardContent className='space-y-3'>
+              <Skeleton className='h-4 w-full' />
+              <Skeleton className='h-4 w-3/4' />
+              <Skeleton className='h-4 w-1/2' />
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    )
+  }
+
+  if (!profileDetails) return null
 
   const customerTags = (profileDetails.tags || []).map((tag: string) =>
     tag.toUpperCase()
@@ -230,7 +254,7 @@ export function DetailsTab ({ customer, merchantId }: DetailsTabProps) {
                 <p className='text-xs font-medium text-muted-foreground'>
                   Phone
                 </p>
-                <p className='text-sm'>{phone || '—'}</p>
+                <p className='text-sm'>{phone ? formatPhoneForDisplay(phone) : '—'}</p>
               </div>
               <div>
                 <p className='text-xs font-medium text-muted-foreground'>
@@ -253,7 +277,7 @@ export function DetailsTab ({ customer, merchantId }: DetailsTabProps) {
               </div>
               <div>
                 <label className='text-sm font-medium'>Phone</label>
-                <Input value={phone} onChange={e => setPhone(e.target.value)} />
+                <PhoneInput value={phone} onChange={setPhone} />
               </div>
               <div>
                 <label className='text-sm font-medium'>Email</label>

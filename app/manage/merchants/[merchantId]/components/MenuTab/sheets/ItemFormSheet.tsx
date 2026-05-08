@@ -646,6 +646,148 @@ export function ItemFormSheet({
                                         )}
                                     />
 
+                                    <div className="space-y-4 rounded-xl border border-border/70 bg-background p-4">
+                                        <div className="flex items-center justify-between gap-3">
+                                            <div className="flex items-center gap-2">
+                                                <Tag className="h-4 w-4 text-blue-500" />
+                                                <div className="flex items-center gap-2">
+                                                    <FormLabel className="mb-0">Categories</FormLabel>
+                                                    {selectedCategories.length > 0 && (
+                                                        <Badge variant="secondary" className="text-xs">
+                                                            {selectedCategories.length}
+                                                        </Badge>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            {!isEdit && (
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant="outline"
+                                                    onClick={() => setShowQuickCreateCategory((prev) => !prev)}
+                                                >
+                                                    {showQuickCreateCategory ? (
+                                                        <>
+                                                            <X className="mr-1 h-3.5 w-3.5" />
+                                                            Close
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <Plus className="mr-1 h-3.5 w-3.5" />
+                                                            New Category
+                                                        </>
+                                                    )}
+                                                </Button>
+                                            )}
+                                        </div>
+
+                                        {isEdit ? (
+                                            <div className="space-y-3">
+                                                {selectedCategoryNames.length > 0 ? (
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {selectedCategoryNames.map((categoryName) => (
+                                                            <Badge key={categoryName} variant="outline">
+                                                                {categoryName}
+                                                            </Badge>
+                                                        ))}
+                                                    </div>
+                                                ) : (
+                                                    <p className="text-sm italic text-muted-foreground">
+                                                        This item is currently uncategorized.
+                                                    </p>
+                                                )}
+                                                <FormDescription>
+                                                    Category reassignment is handled from category and menu management views.
+                                                </FormDescription>
+                                            </div>
+                                        ) : (
+                                            <>
+                                                {selectedCategories.length === 0 && accessibleCategories.length > 0 && (
+                                                    <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm">
+                                                        <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                                                        <div className="space-y-1">
+                                                            <p className="font-medium text-amber-800">Select at least one category</p>
+                                                            <p className="text-xs text-amber-700">
+                                                                HQ item creation should follow the merchant flow here. New items need a category before save.
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {isLoadingCategories ? (
+                                                    <div className="rounded-lg border border-dashed px-4 py-6 text-center text-sm text-muted-foreground">
+                                                        <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin opacity-60" />
+                                                        <p>Loading categories...</p>
+                                                    </div>
+                                                ) : accessibleCategories.length === 0 ? (
+                                                    <div className="rounded-lg border border-dashed px-4 py-6 text-center text-sm text-muted-foreground">
+                                                        <Tag className="mx-auto mb-2 h-8 w-8 opacity-50" />
+                                                        <p>No categories available in this scope.</p>
+                                                        <p className="mt-1 text-xs">
+                                                            Create one here before saving the item.
+                                                        </p>
+                                                    </div>
+                                                ) : (
+                                                    <div className="space-y-3">
+                                                        <div className="flex flex-wrap gap-2">
+                                                            {accessibleCategories.map((category) => {
+                                                                const isSelected = selectedCategories.includes(category.id)
+
+                                                                return (
+                                                                    <button
+                                                                        key={category.id}
+                                                                        type="button"
+                                                                        onClick={() => toggleCategory(category.id)}
+                                                                        className={cn(
+                                                                            'rounded-full border px-3 py-1.5 text-sm font-medium transition-all hover:scale-[1.02] active:scale-[0.99]',
+                                                                            isSelected
+                                                                                ? 'border-primary bg-primary text-primary-foreground shadow-sm'
+                                                                                : 'border-border bg-background hover:border-primary/40 hover:bg-muted/40',
+                                                                        )}
+                                                                    >
+                                                                        {category.name}
+                                                                    </button>
+                                                                )
+                                                            })}
+                                                        </div>
+
+                                                        {selectedCategories.length > 0 && (
+                                                            <button
+                                                                type="button"
+                                                                className="inline-flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+                                                                onClick={() => setSelectedCategories(categoryId ? [categoryId] : [])}
+                                                            >
+                                                                <X className="h-3 w-3" />
+                                                                Clear extra category selections
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                )}
+
+                                                {showQuickCreateCategory && (
+                                                    <QuickCreateCategoryDialog
+                                                        merchantId={merchantId}
+                                                        locationId={isLocationView ? locationId : null}
+                                                        onClose={() => setShowQuickCreateCategory(false)}
+                                                        onCreated={async (newCategoryId, newCategoryName) => {
+                                                            setCreatedCategoryNames((prev) => ({
+                                                                ...prev,
+                                                                [newCategoryId]: newCategoryName,
+                                                            }))
+                                                            setSelectedCategories((prev) =>
+                                                                prev.includes(newCategoryId) ? prev : [...prev, newCategoryId],
+                                                            )
+                                                            setShowQuickCreateCategory(false)
+                                                            await queryClient.invalidateQueries({
+                                                                queryKey: adminKeys.merchantCategories(merchantId, locationId),
+                                                            })
+                                                        }}
+                                                    />
+                                                )}
+                                            </>
+                                        )}
+                                    </div>
+
                                     <Separator className="my-4" />
 
                                     {/* Allergens */}
@@ -1007,147 +1149,6 @@ export function ItemFormSheet({
                                     )}
                                 />
 
-                                <div className="space-y-4 rounded-xl border border-border/70 bg-background p-4">
-                                    <div className="flex items-center justify-between gap-3">
-                                        <div className="flex items-center gap-2">
-                                            <Tag className="h-4 w-4 text-blue-500" />
-                                            <div className="flex items-center gap-2">
-                                                <FormLabel className="mb-0">Categories</FormLabel>
-                                                {selectedCategories.length > 0 && (
-                                                    <Badge variant="secondary" className="text-xs">
-                                                        {selectedCategories.length}
-                                                    </Badge>
-                                                )}
-                                            </div>
-                                        </div>
-                                        {!isEdit && (
-                                            <Button
-                                                type="button"
-                                                size="sm"
-                                                variant="outline"
-                                                onClick={() => setShowQuickCreateCategory((prev) => !prev)}
-                                            >
-                                                {showQuickCreateCategory ? (
-                                                    <>
-                                                        <X className="mr-1 h-3.5 w-3.5" />
-                                                        Close
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <Plus className="mr-1 h-3.5 w-3.5" />
-                                                        New Category
-                                                    </>
-                                                )}
-                                            </Button>
-                                        )}
-                                    </div>
-
-                                    {isEdit ? (
-                                        <div className="space-y-3">
-                                            {selectedCategoryNames.length > 0 ? (
-                                                <div className="flex flex-wrap gap-2">
-                                                    {selectedCategoryNames.map((categoryName) => (
-                                                        <Badge key={categoryName} variant="outline">
-                                                            {categoryName}
-                                                        </Badge>
-                                                    ))}
-                                                </div>
-                                            ) : (
-                                                <p className="text-sm italic text-muted-foreground">
-                                                    This item is currently uncategorized.
-                                                </p>
-                                            )}
-                                            <FormDescription>
-                                                Category reassignment is handled from category and menu management views.
-                                            </FormDescription>
-                                        </div>
-                                    ) : (
-                                        <>
-                                            {selectedCategories.length === 0 && accessibleCategories.length > 0 && (
-                                                <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm">
-                                                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
-                                                    <div className="space-y-1">
-                                                        <p className="font-medium text-amber-800">Select at least one category</p>
-                                                        <p className="text-xs text-amber-700">
-                                                            HQ item creation should follow the merchant flow here. New items need a category before save.
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                            )}
-
-                                            {isLoadingCategories ? (
-                                                <div className="rounded-lg border border-dashed px-4 py-6 text-center text-sm text-muted-foreground">
-                                                    <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin opacity-60" />
-                                                    <p>Loading categories...</p>
-                                                </div>
-                                            ) : accessibleCategories.length === 0 ? (
-                                                <div className="rounded-lg border border-dashed px-4 py-6 text-center text-sm text-muted-foreground">
-                                                    <Tag className="mx-auto mb-2 h-8 w-8 opacity-50" />
-                                                    <p>No categories available in this scope.</p>
-                                                    <p className="mt-1 text-xs">
-                                                        Create one here before saving the item.
-                                                    </p>
-                                                </div>
-                                            ) : (
-                                                <div className="space-y-3">
-                                                    <div className="flex flex-wrap gap-2">
-                                                        {accessibleCategories.map((category) => {
-                                                            const isSelected = selectedCategories.includes(category.id)
-
-                                                            return (
-                                                                <button
-                                                                    key={category.id}
-                                                                    type="button"
-                                                                    onClick={() => toggleCategory(category.id)}
-                                                                    className={cn(
-                                                                        'rounded-full border px-3 py-1.5 text-sm font-medium transition-all hover:scale-[1.02] active:scale-[0.99]',
-                                                                        isSelected
-                                                                            ? 'border-primary bg-primary text-primary-foreground shadow-sm'
-                                                                            : 'border-border bg-background hover:border-primary/40 hover:bg-muted/40',
-                                                                    )}
-                                                                >
-                                                                    {category.name}
-                                                                </button>
-                                                            )
-                                                        })}
-                                                    </div>
-
-                                                    {selectedCategories.length > 0 && (
-                                                        <button
-                                                            type="button"
-                                                            className="inline-flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
-                                                            onClick={() => setSelectedCategories(categoryId ? [categoryId] : [])}
-                                                        >
-                                                            <X className="h-3 w-3" />
-                                                            Clear extra category selections
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            )}
-
-                                            {showQuickCreateCategory && (
-                                                <QuickCreateCategoryDialog
-                                                    merchantId={merchantId}
-                                                    locationId={isLocationView ? locationId : null}
-                                                    onClose={() => setShowQuickCreateCategory(false)}
-                                                    onCreated={async (newCategoryId, newCategoryName) => {
-                                                        setCreatedCategoryNames((prev) => ({
-                                                            ...prev,
-                                                            [newCategoryId]: newCategoryName,
-                                                        }))
-                                                        setSelectedCategories((prev) =>
-                                                            prev.includes(newCategoryId) ? prev : [...prev, newCategoryId],
-                                                        )
-                                                        setShowQuickCreateCategory(false)
-                                                        await queryClient.invalidateQueries({
-                                                            queryKey: adminKeys.merchantCategories(merchantId, locationId),
-                                                        })
-                                                    }}
-                                                />
-                                            )}
-                                        </>
-                                    )}
-                                </div>
                                </>
                            )}
                         </TabsContent>
@@ -1173,6 +1174,7 @@ export function ItemFormSheet({
                             }
                             availability={isLocationView && isEdit ? (watchedValues.override_availability ?? true) : watchedValues.availability}
                             categories={selectedCategoryNames}
+                            allergens={watchedValues.allergens ?? []}
                             expandDescription
                         />
                          <div>

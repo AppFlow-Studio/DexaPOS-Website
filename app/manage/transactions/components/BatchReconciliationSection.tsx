@@ -128,8 +128,14 @@ function downloadCsv(content: string, filename: string) {
   URL.revokeObjectURL(url)
 }
 
-export function BatchReconciliationSection() {
-  const [merchantId, setMerchantId] = useState('all')
+export function BatchReconciliationSection({
+  scopedMerchantId,
+  renderBatchPayments,
+}: {
+  scopedMerchantId?: string
+  renderBatchPayments?: (batch: PlatformSettlementBatch) => React.ReactNode
+} = {}) {
+  const [merchantId, setMerchantId] = useState(scopedMerchantId ?? 'all')
   const [status, setStatus] = useState('all')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
@@ -204,7 +210,7 @@ export function BatchReconciliationSection() {
   }, [batches, selectedBatchId])
 
   const clearFilters = () => {
-    setMerchantId('all')
+    if (!scopedMerchantId) setMerchantId('all')
     setStatus('all')
     setDateFrom('')
     setDateTo('')
@@ -259,23 +265,25 @@ export function BatchReconciliationSection() {
       </CardHeader>
 
       <CardContent className="space-y-4">
-        <div className="grid gap-3 md:grid-cols-5">
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="text-muted-foreground">Merchant</span>
-            <select
-              className="h-9 rounded-md border bg-background px-2"
-              value={merchantId}
-              onChange={(event) => setMerchantId(event.target.value)}
-              disabled={loadingMerchants}
-            >
-              <option value="all">All merchants</option>
-              {merchants.map((merchant) => (
-                <option key={merchant.id} value={merchant.id}>
-                  {merchant.name}
-                </option>
-              ))}
-            </select>
-          </label>
+        <div className={scopedMerchantId ? 'grid gap-3 md:grid-cols-4' : 'grid gap-3 md:grid-cols-5'}>
+          {!scopedMerchantId && (
+            <label className="flex flex-col gap-1 text-sm">
+              <span className="text-muted-foreground">Merchant</span>
+              <select
+                className="h-9 rounded-md border bg-background px-2"
+                value={merchantId}
+                onChange={(event) => setMerchantId(event.target.value)}
+                disabled={loadingMerchants}
+              >
+                <option value="all">All merchants</option>
+                {merchants.map((merchant) => (
+                  <option key={merchant.id} value={merchant.id}>
+                    {merchant.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
 
           <label className="flex flex-col gap-1 text-sm">
             <span className="text-muted-foreground">Batch Status</span>
@@ -409,6 +417,9 @@ export function BatchReconciliationSection() {
               </div>
             )}
 
+            {renderBatchPayments ? (
+              renderBatchPayments(selectedBatch)
+            ) : (
             <Table containerClassName="max-h-[32vh] overflow-auto rounded-md border">
               <TableHeader className="sticky top-0 z-20 bg-card">
                 <TableRow>
@@ -463,6 +474,7 @@ export function BatchReconciliationSection() {
                 )}
               </TableBody>
             </Table>
+            )}
           </div>
         )}
       </CardContent>

@@ -9,6 +9,7 @@ import type { TipPoolConfigWithShares, Role } from "@/app/dashboard/actions/tips
 interface PoolCardProps {
   pool: TipPoolConfigWithShares;
   roles: Role[];
+  poolCount: number;
   onEdit: (pool: TipPoolConfigWithShares) => void;
   onDelete: (pool: TipPoolConfigWithShares) => void;
   onToggle: (poolId: string, isActive: boolean) => void;
@@ -23,17 +24,25 @@ const methodConfig: Record<string, { label: string; className: string }> = {
 };
 
 const sourceConfig: Record<string, { label: string; className: string }> = {
-  charged_tips:      { label: "Charged Tips",       className: "border-green-500/40 bg-green-500/10 text-green-600 dark:text-green-400" },
-  all_tips:          { label: "All Tips",            className: "border-blue-500/40 bg-blue-500/10 text-blue-600 dark:text-blue-400" },
-  cash_only:         { label: "Cash Only",           className: "border-gray-400/40 bg-gray-100 text-gray-600 dark:bg-gray-800/50 dark:text-gray-400" },
-  custom_percentage: { label: "Custom %",            className: "border-purple-500/40 bg-purple-500/10 text-purple-600 dark:text-purple-400" },
+  charged_tips: { label: "Charged Tips", className: "border-green-500/40 bg-green-500/10 text-green-600 dark:text-green-400" },
+  all_tips:     { label: "All Tips",     className: "border-blue-500/40 bg-blue-500/10 text-blue-600 dark:text-blue-400" },
+  cash_only:    { label: "Cash Only",    className: "border-gray-400/40 bg-gray-100 text-gray-600 dark:bg-gray-800/50 dark:text-gray-400" },
 };
 
-export function PoolCard({ pool, roles, onEdit, onDelete, onToggle, isToggling }: PoolCardProps) {
+const intervalConfig: Record<string, { label: string; className: string }> = {
+  full_workday: { label: "Full Workday", className: "border-indigo-500/40 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400" },
+  by_shift:     { label: "By Shift",     className: "border-purple-500/40 bg-purple-500/10 text-purple-600 dark:text-purple-400" },
+  order:        { label: "Per Order",    className: "border-pink-500/40 bg-pink-500/10 text-pink-600 dark:text-pink-400" },
+};
+
+export function PoolCard({ pool, roles, poolCount, onEdit, onDelete, onToggle, isToggling }: PoolCardProps) {
   const getRoleName = (code: string) => roles.find((r) => r.code === code)?.name || code;
 
   const method = methodConfig[pool.distribution_method] ?? { label: pool.distribution_method, className: "" };
   const source = sourceConfig[pool.tip_source] ?? { label: pool.tip_source, className: "" };
+  const interval = intervalConfig[(pool as any).policy_interval] ?? intervalConfig.full_workday;
+  const priority = (pool as any).priority ?? 100;
+  const showPriority = poolCount >= 2 || priority !== 100;
 
   return (
     <Card
@@ -49,7 +58,14 @@ export function PoolCard({ pool, roles, onEdit, onDelete, onToggle, isToggling }
               <Percent className="w-4 h-4 text-primary" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="font-semibold text-foreground leading-tight truncate">{pool.name}</p>
+              <div className="flex items-center gap-2">
+                <p className="font-semibold text-foreground leading-tight truncate">{pool.name}</p>
+                {showPriority && (
+                  <Badge variant="outline" className="text-[10px] font-mono shrink-0">
+                    #{priority}
+                  </Badge>
+                )}
+              </div>
               {pool.description && (
                 <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{pool.description}</p>
               )}
@@ -77,8 +93,8 @@ export function PoolCard({ pool, roles, onEdit, onDelete, onToggle, isToggling }
       </CardHeader>
 
       <CardContent className="space-y-4">
-        {/* Method + Source */}
-        <div className="grid grid-cols-2 gap-3">
+        {/* Method + Source + Interval */}
+        <div className="grid grid-cols-3 gap-3">
           <div className="space-y-1">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Method</p>
             <Badge variant="outline" className={cn("text-xs font-medium", method.className)}>
@@ -90,6 +106,12 @@ export function PoolCard({ pool, roles, onEdit, onDelete, onToggle, isToggling }
             <Badge variant="outline" className={cn("text-xs font-medium", source.className)}>
               {source.label}
               {pool.source_percentage < 100 && ` (${pool.source_percentage}%)`}
+            </Badge>
+          </div>
+          <div className="space-y-1">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Interval</p>
+            <Badge variant="outline" className={cn("text-xs font-medium", interval.className)}>
+              {interval.label}
             </Badge>
           </div>
         </div>
@@ -130,7 +152,9 @@ export function PoolCard({ pool, roles, onEdit, onDelete, onToggle, isToggling }
                   <span className="text-sm font-semibold tabular-nums text-foreground">
                     {share.share_percentage !== null
                       ? `${share.share_percentage}%`
-                      : `${share.points_per_hour} pts/hr`}
+                      : share.points_per_hour !== null
+                      ? `${share.points_per_hour} pts/hr`
+                      : "Eligible"}
                   </span>
                 </div>
               ))}

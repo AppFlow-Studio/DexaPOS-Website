@@ -34,7 +34,7 @@ import { cn } from '@/lib/utils'
 import {
   formatDeviceCategory,
   formatDeviceStatus,
-  formatMoneyCents,
+  formatMoneyDollars,
   getDeviceCategoryIcon,
   getDeviceStatusClasses,
 } from '@/lib/device-registry/presentation'
@@ -355,7 +355,7 @@ export default function ManageDevicesPage() {
                           App {device.app_version ?? 'N/A'}
                         </div>
                       </TableCell>
-                      <TableCell className="align-top">{formatMoneyCents(device.monthly_fee_cents)}</TableCell>
+                      <TableCell className="align-top">{formatMoneyDollars(device.monthly_fee)}</TableCell>
                       <TableCell className="align-top">
                         <div className="text-sm">{formatDate(device.updated_at)}</div>
                         <div className="text-xs text-muted-foreground">

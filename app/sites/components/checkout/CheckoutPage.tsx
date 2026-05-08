@@ -17,12 +17,16 @@ import { OrderDetailsSection } from "./OrderDetailsSection";
 import { TipSection } from "./TipSection";
 import { OrderSummarySection } from "./OrderSummarySection";
 import { PromoCodeSection } from "./PromoCodeSection";
+import { isValidPhone, normalizePhone } from "@/lib/phone";
 import { PlaceOrderButton } from "./PlaceOrderButton";
 import { OrderConfirmation } from "./OrderConfirmation";
 import { PaymentCardForm, type PaymentCardFormHandle } from "./PaymentCardForm";
 import {
   type PlaceOrderItem,
+  checkDeliveryZone,
+  validatePromoCode,
 } from "../../order-actions";
+import type { AppliedPromo } from "./PromoCodeSection";
 import { isStoreOpenNow } from "../StoreInfoBar";
 import { sendOrderConfirmationEmail } from "../../recovery-actions";
 import { getSavedAddresses, addSavedAddress, type SavedAddress } from "../../customer-actions";
@@ -44,11 +48,13 @@ interface CheckoutPageProps {
     business_hours: any;
     latitude?: number | null;
     longitude?: number | null;
+    timezone?: string | null;
   };
   config?: Partial<OnlineOrderingConfig> | null;
   storeConfigId: string;
   slug: string;
   taxRate?: number; // decimal (e.g. 0.08875) — fetched server-side
+  pricingDisclosureText?: string | null;
 }
 
 function formatCheckoutSummaryLine(
@@ -81,6 +87,7 @@ export function CheckoutPage({
   storeConfigId,
   slug,
   taxRate = 0,
+  pricingDisclosureText,
 }: CheckoutPageProps) {
   useSessionInit(storeConfigId);
   useCartSync();
@@ -100,6 +107,7 @@ export function CheckoutPage({
     estimatedTime?: number;
     orderId?: string;
     isPending?: boolean;
+    requestedTime?: string | null;
   } | null>(null);
   const [loading, setLoading] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
@@ -110,6 +118,8 @@ export function CheckoutPage({
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [emailOptIn, setEmailOptIn] = useState(true);
+  const [smsOptIn, setSmsOptIn] = useState(true);
 
   // Order type
   const pickupEnabled = config?.pickupEnabled ?? true;
@@ -137,6 +147,14 @@ export function CheckoutPage({
   });
   const [saveNewAddress, setSaveNewAddress] = useState(false);
 
+  // Promo code
+  const [appliedPromo, setAppliedPromo] = useState<AppliedPromo | null>(null);
+
+  // Delivery zone eligibility check
+  const [zoneCheckState, setZoneCheckState] = useState<"idle" | "checking" | "valid" | "invalid">("idle");
+  const [zoneCheckMessage, setZoneCheckMessage] = useState<string | undefined>();
+  const zoneDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Tip
   const tipPresets = (config?.tipConfig?.presetPercentages as number[]) ?? [15, 18, 20, 25];
   const [selectedTipIndex, setSelectedTipIndex] = useState<number | null>(1);
@@ -150,8 +168,7 @@ export function CheckoutPage({
 
   // Payment
   const paymentFormRef = useRef<PaymentCardFormHandle>(null);
-  const [securityKey, setSecurityKey] = useState<string | null>(null);
-  const [paymentDeviceId, setPaymentDeviceId] = useState<string | null>(null);
+  const [tokenizationKey, setTokenizationKey] = useState<string | null>(null);
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [payCashInStore, setPayCashInStore] = useState(false);
 
@@ -172,7 +189,8 @@ export function CheckoutPage({
         ? 0
         : config?.baseDeliveryFee ?? 0
       : 0;
-  const total = subtotal + tax + tipAmount + deliveryFee;
+  const discountAmount = appliedPromo?.discountAmount ?? 0;
+  const total = Math.max(0, subtotal - discountAmount + tax + tipAmount + deliveryFee);
 
   // Pre-fill contact from session
   useEffect(() => {
@@ -184,12 +202,12 @@ export function CheckoutPage({
     if (customer?.email) setEmail(customer.email);
   }, [customer]);
 
-  // Fetch iPOS security key — enables the card tokenization form
+  // Fetch storefront payment bootstrap config for NMI tokenization — enables the card tokenization form
   useEffect(() => {
     if (!storeConfigId) return;
 
     setPaymentError(null);
-    setPaymentDeviceId(null);
+    setTokenizationKey(null);
     fetch(`${SUPABASE_URL}/functions/v1/process-online-payment`, {
       method: "POST",
       headers: {
@@ -202,21 +220,20 @@ export function CheckoutPage({
     })
       .then((res) => res.json())
       .then((data) => {
-        if (data.success) {
-          setSecurityKey(data.security_key);
-          setPaymentDeviceId(data.payment_device_id ?? null);
+        if (data.success && data.provider === "nmi") {
+          setTokenizationKey(data.tokenization_key ?? null);
         } else {
-          setPaymentDeviceId(null);
+          setTokenizationKey(null);
           // Don't show error if payment simply isn't configured — just hide the form
           if (data.error?.includes("not configured")) {
-            console.log("iPOS payment not configured for this store");
+            console.log("NMI payment not configured for this store");
           } else {
             setPaymentError(data.error || "Failed to initialize payment.");
           }
         }
       })
       .catch(() => {
-        setPaymentDeviceId(null);
+        setTokenizationKey(null);
         setPaymentError("Failed to connect to payment service.");
       });
   }, [storeConfigId]);
@@ -237,6 +254,48 @@ export function CheckoutPage({
     }
   }, [isAuthenticated, orderType]);
 
+  // Debounced delivery zone check — fires when customer types a new address.
+  // Resets when switching away from delivery or selecting a saved address.
+  useEffect(() => {
+    if (orderType !== "delivery" || selectedAddressId !== "new") {
+      setZoneCheckState("idle");
+      setZoneCheckMessage(undefined);
+      return;
+    }
+
+    const { street, city, state, zip } = newAddress;
+    const hasEnoughInput = street.trim().length > 3 && city.trim().length > 0;
+
+    if (!hasEnoughInput) {
+      setZoneCheckState("idle");
+      setZoneCheckMessage(undefined);
+      return;
+    }
+
+    setZoneCheckState("checking");
+
+    if (zoneDebounceRef.current) clearTimeout(zoneDebounceRef.current);
+    zoneDebounceRef.current = setTimeout(async () => {
+      try {
+        const result = await checkDeliveryZone(storeConfigId, { street, city, state, zip });
+        if (result.valid) {
+          setZoneCheckState("valid");
+          setZoneCheckMessage("Great news — we deliver to this address!");
+        } else {
+          setZoneCheckState("invalid");
+          setZoneCheckMessage(result.reason ?? "We don't deliver to this address.");
+        }
+      } catch {
+        setZoneCheckState("idle");
+        setZoneCheckMessage(undefined);
+      }
+    }, 700);
+
+    return () => {
+      if (zoneDebounceRef.current) clearTimeout(zoneDebounceRef.current);
+    };
+  }, [orderType, selectedAddressId, newAddress.street, newAddress.city, newAddress.state, newAddress.zip, storeConfigId]);
+
   // Store address string
   const storeAddress = [
     location.address_line1,
@@ -251,6 +310,19 @@ export function CheckoutPage({
   const storeLat = site?.address?.lat ?? location.latitude;
   const storeLng = site?.address?.lng ?? location.longitude;
 
+  const handleApplyPromo = async (code: string): Promise<string | undefined> => {
+    const { sessionToken } = useSession.getState();
+    const customerId = customer ? (customer as any).id : undefined;
+    const result = await validatePromoCode(storeConfigId, code, subtotal, customerId);
+    if (!result.valid) return result.error;
+    setAppliedPromo({
+      code: code.toUpperCase(),
+      promotionName: result.promotionName ?? code,
+      discountAmount: result.discountAmount ?? 0,
+    });
+    return undefined;
+  };
+
   const handleCheckout = () => {
     handlePlaceOrder();
   };
@@ -261,11 +333,11 @@ export function CheckoutPage({
     setLoading(true);
     setPaymentError(null);
 
-    // Step 1: Tokenize card via FTD (skip if no securityKey — test mode, or cash payment)
-    let paymentTokenId: string | undefined;
+    // Step 1: Tokenize card via NMI (skip if no tokenization key — test mode, or cash payment)
+    let paymentToken: string | undefined;
     let paymentCardType: string | null = null;
     let paymentCardLastFour: string | null = null;
-    if (securityKey && !payCashInStore) {
+    if (tokenizationKey && !payCashInStore) {
       try {
         if (!paymentFormRef.current) {
           throw new Error("Payment form not ready. Please wait a moment.");
@@ -275,7 +347,7 @@ export function CheckoutPage({
           throw new Error(cardValidation.error || "Please complete card details.");
         }
         const tokenizedCard = await paymentFormRef.current.tokenize();
-        paymentTokenId = tokenizedCard.tokenId;
+        paymentToken = tokenizedCard.tokenId;
         paymentCardType = tokenizedCard.cardType;
         paymentCardLastFour = tokenizedCard.cardLastFour;
       } catch (err: any) {
@@ -317,13 +389,32 @@ export function CheckoutPage({
       }
     }
 
-    // Build requested time
+    // Build requested time — encode in the location's timezone so "6:30 PM"
+    // means 6:30 PM at the store, not 6:30 PM in the customer's browser locale.
     let requestedTime: string | null = null;
     if (pickupTime === "scheduled" && scheduledDate && scheduledTime) {
       const [hours, minutes] = scheduledTime.split(":").map(Number);
-      const dt = new Date(scheduledDate);
-      dt.setHours(hours, minutes, 0, 0);
-      requestedTime = dt.toISOString();
+      const locationTz = location.timezone ?? "America/New_York";
+      // Step 1: resolve the calendar date (year/month/day) in the store's timezone,
+      //         because the customer might be in a different day boundary.
+      const calParts = new Intl.DateTimeFormat("en-US", {
+        timeZone: locationTz,
+        year: "numeric", month: "numeric", day: "numeric",
+      }).formatToParts(scheduledDate).reduce<Record<string, number>>((acc, p) => {
+        if (p.type !== "literal") acc[p.type] = Number(p.value);
+        return acc;
+      }, {});
+      // Step 2: naive UTC Date with those wall-clock values
+      const utcCandidate = new Date(Date.UTC(calParts.year, calParts.month - 1, calParts.day, hours, minutes, 0));
+      // Step 3: see what clock that UTC moment maps to in the store's TZ
+      const tzParts = new Intl.DateTimeFormat("en-US", {
+        timeZone: locationTz, hour: "numeric", minute: "numeric", hour12: false,
+      }).formatToParts(utcCandidate);
+      const tzH = Number(tzParts.find(p => p.type === "hour")?.value ?? hours);
+      const tzM = Number(tzParts.find(p => p.type === "minute")?.value ?? minutes);
+      // Step 4: shift by the difference to land on the correct UTC moment
+      const offsetMs = (hours * 60 + minutes - (tzH * 60 + tzM)) * 60000;
+      requestedTime = new Date(utcCandidate.getTime() + offsetMs).toISOString();
     }
 
     // Build special instructions with curbside
@@ -349,7 +440,17 @@ export function CheckoutPage({
       })),
     }));
 
-    // Step 2: Call create-online-order edge function with payment_token_id
+    // Persist transactional notification opt-ins to the session so the
+    // notification helper picks them up when the order row is created.
+    if (sessionToken) {
+      const { updateSession } = await import("@/app/sites/session-actions");
+      await updateSession(sessionToken, {
+        customerEmailOptIn: emailOptIn,
+        customerSmsOptIn: smsOptIn,
+      }).catch(() => {});
+    }
+
+    // Step 2: Call create-online-order edge function with the NMI payment token
     try {
       const res = await fetch(
         `${SUPABASE_URL}/functions/v1/create-online-order`,
@@ -370,13 +471,12 @@ export function CheckoutPage({
             tip: tipAmount,
             special_instructions: instructions || undefined,
             pay_cash_in_store: payCashInStore,
-            ...(paymentDeviceId ? { payment_device_id: paymentDeviceId } : {}),
-            ...(paymentTokenId ? { payment_token_id: paymentTokenId } : {}),
+            ...(paymentToken ? { payment_token: paymentToken } : {}),
             ...(paymentCardType ? { payment_card_type: paymentCardType } : {}),
             ...(paymentCardLastFour ? { payment_card_last_four: paymentCardLastFour } : {}),
             // Contact info (always sent — edge function uses session data if available)
             customer_name: `${firstName} ${lastName}`.trim() || undefined,
-            customer_phone: customer?.phone || phone.trim() || undefined,
+            customer_phone: customer?.phone || normalizePhone(phone) || phone.trim() || undefined,
             customer_email: email || undefined,
           }),
         }
@@ -391,9 +491,14 @@ export function CheckoutPage({
           estimatedTime: result.estimated_time,
           orderId: result.order_id,
           isPending: !result.auto_accepted,
+          requestedTime: requestedTime,
         });
         if (result.order_id) {
           useSession.getState().setActiveOrderId(result.order_id);
+          // Fire transactional receipt email + confirmation SMS.
+          import("@/app/sites/notification-actions")
+            .then(({ notifyOrderPlaced }) => notifyOrderPlaced(result.order_id))
+            .catch((err) => console.error("[checkout] notifyOrderPlaced:", err));
         }
         // Save delivery address if requested
         if (saveNewAddress && isAuthenticated && orderType === "delivery" && selectedAddressId === "new" && newAddress.street) {
@@ -419,7 +524,7 @@ export function CheckoutPage({
           sendOrderConfirmationEmail(result.order_id, email).catch(() => {});
         }
       } else if (result.success && result.requires_redirect && result.payment_url) {
-        // HPP fallback (shouldn't happen with FTD, but handle gracefully)
+        // Hosted redirect fallback is not expected in the NMI embedded flow, but keep the branch safe.
         window.location.href = result.payment_url;
       } else {
         const detail =
@@ -428,9 +533,14 @@ export function CheckoutPage({
             : typeof result.details === "object" && result.details !== null && "rpc" in result.details
               ? String((result.details as { rpc?: { error?: string } }).rpc?.error)
               : "";
-        setPaymentError(
-          detail || result.error || result.code || "Failed to place your order."
-        );
+        const errorMsg = detail || result.error || result.code || "Failed to place your order.";
+        // Surface zone rejection prominently and sync UI state so the address
+        // widget also turns red without requiring a re-type.
+        if (result.code === "outside_delivery_zone") {
+          setZoneCheckState("invalid");
+          setZoneCheckMessage(result.error ?? "We don't deliver to this address.");
+        }
+        setPaymentError(errorMsg);
       }
     } catch {
       setLoading(false);
@@ -467,6 +577,8 @@ export function CheckoutPage({
           orderId={orderResult.orderId}
           slug={slug}
           isPending={orderResult.isPending}
+          requestedTime={orderResult.requestedTime}
+          locationTimezone={location.timezone ?? "America/New_York"}
         />
       </>
     );
@@ -507,7 +619,7 @@ export function CheckoutPage({
   }
 
   const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
-  const phoneValid = !!(customer?.phone) || phone.trim().length >= 7;
+  const phoneValid = !!(customer?.phone) || isValidPhone(phone);
   const deliveryAddressValid =
     orderType !== "delivery" ||
     (selectedAddressId !== "new"
@@ -518,6 +630,9 @@ export function CheckoutPage({
   // null = no hours configured → allow ordering; false = closed; true = open
   const storeOpen = isStoreOpenNow(config?.operatingHours ?? (location as any).business_hours);
   const storeIsClosed = storeOpen === false;
+  const zoneBlocked = orderType === "delivery" && selectedAddressId === "new" && zoneCheckState === "invalid";
+  const paymentMethodReady =
+    !config?.acceptOnlinePayments || payCashInStore || Boolean(tokenizationKey);
   const canPlaceOrder =
     firstName.trim().length > 0 &&
     emailValid &&
@@ -525,6 +640,8 @@ export function CheckoutPage({
     deliveryAddressValid &&
     meetsMinOrder &&
     !storeIsClosed &&
+    paymentMethodReady &&
+    !zoneBlocked &&
     items.length > 0;
 
   const prepTimeMins = config?.preparationLeadTime ?? 20;
@@ -585,10 +702,14 @@ export function CheckoutPage({
               lastName={lastName}
               email={email}
               phone={phone}
+              emailOptIn={emailOptIn}
+              smsOptIn={smsOptIn}
               onFirstNameChange={setFirstName}
               onLastNameChange={setLastName}
               onEmailChange={setEmail}
               onPhoneChange={setPhone}
+              onEmailOptInChange={setEmailOptIn}
+              onSmsOptInChange={setSmsOptIn}
               onSignInClick={() => { setAuthMode("signin"); setShowAuth(true); }}
               onSignUpClick={() => { setAuthMode("signup"); setShowAuth(true); }}
             />
@@ -606,7 +727,7 @@ export function CheckoutPage({
               onScheduledDateChange={setScheduledDate}
               scheduledTime={scheduledTime}
               onScheduledTimeChange={setScheduledTime}
-              maxFutureDays={config?.futureOrderMaxDays ?? 30}
+              maxFutureDays={config?.futureOrderMaxDays || 30}
               prepTime={prepTimeMins}
               operatingHours={config?.operatingHours}
               curbside={curbside}
@@ -622,6 +743,8 @@ export function CheckoutPage({
               isAuthenticated={isAuthenticated}
               saveNewAddress={saveNewAddress}
               onSaveNewAddressChange={setSaveNewAddress}
+              zoneCheckState={zoneCheckState}
+              zoneCheckMessage={zoneCheckMessage}
             />
 
             <div style={{ borderTop: "1px solid var(--border)" }} />
@@ -685,7 +808,7 @@ export function CheckoutPage({
                 {!payCashInStore && (
                   <PaymentCardForm
                     ref={paymentFormRef}
-                    securityKey={securityKey}
+                    tokenizationKey={tokenizationKey}
                     onError={setPaymentError}
                     disabled={loading}
                   />
@@ -765,7 +888,12 @@ export function CheckoutPage({
               />
             </div>
 
-            <PromoCodeSection />
+            <PromoCodeSection
+              subtotal={subtotal}
+              appliedPromo={appliedPromo}
+              onApply={handleApplyPromo}
+              onRemove={() => setAppliedPromo(null)}
+            />
 
             {config?.tippingEnabled !== false && (
               <TipSection
@@ -810,15 +938,18 @@ export function CheckoutPage({
                 itemCount={items.length}
                 showDeliveryFee={orderType === "delivery"}
                 taxRate={taxRate}
+                discountAmount={discountAmount}
+                promoCode={appliedPromo?.code}
+                pricingDisclosureText={pricingDisclosureText}
               />
-              <div className="hidden lg:block">
+              <div className="pt-2">
                 <PlaceOrderButton
                   layout="inline"
                   total={total}
                   loading={loading}
                   disabled={!canPlaceOrder}
                   onClick={handleCheckout}
-                  isTestMode={!securityKey}
+                  isTestMode={!tokenizationKey && !payCashInStore}
                 />
               </div>
             </div>
@@ -826,14 +957,13 @@ export function CheckoutPage({
         </div>
       </main>
 
-      {/* Mobile: full-width fixed bar; desktop uses sidebar button above */}
-      <div className="lg:hidden">
+      <div className="hidden">
         <PlaceOrderButton
           total={total}
           loading={loading}
           disabled={!canPlaceOrder}
           onClick={handleCheckout}
-          isTestMode={!securityKey}
+          isTestMode={!tokenizationKey && !payCashInStore}
           layout="fixed"
         />
       </div>

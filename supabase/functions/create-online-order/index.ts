@@ -1,13 +1,10 @@
-// ============================================================================
+﻿﻿﻿// ============================================================================
 // create-online-order Edge Function
 // ============================================================================
 // Validates stock, hours, delivery zone, recalculates prices server-side,
-// creates a payment intent, and processes payment via iPOS Pays (HPP or
-// card token). On successful card token charge, calls process_online_order
-// RPC to create the order immediately.
-//
-// For HPP flow, the order is created later by the ipospays-payment-webhook
-// after the customer completes payment on the hosted page.
+// creates a payment intent, and processes payment through NMI using a
+// tokenized storefront payment token. On successful card charge, calls
+// process_online_order RPC to create the order immediately.
 // ============================================================================
 
 import { createClient } from 'npm:@supabase/supabase-js'
@@ -26,6 +23,9 @@ import {
   validateDeliveryZone,
   validateMinimumOrder,
 } from './validators.ts'
+import {
+  createSale,
+} from '../_shared/nmi.ts'
 // ============================================================================
 // ENV
 // ============================================================================
@@ -40,11 +40,13 @@ interface CreateOnlineOrderRequest {
   session_token?: string           // optional — authenticated customers
   store_config_id?: string         // required for guest checkout (no session)
   items: Array<{
-    id: string          // menu_item_id
+    id: string           // menu_item_id
     name: string
-    price: number       // unit price in dollars
+    price: number        // effective unit price shown to customer (full cascade)
     quantity: number
     notes?: string
+    menu_id?: string     // optional — enables L5 server-side price verification
+    category_id?: string // optional — enables L3/L4/L5 server-side price verification
     modifiers?: Array<{
       id: string | null
       name: string
@@ -68,8 +70,8 @@ interface CreateOnlineOrderRequest {
   tip: number                     // dollars
   special_instructions?: string
   card_token?: string             // for returning customers with saved cards
-  payment_token_id?: string       // from FTD (Freedom to Design) card tokenization
-  payment_device_id?: string      // selected payment device used during tokenization
+  payment_token?: string          // NMI payment token from the embedded payment component
+  payment_token_id?: string       // legacy alias accepted during NMI cutover
   pay_cash_in_store?: boolean
   payment_card_type?: string | null
   payment_card_last_four?: string | null
@@ -77,6 +79,47 @@ interface CreateOnlineOrderRequest {
   customer_name?: string
   customer_phone?: string
   customer_email?: string
+  // Client-supplied idempotency key. Header `Idempotency-Key` takes precedence over this.
+  // Reused across retries of the same logical order so the server dedupes.
+  transaction_reference_id?: string
+}
+
+interface MenuItemPriceRow {
+  id: string
+  price: number | null
+  delivery_price: number | null
+}
+
+interface LocationItemOverrideRow {
+  menu_item_id: string
+  custom_price: number | null
+}
+
+interface StorefrontPaymentConfig {
+  device_id: string
+  provider: string
+  environment: string
+  provider_public_key: string | null
+  supports_apple_pay: boolean
+  supports_google_pay: boolean
+  supports_customer_vault: boolean
+}
+
+interface NmiDeviceCredential {
+  merchant_id: string
+  location_id: string
+  device_id: string
+  environment: string
+  provider_merchant_id: string | null
+  provider_gateway_id: string | null
+  provider_public_key: string | null
+  decrypted_security_key: string
+}
+
+interface StorefrontPaymentDeviceAccessLog {
+  device_id: string
+  provider: string
+  environment: string
 }
 
 // ============================================================================
@@ -85,7 +128,7 @@ interface CreateOnlineOrderRequest {
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, idempotency-key',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
@@ -93,7 +136,7 @@ const corsHeaders = {
 // RESPONSE HELPERS
 // ============================================================================
 
-function successResponse(data: unknown, status = 200): Response {
+function successResponse(data: Record<string, unknown>, status = 200): Response {
   return new Response(
     JSON.stringify({ success: true, ...data }),
     { status, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
@@ -174,12 +217,53 @@ Deno.serve(async (req: Request): Promise<Response> => {
     itemCount: body.items.length,
     orderType: body.order_type,
     hasCardToken: !!body.card_token,
+    hasNmiPaymentToken: !!body.payment_token,
     hasPaymentToken: !!body.payment_token_id,
-    paymentDeviceId: body.payment_device_id ?? null,
     hasDeliveryAddress: !!body.delivery_address,
   })
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+
+  // ---- Step 1.5: Idempotency short-circuit ----
+  // If the client supplied a key (header preferred, body field as fallback) and we already
+  // created an order for that key, return the existing order immediately. This prevents
+  // duplicate orders from network retries, customer "Place Order" double-clicks, and POS
+  // tablet offline-queue replays. Backed by the partial unique index on
+  // online_orders(provider, provider_order_id) — see migration 20260425010000.
+  const clientIdempotencyKey =
+    req.headers.get('idempotency-key') ?? body.transaction_reference_id ?? null
+
+  if (clientIdempotencyKey) {
+    const { data: existing } = await supabase
+      .from('online_orders')
+      .select('order_id')
+      .eq('provider', 'website')
+      .eq('provider_order_id', clientIdempotencyKey)
+      .maybeSingle()
+
+    if (existing?.order_id) {
+      const { data: ord } = await supabase
+        .from('orders')
+        .select('order_number, display_number')
+        .eq('id', existing.order_id)
+        .maybeSingle()
+
+      logEvent('IDEMPOTENT', 'Returning existing order for replayed request', {
+        key: clientIdempotencyKey,
+        orderId: existing.order_id,
+      })
+
+      return successResponse({
+        requires_redirect: false,
+        order_id: existing.order_id,
+        order_number: ord?.order_number ?? null,
+        display_number: ord?.display_number ?? null,
+        estimated_time: null,
+        auto_accepted: false,
+        idempotent: true,
+      })
+    }
+  }
 
   // ---- Step 2: Load session (if authenticated) + store config ----
   let session: any = null
@@ -190,11 +274,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
       .select(`
         *,
         online_store_config!inner(
-          id, location_id, merchant_id, ipospays_tpn, is_active,
+          id, location_id, merchant_id, is_active,
           operating_hours, accepts_pickup, accepts_delivery,
-          min_order_cents, estimated_prep_minutes,
-          delivery_radius_miles, delivery_fee_cents,
-          free_delivery_threshold_cents, address,
+          min_order, estimated_prep_minutes,
+          delivery_radius_miles, delivery_fee,
+          free_delivery_threshold, address,
           slug, auto_accept_orders
         )
       `)
@@ -215,11 +299,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const { data: configData, error: configError } = await supabase
       .from('online_store_config')
       .select(`
-        id, location_id, merchant_id, ipospays_tpn, is_active,
+        id, location_id, merchant_id, is_active,
         operating_hours, accepts_pickup, accepts_delivery,
-        min_order_cents, estimated_prep_minutes,
-        delivery_radius_miles, delivery_fee_cents,
-        free_delivery_threshold_cents, address,
+        min_order, estimated_prep_minutes,
+        delivery_radius_miles, delivery_fee,
+        free_delivery_threshold, address,
         slug, auto_accept_orders
       `)
       .eq('id', body.store_config_id)
@@ -240,7 +324,6 @@ Deno.serve(async (req: Request): Promise<Response> => {
   const locationId: string = storeConfig.location_id
   const merchantId: string = storeConfig.merchant_id
   const storeConfigId: string = storeConfig.id
-  const ipospaysTpn: string | null = storeConfig.ipospays_tpn
   const estimatedMinutes: number = storeConfig.estimated_prep_minutes ?? 20
   // Auto-create guest session if none exists (guest checkout)
   if (!session && storeConfig) {
@@ -276,7 +359,6 @@ Deno.serve(async (req: Request): Promise<Response> => {
     sessionId: session?.id ?? 'guest',
     locationId,
     merchantId,
-    hasTpn: !!ipospaysTpn,
     isGuest: !session,
   })
 
@@ -341,9 +423,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
       storeConfig.address,
       body.delivery_address,
       storeConfig.delivery_radius_miles,
-      storeConfig.delivery_fee_cents,
-      storeConfig.min_order_cents,
-      storeConfig.free_delivery_threshold_cents
+      Math.round((storeConfig.delivery_fee ?? 0) * 100),
+      Math.round((storeConfig.min_order ?? 0) * 100),
+      storeConfig.free_delivery_threshold != null
+        ? Math.round(storeConfig.free_delivery_threshold * 100)
+        : null
     )
 
     if (!zoneResult.valid) {
@@ -370,23 +454,21 @@ Deno.serve(async (req: Request): Promise<Response> => {
   }
 
   // ---- Step 6: Server-side price recalculation ----
-  const itemIds = body.items.map((i) => i.id)
-
-  // Fetch actual prices from DB
-  const { data: dbItems } = await supabase
-    .from('menu_items')
-    .select('id, price, delivery_price')
-    .in('id', itemIds)
-
-  // custom_price is the correct column name in location_item_overrides (not 'price')
-  const { data: locationOverrides } = await supabase
-    .from('location_item_overrides')
-    .select('menu_item_id, custom_price')
-    .eq('location_id', locationId)
-    .in('menu_item_id', itemIds)
-
-  const dbItemMap = new Map((dbItems ?? []).map((i: any) => [i.id, i]))
-  const overrideMap = new Map((locationOverrides ?? []).map((o: any) => [o.menu_item_id, o]))
+  // Use get_effective_price() — the canonical 5-level cascade (L5>L4>L3>L2>L1).
+  // menu_id and category_id are optional; when absent the function falls back to
+  // L2>L1, which still correctly applies L2 modifier math (add/percent).
+  const effectivePrices = await Promise.all(
+    body.items.map(async (cartItem) => {
+      const { data } = await supabase.rpc('get_effective_price', {
+        p_item_id:     cartItem.id,
+        p_location_id: locationId,
+        p_menu_id:     cartItem.menu_id     ?? null,
+        p_category_id: cartItem.category_id ?? null,
+      })
+      return { id: cartItem.id, prices: data as { effective_price: number; effective_cash_price: number; effective_delivery_price: number } | null }
+    })
+  )
+  const effectivePriceMap = new Map(effectivePrices.map(({ id, prices }) => [id, prices]))
 
   // Fetch tax rate — prefer 'standard'/'default', fall back to any active rate
   let { data: taxRate } = await supabase
@@ -419,22 +501,16 @@ Deno.serve(async (req: Request): Promise<Response> => {
   const recalculatedItems: Partial<OnlineOrderItem>[] = []
 
   for (const cartItem of body.items) {
-    const dbItem = dbItemMap.get(cartItem.id)
-    const override = overrideMap.get(cartItem.id)
+    const serverPrices = effectivePriceMap.get(cartItem.id)
 
-    // Determine the correct base price.
-    // The storefront already applies the full 5-level price cascade (including category overrides L3-L5)
-    // via the get_menu_with_categories RPC. We trust the cart-submitted price as the effective price,
-    // but still verify against L2 (location override) and L1 (base price) for security.
-    // cartItem.price already reflects the full effective_price shown to the customer.
+    // Use the canonical DB price from get_effective_price() (full 5-level cascade).
+    // Falls back to the cart-submitted price only if the RPC returned nothing
+    // (item not found in DB — should not happen in practice).
     let unitPrice: number
     if (body.order_type === 'delivery') {
-      // For delivery: L2 custom_price > L1 delivery_price > L1 base price > cart-submitted effective price
-      unitPrice = override?.custom_price ?? dbItem?.delivery_price ?? dbItem?.price ?? cartItem.price
+      unitPrice = serverPrices?.effective_delivery_price ?? serverPrices?.effective_price ?? cartItem.price
     } else {
-      // For pickup: L2 custom_price > L1 base price > cart-submitted effective price
-      // If no L2 override exists, fall back to cart price (which includes L3-L5 category overrides)
-      unitPrice = override?.custom_price ?? (dbItem ? dbItem.price : cartItem.price)
+      unitPrice = serverPrices?.effective_price ?? cartItem.price
     }
 
     // Modifier totals (modifiers are trusted from client — they come from our DB originally)
@@ -488,9 +564,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
   })
 
   // ---- Step 7: Validate minimum order ----
+  const storeMinOrderCents = Math.round((storeConfig.min_order ?? 0) * 100)
   const effectiveMinOrderCents = body.order_type === 'delivery'
-    ? Math.max(deliveryMinOrderCents, storeConfig.min_order_cents ?? 0)
-    : (storeConfig.min_order_cents ?? 0)
+    ? Math.max(deliveryMinOrderCents, storeMinOrderCents)
+    : storeMinOrderCents
 
   const minResult = validateMinimumOrder(subtotalCents, effectiveMinOrderCents)
   if (!minResult.valid) {
@@ -504,49 +581,97 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
   // ---- Step 8: Resolve payment path ----
   const payCashInStore = body.pay_cash_in_store === true
-  let paymentDevice: { id: string; tpn: string } | null = null
+  const effectivePaymentToken =
+    body.payment_token?.trim() ||
+    body.payment_token_id?.trim() ||
+    body.card_token?.trim() ||
+    null
+  let storefrontPaymentConfig: StorefrontPaymentConfig | null = null
+  let nmiDeviceCredential: NmiDeviceCredential | null = null
 
   if (!payCashInStore) {
-    let paymentDeviceQuery = supabase
-      .from('location_payment_devices')
-      .select('id, tpn')
-      .eq('location_id', locationId)
-      .eq('is_active', true)
+    const { data: paymentConfigRows, error: paymentConfigError } = await supabase.rpc(
+      'get_storefront_payment_config',
+      {
+        p_location_id: locationId,
+      },
+    )
 
-    if (body.payment_device_id) {
-      paymentDeviceQuery = paymentDeviceQuery.eq('id', body.payment_device_id)
-    } else {
-      paymentDeviceQuery = paymentDeviceQuery.eq('use_for_online_ordering', true)
+    if (paymentConfigError) {
+      logError('PAYMENT_CONFIG', 'Failed to resolve storefront payment config', paymentConfigError)
+      return errorResponse(
+        'Payment configuration is unavailable for this store.',
+        'payment_not_configured',
+        503,
+      )
     }
 
-    const { data: paymentDeviceRow, error: paymentDeviceError } = await paymentDeviceQuery.maybeSingle()
+    storefrontPaymentConfig =
+      ((paymentConfigRows as StorefrontPaymentConfig[] | null) ?? []).find(
+        (row) => row.provider === 'nmi',
+      ) ?? null
 
-    if (paymentDeviceError) {
-      logError('PAYMENT_DEVICE', 'Failed to resolve payment device', paymentDeviceError)
+    if (!storefrontPaymentConfig?.device_id) {
+      logError('PAYMENT', 'No active NMI payment device configured for this store', {
+        storeConfigId,
+        locationId,
+        merchantId,
+      })
       return errorResponse(
-        'Payment device configuration is unavailable for this store.',
-        'payment_device_unavailable',
+        'Online payment is not configured for this store. Please contact the store.',
+        'payment_not_configured',
         503
       )
     }
 
-    if (paymentDeviceRow) {
-      paymentDevice = paymentDeviceRow
-    }
-  }
-
-  const effectiveIposTpn = paymentDevice?.tpn ?? ipospaysTpn
-
-  if (!payCashInStore && !effectiveIposTpn) {
-    logError('PAYMENT', 'No iPOS Pays TPN configured for this store', { storeConfigId, paymentDeviceId: body.payment_device_id ?? null })
-    return errorResponse(
-      'Online payment is not configured for this store. Please contact the store.',
-      'payment_not_configured',
-      503
+    const { data: credentialRows, error: credentialError } = await supabase.rpc(
+      'get_nmi_device_credentials',
+      {
+        p_device_id: storefrontPaymentConfig.device_id,
+      },
     )
+
+    if (credentialError) {
+      logError('PAYMENT_DEVICE', 'Failed to resolve NMI device credentials', credentialError)
+      return errorResponse(
+        'Payment configuration is unavailable for this store.',
+        'payment_not_configured',
+        503,
+      )
+    }
+
+    nmiDeviceCredential = ((credentialRows as NmiDeviceCredential[] | null) ?? [])[0] ?? null
+
+    if (!nmiDeviceCredential?.decrypted_security_key) {
+      logError('PAYMENT', 'No active NMI device secret configured for this store', {
+        storeConfigId,
+        locationId,
+        merchantId,
+        paymentDeviceId: storefrontPaymentConfig.device_id,
+      })
+      return errorResponse(
+        'Online payment is not configured for this store. Please contact the store.',
+        'payment_not_configured',
+        503
+      )
+    }
+
+    await supabase
+      .from('payment_credential_access_log')
+      .insert({
+        device_id: storefrontPaymentConfig.device_id,
+        function_name: 'create-online-order',
+        store_config_id: storeConfigId,
+        actor_user_id: null,
+        metadata: {
+          source: 'storefront_order_submit',
+          has_legacy_token_field: Boolean(body.payment_token_id),
+          order_type: body.order_type,
+        },
+      })
   }
 
-  if (!payCashInStore && !body.payment_token_id && !body.card_token) {
+  if (!payCashInStore && !effectivePaymentToken) {
     return errorResponse(
       'A valid payment token is required for online card payments.',
       'payment_token_required',
@@ -555,8 +680,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
   }
 
   // ---- Step 9: Build frozen order data (RPC params snapshot) ----
+  // Idempotency key precedence: client header → client body field → server-generated.
+  // Server-generated fallback is UUID-suffixed so two concurrent guest requests in the
+  // same millisecond cannot collide on the unique index.
   const sessionPrefix = session?.id ? session.id.slice(0, 8) : 'guest'
-  const transactionReferenceId = `dexa-${sessionPrefix}-${Date.now()}`
+  const transactionReferenceId =
+    clientIdempotencyKey ?? `dexa-${sessionPrefix}-${crypto.randomUUID()}`
 
   const deliveryAddr = body.delivery_address
     ? buildDeliveryAddress(
@@ -574,6 +703,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
   const customerPhone = session?.customer_phone || body.customer_phone || null
   const customerEmail = session?.customer_email || body.customer_email || null
 
+  const sanitizedRpcItems = sanitizeItems(recalculatedItems)
+
   const rpcParams: OnlineOrderRpcParams = {
     p_location_id: locationId,
     p_provider: 'website',
@@ -587,7 +718,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     p_total: toDollars(totalCents),
     p_gratuity: toDollars(tipCents),
     p_delivery_charge: toDollars(deliveryFeeCents),
-    p_items: sanitizeItems(recalculatedItems),
+    p_items: sanitizedRpcItems,
     p_delivery_address: deliveryAddr,
     p_order_notes: body.special_instructions ?? null,
     p_placed_at: new Date().toISOString(),
@@ -595,20 +726,85 @@ Deno.serve(async (req: Request): Promise<Response> => {
     p_auto_accept: storeConfig.auto_accept_orders ?? false,
   }
 
-  // ---- Step 10+: TEST MODE — Skip live payment, call RPC directly ----
-  // Guest session insert is best-effort only; order can still be created without a row
-  // in online_order_sessions (e.g. RLS/constraint issues) as long as storeConfig is resolved.
+  // ---- Step 10: Charge card payment via NMI ----
+  let nmiChargeDetails: {
+    transactionId: string
+    responseCode: string
+    responseMessage: string
+    authCode: string
+    cardType: string
+    cardLastFour: string
+    gatewayFee: number | null
+    rawResponse: Record<string, unknown>
+  } | null = null
+
+  if (!payCashInStore && effectivePaymentToken) {
+    logEvent('PAYMENT', 'Charging payment token via NMI', {
+      merchantId,
+      referenceId: transactionReferenceId,
+      totalCents,
+    })
+
+    const chargeResult = await createSale(
+      { apiKey: nmiDeviceCredential!.decrypted_security_key },
+      {
+        amount: Number(toDollars(totalCents).toFixed(2)),
+        paymentToken: effectivePaymentToken,
+        industry: 'ecommerce',
+      },
+    )
+
+    if (!chargeResult.success) {
+      const declineCode = chargeResult.details.responseCode || String(chargeResult.status)
+      const declineMessage =
+        chargeResult.details.responseText ||
+        (chargeResult.status >= 500
+          ? 'Payment service is temporarily unavailable. Please try again.'
+          : 'Your card was declined. Please try a different card.')
+
+      logError('PAYMENT_CHARGE', 'NMI card charge failed', {
+        status: chargeResult.status,
+        details: chargeResult.details,
+        body: chargeResult.body,
+      })
+      return errorResponse(
+        declineMessage,
+        chargeResult.status >= 500 ? 'payment_gateway_error' : 'payment_declined',
+        chargeResult.status >= 500 ? 502 : 402,
+        { responseCode: declineCode, responseMessage: declineMessage }
+      )
+    }
+
+    nmiChargeDetails = {
+      transactionId: chargeResult.details.transactionId || chargeResult.details.id,
+      responseCode: chargeResult.details.responseCode || chargeResult.details.response,
+      responseMessage: chargeResult.details.responseText || 'Approved',
+      authCode: chargeResult.details.authCode,
+      cardType: body.payment_card_type || '',
+      cardLastFour: body.payment_card_last_four || '',
+      gatewayFee: chargeResult.details.gatewayFee,
+      rawResponse: chargeResult.body,
+    }
+
+    logEvent('PAYMENT', 'Card charged successfully', {
+      transactionId: nmiChargeDetails.transactionId,
+      authCode: nmiChargeDetails.authCode,
+      responseCode: nmiChargeDetails.responseCode,
+    })
+  }
+
+  // ---- Step 11: Create order via RPC ----
   if (!session) {
     logEvent('SESSION', 'Proceeding without persisted session row (guest insert failed or skipped)', {
       storeConfigId,
     })
   }
 
-  logEvent('TEST_MODE', 'Bypassing live payment — calling process_online_order RPC directly', {
+  logEvent('ORDER', 'Creating order via process_online_order RPC', {
     totalCents,
     referenceId: transactionReferenceId,
     payCashInStore,
-    sanitizedItemsSample: rpcParams.p_items.map((it) => ({
+    sanitizedItemsSample: sanitizedRpcItems.map((it) => ({
       id: it.id,
       qty: it.quantity,
       modQtys: it.modifiers?.map((m) => m.quantity),
@@ -621,6 +817,41 @@ Deno.serve(async (req: Request): Promise<Response> => {
   )
 
   if (rpcError) {
+    // Race-condition fallback: two concurrent retries with the same client key both
+    // missed the Step 1.5 SELECT, both proceeded to insert, the second hit the unique
+    // index. Treat as idempotent success — refetch and return the existing order.
+    if (rpcError.code === '23505' && clientIdempotencyKey) {
+      const { data: existing } = await supabase
+        .from('online_orders')
+        .select('order_id')
+        .eq('provider', 'website')
+        .eq('provider_order_id', clientIdempotencyKey)
+        .maybeSingle()
+
+      if (existing?.order_id) {
+        const { data: ord } = await supabase
+          .from('orders')
+          .select('order_number, display_number')
+          .eq('id', existing.order_id)
+          .maybeSingle()
+
+        logEvent('IDEMPOTENT', 'Returning existing order after unique-violation race', {
+          key: clientIdempotencyKey,
+          orderId: existing.order_id,
+        })
+
+        return successResponse({
+          requires_redirect: false,
+          order_id: existing.order_id,
+          order_number: ord?.order_number ?? null,
+          display_number: ord?.display_number ?? null,
+          estimated_time: null,
+          auto_accepted: false,
+          idempotent: true,
+        })
+      }
+    }
+
     logError('RPC', 'process_online_order failed', rpcError)
     return errorResponse(
       'Failed to create order. Please try again.',
@@ -660,6 +891,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       .eq('id', session.id)
   }
 
+  // ---- Step 12: Update payment record with real transaction details ----
   const paymentUpdatePayload = payCashInStore
     ? {
         payment_method: 'cash',
@@ -678,38 +910,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         approved_at: null,
         captured_at: null,
         processor_name: null,
-        processor_response: null,
-        terminal_response: null,
-        dejavoo_response_code: null,
-        dejavoo_response_message: null,
-        dejavoo_batch_number: null,
-        dejavoo_invoice_number: null,
-      metadata: {
-        source: 'online_order',
-        provider: 'website',
-        provider_order_id: transactionReferenceId,
-        payment_status_from_source: 'PENDING_CASH_IN_STORE',
-        payment_device_id: paymentDevice?.id ?? null,
-        payment_device_tpn: paymentDevice?.tpn ?? effectiveIposTpn ?? null,
-      },
-    }
-  : {
-        payment_method: 'card',
-        status: 'captured',
-        terminal_type: 'dejavoo',
-        card_type: body.payment_card_type || 'Visa',
-        card_last_four: body.payment_card_last_four || '0000',
-        transaction_id: transactionReferenceId,
-        reference_number: transactionReferenceId,
-        authorization_code: null,
-        auth_code: null,
-        rrn: null,
-        result_code: null,
-        result_message: 'TEST MODE - payment bypassed',
-        batch_number: null,
-        approved_at: new Date().toISOString(),
-        captured_at: new Date().toISOString(),
-        processor_name: 'iPOSPays',
+        payment_device_id: null,
         processor_response: null,
         terminal_response: null,
         dejavoo_response_code: null,
@@ -718,12 +919,43 @@ Deno.serve(async (req: Request): Promise<Response> => {
         dejavoo_invoice_number: null,
         metadata: {
           source: 'online_order',
-          provider: 'website',
+          provider: 'cash',
           provider_order_id: transactionReferenceId,
-          payment_status_from_source: 'TEST_MODE_CAPTURED',
-          payment_bypass: true,
-          payment_device_id: paymentDevice?.id ?? null,
-          payment_device_tpn: paymentDevice?.tpn ?? effectiveIposTpn ?? null,
+          payment_status_from_source: 'PENDING_CASH_IN_STORE',
+          payment_device_id: null,
+        },
+      }
+    : {
+        payment_method: 'card',
+        status: 'captured',
+        terminal_type: 'none',
+        card_type: nmiChargeDetails?.cardType || body.payment_card_type || null,
+        card_last_four: nmiChargeDetails?.cardLastFour || body.payment_card_last_four || null,
+        transaction_id: nmiChargeDetails?.transactionId || null,
+        reference_number: transactionReferenceId,
+        authorization_code: nmiChargeDetails?.authCode || null,
+        auth_code: nmiChargeDetails?.authCode || null,
+        rrn: null,
+        result_code: nmiChargeDetails?.responseCode || null,
+        result_message: nmiChargeDetails?.responseMessage || null,
+        batch_number: null,
+        approved_at: new Date().toISOString(),
+        captured_at: new Date().toISOString(),
+        processor_name: 'nmi',
+        payment_device_id: storefrontPaymentConfig?.device_id ?? null,
+        processor_response: nmiChargeDetails?.rawResponse ?? null,
+        terminal_response: null,
+        gateway_fee: nmiChargeDetails?.gatewayFee ?? null,
+        dejavoo_response_code: null,
+        dejavoo_response_message: null,
+        dejavoo_batch_number: null,
+        dejavoo_invoice_number: null,
+        metadata: {
+          source: 'online_order',
+          provider: 'nmi',
+          provider_order_id: transactionReferenceId,
+          payment_status_from_source: 'CAPTURED',
+          payment_device_id: storefrontPaymentConfig?.device_id ?? null,
         },
       }
 
@@ -771,6 +1003,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       data: paymentUpdateData,
     })
   }
+
   // Link order to customer if session has customer_id
   if (session?.customer_id) {
     await supabase
@@ -779,11 +1012,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
       .eq('id', orderResult.order_id)
   }
 
-  logEvent('ORDER', 'Order created successfully (test mode — no live payment)', {
+  logEvent('ORDER', 'Order created successfully', {
     orderId: orderResult.order_id,
     orderNumber: orderResult.order_number,
     displayNumber: orderResult.display_number,
     payCashInStore,
+    charged: !!nmiChargeDetails,
   })
 
   const autoAccepted: boolean = storeConfig.auto_accept_orders ?? false
