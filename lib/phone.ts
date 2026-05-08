@@ -9,10 +9,20 @@ export function normalizePhone(
   if (!input?.trim()) return null
   try {
     const parsed = parsePhoneNumber(input, defaultCountry)
-    return parsed?.isValid() ? parsed.format('E.164') : null
+    if (parsed?.isValid()) return parsed.format('E.164')
   } catch {
-    return null
+    // Fall through to a permissive US digits-only fallback below.
   }
+
+  // Fallback: handle common user-entered US formats that may not parse
+  // cleanly (spaces, dashes, parentheses, leading country code).
+  const digits = input.replace(/\D/g, '')
+  if (defaultCountry === 'US') {
+    if (digits.length === 10) return `+1${digits}`
+    if (digits.length === 11 && digits.startsWith('1')) return `+${digits}`
+  }
+
+  return null
 }
 
 export const normalizeToE164 = normalizePhone
