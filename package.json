@@ -35,7 +35,6 @@
     "@radix-ui/react-switch": "^1.2.6",
     "@radix-ui/react-tabs": "^1.1.13",
     "@radix-ui/react-tooltip": "^1.2.8",
-    "@rolldown/binding-win32-x64-msvc": "1.0.0-rc.18",
     "@sentry/nextjs": "^10.51.0",
     "@supabase/ssr": "^0.7.0",
     "@supabase/supabase-js": "^2.105.3",
