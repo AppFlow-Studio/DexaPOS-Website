@@ -372,15 +372,17 @@ export function LocationAssignmentSheet({
             </div>
 
             <StaffPinField
-              pin={assignment.pin_code}
+              memberId={memberId}
+              locationId={assignment.location_id}
+              locationName={assignment.location_name}
               hasPin={assignment.has_pin}
+              canReveal={currentUserRoleLevel <= 75}
               onGenerate={handleResetPIN}
               isGenerating={resetPIN.isPending}
               disabled={isPending}
               buttonLabel={
                 assignment.has_pin ? "Generate New PIN" : "Generate PIN"
               }
-              visibleDescription={`Location PIN for ${assignment.location_name}`}
             />
           </div>
         </div>
