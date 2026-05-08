@@ -1102,20 +1102,44 @@ export async function ToggleCategoryInMenu(
   const supabase = createServerSupabaseClient();
   const location_Id = locationId === "all" ? null : locationId;
 
-  // If no location context, update the menu_categories table directly
+  // No location context: membership = row exists. Hide = DELETE, Show = upsert.
   if (!location_Id) {
-    const { error } = await supabase
-      .from("menu_categories")
-      .update({
-        is_active: isActive,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("menu_id", menuId)
-      .eq("category_id", categoryId);
+    if (!isActive) {
+      const { error } = await supabase
+        .from("menu_categories")
+        .delete()
+        .eq("menu_id", menuId)
+        .eq("category_id", categoryId);
 
-    if (error) {
-      console.error("Error toggling category in menu:", error);
-      return { error: error.message };
+      if (error) {
+        console.error("Error removing category from menu:", error);
+        return { error: error.message };
+      }
+    } else {
+      const { data: menuRow, error: menuErr } = await supabase
+        .from("menus")
+        .select("merchant_id")
+        .eq("id", menuId)
+        .single();
+
+      if (menuErr || !menuRow) {
+        return { error: menuErr?.message || "Menu not found" };
+      }
+
+      const { error } = await supabase.from("menu_categories").upsert(
+        {
+          menu_id: menuId,
+          category_id: categoryId,
+          merchant_id: menuRow.merchant_id,
+          is_active: true,
+        },
+        { onConflict: "menu_id,category_id" },
+      );
+
+      if (error) {
+        console.error("Error adding category to menu:", error);
+        return { error: error.message };
+      }
     }
   } else {
     // Location-specific override

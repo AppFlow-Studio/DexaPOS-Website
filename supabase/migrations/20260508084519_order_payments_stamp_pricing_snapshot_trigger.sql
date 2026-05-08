@@ -7,6 +7,11 @@
 -- wrote a real value). Cash and other non-card methods are intentionally untouched.
 -- =====================================================================
 
+-- Column was added manually on staging; ensure it exists on every environment
+-- before the trigger / functions / backfill that reference it run.
+ALTER TABLE public.order_payments
+  ADD COLUMN IF NOT EXISTS processor_fee_percentage_snapshot numeric(5,2);
+
 CREATE OR REPLACE FUNCTION public._stamp_pricing_snapshot()
 RETURNS TRIGGER
 LANGUAGE plpgsql

@@ -16,6 +16,11 @@
 -- and is not used for dual_pricing_fee reporting.
 -- =====================================================================
 
+-- Defensive: idempotent column ensure. The column was added manually on
+-- staging earlier; this guarantees prod has it before the UPDATE is parsed.
+ALTER TABLE public.order_payments
+  ADD COLUMN IF NOT EXISTS processor_fee_percentage_snapshot numeric(5,2);
+
 -- Fee base = full charge amount sent to the bank (total_amount). tip is
 -- rolled in, so tip_fee stays 0 to avoid double counting.
 UPDATE order_payments p
