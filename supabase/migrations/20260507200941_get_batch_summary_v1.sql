@@ -14,8 +14,10 @@
 --   * status='void' AND is_returned=true: refund-via-void (counts as refund)
 --   * status='void' AND is_returned=false: pure cancellation (voids only)
 --
--- entry_mode lives on the pci_safe_order_payments view (not on the
--- order_payments base table), so we join by id.
+-- entry_mode is derived inline from processor_response/terminal_response
+-- JSONB (same logic as the pci_safe_order_payments view). The view itself
+-- has no WHERE clause, so LEFT JOINing it forces a full scan and timed
+-- out under load — inlining the COALESCE expression is index-friendly.
 --
 -- Card brand keys: UPPERCASE per Castles response normalization
 -- ('VISA','MASTERCARD','AMEX','DISCOVER'). Anything else aggregates into
@@ -64,7 +66,6 @@ BEGIN
 
   WITH src AS (
     SELECT
-      p.id,
       p.payment_method,
       p.status,
       COALESCE(p.is_returned, false) AS is_returned,
@@ -74,16 +75,24 @@ BEGIN
       p.original_tip_amount,
       p.dual_pricing_fee,
       p.refunded_dual_pricing_fee,
-      p.tip_fee,
       p.refunded_tip_fee,
       UPPER(COALESCE(NULLIF(p.card_type, ''), 'OTHER')) AS card_brand_raw,
-      LOWER(COALESCE(NULLIF(pci.entry_mode, ''), 'other')) AS entry_mode_raw,
+      LOWER(COALESCE(
+        NULLIF(p.processor_response ->> 'entry_type', ''),
+        NULLIF(p.processor_response ->> 'entryType', ''),
+        NULLIF(p.processor_response ->> 'entry_mode', ''),
+        NULLIF(p.processor_response ->> 'entryMode', ''),
+        NULLIF(p.terminal_response  ->> 'entry_type', ''),
+        NULLIF(p.terminal_response  ->> 'entryType', ''),
+        NULLIF(p.terminal_response  ->> 'entry_mode', ''),
+        NULLIF(p.terminal_response  ->> 'entryMode', ''),
+        'other'
+      )) AS entry_mode_raw,
       (p.status IN ('captured','partially_refunded','refunded')
         OR (p.status = 'void' AND COALESCE(p.is_returned, false) = true)
       ) AS in_sales,
       (p.status = 'void' AND COALESCE(p.is_returned, false) = false) AS is_pure_void
     FROM order_payments p
-    LEFT JOIN pci_safe_order_payments pci ON pci.id = p.id
     WHERE p.settlement_batch_id = p_settlement_batch_id
   ),
   brands AS (
