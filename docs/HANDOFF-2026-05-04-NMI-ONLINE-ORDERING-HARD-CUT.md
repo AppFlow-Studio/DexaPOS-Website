@@ -815,11 +815,39 @@ What is implemented now:
   - overdue suspension sweep
 
 What is intentionally still not implemented:
-- actual NMI subscription charge from `merchant_billing_profiles.card_token`
 - ACH debit execution
 - merchant billing UI
-- HQ billing UI
-- cron wiring
+- HQ billing automation / cron wiring
+
+Billing charge status update:
+- `supabase/functions/billing-charge-subscription/index.ts` is now implemented for
+  manual HQ charging of card-based subscription invoices
+- current behavior:
+  - accepts `invoice_id`
+  - resolves the invoice, subscription, and merchant billing profile
+  - supports `billing_method = 'card'` only
+  - uses the location's active NMI device private API key for authentication
+  - uses `merchant_billing_profiles.card_token` as the NMI vault-token payment source
+  - charges the full `subscription_invoices.total_amount`
+  - marks invoice `processing -> paid` on success
+  - marks invoice `processing -> failed` on failure
+  - moves the subscription to `past_due` on failure
+  - restores `past_due` / `suspended` subscriptions back to `active` on successful payment
+  - writes billing audit events for both charge success and charge failure
+- current limitation:
+  - ACH remains unimplemented and returns an explicit unsupported-method error
+
+HQ manual billing UI update:
+- `components/billing/SubscriptionBillingAdminCard.tsx` now includes a manual
+  `Charge` button for card invoices in `open` or `failed` status
+- this calls `billing-charge-subscription` through
+  `app/manage/actions/subscription-billing.ts`
+- intended immediate validation flow:
+  1. create subscription
+  2. generate invoice
+  3. click `Charge`
+  4. verify invoice becomes `paid`
+  5. verify audit log entry
 
 Current pricing placeholders:
 - `STANDARD`: $50.00 base, 1 included station, $79 extra station, 4% card surcharge

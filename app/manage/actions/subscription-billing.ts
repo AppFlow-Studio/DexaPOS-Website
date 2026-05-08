@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { assertHQPermission } from '@/lib/admin/auth'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { createServiceRoleClient } from '@/lib/supabase/service-role'
 
 export interface SubscriptionPlanRecord {
   id: string
@@ -211,4 +212,67 @@ export async function getSubscriptionInvoices(
     total_amount: Number(row.total_amount || 0),
     payment_attempt_count: Number(row.payment_attempt_count || 0),
   }))
+}
+
+export async function chargeSubscriptionInvoiceManually(
+  invoiceId: string
+): Promise<{ success: boolean; invoiceId?: string; status?: string; transactionId?: string | null; error?: string }> {
+  await assertHQPermission('system.billing.manage')
+
+  if (!invoiceId?.trim()) {
+    return { success: false, error: 'invoiceId is required.' }
+  }
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+  if (!supabaseUrl || !serviceRoleKey) {
+    return { success: false, error: 'Missing Supabase server configuration.' }
+  }
+
+  const response = await fetch(`${supabaseUrl.replace(/\/+$/, '')}/functions/v1/billing-charge-subscription`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${serviceRoleKey}`,
+      apikey: serviceRoleKey,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ invoice_id: invoiceId }),
+    cache: 'no-store',
+  })
+
+  const payload = await response.json().catch(() => ({})) as {
+    success?: boolean
+    error?: string
+    invoice_id?: string
+    status?: string
+    transaction_id?: string | null
+  }
+
+  if (!response.ok || !payload.success) {
+    return {
+      success: false,
+      error: payload.error || 'Failed to charge invoice.',
+    }
+  }
+
+  const serviceRole = createServiceRoleClient()
+  const { data: invoice } = await serviceRole
+    .from('subscription_invoices')
+    .select('merchant_id')
+    .eq('id', invoiceId)
+    .maybeSingle()
+
+  revalidatePath('/manage/billing')
+  if (invoice?.merchant_id) {
+    revalidatePath(`/manage/merchants/${invoice.merchant_id}`)
+    revalidatePath(`/manage/merchants/${invoice.merchant_id}/billing`)
+  }
+
+  return {
+    success: true,
+    invoiceId: payload.invoice_id,
+    status: payload.status,
+    transactionId: payload.transaction_id ?? null,
+  }
 }
