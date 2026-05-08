@@ -2,7 +2,6 @@
 
 import * as React from 'react'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import {
     Select,
     SelectContent,
@@ -10,7 +9,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select'
-import { ArrowLeft, Search, Edit } from 'lucide-react'
+import { Edit } from 'lucide-react'
 import { Location } from '@/types/merchant_locations'
 import { FloorPlan } from '@/types/floor-plan'
 
@@ -76,16 +75,7 @@ export function TablesTopBar({
                 </div>
             </div>
 
-            <div className="flex items-center gap-3 flex-1 max-w-md">
-                <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                        placeholder="Search table name..."
-                        value={searchQuery}
-                        onChange={(e) => onSearchChange(e.target.value)}
-                        className="pl-9"
-                    />
-                </div>
+            <div className="flex items-center gap-3 flex-1 max-w-md justify-end">
                 <Button variant="default" size="sm" onClick={onEditLayout}>
                     <Edit className="h-4 w-4 mr-2" />
                     Edit Mode

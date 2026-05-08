@@ -158,6 +158,45 @@ export const RuntimeFloorPlanView = forwardRef<
       }
     }
 
+    const clampPanToBounds = React.useCallback(() => {
+      if (!containerRef.current) return
+      const rect = containerRef.current.getBoundingClientRect()
+      const containerWidth = rect.width
+      const containerHeight = rect.height
+      const canvasWidth = floorPlan?.canvas_width || 1200
+      const canvasHeight = floorPlan?.canvas_height || 800
+      const scaledWidth = canvasWidth * transformRef.current.scale
+      const scaledHeight = canvasHeight * transformRef.current.scale
+
+      const overscroll = 160
+
+      let minX = containerWidth - scaledWidth - overscroll
+      let maxX = overscroll
+      let minY = containerHeight - scaledHeight - overscroll
+      let maxY = overscroll
+
+      if (scaledWidth <= containerWidth) {
+        const centeredX = (containerWidth - scaledWidth) / 2
+        minX = centeredX - overscroll / 2
+        maxX = centeredX + overscroll / 2
+      }
+
+      if (scaledHeight <= containerHeight) {
+        const centeredY = (containerHeight - scaledHeight) / 2
+        minY = centeredY - overscroll / 2
+        maxY = centeredY + overscroll / 2
+      }
+
+      transformRef.current.x = Math.min(
+        maxX,
+        Math.max(minX, transformRef.current.x)
+      )
+      transformRef.current.y = Math.min(
+        maxY,
+        Math.max(minY, transformRef.current.y)
+      )
+    }, [floorPlan?.canvas_width, floorPlan?.canvas_height])
+
     const zoomAroundPoint = React.useCallback(
       (nextScale: number, pointX: number, pointY: number) => {
         const clampedScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, nextScale))
@@ -171,9 +210,10 @@ export const RuntimeFloorPlanView = forwardRef<
           pointY - (pointY - transformRef.current.y) * ratio
         transformRef.current.scale = clampedScale
 
+        clampPanToBounds()
         updateTransform()
       },
-      []
+      [clampPanToBounds]
     )
 
     const zoomAroundViewportCenter = React.useCallback(
@@ -222,6 +262,7 @@ export const RuntimeFloorPlanView = forwardRef<
 
           transformRef.current.x = dx
           transformRef.current.y = dy
+          clampPanToBounds()
           updateTransform()
         },
         onPinch: ({ offset: [d] }) => {
@@ -282,13 +323,34 @@ export const RuntimeFloorPlanView = forwardRef<
 
     // Fit to view function - calculates bounds and centers/zooms to show all tables
     const fitToView = React.useCallback(() => {
-      if (!containerRef.current || initialTables.length === 0) return
+      if (!containerRef.current) return
 
       // Filter visible and active tables
       const visibleTables = initialTables.filter(
         t => t.is_visible !== false && t.is_active
       )
-      if (visibleTables.length === 0) return
+      const canvasWidth = floorPlan?.canvas_width || 1200
+      const canvasHeight = floorPlan?.canvas_height || 800
+
+      if (visibleTables.length === 0) {
+        const rect = containerRef.current.getBoundingClientRect()
+        const containerWidth = rect.width
+        const containerHeight = rect.height
+        const zoom = Math.min(
+          containerWidth / (canvasWidth + 200),
+          containerHeight / (canvasHeight + 200),
+          1
+        )
+
+        transformRef.current = {
+          x: containerWidth / 2 - (canvasWidth / 2) * zoom,
+          y: containerHeight / 2 - (canvasHeight / 2) * zoom,
+          scale: zoom
+        }
+
+        updateTransform()
+        return
+      }
 
       // Calculate bounds of all tables
       let minX = Infinity
@@ -337,7 +399,7 @@ export const RuntimeFloorPlanView = forwardRef<
       }
 
       updateTransform()
-    }, [initialTables])
+    }, [initialTables, floorPlan?.canvas_width, floorPlan?.canvas_height])
 
     React.useEffect(() => {
       fitToViewLatestRef.current = fitToView
@@ -518,7 +580,11 @@ export const RuntimeFloorPlanView = forwardRef<
         >
           <div
             ref={contentRef}
-            className='absolute top-0 left-0 w-0 h-0 origin-top-left will-change-transform'
+            className='absolute top-0 left-0 origin-top-left will-change-transform'
+            style={{
+              width: floorPlan?.canvas_width || 1200,
+              height: floorPlan?.canvas_height || 800
+            }}
           >
             {/* Canvas Boundary */}
             {(floorPlan?.canvas_width || floorPlan?.canvas_height) && (

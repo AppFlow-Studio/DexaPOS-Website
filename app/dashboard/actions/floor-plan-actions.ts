@@ -683,13 +683,15 @@ export async function LoadWaitlistAction (locationId: string) {
 
 export async function LoadReservationsAction (
   locationId: string,
-  date?: string
+  date?: string,
+  includeCancelled = false
 ) {
   const supabase = createServerSupabaseClient()
 
   const { data, error } = await supabase.rpc('get_reservations', {
     p_location_id: locationId,
-    p_date: date
+    p_date: date,
+    p_include_cancelled: includeCancelled
   })
 
   if (error) throw error

@@ -15,7 +15,7 @@ const TableRectangle4Chair: React.FC<TableRectangle4ChairProps> = ({
   height = 90,
   ...props
 }) => {
-  const lightStroke = "#94A3B8";
+  const lightStroke = color;
 
   return (
     <svg
@@ -34,10 +34,10 @@ const TableRectangle4Chair: React.FC<TableRectangle4ChairProps> = ({
         height="12"
         rx="3"
         fill={color}
-        fillOpacity={darkMode ? 0.12 : 0.85}
+        fillOpacity={darkMode ? 0.12 : 0.12}
         stroke={darkMode ? color : lightStroke}
         strokeWidth="1"
-        strokeOpacity={darkMode ? 0.5 : 0.7}
+        strokeOpacity={darkMode ? 0.5 : 0.5}
       />
       <rect
         x="78"
@@ -46,10 +46,10 @@ const TableRectangle4Chair: React.FC<TableRectangle4ChairProps> = ({
         height="12"
         rx="3"
         fill={color}
-        fillOpacity={darkMode ? 0.12 : 0.85}
+        fillOpacity={darkMode ? 0.12 : 0.12}
         stroke={darkMode ? color : lightStroke}
         strokeWidth="1"
-        strokeOpacity={darkMode ? 0.5 : 0.7}
+        strokeOpacity={darkMode ? 0.5 : 0.5}
       />
 
       {/* Chairs - bottom */}
@@ -60,10 +60,10 @@ const TableRectangle4Chair: React.FC<TableRectangle4ChairProps> = ({
         height="12"
         rx="3"
         fill={color}
-        fillOpacity={darkMode ? 0.12 : 0.85}
+        fillOpacity={darkMode ? 0.12 : 0.12}
         stroke={darkMode ? color : lightStroke}
         strokeWidth="1"
-        strokeOpacity={darkMode ? 0.5 : 0.7}
+        strokeOpacity={darkMode ? 0.5 : 0.5}
       />
       <rect
         x="78"
@@ -72,10 +72,10 @@ const TableRectangle4Chair: React.FC<TableRectangle4ChairProps> = ({
         height="12"
         rx="3"
         fill={color}
-        fillOpacity={darkMode ? 0.12 : 0.85}
+        fillOpacity={darkMode ? 0.12 : 0.12}
         stroke={darkMode ? color : lightStroke}
         strokeWidth="1"
-        strokeOpacity={darkMode ? 0.5 : 0.7}
+        strokeOpacity={darkMode ? 0.5 : 0.5}
       />
 
       {/* Table */}
@@ -86,10 +86,10 @@ const TableRectangle4Chair: React.FC<TableRectangle4ChairProps> = ({
         height="60"
         rx="8"
         fill={color}
-        fillOpacity={darkMode ? 0.18 : 0.88}
+        fillOpacity={darkMode ? 0.18 : 0.18}
         stroke={darkMode ? color : lightStroke}
         strokeWidth="1.5"
-        strokeOpacity={darkMode ? 0.8 : 0.75}
+        strokeOpacity={darkMode ? 0.8 : 0.8}
       />
     </svg>
   );
