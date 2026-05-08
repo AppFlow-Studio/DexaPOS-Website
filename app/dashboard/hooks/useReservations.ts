@@ -29,7 +29,7 @@ export function useReservations (date: string, _includeHistory = false) {
     queryKey: reservationKeys.byDate(clerkOrgId ?? '', locationId, date),
     queryFn: async () => {
       if (!locationId) return [] as Reservation[]
-      return LoadReservationsAction(locationId, date)
+      return LoadReservationsAction(locationId, date, true)
     },
     enabled: !!clerkOrgId && !!locationId,
     staleTime: 30_000
