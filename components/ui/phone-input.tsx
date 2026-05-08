@@ -8,7 +8,7 @@ import { normalizePhone } from '@/lib/phone'
 
 interface PhoneInputProps {
   value: string
-  onChange: (e164: string) => void
+  onChange: (value: string) => void
   onBlur?: () => void
   defaultCountry?: string
   placeholder?: string
@@ -30,8 +30,7 @@ function PhoneInput({
   'aria-invalid': ariaInvalid,
 }: PhoneInputProps) {
   const handleChange = (phone: string) => {
-    const normalized = normalizePhone(phone)
-    onChange(normalized ?? phone)
+    onChange(phone)
   }
 
   const handleBlur = () => {

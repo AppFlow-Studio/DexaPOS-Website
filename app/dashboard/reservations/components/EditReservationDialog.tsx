@@ -194,7 +194,8 @@ export default function EditReservationDialog ({
                     <FormControl>
                       <PhoneInput
                         value={field.value}
-                        onChange={({ digits }) => field.onChange(digits)}
+                        onChange={field.onChange}
+                        onBlur={field.onBlur}
                       />
                     </FormControl>
                     <FormMessage />
