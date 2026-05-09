@@ -14,7 +14,7 @@ const TableHighTop: React.FC<TableHighTopProps> = ({
   width = 120,
   height = 120,
 }) => {
-  const lightStroke = "#94A3B8";
+  const lightStroke = color;
 
   return (
     <svg
@@ -30,10 +30,10 @@ const TableHighTop: React.FC<TableHighTopProps> = ({
         cy="40"
         r="36"
         fill={color}
-        fillOpacity={darkMode ? 0.18 : 0.88}
+        fillOpacity={darkMode ? 0.18 : 0.18}
         stroke={darkMode ? color : lightStroke}
         strokeWidth="1.5"
-        strokeOpacity={darkMode ? 0.8 : 0.75}
+        strokeOpacity={darkMode ? 0.8 : 0.8}
       />
 
       {/* Overhang ring */}
@@ -44,7 +44,7 @@ const TableHighTop: React.FC<TableHighTopProps> = ({
         fill="none"
         stroke={darkMode ? color : lightStroke}
         strokeWidth="0.75"
-        strokeOpacity={darkMode ? 0.25 : 0.35}
+        strokeOpacity={darkMode ? 0.25 : 0.25}
       />
 
       {/* Pedestal base */}
@@ -53,10 +53,10 @@ const TableHighTop: React.FC<TableHighTopProps> = ({
         cy="40"
         r="9"
         fill={color}
-        fillOpacity={darkMode ? 0.22 : 0.9}
+        fillOpacity={darkMode ? 0.22 : 0.22}
         stroke={darkMode ? color : lightStroke}
         strokeWidth="1"
-        strokeOpacity={darkMode ? 0.5 : 0.75}
+        strokeOpacity={darkMode ? 0.5 : 0.5}
       />
     </svg>
   );

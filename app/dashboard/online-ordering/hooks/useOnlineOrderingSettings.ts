@@ -104,6 +104,16 @@ export interface OnlineOrderingSettings {
   // Analytics
   googleAnalyticsId: string;
   facebookPixelId: string;
+
+  // Customer notification preferences (transactional)
+  notificationPrefs: {
+    email_on_order_placed: boolean;
+    sms_on_order_placed: boolean;
+    email_on_status: string[];
+    sms_on_status: string[];
+    admin_test_email?: string | null;
+    admin_test_phone?: string | null;
+  };
 }
 
 const createDefaultDaySchedule = (enabled = false): DaySchedule => ({
@@ -212,6 +222,15 @@ const createDefaultSettings = (
 
   googleAnalyticsId: "",
   facebookPixelId: "",
+
+  notificationPrefs: {
+    email_on_order_placed: true,
+    sms_on_order_placed: true,
+    email_on_status: ["ready", "cancelled"],
+    sms_on_status: ["accepted", "ready", "cancelled"],
+    admin_test_email: null,
+    admin_test_phone: null,
+  },
 });
 
 export type OnlineStoreSetupRequestResult =

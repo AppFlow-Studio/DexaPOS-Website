@@ -390,7 +390,7 @@ export function CartSidebar({ config, storeConfigId, slug, taxRate = 0, allItems
                     disabled={items.length === 0}
                     onClick={handleCheckout}
                   >
-                    Checkout Â· ${total.toFixed(2)}
+                    Checkout · ${total.toFixed(2)}
                   </button>
                 </div>
               </div>

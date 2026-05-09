@@ -902,6 +902,24 @@ Deno.serve(async (req: Request): Promise<Response> => {
   }
 
   // ---- Step 12: Update payment record with real transaction details ----
+  // Snapshot the dual-pricing markup so the reported dual_pricing_fee matches
+  // the exact percentage we added to card prices. processor_fee_percentage is a
+  // separate concept (bank processing fee) and is intentionally not used here.
+  const { data: locationFeeRow } = await supabase
+    .from('locations')
+    .select('dual_pricing_percentage')
+    .eq('id', locationId)
+    .single()
+  const processorFeePct = Number(locationFeeRow?.dual_pricing_percentage ?? 0)
+  // Fee base = full charge amount sent to the bank (subtotal + tax + tip
+  // + delivery). The bank withholds pct% of the authorized total, so the
+  // reported fee must match. tip_fee stays 0 — tip is already in totalCents.
+  const totalDollars = toDollars(totalCents)
+  const dualPricingFee = processorFeePct > 0
+    ? Math.round((totalDollars * processorFeePct) / 100 * 100) / 100
+    : 0
+  const tipFee = 0
+
   const paymentUpdatePayload = payCashInStore
     ? {
         payment_method: 'cash',
@@ -956,6 +974,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
         processor_response: nmiChargeDetails?.rawResponse ?? null,
         terminal_response: null,
         gateway_fee: nmiChargeDetails?.gatewayFee ?? null,
+        processor_fee_percentage_snapshot: processorFeePct,
+        dual_pricing_fee: dualPricingFee,
+        tip_fee: tipFee,
         dejavoo_response_code: null,
         dejavoo_response_message: null,
         dejavoo_batch_number: null,

@@ -409,6 +409,17 @@ async function handleCancellation(
     deliveryCompany: deliveryCompanyName,
   })
 
+  // Fire-and-forget customer notification (email + SMS per merchant prefs).
+  const appUrl = Deno.env.get('NEXT_PUBLIC_APP_URL')
+  const internalSecret = Deno.env.get('INTERNAL_NOTIFICATION_SECRET')
+  if (appUrl && internalSecret) {
+    fetch(`${appUrl}/api/internal/order-status-notify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-internal-secret': internalSecret },
+      body: JSON.stringify({ order_id: onlineOrder.order_id, event: 'cancelled' }),
+    }).catch((err) => console.error('[notify] cancellation post failed:', err))
+  }
+
   return successResponse(
     { order_id: onlineOrder.order_id, cancelled: true },
     'Order cancelled successfully'

@@ -679,10 +679,6 @@ export function FloorPlanCanvasView({ locationId, initialFloorPlanId, onBack, re
                         <Settings2 className="w-4 h-4 mr-1" />
                         Manage
                     </Button>
-                    <Button variant="outline" size="sm" onClick={() => setShowQuickSetupDialog(true)}>
-                        <LayoutGrid className="w-4 h-4 mr-1" />
-                        Quick Setup
-                    </Button>
                 </div>
                 <div className="flex items-center gap-2">
                     <Button

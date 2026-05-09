@@ -1,8 +1,10 @@
 'use client'
 
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { useAuth } from '@clerk/nextjs'
+import { RemoveUser } from '../../actions/remove-user'
+import { toast } from 'sonner'
 import { useGetInfoOfUser } from '../../hooks/useGetInfoOfUser'
 import { useAdminAuth } from '@/lib/hooks/useAdminAuth'
 import { useAdminMerchantAccess, useGrantMerchantAccess, useRevokeMerchantAccess } from '../../hooks/useAdminMerchantAccess'
@@ -57,7 +59,10 @@ import { PageLoader } from '@/components/ui/page-loader'
 export default function UserInfoPage() {
     const { userId: targetUserId } = useParams()
     const { userId: currentUserId } = useAuth()
+    const router = useRouter()
     const { role: currentUserRole, isSuperAdmin } = useAdminAuth()
+    const [isDeletingUser, setIsDeletingUser] = useState(false)
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
     const { data: user, isLoading, error } = useGetInfoOfUser(targetUserId as string)
     
     // Merchant access management state
@@ -139,6 +144,24 @@ export default function UserInfoPage() {
             setIsGrantDialogOpen(false)
         } catch (error) {
             console.error('Error granting merchant access:', error)
+        }
+    }
+
+    const handleDeleteUser = async () => {
+        setIsDeletingUser(true)
+        try {
+            const result = await RemoveUser(targetUserId as string)
+            if (result && 'success' in result && result.success) {
+                toast.success('User deleted successfully')
+                setDeleteDialogOpen(false)
+                router.push('/manage/users')
+            } else {
+                toast.error('Failed to delete user')
+            }
+        } catch {
+            toast.error('An error occurred while deleting the user')
+        } finally {
+            setIsDeletingUser(false)
         }
     }
 
@@ -370,7 +393,7 @@ export default function UserInfoPage() {
                                                     Deleting this user is permanent and cannot be undone.
                                                 </p>
                                             </div>
-                                            <Dialog>
+                                            <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
                                                 <DialogTrigger asChild>
                                                     <Button variant="destructive">
                                                         <Trash2 className="mr-2 h-4 w-4" />
@@ -381,12 +404,14 @@ export default function UserInfoPage() {
                                                     <DialogHeader>
                                                         <DialogTitle>Delete user account</DialogTitle>
                                                         <DialogDescription>
-                                                            Are you sure you want to delete this user account? This action cannot be undone.
+                                                            Are you sure you want to delete <strong>{user.first_name} {user.last_name}</strong>? This action is permanent and cannot be undone.
                                                         </DialogDescription>
                                                     </DialogHeader>
                                                     <DialogFooter>
-                                                        <Button variant="outline">Cancel</Button>
-                                                        <Button variant="destructive">Delete user</Button>
+                                                        <Button variant="outline" onClick={() => setDeleteDialogOpen(false)} disabled={isDeletingUser}>Cancel</Button>
+                                                        <Button variant="destructive" onClick={handleDeleteUser} disabled={isDeletingUser}>
+                                                            {isDeletingUser ? 'Deleting...' : 'Delete user'}
+                                                        </Button>
                                                     </DialogFooter>
                                                 </DialogContent>
                                             </Dialog>

@@ -20,6 +20,7 @@ import {
 } from "@/lib/online-store/setup-flow";
 import { createClerkClient } from "@clerk/backend";
 import { uploadMerchantDocument, uploadOrganizationDocument } from "@/lib/cdn/server";
+import { getCurrentUserMerchantRole } from "@/app/dashboard/actions/role-check";
 
 type MissingRequestFieldKey =
   | "legalBusinessName"
@@ -104,16 +105,12 @@ async function getClerkOrgPublicMetadata(organizationId: string | null) {
   }
 }
 
-async function assertMerchantOrgAdmin(userId: string | null, organizationId: string | null) {
-  if (!userId || !organizationId) throw new Error("Unauthorized");
-  const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY! });
-  const memberships = await clerk.organizations.getOrganizationMembershipList({
-    organizationId,
-    limit: 100,
-  });
-  const membership = memberships.data.find((m) => m.publicUserData?.userId === userId);
-  const role = membership?.role ?? "";
-  if (role !== "org:admin" && role !== "org:owner") {
+async function assertMerchantOrgAdmin(organizationId: string | null) {
+  if (!organizationId) throw new Error("Unauthorized");
+  const info = await getCurrentUserMerchantRole();
+  if (!info) throw new Error("Unauthorized");
+  if (info.clerkOrgId !== organizationId) throw new Error("Unauthorized");
+  if (!info.isOwnerOrAdmin) {
     throw new Error("Only merchant admins can submit an online-store setup request.");
   }
 }
@@ -160,7 +157,7 @@ async function computeOnlineStoreRequestRequirements(
     };
   }
 
-  await assertMerchantOrgAdmin(userId, orgId);
+  await assertMerchantOrgAdmin(orgId);
 
   const { data: location, error: locationError } = await supabase
     .from("locations")
@@ -301,7 +298,7 @@ export async function saveOnlineStoreRequestRequirements(formData: FormData) {
       return { success: false, error: "locationId is required" };
     }
 
-    await assertMerchantOrgAdmin(userId, orgId);
+    await assertMerchantOrgAdmin(orgId);
 
     const { data: location, error: locationError } = await supabase
       .from("locations")
@@ -553,6 +550,16 @@ function mapConfigToSettings(
     metaDescription: config.meta_description ?? "",
     googleAnalyticsId: config.google_analytics_id ?? "",
     facebookPixelId: config.facebook_pixel_id ?? "",
+
+    notificationPrefs: {
+      email_on_order_placed: true,
+      sms_on_order_placed: true,
+      email_on_status: ["ready", "cancelled"],
+      sms_on_status: ["accepted", "ready", "cancelled"],
+      admin_test_email: null,
+      admin_test_phone: null,
+      ...((config.notification_prefs as Record<string, unknown>) ?? {}),
+    } as OnlineOrderingSettings["notificationPrefs"],
   };
 }
 
@@ -838,6 +845,10 @@ export async function saveOnlineOrderingSettings(
     configData.delivery_radius_miles = parsed === null || Number.isFinite(parsed) ? parsed : null;
   }
 
+  if (settings.notificationPrefs !== undefined) {
+    configData.notification_prefs = settings.notificationPrefs;
+  }
+
   // Merchant cannot change HQ-managed payment credentials or tipping.
 
   for (const key of Object.keys(configData)) {
@@ -877,5 +888,81 @@ export async function saveOnlineOrderingSettings(
   revalidatePath("/dashboard/online-ordering");
   return { success: true };
 }
+
+export async function sendTestOrderNotification(
+  locationId: string,
+  channel: "email" | "sms",
+  to: string
+): Promise<{ success: boolean; error?: string }> {
+  if (!locationId || !to) {
+    return { success: false, error: "Missing recipient" };
+  }
+
+  const supabase = createServerSupabaseClient();
+  const { data: config } = await supabase
+    .from("online_store_config")
+    .select("id")
+    .eq("location_id", locationId)
+    .maybeSingle();
+
+  if (!config?.id) {
+    return { success: false, error: "Online store not configured" };
+  }
+
+  const { sendTestNotification } = await import(
+    "@/lib/messaging/order-notifications"
+  );
+  return sendTestNotification(config.id, channel, to);
+}
+
+export async function getOrderNotificationAuditLog(
+  locationId: string,
+  limit = 50
+): Promise<{
+  data: Array<{
+    id: string;
+    orderId: string;
+    channel: "email" | "sms";
+    event: string;
+    recipient: string;
+    status: "sent" | "failed" | "skipped";
+    error: string | null;
+    sentAt: string;
+  }>;
+  error?: string;
+}> {
+  if (!locationId) return { data: [], error: "Missing locationId" };
+  const supabase = createServerSupabaseClient();
+
+  const { data: location } = await supabase
+    .from("locations")
+    .select("merchant_id")
+    .eq("id", locationId)
+    .single();
+  if (!location) return { data: [], error: "Location not found" };
+
+  const { data, error } = await supabase
+    .from("order_notifications")
+    .select("id, order_id, channel, event, recipient, status, error, sent_at")
+    .eq("merchant_id", location.merchant_id)
+    .order("sent_at", { ascending: false })
+    .limit(limit);
+
+  if (error) return { data: [], error: error.message };
+
+  return {
+    data: (data ?? []).map((r) => ({
+      id: r.id as string,
+      orderId: r.order_id as string,
+      channel: r.channel as "email" | "sms",
+      event: r.event as string,
+      recipient: r.recipient as string,
+      status: r.status as "sent" | "failed" | "skipped",
+      error: (r.error as string | null) ?? null,
+      sentAt: r.sent_at as string,
+    })),
+  };
+}
+
 
 

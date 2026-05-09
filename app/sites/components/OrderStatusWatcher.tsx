@@ -15,22 +15,44 @@ interface OrderStatusWatcherProps {
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!;
 
-const DECISION_MESSAGES: Record<string, { title: string; description: string }> = {
+const DECISION_MESSAGES: Record<
+  string,
+  { title: string; description: string; tone: "success" | "info" | "error" }
+> = {
   accepted: {
     title: "Order Accepted!",
     description: "The restaurant has accepted your order.",
+    tone: "success",
   },
   sent_to_kitchen: {
-    title: "Order Accepted!",
-    description: "Your order has been sent to the kitchen.",
+    title: "Sent to the kitchen",
+    description: "Your order is queued up for the chefs.",
+    tone: "info",
+  },
+  preparing: {
+    title: "Cooking now",
+    description: "The kitchen has started preparing your order.",
+    tone: "info",
+  },
+  ready: {
+    title: "Ready for pickup!",
+    description: "Your order is ready — head over when you can.",
+    tone: "success",
+  },
+  completed: {
+    title: "Order completed",
+    description: "Thanks for stopping by. Enjoy!",
+    tone: "success",
   },
   declined: {
     title: "Order Declined",
     description: "The restaurant could not accept your order.",
+    tone: "error",
   },
   cancelled: {
     title: "Order Cancelled",
     description: "Your order has been cancelled.",
+    tone: "error",
   },
 };
 
@@ -46,28 +68,36 @@ export function OrderStatusWatcher({ orderId, onDecision, silentStatuses }: Orde
     if (!orderId) return;
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    const channel = supabase.channel(`order-update:${orderId}`);
 
-    channel
-      .on("broadcast", { event: "status_changed" }, (msg) => {
-        const status: string = msg.payload?.status;
-        if (!status) return;
-        if (status === prevStatusRef.current) return;
-        prevStatusRef.current = status;
+    const handleStatus = (status: string | undefined) => {
+      if (!status) return;
+      if (status === prevStatusRef.current) return;
+      prevStatusRef.current = status;
 
-        const isSilent = silentRef.current?.includes(status) ?? false;
-        const msgDef = DECISION_MESSAGES[status];
-        if (msgDef && !isSilent) {
-          if (status === "accepted" || status === "sent_to_kitchen") {
-            toast.success(msgDef.title, { description: msgDef.description, duration: 6000 });
-          } else {
-            toast.error(msgDef.title, { description: msgDef.description, duration: 8000 });
-          }
-        }
-        if (msgDef) {
-          onDecisionRef.current?.(status);
-        }
-      })
+      const isSilent = silentRef.current?.includes(status) ?? false;
+      const msgDef = DECISION_MESSAGES[status];
+      if (msgDef && !isSilent) {
+        const opts = { description: msgDef.description, duration: msgDef.tone === "error" ? 8000 : 6000 };
+        if (msgDef.tone === "success") toast.success(msgDef.title, opts);
+        else if (msgDef.tone === "error") toast.error(msgDef.title, opts);
+        else toast.info(msgDef.title, opts);
+      }
+      if (msgDef) onDecisionRef.current?.(status);
+    };
+
+    const channel = supabase
+      .channel(`order-update:${orderId}`)
+      .on("broadcast", { event: "status_changed" }, (msg) => handleStatus(msg.payload?.status))
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "orders",
+          filter: `id=eq.${orderId}`,
+        },
+        (payload) => handleStatus((payload.new as { status?: string })?.status)
+      )
       .subscribe();
 
     return () => {

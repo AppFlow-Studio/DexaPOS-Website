@@ -63,6 +63,8 @@ import { extractConnectedPlatforms } from '@/lib/orderout/helpers'
 import { MissingDataForm } from '@/components/online-store/MissingDataForm'
 import { HoursConfigModal } from '@/app/dashboard/online-ordering/components/HoursConfigModal'
 import { FONT_GOOGLE_URLS } from '@/app/sites/lib/theme-utils'
+import { useAdminNmiMerchantStatus } from '@/lib/queries/use-admin-online-ordering'
+import { NmiCreateMerchantDialog } from './NmiCreateMerchantDialog'
 
 const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'localhost:3000'
 
@@ -158,6 +160,12 @@ export function OnlineStoreTab({
     locationsLoading,
 }: OnlineStoreTabProps) {
     const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null)
+    const [isNmiDialogOpen, setIsNmiDialogOpen] = useState(false)
+    const { data: nmiStatusResult } = useAdminNmiMerchantStatus(merchantId)
+    const nmiStatus = nmiStatusResult?.success ? nmiStatusResult.data : null
+    const NMI_PARTNER_PORTAL_URL =
+        'https://mtech.transactiongateway.com/partners/accounts?tid=0d06b140eb69b1d4ac8a02efe71ceab0'
+    const nmiPortalUrl = nmiStatus?.partnerPortalUrl || NMI_PARTNER_PORTAL_URL
 
     // Fetch overview of all locations
     const { data: overviewData, isLoading: overviewLoading } = useAdminOnlineOrderingOverview(merchantId)
@@ -854,11 +862,71 @@ export function OnlineStoreTab({
                             <div className="rounded-md border p-3">
                                 <p className="text-sm font-medium">Provider</p>
                                 <p className="text-xs text-muted-foreground">
-                                    Storefront card checkout now uses NMI through the active location payment device. The old Dejavoo whitelist and TPN routing path are no longer used for online checkout.
+                                    Storefront card checkout now uses NMI through the active location payment device.
                                 </p>
                             </div>
                         </CardContent>
                     </Card>
+
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>NMI Merchant Account</CardTitle>
+                            <CardDescription>
+                                Create the merchant&apos;s NMI gateway account, then finish onboarding in the
+                                partner portal.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            <div className="flex items-center justify-between rounded-md border p-3">
+                                <div className="min-w-0">
+                                    <p className="text-sm font-medium">Account Status</p>
+                                    {nmiStatus ? (
+                                        <p className="text-xs text-muted-foreground">
+                                            Created {nmiStatus.createdAt ? new Date(nmiStatus.createdAt).toLocaleDateString() : ''} · NMI ID{' '}
+                                            <span className="font-mono">{nmiStatus.nmiMerchantId}</span>
+                                            {nmiStatus.status ? ` · ${nmiStatus.status}` : ''}
+                                        </p>
+                                    ) : (
+                                        <p className="text-xs text-muted-foreground">
+                                            No NMI account on file. Pre-fill from the merchant&apos;s review packet, then confirm to create one.
+                                        </p>
+                                    )}
+                                </div>
+                                <Badge variant={nmiStatus ? 'default' : 'secondary'}>
+                                    {nmiStatus ? 'Created' : 'Not created'}
+                                </Badge>
+                            </div>
+                            <div className="flex flex-col gap-2 sm:flex-row">
+                                <Button
+                                    onClick={() => setIsNmiDialogOpen(true)}
+                                    disabled={Boolean(nmiStatus) || !selectedLocationId}
+                                    className="gap-2"
+                                >
+                                    <Plus className="h-4 w-4" />
+                                    {nmiStatus ? 'NMI account exists' : 'Create NMI merchant'}
+                                </Button>
+                                <Button variant="outline" asChild className="gap-2">
+                                    <a href={nmiPortalUrl} target="_blank" rel="noopener noreferrer">
+                                        <ExternalLink className="h-4 w-4" />
+                                        Open NMI partner portal
+                                    </a>
+                                </Button>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    {selectedLocationId ? (
+                        <NmiCreateMerchantDialog
+                            open={isNmiDialogOpen}
+                            onOpenChange={setIsNmiDialogOpen}
+                            merchantId={merchantId}
+                            merchantName={merchantName}
+                            locationId={selectedLocationId}
+                            location={selectedLocation}
+                            settings={localSettings || undefined}
+                            partnerPortalUrl={nmiPortalUrl}
+                        />
+                    ) : null}
 
                     {/* Settings Tabs */}
                     <Tabs defaultValue="store" className="space-y-6">

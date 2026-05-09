@@ -23,11 +23,17 @@ import {
 import { AddToWaitlistWizard } from './AddToWaitlistWizard'
 import { EditWaitlistDialog } from './EditWaitlistDialog'
 import { formatPhoneForDisplay } from '@/lib/phone'
-// Date formatting helper
+
+function formatMinutes (minutes: number): string {
+  const safe = Math.max(0, Math.round(minutes))
+  return `${safe} min`
+}
+
+// Date formatting helper (future-oriented for "Estimated ready")
 function formatDistanceToNow (dateString: string): string {
   const date = new Date(dateString)
   const now = new Date()
-  const diffMs = now.getTime() - date.getTime()
+  const diffMs = date.getTime() - now.getTime()
   const diffMins = Math.floor(diffMs / 60000)
   const diffHours = Math.floor(diffMs / 3600000)
   const diffDays = Math.floor(diffMs / 86400000)
@@ -37,6 +43,40 @@ function formatDistanceToNow (dateString: string): string {
   if (diffHours < 24) return `in ${diffHours} hours`
   if (diffDays < 7) return `in ${diffDays} days`
   return `in ${Math.floor(diffDays / 7)} weeks`
+}
+
+function getEstimatedReadyText (entry: WaitlistEntry): string | null {
+  if (
+    typeof entry.quoted_wait_minutes === 'number' &&
+    entry.quoted_wait_minutes >= 0
+  ) {
+    const waited = Number(entry.minutes_waiting || 0)
+    const remaining = Math.max(0, Math.ceil(entry.quoted_wait_minutes - waited))
+    return remaining < 1 ? 'in less than a minute' : `in ${remaining} minutes`
+  }
+
+  if (entry.estimated_ready_at) return formatDistanceToNow(entry.estimated_ready_at)
+  return null
+}
+
+function getDisplayedWaitTime (entry: WaitlistEntry): string {
+  if (
+    typeof entry.quoted_wait_minutes === 'number' &&
+    entry.quoted_wait_minutes >= 0
+  ) {
+    return formatMinutes(entry.quoted_wait_minutes)
+  }
+  return formatMinutes(Number(entry.minutes_waiting || 0))
+}
+
+function getElapsedWaitTime (entry: WaitlistEntry): string {
+  return formatMinutes(Number(entry.minutes_waiting || 0))
+}
+
+function getStatusBadgeVariant (status: WaitlistEntry['status']) {
+  if (status === 'waiting') return 'default' as const
+  if (status === 'notified') return 'secondary' as const
+  return 'outline' as const
 }
 
 interface WaitlistPanelProps {
@@ -104,7 +144,7 @@ export function WaitlistPanel ({
         </Button>
       </AddToWaitlistWizard>
       {waitlist.map(entry => (
-        <Card key={entry.id} className='hover:shadow-md transition-shadow'>
+        <Card key={entry.id} className='hover:shadow-md transition-shadow border-border/70'>
           <CardHeader className='pb-3'>
             <div className='flex items-start justify-between'>
               <div className='flex-1'>
@@ -127,32 +167,26 @@ export function WaitlistPanel ({
                   )}
                 </CardDescription>
               </div>
-              <Badge
-                variant={
-                  entry.status === 'waiting'
-                    ? 'default'
-                    : entry.status === 'notified'
-                    ? 'secondary'
-                    : 'outline'
-                }
-              >
+              <Badge variant={getStatusBadgeVariant(entry.status)}>
                 {entry.status}
               </Badge>
             </div>
           </CardHeader>
           <CardContent className='pt-0'>
-            <div className='space-y-2'>
-              <div className='flex items-center justify-between text-sm'>
-                <span className='text-muted-foreground'>Wait time</span>
-                <span className='font-medium'>
-                  {entry.minutes_waiting || 0} min
-                </span>
+            <div className='space-y-2.5'>
+              <div className='flex items-center justify-between text-sm rounded-md bg-muted/40 px-2 py-1.5'>
+                <span className='text-muted-foreground'>Quoted wait</span>
+                <span className='font-medium'>{getDisplayedWaitTime(entry)}</span>
               </div>
-              {entry.estimated_ready_at && (
+              <div className='flex items-center justify-between text-sm'>
+                <span className='text-muted-foreground'>Elapsed</span>
+                <span className='font-medium'>{getElapsedWaitTime(entry)}</span>
+              </div>
+              {getEstimatedReadyText(entry) && (
                 <div className='flex items-center justify-between text-sm'>
                   <span className='text-muted-foreground'>Estimated ready</span>
                   <span className='font-medium'>
-                    {formatDistanceToNow(entry.estimated_ready_at)}
+                    {getEstimatedReadyText(entry)}
                   </span>
                 </div>
               )}
@@ -161,13 +195,13 @@ export function WaitlistPanel ({
                   {entry.notes}
                 </p>
               )}
-              <div className='flex items-center gap-2 mt-3 pt-3 border-t'>
+              <div className='flex flex-wrap items-center gap-2 mt-3 pt-3 border-t'>
                 {entry.status === 'waiting' && onNotify && (
                   <Button
                     variant='outline'
                     size='sm'
                     onClick={() => onNotify(entry.id)}
-                    className='flex-1'
+                    className='flex-1 min-w-[110px]'
                   >
                     <Bell className='h-4 w-4 mr-2' />
                     Notify
@@ -178,7 +212,7 @@ export function WaitlistPanel ({
                     variant='default'
                     size='sm'
                     onClick={() => onSeat(entry.id)}
-                    className='flex-1'
+                    className='flex-1 min-w-[110px]'
                   >
                     <CheckCircle2 className='h-4 w-4 mr-2' />
                     Seat

@@ -28,7 +28,6 @@ import {
 } from "../../order-actions";
 import type { AppliedPromo } from "./PromoCodeSection";
 import { isStoreOpenNow } from "../StoreInfoBar";
-import { sendOrderConfirmationEmail } from "../../recovery-actions";
 import { getSavedAddresses, addSavedAddress, type SavedAddress } from "../../customer-actions";
 import type { Site, OnlineOrderingConfig } from "@/types/site";
 
@@ -118,6 +117,8 @@ export function CheckoutPage({
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [emailOptIn, setEmailOptIn] = useState(true);
+  const [smsOptIn, setSmsOptIn] = useState(true);
 
   // Order type
   const pickupEnabled = config?.pickupEnabled ?? true;
@@ -438,6 +439,16 @@ export function CheckoutPage({
       })),
     }));
 
+    // Persist transactional notification opt-ins to the session so the
+    // notification helper picks them up when the order row is created.
+    if (sessionToken) {
+      const { updateSession } = await import("@/app/sites/session-actions");
+      await updateSession(sessionToken, {
+        customerEmailOptIn: emailOptIn,
+        customerSmsOptIn: smsOptIn,
+      }).catch(() => {});
+    }
+
     // Step 2: Call create-online-order edge function with the NMI payment token
     try {
       const res = await fetch(
@@ -483,6 +494,10 @@ export function CheckoutPage({
         });
         if (result.order_id) {
           useSession.getState().setActiveOrderId(result.order_id);
+          // Fire transactional receipt email + confirmation SMS.
+          import("@/app/sites/notification-actions")
+            .then(({ notifyOrderPlaced }) => notifyOrderPlaced(result.order_id))
+            .catch((err) => console.error("[checkout] notifyOrderPlaced:", err));
         }
         // Save delivery address if requested
         if (saveNewAddress && isAuthenticated && orderType === "delivery" && selectedAddressId === "new" && newAddress.street) {
@@ -502,11 +517,6 @@ export function CheckoutPage({
         }
         setStep("confirmation");
         clearCart();
-
-        // Fire-and-forget order confirmation email
-        if (result.order_id && email) {
-          sendOrderConfirmationEmail(result.order_id, email).catch(() => {});
-        }
       } else if (result.success && result.requires_redirect && result.payment_url) {
         // Hosted redirect fallback is not expected in the NMI embedded flow, but keep the branch safe.
         window.location.href = result.payment_url;
@@ -686,10 +696,14 @@ export function CheckoutPage({
               lastName={lastName}
               email={email}
               phone={phone}
+              emailOptIn={emailOptIn}
+              smsOptIn={smsOptIn}
               onFirstNameChange={setFirstName}
               onLastNameChange={setLastName}
               onEmailChange={setEmail}
               onPhoneChange={setPhone}
+              onEmailOptInChange={setEmailOptIn}
+              onSmsOptInChange={setSmsOptIn}
               onSignInClick={() => { setAuthMode("signin"); setShowAuth(true); }}
               onSignUpClick={() => { setAuthMode("signup"); setShowAuth(true); }}
             />

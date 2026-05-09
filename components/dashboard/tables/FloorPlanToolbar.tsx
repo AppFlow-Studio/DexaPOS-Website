@@ -264,8 +264,8 @@ export function FloorPlanEditorSidebar({
         </div>
       </div>
 
-      <ScrollArea className="flex-1 h-full">
-        <div className="p-3 space-y-4">
+      <ScrollArea className="min-h-0 flex-1">
+        <div className="p-3 pb-8 space-y-4">
           {(Object.keys(CATEGORY_CONFIG) as ShapeCategory[]).map((category) => {
             const shapes = shapesByCategory[category] || []
             if (shapes.length === 0) return null

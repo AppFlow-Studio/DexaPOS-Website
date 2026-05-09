@@ -68,6 +68,9 @@ import { BatchReconciliationSection } from './components/BatchReconciliationSect
 import { MerchantBreakdownSection } from './components/MerchantBreakdownSection'
 import { ChargebacksSection } from './components/ChargebacksSection'
 import { AuditLogSection } from './components/AuditLogSection'
+import { ConnectivityStrip } from './components/ConnectivityStrip'
+import { PaymentsLedger } from './components/PaymentsLedger'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { CardBrandIcon } from '@/app/dashboard/payments/components/CardBrandIcon'
 import { toast } from 'sonner'
 import Papa from 'papaparse'
@@ -76,26 +79,6 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from 'recharts'
 
 // â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-function getOrderStatusBadge(status?: string) {
-    if (!status) return null
-    const configs: Record<string, { label: string; className: string }> = {
-        draft:      { label: 'Draft',      className: 'bg-gray-100 text-gray-600 border-gray-300' },
-        pending:    { label: 'Pending',    className: 'bg-yellow-100 text-yellow-800 border-yellow-300' },
-        preparing:  { label: 'Preparing',  className: 'bg-blue-100 text-blue-800 border-blue-300' },
-        ready:      { label: 'Ready',      className: 'bg-purple-100 text-purple-800 border-purple-300' },
-        completed:  { label: 'Completed',  className: 'bg-green-100 text-green-800 border-green-300' },
-        cancelled:  { label: 'Cancelled',  className: 'bg-red-100 text-red-800 border-red-300' },
-        refunded:   { label: 'Refunded',   className: 'bg-amber-100 text-amber-800 border-amber-300' },
-        void:       { label: 'Void',       className: 'bg-gray-100 text-gray-500 border-gray-300' },
-    }
-    const cfg = configs[status] ?? { label: status, className: '' }
-    return (
-        <Badge variant="outline" className={`capitalize text-xs ${cfg.className}`}>
-            {cfg.label}
-        </Badge>
-    )
-}
 
 function getPaymentStatusBadge(status: string) {
     const configs: Record<string, { label: string; className: string }> = {
@@ -125,7 +108,7 @@ function getMethodBadge(method: string) {
 }
 
 function exportToCSV(transactions: PlatformTransaction[]) {
-    const headers = ['Payment ID', 'Order #', 'Merchant', 'Location', 'Customer', 'Method', 'Card', 'Amount', 'Tip', 'Total', 'Payment Status', 'Order Status', 'Auth Code', 'Ref #', 'Date']
+    const headers = ['Payment ID', 'Order #', 'Merchant', 'Location', 'Customer', 'Method', 'Card', 'Amount', 'Tip', 'Total', 'Status', 'Auth Code', 'Ref #', 'Date']
     const rows = transactions.map(t => [
         t.id,
         t.order_number || '',
@@ -138,7 +121,6 @@ function exportToCSV(transactions: PlatformTransaction[]) {
         t.tip_amount ? `$${t.tip_amount.toFixed(2)}` : '',
         `$${t.total_amount.toFixed(2)}`,
         t.status,
-        t.order_status || '',
         t.authorization_code || '',
         t.reference_number || '',
         t.created_at ? format(new Date(t.created_at), 'yyyy-MM-dd HH:mm:ss') : '',
@@ -199,8 +181,6 @@ function buildTransactionExportRecords(rows: PlatformTransactionExportRow[]): Tr
         Merchant: row.merchant_name || '',
         Location: row.location_name || '',
         Customer: row.customer_name || 'Walk-in',
-        'Order Type': row.order_type || '',
-        'Order Status': row.order_status || '',
         'Payment Method': row.payment_method || '',
         'Card Type': row.card_type || '',
         'Card Last 4': row.card_last_four || '',
@@ -364,7 +344,6 @@ type TransactionColumnKey =
     | 'discount'
     | 'total'
     | 'payStatus'
-    | 'orderStatus'
     | 'staff'
     | 'date'
 
@@ -381,7 +360,6 @@ const DEFAULT_COLUMN_VISIBILITY: Record<TransactionColumnKey, boolean> = {
     discount: false,
     total: true,
     payStatus: true,
-    orderStatus: true,
     staff: false,
     date: true,
 }
@@ -398,8 +376,7 @@ const COLUMN_LABELS: Record<TransactionColumnKey, string> = {
     tip: 'Tip',
     discount: 'Discount',
     total: 'Total',
-    payStatus: 'Pay Status',
-    orderStatus: 'Order Status',
+    payStatus: 'Status',
     staff: 'Staff',
     date: 'Date',
 }
@@ -417,7 +394,6 @@ const COLUMN_TOGGLE_ORDER: TransactionColumnKey[] = [
     'discount',
     'total',
     'payStatus',
-    'orderStatus',
     'staff',
     'date',
 ]
@@ -451,12 +427,15 @@ function TransactionsPageInner() {
             : 'created_at'
     const normalizedSortDirection: TransactionSortDirection = sortDirection === 'asc' ? 'asc' : 'desc'
 
-    // Parse all filter params from URL
+    // Parse all filter params from URL.
+    // Memo deps must be the URL string, not the searchParams object itself —
+    // useSearchParams() returns a new instance every render, which would
+    // invalidate this memo and cause downstream React Query keys to churn.
+    const searchParamsKey = searchParams.toString()
     const filters: PlatformTransactionFilters = useMemo(() => ({
         search: searchParams.get('search') ?? undefined,
         merchantIds: parseList(searchParams.get('merchants')).length > 0 ? parseList(searchParams.get('merchants')) : undefined,
         locationIds: parseList(searchParams.get('locations')).length > 0 ? parseList(searchParams.get('locations')) : undefined,
-        orderStatuses: parseList(searchParams.get('orderStatus')).length > 0 ? parseList(searchParams.get('orderStatus')) : undefined,
         paymentStatuses: parseList(searchParams.get('paymentStatus')).length > 0 ? parseList(searchParams.get('paymentStatus')) : undefined,
         paymentMethods: parseList(searchParams.get('method')).length > 0 ? parseList(searchParams.get('method')) : undefined,
         cardTypes: parseList(searchParams.get('cardType')).length > 0 ? parseList(searchParams.get('cardType')) : undefined,
@@ -467,7 +446,8 @@ function TransactionsPageInner() {
         dateTo: searchParams.get('dateTo') ? `${searchParams.get('dateTo')}T23:59:59` : undefined,
         sortBy: normalizedSortBy,
         sortDir: normalizedSortDirection,
-    }), [searchParams])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }), [searchParamsKey, normalizedSortBy, normalizedSortDirection])
 
     // Search state â€” local, communicated via URL
     const [searchValue, setSearchValue] = useState(searchParams.get('search') ?? '')
@@ -760,7 +740,7 @@ function TransactionsPageInner() {
         },
         {
             id: 'voided_returned' as const,
-            title: 'Voided/Returned',
+            title: 'Voids & Refunds',
             value: currentSummary
                 ? `${currentSummary.voidReturnCount.toLocaleString()} • ${formatCurrencyValue(currentSummary.voidReturnAmount)}`
                 : '-',
@@ -855,8 +835,11 @@ function TransactionsPageInner() {
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-3xl font-bold tracking-tight">Transactions</h1>
-                    <p className="text-muted-foreground">Monitor and manage all transaction activity</p>
+                    <h1 className="text-3xl font-bold tracking-tight">Payments &amp; Banking</h1>
+                    <p className="text-muted-foreground">Payment ledger, settlements, and disputes across all merchants</p>
+                    <div className="mt-3">
+                        <ConnectivityStrip merchantIds={filters.merchantIds ?? null} />
+                    </div>
                 </div>
                 <div className="flex items-center gap-2">
                     <Button
@@ -1077,8 +1060,7 @@ function TransactionsPageInner() {
                                             </Button>
                                         </TableHead>
                                     )}
-                                    {columnVisibility.payStatus && <TableHead className={stickyHeadClass}>Pay Status</TableHead>}
-                                    {columnVisibility.orderStatus && <TableHead className={stickyHeadClass}>Order Status</TableHead>}
+                                    {columnVisibility.payStatus && <TableHead className={stickyHeadClass}>Status</TableHead>}
                                     {columnVisibility.staff && <TableHead className={stickyHeadClass}>Staff</TableHead>}
                                     {columnVisibility.date && (
                                         <TableHead className={stickyHeadClass}>
@@ -1179,9 +1161,6 @@ function TransactionsPageInner() {
                                         )}
                                         {columnVisibility.payStatus && (
                                             <TableCell>{getPaymentStatusBadge(tx.status)}</TableCell>
-                                        )}
-                                        {columnVisibility.orderStatus && (
-                                            <TableCell>{getOrderStatusBadge(tx.order_status)}</TableCell>
                                         )}
                                         {columnVisibility.staff && (
                                             <TableCell>{tx.staff_name || <span className="text-muted-foreground">-</span>}</TableCell>
@@ -1293,9 +1272,26 @@ function TransactionsPageInner() {
                 </CardContent>
             </Card>
 
-            <BatchReconciliationSection />
-            <ChargebacksSection />
-            <AuditLogSection />
+            <Tabs defaultValue="settlements" className="space-y-4">
+                <TabsList>
+                    <TabsTrigger value="payments">Payments ledger</TabsTrigger>
+                    <TabsTrigger value="settlements">Settlements</TabsTrigger>
+                    <TabsTrigger value="disputes">Disputes</TabsTrigger>
+                    <TabsTrigger value="audit">Audit</TabsTrigger>
+                </TabsList>
+                <TabsContent value="payments" className="pt-2">
+                    <PaymentsLedger initialMerchantIds={filters.merchantIds} />
+                </TabsContent>
+                <TabsContent value="settlements" className="pt-2">
+                    <BatchReconciliationSection />
+                </TabsContent>
+                <TabsContent value="disputes" className="pt-2">
+                    <ChargebacksSection />
+                </TabsContent>
+                <TabsContent value="audit" className="pt-2">
+                    <AuditLogSection />
+                </TabsContent>
+            </Tabs>
 
             <AlertDialog open={!!refundTarget} onOpenChange={(open) => !open && setRefundTarget(null)}>
                 <AlertDialogContent>

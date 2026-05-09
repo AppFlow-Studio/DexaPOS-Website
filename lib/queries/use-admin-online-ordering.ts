@@ -14,6 +14,11 @@ import {
   adminSaveOnlineStoreRequestRequirements,
 } from '@/app/manage/actions/admin-merchant/online-ordering'
 import { reconcileNmiOrderPayment } from '@/app/manage/actions/admin-merchant/online-payment-reconciliation'
+import {
+  adminCreateNmiMerchant,
+  getAdminNmiMerchantStatus,
+  type AdminCreateNmiMerchantInput,
+} from '@/app/manage/actions/admin-merchant/nmi'
 
 // ============================================================================
 // Types (matching server action types)
@@ -340,3 +345,28 @@ export function useAdminReconcileNmiOrderPayment() {
     mutationFn: (orderPaymentId: string) => reconcileNmiOrderPayment(orderPaymentId),
   })
 }
+
+export function useAdminNmiMerchantStatus(merchantId: string) {
+  return useQuery({
+    queryKey: [...adminKeys.merchants(), merchantId, 'nmi-status'],
+    queryFn: () => getAdminNmiMerchantStatus(merchantId),
+    enabled: !!merchantId,
+  })
+}
+
+export function useAdminCreateNmiMerchant() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (input: AdminCreateNmiMerchantInput) => adminCreateNmiMerchant(input),
+    onSuccess: (_res, vars) => {
+      queryClient.invalidateQueries({
+        queryKey: [...adminKeys.merchants(), vars.merchantId, 'nmi-status'],
+      })
+      queryClient.invalidateQueries({
+        queryKey: [...adminKeys.merchants(), vars.merchantId, 'online-ordering'],
+      })
+    },
+  })
+}
+
+export type { AdminCreateNmiMerchantInput }

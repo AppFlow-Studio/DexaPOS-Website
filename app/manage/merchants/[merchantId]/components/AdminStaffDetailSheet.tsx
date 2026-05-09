@@ -374,16 +374,14 @@ export function AdminStaffDetailSheet({
                 </div>
                 <div className="space-y-4">
                   <StaffPinField
-                    pin={effectivePin}
+                    memberId={staff.member_id}
+                    locationId={pinAssignment?.location_id ?? primaryLocation?.location_id ?? ""}
+                    locationName={pinAssignment?.location_name}
                     hasPin={hasPin || !!generatedPin}
+                    canReveal={canManage}
                     onGenerate={handleGeneratePin}
                     isGenerating={resetPinMutation.isPending}
                     disabled={!canManage || !primaryLocation || !staff.staff_profile_id}
-                    visibleDescription={
-                      pinAssignment?.location_name
-                        ? `Use the eye icon to reveal the PIN for ${pinAssignment.location_name}.`
-                        : undefined
-                    }
                   />
 
                   {/* Custom PIN input */}
