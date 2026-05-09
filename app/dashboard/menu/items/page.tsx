@@ -35,6 +35,10 @@ import {
   ShieldCheck,
   ShieldX,
   Trash2,
+  CheckSquare,
+  CheckCheck,
+  Check,
+  CheckCircle2,
 } from "lucide-react";
 import { useState, useMemo, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
@@ -100,7 +104,6 @@ import { AVAILABLE_CHANNELS } from "@/types/inventory";
 import { DeleteMenuItem } from "../../actions/menu-items";
 import { CreateItemWizard } from "@/components/dashboard/menu/items/CreateItemWizard";
 import { useManagerPermissions } from "../../hooks/useManagerPermissions";
-import { Checkbox } from "@/components/ui/checkbox";
 import { BulkPriceAdjustDialog } from "@/components/dashboard/menu/items/BulkPriceAdjustDialog";
 
 // ============================================================================
@@ -204,6 +207,9 @@ function ItemCard({
   index = 0,
   taxRates = [],
   canDelete = false,
+  isSelectionMode = false,
+  isSelected = false,
+  onToggleSelect,
 }: {
   item: FlatItem;
   onEdit: () => void;
@@ -212,6 +218,9 @@ function ItemCard({
   index?: number;
   taxRates?: any[];
   canDelete?: boolean;
+  isSelectionMode?: boolean;
+  isSelected?: boolean;
+  onToggleSelect?: (id: string) => void;
 }) {
   const hasOverride = item.has_location_override;
   const priceColors =
@@ -238,13 +247,33 @@ function ItemCard({
     >
       <Card
         className={cn(
-          "overflow-hidden transition-all duration-300 h-full py-0.5 cursor-pointer",
+          "overflow-hidden transition-all duration-300 h-full py-0.5 cursor-pointer relative",
           "hover:shadow-lg hover:scale-[1.02] hover:border-primary/50",
           hasOverride && "ring-1 ring-amber-200",
           !item.effective_availability && "opacity-70",
+          isSelectionMode && isSelected &&
+            "ring-2 ring-primary border-primary/60 shadow-md scale-[1.01]",
+          isSelectionMode && !isSelected && "hover:ring-2 hover:ring-primary/40",
         )}
-        onClick={onView}
+        onClick={
+          isSelectionMode ? () => onToggleSelect?.(item.id) : onView
+        }
       >
+        {/* Selection indicator overlay */}
+        {isSelectionMode && (
+          <div className="absolute top-2 right-2 z-20 pointer-events-none">
+            <div
+              className={cn(
+                "flex items-center justify-center w-7 h-7 rounded-full border-2 transition-all duration-200 shadow-sm backdrop-blur-sm",
+                isSelected
+                  ? "bg-primary border-primary text-primary-foreground"
+                  : "bg-background/90 border-border",
+              )}
+            >
+              {isSelected && <Check className="h-4 w-4" strokeWidth={3} />}
+            </div>
+          </div>
+        )}
         {/* Image Section */}
         <div className="relative aspect-[4/3] bg-gradient-to-br from-muted/50 to-muted overflow-hidden">
           {isValidImageUrl(item.image) ? (
@@ -330,22 +359,24 @@ function ItemCard({
           )}
 
           {/* Hover overlay with actions */}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-end justify-center pb-14">
-            <div className="flex gap-2">
-              <Button
-                size="sm"
-                variant="secondary"
-                className="h-8 bg-white/95 hover:bg-white shadow-lg"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onEdit();
-                }}
-              >
-                <Edit3 className="h-3.5 w-3.5 mr-1.5" />
-                Edit
-              </Button>
+          {!isSelectionMode && (
+            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-end justify-center pb-14">
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="h-8 bg-white/95 hover:bg-white shadow-lg"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onEdit();
+                  }}
+                >
+                  <Edit3 className="h-3.5 w-3.5 mr-1.5" />
+                  Edit
+                </Button>
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         {/* Content Section */}
@@ -359,20 +390,14 @@ function ItemCard({
                 {item.description}
               </p>
             )}
-            <div className="flex items-center justify-between pt-2" onClick={(e) => e.stopPropagation()}>
-              <PriceSourcePopover
-                itemId={item.id}
-                currentPrice={item.effective_price}
-                sourceLevel={priceSourceToLevel(item.price_source)}
-                locationId={isAllLocations ? null : selectedLocationId}
-                canRemoveOverride={
-                  item.price_source === "location_item" && !isAllLocations
-                }
-                editScope={deriveScopeFromContext({
-                  isAllLocations,
-                  locationName: locationName || null,
-                })}
-              >
+            <div
+              className="flex items-center justify-between pt-2"
+              onClick={(e) => {
+                if (isSelectionMode) return;
+                e.stopPropagation();
+              }}
+            >
+              {isSelectionMode ? (
                 <div className="flex items-baseline gap-2">
                   <span className="text-lg font-bold text-primary">
                     ${item.effective_price.toFixed(2)}
@@ -382,9 +407,34 @@ function ItemCard({
                       ${item.base_price.toFixed(2)}
                     </span>
                   )}
-                  <Info className="h-3 w-3 text-muted-foreground opacity-60 self-center" />
                 </div>
-              </PriceSourcePopover>
+              ) : (
+                <PriceSourcePopover
+                  itemId={item.id}
+                  currentPrice={item.effective_price}
+                  sourceLevel={priceSourceToLevel(item.price_source)}
+                  locationId={isAllLocations ? null : selectedLocationId}
+                  canRemoveOverride={
+                    item.price_source === "location_item" && !isAllLocations
+                  }
+                  editScope={deriveScopeFromContext({
+                    isAllLocations,
+                    locationName: locationName || null,
+                  })}
+                >
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-lg font-bold text-primary">
+                      ${item.effective_price.toFixed(2)}
+                    </span>
+                    {hasOverride && item.base_price !== item.effective_price && (
+                      <span className="text-sm text-muted-foreground line-through">
+                        ${item.base_price.toFixed(2)}
+                      </span>
+                    )}
+                    <Info className="h-3 w-3 text-muted-foreground opacity-60 self-center" />
+                  </div>
+                </PriceSourcePopover>
+              )}
               {item.effective_cash_price && (
                 <Badge variant="outline" className="text-xs">
                   Cash: ${item.effective_cash_price.toFixed(2)}
@@ -470,7 +520,7 @@ function ItemCard({
               ))}
             </div>
           </div>
-          {canDelete && (
+          {canDelete && !isSelectionMode && (
             <Button
               size="sm"
               variant="destructive"
@@ -502,7 +552,7 @@ function ItemRow({
   index = 0,
   taxRates = [],
   canDelete = false,
-  isSelectable = false,
+  isSelectionMode = false,
   isSelected = false,
   onToggleSelect,
 }: {
@@ -513,7 +563,7 @@ function ItemRow({
   index?: number;
   taxRates?: any[];
   canDelete?: boolean;
-  isSelectable?: boolean;
+  isSelectionMode?: boolean;
   isSelected?: boolean;
   onToggleSelect?: (id: string) => void;
 }) {
@@ -540,21 +590,25 @@ function ItemRow({
           "flex items-center gap-4 p-4 rounded-xl border bg-card transition-all duration-200 cursor-pointer",
           "hover:shadow-md hover:border-primary/30",
           hasOverride && "ring-1 ring-amber-200",
-          isSelected && "ring-2 ring-primary border-primary/40 bg-primary/5",
+          isSelectionMode && isSelected &&
+            "ring-2 ring-primary border-primary/50 bg-primary/5",
+          isSelectionMode && !isSelected && "hover:ring-1 hover:ring-primary/30",
           !item.effective_availability && "opacity-70",
         )}
-        onClick={onView}
+        onClick={
+          isSelectionMode ? () => onToggleSelect?.(item.id) : onView
+        }
       >
-        {isSelectable && (
+        {isSelectionMode && (
           <div
-            className="shrink-0 flex items-center justify-center"
-            onClick={(e) => e.stopPropagation()}
+            className={cn(
+              "shrink-0 flex items-center justify-center w-7 h-7 rounded-full border-2 transition-all duration-200",
+              isSelected
+                ? "bg-primary border-primary text-primary-foreground"
+                : "bg-background border-border",
+            )}
           >
-            <Checkbox
-              checked={isSelected}
-              onCheckedChange={() => onToggleSelect?.(item.id)}
-              aria-label={`Select ${item.name}`}
-            />
+            {isSelected && <Check className="h-4 w-4" strokeWidth={3} />}
           </div>
         )}
         {/* Image */}
@@ -722,63 +776,67 @@ function ItemRow({
         </div>
 
         {/* Actions */}
-        <div className="hidden md:flex flex-col gap-1 w-20 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-7 w-full justify-start px-2"
-            onClick={(e) => {
-              e.stopPropagation();
-              onEdit();
-            }}
-          >
-            <Edit3 className="h-3.5 w-3.5 mr-1.5" />
-            Edit
-          </Button>
-          {canDelete && (
+        {!isSelectionMode && (
+          <div className="hidden md:flex flex-col gap-1 w-20 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
             <Button
               size="sm"
               variant="ghost"
-              className="h-7 w-full justify-start px-2 text-destructive hover:text-destructive hover:bg-destructive/10"
+              className="h-7 w-full justify-start px-2"
               onClick={(e) => {
                 e.stopPropagation();
-                onDelete();
+                onEdit();
               }}
             >
-              <Trash2 className="h-3.5 w-3.5 mr-1.5" />
-              Delete
+              <Edit3 className="h-3.5 w-3.5 mr-1.5" />
+              Edit
             </Button>
-          )}
-        </div>
+            {canDelete && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 w-full justify-start px-2 text-destructive hover:text-destructive hover:bg-destructive/10"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete();
+                }}
+              >
+                <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                Delete
+              </Button>
+            )}
+          </div>
+        )}
 
         {/* Mobile dropdown */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 shrink-0 md:hidden"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <MoreVertical className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={onEdit}>
-              <Edit3 className="h-4 w-4 mr-2" />
-              Quick Edit
-            </DropdownMenuItem>
-            {canDelete && (
-              <DropdownMenuItem
-                onClick={onDelete}
-                className="text-destructive focus:text-destructive"
+        {!isSelectionMode && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 shrink-0 md:hidden"
+                onClick={(e) => e.stopPropagation()}
               >
-                <Trash2 className="h-4 w-4 mr-2" />
-                Delete
+                <MoreVertical className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={onEdit}>
+                <Edit3 className="h-4 w-4 mr-2" />
+                Quick Edit
               </DropdownMenuItem>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
+              {canDelete && (
+                <DropdownMenuItem
+                  onClick={onDelete}
+                  className="text-destructive focus:text-destructive"
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
       </div>
     </div>
   );
@@ -800,6 +858,9 @@ function CategoryGroup({
   taxRates = [],
   isAllLocations = false,
   selectedLocationId = null,
+  isSelectionMode = false,
+  selectedItemIds,
+  onToggleSelect,
 }: {
   category: {
     id: string;
@@ -817,6 +878,9 @@ function CategoryGroup({
   taxRates?: any[];
   isAllLocations?: boolean;
   selectedLocationId?: string | null;
+  isSelectionMode?: boolean;
+  selectedItemIds?: Set<string>;
+  onToggleSelect?: (id: string) => void;
 }) {
   return (
     <Collapsible open={isExpanded} onOpenChange={onToggle}>
@@ -883,6 +947,9 @@ function CategoryGroup({
                       onView={() => onViewItem(item)}
                       onDelete={() => onDeleteItem(item)}
                       canDelete={itemCanDelete && canDeleteItems}
+                      isSelectionMode={isSelectionMode}
+                      isSelected={selectedItemIds?.has(item.id) ?? false}
+                      onToggleSelect={onToggleSelect}
                     />
                   );
                 })}
@@ -968,6 +1035,7 @@ export default function MenuItemsPage() {
   const [isCreateWizardOpen, setIsCreateWizardOpen] = useState(false);
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
   const [bulkPriceDialogOpen, setBulkPriceDialogOpen] = useState(false);
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
 
   const toggleItemSelected = (id: string) => {
     setSelectedItemIds((prev) => {
@@ -978,13 +1046,6 @@ export default function MenuItemsPage() {
     });
   };
   const clearSelection = () => setSelectedItemIds(new Set());
-
-  // Selection only renders in list view; clear when leaving it.
-  useEffect(() => {
-    if (viewMode !== "list" && selectedItemIds.size > 0) {
-      setSelectedItemIds(new Set());
-    }
-  }, [viewMode, selectedItemIds.size]);
 
   // Read category filter from URL
   useEffect(() => {
@@ -1505,6 +1566,34 @@ export default function MenuItemsPage() {
                 </Button>
               )}
 
+              {/* Selection Mode Toggle — works across all views */}
+              <Button
+                variant={isSelectionMode ? "default" : "outline"}
+                size="sm"
+                onClick={() => {
+                  setIsSelectionMode((prev) => {
+                    if (prev) clearSelection();
+                    return !prev;
+                  });
+                }}
+                className={cn(
+                  "gap-1.5",
+                  isSelectionMode &&
+                    "bg-primary text-primary-foreground hover:bg-primary/90",
+                )}
+              >
+                <CheckSquare className="h-4 w-4" />
+                {isSelectionMode ? "Selecting" : "Select"}
+                {isSelectionMode && selectedItemIds.size > 0 && (
+                  <Badge
+                    variant="secondary"
+                    className="ml-1 h-5 px-1.5 text-[10px] bg-primary-foreground/20 text-primary-foreground border-0"
+                  >
+                    {selectedItemIds.size}
+                  </Badge>
+                )}
+              </Button>
+
               {/* View Mode Toggle */}
               <div className="flex items-center border rounded-lg overflow-hidden">
                 <Button
@@ -1646,6 +1735,86 @@ export default function MenuItemsPage() {
         </CardHeader>
 
         <CardContent>
+          {isSelectionMode && (
+            <div className="sticky top-0 z-20 -mx-1 px-3 py-2 mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-primary/30 bg-primary/5 backdrop-blur-md shadow-sm animate-in fade-in slide-in-from-top-2 duration-200">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <CheckCircle2 className="h-4 w-4 text-primary" />
+                <span>
+                  {selectedItemIds.size} of {filteredItems.length} selected
+                </span>
+              </div>
+              <div className="h-5 w-px bg-border mx-1" />
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 px-2 text-xs gap-1"
+                onClick={() => {
+                  const allSelected =
+                    filteredItems.length > 0 &&
+                    filteredItems.every((it) => selectedItemIds.has(it.id));
+                  if (allSelected) {
+                    clearSelection();
+                  } else {
+                    setSelectedItemIds(
+                      new Set(filteredItems.map((it) => it.id)),
+                    );
+                  }
+                }}
+                disabled={filteredItems.length === 0}
+              >
+                <CheckCheck className="h-3.5 w-3.5" />
+                {filteredItems.length > 0 &&
+                filteredItems.every((it) => selectedItemIds.has(it.id))
+                  ? "Deselect all"
+                  : "Select all"}
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 px-2 text-xs"
+                onClick={clearSelection}
+                disabled={selectedItemIds.size === 0}
+              >
+                Clear
+              </Button>
+              <div className="ml-auto flex items-center gap-2">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      size="sm"
+                      variant="default"
+                      className="h-8 gap-1"
+                      disabled={selectedItemIds.size === 0}
+                    >
+                      Bulk edit
+                      <ChevronDown className="h-3.5 w-3.5" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem
+                      onClick={() => setBulkPriceDialogOpen(true)}
+                      disabled={selectedItemIds.size === 0}
+                    >
+                      <DollarSign className="h-4 w-4 mr-2" />
+                      Adjust price…
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 px-2 gap-1"
+                  onClick={() => {
+                    setIsSelectionMode(false);
+                    clearSelection();
+                  }}
+                >
+                  <X className="h-4 w-4" />
+                  Done
+                </Button>
+              </div>
+            </div>
+          )}
           {isLoading ? (
             <div
               className={
@@ -1726,6 +1895,9 @@ export default function MenuItemsPage() {
                     taxRates={taxRates}
                     isAllLocations={isAllLocations}
                     selectedLocationId={selectedLocationId}
+                    isSelectionMode={isSelectionMode}
+                    selectedItemIds={selectedItemIds}
+                    onToggleSelect={toggleItemSelected}
                   />
                 );
               })}
@@ -1749,6 +1921,9 @@ export default function MenuItemsPage() {
                     onView={() => handleViewDetails(item)}
                     onDelete={() => setDeletingItem(item)}
                     canDelete={canDelete}
+                    isSelectionMode={isSelectionMode}
+                    isSelected={selectedItemIds.has(item.id)}
+                    onToggleSelect={toggleItemSelected}
                   />
                 );
               })}
@@ -1756,39 +1931,6 @@ export default function MenuItemsPage() {
           ) : (
             // List View
             <div className="space-y-2">
-              {selectedItemIds.size > 0 && (
-                <div className="sticky top-0 z-10 -mx-1 px-3 py-2 mb-2 flex items-center gap-3 rounded-lg border bg-primary/5 backdrop-blur">
-                  <span className="text-sm font-medium">
-                    {selectedItemIds.size} selected
-                  </span>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-7 px-2 text-xs"
-                    onClick={clearSelection}
-                  >
-                    Clear
-                  </Button>
-                  <div className="ml-auto">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button size="sm" variant="default" className="h-8">
-                          Bulk edit
-                          <ChevronDown className="ml-1 h-3.5 w-3.5" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem
-                          onClick={() => setBulkPriceDialogOpen(true)}
-                        >
-                          <DollarSign className="h-4 w-4 mr-2" />
-                          Adjust price…
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                </div>
-              )}
               {filteredItems.map((item, index) => {
                 // Can delete if: viewing all locations OR item belongs to current location
                 const canDelete = isAllLocations
@@ -1804,7 +1946,7 @@ export default function MenuItemsPage() {
                     onView={() => handleViewDetails(item)}
                     onDelete={() => setDeletingItem(item)}
                     canDelete={canDelete}
-                    isSelectable
+                    isSelectionMode={isSelectionMode}
                     isSelected={selectedItemIds.has(item.id)}
                     onToggleSelect={toggleItemSelected}
                   />
@@ -1949,6 +2091,7 @@ export default function MenuItemsPage() {
           }))}
         onSuccess={() => {
           clearSelection();
+          setIsSelectionMode(false);
           queryClient.invalidateQueries({ queryKey: ["menu-items"] });
           queryClient.invalidateQueries({ queryKey: ["menu-items-flat"] });
           queryClient.invalidateQueries({
