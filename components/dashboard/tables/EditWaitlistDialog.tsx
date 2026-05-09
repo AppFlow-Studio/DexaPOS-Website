@@ -110,7 +110,7 @@ export function EditWaitlistDialog ({
       await UpdateWaitlistEntryAction(locationId, entry.id, {
         partyName: partyName.trim(),
         partySize: size,
-        phone: (normalizePhone(phone) ?? phone.trim()) || undefined,
+        phone: normalizePhone(phone) ?? undefined,
         notes: notes.trim() || undefined,
         preferredSection: preferredSection.trim() || undefined,
         seatingPreference: seatingPreference.trim() || undefined,
