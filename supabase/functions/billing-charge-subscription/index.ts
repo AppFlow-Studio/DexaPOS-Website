@@ -1,5 +1,6 @@
 import { createClient } from 'npm:@supabase/supabase-js'
 import { createSale } from '../_shared/nmi.ts'
+import { sendSubscriptionInvoicePaymentEmail } from '../_shared/payment-emails.ts'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -47,6 +48,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         location_id,
         invoice_number,
         total_amount,
+        due_date,
         billing_method,
         status,
         payment_attempt_count,
@@ -354,6 +356,36 @@ Deno.serve(async (req: Request): Promise<Response> => {
         nmi_body: charge.body,
       },
     })
+
+    try {
+      const [{ data: merchant }, { data: location }] = await Promise.all([
+        supabase
+          .from('merchants')
+          .select('name, owner_email')
+          .eq('id', invoice.merchant_id)
+          .maybeSingle(),
+        supabase
+          .from('locations')
+          .select('name')
+          .eq('id', invoice.location_id)
+          .maybeSingle(),
+      ])
+
+      const ownerEmail = merchant?.owner_email?.trim()
+      if (ownerEmail) {
+        await sendSubscriptionInvoicePaymentEmail({
+          to: ownerEmail,
+          merchantName: merchant?.name || 'Dexa POS',
+          locationName: location?.name || 'Location',
+          invoiceNumber: invoice.invoice_number,
+          totalAmount: toAmount(invoice.total_amount),
+          dueDate: invoice.due_date,
+          transactionId: charge.details.transactionId || charge.details.id || null,
+        })
+      }
+    } catch (emailError) {
+      console.error('[billing-charge-subscription] Failed to send invoice email:', emailError)
+    }
 
     return jsonResponse({
       success: true,

@@ -26,6 +26,7 @@ import {
 import {
   createSale,
 } from '../_shared/nmi.ts'
+import { sendOnlineOrderPaymentEmail } from '../_shared/payment-emails.ts'
 // ============================================================================
 // ENV
 // ============================================================================
@@ -120,6 +121,15 @@ interface StorefrontPaymentDeviceAccessLog {
   device_id: string
   provider: string
   environment: string
+}
+
+interface MerchantEmailRow {
+  name: string | null
+  owner_email: string | null
+}
+
+interface LocationEmailRow {
+  name: string | null
 }
 
 // ============================================================================
@@ -986,6 +996,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
         payment_status: 'paid',
         amount_paid: toDollars(totalCents),
         amount_due: 0,
+        check_status: 'Closed',
+        closed_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
       .eq('id', orderResult.order_id)
@@ -1002,6 +1014,42 @@ Deno.serve(async (req: Request): Promise<Response> => {
       rows: paymentUpdateData?.length ?? 0,
       data: paymentUpdateData,
     })
+  }
+
+  if (!payCashInStore) {
+    const customerEmail =
+      session?.customer_email?.trim() ||
+      body.customer_email?.trim() ||
+      null
+
+    if (customerEmail) {
+      try {
+        const [{ data: merchant }, { data: location }] = await Promise.all([
+          supabase
+            .from('merchants')
+            .select('name, owner_email')
+            .eq('id', merchantId)
+            .maybeSingle(),
+          supabase
+            .from('locations')
+            .select('name')
+            .eq('id', locationId)
+            .maybeSingle(),
+        ])
+
+        await sendOnlineOrderPaymentEmail({
+          to: customerEmail,
+          merchantName: (merchant as MerchantEmailRow | null)?.name || 'Dexa POS',
+          locationName: (location as LocationEmailRow | null)?.name || 'Store',
+          displayNumber: orderResult.display_number ?? null,
+          orderNumber: orderResult.order_number ?? null,
+          totalAmount: toDollars(totalCents),
+          orderType: body.order_type,
+        })
+      } catch (emailError) {
+        logError('EMAIL', 'Failed to send online-order payment email', emailError)
+      }
+    }
   }
 
   // Link order to customer if session has customer_id
