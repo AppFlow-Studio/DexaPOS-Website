@@ -39,6 +39,7 @@ import {
   CheckCheck,
   Check,
   CheckCircle2,
+  Truck,
 } from "lucide-react";
 import { useState, useMemo, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
@@ -105,6 +106,7 @@ import { DeleteMenuItem } from "../../actions/menu-items";
 import { CreateItemWizard } from "@/components/dashboard/menu/items/CreateItemWizard";
 import { useManagerPermissions } from "../../hooks/useManagerPermissions";
 import { BulkPriceAdjustDialog } from "@/components/dashboard/menu/items/BulkPriceAdjustDialog";
+import { BulkDeliveryPriceAdjustDialog } from "@/components/dashboard/menu/items/BulkDeliveryPriceAdjustDialog";
 
 // ============================================================================
 // TYPES
@@ -1104,6 +1106,7 @@ export default function MenuItemsPage() {
   const [isCreateWizardOpen, setIsCreateWizardOpen] = useState(false);
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
   const [bulkPriceDialogOpen, setBulkPriceDialogOpen] = useState(false);
+  const [bulkDeliveryDialogOpen, setBulkDeliveryDialogOpen] = useState(false);
   const [isSelectionMode, setIsSelectionMode] = useState(false);
 
   const toggleItemSelected = (id: string) => {
@@ -1865,7 +1868,14 @@ export default function MenuItemsPage() {
                       disabled={selectedItemIds.size === 0}
                     >
                       <DollarSign className="h-4 w-4 mr-2" />
-                      Adjust price…
+                      Adjust card price…
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => setBulkDeliveryDialogOpen(true)}
+                      disabled={selectedItemIds.size === 0}
+                    >
+                      <Truck className="h-4 w-4 mr-2" />
+                      Adjust online (delivery) price…
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -2157,6 +2167,33 @@ export default function MenuItemsPage() {
             id: it.id,
             name: it.name,
             effectivePrice: it.effective_price,
+          }))}
+        onSuccess={() => {
+          clearSelection();
+          setIsSelectionMode(false);
+          queryClient.invalidateQueries({ queryKey: ["menu-items"] });
+          queryClient.invalidateQueries({ queryKey: ["menu-items-flat"] });
+          queryClient.invalidateQueries({
+            queryKey: ["categories-with-items"],
+          });
+          refetch();
+        }}
+      />
+
+      {/* Bulk Delivery (Online) Price Adjustment */}
+      <BulkDeliveryPriceAdjustDialog
+        open={bulkDeliveryDialogOpen}
+        onOpenChange={setBulkDeliveryDialogOpen}
+        clerkOrgId={clerkOrgId}
+        currentLocationId={isAllLocations ? null : selectedLocationId}
+        isAllLocations={isAllLocations}
+        selectedItems={filteredItems
+          .filter((it) => selectedItemIds.has(it.id))
+          .map((it) => ({
+            id: it.id,
+            name: it.name,
+            cardPrice: it.effective_price,
+            currentDeliveryPrice: it.effective_delivery_price ?? null,
           }))}
         onSuccess={() => {
           clearSelection();
