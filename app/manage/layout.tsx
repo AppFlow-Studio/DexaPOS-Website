@@ -50,7 +50,6 @@ import {
     History,
     LogOut,
     Monitor,
-    Plug,
     AlertOctagon,
     Receipt,
     LucideIcon,
@@ -185,20 +184,14 @@ const navMain: NavGroup[] = [
                 icon: Monitor,
                 requiredPermission: 'system.config.manage' as PermissionCode,
             },
-            // {
-            //     title: 'Integrations',
-            //     url: '/manage/settings/integrations',
-            //     icon: Plug,
-            //     requiredPermission: 'hq.merchant.update' as PermissionCode,
-            // },
         ]
     }
 ]
 
 const navFooter = [
     {
-        title: 'Settings',
-        url: '/manage/settings',
+        title: 'NMI Integration',
+        url: '/manage/nmi-integration',
         icon: Settings,
         requiredPermission: 'system.config.manage' as PermissionCode,
     },

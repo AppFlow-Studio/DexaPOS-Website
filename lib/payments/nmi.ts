@@ -47,6 +47,12 @@ export type NmiTransactionDetails = {
   raw: JsonRecord;
 };
 
+export type NmiVaultCustomerDetails = {
+  customerVaultId: string;
+  initialTransactionId: string;
+  raw: JsonRecord;
+};
+
 function parseTransactionDetails(raw: JsonRecord): NmiTransactionDetails {
   return {
     id: firstString(raw, ["id", "transaction_id", "transactionid"]),
@@ -198,6 +204,122 @@ export async function getNmiTransaction(
 
   return {
     success: result.ok,
+    ...result,
+  };
+}
+
+function parseVaultCustomerDetails(raw: JsonRecord): NmiVaultCustomerDetails {
+  const customerRecord = asRecord(raw.customer);
+  const customerVaultId =
+    firstString(customerRecord, ["id", "customer_vault_id"]) ||
+    firstString(raw, ["customer_vault_id", "customer_id"]);
+
+  const initialTransactionId =
+    firstString(raw, ["transaction_id", "transactionid"]) ||
+    (customerVaultId && firstString(raw, ["id"]) === customerVaultId
+      ? ""
+      : firstString(raw, ["id"]));
+
+  return {
+    customerVaultId: customerVaultId || firstString(raw, ["id"]),
+    initialTransactionId,
+    raw,
+  };
+}
+
+export async function createNmiVaultCustomer(
+  config: NmiRequestConfig,
+  params: {
+    paymentToken: string;
+    firstName?: string;
+    lastName?: string;
+    email?: string;
+    address1?: string;
+    address2?: string;
+    city?: string;
+    state?: string;
+    zip?: string;
+    country?: string;
+    phone?: string;
+  }
+) {
+  const result = await callNmi(
+    "/api/v5/customers",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        payment_details: {
+          payment_token: params.paymentToken,
+        },
+        cit_mit: {
+          stored_credential_indicator: "stored",
+          initiated_by: "customer",
+        },
+        billing_address: {
+          first_name: params.firstName,
+          last_name: params.lastName,
+          email: params.email,
+          address1: params.address1,
+          address2: params.address2,
+          city: params.city,
+          state: params.state,
+          zip: params.zip,
+          country: params.country ?? "US",
+          phone: params.phone,
+        },
+      }),
+    },
+    config
+  );
+
+  const vault = parseVaultCustomerDetails(result.body);
+
+  return {
+    success: result.ok && Boolean(vault.customerVaultId),
+    vault,
+    ...result,
+  };
+}
+
+export async function createNmiVaultSale(
+  config: NmiRequestConfig,
+  params: {
+    amount: number;
+    customerVaultId: string;
+    currency?: string;
+    industry?: "retail" | "restaurant" | "ecommerce" | "moto" | "lodging";
+    initiatedBy?: "customer" | "merchant";
+    initialTransactionId?: string;
+  }
+) {
+  const citMit: JsonRecord = {
+    stored_credential_indicator: "used",
+    initiated_by: params.initiatedBy ?? "merchant",
+  };
+
+  if (params.initialTransactionId?.trim()) {
+    citMit.initial_transaction_id = params.initialTransactionId.trim();
+  }
+
+  const result = await callNmi(
+    "/api/v5/payments/sale",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        amount: params.amount,
+        currency: params.currency ?? "USD",
+        industry: params.industry ?? "ecommerce",
+        payment_details: {
+          customer_vault_id: params.customerVaultId,
+        },
+        cit_mit: citMit,
+      }),
+    },
+    config
+  );
+
+  return {
+    success: result.ok && isApproved(result.details),
     ...result,
   };
 }

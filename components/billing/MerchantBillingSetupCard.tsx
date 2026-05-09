@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState, useTransition } from 'react'
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { toast } from 'sonner'
 import { AlertCircle, Building2, CreditCard, Shield } from 'lucide-react'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -12,12 +12,19 @@ import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Separator } from '@/components/ui/separator'
 import {
+  getMerchantBillingCardSetup,
   getMerchantBillingProfiles,
   saveMerchantBilling,
+  saveMerchantBillingCardWithVault,
   type MerchantBankAccountType,
+  type MerchantBillingCardSetupRecord,
   type MerchantBillingMethod,
   type MerchantBillingProfileRecord,
 } from '@/app/manage/actions/merchant-billing'
+import {
+  PaymentCardForm,
+  type PaymentCardFormHandle,
+} from '@/app/sites/components/checkout/PaymentCardForm'
 
 interface MerchantBillingSetupCardProps {
   merchantId: string
@@ -45,6 +52,11 @@ export function MerchantBillingSetupCard({
   const [isLoading, setIsLoading] = useState(true)
   const [isPending, startTransition] = useTransition()
   const [profiles, setProfiles] = useState<MerchantBillingProfileRecord[]>([])
+  const [cardSetup, setCardSetup] = useState<MerchantBillingCardSetupRecord>({
+    configured: false,
+    label: null,
+    tokenizationKey: null,
+  })
   const [method, setMethod] = useState<MerchantBillingMethod>('ach')
 
   const [bankName, setBankName] = useState('')
@@ -53,11 +65,10 @@ export function MerchantBillingSetupCard({
   const [accountNumber, setAccountNumber] = useState('')
   const [accountType, setAccountType] = useState<MerchantBankAccountType>('checking')
 
-  const [cardToken, setCardToken] = useState('')
-  const [cardBrand, setCardBrand] = useState('')
-  const [cardLastFour, setCardLastFour] = useState('')
-  const [cardExpMonth, setCardExpMonth] = useState('')
-  const [cardExpYear, setCardExpYear] = useState('')
+  const [cardholderName, setCardholderName] = useState('')
+  const [billingEmail, setBillingEmail] = useState('')
+  const [cardFormError, setCardFormError] = useState('')
+  const cardFormRef = useRef<PaymentCardFormHandle | null>(null)
 
   const primaryProfile = useMemo(
     () => profiles.find((profile) => profile.is_primary) || profiles[0] || null,
@@ -67,8 +78,12 @@ export function MerchantBillingSetupCard({
   const refreshProfiles = () => {
     startTransition(async () => {
       try {
-        const nextProfiles = await getMerchantBillingProfiles(merchantId)
+        const [nextProfiles, nextCardSetup] = await Promise.all([
+          getMerchantBillingProfiles(merchantId),
+          getMerchantBillingCardSetup(merchantId),
+        ])
         setProfiles(nextProfiles)
+        setCardSetup(nextCardSetup)
 
         const primary = nextProfiles.find((profile) => profile.is_primary) || nextProfiles[0] || null
         if (primary) {
@@ -80,11 +95,7 @@ export function MerchantBillingSetupCard({
             setRoutingNumber('')
             setAccountNumber('')
           } else {
-            setCardBrand(primary.card_brand || '')
-            setCardLastFour(primary.card_last_four || '')
-            setCardExpMonth(primary.card_exp_month ? String(primary.card_exp_month) : '')
-            setCardExpYear(primary.card_exp_year ? String(primary.card_exp_year) : '')
-            setCardToken(primary.card_token || '')
+            setCardholderName(primary.account_holder_name || '')
           }
         }
       } catch (error: any) {
@@ -102,6 +113,41 @@ export function MerchantBillingSetupCard({
 
   const handleSave = () => {
     startTransition(async () => {
+      if (method === 'card') {
+        const validation = cardFormRef.current?.validateCardInput()
+        if (!validation?.valid) {
+          toast.error(validation?.error || 'Please complete your card details.')
+          return
+        }
+
+        let tokenizedCard: { tokenId: string; cardType: string | null; cardLastFour: string | null }
+        try {
+          tokenizedCard = await cardFormRef.current!.tokenize()
+        } catch (error: any) {
+          toast.error(error?.message || 'Failed to tokenize card.')
+          return
+        }
+
+        const result = await saveMerchantBillingCardWithVault({
+          merchantId,
+          paymentToken: tokenizedCard.tokenId,
+          cardholderName,
+          billingEmail,
+          cardBrand: tokenizedCard.cardType,
+          cardLastFour: tokenizedCard.cardLastFour,
+        })
+
+        if (!result.success) {
+          toast.error(result.error || 'Failed to save billing profile.')
+          return
+        }
+
+        toast.success('Billing card saved to NMI vault.')
+        setCardFormError('')
+        refreshProfiles()
+        return
+      }
+
       const result = await saveMerchantBilling({
         merchantId,
         billingMethod: method,
@@ -110,11 +156,6 @@ export function MerchantBillingSetupCard({
         routingNumber,
         accountNumber,
         accountType,
-        cardToken,
-        cardBrand,
-        cardLastFour,
-        cardExpMonth: Number(cardExpMonth),
-        cardExpYear: Number(cardExpYear),
       })
 
       if (!result.success) {
@@ -209,7 +250,7 @@ export function MerchantBillingSetupCard({
                 <RadioGroupItem value="card" id="billing-card" />
                 <div>
                   <div className="font-medium">Credit / Debit Card</div>
-                  <div className="text-xs text-muted-foreground">Use processor tokenized card references</div>
+                  <div className="text-xs text-muted-foreground">Stored in the Dexa Billing NMI vault</div>
                 </div>
               </label>
             </RadioGroup>
@@ -280,61 +321,62 @@ export function MerchantBillingSetupCard({
               </div>
             </div>
           ) : (
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2 md:col-span-2">
-                <Label htmlFor="card-token">Card Token</Label>
-                <Input
-                  id="card-token"
-                  value={cardToken}
-                  onChange={(event) => setCardToken(event.target.value)}
-                  placeholder="tok_xxx from payment processor"
-                  disabled={!canEdit}
-                />
+            <div className="space-y-4">
+              {!cardSetup.configured ? (
+                <Alert>
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    Dexa Billing NMI is not configured yet. Ask HQ to add the platform billing keys in
+                    Settings before saving a billing card.
+                  </AlertDescription>
+                </Alert>
+              ) : null}
+
+              {cardSetup.label ? (
+                <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+                  Billing card will be stored in: <span className="font-medium text-foreground">{cardSetup.label}</span>
+                </div>
+              ) : null}
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="cardholder-name">Cardholder Name</Label>
+                  <Input
+                    id="cardholder-name"
+                    value={cardholderName}
+                    onChange={(event) => setCardholderName(event.target.value)}
+                    placeholder="Jane Doe"
+                    disabled={!canEdit}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="billing-email">Billing Email</Label>
+                  <Input
+                    id="billing-email"
+                    value={billingEmail}
+                    onChange={(event) => setBillingEmail(event.target.value)}
+                    placeholder="billing@example.com"
+                    type="email"
+                    disabled={!canEdit}
+                  />
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="card-brand">Card Brand</Label>
-                <Input
-                  id="card-brand"
-                  value={cardBrand}
-                  onChange={(event) => setCardBrand(event.target.value)}
-                  placeholder="visa"
-                  disabled={!canEdit}
+
+              {cardSetup.tokenizationKey ? (
+                <PaymentCardForm
+                  ref={cardFormRef}
+                  tokenizationKey={cardSetup.tokenizationKey}
+                  onError={setCardFormError}
+                  disabled={!canEdit || !cardSetup.configured}
                 />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="card-last-four">Card Last 4</Label>
-                <Input
-                  id="card-last-four"
-                  value={cardLastFour}
-                  onChange={(event) => setCardLastFour(event.target.value)}
-                  placeholder="4567"
-                  maxLength={4}
-                  inputMode="numeric"
-                  disabled={!canEdit}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="card-exp-month">Expiry Month</Label>
-                <Input
-                  id="card-exp-month"
-                  value={cardExpMonth}
-                  onChange={(event) => setCardExpMonth(event.target.value)}
-                  placeholder="MM"
-                  inputMode="numeric"
-                  disabled={!canEdit}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="card-exp-year">Expiry Year</Label>
-                <Input
-                  id="card-exp-year"
-                  value={cardExpYear}
-                  onChange={(event) => setCardExpYear(event.target.value)}
-                  placeholder="YYYY"
-                  inputMode="numeric"
-                  disabled={!canEdit}
-                />
-              </div>
+              ) : null}
+
+              {cardFormError ? (
+                <Alert>
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{cardFormError}</AlertDescription>
+                </Alert>
+              ) : null}
             </div>
           )}
 
@@ -348,7 +390,15 @@ export function MerchantBillingSetupCard({
           )}
 
           <div className="flex justify-end">
-            <Button onClick={handleSave} disabled={isLoading || isPending || !canEdit}>
+            <Button
+              onClick={handleSave}
+              disabled={
+                isLoading ||
+                isPending ||
+                !canEdit ||
+                (method === 'card' && !cardSetup.configured)
+              }
+            >
               {isPending ? 'Saving...' : 'Save Payment Method'}
             </Button>
           </div>

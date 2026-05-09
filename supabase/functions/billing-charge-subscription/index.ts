@@ -1,5 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js'
-import { createSale } from '../_shared/nmi.ts'
+import { createSale, createVaultSale } from '../_shared/nmi.ts'
 import { sendSubscriptionInvoicePaymentEmail } from '../_shared/payment-emails.ts'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
@@ -92,7 +92,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     let billingProfileQuery = supabase
       .from('merchant_billing_profiles')
-      .select('id, billing_method, card_token, card_brand, card_last_four, is_primary')
+      .select('id, billing_method, card_token, customer_vault_id, vault_initial_transaction_id, payment_device_id, platform_billing_config_id, card_brand, card_last_four, is_primary')
       .eq('merchant_id', invoice.merchant_id)
       .eq('billing_method', 'card')
       .eq('is_active', true)
@@ -119,79 +119,125 @@ Deno.serve(async (req: Request): Promise<Response> => {
       )
     }
 
-    if (!billingProfile.card_token?.trim()) {
+    if (!billingProfile.customer_vault_id?.trim() && !billingProfile.card_token?.trim()) {
       return jsonResponse(
         {
           success: false,
-          error: 'The selected billing profile is missing an NMI card token.',
-          code: 'billing_card_token_missing',
+          error: 'The selected billing profile is missing an NMI vault reference or card token.',
+          code: 'billing_payment_reference_missing',
         },
         400,
       )
     }
 
-    const { data: paymentConfigRows, error: paymentConfigError } = await supabase.rpc(
-      'get_storefront_payment_config',
-      {
-        p_location_id: invoice.location_id,
-      },
-    )
+    let resolvedPaymentDeviceId = billingProfile.payment_device_id ?? null
+    let resolvedPlatformBillingConfigId = billingProfile.platform_billing_config_id ?? null
+    let resolvedRailSource: 'platform_billing_config' | 'location_payment_device' = 'location_payment_device'
+    let nmiApiKey: string | null = null
 
-    if (paymentConfigError) {
-      console.error('[billing-charge-subscription] Payment config error:', paymentConfigError)
-      return jsonResponse(
+    if (billingProfile.customer_vault_id?.trim() && resolvedPlatformBillingConfigId) {
+      const { data: platformCredentialRows, error: platformCredentialError } = await supabase.rpc(
+        'get_platform_billing_provider_secret',
         {
-          success: false,
-          error: 'Payment configuration is unavailable for this location.',
-          code: 'payment_config_unavailable',
+          p_provider: 'nmi',
         },
-        502,
       )
+
+      if (platformCredentialError) {
+        console.error('[billing-charge-subscription] Platform credential error:', platformCredentialError)
+      } else {
+        const platformCredential = Array.isArray(platformCredentialRows)
+          ? platformCredentialRows[0]
+          : platformCredentialRows
+
+        if (platformCredential?.decrypted_secret?.trim()) {
+          nmiApiKey = platformCredential.decrypted_secret.trim()
+          resolvedRailSource = 'platform_billing_config'
+        }
+      }
     }
 
-    const storefrontPaymentConfig = Array.isArray(paymentConfigRows)
-      ? paymentConfigRows[0]
-      : paymentConfigRows
+    if (!nmiApiKey) {
+      if (!resolvedPaymentDeviceId) {
+        const { data: paymentConfigRows, error: paymentConfigError } = await supabase.rpc(
+          'get_storefront_payment_config',
+          {
+            p_location_id: invoice.location_id,
+          },
+        )
 
-    if (!storefrontPaymentConfig?.device_id) {
-      return jsonResponse(
+        if (paymentConfigError) {
+          console.error('[billing-charge-subscription] Payment config error:', paymentConfigError)
+          return jsonResponse(
+            {
+              success: false,
+              error: 'Payment configuration is unavailable for this location.',
+              code: 'payment_config_unavailable',
+            },
+            502,
+          )
+        }
+
+        const storefrontPaymentConfig = Array.isArray(paymentConfigRows)
+          ? paymentConfigRows[0]
+          : paymentConfigRows
+
+        resolvedPaymentDeviceId = storefrontPaymentConfig?.device_id ?? null
+      }
+
+      if (!resolvedPaymentDeviceId) {
+        return jsonResponse(
+          {
+            success: false,
+            error: 'No active billing rail is configured for this billing profile.',
+            code: 'payment_device_missing',
+          },
+          502,
+        )
+      }
+
+      const { data: credentialRows, error: credentialError } = await supabase.rpc(
+        'get_nmi_device_credentials',
         {
-          success: false,
-          error: 'No active NMI device is configured for this location.',
-          code: 'payment_device_missing',
+          p_device_id: resolvedPaymentDeviceId,
         },
-        502,
       )
+
+      if (credentialError) {
+        console.error('[billing-charge-subscription] Credential error:', credentialError)
+        return jsonResponse(
+          {
+            success: false,
+            error: 'Payment configuration is unavailable for this location.',
+            code: 'payment_credentials_unavailable',
+          },
+          502,
+        )
+      }
+
+      const nmiCredential = Array.isArray(credentialRows)
+        ? credentialRows[0]
+        : credentialRows
+
+      if (!nmiCredential?.decrypted_security_key?.trim()) {
+        return jsonResponse(
+          {
+            success: false,
+            error: 'The active NMI device is missing its private API key.',
+            code: 'payment_api_key_missing',
+          },
+          502,
+        )
+      }
+
+      nmiApiKey = nmiCredential.decrypted_security_key.trim()
     }
 
-    const { data: credentialRows, error: credentialError } = await supabase.rpc(
-      'get_nmi_device_credentials',
-      {
-        p_device_id: storefrontPaymentConfig.device_id,
-      },
-    )
-
-    if (credentialError) {
-      console.error('[billing-charge-subscription] Credential error:', credentialError)
+    if (!nmiApiKey) {
       return jsonResponse(
         {
           success: false,
-          error: 'Payment configuration is unavailable for this location.',
-          code: 'payment_credentials_unavailable',
-        },
-        502,
-      )
-    }
-
-    const nmiCredential = Array.isArray(credentialRows)
-      ? credentialRows[0]
-      : credentialRows
-
-    if (!nmiCredential?.decrypted_security_key?.trim()) {
-      return jsonResponse(
-        {
-          success: false,
-          error: 'The active NMI device is missing its private API key.',
+          error: 'No active NMI billing credentials are available.',
           code: 'payment_api_key_missing',
         },
         502,
@@ -216,15 +262,27 @@ Deno.serve(async (req: Request): Promise<Response> => {
       return jsonResponse({ success: false, error: processingError.message }, 500)
     }
 
-    const charge = await createSale(
-      { apiKey: nmiCredential.decrypted_security_key.trim() },
-      {
-        amount: toAmount(invoice.total_amount),
-        currency: 'USD',
-        paymentToken: billingProfile.card_token.trim(),
-        industry: 'ecommerce',
-      },
-    )
+    const charge = billingProfile.customer_vault_id?.trim()
+      ? await createVaultSale(
+          { apiKey: nmiApiKey },
+          {
+            amount: toAmount(invoice.total_amount),
+            currency: 'USD',
+            customerVaultId: billingProfile.customer_vault_id.trim(),
+            industry: 'ecommerce',
+            initiatedBy: 'merchant',
+            initialTransactionId: billingProfile.vault_initial_transaction_id?.trim() || undefined,
+          },
+        )
+      : await createSale(
+          { apiKey: nmiApiKey },
+          {
+            amount: toAmount(invoice.total_amount),
+            currency: 'USD',
+            paymentToken: billingProfile.card_token.trim(),
+            industry: 'ecommerce',
+          },
+        )
 
     if (!charge.success) {
       const failureMessage =
@@ -267,7 +325,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
         p_metadata: {
           source: 'billing-charge-subscription',
           billing_profile_id: billingProfile.id,
-          payment_device_id: storefrontPaymentConfig.device_id,
+          payment_device_id: resolvedPaymentDeviceId,
+          platform_billing_config_id: resolvedPlatformBillingConfigId,
+          billing_rail_source: resolvedRailSource,
           nmi_status: charge.status,
           nmi_body: charge.body,
         },
@@ -351,7 +411,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
       p_metadata: {
         source: 'billing-charge-subscription',
         billing_profile_id: billingProfile.id,
-        payment_device_id: storefrontPaymentConfig.device_id,
+        payment_device_id: resolvedPaymentDeviceId,
+        platform_billing_config_id: resolvedPlatformBillingConfigId,
+        billing_rail_source: resolvedRailSource,
         nmi_status: charge.status,
         nmi_body: charge.body,
       },
