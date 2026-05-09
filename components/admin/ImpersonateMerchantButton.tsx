@@ -1,11 +1,10 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Eye } from "lucide-react";
+import { Eye, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -19,7 +18,6 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useAdminAuth } from "@/lib/hooks/useAdminAuth";
 import { useAdminMerchantAccess } from "@/app/manage/hooks/useAdminMerchantAccess";
-import { useImpersonationStore } from "@/stores/impersonation-store";
 import { startImpersonation } from "@/lib/admin/impersonation";
 
 // =============================================================================
@@ -47,14 +45,13 @@ export function ImpersonateMerchantButton({
   merchantName,
   variant = "page",
 }: Props) {
-  const router = useRouter();
   const { userId } = useAuth();
   const { role, isSuperAdmin } = useAdminAuth();
   const queryClient = useQueryClient();
-  const setImpersonation = useImpersonationStore((s) => s.setImpersonation);
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
   const [isPending, startTransition] = useTransition();
+  const [isNavigating, setIsNavigating] = useState(false);
 
   // Super admins can impersonate every merchant unconditionally — they
   // bypass admin_merchant_access at the SQL layer too. Other HQ tiers need
@@ -88,13 +85,15 @@ export function ImpersonateMerchantButton({
         return;
       }
 
-      setImpersonation(result.context);
-      setOpen(false);
-      setReason("");
-      router.push("/dashboard");
-      toast.success(`Now viewing as ${result.context.merchantName}`);
+      // Hard navigate so Clerk session, RSC payloads, and every Zustand store
+      // start fresh under the impersonation cookies. The dashboard's
+      // ImpersonationHydrator will repopulate the client store on mount.
+      setIsNavigating(true);
+      window.location.assign("/dashboard");
     });
   };
+
+  const showOverlay = isPending || isNavigating;
 
   const handleClick = (e: React.MouseEvent) => {
     if (variant === "card") e.stopPropagation();
@@ -123,7 +122,7 @@ export function ImpersonateMerchantButton({
             <DialogDescription>
               You will navigate the merchant&apos;s dashboard as if you were
               them. Every action is audit-logged under your HQ account and
-              flagged as impersonation. Session expires after 30 minutes of
+              flagged as impersonation. Session expires after 24 hours of
               inactivity.
             </DialogDescription>
           </DialogHeader>
@@ -148,16 +147,35 @@ export function ImpersonateMerchantButton({
             <Button
               variant="ghost"
               onClick={() => setOpen(false)}
-              disabled={isPending}
+              disabled={showOverlay}
             >
               Cancel
             </Button>
-            <Button onClick={handleStart} disabled={isPending}>
-              {isPending ? "Starting…" : "Start session"}
+            <Button onClick={handleStart} disabled={showOverlay}>
+              {showOverlay ? "Starting…" : "Start session"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {showOverlay && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-background/70 backdrop-blur-sm"
+          aria-live="polite"
+          role="status"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex flex-col items-center gap-3 rounded-lg border bg-card px-6 py-5 shadow-lg">
+            <Loader2 className="h-6 w-6 animate-spin text-amber-600" />
+            <div className="text-sm font-medium">
+              Switching to {merchantName}…
+            </div>
+            <div className="text-xs text-muted-foreground">
+              Loading merchant dashboard
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

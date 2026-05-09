@@ -34,7 +34,7 @@ ALTER TABLE reservations
 -- Dedup unique indexes (partial — skip NULLs)
 CREATE UNIQUE INDEX IF NOT EXISTS customers_merchant_phone_unique
   ON customers (merchant_id, phone)
-  WHERE phone IS NOT NULL AND deleted_at IS NULL;
+  WHERE phone IS NOT NULL;
 
 CREATE UNIQUE INDEX IF NOT EXISTS location_invites_merchant_phone_unique
   ON location_invites (merchant_id, phone)

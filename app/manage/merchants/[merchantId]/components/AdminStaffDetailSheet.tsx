@@ -21,11 +21,14 @@ import {
   useAdminResetStaffPin,
   useAdminToggleStaffStatus,
   useAdminResetStaffPassword,
+  useAdminUpdateStaffRole,
+  useMerchantStaffRoles,
 } from "@/lib/queries/use-admin-staff";
 import type { AdminStaffMember } from "@/types/staff";
 import {
   Activity,
   CheckCircle2,
+  Edit3,
   Eye,
   EyeOff,
   KeyRound,
@@ -36,6 +39,15 @@ import {
   Shield,
   Tablet,
 } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { EditStaffProfileDialog } from "./EditStaffProfileDialog";
+import { EditStaffLocationsDialog } from "./EditStaffLocationsDialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CredentialToast } from "@/components/ui/credential-toast";
@@ -68,6 +80,12 @@ export function AdminStaffDetailSheet({
   const resetPinMutation = useAdminResetStaffPin();
   const toggleStatusMutation = useAdminToggleStaffStatus();
   const resetPasswordMutation = useAdminResetStaffPassword();
+  const updateRoleMutation = useAdminUpdateStaffRole();
+  const { data: availableRoles = [] } = useMerchantStaffRoles();
+
+  const [editProfileOpen, setEditProfileOpen] = React.useState(false);
+  const [editLocationsOpen, setEditLocationsOpen] = React.useState(false);
+  const [pendingRoleLocationId, setPendingRoleLocationId] = React.useState<string | null>(null);
 
   const [generatedPin, setGeneratedPin] = React.useState<string | null>(null);
   const [customPinInput, setCustomPinInput] = React.useState("");
@@ -187,6 +205,24 @@ export function AdminStaffDetailSheet({
     );
   };
 
+  const handleRoleChange = (locationId: string, newRoleCode: string) => {
+    if (!canManage || !staff?.staff_profile_id) return;
+    setPendingRoleLocationId(locationId);
+    updateRoleMutation.mutate(
+      { merchantId, staffProfileId: staff.staff_profile_id, locationId, newRoleCode },
+      {
+        onSuccess: (result) => {
+          if (!result.success) {
+            toast.error(result.error || "Failed to update role");
+            return;
+          }
+          toast.success("Role updated");
+        },
+        onSettled: () => setPendingRoleLocationId(null),
+      },
+    );
+  };
+
   const handleResetPassword = (custom?: string) => {
     if (!canManage || !staff.clerk_user_id) return;
     resetPasswordMutation.mutate(
@@ -210,6 +246,7 @@ export function AdminStaffDetailSheet({
   };
 
   return (
+    <>
     <BottomSheet open={open} onOpenChange={onOpenChange}>
       <BottomSheetContent className="mx-auto w-full max-w-6xl" height="95">
         <BottomSheetHeader className="flex flex-col gap-2">
@@ -274,18 +311,40 @@ export function AdminStaffDetailSheet({
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3 rounded-xl border px-4 py-3">
-                  <div className="space-y-1">
-                    <p className="text-sm font-medium">Status</p>
-                    <p className="text-xs text-muted-foreground">
-                      Toggle staff access for the primary location.
-                    </p>
+                <div className="flex flex-col items-stretch gap-2 md:items-end">
+                  <div className="flex items-center gap-3 rounded-xl border px-4 py-3">
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium">Status</p>
+                      <p className="text-xs text-muted-foreground">
+                        Toggle staff access for the primary location.
+                      </p>
+                    </div>
+                    <Switch
+                      checked={staff.overall_is_active}
+                      onCheckedChange={handleToggleStatus}
+                      disabled={!canManage || !primaryLocation || toggleStatusMutation.isPending}
+                    />
                   </div>
-                  <Switch
-                    checked={staff.overall_is_active}
-                    onCheckedChange={handleToggleStatus}
-                    disabled={!canManage || !primaryLocation || toggleStatusMutation.isPending}
-                  />
+                  {canManage && (
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setEditProfileOpen(true)}
+                      >
+                        <Edit3 className="h-3.5 w-3.5 mr-1.5" />
+                        Edit Profile
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setEditLocationsOpen(true)}
+                      >
+                        <MapPin className="h-3.5 w-3.5 mr-1.5" />
+                        Edit Locations
+                      </Button>
+                    </div>
+                  )}
                 </div>
               </div>
             </section>
@@ -315,16 +374,14 @@ export function AdminStaffDetailSheet({
                 </div>
                 <div className="space-y-4">
                   <StaffPinField
-                    pin={effectivePin}
+                    memberId={staff.member_id}
+                    locationId={pinAssignment?.location_id ?? primaryLocation?.location_id ?? ""}
+                    locationName={pinAssignment?.location_name}
                     hasPin={hasPin || !!generatedPin}
+                    canReveal={canManage}
                     onGenerate={handleGeneratePin}
                     isGenerating={resetPinMutation.isPending}
                     disabled={!canManage || !primaryLocation || !staff.staff_profile_id}
-                    visibleDescription={
-                      pinAssignment?.location_name
-                        ? `Use the eye icon to reveal the PIN for ${pinAssignment.location_name}.`
-                        : undefined
-                    }
                   />
 
                   {/* Custom PIN input */}
@@ -480,12 +537,41 @@ export function AdminStaffDetailSheet({
                     className="rounded-xl border bg-background/60 p-4"
                   >
                     <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div>
-                        <div className="flex items-center gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <p className="font-medium">{assignment.location_name}</p>
                           {assignment.is_primary && <Badge>Primary</Badge>}
                         </div>
-                        <p className="mt-1 text-sm text-muted-foreground">{assignment.role_name}</p>
+                        {canManage ? (
+                          <div className="mt-2 max-w-xs">
+                            <Label className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium">
+                              Role
+                            </Label>
+                            <Select
+                              value={assignment.role_code}
+                              onValueChange={(v) => handleRoleChange(assignment.location_id, v)}
+                              disabled={
+                                updateRoleMutation.isPending &&
+                                pendingRoleLocationId === assignment.location_id
+                              }
+                            >
+                              <SelectTrigger className="h-8 text-sm mt-1">
+                                <SelectValue placeholder="Select role" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {availableRoles.map((r) => (
+                                  <SelectItem key={r.code} value={r.code}>
+                                    {r.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        ) : (
+                          <p className="mt-1 text-sm text-muted-foreground">
+                            {assignment.role_name}
+                          </p>
+                        )}
                       </div>
                       <Badge variant={assignment.is_active ? "default" : "secondary"}>
                         {assignment.is_active ? "Active" : "Inactive"}
@@ -525,7 +611,22 @@ export function AdminStaffDetailSheet({
           </Button>
         </BottomSheetFooter>
       </BottomSheetContent>
+
     </BottomSheet>
+
+    <EditStaffProfileDialog
+      open={editProfileOpen}
+      onOpenChange={setEditProfileOpen}
+      merchantId={merchantId}
+      staff={staff}
+    />
+    <EditStaffLocationsDialog
+      open={editLocationsOpen}
+      onOpenChange={setEditLocationsOpen}
+      merchantId={merchantId}
+      staff={staff}
+    />
+    </>
   );
 }
 

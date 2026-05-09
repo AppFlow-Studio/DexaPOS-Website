@@ -64,7 +64,7 @@ export function EditWaitlistDialog ({
 
     setPartyName(entry.party_name || '')
     setPartySize(String(entry.party_size || ''))
-    setPhone(tenDigits(entry.phone))
+    setPhone(phoneDigits(entry.phone))
     setNotes(entry.notes || '')
     setPreferredSection(entry.preferred_section || '')
     setSeatingPreference(entry.seating_preference || '')
@@ -110,7 +110,7 @@ export function EditWaitlistDialog ({
       await UpdateWaitlistEntryAction(locationId, entry.id, {
         partyName: partyName.trim(),
         partySize: size,
-        phone: normalizePhone(phone) ?? phone.trim() || undefined,
+        phone: (normalizePhone(phone) ?? phone.trim()) || undefined,
         notes: notes.trim() || undefined,
         preferredSection: preferredSection.trim() || undefined,
         seatingPreference: seatingPreference.trim() || undefined,

@@ -15,8 +15,7 @@ const TableCircle4Chair: React.FC<TableCircle4ChairProps> = ({
   height = 130,
   ...props
 }) => {
-  // LIGHT MODE: muted neutral stroke (NOT black)
-  const lightStroke = "#94A3B8";
+  const lightStroke = color;
 
   return (
     <svg
@@ -35,10 +34,10 @@ const TableCircle4Chair: React.FC<TableCircle4ChairProps> = ({
         height="14"
         rx="3"
         fill={color}
-        fillOpacity={darkMode ? 0.12 : 0.85}
+        fillOpacity={darkMode ? 0.12 : 0.12}
         stroke={darkMode ? color : lightStroke}
         strokeWidth="1"
-        strokeOpacity={darkMode ? 0.5 : 0.7}
+        strokeOpacity={darkMode ? 0.5 : 0.5}
       />
 
       {/* Chair - bottom */}
@@ -49,10 +48,10 @@ const TableCircle4Chair: React.FC<TableCircle4ChairProps> = ({
         height="14"
         rx="3"
         fill={color}
-        fillOpacity={darkMode ? 0.12 : 0.85}
+        fillOpacity={darkMode ? 0.12 : 0.12}
         stroke={darkMode ? color : lightStroke}
         strokeWidth="1"
-        strokeOpacity={darkMode ? 0.5 : 0.7}
+        strokeOpacity={darkMode ? 0.5 : 0.5}
       />
 
       {/* Chair - left */}
@@ -63,10 +62,10 @@ const TableCircle4Chair: React.FC<TableCircle4ChairProps> = ({
         height="28"
         rx="3"
         fill={color}
-        fillOpacity={darkMode ? 0.12 : 0.85}
+        fillOpacity={darkMode ? 0.12 : 0.12}
         stroke={darkMode ? color : lightStroke}
         strokeWidth="1"
-        strokeOpacity={darkMode ? 0.5 : 0.7}
+        strokeOpacity={darkMode ? 0.5 : 0.5}
       />
 
       {/* Chair - right */}
@@ -77,10 +76,10 @@ const TableCircle4Chair: React.FC<TableCircle4ChairProps> = ({
         height="28"
         rx="3"
         fill={color}
-        fillOpacity={darkMode ? 0.12 : 0.85}
+        fillOpacity={darkMode ? 0.12 : 0.12}
         stroke={darkMode ? color : lightStroke}
         strokeWidth="1"
-        strokeOpacity={darkMode ? 0.5 : 0.7}
+        strokeOpacity={darkMode ? 0.5 : 0.5}
       />
 
       {/* Table surface */}
@@ -89,10 +88,10 @@ const TableCircle4Chair: React.FC<TableCircle4ChairProps> = ({
         cy="45"
         r="28"
         fill={color}
-        fillOpacity={darkMode ? 0.18 : 0.88}
+        fillOpacity={darkMode ? 0.18 : 0.18}
         stroke={darkMode ? color : lightStroke}
         strokeWidth="1.5"
-        strokeOpacity={darkMode ? 0.8 : 0.75}
+        strokeOpacity={darkMode ? 0.8 : 0.8}
       />
     </svg>
   );

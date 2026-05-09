@@ -3,7 +3,9 @@
 import { useParams, useSearchParams } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { Card, CardContent } from '@/components/ui/card'
+import { PageLoader } from '@/components/ui/page-loader'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
     AlertTriangle,
@@ -18,6 +20,7 @@ import {
     LifeBuoy,
     Monitor,
     MapPin,
+    Globe,
     type LucideIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -29,6 +32,7 @@ import { NotesTab } from './components/NotesTab'
 import { AuditLogsTab } from './components/AuditLogsTab'
 import { DevicesTab } from './components/DevicesTab'
 import { BillingTab } from './components/BillingTab'
+import { OnlineStoreTab } from './components/OnlineStoreTab'
 import { OnboardingStatusCard } from './components/OnboardingStatusCard'
 import { MerchantHeaderBar } from './components/MerchantHeaderBar'
 import { RiskStrip } from './components/RiskStrip'
@@ -48,6 +52,7 @@ type SectionKey =
     | 'settlements'
     | 'disputes'
     | 'billing'
+    | 'online-store'
     | 'support'
     | 'devices'
     | 'locations'
@@ -61,6 +66,7 @@ const VALID_SECTIONS: SectionKey[] = [
     'settlements',
     'disputes',
     'billing',
+    'online-store',
     'support',
     'devices',
     'locations',
@@ -126,16 +132,7 @@ export default function MerchantDetailsPage() {
         }
     }, [requestedTab])
 
-    if (isLoading) {
-        return (
-            <div className="flex flex-col items-center justify-center py-20">
-                <div className="mb-3 h-8 w-8 animate-spin rounded-full border-b-2 border-primary" />
-                <span className="text-sm font-medium text-muted-foreground">
-                    Loading merchant details...
-                </span>
-            </div>
-        )
-    }
+    if (isLoading) return <PageLoader message="Loading merchant details..." />
 
     if (isError || !merchantDetails) {
         return (
@@ -197,6 +194,9 @@ export default function MerchantDetailsPage() {
                             </NavGroup>
 
                             <NavGroup label="Operations">
+                                <NavItem value="online-store" icon={Globe} active={activeTab === 'online-store'} onClick={setActiveTab}>
+                                    Online Store
+                                </NavItem>
                                 <NavItem value="support" icon={LifeBuoy} active={activeTab === 'support'} onClick={setActiveTab}>
                                     Support
                                 </NavItem>
@@ -244,6 +244,15 @@ export default function MerchantDetailsPage() {
                                     merchantId={merchantDetails.id}
                                     merchantName={merchantDetails.name}
                                     canEdit={canManageMerchantStatus}
+                                />
+                            )}
+
+                            {activeTab === 'online-store' && (
+                                <OnlineStoreTab
+                                    merchantId={merchantDetails.id}
+                                    merchantName={merchantDetails.name}
+                                    locations={merchantDetails.locations}
+                                    locationsLoading={false}
                                 />
                             )}
 

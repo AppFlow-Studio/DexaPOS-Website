@@ -1,5 +1,5 @@
-import { parsePhoneNumber, isValidPhoneNumber } from 'libphonenumber-js/min'
-import type { CountryCode } from 'libphonenumber-js/min'
+import { parsePhoneNumber, isValidPhoneNumber } from 'libphonenumber-js'
+import type { CountryCode } from 'libphonenumber-js'
 
 /** Normalize raw user input to E.164. Returns null if invalid or empty. */
 export function normalizePhone(
@@ -9,11 +9,23 @@ export function normalizePhone(
   if (!input?.trim()) return null
   try {
     const parsed = parsePhoneNumber(input, defaultCountry)
-    return parsed?.isValid() ? parsed.format('E.164') : null
+    if (parsed?.isValid()) return parsed.format('E.164')
   } catch {
-    return null
+    // Fall through to a permissive US digits-only fallback below.
   }
+
+  // Fallback: handle common user-entered US formats that may not parse
+  // cleanly (spaces, dashes, parentheses, leading country code).
+  const digits = input.replace(/\D/g, '')
+  if (defaultCountry === 'US') {
+    if (digits.length === 10) return `+1${digits}`
+    if (digits.length === 11 && digits.startsWith('1')) return `+${digits}`
+  }
+
+  return null
 }
+
+export const normalizeToE164 = normalizePhone
 
 /** Format an E.164 string for human display. Falls back to the raw value. */
 export function formatPhoneForDisplay(e164: string | null | undefined): string {
@@ -45,4 +57,9 @@ export function isValidPhone(
 export function phoneDigits(value: string | null | undefined): string {
   if (!value) return ''
   return value.replace(/\D/g, '')
+}
+
+/** Return the last 10 digits of a phone value (US national number). */
+export function tenDigits(value: string | null | undefined): string {
+  return phoneDigits(value).slice(-10)
 }

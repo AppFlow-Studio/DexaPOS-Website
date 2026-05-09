@@ -43,6 +43,11 @@ export const ADMIN_ACTIONS = {
     category: 'merchant',
     severity: 'info',
   },
+  MERCHANT_DEFAULT_ENTITIES_MISSING: {
+    action: 'merchant.default_entities_missing',
+    category: 'merchant',
+    severity: 'warning',
+  },
 
   // Admin user management
   ADMIN_INVITED: {
@@ -75,10 +80,20 @@ export const ADMIN_ACTIONS = {
     category: 'user_management',
     severity: 'warning',
   },
+  ADMIN_ACTIVATED: {
+    action: 'admin.activated',
+    category: 'user_management',
+    severity: 'info',
+  },
   ADMIN_PASSWORD_RESET: {
     action: 'admin.password_reset',
     category: 'user_management',
     severity: 'warning',
+  },
+  ADMIN_PROFILE_UPDATED: {
+    action: 'admin.profile_updated',
+    category: 'user_management',
+    severity: 'info',
   },
   ADMIN_MERCHANT_ACCESS_GRANTED: {
     action: 'admin.access_granted',
@@ -133,6 +148,36 @@ export const ADMIN_ACTIONS = {
     action: 'staff.reactivated_by_admin',
     category: 'staff',
     severity: 'info',
+  },
+  MERCHANT_STAFF_PROFILE_UPDATED: {
+    action: 'staff.profile_updated_by_admin',
+    category: 'staff',
+    severity: 'info',
+  },
+  MERCHANT_STAFF_ROLE_UPDATED: {
+    action: 'staff.role_updated_by_admin',
+    category: 'staff',
+    severity: 'warning',
+  },
+  MERCHANT_STAFF_LOCATIONS_UPDATED: {
+    action: 'staff.locations_updated_by_admin',
+    category: 'staff',
+    severity: 'info',
+  },
+  MERCHANT_STAFF_INVITE_RESENT: {
+    action: 'staff.invite_resent_by_admin',
+    category: 'staff',
+    severity: 'info',
+  },
+  MERCHANT_STAFF_INVITED: {
+    action: 'staff.invited_by_admin',
+    category: 'staff',
+    severity: 'info',
+  },
+  MERCHANT_STAFF_PASSWORD_RESET: {
+    action: 'staff.password_reset_by_admin',
+    category: 'staff',
+    severity: 'warning',
   },
 
   // Notes

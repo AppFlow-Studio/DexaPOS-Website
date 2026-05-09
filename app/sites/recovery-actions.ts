@@ -162,86 +162,86 @@ export async function sendCartRecoveryEmail(
 
 // ---- Send Order Confirmation Email ----
 
-export async function sendOrderConfirmationEmail(
-  orderId: string,
-  email: string
-): Promise<{ success: boolean; error?: string }> {
-  console.log("[EMAIL] sendOrderConfirmationEmail called", { orderId, email });
+// export async function sendOrderConfirmationEmail(
+//   orderId: string,
+//   email: string
+// ): Promise<{ success: boolean; error?: string }> {
+//   console.log("[EMAIL] sendOrderConfirmationEmail called", { orderId, email });
 
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey || !email) {
-    console.error("[EMAIL] Missing apiKey or email", { hasApiKey: !!apiKey, email });
-    return { success: false, error: "Email service not configured or no email" };
-  }
+//   const apiKey = process.env.RESEND_API_KEY;
+//   if (!apiKey || !email) {
+//     console.error("[EMAIL] Missing apiKey or email", { hasApiKey: !!apiKey, email });
+//     return { success: false, error: "Email service not configured or no email" };
+//   }
 
-  const { data: order } = await getOrderTracking(orderId);
-  if (!order) {
-    console.error("[EMAIL] Order not found for id:", orderId);
-    return { success: false, error: "Order not found" };
-  }
+//   const { data: order } = await getOrderTracking(orderId);
+//   if (!order) {
+//     console.error("[EMAIL] Order not found for id:", orderId);
+//     return { success: false, error: "Order not found" };
+//   }
 
-  console.log("[EMAIL] Order found, sending to:", email, "from:", process.env.RESEND_FROM_EMAIL);
+//   console.log("[EMAIL] Order found, sending to:", email, "from:", process.env.RESEND_FROM_EMAIL);
 
-  const itemsHtml = order.items
-    .map(
-      (item) =>
-        `<tr><td style="padding:8px;border-bottom:1px solid #eee;">${item.quantity}x ${item.name}</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:right;">$${item.subtotal.toFixed(2)}</td></tr>`
-    )
-    .join("");
+//   const itemsHtml = order.items
+//     .map(
+//       (item) =>
+//         `<tr><td style="padding:8px;border-bottom:1px solid #eee;">${item.quantity}x ${item.name}</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:right;">$${item.subtotal.toFixed(2)}</td></tr>`
+//     )
+//     .join("");
 
-  const html = `
-<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"></head>
-<body style="font-family:'Segoe UI',system-ui,sans-serif;max-width:500px;margin:0 auto;padding:20px;color:#333;">
-  <div style="text-align:center;margin-bottom:24px;">
-    <div style="display:inline-block;width:48px;height:48px;background:#22c55e;border-radius:50%;line-height:48px;text-align:center;color:#fff;font-size:24px;">&#10003;</div>
-  </div>
-  <h2 style="text-align:center;margin-bottom:4px;">Order Confirmed!</h2>
-  <p style="text-align:center;color:#666;margin-top:0;">Order ${order.displayNumber}</p>
-  <table style="width:100%;border-collapse:collapse;margin:20px 0;">
-    <thead><tr><th style="text-align:left;padding:8px;border-bottom:2px solid #333;">Item</th><th style="text-align:right;padding:8px;border-bottom:2px solid #333;">Price</th></tr></thead>
-    <tbody>${itemsHtml}</tbody>
-  </table>
-  <div style="margin:20px 0;padding:16px;background:#f9fafb;border-radius:8px;">
-    <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span>Subtotal</span><span>$${order.subtotal.toFixed(2)}</span></div>
-    <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span>Tax</span><span>$${order.tax.toFixed(2)}</span></div>
-    ${order.tip > 0 ? `<div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span>Tip</span><span>$${order.tip.toFixed(2)}</span></div>` : ""}
-    <div style="display:flex;justify-content:space-between;font-weight:600;font-size:16px;padding-top:8px;border-top:1px solid #ddd;"><span>Total</span><span>$${order.total.toFixed(2)}</span></div>
-  </div>
-  <p style="text-align:center;color:#666;font-size:14px;">Estimated prep time: ~${order.estimatedPrepMinutes} minutes</p>
-  ${order.cardLastFour ? `
-  <div style="margin:16px 0;padding:12px 16px;background:#f9fafb;border-radius:8px;display:flex;justify-content:space-between;align-items:center;">
-    <span style="color:#666;font-size:14px;">Payment</span>
-    <span style="font-size:14px;font-weight:600;">${order.cardType || 'Card'} •••• ${order.cardLastFour}</span>
-  </div>` : ''}
-  <p style="font-size:12px;color:#999;text-align:center;margin-top:24px;">Thank you for your order!</p>
-</body>
-</html>`.trim();
+//   const html = `
+// <!DOCTYPE html>
+// <html>
+// <head><meta charset="utf-8"></head>
+// <body style="font-family:'Segoe UI',system-ui,sans-serif;max-width:500px;margin:0 auto;padding:20px;color:#333;">
+//   <div style="text-align:center;margin-bottom:24px;">
+//     <div style="display:inline-block;width:48px;height:48px;background:#22c55e;border-radius:50%;line-height:48px;text-align:center;color:#fff;font-size:24px;">&#10003;</div>
+//   </div>
+//   <h2 style="text-align:center;margin-bottom:4px;">Order Confirmed!</h2>
+//   <p style="text-align:center;color:#666;margin-top:0;">Order ${order.displayNumber}</p>
+//   <table style="width:100%;border-collapse:collapse;margin:20px 0;">
+//     <thead><tr><th style="text-align:left;padding:8px;border-bottom:2px solid #333;">Item</th><th style="text-align:right;padding:8px;border-bottom:2px solid #333;">Price</th></tr></thead>
+//     <tbody>${itemsHtml}</tbody>
+//   </table>
+//   <div style="margin:20px 0;padding:16px;background:#f9fafb;border-radius:8px;">
+//     <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span>Subtotal</span><span>$${order.subtotal.toFixed(2)}</span></div>
+//     <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span>Tax</span><span>$${order.tax.toFixed(2)}</span></div>
+//     ${order.tip > 0 ? `<div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span>Tip</span><span>$${order.tip.toFixed(2)}</span></div>` : ""}
+//     <div style="display:flex;justify-content:space-between;font-weight:600;font-size:16px;padding-top:8px;border-top:1px solid #ddd;"><span>Total</span><span>$${order.total.toFixed(2)}</span></div>
+//   </div>
+//   <p style="text-align:center;color:#666;font-size:14px;">Estimated prep time: ~${order.estimatedPrepMinutes} minutes</p>
+//   ${order.cardLastFour ? `
+//   <div style="margin:16px 0;padding:12px 16px;background:#f9fafb;border-radius:8px;display:flex;justify-content:space-between;align-items:center;">
+//     <span style="color:#666;font-size:14px;">Payment</span>
+//     <span style="font-size:14px;font-weight:600;">${order.cardType || 'Card'} •••• ${order.cardLastFour}</span>
+//   </div>` : ''}
+//   <p style="font-size:12px;color:#999;text-align:center;margin-top:24px;">Thank you for your order!</p>
+// </body>
+// </html>`.trim();
 
-  try {
-    const resend = new Resend(apiKey);
-    const fromEmail = process.env.RESEND_FROM_EMAIL || "orders@resend.dev";
+//   try {
+//     const resend = new Resend(apiKey);
+//     const fromEmail = process.env.RESEND_FROM_EMAIL || "orders@resend.dev";
 
-    const { error: emailError } = await resend.emails.send({
-      from: fromEmail,
-      to: email,
-      subject: `Order Confirmed - ${order.displayNumber}`,
-      html,
-    });
+//     const { error: emailError } = await resend.emails.send({
+//       from: fromEmail,
+//       to: email,
+//       subject: `Order Confirmed - ${order.displayNumber}`,
+//       html,
+//     });
 
-    if (emailError) {
-      console.error("[EMAIL] Resend error:", emailError);
-      return { success: false, error: emailError.message };
-    }
+//     if (emailError) {
+//       console.error("[EMAIL] Resend error:", emailError);
+//       return { success: false, error: emailError.message };
+//     }
 
-    console.log("[EMAIL] Email sent successfully to:", email);
-    return { success: true };
-  } catch (err: any) {
-    console.error("[EMAIL] Exception:", err);
-    return { success: false, error: err?.message || "Failed to send email" };
-  }
-}
+//     console.log("[EMAIL] Email sent successfully to:", email);
+//     return { success: true };
+//   } catch (err: any) {
+//     console.error("[EMAIL] Exception:", err);
+//     return { success: false, error: err?.message || "Failed to send email" };
+//   }
+// }
 
 // ---- Send Order Cancellation Email ----
 

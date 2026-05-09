@@ -62,6 +62,87 @@ function logError(eventType: string, message: string, error: any): void {
   console.error(`[${timestamp}] [${eventType}] ERROR: ${message}`, error)
 }
 
+// ============================================================================
+// DEFAULT ENTITIES VERIFICATION
+// ============================================================================
+
+const DEFAULT_ENTITY_TABLES = ['stations', 'payment_terminals', 'prep_stations'] as const
+
+/**
+ * Verifies that the auto-provisioning DB trigger populated the predefined POS
+ * entities for a newly created merchant. If anything is missing, writes a
+ * warning audit log row — never re-inserts. The trigger is the source of truth.
+ */
+async function verifyDefaultEntitiesAndLog(
+  supabase: SupabaseClient,
+  merchantId: string,
+  clerkOrgId: string,
+  resourceName: string,
+  source: string,
+): Promise<void> {
+  try {
+    const counts: Record<string, number> = {
+      stations: 0,
+      payment_terminals: 0,
+      prep_stations: 0,
+    }
+    const missing: string[] = []
+
+    for (const table of DEFAULT_ENTITY_TABLES) {
+      const { count, error } = await supabase
+        .from(table)
+        .select('id', { count: 'exact', head: true })
+        .eq('merchant_id', merchantId)
+
+      if (error) {
+        logError('default_entities', `Count error for ${table}`, error)
+        continue
+      }
+      counts[table] = count ?? 0
+      if (!count) missing.push(table)
+    }
+
+    if (missing.length === 0) return
+
+    const { error: auditError } = await supabase.from('audit_logs').insert({
+      actor_user_id: null,
+      actor_email: null,
+      actor_name: 'System (Clerk Webhook)',
+      actor_role: null,
+      action: 'merchant.default_entities_missing',
+      action_category: 'merchant',
+      severity: 'warning',
+      resource_type: 'merchant',
+      resource_id: merchantId,
+      resource_name: resourceName,
+      merchant_id: merchantId,
+      location_id: null,
+      changes: null,
+      metadata: {
+        admin_action: true,
+        admin_action_key: 'MERCHANT_DEFAULT_ENTITIES_MISSING',
+        clerk_org_id: clerkOrgId,
+        missing,
+        counts,
+        source,
+      },
+      status: 'success',
+    })
+
+    if (auditError) {
+      logError('default_entities', 'Failed to write audit log', auditError)
+    } else {
+      logEvent('default_entities', 'Default entities missing for merchant', {
+        merchantId,
+        missing,
+        counts,
+      })
+    }
+  } catch (err) {
+    logError('default_entities', 'Verification threw', err)
+  }
+}
+
 /**
  * Safely fetches a Clerk user with optional retries and exponential backoff.
  * Returns null instead of throwing when the user is not found (race condition).
@@ -412,6 +493,31 @@ async function handleUserCreated(ctx: WebhookContext): Promise<Response> {
       // Update invite status
       await updatePendingInviteStatus(supabase, pendingInvite.id, 'accepted', event.data.id)
 
+      // Auto-activate invited users: an invitation is an explicit grant of access,
+      // and for the first admin of a merchant org there is nobody upstream
+      // available to flip the status flag manually.
+      const existingMetadata =
+        (event.data.public_metadata as Record<string, unknown> | null) || {}
+      if (existingMetadata.status !== 'Active') {
+        const nowIso = new Date().toISOString()
+        await supabase
+          .from('users')
+          .update({
+            public_metadata: {
+              ...existingMetadata,
+              status: 'Active',
+              auto_activated: true,
+              auto_activated_reason:
+                existingMetadata.auto_activated_reason || 'invite_accepted',
+              auto_activated_at: nowIso,
+            },
+            updated_at: nowIso,
+          })
+          .eq('id', event.data.id)
+
+        logEvent(eventType, 'Auto-activated invited user', { userId: event.data.id })
+      }
+
       logEvent(eventType, 'Org membership created and invite updated', { userId: event.data.id })
     } catch (err: any) {
       // Non-fatal: the users row is already written. Returning 500 would cause Clerk
@@ -549,7 +655,7 @@ async function handleOrganizationCreated(ctx: WebhookContext): Promise<Response>
   // Create merchant if org_type is 'merchant'
   if (event.data.public_metadata?.org_type === 'merchant') {
     const meta = event.data.public_metadata
-    const { error: merchantError } = await supabase
+    const { data: merchantRow, error: merchantError } = await supabase
       .from('merchants')
       .insert([{
         name: event.data.name,
@@ -575,11 +681,23 @@ async function handleOrganizationCreated(ctx: WebhookContext): Promise<Response>
         created_at: new Date(event.data.created_at).toISOString(),
         updated_at: new Date(event.data.updated_at).toISOString(),
       }])
+      .select('id')
+      .single()
 
     if (merchantError) {
       logError(eventType, 'Failed to create merchant record', merchantError)
     } else {
       logEvent(eventType, 'Merchant record created', { orgId: event.data.id })
+
+      if (merchantRow?.id) {
+        await verifyDefaultEntitiesAndLog(
+          supabase,
+          merchantRow.id,
+          event.data.id,
+          meta.dba_name || meta.business_legal_name || event.data.name,
+          'webhook:organization.created',
+        )
+      }
     }
   }
 
@@ -979,9 +1097,52 @@ async function handleMerchantMembershipCreated(
     .eq('merchant_id', merchantId)
     .maybeSingle()
 
+  // Bug A defense-in-depth: also dedupe by (merchant_id, lower(email)). If a
+  // POS-only row exists for this email but the InviteClerkStaff server action
+  // didn't thread staffProfileId through (older invite, direct creation, etc),
+  // we still UPDATE the existing row instead of inserting a duplicate.
+  let existingProfileByEmail: { id: string; user_id: string | null } | null = null
+  if (!existingProfile && userEmail) {
+    const { data: byEmail } = await supabase
+      .from('staff_profiles')
+      .select('id, user_id')
+      .eq('merchant_id', merchantId)
+      .ilike('email', userEmail.trim().toLowerCase())
+      .maybeSingle()
+    if (byEmail && !byEmail.user_id) {
+      existingProfileByEmail = byEmail as { id: string; user_id: string | null }
+    }
+  }
+
   if (existingProfile) {
     staffProfile = existingProfile
     logEvent(eventType, 'Using existing staff profile', { profileId: staffProfile.id })
+  } else if (existingProfileByEmail) {
+    logEvent(eventType, 'Found POS-only staff_profile by email — promoting in place to avoid duplicate', {
+      profileId: existingProfileByEmail.id,
+      userId,
+      email: userEmail,
+    })
+    const { data: promoted, error: promoteError } = await supabase
+      .from('staff_profiles')
+      .update({
+        user_id: userId,
+        account_type: 'clerk',
+        first_name: firstName || undefined,
+        last_name: lastName || undefined,
+        phone: phone || undefined,
+        updated_at: updatedAt,
+      })
+      .eq('id', existingProfileByEmail.id)
+      .eq('merchant_id', merchantId)
+      .select('id')
+      .single()
+
+    if (promoteError) {
+      logError(eventType, 'Failed to promote POS-only profile by email', promoteError)
+      return errorResponse(promoteError.message, 500)
+    }
+    staffProfile = promoted
   } else {
     const { data: newProfile, error: profileError } = await supabase
       .from('staff_profiles')

@@ -31,6 +31,21 @@ function trimLeadingZeros(s: string | null | undefined): string | null {
     return s.replace(/^0+/, '') || '0'
 }
 
+// Sanitize a value for use inside a PostgREST .or() in.() list. Wrap in quotes
+// only if it contains a comma or special char; keep alphanumerics as-is to
+// avoid bloating the URL.
+function quoteCsv(v: string): string {
+    return /[,()"\\]/.test(v) ? `"${v.replace(/"/g, '\\"')}"` : v
+}
+
+// Pull the trailing 4 digits out of strings like "************6731" or "4117 73** **** 3438".
+function extractLast4(s: string | null | undefined): string | null {
+    if (!s) return null
+    const digits = s.replace(/\D/g, '')
+    if (digits.length < 4) return null
+    return digits.slice(-4)
+}
+
 // Larger pages = fewer round trips. Cap at 100 so a single mid×resource sync
 // stays under a few seconds. If a date range exceeds this we paginate.
 const PAGE_SIZE = 100
@@ -54,6 +69,7 @@ export interface LuqraSyncResult {
             transactionsReconciled: number
             chargebacksIngested: number
             chargebacksUpdated: number
+            chargebacksReconciled: number
             depositsIngested: number
             depositsUpdated: number
             depositsLinked: number
@@ -134,40 +150,110 @@ async function syncTransactionsForMid(
         const rows: LuqraTransaction[] = payload?.data?.data ?? []
         if (rows.length === 0) break
 
-        // Reconcile in-batch against local order_payments (auth + batch).
+        // Reconcile in-batch against local order_payments.
+        // Primary key: (batch_id, authorization_code). Fallback: (location, last4, amount_cents, date)
+        // to catch cases where the live processor reformats the batch id or auth code.
         const auths = Array.from(new Set(rows.map((r) => r.authorizationNumber).filter(Boolean)))
         const batchIds = Array.from(new Set(rows.map((r) => r.batchId).filter(Boolean)))
+        const last4s = Array.from(new Set(rows.map((r) => r.accountNumberLast4).filter(Boolean) as string[]))
+        const dateRangeFrom = rows.reduce((min, r) => {
+            const d = r.originalTransactionDate
+            return d && (!min || d < min) ? d : min
+        }, '' as string)
+        const dateRangeTo = rows.reduce((max, r) => {
+            const d = r.originalTransactionDate
+            return d && (!max || d > max) ? d : max
+        }, '' as string)
 
-        const reconMap = new Map<string, { payment_id: string; order_id: string }>()
-        if (auths.length && batchIds.length) {
-            const { data: payments } = await supabase
+        // Three-tier matching, exact → loose:
+        //   1) (batch_id, auth)         — strongest signal, almost always correct
+        //   2) auth alone               — covers batch-id reformatting between processor & Luqra
+        //   3) (last4, amount, date)    — only if there is exactly ONE candidate for that key
+        const reconByBatchAuth = new Map<string, { payment_id: string; order_id: string }>()
+        const reconByAuth = new Map<string, { payment_id: string; order_id: string }[]>()
+        const reconByLast4AmtDate = new Map<string, { payment_id: string; order_id: string }[]>()
+        const claimedPaymentIds = new Set<string>()
+
+        if (auths.length || last4s.length) {
+            const orParts: string[] = []
+            if (auths.length) orParts.push(`authorization_code.in.(${auths.map(quoteCsv).join(',')})`)
+            if (last4s.length) orParts.push(`card_last_four.in.(${last4s.map(quoteCsv).join(',')})`)
+
+            let q = supabase
                 .from('order_payments')
                 .select(
                     `
             id, order_id, authorization_code, batch_number, dejavoo_batch_number,
+            card_last_four, total_amount, location_id, captured_at, initiated_at,
             orders!inner(merchant_id)
           `
                 )
                 .eq('orders.merchant_id', merchantId)
-                .in('authorization_code', auths)
+                .in('status', ['captured', 'authorized', 'refunded'])
+                .or(orParts.join(','))
+
+            if (dateRangeFrom)
+                q = q.gte('initiated_at', new Date(new Date(dateRangeFrom).getTime() - 2 * 86400e3).toISOString())
+            if (dateRangeTo)
+                q = q.lte('initiated_at', new Date(new Date(dateRangeTo).getTime() + 2 * 86400e3).toISOString())
+
+            const { data: payments } = await q
 
             for (const p of payments ?? []) {
+                const ref = { payment_id: p.id as string, order_id: p.order_id as string }
                 const auth = p.authorization_code as string | null
-                if (!auth) continue
-                for (const b of [p.batch_number, p.dejavoo_batch_number].filter(Boolean) as string[]) {
-                    if (batchIds.includes(b)) {
-                        reconMap.set(`${b}::${auth}`, {
-                            payment_id: p.id as string,
-                            order_id: p.order_id as string,
-                        })
+                if (auth) {
+                    for (const b of [p.batch_number, p.dejavoo_batch_number].filter(Boolean) as string[]) {
+                        if (batchIds.includes(b)) {
+                            reconByBatchAuth.set(`${b}::${auth}`, ref)
+                        }
                     }
+                    const arr = reconByAuth.get(auth) ?? []
+                    arr.push(ref)
+                    reconByAuth.set(auth, arr)
+                }
+                const last4 = p.card_last_four as string | null
+                const amtCents = Math.round((Number(p.total_amount) || 0) * 100)
+                const day = (p.captured_at ?? p.initiated_at) as string | null
+                if (last4 && amtCents && day) {
+                    const key = `${last4}::${amtCents}::${day.slice(0, 10)}`
+                    const arr = reconByLast4AmtDate.get(key) ?? []
+                    arr.push(ref)
+                    reconByLast4AmtDate.set(key, arr)
                 }
             }
         }
 
+        const claim = (
+            ref: { payment_id: string; order_id: string } | undefined
+        ): { payment_id: string; order_id: string } | undefined => {
+            if (!ref) return undefined
+            if (claimedPaymentIds.has(ref.payment_id)) return undefined
+            claimedPaymentIds.add(ref.payment_id)
+            return ref
+        }
+
         const upsertRows = rows.map((r) => {
-            const key = `${r.batchId}::${r.authorizationNumber}`
-            const match = reconMap.get(key)
+            // Tier 1: (batch_id, auth) exact.
+            let match = claim(reconByBatchAuth.get(`${r.batchId}::${r.authorizationNumber}`))
+
+            // Tier 2: auth alone — only if a unique unclaimed candidate.
+            if (!match && r.authorizationNumber) {
+                const cands = (reconByAuth.get(r.authorizationNumber) ?? []).filter(
+                    (c) => !claimedPaymentIds.has(c.payment_id)
+                )
+                if (cands.length === 1) match = claim(cands[0])
+            }
+
+            // Tier 3: (last4, amount_cents, date) — single unclaimed candidate only.
+            if (!match && r.accountNumberLast4 && r.originalTransactionDate) {
+                const key = `${r.accountNumberLast4}::${Number(r.transactionAmount) || 0}::${r.originalTransactionDate}`
+                const cands = (reconByLast4AmtDate.get(key) ?? []).filter(
+                    (c) => !claimedPaymentIds.has(c.payment_id)
+                )
+                if (cands.length === 1) match = claim(cands[0])
+            }
+
             if (match) reconciled++
             return {
                 merchant_id: merchantId,
@@ -243,6 +329,31 @@ async function syncTransactionsForMid(
 // Chargebacks
 // ----------------------------------------------------------------------------
 
+function mapCardNetwork(cardBrand: number | null | undefined): string | null {
+    switch (cardBrand) {
+        case 1:
+            return 'visa'
+        case 2:
+            return 'mastercard'
+        case 3:
+            return 'amex'
+        case 4:
+            return 'discover'
+        default:
+            return cardBrand == null ? null : 'other'
+    }
+}
+
+function mapChargebackStatus(luqraStatus: string | null | undefined): string {
+    const s = (luqraStatus ?? '').toLowerCase()
+    if (s.includes('won')) return 'won'
+    if (s.includes('lost')) return 'lost'
+    if (s.includes('expired')) return 'expired'
+    if (s.includes('defended') || s.includes('represented')) return 'defended'
+    if (s.includes('review') || s.includes('pending')) return 'under_review'
+    return 'notified'
+}
+
 async function syncChargebacksForMid(
     merchantId: string,
     target: MidTarget,
@@ -256,6 +367,7 @@ async function syncChargebacksForMid(
     let pagesFetched = 0
     let ingested = 0
     let updated = 0
+    let reconciled = 0
     let firstError: string | undefined
 
     const pageSize = Math.min(maxRows ?? PAGE_SIZE, PAGE_SIZE)
@@ -279,38 +391,167 @@ async function syncChargebacksForMid(
         const rows: LuqraChargeback[] = payload?.data?.data ?? []
         if (rows.length === 0) break
 
-        const upsertRows = rows.map((r) => ({
-            id: r.id,
-            merchant_id: merchantId,
-            location_id: target.locationId,
-            mid: r.mid,
-            case_number: r.caseNumber,
-            acquirer_reference_number: r.acquirerReferenceNumber,
-            application_id: r.applicationId,
-            doing_business_as: r.doingBusinessAs,
-            date_loaded: r.dateLoaded,
-            last_date_loaded: r.lastDateLoaded,
-            date_transaction: r.dateTransaction,
-            debit_credit: r.debitCredit,
-            merch_amount: Number(r.merchAmount) || 0,
-            case_amount: Number(r.caseAmount) || 0,
-            case_type: r.caseType,
-            item_type: r.itemType,
-            resolution_to: r.resolutionTo,
-            reason_code: r.reasonCode,
-            reason_description: r.reasonDesc,
-            card_brand: r.cardBrand,
-            cardholder_account_number: r.cardholderAccountNumber,
-            auth_code: r.authCode,
-            trans_id: r.transId,
-            current_status: r.currentStatus,
-            dispute_type: r.disputeType,
-            is_reversal: r.isReversal,
-            status_id: r.status,
-            history: r.history as unknown as Record<string, unknown>[],
-            raw: r as unknown as Record<string, unknown>,
-            last_seen_at: new Date().toISOString(),
-        }))
+        // Reconcile against order_payments. Primary signal: auth_code. Tiebreak / fallback
+        // signals: card last4, amount, transaction date. Chargebacks don't carry a Luqra batchId.
+        type CbCandidate = {
+            id: string
+            order_id: string
+            location_id: string | null
+            merchant_id: string
+            amount: number
+            last4: string | null
+            created_at: string
+            authorization_code: string | null
+        }
+
+        const auths = Array.from(new Set(rows.map((r) => r.authCode).filter(Boolean) as string[]))
+        const last4s = Array.from(
+            new Set(
+                rows
+                    .map((r) => extractLast4(r.cardholderAccountNumber))
+                    .filter(Boolean) as string[]
+            )
+        )
+
+        const candidatesByAuth = new Map<string, CbCandidate[]>()
+        const candidatesByLast4 = new Map<string, CbCandidate[]>()
+
+        if (auths.length || last4s.length) {
+            const orParts: string[] = []
+            if (auths.length) orParts.push(`authorization_code.in.(${auths.map(quoteCsv).join(',')})`)
+            if (last4s.length) orParts.push(`card_last_four.in.(${last4s.map(quoteCsv).join(',')})`)
+
+            const { data: payments } = await supabase
+                .from('order_payments')
+                .select(
+                    `
+                    id, order_id, location_id, amount, total_amount, captured_at, initiated_at,
+                    authorization_code, card_last_four,
+                    orders!inner(merchant_id)
+                  `
+                )
+                .eq('orders.merchant_id', merchantId)
+                .in('status', ['captured', 'authorized', 'refunded'])
+                .or(orParts.join(','))
+
+            for (const p of payments ?? []) {
+                const cand: CbCandidate = {
+                    id: p.id as string,
+                    order_id: p.order_id as string,
+                    location_id: (p.location_id as string) ?? null,
+                    merchant_id: merchantId,
+                    amount: Number(p.total_amount ?? p.amount) || 0,
+                    last4: (p.card_last_four as string) ?? null,
+                    created_at: ((p.captured_at as string) ?? (p.initiated_at as string)) as string,
+                    authorization_code: (p.authorization_code as string) ?? null,
+                }
+                if (cand.authorization_code) {
+                    const arr = candidatesByAuth.get(cand.authorization_code) ?? []
+                    arr.push(cand)
+                    candidatesByAuth.set(cand.authorization_code, arr)
+                }
+                if (cand.last4) {
+                    const arr = candidatesByLast4.get(cand.last4) ?? []
+                    arr.push(cand)
+                    candidatesByLast4.set(cand.last4, arr)
+                }
+            }
+        }
+
+        const pickByDistance = (cands: CbCandidate[], r: LuqraChargeback): CbCandidate | null => {
+            if (cands.length === 0) return null
+            const target = Number(r.merchAmount) || 0
+            const last4 = extractLast4(r.cardholderAccountNumber)
+            const txnTime = r.dateTransaction ? new Date(r.dateTransaction).getTime() : null
+            return [...cands].sort((a, b) => {
+                const la = a.last4 === last4 ? 0 : 1
+                const lb = b.last4 === last4 ? 0 : 1
+                if (la !== lb) return la - lb
+                const da = Math.abs(a.amount - target)
+                const db = Math.abs(b.amount - target)
+                if (Math.abs(da - db) > 0.01) return da - db
+                if (txnTime != null) {
+                    const ta = Math.abs(new Date(a.created_at).getTime() - txnTime)
+                    const tb = Math.abs(new Date(b.created_at).getTime() - txnTime)
+                    return ta - tb
+                }
+                return 0
+            })[0]
+        }
+
+        const pickMatch = (r: LuqraChargeback) => {
+            const auth = r.authCode
+            if (auth) {
+                const byAuth = candidatesByAuth.get(auth) ?? []
+                const m = pickByDistance(byAuth, r)
+                if (m) {
+                    // require last4 OR amount confirmation when more than one auth candidate exists
+                    if (byAuth.length === 1) return m
+                    const last4 = extractLast4(r.cardholderAccountNumber)
+                    const target = Number(r.merchAmount) || 0
+                    if ((last4 && m.last4 === last4) || Math.abs(m.amount - target) < 0.02) return m
+                }
+            }
+            // Fallback: no auth match, try (last4, amount, date) within ±2 days.
+            const last4 = extractLast4(r.cardholderAccountNumber)
+            if (!last4) return null
+            const cands = candidatesByLast4.get(last4) ?? []
+            const target = Number(r.merchAmount) || 0
+            const txnTime = r.dateTransaction ? new Date(r.dateTransaction).getTime() : null
+            const filtered = cands.filter((c) => {
+                if (Math.abs(c.amount - target) > 0.02) return false
+                if (txnTime == null) return true
+                const dt = Math.abs(new Date(c.created_at).getTime() - txnTime)
+                return dt <= 2 * 86400e3
+            })
+            return pickByDistance(filtered, r)
+        }
+
+        const nowIso = new Date().toISOString()
+        type Match = NonNullable<ReturnType<typeof pickMatch>>
+        const matchByLuqraId = new Map<number, Match>()
+
+        const upsertRows = rows.map((r) => {
+            const match = pickMatch(r)
+            if (match) {
+                matchByLuqraId.set(r.id, match)
+                reconciled++
+            }
+            return {
+                id: r.id,
+                merchant_id: merchantId,
+                location_id: target.locationId,
+                mid: r.mid,
+                case_number: r.caseNumber,
+                acquirer_reference_number: r.acquirerReferenceNumber,
+                application_id: r.applicationId,
+                doing_business_as: r.doingBusinessAs,
+                date_loaded: r.dateLoaded,
+                last_date_loaded: r.lastDateLoaded,
+                date_transaction: r.dateTransaction,
+                debit_credit: r.debitCredit,
+                merch_amount: Number(r.merchAmount) || 0,
+                case_amount: Number(r.caseAmount) || 0,
+                case_type: r.caseType,
+                item_type: r.itemType,
+                resolution_to: r.resolutionTo,
+                reason_code: r.reasonCode,
+                reason_description: r.reasonDesc,
+                card_brand: r.cardBrand,
+                cardholder_account_number: r.cardholderAccountNumber,
+                auth_code: r.authCode,
+                trans_id: r.transId,
+                current_status: r.currentStatus,
+                dispute_type: r.disputeType,
+                is_reversal: r.isReversal,
+                status_id: r.status,
+                history: r.history as unknown as Record<string, unknown>[],
+                raw: r as unknown as Record<string, unknown>,
+                reconciled_payment_id: match?.id ?? null,
+                reconciled_at: match ? nowIso : null,
+                last_seen_at: nowIso,
+            }
+        })
 
         const { data: upserted, error: upsertErr } = await supabase
             .from('luqra_chargebacks')
@@ -327,6 +568,38 @@ async function syncChargebacksForMid(
             else updated++
         }
 
+        // Promote matched cases into public.chargebacks (order timeline + platform view).
+        const localUpserts = rows
+            .filter((r) => matchByLuqraId.has(r.id))
+            .map((r) => {
+                const match = matchByLuqraId.get(r.id)!
+                const status = mapChargebackStatus(r.currentStatus)
+                const isResolved = status === 'won' || status === 'lost' || status === 'expired'
+                return {
+                    original_payment_id: match.id,
+                    dispute_psp_reference: `luqra:${r.id}`,
+                    merchant_id: match.merchant_id,
+                    location_id: match.location_id ?? target.locationId,
+                    amount: Number(r.merchAmount) || 0,
+                    reason_code: r.reasonCode ?? '',
+                    reason_description: r.reasonDesc ?? null,
+                    card_network: mapCardNetwork(r.cardBrand),
+                    status,
+                    defendable: !isResolved,
+                    received_at: r.dateLoaded ?? nowIso,
+                    resolved_at: isResolved ? r.lastDateLoaded ?? nowIso : null,
+                }
+            })
+
+        if (localUpserts.length > 0) {
+            const { error: localErr } = await supabase
+                .from('chargebacks')
+                .upsert(localUpserts, { onConflict: 'dispute_psp_reference', ignoreDuplicates: false })
+            if (localErr && !firstError) {
+                firstError = localErr.message
+            }
+        }
+
         if (rows.length < pageSize) break
     }
 
@@ -341,14 +614,14 @@ async function syncChargebacksForMid(
         pages_fetched: pagesFetched,
         rows_ingested: ingested,
         rows_updated: updated,
-        rows_reconciled: 0,
+        rows_reconciled: reconciled,
         status: firstError ? 'error' : 'ok',
         error_code: firstError ?? null,
         started_at: startedAt,
         finished_at: new Date().toISOString(),
     })
 
-    return { ingested, updated, error: firstError }
+    return { ingested, updated, reconciled, error: firstError }
 }
 
 // ----------------------------------------------------------------------------
@@ -685,6 +958,7 @@ export async function syncLuqraForMerchant(
                 transactionsReconciled: t.reconciled,
                 chargebacksIngested: c.ingested,
                 chargebacksUpdated: c.updated,
+                chargebacksReconciled: c.reconciled,
                 depositsIngested: d.ingested,
                 depositsUpdated: d.updated,
                 depositsLinked: d.linked,
@@ -1122,6 +1396,10 @@ export interface CachedCbRow {
     acquirer_reference_number: string | null
     date_transaction: string | null
     resolution_to: string | null
+    reconciled_payment_id: string | null
+    reconciled_at: string | null
+    reconciled_order_id: string | null
+    reconciled_order_number: string | null
 }
 
 export async function getCachedLuqraChargebacks(
@@ -1137,7 +1415,11 @@ export async function getCachedLuqraChargebacks(
             .select(
                 `
         *,
-        location:locations(id, name)
+        location:locations(id, name),
+        payment:order_payments!luqra_chargebacks_reconciled_payment_id_fkey(
+            id, order_id,
+            order:orders(id, order_number)
+        )
       `
             )
             .eq('merchant_id', merchantId)
@@ -1154,10 +1436,21 @@ export async function getCachedLuqraChargebacks(
 
         // Aggregate locally — same shape the live fetcher used to provide.
         const rows: (CachedCbRow & { location: unknown })[] = (data ?? []).map((r) => {
-            const loc = (r as { location?: { id: string; name: string } }).location ?? null
+            const row = r as Record<string, unknown>
+            const loc = (row.location as { id: string; name: string } | null) ?? null
+            const rawPayment = row.payment as
+                | { id: string; order_id: string; order: { id: string; order_number: string | null } | { id: string; order_number: string | null }[] | null }
+                | { id: string; order_id: string; order: { id: string; order_number: string | null } | { id: string; order_number: string | null }[] | null }[]
+                | null
+                | undefined
+            const payment = Array.isArray(rawPayment) ? rawPayment[0] ?? null : rawPayment ?? null
+            const rawOrder = payment?.order ?? null
+            const order = Array.isArray(rawOrder) ? rawOrder[0] ?? null : rawOrder
             return {
-                ...(r as unknown as CachedCbRow),
+                ...(row as unknown as CachedCbRow),
                 location_name: loc?.name ?? null,
+                reconciled_order_id: order?.id ?? null,
+                reconciled_order_number: order?.order_number ?? null,
                 location: loc,
             }
         })

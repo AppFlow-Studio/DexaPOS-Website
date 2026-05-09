@@ -49,8 +49,15 @@ import {
   Loader2,
   ChevronRight,
   Shield,
+  Star,
 } from "lucide-react";
 import { CredentialToast } from "@/components/ui/credential-toast";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { LocationAssignmentSheet } from "./LocationAssignmentSheet";
 import {
   useDeactivateStaff,
@@ -64,6 +71,7 @@ import {
   useUpdateStaffProfile,
   useAddStaffToLocation,
   useRemoveStaffFromLocation,
+  useSetPrimaryLocation,
 } from "@/app/dashboard/hooks/useStaff";
 import { toast } from "sonner";
 import { GetMerchantRoles } from "@/app/dashboard/actions/staff-invite";
@@ -94,6 +102,7 @@ export function StaffDetailSheet({
   const updateProfile = useUpdateStaffProfile();
   const addToLocation = useAddStaffToLocation();
   const removeFromLocation = useRemoveStaffFromLocation();
+  const setPrimary = useSetPrimaryLocation();
   const { data: userInfo } = useUserInfo();
   const { locations: allLocations } = useLocationStore();
 
@@ -162,7 +171,6 @@ export function StaffDetailSheet({
     (a) => a.is_primary
   );
   const hasPin = displayStaff?.location_assignments?.some((a) => a.has_pin) ?? false;
-  const primaryPin = primaryLocation?.pin_code || null;
 
   // Get current user's role level for filtering assignable roles
   const currentUserLevel = React.useMemo(() => {
@@ -173,14 +181,37 @@ export function StaffDetailSheet({
     return role?.level || 100;
   }, [userInfo, roles]);
 
-  // Load roles when edit mode is enabled
+  // Staff management permission: owner, admin, and managers (level ≤ 75) can manage.
+  // Cashier-level and below cannot activate/deactivate staff or manage PINs.
+  const canManageStaff = React.useMemo(() => {
+    if (!userInfo?.members?.[0]) return true; // optimistic until loaded; server enforces
+    const member = userInfo.members[0];
+    const roleCode = (member.role_code || member.role) ?? "";
+    if (["merchant.owner", "merchant.admin"].includes(roleCode)) return true;
+    if (roles.length > 0) return currentUserLevel <= 75;
+    return true; // optimistic while roles load
+  }, [userInfo, roles, currentUserLevel]);
+
+  // PIN reveal permission: owner and admin can always reveal;
+  // managers (level ≤ 75) can too. Cashier-level roles cannot.
+  const canRevealPin = React.useMemo(() => {
+    if (!userInfo?.members?.[0]) return false;
+    const member = userInfo.members[0];
+    const roleCode = (member.role_code || member.role) ?? "";
+    if (["merchant.owner", "merchant.admin"].includes(roleCode)) return true;
+    // Fall back to level check once roles are loaded
+    if (roles.length > 0) return currentUserLevel <= 75;
+    return false;
+  }, [userInfo, roles, currentUserLevel]);
+
+  // Load roles when the sheet opens
   React.useEffect(() => {
-    if (open && (isEditMode || showAddLocation)) {
+    if (open) {
       GetMerchantRoles().then((rolesData) => {
         setRoles(rolesData);
       });
     }
-  }, [open, isEditMode, showAddLocation]);
+  }, [open]);
 
   // Reset edit state when staff changes
   React.useEffect(() => {
@@ -392,7 +423,7 @@ export function StaffDetailSheet({
     if ((editedEmail || null) !== (staff.email || null))
       updates.email = editedEmail || null;
     if ((editedPhone || null) !== (staff.phone || null))
-      updates.phone = normalizePhone(editedPhone) ?? editedPhone || null;
+      updates.phone = normalizePhone(editedPhone) ?? (editedPhone || null);
 
     if (Object.keys(updates).length === 0) {
       setIsProfileEditMode(false);
@@ -443,6 +474,13 @@ export function StaffDetailSheet({
 
   const handleRemoveFromLocation = (locationId: string) => {
     removeFromLocation.mutate({
+      memberId: staff.member_id,
+      locationId,
+    });
+  };
+
+  const handleSetPrimary = (locationId: string) => {
+    setPrimary.mutate({
       memberId: staff.member_id,
       locationId,
     });
@@ -547,15 +585,30 @@ export function StaffDetailSheet({
                         Toggle staff access for the primary location.
                       </p>
                     </div>
-                    <Switch
-                      checked={staff.overall_is_active}
-                      onCheckedChange={handleStatusToggle}
-                      disabled={
-                        !primaryLocation ||
-                        deactivateStaff.isPending ||
-                        reactivateStaff.isPending
-                      }
-                    />
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          {/* span needed so Tooltip works on a disabled element */}
+                          <span className="ml-auto">
+                            <Switch
+                              checked={staff.overall_is_active}
+                              onCheckedChange={handleStatusToggle}
+                              disabled={
+                                !primaryLocation ||
+                                !canManageStaff ||
+                                deactivateStaff.isPending ||
+                                reactivateStaff.isPending
+                              }
+                            />
+                          </span>
+                        </TooltipTrigger>
+                        {!canManageStaff && (
+                          <TooltipContent side="left">
+                            You don&apos;t have permission to manage staff
+                          </TooltipContent>
+                        )}
+                      </Tooltip>
+                    </TooltipProvider>
                   </div>
                 </div>
               </div>
@@ -679,7 +732,11 @@ export function StaffDetailSheet({
                         {isEditMode ? (
                           <Select value={editedRole} onValueChange={setEditedRole}>
                             <SelectTrigger className="h-10">
-                              <SelectValue />
+                              <SelectValue placeholder="Select role">
+                                {editedRole
+                                  ? (roles.find((r) => r.code === editedRole)?.name ?? editedRole)
+                                  : "Select role"}
+                              </SelectValue>
                             </SelectTrigger>
                             <SelectContent>
                               {roles
@@ -850,18 +907,17 @@ export function StaffDetailSheet({
 
                   <div className="space-y-4">
                     <StaffPinField
-                      pin={primaryPin}
+                      memberId={displayStaff?.member_id ?? ""}
+                      locationId={primaryLocation?.location_id ?? ""}
+                      locationName={primaryLocation?.location_name}
                       hasPin={Boolean(primaryLocation?.has_pin)}
+                      canReveal={canRevealPin}
+                      canManage={canManageStaff}
                       onGenerate={handleResetPIN}
                       isGenerating={resetPIN.isPending}
                       disabled={!primaryLocation}
                       buttonLabel={
                         primaryLocation?.has_pin ? "Generate New PIN" : "Generate PIN"
-                      }
-                      visibleDescription={
-                        primaryLocation
-                          ? `Primary location: ${primaryLocation.location_name}`
-                          : undefined
                       }
                     />
 
@@ -1226,6 +1282,26 @@ export function StaffDetailSheet({
                         </div>
 
                         <div className="flex items-center gap-2">
+                          {assignment.is_active && !assignment.is_primary && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 gap-1 px-2"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleSetPrimary(assignment.location_id);
+                              }}
+                              disabled={setPrimary.isPending}
+                              title="Set as primary location"
+                            >
+                              {setPrimary.isPending ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Star className="h-4 w-4" />
+                              )}
+                              <span className="hidden sm:inline">Set primary</span>
+                            </Button>
+                          )}
                           {assignment.is_active && !assignment.is_primary && (
                             <Button
                               variant="ghost"

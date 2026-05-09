@@ -74,7 +74,7 @@ export function AddToWaitlistWizard({ locationId, onSuccess, children }: AddToWa
             const result = await AddToWaitlistAction(locationId, {
                 partyName: partyName.trim(),
                 partySize: size,
-                phone: normalizePhone(phone) ?? phone.trim() || undefined,
+                phone: normalizePhone(phone) ?? undefined,
                 notes: notes.trim() || undefined,
                 preferredSection: preferredSection.trim() || undefined,
                 quotedWaitMinutes: quotedWaitMinutes ? parseInt(quotedWaitMinutes, 10) : undefined,

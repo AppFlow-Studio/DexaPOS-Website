@@ -522,21 +522,9 @@ export function TransactionFilterSheet({ searchParams }: TransactionFilterSheetP
 
                     <Separator />
 
-                    {/* Order Status */}
-                    <div className="space-y-2">
-                        <Label className="text-sm font-semibold">Order Status</Label>
-                        <MultiSelect
-                            label="Order Statuses"
-                            options={ORDER_STATUSES}
-                            selected={orderStatuses}
-                            onChange={setOrderStatuses}
-                            placeholder="All Statuses"
-                        />
-                    </div>
-
                     {/* Payment Status */}
                     <div className="space-y-2">
-                        <Label className="text-sm font-semibold">Payment Status</Label>
+                        <Label className="text-sm font-semibold">Status</Label>
                         <MultiSelect
                             label="Payment Statuses"
                             options={PAYMENT_STATUSES}

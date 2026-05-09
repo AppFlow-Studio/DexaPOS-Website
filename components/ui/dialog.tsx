@@ -33,6 +33,7 @@ function DialogClose({
 const overlayZ = {
   default: "z-[100]",
   high: "z-[110]",
+  "above-sheet": "z-[210]",
 } as const;
 
 function DialogOverlay({
@@ -40,7 +41,7 @@ function DialogOverlay({
   elevation = "default",
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Overlay> & {
-  elevation?: "default" | "high"
+  elevation?: "default" | "high" | "above-sheet"
 }) {
   return (
     <DialogPrimitive.Overlay
@@ -65,7 +66,7 @@ function DialogContent({
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean
   /** Use "high" when opening from inside a BottomSheet so the dialog appears above it */
-  elevation?: "default" | "high"
+  elevation?: "default" | "high" | "above-sheet"
   overlayClassName?: string
 }) {
   return (

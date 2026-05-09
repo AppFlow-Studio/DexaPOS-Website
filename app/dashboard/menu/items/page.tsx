@@ -100,6 +100,8 @@ import { AVAILABLE_CHANNELS } from "@/types/inventory";
 import { DeleteMenuItem } from "../../actions/menu-items";
 import { CreateItemWizard } from "@/components/dashboard/menu/items/CreateItemWizard";
 import { useManagerPermissions } from "../../hooks/useManagerPermissions";
+import { Checkbox } from "@/components/ui/checkbox";
+import { BulkPriceAdjustDialog } from "@/components/dashboard/menu/items/BulkPriceAdjustDialog";
 
 // ============================================================================
 // TYPES
@@ -500,6 +502,9 @@ function ItemRow({
   index = 0,
   taxRates = [],
   canDelete = false,
+  isSelectable = false,
+  isSelected = false,
+  onToggleSelect,
 }: {
   item: FlatItem;
   onEdit: () => void;
@@ -508,6 +513,9 @@ function ItemRow({
   index?: number;
   taxRates?: any[];
   canDelete?: boolean;
+  isSelectable?: boolean;
+  isSelected?: boolean;
+  onToggleSelect?: (id: string) => void;
 }) {
   const hasOverride = item.has_location_override;
   const priceColors =
@@ -532,10 +540,23 @@ function ItemRow({
           "flex items-center gap-4 p-4 rounded-xl border bg-card transition-all duration-200 cursor-pointer",
           "hover:shadow-md hover:border-primary/30",
           hasOverride && "ring-1 ring-amber-200",
+          isSelected && "ring-2 ring-primary border-primary/40 bg-primary/5",
           !item.effective_availability && "opacity-70",
         )}
         onClick={onView}
       >
+        {isSelectable && (
+          <div
+            className="shrink-0 flex items-center justify-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Checkbox
+              checked={isSelected}
+              onCheckedChange={() => onToggleSelect?.(item.id)}
+              aria-label={`Select ${item.name}`}
+            />
+          </div>
+        )}
         {/* Image */}
         <div className="relative w-16 h-16 rounded-lg overflow-hidden bg-muted/30 shrink-0">
           {isValidImageUrl(item.image) ? (
@@ -657,53 +678,55 @@ function ItemRow({
             </div>
 
             {/* Price and indicators */}
-            <div className="text-right shrink-0 flex items-center gap-3">
-              <div className="flex flex-col items-end">
-                <span className="font-bold text-primary">
-                  ${item.effective_price.toFixed(2)}
+            <div className="shrink-0 flex flex-col items-end gap-1 w-24">
+              <span className="font-bold text-primary tabular-nums leading-none">
+                ${item.effective_price.toFixed(2)}
+              </span>
+              {hasOverride && item.base_price !== item.effective_price && (
+                <span className="text-xs text-muted-foreground line-through tabular-nums leading-none">
+                  ${item.base_price.toFixed(2)}
                 </span>
-                {hasOverride && item.base_price !== item.effective_price && (
-                  <span className="text-xs text-muted-foreground line-through">
-                    ${item.base_price.toFixed(2)}
-                  </span>
-                )}
-              </div>
-              {item.price_source !== "base" && (
-                <Badge
-                  variant="outline"
-                  className={cn(
-                    "text-[10px] px-1.5",
-                    priceColors.bg,
-                    priceColors.text,
-                    priceColors.border,
-                  )}
-                >
-                  {item.price_source === "location_item" && (
-                    <MapPin className="h-2.5 w-2.5" />
-                  )}
-                  {item.price_source === "category" && (
-                    <Tag className="h-2.5 w-2.5" />
-                  )}
-                </Badge>
               )}
-              {!item.effective_availability && (
-                <Badge
-                  variant="secondary"
-                  className="text-xs bg-red-100 text-red-700"
-                >
-                  Off
-                </Badge>
+              {(item.price_source !== "base" || !item.effective_availability) && (
+                <div className="flex items-center gap-1">
+                  {item.price_source !== "base" && (
+                    <Badge
+                      variant="outline"
+                      className={cn(
+                        "text-[10px] px-1.5 py-0",
+                        priceColors.bg,
+                        priceColors.text,
+                        priceColors.border,
+                      )}
+                    >
+                      {item.price_source === "location_item" && (
+                        <MapPin className="h-2.5 w-2.5" />
+                      )}
+                      {item.price_source === "category" && (
+                        <Tag className="h-2.5 w-2.5" />
+                      )}
+                    </Badge>
+                  )}
+                  {!item.effective_availability && (
+                    <Badge
+                      variant="secondary"
+                      className="text-[10px] px-1.5 py-0 bg-red-100 text-red-700"
+                    >
+                      Off
+                    </Badge>
+                  )}
+                </div>
               )}
             </div>
           </div>
         </div>
 
         {/* Actions */}
-        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="hidden md:flex flex-col gap-1 w-20 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
           <Button
             size="sm"
             variant="ghost"
-            className="h-8"
+            className="h-7 w-full justify-start px-2"
             onClick={(e) => {
               e.stopPropagation();
               onEdit();
@@ -716,7 +739,7 @@ function ItemRow({
             <Button
               size="sm"
               variant="ghost"
-              className="h-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+              className="h-7 w-full justify-start px-2 text-destructive hover:text-destructive hover:bg-destructive/10"
               onClick={(e) => {
                 e.stopPropagation();
                 onDelete();
@@ -943,6 +966,25 @@ export default function MenuItemsPage() {
   const [deletingItem, setDeletingItem] = useState<FlatItem | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isCreateWizardOpen, setIsCreateWizardOpen] = useState(false);
+  const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
+  const [bulkPriceDialogOpen, setBulkPriceDialogOpen] = useState(false);
+
+  const toggleItemSelected = (id: string) => {
+    setSelectedItemIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+  const clearSelection = () => setSelectedItemIds(new Set());
+
+  // Selection only renders in list view; clear when leaving it.
+  useEffect(() => {
+    if (viewMode !== "list" && selectedItemIds.size > 0) {
+      setSelectedItemIds(new Set());
+    }
+  }, [viewMode, selectedItemIds.size]);
 
   // Read category filter from URL
   useEffect(() => {
@@ -1714,6 +1756,39 @@ export default function MenuItemsPage() {
           ) : (
             // List View
             <div className="space-y-2">
+              {selectedItemIds.size > 0 && (
+                <div className="sticky top-0 z-10 -mx-1 px-3 py-2 mb-2 flex items-center gap-3 rounded-lg border bg-primary/5 backdrop-blur">
+                  <span className="text-sm font-medium">
+                    {selectedItemIds.size} selected
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 px-2 text-xs"
+                    onClick={clearSelection}
+                  >
+                    Clear
+                  </Button>
+                  <div className="ml-auto">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button size="sm" variant="default" className="h-8">
+                          Bulk edit
+                          <ChevronDown className="ml-1 h-3.5 w-3.5" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem
+                          onClick={() => setBulkPriceDialogOpen(true)}
+                        >
+                          <DollarSign className="h-4 w-4 mr-2" />
+                          Adjust price…
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </div>
+              )}
               {filteredItems.map((item, index) => {
                 // Can delete if: viewing all locations OR item belongs to current location
                 const canDelete = isAllLocations
@@ -1729,6 +1804,9 @@ export default function MenuItemsPage() {
                     onView={() => handleViewDetails(item)}
                     onDelete={() => setDeletingItem(item)}
                     canDelete={canDelete}
+                    isSelectable
+                    isSelected={selectedItemIds.has(item.id)}
+                    onToggleSelect={toggleItemSelected}
                   />
                 );
               })}
@@ -1854,6 +1932,31 @@ export default function MenuItemsPage() {
           }}
         />
       )}
+
+      {/* Bulk Price Adjustment */}
+      <BulkPriceAdjustDialog
+        open={bulkPriceDialogOpen}
+        onOpenChange={setBulkPriceDialogOpen}
+        clerkOrgId={clerkOrgId}
+        currentLocationId={isAllLocations ? null : selectedLocationId}
+        isAllLocations={isAllLocations}
+        selectedItems={filteredItems
+          .filter((it) => selectedItemIds.has(it.id))
+          .map((it) => ({
+            id: it.id,
+            name: it.name,
+            effectivePrice: it.effective_price,
+          }))}
+        onSuccess={() => {
+          clearSelection();
+          queryClient.invalidateQueries({ queryKey: ["menu-items"] });
+          queryClient.invalidateQueries({ queryKey: ["menu-items-flat"] });
+          queryClient.invalidateQueries({
+            queryKey: ["categories-with-items"],
+          });
+          refetch();
+        }}
+      />
     </div>
   );
 }

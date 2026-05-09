@@ -92,18 +92,18 @@ export function TableShapePickerDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-5xl gap-0 overflow-hidden border border-gray-700 bg-[#2a2a2a] p-0 text-white">
-                <DialogHeader className="border-b border-gray-700 px-6 py-5">
-                    <DialogTitle className="text-2xl font-bold text-white">Add New Object</DialogTitle>
-                    <DialogDescription className="text-base text-gray-400">
+            <DialogContent className="w-[96vw] sm:w-[96vw] sm:max-w-[1120px] max-w-[1120px] gap-0 overflow-hidden border border-border bg-background p-0 text-foreground">
+                <DialogHeader className="border-b border-border px-5 py-4">
+                    <DialogTitle className="text-lg font-semibold text-foreground">Add New Object</DialogTitle>
+                    <DialogDescription className="text-sm text-muted-foreground">
                         Pick a shape from the shared SVG library and drop a named object into the floor plan.
                     </DialogDescription>
                 </DialogHeader>
 
-                <div className="grid gap-6 px-6 py-6 lg:grid-cols-[260px_minmax(0,1fr)]">
-                    <div className="space-y-4">
+                <div className="grid gap-5 px-5 py-4 lg:grid-cols-[240px_minmax(680px,1fr)]">
+                    <div className="space-y-3">
                         <div className="space-y-2">
-                            <Label htmlFor="new-floor-object-name" className="text-base font-medium text-gray-300">
+                            <Label htmlFor="new-floor-object-name" className="text-sm font-medium text-foreground">
                                 Object name
                             </Label>
                             <Input
@@ -111,7 +111,7 @@ export function TableShapePickerDialog({
                                 value={name}
                                 onChange={(event) => setName(event.target.value)}
                                 placeholder="e.g. Table 12 or Main Bar"
-                                className="h-14 border-gray-600 bg-[#1e1e1e] text-lg text-white placeholder:text-gray-500"
+                                className="h-10 border-border bg-background text-sm text-foreground placeholder:text-muted-foreground"
                                 onKeyDown={(event) => {
                                     if (event.key === 'Enter') {
                                         event.preventDefault()
@@ -121,27 +121,27 @@ export function TableShapePickerDialog({
                             />
                         </div>
 
-                        <div className="rounded-xl border border-gray-700 bg-[#313131] p-4">
-                            <p className="text-xs font-medium uppercase tracking-[0.18em] text-gray-400">
+                        <div className="rounded-md border border-border bg-muted/20 p-3">
+                            <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
                                 Selected shape
                             </p>
-                            <div className="mt-3 rounded-xl border border-gray-700 bg-[#1e1e1e] p-4 shadow-sm">
+                                <div className="mt-2 rounded-md border border-border bg-background p-3 shadow-sm">
                                 {(() => {
                                     const selectedShape = TABLE_SHAPES[selectedShapeId]
                                     const SelectedShapeIcon = selectedShape.component
                                     return (
-                                        <div className="space-y-3">
-                                            <div className="flex h-28 items-center justify-center rounded-xl border border-gray-700 bg-[#2a2a2a]">
-                                                <SelectedShapeIcon width={112} height={112} color={SHAPE_ACTIVE_COLOR} />
+                                        <div className="space-y-2.5">
+                                            <div className="flex h-20 items-center justify-center rounded-md border border-border bg-muted/30">
+                                                <SelectedShapeIcon width={76} height={76} color={SHAPE_ACTIVE_COLOR} />
                                             </div>
                                             <div>
-                                                <p className="text-sm font-semibold text-white">{selectedShape.label}</p>
-                                                <p className="text-xs text-gray-400">
+                                                <p className="text-sm font-medium text-foreground">{selectedShape.label}</p>
+                                                <p className="text-xs text-muted-foreground">
                                                     {CATEGORY_LABELS[selectedShape.category as ShapeCategory]}
                                                 </p>
                                             </div>
                                             {selectedShape.capacity > 0 && (
-                                                <Badge className="w-fit bg-blue-500/10 text-blue-400 hover:bg-blue-500/10">
+                                                <Badge variant="secondary" className="w-fit text-[10px]">
                                                     {selectedShape.capacity} seats
                                                 </Badge>
                                             )}
@@ -154,12 +154,12 @@ export function TableShapePickerDialog({
 
                     <div className="min-w-0">
                         <Tabs value={activeCategory} onValueChange={(value) => setActiveCategory(value as ShapeCategory)}>
-                            <TabsList className="grid w-full grid-cols-3 bg-[#313131] lg:grid-cols-6">
+                            <TabsList className="grid w-full grid-cols-3 bg-muted/40 lg:grid-cols-6">
                                 {CATEGORY_ORDER.map((category) => (
                                     <TabsTrigger
                                         key={category}
                                         value={category}
-                                        className="text-gray-300 data-[state=active]:bg-blue-600 data-[state=active]:text-white"
+                                        className="px-2 text-xs text-muted-foreground data-[state=active]:bg-background data-[state=active]:text-foreground"
                                     >
                                         {CATEGORY_LABELS[category]}
                                     </TabsTrigger>
@@ -167,9 +167,9 @@ export function TableShapePickerDialog({
                             </TabsList>
 
                             {CATEGORY_ORDER.map((category) => (
-                                <TabsContent key={category} value={category} className="mt-4">
-                                    <ScrollArea className="h-[420px] rounded-xl border border-gray-700 bg-[#1e1e1e] p-1">
-                                        <div className="grid gap-3 p-3 md:grid-cols-2 xl:grid-cols-3">
+                                <TabsContent key={category} value={category} className="mt-3">
+                                    <ScrollArea className="h-[420px] rounded-md border border-border bg-muted/10 p-2">
+                                        <div className="grid gap-3 p-2 md:grid-cols-2 xl:grid-cols-3">
                                             {shapesByCategory[category].map((shape) => {
                                                 const ShapeIcon = shape.component
                                                 const isSelected = selectedShapeId === shape.id
@@ -178,31 +178,31 @@ export function TableShapePickerDialog({
                                                         key={shape.id}
                                                         type="button"
                                                         onClick={() => setSelectedShapeId(shape.id as keyof typeof TABLE_SHAPES)}
-                                                        className={`rounded-2xl border p-4 text-left transition-all ${
+                                                        className={`rounded-md border p-3 text-left transition-all ${
                                                             isSelected
-                                                                ? 'border-blue-500 bg-blue-500/10 shadow-sm'
-                                                                : 'border-gray-700 bg-[#212121] hover:border-gray-600'
+                                                                ? 'border-primary/60 bg-primary/10 shadow-sm'
+                                                                : 'border-border bg-background hover:border-primary/40'
                                                         }`}
                                                     >
-                                                        <div className="flex h-28 items-center justify-center rounded-xl border border-gray-700 bg-[#2a2a2a]">
+                                                        <div className="flex h-20 items-center justify-center rounded-md border border-border bg-muted/30">
                                                             <ShapeIcon
-                                                                width={112}
-                                                                height={112}
+                                                                width={74}
+                                                                height={74}
                                                                 color={isSelected ? SHAPE_ACTIVE_COLOR : SHAPE_DEFAULT_COLOR}
                                                             />
                                                         </div>
-                                                        <div className="mt-3 space-y-2">
+                                                        <div className="mt-2 space-y-1.5">
                                                             <div className="flex items-start justify-between gap-2">
                                                                 <div>
-                                                                    <p className={`text-sm font-semibold ${isSelected ? 'text-blue-400' : 'text-gray-200'}`}>
+                                                                    <p className={`text-sm font-medium ${isSelected ? 'text-primary' : 'text-foreground'}`}>
                                                                         {shape.label}
                                                                     </p>
-                                                                    <p className="text-xs text-gray-400">
+                                                                    <p className="text-xs text-muted-foreground">
                                                                         {CATEGORY_LABELS[shape.category as ShapeCategory]}
                                                                     </p>
                                                                 </div>
                                                                 {shape.capacity > 0 && (
-                                                                    <Badge className={isSelected ? 'bg-blue-500/10 text-blue-400 hover:bg-blue-500/10' : 'bg-[#313131] text-gray-300 hover:bg-[#313131]'}>
+                                                                    <Badge variant="secondary" className="text-[10px]">
                                                                         {shape.capacity}
                                                                     </Badge>
                                                                 )}
@@ -219,17 +219,15 @@ export function TableShapePickerDialog({
                     </div>
                 </div>
 
-                <DialogFooter className="border-t border-gray-700 px-6 py-4">
+                <DialogFooter className="border-t border-border bg-muted/20 px-5 py-3">
                     <Button
                         variant="outline"
                         onClick={() => onOpenChange(false)}
-                        className="border-gray-700 bg-gray-700 text-gray-300 hover:bg-gray-600 hover:text-white"
                     >
                         Cancel
                     </Button>
                     <Button
                         onClick={handleSubmit}
-                        className="bg-blue-600 text-white hover:bg-blue-700"
                     >
                         Add Object
                     </Button>

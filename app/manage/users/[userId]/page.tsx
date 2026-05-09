@@ -1,8 +1,10 @@
 'use client'
 
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { useAuth } from '@clerk/nextjs'
+import { RemoveUser } from '../../actions/remove-user'
+import { toast } from 'sonner'
 import { useGetInfoOfUser } from '../../hooks/useGetInfoOfUser'
 import { useAdminAuth } from '@/lib/hooks/useAdminAuth'
 import { useAdminMerchantAccess, useGrantMerchantAccess, useRevokeMerchantAccess } from '../../hooks/useAdminMerchantAccess'
@@ -32,13 +34,6 @@ import {
     DialogTrigger,
 } from '@/components/ui/dialog'
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select'
-import {
     User,
     Mail,
     Shield,
@@ -56,16 +51,30 @@ import {
     Lock,
 } from 'lucide-react'
 import Link from 'next/link'
+import { EditUserDetailsDialog } from './components/edit-user-details-dialog'
+import { EditMembershipDialog } from './components/edit-membership-dialog'
+import { GrantMerchantAccessDialog } from './components/grant-merchant-access-dialog'
+import { PageLoader } from '@/components/ui/page-loader'
 
 export default function UserInfoPage() {
     const { userId: targetUserId } = useParams()
     const { userId: currentUserId } = useAuth()
+    const router = useRouter()
     const { role: currentUserRole, isSuperAdmin } = useAdminAuth()
+    const [isDeletingUser, setIsDeletingUser] = useState(false)
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
     const { data: user, isLoading, error } = useGetInfoOfUser(targetUserId as string)
     
     // Merchant access management state
-    const [selectedMerchantToGrant, setSelectedMerchantToGrant] = useState<string>('')
     const [isGrantDialogOpen, setIsGrantDialogOpen] = useState(false)
+
+    // Edit dialog state
+    const [isEditDetailsOpen, setIsEditDetailsOpen] = useState(false)
+    const [editingMembership, setEditingMembership] = useState<{
+        organizationId: string
+        organizationName: string
+        role: string | null
+    } | null>(null)
     
     // Fetch target user's merchant access
     const { data: targetUserMerchantAccess, isLoading: accessLoading } = useAdminMerchantAccess(targetUserId as string)
@@ -77,13 +86,7 @@ export default function UserInfoPage() {
     const grantAccessMutation = useGrantMerchantAccess()
     const revokeAccessMutation = useRevokeMerchantAccess()
 
-    if (isLoading) {
-        return (
-            <div className="flex h-screen items-center justify-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-            </div>
-        )
-    }
+    if (isLoading) return <PageLoader />
 
     if (error) {
         return (
@@ -114,30 +117,51 @@ export default function UserInfoPage() {
     const targetUserRoleCode = targetUserHQMembership?.role as HQRoleCode | undefined
     const targetUserRoleLevel = targetUserRoleCode ? (HQ_ROLES[targetUserRoleCode]?.level || 0) : 0
     const currentUserRoleLevel = currentUserRole?.level || 0
+    
+    // Only super admins can assign merchants. They also cannot assign merchants
+    // to themselves — that prevents a super admin from silently scoping their
+    // own access via this UI.
+    const isSelf = !!currentUserId && currentUserId === targetUserId
+    const canEditMerchantAccess = isSuperAdmin && !isSelf
     const isTargetSuperAdmin = targetUserRoleCode === 'hq.super_admin'
-    const isViewingOwnProfile = targetUserId === currentUserId
-
-    // Can edit if current user has higher role level than target user, but never self-grant
-    const canEditMerchantAccess = !isViewingOwnProfile && (isSuperAdmin || currentUserRoleLevel > targetUserRoleLevel)
-
+    // Suppress unused warnings for legacy variables left in place for context.
+    void currentUserRoleLevel; void targetUserRoleLevel
+    
     // Filter out merchants the target user already has access to
     const availableMerchantsToGrant = allMerchantsData?.merchants?.filter(
         (merchant) => !targetUserMerchantAccess?.some((access) => access.merchantId === merchant.id)
     ) || []
 
-    const handleGrantAccess = async () => {
-        if (!selectedMerchantToGrant) return
-        
+    const handleGrantAccess = async (merchantId: string) => {
+        if (!merchantId) return
+
         try {
             await grantAccessMutation.mutateAsync({
                 adminUserId: targetUserId as string,
-                merchantId: selectedMerchantToGrant,
+                merchantId,
                 grantedBy: currentUserId || undefined,
             })
-            setSelectedMerchantToGrant('')
             setIsGrantDialogOpen(false)
         } catch (error) {
             console.error('Error granting merchant access:', error)
+        }
+    }
+
+    const handleDeleteUser = async () => {
+        setIsDeletingUser(true)
+        try {
+            const result = await RemoveUser(targetUserId as string)
+            if (result && 'success' in result && result.success) {
+                toast.success('User deleted successfully')
+                setDeleteDialogOpen(false)
+                router.push('/manage/users')
+            } else {
+                toast.error('Failed to delete user')
+            }
+        } catch {
+            toast.error('An error occurred while deleting the user')
+        } finally {
+            setIsDeletingUser(false)
         }
     }
 
@@ -284,7 +308,10 @@ export default function UserInfoPage() {
                                     </div>
 
                                     <div className="mt-6 pt-4 border-t">
-                                        <Button variant="outline">
+                                        <Button
+                                            variant="outline"
+                                            onClick={() => setIsEditDetailsOpen(true)}
+                                        >
                                             <Edit className="mr-2 h-4 w-4" />
                                             Edit user details
                                         </Button>
@@ -326,7 +353,16 @@ export default function UserInfoPage() {
                                                             </DropdownMenuTrigger>
                                                             <DropdownMenuContent align="end">
                                                                 <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                                                <DropdownMenuItem>
+                                                                <DropdownMenuItem
+                                                                    onSelect={(event) => {
+                                                                        event.preventDefault()
+                                                                        setEditingMembership({
+                                                                            organizationId: member.organization_id,
+                                                                            organizationName: member.organizations?.name || 'organization',
+                                                                            role: member.role || null,
+                                                                        })
+                                                                    }}
+                                                                >
                                                                     <Edit className="mr-2 h-4 w-4" />
                                                                     Edit membership
                                                                 </DropdownMenuItem>
@@ -357,7 +393,7 @@ export default function UserInfoPage() {
                                                     Deleting this user is permanent and cannot be undone.
                                                 </p>
                                             </div>
-                                            <Dialog>
+                                            <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
                                                 <DialogTrigger asChild>
                                                     <Button variant="destructive">
                                                         <Trash2 className="mr-2 h-4 w-4" />
@@ -368,12 +404,14 @@ export default function UserInfoPage() {
                                                     <DialogHeader>
                                                         <DialogTitle>Delete user account</DialogTitle>
                                                         <DialogDescription>
-                                                            Are you sure you want to delete this user account? This action cannot be undone.
+                                                            Are you sure you want to delete <strong>{user.first_name} {user.last_name}</strong>? This action is permanent and cannot be undone.
                                                         </DialogDescription>
                                                     </DialogHeader>
                                                     <DialogFooter>
-                                                        <Button variant="outline">Cancel</Button>
-                                                        <Button variant="destructive">Delete user</Button>
+                                                        <Button variant="outline" onClick={() => setDeleteDialogOpen(false)} disabled={isDeletingUser}>Cancel</Button>
+                                                        <Button variant="destructive" onClick={handleDeleteUser} disabled={isDeletingUser}>
+                                                            {isDeletingUser ? 'Deleting...' : 'Delete user'}
+                                                        </Button>
                                                     </DialogFooter>
                                                 </DialogContent>
                                             </Dialog>
@@ -396,52 +434,11 @@ export default function UserInfoPage() {
                                                 )}
                                             </CardDescription>
                                         </div>
-                                        {canEditMerchantAccess && !isTargetSuperAdmin && (
-                                            <Dialog open={isGrantDialogOpen} onOpenChange={setIsGrantDialogOpen}>
-                                                <DialogTrigger asChild>
-                                                    <Button>
-                                                        <Plus className="mr-2 h-4 w-4" />
-                                                        Grant Access
-                                                    </Button>
-                                                </DialogTrigger>
-                                                <DialogContent>
-                                                    <DialogHeader>
-                                                        <DialogTitle>Grant Merchant Access</DialogTitle>
-                                                        <DialogDescription>
-                                                            Select a merchant to grant access to {user.first_name} {user.last_name}
-                                                        </DialogDescription>
-                                                    </DialogHeader>
-                                                    <div className="py-4">
-                                                        <Select value={selectedMerchantToGrant} onValueChange={setSelectedMerchantToGrant}>
-                                                            <SelectTrigger>
-                                                                <SelectValue placeholder="Select a merchant" />
-                                                            </SelectTrigger>
-                                                            <SelectContent>
-                                                                {availableMerchantsToGrant.length === 0 ? (
-                                                                    <SelectItem value="none" disabled>No merchants available</SelectItem>
-                                                                ) : (
-                                                                    availableMerchantsToGrant.map((merchant) => (
-                                                                        <SelectItem key={merchant.id} value={merchant.id}>
-                                                                            {merchant.name}
-                                                                        </SelectItem>
-                                                                    ))
-                                                                )}
-                                                            </SelectContent>
-                                                        </Select>
-                                                    </div>
-                                                    <DialogFooter>
-                                                        <Button variant="outline" onClick={() => setIsGrantDialogOpen(false)}>
-                                                            Cancel
-                                                        </Button>
-                                                        <Button
-                                                            onClick={handleGrantAccess}
-                                                            disabled={!selectedMerchantToGrant || grantAccessMutation.isPending}
-                                                        >
-                                                            {grantAccessMutation.isPending ? 'Granting...' : 'Grant Access'}
-                                                        </Button>
-                                                    </DialogFooter>
-                                                </DialogContent>
-                                            </Dialog>
+                                        {canEditMerchantAccess && (
+                                            <Button onClick={() => setIsGrantDialogOpen(true)}>
+                                                <Plus className="mr-2 h-4 w-4" />
+                                                Grant Access
+                                            </Button>
                                         )}
                                     </div>
                                 </CardHeader>
@@ -556,6 +553,39 @@ export default function UserInfoPage() {
                     </Tabs>
                 </div>
             </div>
+
+            <GrantMerchantAccessDialog
+                open={isGrantDialogOpen}
+                onOpenChange={setIsGrantDialogOpen}
+                userName={`${user.first_name} ${user.last_name}`.trim()}
+                availableMerchants={availableMerchantsToGrant}
+                isPending={grantAccessMutation.isPending}
+                onGrant={(merchantId) => void handleGrantAccess(merchantId)}
+            />
+
+            <EditUserDetailsDialog
+                open={isEditDetailsOpen}
+                onOpenChange={setIsEditDetailsOpen}
+                userId={targetUserId as string}
+                initialFirstName={user.first_name || ''}
+                initialLastName={user.last_name || ''}
+                email={user.email || ''}
+            />
+
+            {editingMembership && (
+                <EditMembershipDialog
+                    open={!!editingMembership}
+                    onOpenChange={(open) => {
+                        if (!open) setEditingMembership(null)
+                    }}
+                    userId={targetUserId as string}
+                    organizationId={editingMembership.organizationId}
+                    organizationName={editingMembership.organizationName}
+                    currentRole={editingMembership.role}
+                    actorRoleLevel={currentUserRoleLevel}
+                    isSuperAdmin={isSuperAdmin}
+                />
+            )}
         </div>
     )
 }

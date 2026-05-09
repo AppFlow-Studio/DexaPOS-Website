@@ -90,6 +90,8 @@ export function usePlatformSalesTrend() {
   return useQuery({
     queryKey: platformKeys.salesTrend(),
     queryFn: () => getPlatformSalesTrend(),
+    staleTime: 30_000,
+    refetchOnMount: 'always',
   })
 }
 
@@ -112,6 +114,8 @@ export function usePlatformTransactions(limit: number = 50, offset: number = 0, 
     queryKey: platformKeys.transactions(limit, offset, filters),
     queryFn: () => getPlatformTransactions(limit, offset, filters),
     placeholderData: keepPreviousData,
+    staleTime: 30_000,
+    refetchOnMount: 'always',
   })
 }
 
@@ -126,6 +130,8 @@ export function usePlatformTransactionSummary(filters?: PlatformTransactionFilte
   return useQuery({
     queryKey: platformKeys.transactionSummary(filters),
     queryFn: () => getPlatformTransactionSummary(filters),
+    staleTime: 30_000,
+    refetchOnMount: 'always',
   })
 }
 

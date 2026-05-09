@@ -103,8 +103,11 @@ export function TableNode ({
   const TableComponent = shape.component
   const width = table.width || shape.width
   const height = table.height || shape.height
+  const isTextLabelShape = table.shape_id === 'label-text'
   const shouldShowLabel =
-    table.category === 'table' || table.category === 'booth'
+    table.category === 'table' ||
+    table.category === 'booth' ||
+    table.category === 'zone'
   const capacityValue = Number(table.capacity ?? 0)
   const shouldShowCapacity =
     shouldShowLabel && Number.isFinite(capacityValue) && capacityValue > 0
@@ -407,11 +410,12 @@ export function TableNode ({
           width={width}
           height={height}
           darkMode={isDarkMode}
+          text={isTextLabelShape ? (table.label_override || table.name || '') : undefined}
         />
       </div>
 
       {/* LABELS */}
-      {shouldShowLabel && (
+      {shouldShowLabel && !isTextLabelShape && (
         <div className='absolute inset-0 flex items-center justify-center z-30 pointer-events-none'>
           {isEditing ? (
             <div className='pointer-events-auto w-[120%] transform -translate-y-6'>
@@ -427,14 +431,22 @@ export function TableNode ({
           ) : (
             (table.label_override || table.name || shouldShowCapacity) && (
               <div
-                className='text-[10px] font-bold text-white text-center leading-tight'
+                className={cn(
+                  'text-[10px] font-bold text-center leading-tight',
+                  isDarkMode ? 'text-white' : 'text-slate-900'
+                )}
                 style={{ transform: `rotate(-${table.rotation || 0}deg)` }}
               >
                 {(table.label_override || table.name) && (
                   <div>{table.label_override || table.name}</div>
                 )}
                 {shouldShowCapacity && (
-                  <div className='text-[9px] font-semibold text-white/90'>
+                  <div
+                    className={cn(
+                      'text-[9px] font-semibold',
+                      isDarkMode ? 'text-white/90' : 'text-slate-700'
+                    )}
+                  >
                     Seats: {capacityValue}
                   </div>
                 )}
