@@ -39,6 +39,10 @@ import {
   type SubscriptionServiceAssignmentRecord,
   upsertMerchantSubscription,
 } from '@/app/manage/actions/subscription-billing'
+import {
+  getMerchantNmiAccountsSummary,
+  type MerchantNmiAccountRow,
+} from '@/app/manage/actions/admin-merchant/nmi'
 
 interface BillingLocationOption {
   id: string
@@ -142,6 +146,7 @@ export function SubscriptionBillingAdminCard({
   const [subscriptions, setSubscriptions] = useState<MerchantSubscriptionRecord[]>([])
   const [invoices, setInvoices] = useState<SubscriptionInvoiceRecord[]>([])
   const [subscriptionServiceMap, setSubscriptionServiceMap] = useState<Record<string, SubscriptionServiceAssignmentRecord[]>>({})
+  const [locationEligibilityMap, setLocationEligibilityMap] = useState<Record<string, MerchantNmiAccountRow>>({})
   const [serviceFormState, setServiceFormState] = useState<ServiceFormState>({})
 
   const [selectedLocationId, setSelectedLocationId] = useState<string>('')
@@ -161,13 +166,19 @@ export function SubscriptionBillingAdminCard({
     [selectedLocationSubscription, subscriptionServiceMap]
   )
 
+  const selectedLocationEligibility = useMemo(
+    () => (selectedLocationId ? locationEligibilityMap[selectedLocationId] ?? null : null),
+    [locationEligibilityMap, selectedLocationId]
+  )
+
   const refresh = () => {
     startTransition(async () => {
       try {
-        const [nextServices, nextSubscriptions, nextInvoices] = await Promise.all([
+        const [nextServices, nextSubscriptions, nextInvoices, nmiSummary] = await Promise.all([
           getBillableServices(),
           getMerchantSubscriptions(merchantId),
           getSubscriptionInvoices(merchantId, null, 100),
+          getMerchantNmiAccountsSummary(merchantId),
         ])
 
         const assignmentEntries = await Promise.all(
@@ -183,6 +194,9 @@ export function SubscriptionBillingAdminCard({
         setSubscriptions(nextSubscriptions)
         setInvoices(nextInvoices)
         setSubscriptionServiceMap(nextAssignmentMap)
+        setLocationEligibilityMap(
+          Object.fromEntries(nmiSummary.locations.map((location) => [location.locationId, location]))
+        )
 
         const defaultLocationId = selectedLocationId || locations[0]?.id || ''
         if (defaultLocationId) {
@@ -387,6 +401,18 @@ export function SubscriptionBillingAdminCard({
                     ))}
                   </SelectContent>
                 </Select>
+                {selectedLocationEligibility ? (
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Badge variant={selectedLocationEligibility.vaultReady ? 'default' : 'secondary'}>
+                      {selectedLocationEligibility.vaultReady ? 'Eligible' : 'Not eligible'}
+                    </Badge>
+                    <span>
+                      {selectedLocationEligibility.vaultReady
+                        ? 'Location has a saved billing card and can be subscribed.'
+                        : 'Location needs a primary vaulted billing card before subscription charging.'}
+                    </span>
+                  </div>
+                ) : null}
               </div>
 
               <div className="space-y-2">
