@@ -83,6 +83,8 @@ const initialFormData: LocationFormData = {
     confirm_account_number: '',
     account_type: 'checking',
     use_merchant_billing_profile: false,
+    luqra_mid: '',
+    luqra_mid_descriptor: '',
     business_hours: DEFAULT_BUSINESS_HOURS,
     manager_assignment_type: 'skip',
     manager_invite_name: '',
@@ -368,6 +370,9 @@ export function AdminCreateLocationWizard({ merchantId, merchantName }: AdminCre
                 onboarding_completed: true,
                 uses_global_menu: formData.uses_global_menu,
                 public_metadata: buildOnlineStoreLocationMetadata(formData),
+                luqra_mid: formData.luqra_mid?.trim() || undefined,
+                luqra_mid_descriptor: formData.luqra_mid_descriptor?.trim() || undefined,
+                luqra_mid_status: 'pending',
             })
 
             if (result.error) {
@@ -467,11 +472,66 @@ export function AdminCreateLocationWizard({ merchantId, merchantName }: AdminCre
                 )
             case 4:
                 return (
-                    <BankingPayoutsStep
-                        data={formData as LocationFormStep4}
-                        onChange={updateFormData}
-                        errors={errors}
-                    />
+                    <div className="space-y-6">
+                        <BankingPayoutsStep
+                            data={formData as LocationFormStep4}
+                            onChange={updateFormData}
+                            errors={errors}
+                            onBankSupportDocumentSelect={setBankSupportFile}
+                            onClearBankSupportDocument={() => setBankSupportFile(null)}
+                        />
+                        <div className="space-y-3 rounded-lg border bg-card p-4">
+                            <div>
+                                <p className="text-sm font-medium">Luqra acquiring MID</p>
+                                <p className="text-xs text-muted-foreground">
+                                    Optional. Bind this location to a Luqra MID so admins can pull
+                                    transactions and chargebacks from the reports API. You can also
+                                    set this later from the merchant&apos;s MIDs section.
+                                </p>
+                            </div>
+                            <div className="grid gap-3 md:grid-cols-2">
+                                <div className="space-y-1.5">
+                                    <label htmlFor="wiz-luqra-mid" className="text-xs font-medium">
+                                        MID
+                                    </label>
+                                    <input
+                                        id="wiz-luqra-mid"
+                                        inputMode="numeric"
+                                        placeholder="584600000103655"
+                                        className="font-mono h-9 w-full rounded-md border bg-background px-2 text-sm"
+                                        value={formData.luqra_mid ?? ''}
+                                        onChange={(e) =>
+                                            updateFormData({
+                                                luqra_mid: e.target.value.replace(/\s+/g, ''),
+                                            })
+                                        }
+                                    />
+                                    {errors.luqra_mid && (
+                                        <p className="text-xs text-destructive">{errors.luqra_mid}</p>
+                                    )}
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label
+                                        htmlFor="wiz-luqra-descriptor"
+                                        className="text-xs font-medium"
+                                    >
+                                        Descriptor
+                                    </label>
+                                    <input
+                                        id="wiz-luqra-descriptor"
+                                        placeholder="MTECH DISTRIBUTORS"
+                                        className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+                                        value={formData.luqra_mid_descriptor ?? ''}
+                                        onChange={(e) =>
+                                            updateFormData({
+                                                luqra_mid_descriptor: e.target.value,
+                                            })
+                                        }
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 )
             case 5:
                 return (

@@ -121,9 +121,12 @@ function getDeadlineBadge(deadline?: string, status?: string) {
   return <span className="text-xs">{dateLabel}</span>
 }
 
-export function ChargebacksSection({ defaultOpen = false }: { defaultOpen?: boolean } = {}) {
+export function ChargebacksSection({
+  scopedMerchantId,
+  defaultOpen = false,
+}: { scopedMerchantId?: string; defaultOpen?: boolean } = {}) {
   const [open, setOpen] = useState(defaultOpen)
-  const [merchantId, setMerchantId] = useState('all')
+  const [merchantId, setMerchantId] = useState(scopedMerchantId ?? 'all')
   const [status, setStatus] = useState<'all' | PlatformChargebackStatus>('all')
   const [cardNetwork, setCardNetwork] = useState('all')
   const [dateFrom, setDateFrom] = useState('')
@@ -194,7 +197,7 @@ export function ChargebacksSection({ defaultOpen = false }: { defaultOpen?: bool
   }, [page, totalPages])
 
   const clearFilters = () => {
-    setMerchantId('all')
+    if (!scopedMerchantId) setMerchantId('all')
     setStatus('all')
     setCardNetwork('all')
     setDateFrom('')
@@ -250,23 +253,25 @@ export function ChargebacksSection({ defaultOpen = false }: { defaultOpen?: bool
               </div>
             )}
 
-            <div className="grid gap-3 md:grid-cols-6">
-              <label className="flex flex-col gap-1 text-sm">
-                <span className="text-muted-foreground">Merchant</span>
-                <select
-                  className="h-9 rounded-md border bg-background px-2"
-                  value={merchantId}
-                  onChange={(event) => setMerchantId(event.target.value)}
-                  disabled={loadingMerchants}
-                >
-                  <option value="all">All merchants</option>
-                  {merchants.map((merchant) => (
-                    <option key={merchant.id} value={merchant.id}>
-                      {merchant.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
+            <div className={scopedMerchantId ? 'grid gap-3 md:grid-cols-5' : 'grid gap-3 md:grid-cols-6'}>
+              {!scopedMerchantId && (
+                <label className="flex flex-col gap-1 text-sm">
+                  <span className="text-muted-foreground">Merchant</span>
+                  <select
+                    className="h-9 rounded-md border bg-background px-2"
+                    value={merchantId}
+                    onChange={(event) => setMerchantId(event.target.value)}
+                    disabled={loadingMerchants}
+                  >
+                    <option value="all">All merchants</option>
+                    {merchants.map((merchant) => (
+                      <option key={merchant.id} value={merchant.id}>
+                        {merchant.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
 
               <label className="flex flex-col gap-1 text-sm">
                 <span className="text-muted-foreground">Status</span>
@@ -331,7 +336,7 @@ export function ChargebacksSection({ defaultOpen = false }: { defaultOpen?: bool
               <TableHeader className="sticky top-0 z-20 bg-card">
                 <TableRow>
                   <TableHead>Original Payment</TableHead>
-                  <TableHead>Merchant</TableHead>
+                  {!scopedMerchantId && <TableHead>Merchant</TableHead>}
                   <TableHead className="text-right">Amount</TableHead>
                   <TableHead>Reason Code</TableHead>
                   <TableHead>Reason Description</TableHead>
@@ -346,7 +351,7 @@ export function ChargebacksSection({ defaultOpen = false }: { defaultOpen?: bool
                 {isLoading || isFetching ? (
                   Array.from({ length: 6 }).map((_, rowIndex) => (
                     <TableRow key={`chargeback-loading-${rowIndex}`}>
-                      {Array.from({ length: 10 }).map((__, cellIndex) => (
+                      {Array.from({ length: scopedMerchantId ? 9 : 10 }).map((__, cellIndex) => (
                         <TableCell key={`chargeback-loading-${rowIndex}-${cellIndex}`}>
                           <Skeleton className="h-4 w-full" />
                         </TableCell>
@@ -355,7 +360,7 @@ export function ChargebacksSection({ defaultOpen = false }: { defaultOpen?: bool
                   ))
                 ) : rows.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={10} className="py-8 text-center text-muted-foreground">
+                    <TableCell colSpan={scopedMerchantId ? 9 : 10} className="py-8 text-center text-muted-foreground">
                       No chargebacks found for current filters.
                     </TableCell>
                   </TableRow>
@@ -378,7 +383,9 @@ export function ChargebacksSection({ defaultOpen = false }: { defaultOpen?: bool
                               {row.original_payment_id}
                             </Link>
                           </TableCell>
-                          <TableCell>{row.merchant_name || row.merchant_id}</TableCell>
+                          {!scopedMerchantId && (
+                            <TableCell>{row.merchant_name || row.merchant_id}</TableCell>
+                          )}
                           <TableCell className="text-right font-mono">{formatCurrency(row.amount)}</TableCell>
                           <TableCell className="font-mono text-xs">{row.reason_code}</TableCell>
                           <TableCell className="max-w-[280px] truncate">{row.reason_description || '-'}</TableCell>
@@ -393,7 +400,7 @@ export function ChargebacksSection({ defaultOpen = false }: { defaultOpen?: bool
 
                         {isExpanded && (
                           <TableRow className="bg-muted/10">
-                            <TableCell colSpan={10}>
+                            <TableCell colSpan={scopedMerchantId ? 9 : 10}>
                               <div className="grid gap-4 lg:grid-cols-3">
                                 <div className="space-y-2 rounded-md border p-3">
                                   <h4 className="text-sm font-semibold">Original Payment</h4>
