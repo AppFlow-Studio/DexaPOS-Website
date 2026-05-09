@@ -63,7 +63,7 @@
     "react-dom": "19.1.0",
     "react-dropzone": "^14.4.1",
     "react-easy-crop": "^5.5.7",
-    "react-hook-form": "^7.73.1",
+    "react-hook-form": "^7.75.0",
     "react-international-phone": "^4.8.0",
     "react-modal-sheet": "^5.6.0",
     "recharts": "^2.15.4",
