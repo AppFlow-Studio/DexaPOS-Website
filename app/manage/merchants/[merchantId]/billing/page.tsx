@@ -40,6 +40,7 @@ export default async function AdminMerchantBillingPage({ params }: AdminMerchant
         merchantName={merchant.name}
         context="admin"
         canEdit={hasPermission('hq.merchant.update')}
+        locations={(merchant.locations ?? []) as Array<{ id: string; name: string }>}
       />
 
       {hasPermission('system.billing.manage') ? (

@@ -15,6 +15,8 @@ export type MerchantBankAccountType = 'checking' | 'savings'
 export interface MerchantBillingProfileRecord {
   id: string
   merchant_id: string
+  location_id: string | null
+  location_name: string | null
   billing_method: MerchantBillingMethod
   bank_name: string | null
   account_holder_name: string | null
@@ -45,6 +47,7 @@ export interface MerchantBillingCardSetupRecord {
 
 export interface SaveMerchantBillingParams {
   merchantId: string
+  locationId?: string | null
   billingMethod: MerchantBillingMethod
   bankName?: string
   accountHolderName?: string
@@ -60,6 +63,7 @@ export interface SaveMerchantBillingParams {
 
 export interface SaveMerchantBillingCardWithVaultParams {
   merchantId: string
+  locationId?: string | null
   paymentToken: string
   cardholderName: string
   billingEmail: string
@@ -118,6 +122,7 @@ export async function getMerchantBillingProfiles(merchantId: string): Promise<Me
       `
         id,
         merchant_id,
+        location_id,
         billing_method,
         bank_name,
         account_holder_name,
@@ -137,11 +142,13 @@ export async function getMerchantBillingProfiles(merchantId: string): Promise<Me
         verified_at,
         is_primary,
         is_active,
-        created_at
+        created_at,
+        location:locations!merchant_billing_profiles_location_id_fkey(id, name)
       `
     )
     .eq('merchant_id', merchantId)
     .eq('is_active', true)
+    .order('location_id', { ascending: true, nullsFirst: true })
     .order('is_primary', { ascending: false })
     .order('created_at', { ascending: false })
 
@@ -150,7 +157,13 @@ export async function getMerchantBillingProfiles(merchantId: string): Promise<Me
     throw new Error('Failed to load merchant billing profiles.')
   }
 
-  return (data || []) as MerchantBillingProfileRecord[]
+  return ((data || []) as any[]).map((row) => {
+    const location = Array.isArray(row.location) ? row.location[0] : row.location
+    return {
+      ...row,
+      location_name: location?.name ?? null,
+    }
+  }) as MerchantBillingProfileRecord[]
 }
 
 export async function getMerchantBillingCardSetup(merchantId: string): Promise<MerchantBillingCardSetupRecord> {
@@ -192,6 +205,8 @@ export async function saveMerchantBilling(
   if (!merchantId) {
     return { success: false, error: 'Merchant is required.' }
   }
+
+  const locationId = normalizeText(params.locationId)
 
   const { orgId } = await auth()
   if (orgId === DEXA_HQ_ORG_ID) {
@@ -247,7 +262,7 @@ export async function saveMerchantBilling(
 
   const supabase = createServerSupabaseClient()
 
-  const { error: deactivateError } = await supabase
+  let deactivateQuery = supabase
     .from('merchant_billing_profiles')
     .update({
       is_primary: false,
@@ -255,6 +270,12 @@ export async function saveMerchantBilling(
     })
     .eq('merchant_id', merchantId)
     .eq('is_primary', true)
+
+  deactivateQuery = locationId
+    ? deactivateQuery.eq('location_id', locationId)
+    : deactivateQuery.is('location_id', null)
+
+  const { error: deactivateError } = await deactivateQuery
 
   if (deactivateError) {
     console.error('[saveMerchantBilling] Failed to deactivate existing primary profile:', deactivateError)
@@ -265,6 +286,7 @@ export async function saveMerchantBilling(
     billingMethod === 'ach'
       ? {
           merchant_id: merchantId,
+          location_id: locationId,
           billing_method: 'ach' as const,
           bank_name: normalizeText(params.bankName),
           account_holder_name: normalizeText(params.accountHolderName),
@@ -282,6 +304,7 @@ export async function saveMerchantBilling(
         }
       : {
           merchant_id: merchantId,
+          location_id: locationId,
           billing_method: 'card' as const,
           bank_name: null,
           account_holder_name: null,
@@ -321,6 +344,8 @@ export async function saveMerchantBillingCardWithVault(
   if (!merchantId) {
     return { success: false, error: 'Merchant is required.' }
   }
+
+  const locationId = normalizeText(params.locationId)
 
   const { orgId } = await auth()
   if (orgId === DEXA_HQ_ORG_ID) {
@@ -394,7 +419,7 @@ export async function saveMerchantBillingCardWithVault(
     }
   }
 
-  const { error: deactivateError } = await supabase
+  let deactivateQuery = supabase
     .from('merchant_billing_profiles')
     .update({
       is_primary: false,
@@ -402,6 +427,12 @@ export async function saveMerchantBillingCardWithVault(
     })
     .eq('merchant_id', merchantId)
     .eq('is_primary', true)
+
+  deactivateQuery = locationId
+    ? deactivateQuery.eq('location_id', locationId)
+    : deactivateQuery.is('location_id', null)
+
+  const { error: deactivateError } = await deactivateQuery
 
   if (deactivateError) {
     console.error('[saveMerchantBillingCardWithVault] Failed to deactivate existing primary profile:', deactivateError)
@@ -412,6 +443,7 @@ export async function saveMerchantBillingCardWithVault(
     .from('merchant_billing_profiles')
     .insert({
       merchant_id: merchantId,
+      location_id: locationId,
       billing_method: 'card',
       account_holder_name: cardholderName,
       card_brand: cardBrand,

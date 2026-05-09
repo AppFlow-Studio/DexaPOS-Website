@@ -37,6 +37,7 @@ import { OnboardingStatusCard } from './components/OnboardingStatusCard'
 import { MerchantHeaderBar } from './components/MerchantHeaderBar'
 import { RiskStrip } from './components/RiskStrip'
 import { MidsSection } from './components/sections/MidsSection'
+import { NmiAccountsSection } from './components/sections/NmiAccountsSection'
 import { SettlementsSection } from './components/sections/SettlementsSection'
 import { DisputesSection } from './components/sections/DisputesSection'
 import { SupportTicketsSection } from './components/sections/SupportTicketsSection'
@@ -49,6 +50,7 @@ type SectionKey =
     | 'notes'
     | 'audit'
     | 'mids'
+    | 'nmi-accounts'
     | 'settlements'
     | 'disputes'
     | 'billing'
@@ -63,6 +65,7 @@ const VALID_SECTIONS: SectionKey[] = [
     'notes',
     'audit',
     'mids',
+    'nmi-accounts',
     'settlements',
     'disputes',
     'billing',
@@ -182,6 +185,9 @@ export default function MerchantDetailsPage() {
                                 <NavItem value="mids" icon={CreditCard} active={activeTab === 'mids'} onClick={setActiveTab}>
                                     MIDs
                                 </NavItem>
+                                <NavItem value="nmi-accounts" icon={CreditCard} active={activeTab === 'nmi-accounts'} onClick={setActiveTab}>
+                                    NMI Accounts
+                                </NavItem>
                                 <NavItem value="settlements" icon={Banknote} active={activeTab === 'settlements'} onClick={setActiveTab}>
                                     Settlements
                                 </NavItem>
@@ -231,6 +237,8 @@ export default function MerchantDetailsPage() {
 
                             {activeTab === 'mids' && <MidsSection merchantId={merchantDetails.id} />}
 
+                            {activeTab === 'nmi-accounts' && <NmiAccountsSection merchantId={merchantDetails.id} />}
+
                             {activeTab === 'settlements' && (
                                 <SettlementsSection merchantId={merchantDetails.id} />
                             )}
@@ -244,6 +252,7 @@ export default function MerchantDetailsPage() {
                                     merchantId={merchantDetails.id}
                                     merchantName={merchantDetails.name}
                                     canEdit={canManageMerchantStatus}
+                                    locations={merchantDetails.locations}
                                 />
                             )}
 

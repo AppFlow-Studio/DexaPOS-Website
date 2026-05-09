@@ -90,23 +90,50 @@ Deno.serve(async (req: Request): Promise<Response> => {
       ? invoice.merchant_subscriptions[0]
       : invoice.merchant_subscriptions
 
-    let billingProfileQuery = supabase
-      .from('merchant_billing_profiles')
-      .select('id, billing_method, card_token, customer_vault_id, vault_initial_transaction_id, payment_device_id, platform_billing_config_id, card_brand, card_last_four, is_primary')
-      .eq('merchant_id', invoice.merchant_id)
-      .eq('billing_method', 'card')
-      .eq('is_active', true)
+    let billingProfile:
+      | {
+          id: string
+          billing_method: string
+          card_token: string | null
+          customer_vault_id: string | null
+          vault_initial_transaction_id: string | null
+          payment_device_id: string | null
+          platform_billing_config_id: string | null
+          card_brand: string | null
+          card_last_four: string | null
+          is_primary: boolean
+          location_id?: string | null
+        }
+      | null = null
+    let billingProfileError: { message?: string } | null = null
 
     if (subscription?.billing_profile_id) {
-      billingProfileQuery = billingProfileQuery.eq('id', subscription.billing_profile_id)
-    } else {
-      billingProfileQuery = billingProfileQuery.eq('is_primary', true)
-    }
+      const profileResult = await supabase
+        .from('merchant_billing_profiles')
+        .select('id, billing_method, card_token, customer_vault_id, vault_initial_transaction_id, payment_device_id, platform_billing_config_id, card_brand, card_last_four, is_primary, location_id')
+        .eq('id', subscription.billing_profile_id)
+        .eq('merchant_id', invoice.merchant_id)
+        .eq('billing_method', 'card')
+        .eq('is_active', true)
+        .maybeSingle()
 
-    const { data: billingProfile, error: billingProfileError } = await billingProfileQuery
-      .order('is_primary', { ascending: false })
-      .limit(1)
-      .maybeSingle()
+      billingProfile = profileResult.data
+      billingProfileError = profileResult.error
+    } else {
+      const profileResult = await supabase
+        .from('merchant_billing_profiles')
+        .select('id, billing_method, card_token, customer_vault_id, vault_initial_transaction_id, payment_device_id, platform_billing_config_id, card_brand, card_last_four, is_primary, location_id')
+        .eq('merchant_id', invoice.merchant_id)
+        .eq('billing_method', 'card')
+        .eq('is_active', true)
+        .eq('is_primary', true)
+        .or(`location_id.eq.${invoice.location_id},location_id.is.null`)
+        .order('location_id', { ascending: true, nullsFirst: false })
+        .limit(1)
+
+      billingProfile = profileResult.data?.[0] ?? null
+      billingProfileError = profileResult.error
+    }
 
     if (billingProfileError || !billingProfile) {
       return jsonResponse(
