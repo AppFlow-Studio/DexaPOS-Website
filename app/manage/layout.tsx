@@ -115,6 +115,12 @@ const navMain: NavGroup[] = [
                 requiredPermission: 'transactions.view',
             },
             {
+                title: 'TSYS Disputes',
+                url: '/manage/disputes',
+                icon: ShieldAlert,
+                requiredPermission: 'transactions.view',
+            },
+            {
                 title: 'Analytics',
                 url: '/manage/analytics',
                 icon: BarChart3,

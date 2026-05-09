@@ -46,7 +46,7 @@ DEXA HQ (internal) → Carriers (resellers/ISOs) → Merchants (restaurant owner
 - **Order management** — real-time order tracking across dine-in, takeout, and online channels
 - **Online ordering** — multi-tenant subdomain routing with provider-agnostic webhook pipeline
 - **Staff management** — roles, permissions, schedules, tip distribution
-- **Analytics & reporting** — revenue graphs, filter-based reporting, Luqra bank reconciliation
+- **Analytics & reporting** — revenue graphs, filter-based reporting, TSYS bank reconciliation
 - **Device management** — terminal registry, health monitoring, hardware lifecycle tracking
 - **Inventory** — catalog, vendor management, recipe/ingredient linking, smart PO suggestions
 - **Audit logs** — full activity feed with per-merchant and per-location views

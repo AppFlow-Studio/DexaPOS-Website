@@ -121,8 +121,8 @@ function getDeadlineBadge(deadline?: string, status?: string) {
   return <span className="text-xs">{dateLabel}</span>
 }
 
-export function ChargebacksSection() {
-  const [open, setOpen] = useState(false)
+export function ChargebacksSection({ defaultOpen = false }: { defaultOpen?: boolean } = {}) {
+  const [open, setOpen] = useState(defaultOpen)
   const [merchantId, setMerchantId] = useState('all')
   const [status, setStatus] = useState<'all' | PlatformChargebackStatus>('all')
   const [cardNetwork, setCardNetwork] = useState('all')

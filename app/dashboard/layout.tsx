@@ -66,6 +66,7 @@ import {
   Gift,
   DollarSign,
   CalendarClock,
+  ShieldAlert,
 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -278,6 +279,11 @@ const navMain = [
           { title: "Tip Distribution", url: "/dashboard/tips" },
           { title: "My Tips", url: "/dashboard/tips/my-tips" },
         ],
+      },
+      {
+        title: "TSYS Disputes",
+        url: "/dashboard/payments/disputes",
+        icon: ShieldAlert,
       },
     ],
   },

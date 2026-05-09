@@ -1,5 +1,5 @@
 import Telnyx from "telnyx";
-import { normalizeToE164, isValidPhone as isValidPhoneShared } from "@/lib/phone";
+import { normalizePhone as normalizeToE164, isValidPhone as isValidPhoneShared } from "@/lib/phone";
 
 const apiKey = process.env.TELNYX_API_KEY;
 const fromPhone = process.env.TELNYX_FROM_NUMBER;

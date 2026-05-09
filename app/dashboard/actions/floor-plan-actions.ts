@@ -19,7 +19,7 @@ import {
   notifyReservationConfirmed,
   notifyReservationCancelled,
 } from '@/app/actions/notifications/reservation'
-import { normalizeToE164 } from '@/lib/phone'
+import { normalizePhone } from '@/lib/phone'
 
 /**
  * Resolves the active merchant id for the current request, honoring HQ

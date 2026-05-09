@@ -14,10 +14,8 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { PhoneInput } from '@/components/ui/phone-input'
-import { tenDigits } from '@/lib/phone'
+import { phoneDigits, normalizePhone } from '@/lib/phone'
 import { Label } from '@/components/ui/label'
-import { PhoneInput } from '@/components/ui/phone-input'
-import { normalizePhone } from '@/lib/phone'
 import { Textarea } from '@/components/ui/textarea'
 import {
   Users,
