@@ -1,7 +1,10 @@
 'use server'
 
 import { assertHQPermission } from '@/lib/admin/auth'
+import { LogAuditEvent } from '@/app/dashboard/actions/audit-logs'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
+import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { revalidatePath } from 'next/cache'
 
 export interface MerchantNmiAccountRow {
   locationId: string
@@ -70,18 +73,12 @@ export async function getMerchantNmiAccountsSummary(
     locations: rows,
   }
 }
-'use server'
 
 // ============================================================================
 // Admin NMI Server Actions
 // HQ-side flow to create a gateway merchant account in NMI for a Dexa merchant.
 // Reference: POST {NMI_API_URL}/v4/merchants
 // ============================================================================
-
-import { createServerSupabaseClient } from '@/lib/supabase/server'
-import { assertHQPermission } from '@/lib/admin/auth'
-import { LogAuditEvent } from '@/app/dashboard/actions/audit-logs'
-import { revalidatePath } from 'next/cache'
 
 const NMI_API_URL = process.env.NMI_API_URL || 'https://sandbox.nmi.com/api'
 const NMI_PARTNER_API_KEY = process.env.NMI_PARTNER_API_KEY
