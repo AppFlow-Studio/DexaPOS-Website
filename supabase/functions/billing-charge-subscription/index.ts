@@ -93,6 +93,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     let billingProfile:
       | {
           id: string
+          billing_email: string | null
           billing_method: string
           card_token: string | null
           customer_vault_id: string | null
@@ -110,7 +111,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     if (subscription?.billing_profile_id) {
       const profileResult = await supabase
         .from('merchant_billing_profiles')
-        .select('id, billing_method, card_token, customer_vault_id, vault_initial_transaction_id, payment_device_id, platform_billing_config_id, card_brand, card_last_four, is_primary, location_id')
+        .select('id, billing_email, billing_method, card_token, customer_vault_id, vault_initial_transaction_id, payment_device_id, platform_billing_config_id, card_brand, card_last_four, is_primary, location_id')
         .eq('id', subscription.billing_profile_id)
         .eq('merchant_id', invoice.merchant_id)
         .eq('billing_method', 'card')
@@ -122,7 +123,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     } else {
       const profileResult = await supabase
         .from('merchant_billing_profiles')
-        .select('id, billing_method, card_token, customer_vault_id, vault_initial_transaction_id, payment_device_id, platform_billing_config_id, card_brand, card_last_four, is_primary, location_id')
+        .select('id, billing_email, billing_method, card_token, customer_vault_id, vault_initial_transaction_id, payment_device_id, platform_billing_config_id, card_brand, card_last_four, is_primary, location_id')
         .eq('merchant_id', invoice.merchant_id)
         .eq('billing_method', 'card')
         .eq('is_active', true)
@@ -460,10 +461,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
           .maybeSingle(),
       ])
 
-      const ownerEmail = merchant?.owner_email?.trim()
-      if (ownerEmail) {
+      const recipientEmail = billingProfile.billing_email?.trim() || merchant?.owner_email?.trim()
+      if (recipientEmail) {
         await sendSubscriptionInvoicePaymentEmail({
-          to: ownerEmail,
+          to: recipientEmail,
           merchantName: merchant?.name || 'Dexa POS',
           locationName: location?.name || 'Location',
           invoiceNumber: invoice.invoice_number,

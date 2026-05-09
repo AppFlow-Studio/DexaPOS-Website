@@ -17,6 +17,7 @@ export interface MerchantBillingProfileRecord {
   merchant_id: string
   location_id: string | null
   location_name: string | null
+  billing_email: string | null
   billing_method: MerchantBillingMethod
   bank_name: string | null
   account_holder_name: string | null
@@ -82,6 +83,38 @@ function digitsOnly(value?: string | null): string {
   return value.replace(/\D/g, '')
 }
 
+function formatNmiDebugError(input: {
+  status?: number
+  responseText?: string
+  body?: unknown
+  text?: string
+}): string {
+  const parts: string[] = []
+
+  if (typeof input.status === 'number') {
+    parts.push(`status ${input.status}`)
+  }
+
+  if (input.responseText && input.responseText.trim().length > 0) {
+    parts.push(input.responseText.trim())
+  }
+
+  if (input.text && input.text.trim().length > 0) {
+    const normalized = input.text.trim()
+    if (!parts.includes(normalized)) {
+      parts.push(normalized)
+    }
+  } else if (input.body) {
+    try {
+      parts.push(JSON.stringify(input.body))
+    } catch {
+      // ignore json stringify failure
+    }
+  }
+
+  return parts.join(' | ')
+}
+
 async function assertMerchantScopeForCurrentOrg(merchantId: string): Promise<void> {
   const { userId, orgId } = await auth()
   if (!userId || !orgId) {
@@ -123,6 +156,7 @@ export async function getMerchantBillingProfiles(merchantId: string): Promise<Me
         id,
         merchant_id,
         location_id,
+        billing_email,
         billing_method,
         bank_name,
         account_holder_name,
@@ -287,6 +321,7 @@ export async function saveMerchantBilling(
       ? {
           merchant_id: merchantId,
           location_id: locationId,
+          billing_email: null,
           billing_method: 'ach' as const,
           bank_name: normalizeText(params.bankName),
           account_holder_name: normalizeText(params.accountHolderName),
@@ -305,6 +340,7 @@ export async function saveMerchantBilling(
       : {
           merchant_id: merchantId,
           location_id: locationId,
+          billing_email: null,
           billing_method: 'card' as const,
           bank_name: null,
           account_holder_name: null,
@@ -411,12 +447,24 @@ export async function saveMerchantBillingCardWithVault(
     )
 
     if (!vaultResult.success || !vaultResult.vault.customerVaultId) {
+      const debugMessage = formatNmiDebugError({
+        status: vaultResult.status,
+        responseText: vaultResult.details.responseText,
+        body: vaultResult.body,
+        text: vaultResult.text,
+      })
+
+      console.error('[saveMerchantBillingCardWithVault] Vault create rejected:', {
+        status: vaultResult.status,
+        responseText: vaultResult.details.responseText,
+        text: vaultResult.text,
+        body: vaultResult.body,
+      })
+
       return {
         success: false,
         error:
-          vaultResult.details.responseText ||
-          vaultResult.body.message?.toString() ||
-          'Failed to store the card in NMI Customer Vault.',
+          debugMessage || 'Failed to store the card in NMI Customer Vault.',
       }
     }
 
@@ -445,6 +493,7 @@ export async function saveMerchantBillingCardWithVault(
       .insert({
         merchant_id: merchantId,
         location_id: locationId,
+        billing_email: billingEmail,
         billing_method: 'card',
         account_holder_name: cardholderName,
         card_brand: cardBrand,

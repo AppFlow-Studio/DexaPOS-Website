@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { assertHQPermission } from '@/lib/admin/auth'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
+import { buildEmailTemplate, sendEmail } from '@/lib/messaging/resend'
 
 export interface SubscriptionPlanRecord {
   id: string
@@ -61,9 +62,9 @@ export interface MerchantSubscriptionRecord {
   merchant_id: string
   location_id: string
   location_name: string
-  plan_id: string
-  plan_code: string
-  display_name: string
+  plan_id: string | null
+  plan_code: string | null
+  display_name: string | null
   current_period_start: string
   current_period_end: string
   next_billing_date: string
@@ -78,6 +79,27 @@ export interface MerchantSubscriptionRecord {
   metadata: Record<string, unknown>
   created_at: string
   updated_at: string
+}
+
+function formatUsd(amount: number): string {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+  }).format(amount)
+}
+
+async function sendSubscriptionLifecycleEmail(params: {
+  to: string
+  merchantName: string
+  locationName: string
+  subject: string
+  body: string
+}) {
+  const html = buildEmailTemplate(params.merchantName, params.subject, params.body)
+  const result = await sendEmail(params.to, params.subject, html)
+  if ('error' in result) {
+    throw new Error(result.error)
+  }
 }
 
 export interface SubscriptionInvoiceRecord {
@@ -191,8 +213,8 @@ export async function upsertMerchantSubscription(
 ): Promise<{ success: boolean; subscriptionId?: string; error?: string }> {
   await assertHQPermission('system.billing.manage')
 
-  if (!params.merchantId || !params.locationId || !params.planId) {
-    return { success: false, error: 'merchantId, locationId, and planId are required.' }
+  if (!params.merchantId || !params.locationId) {
+    return { success: false, error: 'merchantId and locationId are required.' }
   }
 
   const supabase = createServerSupabaseClient()
@@ -213,6 +235,64 @@ export async function upsertMerchantSubscription(
   if (error) {
     console.error('[upsertMerchantSubscription] Error:', error)
     return { success: false, error: error.message }
+  }
+
+  try {
+    const serviceRole = createServiceRoleClient()
+    const [subscriptionRecord, locationRecord, merchantRecord, billingProfileRecord] = await Promise.all([
+      serviceRole
+        .from('merchant_subscriptions')
+        .select('id, monthly_amount, status, location_id')
+        .eq('id', data as string)
+        .maybeSingle(),
+      serviceRole
+        .from('locations')
+        .select('id, name')
+        .eq('id', params.locationId)
+        .maybeSingle(),
+      serviceRole
+        .from('merchants')
+        .select('id, name, owner_email')
+        .eq('id', params.merchantId)
+        .maybeSingle(),
+      params.billingProfileId
+        ? serviceRole
+            .from('merchant_billing_profiles')
+            .select('id, billing_email')
+            .eq('id', params.billingProfileId)
+            .maybeSingle()
+        : serviceRole
+            .from('merchant_billing_profiles')
+            .select('id, billing_email')
+            .eq('merchant_id', params.merchantId)
+            .eq('location_id', params.locationId)
+            .eq('is_primary', true)
+            .eq('is_active', true)
+            .maybeSingle(),
+      serviceRole.rpc('list_subscription_service_assignments', {
+        p_subscription_id: data as string,
+      }),
+    ])
+
+    const recipientEmail =
+      billingProfileRecord.data?.billing_email?.trim() || merchantRecord.data?.owner_email?.trim() || ''
+
+    if (recipientEmail && params.status === 'canceled') {
+      const locationName = locationRecord.data?.name || 'Location'
+      const merchantName = merchantRecord.data?.name || 'Dexa POS'
+
+      await sendSubscriptionLifecycleEmail({
+        to: recipientEmail,
+        merchantName,
+        locationName,
+        subject: `Dexa subscription canceled - ${locationName}`,
+        body:
+          `The subscription for ${locationName} has been canceled.\n\n` +
+          `No further recurring subscription charges should be generated for this location while it remains canceled.`,
+      })
+    }
+  } catch (emailError) {
+    console.error('[upsertMerchantSubscription] Failed to send lifecycle email:', emailError)
   }
 
   revalidatePath('/manage/billing')
@@ -276,6 +356,67 @@ export async function replaceSubscriptionServiceAssignments(
   if (error) {
     console.error('[replaceSubscriptionServiceAssignments] Error:', error)
     return { success: false, error: error.message }
+  }
+
+  try {
+    const serviceRole = createServiceRoleClient()
+    const [subscriptionRecord, assignmentRecord] = await Promise.all([
+      serviceRole
+        .from('merchant_subscriptions')
+        .select('id, merchant_id, location_id, monthly_amount, status')
+        .eq('id', subscriptionId)
+        .maybeSingle(),
+      serviceRole.rpc('list_subscription_service_assignments', {
+        p_subscription_id: subscriptionId,
+      }),
+    ])
+
+    if (subscriptionRecord.data && subscriptionRecord.data.status !== 'canceled') {
+      const [{ data: merchantRecord }, { data: locationRecord }, { data: billingProfileRecord }] = await Promise.all([
+        serviceRole
+          .from('merchants')
+          .select('name, owner_email')
+          .eq('id', subscriptionRecord.data.merchant_id)
+          .maybeSingle(),
+        serviceRole
+          .from('locations')
+          .select('name')
+          .eq('id', subscriptionRecord.data.location_id)
+          .maybeSingle(),
+        serviceRole
+          .from('merchant_billing_profiles')
+          .select('billing_email')
+          .eq('merchant_id', subscriptionRecord.data.merchant_id)
+          .eq('location_id', subscriptionRecord.data.location_id)
+          .eq('is_primary', true)
+          .eq('is_active', true)
+          .maybeSingle(),
+      ])
+
+      const recipientEmail =
+        billingProfileRecord?.billing_email?.trim() || merchantRecord?.owner_email?.trim() || ''
+
+      if (recipientEmail) {
+        const assignmentCount = Array.isArray(assignmentRecord.data) ? assignmentRecord.data.length : 0
+        const locationName = locationRecord?.name || 'Location'
+        const merchantName = merchantRecord?.name || 'Dexa POS'
+        const monthlyAmount = Number(subscriptionRecord.data.monthly_amount || 0)
+
+        await sendSubscriptionLifecycleEmail({
+          to: recipientEmail,
+          merchantName,
+          locationName,
+          subject: `Dexa subscription active - ${locationName}`,
+          body:
+            `Your subscription for ${locationName} is active.\n\n` +
+            `Assigned services: ${assignmentCount}\n` +
+            `Recurring monthly total: ${formatUsd(monthlyAmount)}\n\n` +
+            `Future subscription invoices and payment confirmations will be sent to this billing email.`,
+        })
+      }
+    }
+  } catch (emailError) {
+    console.error('[replaceSubscriptionServiceAssignments] Failed to send lifecycle email:', emailError)
   }
 
   revalidatePath('/manage/billing')

@@ -57,8 +57,8 @@ function parseTransactionDetails(raw: JsonRecord): NmiTransactionDetails {
   return {
     id: firstString(raw, ["id", "transaction_id", "transactionid"]),
     response: firstString(raw, ["response"]),
-    responseCode: firstString(raw, ["response_code", "responseCode"]),
-    responseText: firstString(raw, ["response_text", "responseText", "message"]),
+    responseCode: firstString(raw, ["response_code", "responseCode", "responsecode"]),
+    responseText: firstString(raw, ["response_text", "responseText", "responsetext", "message"]),
     authCode: firstString(raw, ["authcode", "authorization_code", "authorizationCode"]),
     transactionId: firstString(raw, ["transactionid", "transaction_id", "id"]),
     transactionType: firstString(raw, ["type", "transaction_type", "transactionType"]),
@@ -111,6 +111,42 @@ async function callNmi(
     body,
     text,
     details: parseTransactionDetails(body),
+  };
+}
+
+async function callNmiClassic(
+  form: Record<string, string>,
+  config: NmiRequestConfig
+): Promise<{
+  ok: boolean;
+  status: number;
+  body: JsonRecord;
+  text: string;
+  details: NmiTransactionDetails;
+}> {
+  const baseUrl = (process.env.NMI_API_BASE_URL ?? "https://secure.nmi.com").replace(/\/+$/, "");
+  const response = await fetch(`${baseUrl}/api/transact.php`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({
+      security_key: config.apiKey,
+      ...form,
+    }).toString(),
+    signal: AbortSignal.timeout(config.timeoutMs ?? 15000),
+    cache: "no-store",
+  });
+
+  const text = await response.text();
+  const parsed = Object.fromEntries(new URLSearchParams(text)) as JsonRecord;
+
+  return {
+    ok: response.ok,
+    status: response.status,
+    body: parsed,
+    text,
+    details: parseTransactionDetails(parsed),
   };
 }
 
@@ -212,7 +248,7 @@ function parseVaultCustomerDetails(raw: JsonRecord): NmiVaultCustomerDetails {
   const customerRecord = asRecord(raw.customer);
   const customerVaultId =
     firstString(customerRecord, ["id", "customer_vault_id"]) ||
-    firstString(raw, ["customer_vault_id", "customer_id"]);
+    firstString(raw, ["customer_vault_id", "customer_vaultid", "customer_id"]);
 
   const initialTransactionId =
     firstString(raw, ["transaction_id", "transactionid"]) ||
@@ -248,14 +284,10 @@ export async function createNmiVaultCustomer(
     {
       method: "POST",
       body: JSON.stringify({
-        payment_details: {
-          payment_token: params.paymentToken,
-        },
-        cit_mit: {
-          stored_credential_indicator: "stored",
-          initiated_by: "customer",
-        },
-        billing_address: {
+        billing: {
+          payment_details: {
+            payment_token: params.paymentToken,
+          },
           first_name: params.firstName,
           last_name: params.lastName,
           email: params.email,
@@ -272,12 +304,43 @@ export async function createNmiVaultCustomer(
     config
   );
 
-  const vault = parseVaultCustomerDetails(result.body);
+  const needsClassicFallback =
+    !result.ok &&
+    (result.status === 400 || result.status === 422) &&
+    (
+      result.details.responseText === "The provided data is invalid." ||
+      result.text.includes("E_INVALID_SUBMISSION")
+    );
+
+  const finalResult = needsClassicFallback
+    ? await callNmiClassic(
+        {
+          customer_vault: "add_customer",
+          payment_token: params.paymentToken,
+          payment: "creditcard",
+          first_name: params.firstName ?? "",
+          last_name: params.lastName ?? "",
+          email: params.email ?? "",
+          address1: params.address1 ?? "",
+          address2: params.address2 ?? "",
+          city: params.city ?? "",
+          state: params.state ?? "",
+          zip: params.zip ?? "",
+          country: params.country ?? "US",
+          phone: params.phone ?? "",
+        },
+        config
+      )
+    : result;
+
+  const vault = parseVaultCustomerDetails(finalResult.body);
 
   return {
-    success: result.ok && Boolean(vault.customerVaultId),
+    success:
+      (finalResult.ok || finalResult.details.response === "1" || finalResult.details.responseCode === "100") &&
+      Boolean(vault.customerVaultId),
     vault,
-    ...result,
+    ...finalResult,
   };
 }
 
@@ -292,15 +355,6 @@ export async function createNmiVaultSale(
     initialTransactionId?: string;
   }
 ) {
-  const citMit: JsonRecord = {
-    stored_credential_indicator: "used",
-    initiated_by: params.initiatedBy ?? "merchant",
-  };
-
-  if (params.initialTransactionId?.trim()) {
-    citMit.initial_transaction_id = params.initialTransactionId.trim();
-  }
-
   const result = await callNmi(
     "/api/v5/payments/sale",
     {
@@ -312,14 +366,35 @@ export async function createNmiVaultSale(
         payment_details: {
           customer_vault_id: params.customerVaultId,
         },
-        cit_mit: citMit,
       }),
     },
     config
   );
 
+  const needsClassicFallback =
+    !result.ok &&
+    (result.status === 400 || result.status === 422) &&
+    (
+      result.details.responseText === "The provided data is invalid." ||
+      result.text.includes("E_INVALID_SUBMISSION")
+    );
+
+  const finalResult = needsClassicFallback
+    ? await callNmiClassic(
+        {
+          type: "sale",
+          payment: "creditcard",
+          amount: String(params.amount.toFixed(2)),
+          customer_vault_id: params.customerVaultId,
+        },
+        config
+      )
+    : result;
+
   return {
-    success: result.ok && isApproved(result.details),
-    ...result,
+    success:
+      (finalResult.ok || finalResult.details.response === "1" || finalResult.details.responseCode === "100") &&
+      isApproved(finalResult.details),
+    ...finalResult,
   };
 }

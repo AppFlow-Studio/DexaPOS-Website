@@ -150,6 +150,7 @@ export function MerchantBillingSetupCard({
         setAccountNumber('')
       } else {
         setCardholderName(scopedPrimaryProfile.account_holder_name || '')
+        setBillingEmail(scopedPrimaryProfile.billing_email || '')
       }
       return
     }

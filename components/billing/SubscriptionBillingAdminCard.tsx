@@ -259,7 +259,7 @@ export function SubscriptionBillingAdminCard({
       }))
       .filter((service) => service.enabled && service.quantity > 0)
 
-    if (enabledServices.length === 0) {
+    if (status !== 'canceled' && enabledServices.length === 0) {
       toast.error('Enable at least one billable service for this location.')
       return
     }
@@ -288,7 +288,7 @@ export function SubscriptionBillingAdminCard({
 
       const serviceResult = await replaceSubscriptionServiceAssignments(
         subscriptionResult.subscriptionId,
-        enabledServices.map((service) => ({
+        (status === 'canceled' ? [] : enabledServices).map((service) => ({
           serviceId: service.serviceId,
           quantity: service.quantity,
           enabled: true,
@@ -304,7 +304,13 @@ export function SubscriptionBillingAdminCard({
         return
       }
 
-      toast.success(selectedLocationSubscription ? 'Subscription services updated.' : 'Subscription created.')
+      toast.success(
+        status === 'canceled'
+          ? 'Subscription canceled.'
+          : selectedLocationSubscription
+            ? 'Subscription services updated.'
+            : 'Subscription created.'
+      )
       refresh()
     })
   }
@@ -353,7 +359,7 @@ export function SubscriptionBillingAdminCard({
         </p>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+      <div className="space-y-6">
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">

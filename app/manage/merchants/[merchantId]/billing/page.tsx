@@ -1,9 +1,6 @@
 import { requireAdminAuth } from '@/lib/admin/auth'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { MerchantBillingSetupCard } from '@/components/billing/MerchantBillingSetupCard'
-import { SubscriptionBillingAdminCard } from '@/components/billing/SubscriptionBillingAdminCard'
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { ShieldAlert } from 'lucide-react'
 import { notFound } from 'next/navigation'
 
 interface AdminMerchantBillingPageProps {
@@ -42,24 +39,6 @@ export default async function AdminMerchantBillingPage({ params }: AdminMerchant
         canEdit={hasPermission('hq.merchant.update')}
         locations={(merchant.locations ?? []) as Array<{ id: string; name: string }>}
       />
-
-      {hasPermission('system.billing.manage') ? (
-        <SubscriptionBillingAdminCard
-          merchantId={merchant.id}
-          merchantName={merchant.name}
-          locations={(merchant.locations ?? []) as Array<{ id: string; name: string }>}
-          canManageBilling
-        />
-      ) : (
-        <Alert>
-          <ShieldAlert className="h-4 w-4" />
-          <AlertTitle>Billing Management Restricted</AlertTitle>
-          <AlertDescription>
-            You can view the merchant billing method, but subscription billing management requires the
-            `system.billing.manage` HQ permission.
-          </AlertDescription>
-        </Alert>
-      )}
     </div>
   )
 }
