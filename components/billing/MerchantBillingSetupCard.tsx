@@ -452,6 +452,9 @@ export function MerchantBillingSetupCard({
                   tokenizationKey={cardSetup.tokenizationKey}
                   onError={setCardFormError}
                   disabled={!canEdit || !cardSetup.configured}
+                  country="US"
+                  currency="USD"
+                  price="0.00"
                 />
               ) : null}
 

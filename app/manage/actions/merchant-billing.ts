@@ -340,135 +340,145 @@ export async function saveMerchantBilling(
 export async function saveMerchantBillingCardWithVault(
   params: SaveMerchantBillingCardWithVaultParams,
 ): Promise<{ success: boolean; error?: string }> {
-  const merchantId = params.merchantId?.trim()
-  if (!merchantId) {
-    return { success: false, error: 'Merchant is required.' }
-  }
-
-  const locationId = normalizeText(params.locationId)
-
-  const { orgId } = await auth()
-  if (orgId === DEXA_HQ_ORG_ID) {
-    await assertHQPermission('hq.merchant.update')
-  } else {
-    await assertMerchantScopeForCurrentOrg(merchantId)
-  }
-
-  const paymentToken = normalizeText(params.paymentToken)
-  const cardholderName = normalizeText(params.cardholderName)
-  const billingEmail = normalizeText(params.billingEmail)
-  const cardBrand = normalizeText(params.cardBrand)
-  const cardLastFour = digitsOnly(params.cardLastFour)
-
-  if (!paymentToken) {
-    return { success: false, error: 'Card tokenization failed. Please try again.' }
-  }
-  if (!cardholderName) {
-    return { success: false, error: 'Cardholder name is required.' }
-  }
-  if (!billingEmail) {
-    return { success: false, error: 'Billing email is required.' }
-  }
-
-  const [firstName, ...rest] = cardholderName.split(/\s+/)
-  const lastName = rest.join(' ').trim() || 'Cardholder'
-
-  const supabase = createServiceRoleClient()
-  const { data: platformCredentialRows, error: platformCredentialError } = await supabase.rpc(
-    'get_platform_billing_provider_secret',
-    {
-      p_provider: 'nmi',
-    },
-  )
-
-  if (platformCredentialError) {
-    console.error('[saveMerchantBillingCardWithVault] Platform credential error:', platformCredentialError)
-    return { success: false, error: 'Failed to load the Dexa Billing NMI configuration.' }
-  }
-
-  const platformCredential = Array.isArray(platformCredentialRows)
-    ? platformCredentialRows[0]
-    : platformCredentialRows
-
-  if (!platformCredential?.config_id || !platformCredential?.decrypted_secret?.trim()) {
-    return {
-      success: false,
-      error: 'Dexa Billing NMI is not configured yet. Ask HQ to set the platform billing keys first.',
+  try {
+    const merchantId = params.merchantId?.trim()
+    if (!merchantId) {
+      return { success: false, error: 'Merchant is required.' }
     }
-  }
 
-  const vaultResult = await createNmiVaultCustomer(
-    {
-      apiKey: platformCredential.decrypted_secret.trim(),
-    },
-    {
-      paymentToken,
-      firstName,
-      lastName,
-      email: billingEmail,
-    },
-  )
+    const locationId = normalizeText(params.locationId)
 
-  if (!vaultResult.success || !vaultResult.vault.customerVaultId) {
+    const { orgId } = await auth()
+    if (orgId === DEXA_HQ_ORG_ID) {
+      await assertHQPermission('hq.merchant.update')
+    } else {
+      await assertMerchantScopeForCurrentOrg(merchantId)
+    }
+
+    const paymentToken = normalizeText(params.paymentToken)
+    const cardholderName = normalizeText(params.cardholderName)
+    const billingEmail = normalizeText(params.billingEmail)
+    const cardBrand = normalizeText(params.cardBrand)
+    const cardLastFour = digitsOnly(params.cardLastFour)
+
+    if (!paymentToken) {
+      return { success: false, error: 'Card tokenization failed. Please try again.' }
+    }
+    if (!cardholderName) {
+      return { success: false, error: 'Cardholder name is required.' }
+    }
+    if (!billingEmail) {
+      return { success: false, error: 'Billing email is required.' }
+    }
+
+    const [firstName, ...rest] = cardholderName.split(/\s+/)
+    const lastName = rest.join(' ').trim() || 'Cardholder'
+
+    const supabase = createServiceRoleClient()
+    const { data: platformCredentialRows, error: platformCredentialError } = await supabase.rpc(
+      'get_platform_billing_provider_secret',
+      {
+        p_provider: 'nmi',
+      },
+    )
+
+    if (platformCredentialError) {
+      console.error('[saveMerchantBillingCardWithVault] Platform credential error:', platformCredentialError)
+      return { success: false, error: 'Failed to load the Dexa Billing NMI configuration.' }
+    }
+
+    const platformCredential = Array.isArray(platformCredentialRows)
+      ? platformCredentialRows[0]
+      : platformCredentialRows
+
+    if (!platformCredential?.config_id || !platformCredential?.decrypted_secret?.trim()) {
+      return {
+        success: false,
+        error: 'Dexa Billing NMI is not configured yet. Ask HQ to set the platform billing keys first.',
+      }
+    }
+
+    const vaultResult = await createNmiVaultCustomer(
+      {
+        apiKey: platformCredential.decrypted_secret.trim(),
+      },
+      {
+        paymentToken,
+        firstName,
+        lastName,
+        email: billingEmail,
+      },
+    )
+
+    if (!vaultResult.success || !vaultResult.vault.customerVaultId) {
+      return {
+        success: false,
+        error:
+          vaultResult.details.responseText ||
+          vaultResult.body.message?.toString() ||
+          'Failed to store the card in NMI Customer Vault.',
+      }
+    }
+
+    let deactivateQuery = supabase
+      .from('merchant_billing_profiles')
+      .update({
+        is_primary: false,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('merchant_id', merchantId)
+      .eq('is_primary', true)
+
+    deactivateQuery = locationId
+      ? deactivateQuery.eq('location_id', locationId)
+      : deactivateQuery.is('location_id', null)
+
+    const { error: deactivateError } = await deactivateQuery
+
+    if (deactivateError) {
+      console.error('[saveMerchantBillingCardWithVault] Failed to deactivate existing primary profile:', deactivateError)
+      return { success: false, error: 'Failed to update existing billing profile.' }
+    }
+
+    const { error: insertError } = await supabase
+      .from('merchant_billing_profiles')
+      .insert({
+        merchant_id: merchantId,
+        location_id: locationId,
+        billing_method: 'card',
+        account_holder_name: cardholderName,
+        card_brand: cardBrand,
+        card_last_four: cardLastFour.length === 4 ? cardLastFour : null,
+        card_exp_month: null,
+        card_exp_year: null,
+        card_token: null,
+        payment_device_id: null,
+        platform_billing_config_id: platformCredential.config_id,
+        customer_vault_id: vaultResult.vault.customerVaultId,
+        vault_initial_transaction_id: vaultResult.vault.initialTransactionId || null,
+        is_primary: true,
+        is_verified: true,
+        verified_at: new Date().toISOString(),
+        is_active: true,
+      })
+
+    if (insertError) {
+      console.error('[saveMerchantBillingCardWithVault] Insert error:', insertError)
+      return { success: false, error: insertError.message }
+    }
+
+    revalidatePath('/dashboard/settings/billing')
+    revalidatePath(`/manage/merchants/${merchantId}/billing`)
+    revalidatePath('/manage/merchants')
+
+    return { success: true }
+  } catch (error: any) {
+    console.error('[saveMerchantBillingCardWithVault] Unhandled error:', error)
     return {
       success: false,
       error:
-        vaultResult.details.responseText ||
-        vaultResult.body.message?.toString() ||
+        error?.message ||
         'Failed to store the card in NMI Customer Vault.',
     }
   }
-
-  let deactivateQuery = supabase
-    .from('merchant_billing_profiles')
-    .update({
-      is_primary: false,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('merchant_id', merchantId)
-    .eq('is_primary', true)
-
-  deactivateQuery = locationId
-    ? deactivateQuery.eq('location_id', locationId)
-    : deactivateQuery.is('location_id', null)
-
-  const { error: deactivateError } = await deactivateQuery
-
-  if (deactivateError) {
-    console.error('[saveMerchantBillingCardWithVault] Failed to deactivate existing primary profile:', deactivateError)
-    return { success: false, error: 'Failed to update existing billing profile.' }
-  }
-
-  const { error: insertError } = await supabase
-    .from('merchant_billing_profiles')
-    .insert({
-      merchant_id: merchantId,
-      location_id: locationId,
-      billing_method: 'card',
-      account_holder_name: cardholderName,
-      card_brand: cardBrand,
-      card_last_four: cardLastFour.length === 4 ? cardLastFour : null,
-      card_exp_month: null,
-      card_exp_year: null,
-      card_token: null,
-      payment_device_id: null,
-      platform_billing_config_id: platformCredential.config_id,
-      customer_vault_id: vaultResult.vault.customerVaultId,
-      vault_initial_transaction_id: vaultResult.vault.initialTransactionId || null,
-      is_primary: true,
-      is_verified: true,
-      verified_at: new Date().toISOString(),
-      is_active: true,
-    })
-
-  if (insertError) {
-    console.error('[saveMerchantBillingCardWithVault] Insert error:', insertError)
-    return { success: false, error: insertError.message }
-  }
-
-  revalidatePath('/dashboard/settings/billing')
-  revalidatePath(`/manage/merchants/${merchantId}/billing`)
-  revalidatePath('/manage/merchants')
-
-  return { success: true }
 }
