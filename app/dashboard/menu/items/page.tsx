@@ -678,53 +678,55 @@ function ItemRow({
             </div>
 
             {/* Price and indicators */}
-            <div className="text-right shrink-0 flex items-center gap-3">
-              <div className="flex flex-col items-end">
-                <span className="font-bold text-primary">
-                  ${item.effective_price.toFixed(2)}
+            <div className="shrink-0 flex flex-col items-end gap-1 w-24">
+              <span className="font-bold text-primary tabular-nums leading-none">
+                ${item.effective_price.toFixed(2)}
+              </span>
+              {hasOverride && item.base_price !== item.effective_price && (
+                <span className="text-xs text-muted-foreground line-through tabular-nums leading-none">
+                  ${item.base_price.toFixed(2)}
                 </span>
-                {hasOverride && item.base_price !== item.effective_price && (
-                  <span className="text-xs text-muted-foreground line-through">
-                    ${item.base_price.toFixed(2)}
-                  </span>
-                )}
-              </div>
-              {item.price_source !== "base" && (
-                <Badge
-                  variant="outline"
-                  className={cn(
-                    "text-[10px] px-1.5",
-                    priceColors.bg,
-                    priceColors.text,
-                    priceColors.border,
-                  )}
-                >
-                  {item.price_source === "location_item" && (
-                    <MapPin className="h-2.5 w-2.5" />
-                  )}
-                  {item.price_source === "category" && (
-                    <Tag className="h-2.5 w-2.5" />
-                  )}
-                </Badge>
               )}
-              {!item.effective_availability && (
-                <Badge
-                  variant="secondary"
-                  className="text-xs bg-red-100 text-red-700"
-                >
-                  Off
-                </Badge>
+              {(item.price_source !== "base" || !item.effective_availability) && (
+                <div className="flex items-center gap-1">
+                  {item.price_source !== "base" && (
+                    <Badge
+                      variant="outline"
+                      className={cn(
+                        "text-[10px] px-1.5 py-0",
+                        priceColors.bg,
+                        priceColors.text,
+                        priceColors.border,
+                      )}
+                    >
+                      {item.price_source === "location_item" && (
+                        <MapPin className="h-2.5 w-2.5" />
+                      )}
+                      {item.price_source === "category" && (
+                        <Tag className="h-2.5 w-2.5" />
+                      )}
+                    </Badge>
+                  )}
+                  {!item.effective_availability && (
+                    <Badge
+                      variant="secondary"
+                      className="text-[10px] px-1.5 py-0 bg-red-100 text-red-700"
+                    >
+                      Off
+                    </Badge>
+                  )}
+                </div>
               )}
             </div>
           </div>
         </div>
 
         {/* Actions */}
-        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="hidden md:flex flex-col gap-1 w-20 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
           <Button
             size="sm"
             variant="ghost"
-            className="h-8"
+            className="h-7 w-full justify-start px-2"
             onClick={(e) => {
               e.stopPropagation();
               onEdit();
@@ -737,7 +739,7 @@ function ItemRow({
             <Button
               size="sm"
               variant="ghost"
-              className="h-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+              className="h-7 w-full justify-start px-2 text-destructive hover:text-destructive hover:bg-destructive/10"
               onClick={(e) => {
                 e.stopPropagation();
                 onDelete();
