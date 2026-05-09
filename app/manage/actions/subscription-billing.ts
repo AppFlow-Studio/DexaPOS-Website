@@ -413,6 +413,14 @@ export async function replaceSubscriptionServiceAssignments(
             `Recurring monthly total: ${formatUsd(monthlyAmount)}\n\n` +
             `Future subscription invoices and payment confirmations will be sent to this billing email.`,
         })
+      } else {
+        console.warn(
+          '[replaceSubscriptionServiceAssignments] No recipient email found for subscription lifecycle email.',
+          {
+            merchantId: subscriptionRecord.data.merchant_id,
+            locationId: subscriptionRecord.data.location_id,
+          }
+        )
       }
     }
   } catch (emailError) {
