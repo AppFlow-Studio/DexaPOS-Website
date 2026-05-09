@@ -3480,16 +3480,33 @@ export async function toggleAdminCategoryInMenu(
     return { success: false, error: 'Menu not found' }
   }
 
-  // Update the menu_categories is_active field
-  const { error } = await supabase
-    .from('menu_categories')
-    .update({ is_active: isActive })
-    .eq('menu_id', menuId)
-    .eq('category_id', categoryId)
+  // Membership = row exists. Hide = DELETE, Show = upsert.
+  if (!isActive) {
+    const { error } = await supabase
+      .from('menu_categories')
+      .delete()
+      .eq('menu_id', menuId)
+      .eq('category_id', categoryId)
 
-  if (error) {
-    console.error('[toggleAdminCategoryInMenu] Error:', error)
-    return { success: false, error: error.message }
+    if (error) {
+      console.error('[toggleAdminCategoryInMenu] Error:', error)
+      return { success: false, error: error.message }
+    }
+  } else {
+    const { error } = await supabase.from('menu_categories').upsert(
+      {
+        menu_id: menuId,
+        category_id: categoryId,
+        merchant_id: merchantId,
+        is_active: true,
+      },
+      { onConflict: 'menu_id,category_id' }
+    )
+
+    if (error) {
+      console.error('[toggleAdminCategoryInMenu] Error:', error)
+      return { success: false, error: error.message }
+    }
   }
 
   return { success: true, error: null }

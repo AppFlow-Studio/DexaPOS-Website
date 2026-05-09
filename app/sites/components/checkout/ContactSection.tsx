@@ -15,10 +15,14 @@ interface ContactSectionProps {
   lastName: string;
   email: string;
   phone: string;
+  emailOptIn: boolean;
+  smsOptIn: boolean;
   onFirstNameChange: (v: string) => void;
   onLastNameChange: (v: string) => void;
   onEmailChange: (v: string) => void;
   onPhoneChange: (v: string) => void;
+  onEmailOptInChange: (v: boolean) => void;
+  onSmsOptInChange: (v: boolean) => void;
   onSignInClick: () => void;
   onSignUpClick?: () => void;
 }
@@ -30,10 +34,14 @@ export function ContactSection({
   lastName,
   email,
   phone,
+  emailOptIn,
+  smsOptIn,
   onFirstNameChange,
   onLastNameChange,
   onEmailChange,
   onPhoneChange,
+  onEmailOptInChange,
+  onSmsOptInChange,
   onSignInClick,
   onSignUpClick,
 }: ContactSectionProps) {
@@ -174,6 +182,27 @@ export function ContactSection({
           {phoneError && <p className="text-xs text-red-500">{phoneError}</p>}
         </div>
       )}
+
+      <div className="space-y-2 pt-2 border-t" style={{ borderColor: "var(--border)" }}>
+        <label className="flex items-start gap-2 text-sm cursor-pointer" style={{ color: "var(--text)" }}>
+          <input
+            type="checkbox"
+            checked={emailOptIn}
+            onChange={(e) => onEmailOptInChange(e.target.checked)}
+            className="mt-0.5"
+          />
+          <span>Email me a receipt and order updates</span>
+        </label>
+        <label className="flex items-start gap-2 text-sm cursor-pointer" style={{ color: "var(--text)" }}>
+          <input
+            type="checkbox"
+            checked={smsOptIn}
+            onChange={(e) => onSmsOptInChange(e.target.checked)}
+            className="mt-0.5"
+          />
+          <span>Text me order status updates</span>
+        </label>
+      </div>
 
       <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
         Fields marked <span className="text-red-500">*</span> are required.

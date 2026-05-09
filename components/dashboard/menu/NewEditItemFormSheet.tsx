@@ -76,7 +76,7 @@ import {
   CreateMenuItem,
   ResetMenuItemToGlobal,
 } from "@/app/dashboard/actions/menu-items";
-import { AddItemToCategory } from "@/app/dashboard/actions/item-assignments";
+import { AddItemToCategory, RemoveItemFromCategory } from "@/app/dashboard/actions/item-assignments";
 import {
   CategoriesModel,
   ModifierGroupsModel,
@@ -834,6 +834,9 @@ export function NewEditItemFormSheet({
   const [selectedCategories, setSelectedCategories] = React.useState<string[]>(
     [],
   );
+  const [originalCategoryIds, setOriginalCategoryIds] = React.useState<string[]>(
+    [],
+  );
   const [selectedModifiers, setSelectedModifiers] = React.useState<string[]>(
     [],
   );
@@ -1075,13 +1078,14 @@ export function NewEditItemFormSheet({
       const categoryData =
         editItem.category_items || editItem.menu_item_categories;
       if (categoryData) {
-        setSelectedCategories(
-          categoryData
-            .map((c: any) => c.category_id || c.category?.id || c.id)
-            .filter(Boolean),
-        );
+        const ids = categoryData
+          .map((c: any) => c.category_id || c.category?.id || c.id)
+          .filter(Boolean);
+        setSelectedCategories(ids);
+        setOriginalCategoryIds(ids);
       } else {
         setSelectedCategories([]);
+        setOriginalCategoryIds([]);
       }
       // Fetch modifier assignments directly from DB — bypasses any RPC/cache issues
       // Pass locationId to include location-scoped modifier assignments
@@ -1109,6 +1113,7 @@ export function NewEditItemFormSheet({
       });
       imageUpload.reset(null);
       setSelectedCategories([]);
+      setOriginalCategoryIds([]);
       setSelectedModifiers([]);
     }
     return () => { cancelled = true; };
@@ -1302,6 +1307,42 @@ export function NewEditItemFormSheet({
         }
         toast.error("Operation Failed", { description: result.error });
         return;
+      }
+
+      // For edits, sync category assignment changes (additions + removals)
+      if (editItem && merchantId) {
+        const toAdd = selectedCategories.filter(
+          (id) => !originalCategoryIds.includes(id),
+        );
+        const toRemove = originalCategoryIds.filter(
+          (id) => !selectedCategories.includes(id),
+        );
+        const locScope = isAllLocations ? null : selectedLocationId;
+        const assignmentResults = await Promise.all([
+          ...toAdd.map((catId) =>
+            AddItemToCategory(
+              catId,
+              editItem.id,
+              merchantId,
+              0,
+              undefined,
+              undefined,
+              locScope,
+            ),
+          ),
+          ...toRemove.map((catId) =>
+            RemoveItemFromCategory(catId, editItem.id, locScope),
+          ),
+        ]);
+        const failed = assignmentResults.find((r: any) => r?.error);
+        if (failed) {
+          toast.warning("Some category changes failed", {
+            description: (failed as any).error,
+          });
+        }
+        if (toAdd.length || toRemove.length) {
+          setOriginalCategoryIds(selectedCategories);
+        }
       }
 
       // If created from a category context, assign the new item to that category

@@ -42,31 +42,38 @@ export async function uploadMerchantLogo(
     return { success: false, error: 'Merchant not found' }
   }
 
-  const uploadResult = await uploadOrganizationLogo(file, merchant.clerk_org_id)
+  const merchantRow = merchant as {
+    id: string
+    name: string | null
+    clerk_org_id: string
+    organizations?: { imageURL?: string | null } | { imageURL?: string | null }[] | null
+  }
+
+  const uploadResult = await uploadOrganizationLogo(file, merchantRow.clerk_org_id)
   if (!uploadResult.success || !uploadResult.cdnUrl) {
     return { success: false, error: uploadResult.error || 'Upload failed' }
   }
 
   const logoUrl = uploadResult.cdnUrl
   const clerkOrg = await clerkClient.organizations.getOrganization({
-    organizationId: merchant.clerk_org_id,
+    organizationId: merchantRow.clerk_org_id,
   })
   const previousClerkLogoUrl =
     typeof clerkOrg.publicMetadata?.imageURL === 'string' ? clerkOrg.publicMetadata.imageURL : null
   const previousDatabaseLogoUrl =
-    merchant.organizations && !Array.isArray(merchant.organizations)
-      ? merchant.organizations.imageURL
+    merchantRow.organizations && !Array.isArray(merchantRow.organizations)
+      ? merchantRow.organizations.imageURL ?? null
       : null
 
   try {
-    await clerkClient.organizations.updateOrganization(merchant.clerk_org_id, {
+    await clerkClient.organizations.updateOrganization(merchantRow.clerk_org_id, {
       publicMetadata: {
         ...(clerkOrg.publicMetadata as Record<string, unknown>),
         imageURL: logoUrl,
       },
     })
   } catch (error) {
-    await deleteOrganizationLogo(logoUrl, merchant.clerk_org_id)
+    await deleteOrganizationLogo(logoUrl, merchantRow.clerk_org_id)
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Failed to update organization metadata',
@@ -76,11 +83,11 @@ export async function uploadMerchantLogo(
   const { error: updateError } = await supabase
     .from('organizations')
     .update({ imageURL: logoUrl, updated_at: new Date().toISOString() })
-    .eq('id', merchant.clerk_org_id)
+    .eq('id', merchantRow.clerk_org_id)
 
   if (updateError) {
-    await deleteOrganizationLogo(logoUrl, merchant.clerk_org_id)
-    await clerkClient.organizations.updateOrganization(merchant.clerk_org_id, {
+    await deleteOrganizationLogo(logoUrl, merchantRow.clerk_org_id)
+    await clerkClient.organizations.updateOrganization(merchantRow.clerk_org_id, {
       publicMetadata: {
         ...(clerkOrg.publicMetadata as Record<string, unknown>),
         imageURL: previousClerkLogoUrl,
@@ -91,17 +98,17 @@ export async function uploadMerchantLogo(
 
   const previousLogoUrl = previousClerkLogoUrl || previousDatabaseLogoUrl
   if (previousLogoUrl && previousLogoUrl !== logoUrl) {
-    const deleteResult = await deleteOrganizationLogo(previousLogoUrl, merchant.clerk_org_id)
+    const deleteResult = await deleteOrganizationLogo(previousLogoUrl, merchantRow.clerk_org_id)
     if (!deleteResult.success) {
       console.warn('Failed to delete previous merchant logo:', deleteResult.error)
     }
   }
 
-  await logAdminAction('MERCHANT_LOGO_UPDATED', {
-    merchantId: merchant.id,
+  await logAdminAction('MERCHANT_UPDATED', {
+    merchantId: merchantRow.id,
     resourceType: 'merchant',
-    resourceId: merchant.id,
-    resourceName: merchant.name,
+    resourceId: merchantRow.id,
+    resourceName: merchantRow.name ?? merchantRow.id,
     metadata: { logoUrl },
   })
 

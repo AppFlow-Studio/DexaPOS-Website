@@ -17,6 +17,7 @@ const TextLabel: React.FC<TextLabelProps> = ({
 }) => {
   const baseHeight = 50;
   const scaleY = height / baseHeight;
+  const lightTextColor = "#111827";
 
   const lightOpacity = 0.9;
   const darkOpacity = 0.7;
@@ -36,7 +37,7 @@ const TextLabel: React.FC<TextLabelProps> = ({
         dominantBaseline="middle"
         fontSize={24 * scaleY}
         fontWeight="bold"
-        fill={color}
+        fill={darkMode ? color : lightTextColor}
         fillOpacity={darkMode ? darkOpacity : lightOpacity}
       >
         {text}

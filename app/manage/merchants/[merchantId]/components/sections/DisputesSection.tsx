@@ -1,8 +1,9 @@
 'use client'
 
 import { Fragment, useMemo, useState } from 'react'
+import Link from 'next/link'
 import type { DateRange } from 'react-day-picker'
-import { ChevronDown, ChevronRight, Download, RefreshCcwDot, ShieldAlert, ShieldCheck, AlertTriangle, Scale } from 'lucide-react'
+import { ChevronDown, ChevronRight, Download, Link2, Link2Off, RefreshCcwDot, ShieldAlert, ShieldCheck, AlertTriangle, Scale } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -119,7 +120,11 @@ export function DisputesSection({ merchantId }: { merchantId: string }) {
             (s, m) => s + m.chargebacksIngested + m.chargebacksUpdated,
             0
         )
-        toast.success(`Synced ${totalCb} chargeback rows`)
+        const totalLinked = Object.values(res.perMid).reduce(
+            (s, m) => s + (m.chargebacksReconciled ?? 0),
+            0
+        )
+        toast.success(`Synced ${totalCb} chargeback rows · ${totalLinked} linked to orders`)
     }
 
     const cells: KpiCell[] = [
@@ -155,6 +160,13 @@ export function DisputesSection({ merchantId }: { merchantId: string }) {
                 .filter((r) => (r.current_status ?? '').toLowerCase().includes('lost'))
                 .length.toLocaleString(),
             meta: 'Resolved against merchant',
+        },
+        {
+            icon: Link2Off,
+            label: 'Unmatched',
+            value: rows.filter((r) => !r.reconciled_payment_id).length.toLocaleString(),
+            meta: 'No order_payment match',
+            tone: rows.some((r) => !r.reconciled_payment_id) ? 'warn' : 'good',
         },
     ]
     void formatPercent
@@ -256,6 +268,7 @@ export function DisputesSection({ merchantId }: { merchantId: string }) {
                             <TableHead>Card</TableHead>
                             <TableHead className="text-right">Amount</TableHead>
                             <TableHead>Auth</TableHead>
+                            <TableHead>Order</TableHead>
                             <TableHead>Status</TableHead>
                         </TableRow>
                     </TableHeader>
@@ -263,7 +276,7 @@ export function DisputesSection({ merchantId }: { merchantId: string }) {
                         {isLoading ? (
                             Array.from({ length: 4 }).map((_, idx) => (
                                 <TableRow key={`disp-loading-${idx}`}>
-                                    {Array.from({ length: 8 }).map((__, cellIdx) => (
+                                    {Array.from({ length: 9 }).map((__, cellIdx) => (
                                         <TableCell key={`disp-loading-${idx}-${cellIdx}`}>
                                             <Skeleton className="h-4 w-full" />
                                         </TableCell>
@@ -272,7 +285,7 @@ export function DisputesSection({ merchantId }: { merchantId: string }) {
                             ))
                         ) : rows.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={8} className="py-12 text-center text-muted-foreground">
+                                <TableCell colSpan={9} className="py-12 text-center text-muted-foreground">
                                     No active disputes for this filter.
                                 </TableCell>
                             </TableRow>
@@ -307,13 +320,29 @@ export function DisputesSection({ merchantId }: { merchantId: string }) {
                                                 {formatCurrency(Number(r.merch_amount) || 0)}
                                             </TableCell>
                                             <TableCell className="font-mono text-[11.5px]">{r.auth_code}</TableCell>
+                                            <TableCell onClick={(e) => e.stopPropagation()}>
+                                                {r.reconciled_order_id ? (
+                                                    <Link
+                                                        href={`/manage/transactions?orderId=${r.reconciled_order_id}`}
+                                                        className="inline-flex items-center gap-1 font-mono text-[11.5px] text-primary hover:underline"
+                                                    >
+                                                        <Link2 className="h-3 w-3" />
+                                                        #{r.reconciled_order_number ?? r.reconciled_order_id.slice(0, 8)}
+                                                    </Link>
+                                                ) : (
+                                                    <Badge variant="outline" className="border-zinc-300 bg-zinc-50 text-[10.5px] text-muted-foreground">
+                                                        <Link2Off className="mr-1 h-3 w-3" />
+                                                        Unmatched
+                                                    </Badge>
+                                                )}
+                                            </TableCell>
                                             <TableCell>
                                                 <Badge className={statusTone(r.current_status ?? '')}>{r.current_status ?? '—'}</Badge>
                                             </TableCell>
                                         </TableRow>
                                         {isOpen && (
                                             <TableRow className="bg-muted/10">
-                                                <TableCell colSpan={8} className="py-3">
+                                                <TableCell colSpan={9} className="py-3">
                                                     <div className="space-y-3 px-2">
                                                         <div className="grid gap-4 lg:grid-cols-3 text-[12px]">
                                                             <div>

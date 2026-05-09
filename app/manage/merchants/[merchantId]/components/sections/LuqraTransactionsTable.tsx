@@ -2,7 +2,8 @@
 
 import { useState } from 'react'
 import type { DateRange } from 'react-day-picker'
-import { CheckCircle2, CircleAlert, Download, RefreshCcwDot } from 'lucide-react'
+import Link from 'next/link'
+import { CheckCircle2, ChevronRight, CircleAlert, Download, RefreshCcwDot } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -278,11 +279,18 @@ export function LuqraTransactionsTable({
                                     {formatMoney(r.amount_dollars)}
                                 </TableCell>
                                 <TableCell>
-                                    {r.reconciled_payment_id ? (
-                                        <Badge className="border-emerald-200 bg-emerald-100 text-emerald-800">
-                                            <CheckCircle2 className="h-3 w-3" />
-                                            {r.reconciled_order_number ?? 'Matched'}
-                                        </Badge>
+                                    {r.reconciled_payment_id && r.reconciled_order_id ? (
+                                        <Link
+                                            href={`/manage/transactions?orderId=${r.reconciled_order_id}`}
+                                            className="inline-flex items-center gap-1"
+                                            title="Open linked order_payment"
+                                        >
+                                            <Badge className="border-emerald-200 bg-emerald-100 text-emerald-800 hover:bg-emerald-200">
+                                                <CheckCircle2 className="h-3 w-3" />
+                                                {r.reconciled_order_number ?? 'Matched'}
+                                            </Badge>
+                                            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                                        </Link>
                                     ) : (
                                         <Badge variant="outline" className="text-muted-foreground">
                                             <CircleAlert className="h-3 w-3" />

@@ -88,13 +88,6 @@ export interface OnlineOrderingSettings {
   tippingEnabled: boolean;
   tipPresets: number[];
 
-  // Payment
-  ipospaysDeviceId?: string | null;
-  ipospaysDeviceLabel?: string | null;
-  ipospaysTpn: string;
-  ipospaysFtdEcomKey: string;
-  ipospaysFtdEcomKeyConfigured?: boolean;
-
   // SEO
   metaTitle: string;
   metaDescription: string;
@@ -111,6 +104,16 @@ export interface OnlineOrderingSettings {
   // Analytics
   googleAnalyticsId: string;
   facebookPixelId: string;
+
+  // Customer notification preferences (transactional)
+  notificationPrefs: {
+    email_on_order_placed: boolean;
+    sms_on_order_placed: boolean;
+    email_on_status: string[];
+    sms_on_status: string[];
+    admin_test_email?: string | null;
+    admin_test_phone?: string | null;
+  };
 }
 
 const createDefaultDaySchedule = (enabled = false): DaySchedule => ({
@@ -207,12 +210,6 @@ const createDefaultSettings = (
   tippingEnabled: true,
   tipPresets: [15, 18, 20, 25],
 
-  ipospaysTpn: "",
-  ipospaysFtdEcomKey: "",
-  ipospaysFtdEcomKeyConfigured: false,
-  ipospaysDeviceId: null,
-  ipospaysDeviceLabel: null,
-
   headerStyle: "filled",
   headerTextColor: null,
   borderColor: null,
@@ -225,6 +222,15 @@ const createDefaultSettings = (
 
   googleAnalyticsId: "",
   facebookPixelId: "",
+
+  notificationPrefs: {
+    email_on_order_placed: true,
+    sms_on_order_placed: true,
+    email_on_status: ["ready", "cancelled"],
+    sms_on_status: ["accepted", "ready", "cancelled"],
+    admin_test_email: null,
+    admin_test_phone: null,
+  },
 });
 
 export type OnlineStoreSetupRequestResult =

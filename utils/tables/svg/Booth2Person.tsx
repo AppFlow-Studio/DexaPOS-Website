@@ -14,7 +14,8 @@ const Booth2Person: React.FC<Booth2PersonProps> = ({
   height = 100,
   ...props
 }) => {
-  const strokeOpacity = darkMode ? 0.5 : 0.8;
+  const tableStrokeOpacity = darkMode ? 0.5 : 0.8;
+  const boothStrokeOpacity = darkMode ? 0.5 : 0.5;
 
   return (
     <svg
@@ -33,9 +34,9 @@ const Booth2Person: React.FC<Booth2PersonProps> = ({
         height="48"
         rx="4"
         fill={color}
-        fillOpacity={darkMode ? 0.18 : 0.8}
+        fillOpacity={darkMode ? 0.18 : 0.18}
         stroke={color}
-        strokeOpacity={strokeOpacity}
+        strokeOpacity={tableStrokeOpacity}
         strokeWidth="1.5"
       />
 
@@ -47,9 +48,9 @@ const Booth2Person: React.FC<Booth2PersonProps> = ({
         height="13"
         rx="3"
         fill={color}
-        fillOpacity={darkMode ? 0.12 : 0.8}
+        fillOpacity={darkMode ? 0.12 : 0.12}
         stroke={color}
-        strokeOpacity={strokeOpacity}
+        strokeOpacity={boothStrokeOpacity}
         strokeWidth="1"
       />
 
@@ -61,9 +62,9 @@ const Booth2Person: React.FC<Booth2PersonProps> = ({
         height="13"
         rx="3"
         fill={color}
-        fillOpacity={darkMode ? 0.12 : 0.8}
+        fillOpacity={darkMode ? 0.12 : 0.12}
         stroke={color}
-        strokeOpacity={strokeOpacity}
+        strokeOpacity={boothStrokeOpacity}
         strokeWidth="1"
       />
     </svg>
