@@ -882,11 +882,28 @@ function CategoryGroup({
   selectedItemIds?: Set<string>;
   onToggleSelect?: (id: string) => void;
 }) {
+  const selectedCount = isSelectionMode && selectedItemIds
+    ? items.reduce((acc, it) => acc + (selectedItemIds.has(it.id) ? 1 : 0), 0)
+    : 0;
+  const allSelected =
+    isSelectionMode && items.length > 0 && selectedCount === items.length;
+  const someSelected = isSelectionMode && selectedCount > 0 && !allSelected;
+
   return (
     <Collapsible open={isExpanded} onOpenChange={onToggle}>
-      <Card className="overflow-hidden">
+      <Card
+        className={cn(
+          "overflow-hidden transition-all",
+          isSelectionMode && selectedCount > 0 && "ring-1 ring-primary/30",
+        )}
+      >
         <CollapsibleTrigger asChild>
-          <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors py-3">
+          <CardHeader
+            className={cn(
+              "cursor-pointer hover:bg-muted/50 transition-colors py-3",
+              isSelectionMode && selectedCount > 0 && "bg-primary/5",
+            )}
+          >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 {isExpanded ? (
@@ -916,9 +933,61 @@ function CategoryGroup({
                   )}
                 </div>
               </div>
-              <Badge variant="secondary">
-                {items.length} item{items.length !== 1 ? "s" : ""}
-              </Badge>
+              <div className="flex items-center gap-2">
+                {isSelectionMode && (
+                  <>
+                    {selectedCount > 0 && (
+                      <Badge
+                        variant="default"
+                        className="gap-1 bg-primary/15 text-primary border border-primary/30 hover:bg-primary/20"
+                      >
+                        <CheckCircle2 className="h-3 w-3" />
+                        {selectedCount} selected
+                      </Badge>
+                    )}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (!onToggleSelect) return;
+                        if (allSelected) {
+                          items.forEach((it) => {
+                            if (selectedItemIds?.has(it.id))
+                              onToggleSelect(it.id);
+                          });
+                        } else {
+                          items.forEach((it) => {
+                            if (!selectedItemIds?.has(it.id))
+                              onToggleSelect(it.id);
+                          });
+                        }
+                      }}
+                      className={cn(
+                        "flex items-center justify-center w-7 h-7 rounded-full border-2 transition-all duration-200",
+                        allSelected
+                          ? "bg-primary border-primary text-primary-foreground"
+                          : someSelected
+                            ? "bg-primary/20 border-primary text-primary"
+                            : "bg-background border-border hover:border-primary/60",
+                      )}
+                      aria-label={
+                        allSelected
+                          ? `Deselect all in ${category.name}`
+                          : `Select all in ${category.name}`
+                      }
+                    >
+                      {allSelected ? (
+                        <Check className="h-4 w-4" strokeWidth={3} />
+                      ) : someSelected ? (
+                        <span className="block w-2.5 h-0.5 bg-primary rounded-full" />
+                      ) : null}
+                    </button>
+                  </>
+                )}
+                <Badge variant="secondary">
+                  {items.length} item{items.length !== 1 ? "s" : ""}
+                </Badge>
+              </div>
             </div>
           </CardHeader>
         </CollapsibleTrigger>
