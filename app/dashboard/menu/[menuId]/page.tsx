@@ -147,9 +147,9 @@ export default function MenuDetailPage() {
   const [editedDescription, setEditedDescription] = useState("");
   const [editedLocationId, setEditedLocationId] = useState<string | null>(null);
   const [hasSettingsChanges, setHasSettingsChanges] = useState(false);
-  const [categoryViewMode, setCategoryViewMode] = useState<"list" | "table">(
-    "list",
-  );
+  const [categoryViewMode, setCategoryViewMode] = useState<
+    "list" | "grid" | "table"
+  >("list");
 
   const [reorderedCategories, setReorderedCategories] = useState<
     MenuCategory[]
