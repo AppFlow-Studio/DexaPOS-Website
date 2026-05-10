@@ -297,7 +297,17 @@ export function SubscriptionBillingAdminCard({
       }))
       .filter((service) => service.enabled && service.quantity > 0)
 
-    if (status !== 'canceled' && enabledServices.length === 0) {
+    const fallbackActiveStatus =
+      selectedLocationSubscription?.status && selectedLocationSubscription.status !== 'canceled'
+        ? selectedLocationSubscription.status
+        : 'active'
+
+    const effectiveStatus: SubscriptionStatus =
+      status === 'canceled' && enabledServices.length > 0
+        ? fallbackActiveStatus
+        : status
+
+    if (effectiveStatus !== 'canceled' && enabledServices.length === 0) {
       toast.error('Enable at least one billable service for this location.')
       return
     }
@@ -311,8 +321,8 @@ export function SubscriptionBillingAdminCard({
         currentPeriodStart,
         currentPeriodEnd,
         nextBillingDate,
-        status,
-        trialEndsAt: status === 'trial' && trialEndsAt ? `${trialEndsAt}T00:00:00.000Z` : null,
+        status: effectiveStatus,
+        trialEndsAt: effectiveStatus === 'trial' && trialEndsAt ? `${trialEndsAt}T00:00:00.000Z` : null,
         metadata: {
           source: 'hq_service_catalog_billing_ui',
           pricingModel: 'service_catalog',
@@ -326,7 +336,7 @@ export function SubscriptionBillingAdminCard({
 
       const serviceResult = await replaceSubscriptionServiceAssignments(
         subscriptionResult.subscriptionId,
-        (status === 'canceled' ? [] : enabledServices).map((service) => ({
+        (effectiveStatus === 'canceled' ? [] : enabledServices).map((service) => ({
           serviceId: service.serviceId,
           quantity: service.quantity,
           enabled: true,
@@ -343,8 +353,10 @@ export function SubscriptionBillingAdminCard({
       }
 
       toast.success(
-        status === 'canceled'
+        effectiveStatus === 'canceled'
           ? 'Subscription canceled.'
+          : status === 'canceled'
+            ? 'Selected services removed. Subscription remains active.'
           : selectedLocationSubscription
             ? 'Subscription services updated.'
             : 'Subscription created.'
