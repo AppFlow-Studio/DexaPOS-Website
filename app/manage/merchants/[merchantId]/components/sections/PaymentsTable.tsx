@@ -274,11 +274,14 @@ export function MerchantPaymentsTab({
                         </TableRow>
                     ) : (
                         rows.map((r) => {
-                            const batch =
-                                r.settlement_batch_label ??
-                                r.batch_number ??
-                                r.dejavoo_batch_number ??
-                                null
+                            // Prefer the host batch number ("009", optionally
+                            // prefixed with the acquirer like "TSYS-009"). Fall
+                            // back to the legacy settlement_batch_label only for
+                            // pre-Wave-A.1 rows where batch_number is null.
+                            const hostBatchNumber = r.batch_number ?? r.dejavoo_batch_number ?? null
+                            const batch = hostBatchNumber
+                                ? (r.acquirer ? `${r.acquirer}-${hostBatchNumber}` : hostBatchNumber)
+                                : (r.settlement_batch_label ?? null)
                             return (
                                 <TableRow key={r.id}>
                                     <TableCell className="whitespace-nowrap text-[12px]">
