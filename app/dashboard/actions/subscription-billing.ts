@@ -2,6 +2,7 @@
 
 import { auth } from '@clerk/nextjs/server'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
+import { getEffectiveMerchantContext } from '@/lib/admin/merchant-context'
 import {
   formatLongDate,
   formatShortDateRange,
@@ -85,16 +86,17 @@ function toNumber(value: unknown): number {
 }
 
 async function resolveMerchantForCurrentOrg() {
-  const { userId, orgId } = await auth()
-  if (!userId || !orgId) {
+  const { userId } = await auth()
+  if (!userId) {
     throw new Error('Unauthorized')
   }
 
+  const merchantContext = await getEffectiveMerchantContext(null)
   const serviceRole = createServiceRoleClient()
   const { data: merchant, error } = await serviceRole
     .from('merchants')
     .select('id, name, clerk_org_id')
-    .eq('clerk_org_id', orgId)
+    .eq('id', merchantContext.merchantId)
     .single()
 
   if (error || !merchant) {
@@ -366,4 +368,3 @@ export async function getMerchantSubscriptionInvoiceDocument(
     return { success: false, error: error?.message || 'Failed to load invoice document.' }
   }
 }
-

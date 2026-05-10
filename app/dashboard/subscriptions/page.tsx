@@ -1,20 +1,22 @@
 import { auth } from '@clerk/nextjs/server'
 import { redirect } from 'next/navigation'
 import { MerchantSubscriptionOverviewCard } from '@/components/billing/MerchantSubscriptionOverviewCard'
+import { getEffectiveMerchantContext } from '@/lib/admin/merchant-context'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 
 export default async function MerchantSubscriptionsPage() {
-  const { userId, orgId } = await auth()
+  const { userId } = await auth()
 
-  if (!userId || !orgId) {
+  if (!userId) {
     redirect('/sign-in?redirect=/dashboard/subscriptions')
   }
 
+  const merchantContext = await getEffectiveMerchantContext(null)
   const supabase = createServerSupabaseClient()
   const { data: merchant, error } = await supabase
     .from('merchants')
     .select('id, name')
-    .eq('clerk_org_id', orgId)
+    .eq('id', merchantContext.merchantId)
     .single()
 
   if (error || !merchant) {
