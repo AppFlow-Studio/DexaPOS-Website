@@ -15,7 +15,17 @@ import {
   Clock,
   ArrowLeft,
   Trash2,
+  ChevronDown,
+  DollarSign,
+  Truck,
+  CheckSquare,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { DeleteMenu, UpdateMenu, ToggleMenuActive } from "../../actions/menus";
 import {
@@ -64,6 +74,8 @@ import { CategorySection } from "@/components/dashboard/menu/menuId/CategorySect
 import { MenuHeader } from "@/components/dashboard/menu/menuId/MenuHeader";
 import { MenuOverviewTab } from "@/components/dashboard/menu/menuId/MenuOverviewTab";
 import { MenuCategoriesTab } from "@/components/dashboard/menu/menuId/MenuCategoriesTab";
+import { BulkMenuPriceAdjustDialog } from "@/components/dashboard/menu/menuId/BulkMenuPriceAdjustDialog";
+import { BulkMenuDeliveryPriceAdjustDialog } from "@/components/dashboard/menu/menuId/BulkMenuDeliveryPriceAdjustDialog";
 import { MenuSchedulesTab } from "@/components/dashboard/menu/menuId/MenuSchedulesTab";
 import { MenuSettingsTab } from "@/components/dashboard/menu/menuId/MenuSettingsTab";
 import { MenuPreviewModal } from "@/components/dashboard/menu/menuId/MenuPreviewModal";
@@ -170,6 +182,40 @@ export default function MenuDetailPage() {
 
   // Preview modal state
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+
+  // Bulk selection state (categories tab only)
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
+  const [bulkMenuPriceOpen, setBulkMenuPriceOpen] = useState(false);
+  const [bulkMenuDeliveryOpen, setBulkMenuDeliveryOpen] = useState(false);
+
+  function handleToggleItem(itemId: string) {
+    setSelectedItemIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(itemId)) next.delete(itemId);
+      else next.add(itemId);
+      return next;
+    });
+  }
+
+  function handleToggleCategoryItems(categoryId: string, itemIds: string[]) {
+    setSelectedItemIds((prev) => {
+      const next = new Set(prev);
+      if (itemIds.length === 0) {
+        // deselect all items from this category
+        const cat = visibleCategories.find((c) => c.category_id === categoryId);
+        cat?.items?.forEach((i) => next.delete(i.menu_item_id));
+      } else {
+        itemIds.forEach((id) => next.add(id));
+      }
+      return next;
+    });
+  }
+
+  function exitSelectionMode() {
+    setIsSelectionMode(false);
+    setSelectedItemIds(new Set());
+  }
 
   // OrderOut
   const { data: orderOutStatus } = useOrderOutStatus(
@@ -281,6 +327,18 @@ export default function MenuDetailPage() {
 
   const hiddenCategories = displayCategories.filter((c) => !c.is_active);
   const visibleCategories = displayCategories.filter((c) => c.is_active);
+
+  const totalSelectableItems = useMemo(
+    () => visibleCategories.flatMap((c) => c.items ?? []).length,
+    [visibleCategories],
+  );
+
+  function handleSelectAll() {
+    const allIds = visibleCategories
+      .flatMap((c) => c.items ?? [])
+      .map((i) => i.menu_item_id);
+    setSelectedItemIds(new Set(allIds));
+  }
 
   // Initialize reordered categories when categories load
   useEffect(() => {
@@ -1128,6 +1186,70 @@ export default function MenuDetailPage() {
         </TabsContent>
 
         <TabsContent value="categories" className="space-y-4">
+          {/* Sticky selection bar — matches items-page pattern */}
+          {isSelectionMode && (
+            <div className="sticky top-0 z-20 flex items-center gap-3 rounded-xl border border-primary/20 bg-primary/5 px-4 py-2.5 backdrop-blur mb-4">
+              <Badge variant="secondary" className="text-xs">
+                {selectedItemIds.size} of {totalSelectableItems} selected
+              </Badge>
+              <div className="w-px h-4 bg-border" />
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 text-xs"
+                onClick={
+                  selectedItemIds.size === totalSelectableItems
+                    ? () => setSelectedItemIds(new Set())
+                    : handleSelectAll
+                }
+              >
+                {selectedItemIds.size === totalSelectableItems
+                  ? "Deselect all"
+                  : "Select all"}
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 text-xs"
+                onClick={() => setSelectedItemIds(new Set())}
+              >
+                Clear
+              </Button>
+              <div className="ml-auto flex items-center gap-2">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      size="sm"
+                      className="h-8 gap-1"
+                      disabled={selectedItemIds.size === 0}
+                    >
+                      Bulk edit
+                      <ChevronDown className="h-3.5 w-3.5" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => setBulkMenuPriceOpen(true)}>
+                      <DollarSign className="h-4 w-4 mr-2" />
+                      Adjust card price…
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setBulkMenuDeliveryOpen(true)}>
+                      <Truck className="h-4 w-4 mr-2" />
+                      Adjust online (delivery) price…
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-8"
+                  onClick={exitSelectionMode}
+                >
+                  Done
+                </Button>
+              </div>
+            </div>
+          )}
+
           <MenuCategoriesTab
             visibleCategories={
               hasCategoryOrderChanges
@@ -1170,6 +1292,15 @@ export default function MenuDetailPage() {
             itemOrderChanges={itemOrderChanges}
             savingItemOrderFor={savingItemOrderFor}
             reorderedItemsMap={reorderedItemsMap}
+            // Selection
+            isSelectionMode={isSelectionMode}
+            selectedItemIds={selectedItemIds}
+            onToggleItem={handleToggleItem}
+            onToggleCategoryItems={handleToggleCategoryItems}
+            selectedCount={selectedItemIds.size}
+            onToggleSelectionMode={() =>
+              isSelectionMode ? exitSelectionMode() : setIsSelectionMode(true)
+            }
           />
         </TabsContent>
 
@@ -1424,6 +1555,61 @@ export default function MenuDetailPage() {
             ? locations?.find((l) => l.id === selectedLocationId)?.name
             : undefined
         }
+      />
+
+      {/* Bulk menu card-price adjustment (L5) */}
+      <BulkMenuPriceAdjustDialog
+        open={bulkMenuPriceOpen}
+        onOpenChange={setBulkMenuPriceOpen}
+        clerkOrgId={clerkOrgId}
+        menuId={menuId}
+        currentLocationId={
+          isAllLocations ? null : selectedLocationId ?? null
+        }
+        isAllLocations={isAllLocations}
+        selectedItems={visibleCategories
+          .flatMap((c) => c.items ?? [])
+          .filter((it) => selectedItemIds.has(it.menu_item_id))
+          .map((it) => ({
+            id: it.menu_item_id,
+            name: it.menu_item?.name ?? "",
+            effectivePrice: it.menu_item?.effective_price ?? 0,
+          }))}
+        onSuccess={() => {
+          exitSelectionMode();
+          queryClient.invalidateQueries({
+            queryKey: ["menu-with-categories", menuId],
+          });
+          refetchMenu();
+        }}
+      />
+
+      {/* Bulk menu delivery-price adjustment (L5) */}
+      <BulkMenuDeliveryPriceAdjustDialog
+        open={bulkMenuDeliveryOpen}
+        onOpenChange={setBulkMenuDeliveryOpen}
+        clerkOrgId={clerkOrgId}
+        menuId={menuId}
+        currentLocationId={
+          isAllLocations ? null : selectedLocationId ?? null
+        }
+        isAllLocations={isAllLocations}
+        selectedItems={visibleCategories
+          .flatMap((c) => c.items ?? [])
+          .filter((it) => selectedItemIds.has(it.menu_item_id))
+          .map((it) => ({
+            id: it.menu_item_id,
+            name: it.menu_item?.name ?? "",
+            cardPrice: it.menu_item?.effective_price ?? 0,
+            currentDeliveryPrice: it.menu_item?.effective_delivery_price ?? null,
+          }))}
+        onSuccess={() => {
+          exitSelectionMode();
+          queryClient.invalidateQueries({
+            queryKey: ["menu-with-categories", menuId],
+          });
+          refetchMenu();
+        }}
       />
 
     </div>

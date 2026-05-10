@@ -10,6 +10,7 @@ import {
   Table as TableIcon,
   LayoutGrid,
   Info,
+  CheckSquare,
 } from "lucide-react";
 import { MenuCategory, MenuCategoryItem } from "@/types/menu";
 import { CategoryTable } from "./CategoryTable";
@@ -62,6 +63,13 @@ interface MenuCategoriesTabProps {
   itemOrderChanges?: Map<string, boolean>;
   savingItemOrderFor?: string | null;
   reorderedItemsMap?: Map<string, MenuCategoryItem[]>;
+  // Selection mode
+  isSelectionMode?: boolean;
+  selectedItemIds?: Set<string>;
+  onToggleItem?: (itemId: string) => void;
+  onToggleCategoryItems?: (categoryId: string, itemIds: string[]) => void;
+  selectedCount?: number;
+  onToggleSelectionMode?: () => void;
 }
 
 export function MenuCategoriesTab({
@@ -98,6 +106,13 @@ export function MenuCategoriesTab({
   itemOrderChanges,
   savingItemOrderFor,
   reorderedItemsMap,
+  // Selection
+  isSelectionMode = false,
+  selectedItemIds,
+  onToggleItem,
+  onToggleCategoryItems,
+  selectedCount = 0,
+  onToggleSelectionMode,
 }: MenuCategoriesTabProps) {
   const isAllLocations = !selectedLocationId || selectedLocationId === "all";
   // Cannot add/remove categories when location-scoped viewing a global menu
@@ -108,6 +123,22 @@ export function MenuCategoriesTab({
       {/* Controls */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
+          {onToggleSelectionMode && (
+            <Button
+              variant={isSelectionMode ? "secondary" : "outline"}
+              size="sm"
+              className="gap-1"
+              onClick={onToggleSelectionMode}
+            >
+              <CheckSquare className="h-4 w-4" />
+              {isSelectionMode ? "Selecting" : "Select"}
+              {isSelectionMode && selectedCount > 0 && (
+                <Badge variant="secondary" className="ml-0.5 h-5 px-1.5 text-xs">
+                  {selectedCount}
+                </Badge>
+              )}
+            </Button>
+          )}
           {categoryViewMode === "list" && (
             <>
               <Button variant="outline" size="sm" onClick={onExpandAll}>
@@ -291,6 +322,10 @@ export function MenuCategoriesTab({
               itemOrderChanges={itemOrderChanges}
               savingItemOrderFor={savingItemOrderFor}
               reorderedItemsMap={reorderedItemsMap}
+              isSelectionMode={isSelectionMode}
+              selectedItemIds={selectedItemIds}
+              onToggleItem={onToggleItem}
+              onToggleCategoryItems={onToggleCategoryItems}
             />
           )}
 
