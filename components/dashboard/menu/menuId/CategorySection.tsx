@@ -30,6 +30,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   ChevronDown,
   ChevronRight,
@@ -73,6 +74,11 @@ interface CategorySectionProps {
   onResetItemOrder?: (categoryId: string) => void;
   hasItemOrderChanges?: boolean;
   isSavingItemOrder?: boolean;
+  // Selection mode
+  isSelectionMode?: boolean;
+  selectedItemIds?: Set<string>;
+  onToggleItem?: (itemId: string) => void;
+  onToggleCategoryItems?: (itemIds: string[]) => void;
 }
 
 export function CategorySection({
@@ -96,12 +102,39 @@ export function CategorySection({
   onResetItemOrder,
   hasItemOrderChanges = false,
   isSavingItemOrder = false,
+  // Selection
+  isSelectionMode = false,
+  selectedItemIds,
+  onToggleItem,
+  onToggleCategoryItems,
 }: CategorySectionProps) {
   const itemCount = category.items?.length || 0;
   const [isToggling, setIsToggling] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const isAllLocations = !locationId || locationId === "all";
+
+  // Selection helpers for the category-level checkbox
+  const categoryItemIds = (category.items ?? []).map((i) => i.menu_item_id);
+  const selectedCount = categoryItemIds.filter((id) => selectedItemIds?.has(id)).length;
+  const categoryCheckState: boolean | "indeterminate" =
+    selectedCount === 0
+      ? false
+      : selectedCount === categoryItemIds.length
+        ? true
+        : "indeterminate";
+
+  function handleCategoryCheckbox(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (!onToggleCategoryItems) return;
+    if (categoryCheckState === true) {
+      // deselect all
+      onToggleCategoryItems([]);
+    } else {
+      // select all
+      onToggleCategoryItems(categoryItemIds);
+    }
+  }
 
   // Check if this category has a location-specific override
   const hasLocationOverride =
@@ -181,6 +214,15 @@ export function CategorySection({
       >
         <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors py-3">
           <div className="flex items-center justify-between">
+            {/* Category-level selection checkbox */}
+            {isSelectionMode && categoryItemIds.length > 0 && (
+              <div
+                className="flex-shrink-0 mr-2"
+                onClick={handleCategoryCheckbox}
+              >
+                <Checkbox checked={categoryCheckState} />
+              </div>
+            )}
             <CollapsibleTrigger asChild>
               <div className="flex items-center gap-3 flex-1 cursor-pointer">
                 {isExpanded ? (
@@ -353,6 +395,9 @@ export function CategorySection({
                 hasItemOrderChanges={hasItemOrderChanges}
                 isSavingItemOrder={isSavingItemOrder}
                 locationId={locationId || null}
+                isSelectionMode={isSelectionMode}
+                selectedItemIds={selectedItemIds}
+                onToggleItem={onToggleItem}
               />
             ) : (
               <div className="text-center py-8 text-muted-foreground">

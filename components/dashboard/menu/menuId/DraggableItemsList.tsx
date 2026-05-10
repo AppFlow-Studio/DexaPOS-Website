@@ -31,6 +31,9 @@ interface SortableItemWrapperProps {
   onItemClick: (itemId: string) => void;
   showLocationPricing: boolean;
   onEdit: () => void;
+  isSelectionMode?: boolean;
+  isSelected?: boolean;
+  onToggleSelect?: () => void;
 }
 
 function SortableItemWrapper({
@@ -38,6 +41,9 @@ function SortableItemWrapper({
   onItemClick,
   showLocationPricing,
   onEdit,
+  isSelectionMode = false,
+  isSelected = false,
+  onToggleSelect,
 }: SortableItemWrapperProps) {
   const {
     attributes,
@@ -62,18 +68,20 @@ function SortableItemWrapper({
         isDragging && "opacity-50 z-50 bg-muted"
       )}
     >
-      {/* Drag Handle */}
-      <div
-        {...attributes}
-        {...listeners}
-        className={cn(
-          "flex-shrink-0 w-8 h-full flex items-center justify-center cursor-grab active:cursor-grabbing",
-          "opacity-40 hover:opacity-100 transition-opacity",
-          "touch-none"
-        )}
-      >
-        <GripVertical className="h-4 w-4 text-muted-foreground" />
-      </div>
+      {/* Drag Handle — hidden in selection mode */}
+      {!isSelectionMode && (
+        <div
+          {...attributes}
+          {...listeners}
+          className={cn(
+            "flex-shrink-0 w-8 h-full flex items-center justify-center cursor-grab active:cursor-grabbing",
+            "opacity-40 hover:opacity-100 transition-opacity",
+            "touch-none"
+          )}
+        >
+          <GripVertical className="h-4 w-4 text-muted-foreground" />
+        </div>
+      )}
 
       <div className="flex-1">
         <CategoryItemRow
@@ -81,6 +89,9 @@ function SortableItemWrapper({
           onClick={() => onItemClick(item.menu_item_id)}
           showLocationPricing={showLocationPricing}
           onEdit={onEdit}
+          isSelectionMode={isSelectionMode}
+          isSelected={isSelected}
+          onToggleSelect={onToggleSelect}
         />
       </div>
     </div>
@@ -118,6 +129,10 @@ interface DraggableItemsListProps {
   hasItemOrderChanges: boolean;
   isSavingItemOrder: boolean;
   locationId: string | null;
+  // Selection mode
+  isSelectionMode?: boolean;
+  selectedItemIds?: Set<string>;
+  onToggleItem?: (itemId: string) => void;
 }
 
 export function DraggableItemsList({
@@ -132,6 +147,9 @@ export function DraggableItemsList({
   hasItemOrderChanges,
   isSavingItemOrder,
   locationId,
+  isSelectionMode = false,
+  selectedItemIds,
+  onToggleItem,
 }: DraggableItemsListProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
 
@@ -252,6 +270,9 @@ export function DraggableItemsList({
                 onItemClick={onItemClick}
                 showLocationPricing={showLocationPricing}
                 onEdit={() => onEditItem(item)}
+                isSelectionMode={isSelectionMode}
+                isSelected={selectedItemIds?.has(item.menu_item_id) ?? false}
+                onToggleSelect={() => onToggleItem?.(item.menu_item_id)}
               />
             ))}
           </div>

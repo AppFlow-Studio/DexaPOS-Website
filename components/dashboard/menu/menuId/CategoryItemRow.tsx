@@ -2,6 +2,7 @@
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
     Tooltip,
     TooltipContent,
@@ -9,6 +10,7 @@ import {
     TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { Info, Utensils, Star, DollarSign } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { MenuCategoryItem } from '@/types/menu'
 import { PriceSourcePopover } from '@/components/dashboard/menu/PriceSourcePopover'
 import {
@@ -27,6 +29,10 @@ interface CategoryItemRowProps {
     onClick: () => void
     showLocationPricing: boolean
     onEdit: () => void
+    // Selection mode
+    isSelectionMode?: boolean
+    isSelected?: boolean
+    onToggleSelect?: () => void
 }
 
 const PRICE_SOURCE_LABELS: Record<string, string> = {
@@ -41,7 +47,10 @@ export function CategoryItemRow({
     item,
     onClick,
     showLocationPricing,
-    onEdit
+    onEdit,
+    isSelectionMode = false,
+    isSelected = false,
+    onToggleSelect,
 }: CategoryItemRowProps) {
     const menuItem = item.menu_item
     const priceSource = menuItem?.price_source || 'base'
@@ -71,9 +80,22 @@ export function CategoryItemRow({
 
     return (
         <div
-            className="flex items-center gap-4 py-4 px-2 hover:bg-muted/50 cursor-pointer transition-colors rounded-lg"
-            onClick={onEdit}
+            className={cn(
+                "flex items-center gap-4 py-4 px-2 hover:bg-muted/50 cursor-pointer transition-colors rounded-lg",
+                isSelectionMode && isSelected && "bg-primary/5",
+            )}
+            onClick={isSelectionMode ? onToggleSelect : onEdit}
         >
+            {/* Selection checkbox */}
+            {isSelectionMode && (
+                <div
+                    className="flex-shrink-0"
+                    onClick={(e) => { e.stopPropagation(); onToggleSelect?.(); }}
+                >
+                    <Checkbox checked={isSelected} />
+                </div>
+            )}
+
             {/* Item Image */}
             <div className="h-16 w-16 rounded-lg bg-muted flex items-center justify-center overflow-hidden flex-shrink-0">
                 {menuItem?.image ? (
@@ -145,26 +167,28 @@ export function CategoryItemRow({
                         </Badge>
                     )}
                 </div>
-                <TooltipProvider>
-                    <Tooltip>
-                        <TooltipTrigger asChild>
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8"
-                                onClick={(e) => {
-                                    e.stopPropagation()
-                                    onEdit()
-                                }}
-                            >
-                                <DollarSign className="h-4 w-4" />
-                            </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                            <p>Edit state of this item in this menu/category context</p>
-                        </TooltipContent>
-                    </Tooltip>
-                </TooltipProvider>
+                {!isSelectionMode && (
+                    <TooltipProvider>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8"
+                                    onClick={(e) => {
+                                        e.stopPropagation()
+                                        onEdit()
+                                    }}
+                                >
+                                    <DollarSign className="h-4 w-4" />
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                                <p>Edit state of this item in this menu/category context</p>
+                            </TooltipContent>
+                        </Tooltip>
+                    </TooltipProvider>
+                )}
             </div>
         </div>
     )
