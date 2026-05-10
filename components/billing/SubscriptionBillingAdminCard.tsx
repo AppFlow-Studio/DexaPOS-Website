@@ -5,6 +5,8 @@ import { toast } from 'sonner'
 import {
   CalendarDays,
   CircleDollarSign,
+  Download,
+  Eye,
   FileText,
   Loader2,
   RefreshCcw,
@@ -15,6 +17,13 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
@@ -29,6 +38,7 @@ import {
   chargeSubscriptionInvoiceManually,
   generateSubscriptionInvoiceManually,
   getBillableServices,
+  getSubscriptionInvoiceDocument,
   getMerchantSubscriptions,
   getSubscriptionInvoices,
   getSubscriptionServiceAssignments,
@@ -43,6 +53,11 @@ import {
   getMerchantNmiAccountsSummary,
   type MerchantNmiAccountRow,
 } from '@/app/manage/actions/admin-merchant/nmi'
+import {
+  renderSubscriptionInvoiceHtml,
+  type SubscriptionInvoiceDocumentData,
+} from '@/lib/subscription-billing/invoice-template'
+import { downloadSubscriptionInvoicePdf } from '@/lib/subscription-billing/invoice-pdf'
 
 interface BillingLocationOption {
   id: string
@@ -148,6 +163,10 @@ export function SubscriptionBillingAdminCard({
   const [subscriptionServiceMap, setSubscriptionServiceMap] = useState<Record<string, SubscriptionServiceAssignmentRecord[]>>({})
   const [locationEligibilityMap, setLocationEligibilityMap] = useState<Record<string, MerchantNmiAccountRow>>({})
   const [serviceFormState, setServiceFormState] = useState<ServiceFormState>({})
+  const [invoicePreviewDocument, setInvoicePreviewDocument] = useState<SubscriptionInvoiceDocumentData | null>(null)
+  const [isInvoicePreviewOpen, setIsInvoicePreviewOpen] = useState(false)
+  const [isInvoicePreviewLoading, setIsInvoicePreviewLoading] = useState(false)
+  const [invoiceActionId, setInvoiceActionId] = useState<string | null>(null)
 
   const [selectedLocationId, setSelectedLocationId] = useState<string>('')
   const [status, setStatus] = useState<SubscriptionStatus>('active')
@@ -169,6 +188,11 @@ export function SubscriptionBillingAdminCard({
   const selectedLocationEligibility = useMemo(
     () => (selectedLocationId ? locationEligibilityMap[selectedLocationId] ?? null : null),
     [locationEligibilityMap, selectedLocationId]
+  )
+
+  const invoicePreviewHtml = useMemo(
+    () => (invoicePreviewDocument ? renderSubscriptionInvoiceHtml(invoicePreviewDocument) : ''),
+    [invoicePreviewDocument]
   )
 
   const refresh = () => {
@@ -353,6 +377,40 @@ export function SubscriptionBillingAdminCard({
     })
   }
 
+  const loadInvoiceDocument = async (invoiceId: string): Promise<SubscriptionInvoiceDocumentData | null> => {
+    setInvoiceActionId(invoiceId)
+    const result = await getSubscriptionInvoiceDocument(invoiceId)
+    setInvoiceActionId(null)
+
+    if (!result.success || !result.document) {
+      toast.error(result.error || 'Failed to load invoice document.')
+      return null
+    }
+
+    return result.document
+  }
+
+  const handlePreviewInvoice = async (invoiceId: string) => {
+    setIsInvoicePreviewLoading(true)
+    const document = await loadInvoiceDocument(invoiceId)
+    if (document) {
+      setInvoicePreviewDocument(document)
+      setIsInvoicePreviewOpen(true)
+    }
+    setIsInvoicePreviewLoading(false)
+  }
+
+  const handleDownloadInvoice = async (invoiceId: string) => {
+    const document = await loadInvoiceDocument(invoiceId)
+    if (!document) return
+
+    try {
+      await downloadSubscriptionInvoicePdf(document)
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to download invoice.')
+    }
+  }
+
   const updateServiceState = (serviceId: string, patch: Partial<{ enabled: boolean; quantity: string }>) => {
     setServiceFormState((current) => ({
       ...current,
@@ -502,7 +560,7 @@ export function SubscriptionBillingAdminCard({
                           <Badge variant="outline">{service.service_code}</Badge>
                         </div>
                         <div className="text-sm text-muted-foreground">
-                          {summarizePricing(service)} • {service.service_category} • {service.pricing_model}
+                          {summarizePricing(service)} | {service.service_category} | {service.pricing_model}
                         </div>
                       </div>
                       <div className="w-28 space-y-2">
@@ -579,7 +637,7 @@ export function SubscriptionBillingAdminCard({
                       <div className="mt-3 flex flex-wrap gap-2">
                         {assignmentSummary.map((assignment) => (
                           <Badge key={assignment.id} variant="secondary">
-                            {assignment.display_name} × {assignment.quantity}
+                            {assignment.display_name} x {assignment.quantity}
                           </Badge>
                         ))}
                       </div>
@@ -661,21 +719,49 @@ export function SubscriptionBillingAdminCard({
                       </td>
                       <td className="py-3 pr-4">{invoice.due_date}</td>
                       <td className="py-3 pr-4">
-                        {invoice.billing_method === 'card' && ['open', 'failed'].includes(invoice.status) ? (
+                        <div className="flex flex-wrap items-center gap-2">
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => handleChargeInvoice(invoice.id)}
-                            disabled={!canManageBilling || isPending}
+                            onClick={() => handlePreviewInvoice(invoice.id)}
+                            disabled={isPending || isInvoicePreviewLoading}
                           >
-                            {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                            Charge
+                            {isInvoicePreviewLoading && invoiceActionId === invoice.id ? (
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            ) : (
+                              <Eye className="mr-2 h-4 w-4" />
+                            )}
+                            View
                           </Button>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">
-                            {invoice.billing_method === 'ach' ? 'ACH pending' : '—'}
-                          </span>
-                        )}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleDownloadInvoice(invoice.id)}
+                            disabled={isPending}
+                          >
+                            {invoiceActionId === invoice.id && !isInvoicePreviewLoading ? (
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            ) : (
+                              <Download className="mr-2 h-4 w-4" />
+                            )}
+                            Download
+                          </Button>
+                          {invoice.billing_method === 'card' && ['open', 'failed'].includes(invoice.status) ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleChargeInvoice(invoice.id)}
+                              disabled={!canManageBilling || isPending}
+                            >
+                              {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                              Charge
+                            </Button>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">
+                              {invoice.billing_method === 'ach' ? 'ACH pending' : '-'}
+                            </span>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -685,6 +771,28 @@ export function SubscriptionBillingAdminCard({
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={isInvoicePreviewOpen} onOpenChange={setIsInvoicePreviewOpen}>
+        <DialogContent className="max-w-5xl">
+          <DialogHeader>
+            <DialogTitle>Invoice Preview</DialogTitle>
+            <DialogDescription>
+              Preview the customer-facing subscription invoice layout before downloading it.
+            </DialogDescription>
+          </DialogHeader>
+          {invoicePreviewDocument ? (
+            <div className="overflow-hidden rounded-md border">
+              <iframe
+                title="Subscription invoice preview"
+                srcDoc={invoicePreviewHtml}
+                className="h-[720px] w-full bg-white"
+              />
+            </div>
+          ) : (
+            <div className="text-sm text-muted-foreground">No invoice selected.</div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
