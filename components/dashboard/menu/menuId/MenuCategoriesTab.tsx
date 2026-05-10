@@ -3,11 +3,20 @@
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Empty } from "@/components/ui/empty";
-import { Tag, Wand2, List, Table as TableIcon, Info } from "lucide-react";
+import {
+  Tag,
+  Wand2,
+  List,
+  Table as TableIcon,
+  LayoutGrid,
+  Info,
+} from "lucide-react";
 import { MenuCategory, MenuCategoryItem } from "@/types/menu";
 import { CategoryTable } from "./CategoryTable";
+import { CategoryGrid } from "./CategoryGrid";
 import { HiddenCategoriesCard } from "./HiddenCategoriesCard";
 import { DraggableCategoriesList } from "./DraggableCategoriesList";
+import { cn } from "@/lib/utils";
 import {
   Tooltip,
   TooltipContent,
@@ -36,8 +45,8 @@ interface MenuCategoriesTabProps {
   onAddCategory: () => void;
   onNavigateToCategories: () => void;
   refetchMenu: () => void;
-  categoryViewMode?: "list" | "table";
-  onViewModeChange?: (mode: "list" | "table") => void;
+  categoryViewMode?: "list" | "grid" | "table";
+  onViewModeChange?: (mode: "list" | "grid" | "table") => void;
   onMoveCategoryUp?: (index: number) => void;
   onMoveCategoryDown?: (index: number) => void;
   onSaveCategoryOrder?: () => Promise<void>;
@@ -110,20 +119,32 @@ export function MenuCategoriesTab({
             </>
           )}
           {onViewModeChange && (
-            <div className="flex items-center border rounded-md">
+            <div className="flex items-center border rounded-md overflow-hidden">
               <Button
                 variant={categoryViewMode === "list" ? "default" : "ghost"}
                 size="sm"
-                className="rounded-r-none"
+                className="rounded-none"
                 onClick={() => onViewModeChange("list")}
-                title="List view"
+                title="List view (drag to reorder)"
               >
                 <List className="h-4 w-4" />
               </Button>
               <Button
+                variant={categoryViewMode === "grid" ? "default" : "ghost"}
+                size="sm"
+                className={cn(
+                  "rounded-none border-x",
+                  categoryViewMode !== "grid" && "border-x-transparent",
+                )}
+                onClick={() => onViewModeChange("grid")}
+                title="Grid view"
+              >
+                <LayoutGrid className="h-4 w-4" />
+              </Button>
+              <Button
                 variant={categoryViewMode === "table" ? "default" : "ghost"}
                 size="sm"
-                className="rounded-l-none"
+                className="rounded-none"
                 onClick={() => onViewModeChange("table")}
                 title="Table view"
               >
@@ -212,6 +233,32 @@ export function MenuCategoriesTab({
               <Info className="h-4 w-4" />
               <span>
                 This order determines how categories appear on the POS system
+              </span>
+            </div>
+          )}
+        </>
+      ) : categoryViewMode === "grid" ? (
+        <>
+          <CategoryGrid
+            categories={visibleCategories}
+            menuId={menuId}
+            selectedLocationId={selectedLocationId}
+            isMenuLocationOwned={isMenuLocationOwned}
+            onMoveUp={onMoveCategoryUp}
+            onMoveDown={onMoveCategoryDown}
+            onToggleVisibility={onToggleVisibility}
+            onResetOverride={onResetOverride}
+            onRemoveCategory={onRemoveCategory}
+            onItemClick={onItemClick}
+            onEditItem={onEditItem}
+            hasOrderChanges={hasCategoryOrderChanges}
+          />
+          {visibleCategories.length > 0 && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Info className="h-4 w-4" />
+              <span>
+                Use the arrows on each card to reorder categories. Click any
+                item chip to open it.
               </span>
             </div>
           )}
