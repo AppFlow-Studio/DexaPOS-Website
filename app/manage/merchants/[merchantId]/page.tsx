@@ -15,7 +15,6 @@ import {
     History,
     CreditCard,
     Banknote,
-    CircleDollarSign,
     ShieldCheck,
     Receipt,
     LifeBuoy,
@@ -33,7 +32,6 @@ import { NotesTab } from './components/NotesTab'
 import { AuditLogsTab } from './components/AuditLogsTab'
 import { DevicesTab } from './components/DevicesTab'
 import { BillingTab } from './components/BillingTab'
-import { SubscriptionTab } from './components/SubscriptionTab'
 import { OnlineStoreTab } from './components/OnlineStoreTab'
 import { OnboardingStatusCard } from './components/OnboardingStatusCard'
 import { MerchantHeaderBar } from './components/MerchantHeaderBar'
@@ -56,7 +54,6 @@ type SectionKey =
     | 'settlements'
     | 'disputes'
     | 'billing'
-    | 'subscriptions'
     | 'online-store'
     | 'support'
     | 'devices'
@@ -72,7 +69,6 @@ const VALID_SECTIONS: SectionKey[] = [
     'settlements',
     'disputes',
     'billing',
-    'subscriptions',
     'online-store',
     'support',
     'devices',
@@ -201,9 +197,6 @@ export default function MerchantDetailsPage() {
                                 <NavItem value="billing" icon={Receipt} active={activeTab === 'billing'} onClick={setActiveTab}>
                                     Billing
                                 </NavItem>
-                                <NavItem value="subscriptions" icon={CircleDollarSign} active={activeTab === 'subscriptions'} onClick={setActiveTab}>
-                                    Subscriptions
-                                </NavItem>
                             </NavGroup>
 
                             <NavGroup label="Operations">
@@ -259,15 +252,6 @@ export default function MerchantDetailsPage() {
                                     merchantId={merchantDetails.id}
                                     merchantName={merchantDetails.name}
                                     canEdit={canManageMerchantStatus}
-                                    locations={merchantDetails.locations}
-                                />
-                            )}
-
-                            {activeTab === 'subscriptions' && (
-                                <SubscriptionTab
-                                    merchantId={merchantDetails.id}
-                                    merchantName={merchantDetails.name}
-                                    canManageBilling={hasPermission('system.billing.manage')}
                                     locations={merchantDetails.locations}
                                 />
                             )}

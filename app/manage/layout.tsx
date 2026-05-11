@@ -52,6 +52,7 @@ import {
     Monitor,
     AlertOctagon,
     Receipt,
+    CircleDollarSign,
     LucideIcon,
 } from 'lucide-react'
 import Link from 'next/link'
@@ -130,6 +131,12 @@ const navMain: NavGroup[] = [
                 url: '/manage/platform-fees',
                 icon: Receipt,
                 requiredPermission: 'hq.merchant.transactions' as PermissionCode,
+            },
+            {
+                title: 'Subscriptions',
+                url: '/manage/subscriptions',
+                icon: CircleDollarSign,
+                requiredPermission: 'system.billing.manage' as PermissionCode,
             },
         ]
     },
