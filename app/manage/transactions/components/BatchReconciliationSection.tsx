@@ -45,6 +45,18 @@ function formatDateTime(dateValue?: string): string {
   return format(new Date(dateValue), 'MMM d, yyyy h:mm a')
 }
 
+/**
+ * Display label for a batch. Prefer the host batch_number ("009") with the
+ * acquirer prefix ("TSYS-009"); fall back to the legacy batch_id text only
+ * for pre-Wave-A.1 rows where batch_number was never populated.
+ */
+function formatBatchLabel(batch: Pick<PlatformSettlementBatch, 'batch_number' | 'acquirer' | 'batch_id'>): string {
+  if (batch.batch_number) {
+    return batch.acquirer ? `${batch.acquirer}-${batch.batch_number}` : batch.batch_number
+  }
+  return batch.batch_id
+}
+
 function getStatusBadge(status: string) {
   const normalized = status.toLowerCase()
 
@@ -166,13 +178,16 @@ export function BatchReconciliationSection({
     [batches, selectedBatchId]
   )
 
+  // Pass the settlement_batches UUID. The RPC resolves it to the canonical
+  // (batch_number, acquirer) tuple and joins on order_payments.batch_number,
+  // so lazy-created rows ('LAZY-...' batch_id) link correctly.
   const {
     data: batchPaymentsResult,
     isLoading: batchPaymentsLoading,
     isFetching: batchPaymentsFetching,
     refetch: refetchBatchPayments,
   } = usePlatformSettlementBatchPayments(
-    selectedBatch?.batch_id || null,
+    selectedBatch?.id || null,
     selectedBatch?.merchant_id,
     !!selectedBatch
   )
@@ -236,7 +251,7 @@ export function BatchReconciliationSection({
     }
 
     const csv = buildBatchExportCsv(selectedBatch, batchPayments)
-    const filename = `DEXA_Batch_${selectedBatch.batch_id}_${selectedBatch.business_date}.csv`
+    const filename = `DEXA_Batch_${formatBatchLabel(selectedBatch)}_${selectedBatch.business_date}.csv`
     downloadCsv(csv, filename)
     toast.success(`Exported ${batchPayments.length.toLocaleString()} payment rows.`)
   }
@@ -366,7 +381,7 @@ export function BatchReconciliationSection({
                   className={`cursor-pointer ${selectedBatchId === batch.id ? 'bg-muted/30' : ''}`}
                   onClick={() => setSelectedBatchId(batch.id)}
                 >
-                  <TableCell className="font-mono text-xs">{batch.batch_id}</TableCell>
+                  <TableCell className="font-mono text-xs">{formatBatchLabel(batch)}</TableCell>
                   <TableCell>
                     <div className="font-medium">{batch.merchant_name}</div>
                     <div className="text-xs text-muted-foreground">{batch.location_name || 'No location'}</div>
@@ -402,7 +417,7 @@ export function BatchReconciliationSection({
           <div className="space-y-3 rounded-md border p-3">
             <div className="flex flex-wrap items-center gap-2 text-sm">
               <span className="font-medium">Selected batch:</span>
-              <Badge variant="outline" className="font-mono text-xs">{selectedBatch.batch_id}</Badge>
+              <Badge variant="outline" className="font-mono text-xs">{formatBatchLabel(selectedBatch)}</Badge>
               <span className="text-muted-foreground">Linked payments:</span>
               <span className="font-medium">{selectedBatch.linked_payment_count.toLocaleString()}</span>
               <span className="text-muted-foreground">Linked amount:</span>

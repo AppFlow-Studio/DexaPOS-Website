@@ -40,6 +40,7 @@ export interface MerchantPaymentRow {
     card_last_four: string | null
     batch_number: string | null
     dejavoo_batch_number: string | null
+    acquirer: string | null
     settlement_batch_id: string | null
     settlement_batch_label: string | null
     is_settled: boolean
@@ -68,7 +69,7 @@ export async function getMerchantPayments(
                 `
                 id, order_id, location_id, payment_method, amount, tip_amount, total_amount,
                 status, terminal_type, terminal_id, authorization_code, card_type, card_last_four,
-                batch_number, dejavoo_batch_number, settlement_batch_id, is_settled, settled_at,
+                batch_number, dejavoo_batch_number, acquirer, settlement_batch_id, is_settled, settled_at,
                 captured_at, initiated_at,
                 orders!inner(merchant_id, order_number),
                 location:locations(id, name),
@@ -129,6 +130,7 @@ export async function getMerchantPayments(
                 card_last_four: (row.card_last_four as string) ?? null,
                 batch_number: (row.batch_number as string) ?? null,
                 dejavoo_batch_number: (row.dejavoo_batch_number as string) ?? null,
+                acquirer: (row.acquirer as string) ?? null,
                 settlement_batch_id: (row.settlement_batch_id as string) ?? null,
                 settlement_batch_label: sb?.batch_id ?? null,
                 is_settled: !!row.is_settled,

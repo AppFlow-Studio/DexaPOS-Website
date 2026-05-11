@@ -3,6 +3,10 @@
 -- matches incoming chargebacks to existing order_payments records.
 
 -- ─── luqra_chargebacks ────────────────────────────────────────────────────────
+-- Idempotent: drop existing table (CASCADE removes dependent policy/trigger/indexes)
+-- and function so this migration can be re-run safely. Prod table is empty.
+DROP FUNCTION IF EXISTS public.reconcile_luqra_chargebacks(uuid, timestamptz);
+DROP TABLE IF EXISTS public.luqra_chargebacks CASCADE;
 
 CREATE TABLE public.luqra_chargebacks (
   id                       bigint       PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
@@ -36,19 +40,20 @@ CREATE TABLE public.luqra_chargebacks (
   updated_at               timestamptz  NOT NULL DEFAULT now()
 );
 
-CREATE INDEX luqra_chargebacks_merchant_id_idx
+CREATE INDEX IF NOT EXISTS luqra_chargebacks_merchant_id_idx
   ON public.luqra_chargebacks (merchant_id);
 
-CREATE INDEX luqra_chargebacks_reconciled_payment_id_idx
+CREATE INDEX IF NOT EXISTS luqra_chargebacks_reconciled_payment_id_idx
   ON public.luqra_chargebacks (reconciled_payment_id);
 
-CREATE INDEX luqra_chargebacks_case_number_idx
+CREATE INDEX IF NOT EXISTS luqra_chargebacks_case_number_idx
   ON public.luqra_chargebacks (case_number)
   WHERE case_number IS NOT NULL;
 
 ALTER TABLE public.luqra_chargebacks ENABLE ROW LEVEL SECURITY;
 
 -- HQ-only direct access; merchant sync goes through SECURITY DEFINER RPCs
+DROP POLICY IF EXISTS "hq_full_access_luqra_chargebacks" ON public.luqra_chargebacks;
 CREATE POLICY "hq_full_access_luqra_chargebacks"
   ON public.luqra_chargebacks
   FOR ALL
@@ -62,6 +67,7 @@ CREATE POLICY "hq_full_access_luqra_chargebacks"
     )
   );
 
+DROP TRIGGER IF EXISTS update_luqra_chargebacks_updated_at ON public.luqra_chargebacks;
 CREATE TRIGGER update_luqra_chargebacks_updated_at
   BEFORE UPDATE ON public.luqra_chargebacks
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
