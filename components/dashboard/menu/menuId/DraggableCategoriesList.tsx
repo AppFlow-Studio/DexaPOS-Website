@@ -51,6 +51,11 @@ interface SortableCategoryWrapperProps {
   hasItemOrderChanges?: boolean;
   isSavingItemOrder?: boolean;
   reorderedItems?: MenuCategoryItem[]; // The reordered items for this category
+  // Selection mode
+  isSelectionMode?: boolean;
+  selectedItemIds?: Set<string>;
+  onToggleItem?: (itemId: string) => void;
+  onToggleCategoryItems?: (categoryId: string, itemIds: string[]) => void;
 }
 
 function SortableCategoryWrapper({
@@ -74,6 +79,11 @@ function SortableCategoryWrapper({
   hasItemOrderChanges,
   isSavingItemOrder,
   reorderedItems,
+  // Selection
+  isSelectionMode = false,
+  selectedItemIds,
+  onToggleItem,
+  onToggleCategoryItems,
 }: SortableCategoryWrapperProps) {
   const {
     attributes,
@@ -133,6 +143,15 @@ function SortableCategoryWrapper({
           onResetItemOrder={onResetItemOrder}
           hasItemOrderChanges={hasItemOrderChanges}
           isSavingItemOrder={isSavingItemOrder}
+          // Selection
+          isSelectionMode={isSelectionMode}
+          selectedItemIds={selectedItemIds}
+          onToggleItem={onToggleItem}
+          onToggleCategoryItems={
+            onToggleCategoryItems
+              ? (itemIds) => onToggleCategoryItems(category.category_id, itemIds)
+              : undefined
+          }
         />
       </div>
     </div>
@@ -186,6 +205,11 @@ interface DraggableCategoriesListProps {
   itemOrderChanges?: Map<string, boolean>; // Map<categoryId, hasChanges>
   savingItemOrderFor?: string | null; // categoryId being saved
   reorderedItemsMap?: Map<string, MenuCategoryItem[]>; // Map<categoryId, reordered items>
+  // Selection mode
+  isSelectionMode?: boolean;
+  selectedItemIds?: Set<string>;
+  onToggleItem?: (itemId: string) => void;
+  onToggleCategoryItems?: (categoryId: string, itemIds: string[]) => void;
 }
 
 export function DraggableCategoriesList({
@@ -213,6 +237,11 @@ export function DraggableCategoriesList({
   itemOrderChanges,
   savingItemOrderFor,
   reorderedItemsMap,
+  // Selection
+  isSelectionMode = false,
+  selectedItemIds,
+  onToggleItem,
+  onToggleCategoryItems,
 }: DraggableCategoriesListProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const showLocationPricing =
@@ -340,6 +369,11 @@ export function DraggableCategoriesList({
                 itemOrderChanges?.get(category.category_id) || false
               }
               isSavingItemOrder={savingItemOrderFor === category.category_id}
+              // Selection
+              isSelectionMode={isSelectionMode}
+              selectedItemIds={selectedItemIds}
+              onToggleItem={onToggleItem}
+              onToggleCategoryItems={onToggleCategoryItems}
             />
           ))}
         </SortableContext>

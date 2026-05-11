@@ -22,7 +22,7 @@ import {
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { PhoneInput } from '@/components/ui/phone-input'
-import { normalizePhone, tenDigits } from '@/lib/phone'
+import { isValidPhone, normalizePhone, phoneDigits } from '@/lib/phone'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
@@ -39,7 +39,7 @@ const schema = z.object({
   phone: z
     .string()
     .min(1, 'Phone required')
-    .refine(value => normalizePhone(value) !== null, {
+    .refine(value => isValidPhone(value), {
       message: 'Enter a valid phone number'
     }),
   email: z.string().email('Invalid email').or(z.literal('')).optional(),
@@ -106,7 +106,7 @@ export default function EditReservationDialog ({
     form.reset({
       partyName: reservation.party_name,
       partySize: reservation.party_size,
-      phone: tenDigits(reservation.phone),
+      phone: phoneDigits(reservation.phone),
       email: reservation.email ?? '',
       reservationDate: reservation.reservation_date ?? date,
       reservationTime: normalizeTimeValue(reservation.reservation_time),
