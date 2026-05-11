@@ -13,10 +13,9 @@ import {
 } from '@/components/ui/bottom-sheet'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { tenDigits } from '@/lib/phone'
-import { Label } from '@/components/ui/label'
 import { PhoneInput } from '@/components/ui/phone-input'
-import { normalizePhone } from '@/lib/phone'
+import { phoneDigits, normalizePhone } from '@/lib/phone'
+import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import {
   Users,
@@ -65,7 +64,7 @@ export function EditWaitlistDialog ({
 
     setPartyName(entry.party_name || '')
     setPartySize(String(entry.party_size || ''))
-    setPhone(tenDigits(entry.phone))
+    setPhone(phoneDigits(entry.phone))
     setNotes(entry.notes || '')
     setPreferredSection(entry.preferred_section || '')
     setSeatingPreference(entry.seating_preference || '')
@@ -111,7 +110,7 @@ export function EditWaitlistDialog ({
       await UpdateWaitlistEntryAction(locationId, entry.id, {
         partyName: partyName.trim(),
         partySize: size,
-        phone: (normalizePhone(phone) ?? phone.trim()) || undefined,
+        phone: normalizePhone(phone) ?? undefined,
         notes: notes.trim() || undefined,
         preferredSection: preferredSection.trim() || undefined,
         seatingPreference: seatingPreference.trim() || undefined,

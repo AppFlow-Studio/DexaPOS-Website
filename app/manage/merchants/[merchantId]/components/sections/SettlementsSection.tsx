@@ -120,8 +120,8 @@ export function SettlementsSection({ merchantId }: { merchantId: string }) {
     return (
         <div className="space-y-5">
             <SectionHead
-                title="Luqra Settlements"
-                sub="Acquiring batches from Luqra alongside our local reconciliation."
+                title="TSYS Settlements"
+                sub="Acquiring batches from TSYS alongside our local reconciliation."
             />
 
             <KpiStrip cells={cells} loading={isLoading} />
@@ -130,8 +130,8 @@ export function SettlementsSection({ merchantId }: { merchantId: string }) {
                 <TabsList>
                     <TabsTrigger value="ours">Our batches</TabsTrigger>
                     <TabsTrigger value="payments">Payments</TabsTrigger>
-                    <TabsTrigger value="luqra">Luqra transactions</TabsTrigger>
-                    <TabsTrigger value="batches">Luqra batches</TabsTrigger>
+                    <TabsTrigger value="luqra">TSYS transactions</TabsTrigger>
+                    <TabsTrigger value="batches">TSYS batches</TabsTrigger>
                     <TabsTrigger value="deposits">Deposits</TabsTrigger>
                 </TabsList>
 
@@ -139,7 +139,7 @@ export function SettlementsSection({ merchantId }: { merchantId: string }) {
                     <BatchReconciliationSection
                         scopedMerchantId={merchantId}
                         renderBatchPayments={(batch) => (
-                            <BatchCardPayments merchantId={merchantId} batchId={batch.batch_id} />
+                            <BatchCardPayments merchantId={merchantId} batchId={batch.id} />
                         )}
                     />
                 </TabsContent>
@@ -153,7 +153,7 @@ export function SettlementsSection({ merchantId }: { merchantId: string }) {
                         <Empty
                             icon={CreditCard}
                             title="No MIDs assigned yet"
-                            description="Assign a Luqra MID to at least one location from the MIDs section to pull live transactions."
+                            description="Assign a TSYS MID to at least one location from the MIDs section to pull live transactions."
                         />
                     ) : (
                         <LuqraTransactionsTable merchantId={merchantId} locations={locations} />

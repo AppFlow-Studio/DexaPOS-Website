@@ -20,7 +20,6 @@ import {
   Utensils,
   ChevronDown,
   ChevronUp,
-  ExternalLink,
   X,
   Globe,
   MapPin,
@@ -34,15 +33,22 @@ import {
   Save,
   Flame,
   Check,
+  CheckSquare,
+  Truck,
 } from "lucide-react";
-import { useState, useMemo } from "react";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
-  useCategories,
-  useCategoriesWithItems,
-} from "../../hooks/useCategories";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { BulkPriceAdjustDialog } from "@/components/dashboard/menu/items/BulkPriceAdjustDialog";
+import { BulkDeliveryPriceAdjustDialog } from "@/components/dashboard/menu/items/BulkDeliveryPriceAdjustDialog";
+import { useState, useMemo } from "react";
+import { useCategoriesWithItems } from "../../hooks/useCategories";
 import { useModifierGroups } from "../../hooks/useModifierGroups";
 import { useMenus } from "../../hooks/useMenus";
-import { useSchedules } from "../../hooks/useSchedules";
 import { useLocations } from "../../hooks/useLocations";
 import { useUserInfo } from "../../../manage/hooks/useUserInfo.";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -55,10 +61,9 @@ import {
   UpdateLocationCategoryOverride,
   RemoveLocationCategoryOverride,
 } from "../../actions/categories";
-import { GetMenuItemsByCategory } from "../../actions/menu-items";
 import { useLocationStore } from "@/stores/location-store";
 import { toast } from "sonner";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   Dialog,
   DialogContent,
@@ -68,7 +73,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { cn, isValidImageUrl } from "@/lib/utils";
-import { CategoriesModel, MenuItemsModel } from "@/types/db-modles";
 import { CategoryWithItems, CategoryMenuItem } from "@/types/menu";
 import { useRouter } from "next/navigation";
 import {
@@ -196,6 +200,12 @@ export default function CategoriesPage() {
   );
   const [activeId, setActiveId] = useState<string | null>(null);
 
+  // Bulk selection state
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
+  const [bulkPriceOpen, setBulkPriceOpen] = useState(false);
+  const [bulkDeliveryOpen, setBulkDeliveryOpen] = useState(false);
+
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
@@ -224,6 +234,32 @@ export default function CategoriesPage() {
         ? b.name.localeCompare(a.name)
         : a.name.localeCompare(b.name),
     );
+
+  const totalSelectableItems = useMemo(
+    () => filteredCategories.reduce((sum, c) => sum + (c.items?.length ?? 0), 0),
+    [filteredCategories],
+  );
+
+  function handleToggleItem(menuItemId: string) {
+    setSelectedItemIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(menuItemId)) next.delete(menuItemId);
+      else next.add(menuItemId);
+      return next;
+    });
+  }
+
+  function handleSelectAll() {
+    const allIds = filteredCategories
+      .flatMap((c) => c.items ?? [])
+      .map((i) => i.menu_item_id);
+    setSelectedItemIds(new Set(allIds));
+  }
+
+  function exitSelectionMode() {
+    setIsSelectionMode(false);
+    setSelectedItemIds(new Set());
+  }
 
   // Stats from RPC data
   const totalItems = categoriesList.reduce(
@@ -779,10 +815,92 @@ export default function CategoriesPage() {
               >
                 {categorySortDesc ? "Z – A" : "A – Z"}
               </Button>
+              <Button
+                variant={isSelectionMode ? "secondary" : "outline"}
+                size="sm"
+                className="gap-1"
+                onClick={() =>
+                  isSelectionMode ? exitSelectionMode() : setIsSelectionMode(true)
+                }
+              >
+                <CheckSquare className="h-4 w-4" />
+                {isSelectionMode ? "Selecting" : "Select"}
+                {isSelectionMode && selectedItemIds.size > 0 && (
+                  <Badge
+                    variant="secondary"
+                    className="ml-0.5 h-5 px-1.5 text-xs"
+                  >
+                    {selectedItemIds.size}
+                  </Badge>
+                )}
+              </Button>
             </div>
           </div>
         </CardHeader>
         <CardContent>
+          {/* Sticky selection bar */}
+          {isSelectionMode && (
+            <div className="sticky top-0 z-20 flex items-center gap-3 rounded-xl border border-primary/20 bg-primary/5 px-4 py-2.5 backdrop-blur mb-4">
+              <Badge variant="secondary" className="text-xs">
+                {selectedItemIds.size} of {totalSelectableItems} selected
+              </Badge>
+              <div className="w-px h-4 bg-border" />
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 text-xs"
+                onClick={
+                  selectedItemIds.size === totalSelectableItems
+                    ? () => setSelectedItemIds(new Set())
+                    : handleSelectAll
+                }
+              >
+                {selectedItemIds.size === totalSelectableItems
+                  ? "Deselect all"
+                  : "Select all"}
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 text-xs"
+                onClick={() => setSelectedItemIds(new Set())}
+              >
+                Clear
+              </Button>
+              <div className="ml-auto flex items-center gap-2">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      size="sm"
+                      className="h-8 gap-1"
+                      disabled={selectedItemIds.size === 0}
+                    >
+                      Bulk edit
+                      <ChevronDown className="h-3.5 w-3.5" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => setBulkPriceOpen(true)}>
+                      <DollarSign className="h-4 w-4 mr-2" />
+                      Adjust card price…
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setBulkDeliveryOpen(true)}>
+                      <Truck className="h-4 w-4 mr-2" />
+                      Adjust online (delivery) price…
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-8"
+                  onClick={exitSelectionMode}
+                >
+                  Done
+                </Button>
+              </div>
+            </div>
+          )}
           {isLoading ? (
             <div className="space-y-4">
               {[1, 2, 3, 4, 5, 6].map((i) => (
@@ -836,6 +954,38 @@ export default function CategoriesPage() {
                       onClick={() => handleCategoryClick(category)}
                     >
                       <div className="flex items-start gap-4">
+                        {/* Category-level checkbox in selection mode */}
+                        {isSelectionMode && (() => {
+                          const catItemIds = (category.items ?? []).map((i) => i.menu_item_id);
+                          const selCount = catItemIds.filter((id) => selectedItemIds.has(id)).length;
+                          const checkState: boolean | "indeterminate" =
+                            selCount === 0 ? false :
+                            selCount === catItemIds.length ? true :
+                            "indeterminate";
+                          return (
+                            <div
+                              className="flex-shrink-0 mt-1"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (checkState === true) {
+                                  setSelectedItemIds((prev) => {
+                                    const next = new Set(prev);
+                                    catItemIds.forEach((id) => next.delete(id));
+                                    return next;
+                                  });
+                                } else {
+                                  setSelectedItemIds((prev) => {
+                                    const next = new Set(prev);
+                                    catItemIds.forEach((id) => next.add(id));
+                                    return next;
+                                  });
+                                }
+                              }}
+                            >
+                              <Checkbox checked={checkState} />
+                            </div>
+                          );
+                        })()}
                         {/* Icon/Image */}
                         {isValidImageUrl(category.image) ? (
                           <div className="h-16 w-16 rounded-lg overflow-hidden bg-muted shrink-0">
@@ -1454,6 +1604,9 @@ export default function CategoriesPage() {
                                               handleRemoveItemFromCategory={
                                                 handleRemoveItemFromCategory
                                               }
+                                              isSelectionMode={isSelectionMode}
+                                              isSelected={selectedItemIds.has(item.menu_item_id)}
+                                              onToggleSelect={() => handleToggleItem(item.menu_item_id)}
                                             />
                                           ),
                                         )}
@@ -1607,6 +1760,63 @@ export default function CategoriesPage() {
         }}
       />
 
+      {/* Bulk price adjustment dialogs (L1/L2) */}
+      <BulkPriceAdjustDialog
+        open={bulkPriceOpen}
+        onOpenChange={setBulkPriceOpen}
+        clerkOrgId={clerkOrgId}
+        selectedItems={Array.from(
+          new Map(
+            filteredCategories
+              .flatMap((c) => c.items ?? [])
+              .filter((it) => selectedItemIds.has(it.menu_item_id))
+              .map((it) => [
+                it.menu_item_id,
+                {
+                  id: it.menu_item_id,
+                  name: it.menu_item.name,
+                  effectivePrice: it.menu_item.effective_price,
+                },
+              ]),
+          ).values(),
+        )}
+        currentLocationId={isAllLocations ? null : selectedLocationId ?? null}
+        isAllLocations={isAllLocations}
+        onSuccess={() => {
+          exitSelectionMode();
+          queryClient.invalidateQueries({ queryKey: ["categories-with-items"] });
+          refetch();
+        }}
+      />
+      <BulkDeliveryPriceAdjustDialog
+        open={bulkDeliveryOpen}
+        onOpenChange={setBulkDeliveryOpen}
+        clerkOrgId={clerkOrgId}
+        selectedItems={Array.from(
+          new Map(
+            filteredCategories
+              .flatMap((c) => c.items ?? [])
+              .filter((it) => selectedItemIds.has(it.menu_item_id))
+              .map((it) => [
+                it.menu_item_id,
+                {
+                  id: it.menu_item_id,
+                  name: it.menu_item.name,
+                  cardPrice: it.menu_item.effective_price,
+                  currentDeliveryPrice: it.menu_item.effective_delivery_price ?? null,
+                },
+              ]),
+          ).values(),
+        )}
+        currentLocationId={isAllLocations ? null : selectedLocationId ?? null}
+        isAllLocations={isAllLocations}
+        onSuccess={() => {
+          exitSelectionMode();
+          queryClient.invalidateQueries({ queryKey: ["categories-with-items"] });
+          refetch();
+        }}
+      />
+
       {/* Delete Confirmation Dialog */}
       <Dialog
         open={!!deletingCategory}
@@ -1673,6 +1883,9 @@ interface SortableCategoryItemRowProps {
     menuItemId: string,
     e: React.MouseEvent,
   ) => void;
+  isSelectionMode?: boolean;
+  isSelected?: boolean;
+  onToggleSelect?: () => void;
 }
 
 function SortableCategoryItemRow({
@@ -1683,6 +1896,9 @@ function SortableCategoryItemRow({
   selectedLocationId,
   handleEditItem,
   handleRemoveItemFromCategory,
+  isSelectionMode = false,
+  isSelected = false,
+  onToggleSelect,
 }: SortableCategoryItemRowProps) {
   const {
     attributes,
@@ -1708,19 +1924,34 @@ function SortableCategoryItemRow({
           ? "opacity-30 shadow-lg z-50 ring-2 ring-primary"
           : "hover:shadow-sm hover:border-primary/30",
         !item.menu_item.effective_availability && "opacity-60",
+        isSelectionMode && isSelected && "bg-primary/5",
       )}
-      onClick={(e) => handleEditItem(item, category, e)}
+      onClick={(e) => {
+        if (isSelectionMode) { onToggleSelect?.(); }
+        else { handleEditItem(item, category, e); }
+      }}
     >
-      {/* Drag Handle */}
-      <button
-        {...attributes}
-        {...listeners}
-        className="flex items-center justify-center w-7 h-7 rounded hover:bg-muted cursor-grab active:cursor-grabbing touch-none shrink-0"
-        onClick={(e) => e.stopPropagation()}
-        aria-label="Drag to reorder"
-      >
-        <GripVertical className="h-4 w-4 text-muted-foreground" />
-      </button>
+      {/* Checkbox in selection mode */}
+      {isSelectionMode && (
+        <div
+          className="flex-shrink-0"
+          onClick={(e) => { e.stopPropagation(); onToggleSelect?.(); }}
+        >
+          <Checkbox checked={isSelected} />
+        </div>
+      )}
+      {/* Drag Handle — hidden in selection mode */}
+      {!isSelectionMode && (
+        <button
+          {...attributes}
+          {...listeners}
+          className="flex items-center justify-center w-7 h-7 rounded hover:bg-muted cursor-grab active:cursor-grabbing touch-none shrink-0"
+          onClick={(e) => e.stopPropagation()}
+          aria-label="Drag to reorder"
+        >
+          <GripVertical className="h-4 w-4 text-muted-foreground" />
+        </button>
+      )}
 
       {/* Order Number */}
       <span className="flex items-center justify-center w-5 h-5 rounded-full bg-muted text-muted-foreground text-[10px] font-medium shrink-0">
@@ -1787,7 +2018,8 @@ function SortableCategoryItemRow({
         )}
       </div>
 
-      {/* Edit button */}
+      {/* Edit / Remove buttons — hidden in selection mode */}
+      {!isSelectionMode && (
       <TooltipProvider>
         <Tooltip>
           <TooltipTrigger asChild>
@@ -1805,9 +2037,10 @@ function SortableCategoryItemRow({
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
+      )}
 
       {/* Remove button */}
-      {(() => {
+      {!isSelectionMode && (() => {
         const canAddItems = isAllLocations
           ? category.is_global
           : category.location_id === selectedLocationId;
@@ -1840,7 +2073,6 @@ function SortableCategoryItemRow({
           </TooltipProvider>
         );
       })()}
-      <ExternalLink className="h-4 w-4 text-muted-foreground" />
     </div>
   );
 }

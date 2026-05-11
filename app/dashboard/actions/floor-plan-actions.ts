@@ -19,7 +19,7 @@ import {
   notifyReservationConfirmed,
   notifyReservationCancelled,
 } from '@/app/actions/notifications/reservation'
-import { normalizeToE164 } from '@/lib/phone'
+import { normalizePhone } from '@/lib/phone'
 
 /**
  * Resolves the active merchant id for the current request, honoring HQ
@@ -683,13 +683,15 @@ export async function LoadWaitlistAction (locationId: string) {
 
 export async function LoadReservationsAction (
   locationId: string,
-  date?: string
+  date?: string,
+  includeCancelled = false
 ) {
   const supabase = createServerSupabaseClient()
 
   const { data, error } = await supabase.rpc('get_reservations', {
     p_location_id: locationId,
-    p_date: date
+    p_date: date,
+    p_include_cancelled: includeCancelled
   })
 
   if (error) throw error
@@ -710,7 +712,7 @@ export async function AddToWaitlistAction (
 ) {
   const supabase = createServerSupabaseClient()
 
-  const normalizedPhone = params.phone ? normalizeToE164(params.phone) : null
+  const normalizedPhone = params.phone ? normalizePhone(params.phone) : null
   if (params.phone && !normalizedPhone) {
     throw new Error('Invalid phone number — please enter 10 digits')
   }
@@ -824,7 +826,7 @@ export async function UpdateWaitlistEntryAction (
   if (params.partySize !== undefined) updateData.party_size = params.partySize
   if (params.phone !== undefined) {
     if (params.phone) {
-      const normalized = normalizeToE164(params.phone)
+      const normalized = normalizePhone(params.phone)
       if (!normalized) {
         throw new Error('Invalid phone number — please enter 10 digits')
       }
@@ -967,7 +969,7 @@ export async function CreateReservationAction (
 ) {
   const supabase = createServerSupabaseClient()
 
-  const normalizedPhone = normalizeToE164(params.phone)
+  const normalizedPhone = normalizePhone(params.phone)
   if (!normalizedPhone) {
     throw new Error('Invalid phone number — please enter 10 digits')
   }
@@ -1074,7 +1076,7 @@ export async function UpdateReservationAction (
   if (params.partyName !== undefined) updateData.party_name = params.partyName
   if (params.partySize !== undefined) updateData.party_size = params.partySize
   if (params.phone !== undefined) {
-    const normalized = normalizeToE164(params.phone)
+    const normalized = normalizePhone(params.phone)
     if (!normalized) {
       throw new Error('Invalid phone number — please enter 10 digits')
     }

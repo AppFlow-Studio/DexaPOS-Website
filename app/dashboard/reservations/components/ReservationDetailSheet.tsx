@@ -1,35 +1,35 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import {
   Sheet,
   SheetContent,
+  SheetDescription,
   SheetHeader,
-  SheetTitle,
-  SheetDescription
+  SheetTitle
 } from '@/components/ui/sheet'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Separator } from '@/components/ui/separator'
-import { Star, Loader2, Pencil } from 'lucide-react'
+import { Loader2, Pencil, Phone, Clock3, Users, Star, Armchair, Hash } from 'lucide-react'
 import {
-  useUpdateReservationStatus,
-  useCancelReservation
+  useCancelReservation,
+  useUpdateReservationStatus
 } from '@/app/dashboard/hooks/useReservations'
 import CancelReservationDialog from './CancelReservationDialog'
 import EditReservationDialog from './EditReservationDialog'
 import type { Reservation } from '@/types/floor-plan'
 import { formatPhoneForDisplay } from '@/lib/phone'
+import { cn } from '@/lib/utils'
 
 const STATUS_COLORS: Record<Reservation['status'], string> = {
-  pending: 'bg-yellow-100 text-yellow-800',
-  confirmed: 'bg-blue-100 text-blue-800',
-  reminded: 'bg-purple-100 text-purple-800',
-  arrived: 'bg-orange-100 text-orange-800',
-  seated: 'bg-green-100 text-green-800',
-  completed: 'bg-gray-100 text-gray-600',
-  no_show: 'bg-red-100 text-red-800',
-  cancelled: 'bg-red-100 text-red-800'
+  pending: 'border-amber-200 bg-amber-50/90 text-amber-900',
+  confirmed: 'border-sky-200 bg-sky-50/90 text-sky-900',
+  reminded: 'border-fuchsia-200 bg-fuchsia-50/90 text-fuchsia-900',
+  arrived: 'border-orange-200 bg-orange-50/90 text-orange-900',
+  seated: 'border-emerald-200 bg-emerald-50/90 text-emerald-900',
+  completed: 'border-slate-200 bg-slate-100/90 text-slate-700',
+  no_show: 'border-rose-200 bg-rose-50/90 text-rose-900',
+  cancelled: 'border-rose-200 bg-rose-50/90 text-rose-900'
 }
 
 type StatusTransition = {
@@ -40,12 +40,20 @@ type StatusTransition = {
 const STATUS_TRANSITIONS: Partial<
   Record<Reservation['status'], StatusTransition[]>
 > = {
-  pending: [{ label: 'Confirm', status: 'confirmed' }],
-  confirmed: [{ label: 'Mark Arrived', status: 'arrived' }],
-  reminded: [{ label: 'Mark Arrived', status: 'arrived' }],
-  arrived: [
-    { label: 'Complete', status: 'completed' },
+  pending: [
+    { label: 'Confirm', status: 'confirmed' },
     { label: 'Mark No-Show', status: 'no_show' }
+  ],
+  confirmed: [
+    { label: 'Mark Arrived', status: 'arrived' },
+    { label: 'Mark No-Show', status: 'no_show' }
+  ],
+  reminded: [
+    { label: 'Mark Arrived', status: 'arrived' },
+    { label: 'Mark No-Show', status: 'no_show' }
+  ],
+  arrived: [
+    { label: 'Complete', status: 'completed' }
   ]
 }
 
@@ -63,12 +71,29 @@ interface ReservationDetailSheetProps {
   date: string
 }
 
-function InfoRow ({ label, value }: { label: string; value?: string | null }) {
+function formatStatus (status: Reservation['status']) {
+  if (status === 'no_show') return 'No-Show'
+  return status.replace('_', ' ')
+}
+
+function DetailItem ({
+  icon: Icon,
+  label,
+  value
+}: {
+  icon: typeof Clock3
+  label: string
+  value?: string | null
+}) {
   if (!value) return null
+
   return (
-    <div className='flex justify-between text-sm'>
-      <span className='text-muted-foreground'>{label}</span>
-      <span className='font-medium text-right max-w-[60%]'>{value}</span>
+    <div className='rounded-xl border border-border/70 bg-card px-3 py-3'>
+      <div className='mb-1 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground'>
+        <Icon className='h-3.5 w-3.5' />
+        {label}
+      </div>
+      <div className='text-sm font-medium text-foreground'>{value}</div>
     </div>
   )
 }
@@ -82,28 +107,34 @@ export default function ReservationDetailSheet ({
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false)
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [displayedReservation, setDisplayedReservation] = useState(reservation)
+  const [pendingStatus, setPendingStatus] = useState<Reservation['status'] | null>(
+    null
+  )
   const updateStatus = useUpdateReservationStatus(date)
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const _cancelMutation = useCancelReservation(date)
 
-  // Sync displayed reservation with prop updates
   useEffect(() => {
     setDisplayedReservation(reservation)
+    setPendingStatus(null)
   }, [reservation])
 
   if (!reservation || !displayedReservation) return null
 
   const handleStatusChange = (newStatus: Reservation['status']) => {
-    // Optimistically update the displayed reservation
-    setDisplayedReservation({ ...displayedReservation, status: newStatus })
+    setPendingStatus(newStatus)
 
-    // Then mutate to server
     updateStatus.mutate(
       { reservationId: reservation.id, status: newStatus },
       {
+        onSuccess: () => {
+          setDisplayedReservation(prev =>
+            prev ? { ...prev, status: newStatus } : prev
+          )
+          setPendingStatus(null)
+        },
         onError: () => {
-          // Revert on error
-          setDisplayedReservation(reservation)
+          setPendingStatus(null)
         }
       }
     )
@@ -123,173 +154,215 @@ export default function ReservationDetailSheet ({
     })
   }
 
+  const seatingSummary =
+    displayedReservation.assigned_tables &&
+    displayedReservation.assigned_tables.length > 0
+      ? displayedReservation.assigned_tables.join(', ')
+      : 'No tables assigned'
+
   return (
     <>
       <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent className='w-full sm:max-w-md overflow-y-auto p-6'>
-          <SheetHeader className='mb-6 space-y-3'>
-            <SheetTitle className='flex items-center gap-2 text-lg'>
-              {displayedReservation.party_name}
-              {displayedReservation.is_vip && (
-                <Badge className='bg-amber-100 text-amber-800 flex items-center gap-1'>
-                  <Star className='h-3 w-3' />
-                  VIP
-                </Badge>
-              )}
-            </SheetTitle>
-            <SheetDescription className='flex items-center gap-2'>
-              <Badge className={STATUS_COLORS[displayedReservation.status]}>
-                {displayedReservation.status.replace('_', ' ')}
-              </Badge>
-              <span className='text-xs text-muted-foreground'>
-                #{displayedReservation.confirmation_number}
-              </span>
-            </SheetDescription>
-          </SheetHeader>
-
-          <div className='space-y-6'>
-            {/* Core details */}
-            <div className='space-y-3'>
-              <InfoRow
-                label='Date'
-                value={displayedReservation.reservation_date}
-              />
-              <InfoRow
-                label='Time'
-                value={displayedReservation.reservation_time}
-              />
-              <InfoRow
-                label='Duration'
-                value={`${displayedReservation.duration_minutes} min`}
-              />
-              <InfoRow
-                label='Party Size'
-                value={String(displayedReservation.party_size)}
-              />
-              <InfoRow label='Phone' value={formatPhoneForDisplay(displayedReservation.phone)} />
-              <InfoRow label='Email' value={displayedReservation.email} />
-            </div>
-
-            <Separator />
-
-            {/* Tables & seating */}
-            <div className='space-y-3'>
-              <InfoRow
-                label='Assigned Tables'
-                value={
-                  displayedReservation.assigned_tables &&
-                  displayedReservation.assigned_tables.length > 0
-                    ? displayedReservation.assigned_tables.join(', ')
-                    : 'None assigned'
-                }
-              />
-              <InfoRow
-                label='Preferred Section'
-                value={displayedReservation.preferred_section}
-              />
-              <InfoRow
-                label='Seating Preference'
-                value={displayedReservation.seating_preference}
-              />
-            </div>
-
-            {/* Timestamps */}
-            {(displayedReservation.arrived_at ||
-              displayedReservation.seated_at) && (
-              <>
-                <Separator />
-                <div className='space-y-3'>
-                  <InfoRow
-                    label='Arrived At'
-                    value={formatTimestamp(displayedReservation.arrived_at)}
-                  />
-                  <InfoRow
-                    label='Seated At'
-                    value={formatTimestamp(displayedReservation.seated_at)}
-                  />
-                </div>
-              </>
-            )}
-
-            {/* Notes */}
-            {(displayedReservation.notes ||
-              displayedReservation.special_requests) && (
-              <>
-                <Separator />
-                <div className='space-y-3'>
-                  {displayedReservation.notes && (
-                    <div className='text-sm'>
-                      <p className='text-muted-foreground mb-2'>Notes</p>
-                      <p>{displayedReservation.notes}</p>
-                    </div>
-                  )}
-                  {displayedReservation.special_requests && (
-                    <div className='text-sm'>
-                      <p className='text-muted-foreground mb-2'>
-                        Special Requests
-                      </p>
-                      <p>{displayedReservation.special_requests}</p>
-                    </div>
-                  )}
-                </div>
-              </>
-            )}
-
-            {/* Cancellation reason */}
-            {displayedReservation.cancellation_reason && (
-              <>
-                <Separator />
-                <div className='text-sm space-y-1'>
-                  <p className='text-muted-foreground'>Cancellation Reason</p>
-                  <p>{displayedReservation.cancellation_reason}</p>
-                </div>
-              </>
-            )}
-
-            <Separator />
-
-            {/* Actions */}
-            <div className='space-y-3 mt-6'>
-              <Button
-                className='w-full'
-                variant='secondary'
-                onClick={() => setEditDialogOpen(true)}
-              >
-                <Pencil className='mr-2 h-4 w-4' />
-                Edit Reservation
-              </Button>
-
-              {isTerminal ? (
-                <p className='text-sm text-muted-foreground'>
-                  No further actions
-                </p>
-              ) : (
-                <>
-                  {transitions.map(t => (
-                    <Button
-                      key={t.status}
-                      className='w-full'
-                      variant='outline'
-                      disabled={updateStatus.isPending}
-                      onClick={() => handleStatusChange(t.status)}
-                    >
-                      {updateStatus.isPending && (
-                        <Loader2 className='mr-2 h-4 w-4 animate-spin' />
+        <SheetContent className='w-full overflow-y-auto border-l border-border/70 bg-background p-0 sm:max-w-[560px]'>
+          <div className='flex min-h-full flex-col'>
+            <SheetHeader className='border-b border-border/70 bg-background/95 px-6 py-5'>
+              <div className='space-y-4'>
+                <div className='flex items-start justify-between gap-3 pr-8'>
+                  <div className='min-w-0 space-y-2'>
+                    <div className='flex items-center gap-2'>
+                      <SheetTitle className='truncate text-2xl font-semibold tracking-tight'>
+                        {displayedReservation.party_name}
+                      </SheetTitle>
+                      {displayedReservation.is_vip && (
+                        <Badge className='border-amber-200 bg-amber-50 text-amber-900'>
+                          <Star className='mr-1 h-3 w-3 fill-current' />
+                          VIP
+                        </Badge>
                       )}
-                      {t.label}
-                    </Button>
-                  ))}
-                  {canCancel && (
-                    <Button
-                      className='w-full'
-                      variant='destructive'
-                      onClick={() => setCancelDialogOpen(true)}
-                    >
-                      Cancel Reservation
-                    </Button>
-                  )}
-                </>
+                    </div>
+                    <SheetDescription className='text-sm'>
+                      Reservation #{displayedReservation.confirmation_number}
+                    </SheetDescription>
+                  </div>
+
+                  <Badge
+                    className={cn(
+                      'border px-2.5 py-1 capitalize shadow-sm',
+                      STATUS_COLORS[displayedReservation.status]
+                    )}
+                  >
+                    {formatStatus(displayedReservation.status)}
+                  </Badge>
+                </div>
+
+                <div className='grid gap-3 sm:grid-cols-3'>
+                  <DetailItem
+                    icon={Clock3}
+                    label='Time'
+                    value={displayedReservation.reservation_time}
+                  />
+                  <DetailItem
+                    icon={Users}
+                    label='Party'
+                    value={`${displayedReservation.party_size} ${
+                      displayedReservation.party_size === 1 ? 'guest' : 'guests'
+                    }`}
+                  />
+                  <DetailItem
+                    icon={Phone}
+                    label='Phone'
+                    value={formatPhoneForDisplay(displayedReservation.phone)}
+                  />
+                </div>
+              </div>
+            </SheetHeader>
+
+            <div className='flex-1 space-y-6 bg-muted/10 px-6 py-5'>
+              <section className='space-y-3 rounded-2xl border border-border/70 bg-card p-4'>
+                <div className='text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground'>
+                  Details
+                </div>
+                <div className='grid gap-3 sm:grid-cols-2'>
+                  <DetailItem
+                    icon={Hash}
+                    label='Date'
+                    value={displayedReservation.reservation_date}
+                  />
+                  <DetailItem
+                    icon={Clock3}
+                    label='Duration'
+                    value={`${displayedReservation.duration_minutes} min`}
+                  />
+                  <DetailItem
+                    icon={Phone}
+                    label='Email'
+                    value={displayedReservation.email}
+                  />
+                  <DetailItem
+                    icon={Armchair}
+                    label='Tables'
+                    value={seatingSummary}
+                  />
+                  <DetailItem
+                    icon={Armchair}
+                    label='Section'
+                    value={displayedReservation.preferred_section}
+                  />
+                  <DetailItem
+                    icon={Armchair}
+                    label='Seating'
+                    value={displayedReservation.seating_preference}
+                  />
+                </div>
+              </section>
+
+              {(displayedReservation.arrived_at ||
+                displayedReservation.seated_at) && (
+                <section className='space-y-3 rounded-2xl border border-border/70 bg-card p-4'>
+                  <div className='text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground'>
+                    Service Timeline
+                  </div>
+                  <div className='grid gap-3 sm:grid-cols-2'>
+                    <DetailItem
+                      icon={Clock3}
+                      label='Arrived'
+                      value={formatTimestamp(displayedReservation.arrived_at)}
+                    />
+                    <DetailItem
+                      icon={Clock3}
+                      label='Seated'
+                      value={formatTimestamp(displayedReservation.seated_at)}
+                    />
+                  </div>
+                </section>
               )}
+
+              {(displayedReservation.notes ||
+                displayedReservation.special_requests) && (
+                <section className='space-y-3 rounded-2xl border border-border/70 bg-card p-4'>
+                  <div className='text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground'>
+                    Notes
+                  </div>
+                  <div className='space-y-3'>
+                    {displayedReservation.notes && (
+                      <div className='space-y-2'>
+                        <div className='text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground'>
+                          Notes
+                        </div>
+                        <p className='text-sm leading-6 text-foreground'>
+                          {displayedReservation.notes}
+                        </p>
+                      </div>
+                    )}
+                    {displayedReservation.special_requests && (
+                      <div className='space-y-2'>
+                        <div className='text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground'>
+                          Special Requests
+                        </div>
+                        <p className='text-sm leading-6 text-foreground'>
+                          {displayedReservation.special_requests}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </section>
+              )}
+
+              {displayedReservation.cancellation_reason && (
+                <section className='space-y-3 rounded-2xl border border-border/70 bg-card p-4'>
+                  <div className='text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground'>
+                    Cancellation
+                  </div>
+                  <p className='text-sm leading-6 text-foreground'>
+                    {displayedReservation.cancellation_reason}
+                  </p>
+                </section>
+              )}
+            </div>
+
+            <div className='mt-auto border-t border-border/70 bg-background/95 px-6 py-5'>
+              <div className='space-y-3'>
+                <Button
+                  className='w-full'
+                  variant='secondary'
+                  onClick={() => setEditDialogOpen(true)}
+                >
+                  <Pencil className='mr-2 h-4 w-4' />
+                  Edit Reservation
+                </Button>
+
+                {isTerminal ? (
+                  <p className='text-sm text-muted-foreground'>
+                    No further actions available.
+                  </p>
+                ) : (
+                  <>
+                    {transitions.map(t => (
+                      <Button
+                        key={t.status}
+                        className='w-full'
+                        variant='outline'
+                        disabled={updateStatus.isPending}
+                        onClick={() => handleStatusChange(t.status)}
+                      >
+                        {pendingStatus === t.status && (
+                          <Loader2 className='mr-2 h-4 w-4 animate-spin' />
+                        )}
+                        {t.label}
+                      </Button>
+                    ))}
+                    {canCancel && (
+                      <Button
+                        className='w-full'
+                        variant='destructive'
+                        onClick={() => setCancelDialogOpen(true)}
+                      >
+                        Cancel Reservation
+                      </Button>
+                    )}
+                  </>
+                )}
+              </div>
             </div>
           </div>
         </SheetContent>
