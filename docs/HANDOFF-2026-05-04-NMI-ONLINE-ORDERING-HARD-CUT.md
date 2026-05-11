@@ -895,3 +895,375 @@ Current pricing placeholders:
 Important implementation decision:
 - placeholders are in `subscription_plans`
 - final pricing should be changed by updating plan rows, not by rewriting invoice math
+
+## Subscription Billing - Current State As Built (2026-05-11)
+
+This section supersedes the earlier subscription-planning notes above where they conflict with current implementation.
+
+### Final architecture in code
+
+- Dexa is the source of truth for SaaS billing.
+- NMI is the payment rail only.
+- Online-ordering NMI merchant accounts remain separate from SaaS billing.
+- SaaS billing charges flow through one centralized Dexa-owned NMI merchant account.
+- Billing cards are saved into that Dexa Billing NMI account's Customer Vault.
+- Subscription state, service assignments, invoice math, invoice records, retry state, and suspension state remain in Dexa.
+
+### NMI account split
+
+Two different NMI account categories now exist in the product:
+
+- Dexa Billing NMI account
+  - used for subscription billing card vaulting
+  - used for subscription invoice charges
+  - configured in HQ at:
+    - `/manage/nmi-integration`
+
+- location online-ordering NMI accounts
+  - used for storefront / checkout payments
+  - configured per location in:
+    - HQ merchant `Online Store`
+  - not used for SaaS subscription charges
+
+### Billing profile model
+
+Billing profiles are now location-scoped for subscription charging.
+
+- `merchant_billing_profiles` supports:
+  - `location_id`
+  - `billing_email`
+  - `customer_vault_id`
+  - `platform_billing_config_id`
+  - `vault_initial_transaction_id`
+
+Behavior:
+
+- each location can have its own Visa / billing profile
+- multiple locations under the same merchant can use different cards
+- subscription charging resolves the location billing profile first
+- merchant-wide legacy billing profiles remain as fallback for older non-subscription paths
+
+### Vault-backed billing flow
+
+First-time subscription billing card save now works like this:
+
+1. HQ or merchant opens the billing page
+2. selects a location-specific billing profile scope
+3. enters the card in Dexa
+4. Collect.js tokenizes the card
+5. Dexa saves the card into the centralized Dexa Billing NMI Customer Vault
+6. Dexa stores the durable `customer_vault_id` and billing metadata in `merchant_billing_profiles`
+
+Important:
+
+- one-time checkout payment tokens are not used as the long-term subscription billing primitive
+- recurring / future charges use the durable vault reference instead
+
+### Centralized Dexa Billing config
+
+HQ testing/admin route:
+
+- `/manage/nmi-integration`
+
+This route stores the centralized Dexa Billing NMI credentials:
+
+- tokenization key
+- private API key
+
+These credentials are used for:
+
+- Customer Vault creation
+- follow-up subscription invoice charges
+
+### Current HQ merchant surfaces
+
+Merchant HQ page:
+
+- `Billing`
+  - location-scoped billing card / ACH setup
+  - billing cards can be vaulted into NMI here
+
+- `Subscriptions`
+  - per-location service assignment
+  - invoice generation
+  - invoice charge
+  - invoice preview
+  - invoice download
+
+- `NMI Accounts`
+  - location-by-location visibility for subscription eligibility
+  - shows whether a location has a vaulted billing card and is eligible for subscription charging
+
+### Current merchant-facing surfaces
+
+Merchant dashboard:
+
+- `/dashboard/settings/billing`
+  - billing method setup only
+
+- `/dashboard/subscriptions`
+  - read-only merchant subscription view
+  - per-location subscriptions
+  - invoice history
+  - invoice preview
+  - invoice download
+
+This route is impersonation-safe and works under HQ `View as merchant`.
+
+### Subscription pricing model now in code
+
+Current model is service-catalog based, not single-plan based.
+
+Primary objects:
+
+- `billable_services`
+- `merchant_subscriptions`
+- `merchant_subscription_services`
+- `subscription_invoices`
+
+Current seeded services:
+
+- `pos_tablet`
+  - tiered
+  - `$50/mo` first
+  - `$39/mo` each additional
+
+- `kds`
+  - per unit
+  - `$25/mo` per device
+
+- `loyalty`
+  - flat
+  - `$75/mo`
+
+- `online_ordering`
+  - flat
+  - `$100/mo`
+
+- `orderout`
+  - flat
+  - `$79.99/mo`
+
+Current quantity source:
+
+- HQ manual quantity assignment per location
+
+### Invoice and email behavior now implemented
+
+Subscription emails now use invoice-style layouts for:
+
+- subscription activation
+- subscription charge receipt
+- subscription cancellation
+
+Admin subscription invoices now support:
+
+- preview
+- PDF download
+
+Merchant subscription invoices now support:
+
+- preview
+- PDF download
+
+Recipients:
+
+- subscription lifecycle / charge emails go to location `billing_email`
+- merchant owner email is fallback where applicable
+
+### Current charge path behavior
+
+`supabase/functions/billing-charge-subscription/index.ts`
+
+Current implemented behavior:
+
+- accepts `invoice_id`
+- resolves invoice, subscription, and billing profile
+- uses centralized Dexa Billing NMI credentials
+- prefers `customer_vault_id`
+- falls back to legacy token path only if needed
+- charges full `subscription_invoices.total_amount`
+- on success:
+  - invoice -> `paid`
+  - suspended / past_due subscription -> `active`
+  - logs `invoice_charged`
+  - logs `subscription_restored` when applicable
+- on failure:
+  - invoice -> `failed`
+  - subscription -> `past_due`
+  - logs `invoice_payment_failed`
+
+### What is proven working
+
+Verified in staging/test mode:
+
+- billing card save to NMI vault works
+- per-location billing cards work
+- location subscription creation works
+- invoice generation works
+- manual subscription charge works
+- NMI dashboard amount matches Dexa invoice amount
+- merchant read-only invoice/subscription UI works
+- invoice emails are sending
+
+### What remains from the original ticket
+
+The remaining acceptance items are:
+
+- [ ] `past_due -> retry -> suspended` lifecycle works
+- [ ] successful payment after suspension auto-restores
+
+### Exact closeout test plan for the last two items
+
+Recommended fastest validation path is to use the existing edge functions directly. This avoids trying to manufacture processor declines in a fragile way.
+
+#### Step 1: Create a clean test invoice
+
+In HQ:
+
+1. open merchant `Subscriptions`
+2. choose a location with a valid vaulted billing card
+3. generate a fresh invoice
+4. copy the `invoice_id`
+
+#### Step 2: Force the invoice into failed / past_due
+
+Call `billing-handle-failure` with that invoice:
+
+```powershell
+$headers = @{
+  Authorization = "Bearer <SUPABASE_SERVICE_ROLE_KEY>"
+  apikey = "<SUPABASE_SERVICE_ROLE_KEY>"
+  "Content-Type" = "application/json"
+}
+
+$body = @{
+  invoice_id = "<INVOICE_ID>"
+  error_message = "manual lifecycle test"
+} | ConvertTo-Json
+
+Invoke-RestMethod `
+  -Method Post `
+  -Uri "https://dfwqakoyittmrwbqvxgw.supabase.co/functions/v1/billing-handle-failure" `
+  -Headers $headers `
+  -Body $body
+```
+
+Expected result:
+
+- `subscription_invoices.status = 'failed'`
+- `merchant_subscriptions.status = 'past_due'`
+
+#### Step 3: Suspend it
+
+Run the suspension sweep with `days_past_due = 1` after temporarily setting the invoice `due_date` to yesterday, or use a very old test invoice.
+
+Quick SQL to backdate the due date:
+
+```sql
+update public.subscription_invoices
+set due_date = current_date - 1
+where id = '<INVOICE_ID>'::uuid;
+```
+
+Then call:
+
+```powershell
+$body = @{
+  days_past_due = 1
+} | ConvertTo-Json
+
+Invoke-RestMethod `
+  -Method Post `
+  -Uri "https://dfwqakoyittmrwbqvxgw.supabase.co/functions/v1/billing-suspend-overdue" `
+  -Headers $headers `
+  -Body $body
+```
+
+Expected result:
+
+- `merchant_subscriptions.status = 'suspended'`
+- audit log contains:
+  - `subscription_suspended`
+
+This closes:
+
+- [x] `past_due -> retry -> suspended` lifecycle works
+
+#### Step 4: Verify auto-restore after successful repayment
+
+Now charge the same failed invoice again from HQ `Subscriptions` using the `Charge` button, or call the charge function normally.
+
+Expected result:
+
+- invoice becomes `paid`
+- subscription moves from `suspended` back to `active`
+- audit log contains:
+  - `invoice_charged`
+  - `subscription_restored`
+
+This closes:
+
+- [x] successful payment after suspension auto-restores
+
+#### Verification SQL
+
+Use these queries after each step:
+
+```sql
+select
+  id,
+  location_id,
+  status,
+  billing_profile_id,
+  current_period_start,
+  current_period_end,
+  next_billing_date,
+  updated_at
+from public.merchant_subscriptions
+where id = (
+  select subscription_id
+  from public.subscription_invoices
+  where id = '<INVOICE_ID>'::uuid
+);
+```
+
+```sql
+select
+  id,
+  invoice_number,
+  status,
+  due_date,
+  paid_at,
+  payment_attempt_count,
+  last_payment_attempt_at,
+  last_payment_error,
+  nmi_transaction_id
+from public.subscription_invoices
+where id = '<INVOICE_ID>'::uuid;
+```
+
+```sql
+select
+  action,
+  action_category,
+  resource_type,
+  resource_name,
+  status,
+  error_message,
+  created_at
+from public.audit_logs
+where action_category = 'billing'
+order by created_at desc
+limit 20;
+```
+
+### Operational note
+
+For acceptance testing, using `billing-handle-failure` and `billing-suspend-overdue` directly is acceptable and preferable.
+
+Reason:
+
+- these two remaining ticket items are lifecycle-state validations
+- they do not require a real processor decline to prove the product state machine
+- the important contract is that the system transitions correctly and restores correctly after a later successful charge
