@@ -197,7 +197,7 @@ export default function MerchantDetailsPage() {
             )}
 
             <CloverImportDialog
-                merchantId={merchantId as string}
+                merchantId={merchantDetails.id}
                 open={cloverImportOpen}
                 onOpenChange={setCloverImportOpen}
             />
