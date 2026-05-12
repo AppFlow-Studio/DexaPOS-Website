@@ -19,7 +19,7 @@ import { useStorefrontPath } from "../../lib/use-storefront-path";
 import { getTodayHoursString, isStoreOpenNow } from "../StoreInfoBar";
 import { MenuSearch } from "../MenuSearch";
 import { motion, AnimatePresence } from "motion/react";
-import { Plus, ChevronUp, ShoppingBag, Clock } from "lucide-react";
+import { Plus, ChevronUp, Clock } from "lucide-react";
 
 interface HeroLayoutProps {
   site: Site | null;
@@ -42,18 +42,6 @@ interface HeroLayoutProps {
 
 function isValidImageSrc(src?: string | null): boolean {
   return !!src && (src.startsWith("http://") || src.startsWith("https://") || src.startsWith("/"));
-}
-
-function flattenItems(menus: StorefrontMenu[]): StorefrontItem[] {
-  const seen = new Map<string, StorefrontItem>();
-  menus.forEach((menu) =>
-    menu.categories?.forEach((cat) =>
-      cat.items?.forEach((i) => {
-        if (!seen.has(i.id)) seen.set(i.id, i);
-      })
-    )
-  );
-  return Array.from(seen.values());
 }
 
 export function HeroLayout({ site, location, menus, slug }: HeroLayoutProps) {

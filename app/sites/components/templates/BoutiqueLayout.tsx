@@ -119,7 +119,6 @@ export function BoutiqueLayout({ site, location, menus, slug }: BoutiqueLayoutPr
     },
     [activeTag]
   );
-
   useEffect(() => {
     if (allCategories.length) setActiveCategory(allCategories[0].id);
   }, [activeMenu]);
@@ -252,7 +251,6 @@ export function BoutiqueLayout({ site, location, menus, slug }: BoutiqueLayoutPr
                 })}
               </div>
             )}
-
             {/* Search */}
             <div className="px-6 pt-5 pb-1">
               <MenuSearch
@@ -325,7 +323,6 @@ export function BoutiqueLayout({ site, location, menus, slug }: BoutiqueLayoutPr
                 </div>
               </div>
             )}
-
             {/* Persistent View Cart CTA */}
             <div className="p-6 border-t" style={{ borderColor: "#E5E7EB" }}>
               <button
