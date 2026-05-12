@@ -46,17 +46,6 @@ function isValidImageSrc(src?: string | null): boolean {
   return !!src && (src.startsWith("http://") || src.startsWith("https://") || src.startsWith("/"));
 }
 
-function flattenItems(menus: StorefrontMenu[]): StorefrontItem[] {
-  const seen = new Map<string, StorefrontItem>();
-  menus.forEach((menu) =>
-    menu.categories?.forEach((cat) =>
-      cat.items?.forEach((i) => {
-        if (!seen.has(i.id)) seen.set(i.id, i);
-      })
-    )
-  );
-  return Array.from(seen.values());
-}
 
 const POPULAR_TAGS = ["Popular", "New", "Vegan", "Gluten-Free", "Spicy"];
 
@@ -73,7 +62,7 @@ export function MarketLayout({ site, location, menus, slug }: MarketLayoutProps)
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [headerHeight, setHeaderHeight] = useState(56);
 
-  const [activeMenuId, setActiveMenuId] = useState<string>("");
+  const [activeMenuId, setActiveMenuId] = useState<string>(() => menus[0]?.id ?? "");
   const [activeCategory, setActiveCategory] = useState<string>("__all__");
   const [selectedItem, setSelectedItem] = useState<StorefrontItem | null>(null);
   const [selectedCategoryItems, setSelectedCategoryItems] = useState<StorefrontItem[]>([]);
@@ -104,19 +93,17 @@ export function MarketLayout({ site, location, menus, slug }: MarketLayoutProps)
     return () => ro.disconnect();
   }, []);
 
-  useEffect(() => {
-    if (menus.length > 0 && !activeMenuId) setActiveMenuId(menus[0].id);
-  }, [menus, activeMenuId]);
-
   const activeMenu = menus.find((m) => m.id === activeMenuId);
-  const allItems = useMemo(() => flattenItems(menus), [menus]);
-
   const allCategories = activeMenu?.categories ?? [];
 
+  // Items scoped to the active menu only (not all menus)
+  const allItems = useMemo(
+    () => allCategories.flatMap((c) => c.items),
+    [allCategories]
+  );
+
   const itemsInCategory = useMemo(() => {
-    if (activeCategory === "__all__") {
-      return allItems;
-    }
+    if (activeCategory === "__all__") return allItems;
     return allCategories.find((c) => c.id === activeCategory)?.items ?? [];
   }, [activeCategory, allItems, allCategories]);
 
@@ -196,7 +183,33 @@ export function MarketLayout({ site, location, menus, slug }: MarketLayoutProps)
       />
 
       {activeTab === "menu" ? (
-        <div className="container mx-auto px-4 py-6 pb-32 lg:pb-8 flex flex-col lg:flex-row gap-6">
+        <>
+          {/* Menu tabs — only when multiple menus */}
+          {menus.length > 1 && (
+            <div className="container mx-auto px-4 border-b" style={{ borderColor: "#E5E7EB" }}>
+              <div className="flex overflow-x-auto gap-1" style={{ scrollbarWidth: "none" }}>
+                {menus.map((menu) => {
+                  const isActive = activeMenuId === menu.id;
+                  return (
+                    <button
+                      key={menu.id}
+                      type="button"
+                      onClick={() => setActiveMenuId(menu.id)}
+                      className="px-4 py-3 text-xs font-semibold whitespace-nowrap transition-colors border-b-2 -mb-px shrink-0 uppercase tracking-wide"
+                      style={{
+                        borderColor: isActive ? "var(--primary)" : "transparent",
+                        color: isActive ? "var(--primary)" : "#9CA3AF",
+                        backgroundColor: "transparent",
+                      }}
+                    >
+                      {menu.name}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          <div className="container mx-auto px-4 py-6 pb-32 lg:pb-8 flex flex-col lg:flex-row gap-6">
           {/* Left sidebar — desktop only */}
           <aside
             className="hidden lg:block shrink-0 w-56 lg:sticky self-start"
@@ -310,7 +323,10 @@ export function MarketLayout({ site, location, menus, slug }: MarketLayoutProps)
             {/* Toolbar */}
             <div className="flex items-center justify-between mb-4">
               <p className="text-sm" style={{ color: "#6B7280" }}>
-                {filteredItems.length} item{filteredItems.length !== 1 ? "s" : ""}
+                {activeCategory === "__all__"
+                  ? `${filteredItems.length} item${filteredItems.length !== 1 ? "s" : ""}`
+                  : `${filteredItems.length} item${filteredItems.length !== 1 ? "s" : ""} in ${allCategories.find((c) => c.id === activeCategory)?.name ?? ""}`
+                }
               </p>
               <div className="flex items-center gap-2">
                 <select
@@ -342,33 +358,88 @@ export function MarketLayout({ site, location, menus, slug }: MarketLayoutProps)
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.2 }}
-                className={
-                  viewMode === "grid"
-                    ? "grid gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-3"
-                    : "flex flex-col gap-3"
-                }
               >
-                {filteredItems.map((item) => (
-                  <MarketItemCard
-                    key={item.id}
-                    item={item}
-                    viewMode={viewMode}
-                    failedImageIds={failedImageIds}
-                    onImageError={handleImageError}
-                    onClick={() => handleItemClick(item)}
-                  />
-                ))}
+                {activeCategory === "__all__" ? (
+                  /* Show all categories with section headers */
+                  (() => {
+                    const sectionsWithItems = allCategories
+                      .map((cat) => {
+                        let items = cat.items;
+                        if (activeTag === "Popular") items = items.filter((i) => i.is_popular);
+                        else if (activeTag === "New") items = items.filter((i) => i.is_new);
+                        else if (activeTag) items = items.filter((i) => (i.dietary_tags || []).some((t) => t.toLowerCase().includes(activeTag.toLowerCase())));
+                        switch (sortOption) {
+                          case "price_asc": items = [...items].sort((a, b) => a.delivery_price - b.delivery_price); break;
+                          case "price_desc": items = [...items].sort((a, b) => b.delivery_price - a.delivery_price); break;
+                          case "name": items = [...items].sort((a, b) => a.name.localeCompare(b.name)); break;
+                        }
+                        return { cat, items };
+                      })
+                      .filter(({ items }) => items.length > 0);
+
+                    if (sectionsWithItems.length === 0) {
+                      return (
+                        <div className="flex flex-col items-center justify-center py-20 text-center">
+                          <p className="text-lg font-semibold" style={{ color: "#111827" }}>No items found</p>
+                          <p className="mt-1 text-sm" style={{ color: "#6B7280" }}>Try a different tag or sort</p>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div className="space-y-10">
+                        {sectionsWithItems.map(({ cat, items }) => (
+                          <section key={cat.id}>
+                            <h2 className="text-base font-semibold mb-3 pb-2 border-b" style={{ color: "var(--primary)", borderColor: "#E5E7EB" }}>
+                              {cat.name}
+                              <span className="ml-2 text-xs font-normal" style={{ color: "#9CA3AF" }}>({items.length})</span>
+                            </h2>
+                            <div className={viewMode === "grid" ? "grid gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-3" : "flex flex-col gap-3"}>
+                              {items.map((item) => (
+                                <MarketItemCard
+                                  key={item.id}
+                                  item={item}
+                                  viewMode={viewMode}
+                                  failedImageIds={failedImageIds}
+                                  onImageError={handleImageError}
+                                  onClick={() => handleItemClick(item)}
+                                />
+                              ))}
+                            </div>
+                          </section>
+                        ))}
+                      </div>
+                    );
+                  })()
+                ) : (
+                  /* Single category — flat grid */
+                  <>
+                    {filteredItems.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center py-20 text-center">
+                        <p className="text-lg font-semibold" style={{ color: "#111827" }}>No items found</p>
+                        <p className="mt-1 text-sm" style={{ color: "#6B7280" }}>Try a different tag or sort</p>
+                      </div>
+                    ) : (
+                      <div className={viewMode === "grid" ? "grid gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-3" : "flex flex-col gap-3"}>
+                        {filteredItems.map((item) => (
+                          <MarketItemCard
+                            key={item.id}
+                            item={item}
+                            viewMode={viewMode}
+                            failedImageIds={failedImageIds}
+                            onImageError={handleImageError}
+                            onClick={() => handleItemClick(item)}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
               </motion.div>
             </AnimatePresence>
-
-            {filteredItems.length === 0 && (
-              <div className="flex flex-col items-center justify-center py-20 text-center">
-                <p className="text-lg font-semibold" style={{ color: "#111827" }}>No items found</p>
-                <p className="mt-1 text-sm" style={{ color: "#6B7280" }}>Try a different category or tag</p>
-              </div>
-            )}
           </div>
         </div>
+        </>
       ) : (
         <main className="container mx-auto px-4 py-6 pb-28">
           <OrdersPanel slug={slug} storeConfigId={site?.id} />

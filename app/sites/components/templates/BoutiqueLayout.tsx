@@ -18,7 +18,9 @@ import { useSessionInit } from "../../hooks/useSessionInit";
 import { useStorefrontPath } from "../../lib/use-storefront-path";
 import { MenuSearch } from "../MenuSearch";
 import { motion, AnimatePresence } from "motion/react";
-import { Plus, ChevronUp, ShoppingBag } from "lucide-react";
+import { Plus, ChevronUp, ShoppingBag, Tag } from "lucide-react";
+
+const POPULAR_TAGS = ["Popular", "New", "Vegan", "Gluten-Free", "Spicy"];
 
 interface BoutiqueLayoutProps {
   site: Site | null;
@@ -56,12 +58,13 @@ export function BoutiqueLayout({ site, location, menus, slug }: BoutiqueLayoutPr
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [headerHeight, setHeaderHeight] = useState(56);
 
-  const [activeMenuId, setActiveMenuId] = useState<string>("");
+  const [activeMenuId, setActiveMenuId] = useState<string>(() => menus[0]?.id ?? "");
   const [activeCategory, setActiveCategory] = useState<string>("");
   const [selectedItem, setSelectedItem] = useState<StorefrontItem | null>(null);
   const [selectedCategoryItems, setSelectedCategoryItems] = useState<StorefrontItem[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [failedImageIds, setFailedImageIds] = useState<Set<string>>(new Set());
+  const [activeTag, setActiveTag] = useState<string | null>(null);
 
   const { setOpen: setCartOpen, items: cartItems, pendingModalItem, clearPendingModalItem } = useCart();
   const cartCount = cartItems.reduce((sum, i) => sum + i.quantity, 0);
@@ -85,12 +88,37 @@ export function BoutiqueLayout({ site, location, menus, slug }: BoutiqueLayoutPr
     return () => ro.disconnect();
   }, []);
 
-  useEffect(() => {
-    if (menus.length > 0 && !activeMenuId) setActiveMenuId(menus[0].id);
-  }, [menus, activeMenuId]);
-
   const activeMenu = menus.find((m) => m.id === activeMenuId);
   const allCategories = activeMenu?.categories ?? [];
+
+  const allItems = useMemo(
+    () => allCategories.flatMap((c) => c.items),
+    [allCategories]
+  );
+
+  const activeTags = useMemo(
+    () =>
+      POPULAR_TAGS.filter((tag) => {
+        if (tag === "Popular") return allItems.some((i) => i.is_popular);
+        if (tag === "New") return allItems.some((i) => i.is_new);
+        return allItems.some((i) =>
+          (i.dietary_tags || []).some((t) => t.toLowerCase().includes(tag.toLowerCase()))
+        );
+      }),
+    [allItems]
+  );
+
+  const filterItems = useCallback(
+    (items: StorefrontItem[]) => {
+      if (!activeTag) return items;
+      if (activeTag === "Popular") return items.filter((i) => i.is_popular);
+      if (activeTag === "New") return items.filter((i) => i.is_new);
+      return items.filter((i) =>
+        (i.dietary_tags || []).some((t) => t.toLowerCase().includes(activeTag.toLowerCase()))
+      );
+    },
+    [activeTag]
+  );
 
   useEffect(() => {
     if (allCategories.length) setActiveCategory(allCategories[0].id);
@@ -200,6 +228,31 @@ export function BoutiqueLayout({ site, location, menus, slug }: BoutiqueLayoutPr
               )}
             </div>
 
+            {/* Menu tabs — only when multiple menus */}
+            {menus.length > 1 && (
+              <div className="border-b" style={{ borderColor: "#E5E7EB" }}>
+                {menus.map((menu) => {
+                  const isActive = activeMenuId === menu.id;
+                  return (
+                    <button
+                      key={menu.id}
+                      type="button"
+                      onClick={() => setActiveMenuId(menu.id)}
+                      className="w-full flex items-center gap-3 px-8 py-3 text-left text-sm font-medium transition-all border-l-2"
+                      style={{
+                        borderColor: isActive ? "var(--primary)" : "transparent",
+                        color: isActive ? "var(--primary)" : "#6B7280",
+                        backgroundColor: isActive ? "color-mix(in srgb, var(--primary) 5%, #FFFFFF)" : "transparent",
+                        fontWeight: isActive ? 600 : 400,
+                      }}
+                    >
+                      {menu.name}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
             {/* Search */}
             <div className="px-6 pt-5 pb-1">
               <MenuSearch
@@ -243,6 +296,35 @@ export function BoutiqueLayout({ site, location, menus, slug }: BoutiqueLayoutPr
                 })}
               </ol>
             </div>
+
+            {/* Tag filters */}
+            {activeTags.length > 0 && (
+              <div className="px-6 pb-4 border-t pt-4" style={{ borderColor: "#E5E7EB" }}>
+                <p className="text-[10px] font-semibold uppercase tracking-widest mb-3 flex items-center gap-1.5" style={{ color: "#9CA3AF" }}>
+                  <Tag className="h-3 w-3" />
+                  Filter
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {activeTags.map((tag) => {
+                    const isActive = activeTag === tag;
+                    return (
+                      <button
+                        key={tag}
+                        type="button"
+                        onClick={() => setActiveTag(isActive ? null : tag)}
+                        className="px-3 py-1 rounded-full text-xs font-medium transition-all"
+                        style={{
+                          backgroundColor: isActive ? "var(--primary)" : "#F3F4F6",
+                          color: isActive ? "var(--primary-text)" : "#374151",
+                        }}
+                      >
+                        {tag}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* Persistent View Cart CTA */}
             <div className="p-6 border-t" style={{ borderColor: "#E5E7EB" }}>
@@ -298,6 +380,31 @@ export function BoutiqueLayout({ site, location, menus, slug }: BoutiqueLayoutPr
                 borderColor: "#E5E7EB",
               }}
             >
+              {/* Mobile menu tabs */}
+              {menus.length > 1 && (
+                <div className="overflow-x-auto mb-2 -mx-4 px-4 border-b pb-2" style={{ scrollbarWidth: "none", borderColor: "#E5E7EB" }}>
+                  <div className="flex gap-1">
+                    {menus.map((menu) => {
+                      const isActive = activeMenuId === menu.id;
+                      return (
+                        <button
+                          key={menu.id}
+                          type="button"
+                          onClick={() => setActiveMenuId(menu.id)}
+                          className="px-3 py-1.5 text-xs font-semibold whitespace-nowrap transition-colors border-b-2 -mb-[9px] shrink-0 uppercase tracking-wide"
+                          style={{
+                            borderColor: isActive ? "var(--primary)" : "transparent",
+                            color: isActive ? "var(--primary)" : "#9CA3AF",
+                            backgroundColor: "transparent",
+                          }}
+                        >
+                          {menu.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
               <div className="mb-2">
                 <MenuSearch
                   menus={menus}
@@ -307,57 +414,91 @@ export function BoutiqueLayout({ site, location, menus, slug }: BoutiqueLayoutPr
                 />
               </div>
               <div className="overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
-              <div className="flex gap-2">
-                {allCategories.map((cat) => {
-                  const isActive = activeCategory === cat.id;
-                  return (
-                    <button
-                      key={cat.id}
-                      type="button"
-                      onClick={() => scrollToCategory(cat.id)}
-                      className="shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-all"
-                      style={{
-                        backgroundColor: isActive ? "var(--primary)" : "#FFFFFF",
-                        color: isActive ? "var(--primary-text)" : "#6B7280",
-                        border: `1px solid ${isActive ? "var(--primary)" : "#E5E7EB"}`,
-                      }}
-                    >
-                      {cat.name}
-                    </button>
-                  );
-                })}
+                <div className="flex gap-2">
+                  {allCategories.map((cat) => {
+                    const isActive = activeCategory === cat.id;
+                    return (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => scrollToCategory(cat.id)}
+                        className="shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-all"
+                        style={{
+                          backgroundColor: isActive ? "var(--primary)" : "#FFFFFF",
+                          color: isActive ? "var(--primary-text)" : "#6B7280",
+                          border: `1px solid ${isActive ? "var(--primary)" : "#E5E7EB"}`,
+                        }}
+                      >
+                        {cat.name}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-              </div>
+              {activeTags.length > 0 && (
+                <div className="overflow-x-auto pt-2 pb-1" style={{ scrollbarWidth: "none" }}>
+                  <div className="flex gap-2">
+                    {activeTags.map((tag) => {
+                      const isActive = activeTag === tag;
+                      return (
+                        <button
+                          key={tag}
+                          type="button"
+                          onClick={() => setActiveTag(isActive ? null : tag)}
+                          className="shrink-0 px-3 py-1 rounded-full text-xs font-medium transition-all"
+                          style={{
+                            backgroundColor: isActive ? "var(--primary)" : "#F3F4F6",
+                            color: isActive ? "var(--primary-text)" : "#6B7280",
+                            border: isActive ? `1px solid var(--primary)` : "1px solid #E5E7EB",
+                          }}
+                        >
+                          {tag}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Category sections */}
             <div className="px-6 lg:px-10 py-8 pb-32 lg:pb-12 space-y-16">
-              {allCategories.map((category) => (
-                <section key={category.id} id={`boutique-cat-${category.id}`} className="scroll-mt-20">
-                  <div className="mb-6">
-                    <h2
-                      className="text-3xl font-bold"
-                      style={{ color: "var(--primary)", fontFamily: "var(--font-display)" }}
-                    >
-                      {category.name}
-                    </h2>
-                    <div className="mt-2 h-px w-16" style={{ backgroundColor: "var(--primary)", opacity: 0.3 }} />
-                  </div>
+              {allCategories.map((category) => {
+                const visibleItems = filterItems(category.items);
+                if (visibleItems.length === 0) return null;
+                return (
+                  <section key={category.id} id={`boutique-cat-${category.id}`} className="scroll-mt-20">
+                    <div className="mb-6">
+                      <h2
+                        className="text-3xl font-bold"
+                        style={{ color: "var(--primary)", fontFamily: "var(--font-display)" }}
+                      >
+                        {category.name}
+                      </h2>
+                      <div className="mt-2 h-px w-16" style={{ backgroundColor: "var(--primary)", opacity: 0.3 }} />
+                    </div>
 
-                  {/* Vertical cards grid — image top, hover-reveal add */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
-                    {category.items.map((item) => (
-                      <BoutiqueItemCard
-                        key={item.id}
-                        item={item}
-                        failedImageIds={failedImageIds}
-                        onImageError={handleImageError}
-                        onClick={() => handleItemClick(item)}
-                      />
-                    ))}
-                  </div>
-                </section>
-              ))}
+                    {/* Vertical cards grid — image top, hover-reveal add */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
+                      {visibleItems.map((item) => (
+                        <BoutiqueItemCard
+                          key={item.id}
+                          item={item}
+                          failedImageIds={failedImageIds}
+                          onImageError={handleImageError}
+                          onClick={() => handleItemClick(item)}
+                        />
+                      ))}
+                    </div>
+                  </section>
+                );
+              })}
+              {activeTag && allCategories.every((c) => filterItems(c.items).length === 0) && (
+                <div className="flex flex-col items-center justify-center py-20 text-center">
+                  <p className="text-lg font-semibold" style={{ color: "#111827" }}>No items found</p>
+                  <p className="mt-1 text-sm" style={{ color: "#6B7280" }}>No items match the selected filter</p>
+                </div>
+              )}
             </div>
           </div>
         </div>

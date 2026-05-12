@@ -69,7 +69,7 @@ export function HeroLayout({ site, location, menus, slug }: HeroLayoutProps) {
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [headerHeight, setHeaderHeight] = useState(56);
 
-  const [activeMenuId, setActiveMenuId] = useState<string>("");
+  const [activeMenuId, setActiveMenuId] = useState<string>(() => menus[0]?.id ?? "");
   const [activeCategory, setActiveCategory] = useState<string>("");
   const [selectedItem, setSelectedItem] = useState<StorefrontItem | null>(null);
   const [selectedCategoryItems, setSelectedCategoryItems] = useState<StorefrontItem[]>([]);
@@ -100,10 +100,6 @@ export function HeroLayout({ site, location, menus, slug }: HeroLayoutProps) {
     ro.observe(header);
     return () => ro.disconnect();
   }, []);
-
-  useEffect(() => {
-    if (menus.length > 0 && !activeMenuId) setActiveMenuId(menus[0].id);
-  }, [menus, activeMenuId]);
 
   const activeMenu = menus.find((m) => m.id === activeMenuId);
 
@@ -214,7 +210,7 @@ export function HeroLayout({ site, location, menus, slug }: HeroLayoutProps) {
             </div>
           </div>
 
-          {/* Sticky horizontal category nav + search */}
+          {/* Sticky nav: menu tabs (if >1) + category pills + search */}
           <div
             className="z-40 border-b"
             style={{
@@ -225,6 +221,33 @@ export function HeroLayout({ site, location, menus, slug }: HeroLayoutProps) {
               boxShadow: "0 2px 10px rgba(0,0,0,0.04)",
             }}
           >
+            {/* Menu tabs row — only when multiple menus */}
+            {menus.length > 1 && (
+              <div className="container mx-auto px-4 border-b" style={{ borderColor: "#E5E5E5" }}>
+                <div className="flex overflow-x-auto gap-1" style={{ scrollbarWidth: "none" }}>
+                  {menus.map((menu) => {
+                    const isActive = activeMenuId === menu.id;
+                    return (
+                      <button
+                        key={menu.id}
+                        type="button"
+                        onClick={() => setActiveMenuId(menu.id)}
+                        className="px-4 py-2.5 text-xs font-semibold whitespace-nowrap transition-colors border-b-2 -mb-px shrink-0 uppercase tracking-wide"
+                        style={{
+                          borderColor: isActive ? "var(--primary)" : "transparent",
+                          color: isActive ? "var(--primary)" : "#9CA3AF",
+                          backgroundColor: "transparent",
+                        }}
+                      >
+                        {menu.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Category nav + search */}
             <div className="container mx-auto px-4 flex items-center gap-2">
               <nav className="flex overflow-x-auto py-3 gap-6 flex-1 min-w-0" style={{ scrollbarWidth: "none" }}>
                 {allCategories.map((cat) => {
