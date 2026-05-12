@@ -179,7 +179,7 @@ export default function ReservationsPage() {
                     </div>
                     <Badge
                       variant="secondary"
-                      className="rounded-full px-3 py-1 text-sm"
+                      className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-sm text-emerald-100 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-100"
                     >
                       {active.length}
                     </Badge>
@@ -213,7 +213,7 @@ export default function ReservationsPage() {
                     </div>
                     <Badge
                       variant="outline"
-                      className="rounded-full px-3 py-1 text-sm"
+                      className="rounded-full border border-slate-500/20 bg-slate-500/10 px-3 py-1 text-sm text-slate-200 dark:border-slate-400/20 dark:bg-slate-400/10 dark:text-slate-200"
                     >
                       {history.length}
                     </Badge>

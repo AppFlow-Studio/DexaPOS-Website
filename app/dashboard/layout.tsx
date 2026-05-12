@@ -186,6 +186,11 @@ const navMain = [
         icon: Package,
       },
       {
+        title: "Subscriptions",
+        url: "/dashboard/subscriptions",
+        icon: FileText,
+      },
+      {
         title: "Devices",
         url: "/dashboard/devices",
         icon: Monitor,

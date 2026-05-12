@@ -3,11 +3,21 @@
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Empty } from "@/components/ui/empty";
-import { Tag, Wand2, List, Table as TableIcon, Info } from "lucide-react";
+import {
+  Tag,
+  Wand2,
+  List,
+  Table as TableIcon,
+  LayoutGrid,
+  Info,
+  CheckSquare,
+} from "lucide-react";
 import { MenuCategory, MenuCategoryItem } from "@/types/menu";
 import { CategoryTable } from "./CategoryTable";
+import { CategoryGrid } from "./CategoryGrid";
 import { HiddenCategoriesCard } from "./HiddenCategoriesCard";
 import { DraggableCategoriesList } from "./DraggableCategoriesList";
+import { cn } from "@/lib/utils";
 import {
   Tooltip,
   TooltipContent,
@@ -36,8 +46,8 @@ interface MenuCategoriesTabProps {
   onAddCategory: () => void;
   onNavigateToCategories: () => void;
   refetchMenu: () => void;
-  categoryViewMode?: "list" | "table";
-  onViewModeChange?: (mode: "list" | "table") => void;
+  categoryViewMode?: "list" | "grid" | "table";
+  onViewModeChange?: (mode: "list" | "grid" | "table") => void;
   onMoveCategoryUp?: (index: number) => void;
   onMoveCategoryDown?: (index: number) => void;
   onSaveCategoryOrder?: () => Promise<void>;
@@ -53,6 +63,13 @@ interface MenuCategoriesTabProps {
   itemOrderChanges?: Map<string, boolean>;
   savingItemOrderFor?: string | null;
   reorderedItemsMap?: Map<string, MenuCategoryItem[]>;
+  // Selection mode
+  isSelectionMode?: boolean;
+  selectedItemIds?: Set<string>;
+  onToggleItem?: (itemId: string) => void;
+  onToggleCategoryItems?: (categoryId: string, itemIds: string[]) => void;
+  selectedCount?: number;
+  onToggleSelectionMode?: () => void;
 }
 
 export function MenuCategoriesTab({
@@ -89,6 +106,13 @@ export function MenuCategoriesTab({
   itemOrderChanges,
   savingItemOrderFor,
   reorderedItemsMap,
+  // Selection
+  isSelectionMode = false,
+  selectedItemIds,
+  onToggleItem,
+  onToggleCategoryItems,
+  selectedCount = 0,
+  onToggleSelectionMode,
 }: MenuCategoriesTabProps) {
   const isAllLocations = !selectedLocationId || selectedLocationId === "all";
   // Cannot add/remove categories when location-scoped viewing a global menu
@@ -99,6 +123,22 @@ export function MenuCategoriesTab({
       {/* Controls */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
+          {onToggleSelectionMode && (
+            <Button
+              variant={isSelectionMode ? "secondary" : "outline"}
+              size="sm"
+              className="gap-1"
+              onClick={onToggleSelectionMode}
+            >
+              <CheckSquare className="h-4 w-4" />
+              {isSelectionMode ? "Selecting" : "Select"}
+              {isSelectionMode && selectedCount > 0 && (
+                <Badge variant="secondary" className="ml-0.5 h-5 px-1.5 text-xs">
+                  {selectedCount}
+                </Badge>
+              )}
+            </Button>
+          )}
           {categoryViewMode === "list" && (
             <>
               <Button variant="outline" size="sm" onClick={onExpandAll}>
@@ -110,20 +150,32 @@ export function MenuCategoriesTab({
             </>
           )}
           {onViewModeChange && (
-            <div className="flex items-center border rounded-md">
+            <div className="flex items-center border rounded-md overflow-hidden">
               <Button
                 variant={categoryViewMode === "list" ? "default" : "ghost"}
                 size="sm"
-                className="rounded-r-none"
+                className="rounded-none"
                 onClick={() => onViewModeChange("list")}
-                title="List view"
+                title="List view (drag to reorder)"
               >
                 <List className="h-4 w-4" />
               </Button>
               <Button
+                variant={categoryViewMode === "grid" ? "default" : "ghost"}
+                size="sm"
+                className={cn(
+                  "rounded-none border-x",
+                  categoryViewMode !== "grid" && "border-x-transparent",
+                )}
+                onClick={() => onViewModeChange("grid")}
+                title="Grid view"
+              >
+                <LayoutGrid className="h-4 w-4" />
+              </Button>
+              <Button
                 variant={categoryViewMode === "table" ? "default" : "ghost"}
                 size="sm"
-                className="rounded-l-none"
+                className="rounded-none"
                 onClick={() => onViewModeChange("table")}
                 title="Table view"
               >
@@ -216,6 +268,32 @@ export function MenuCategoriesTab({
             </div>
           )}
         </>
+      ) : categoryViewMode === "grid" ? (
+        <>
+          <CategoryGrid
+            categories={visibleCategories}
+            menuId={menuId}
+            selectedLocationId={selectedLocationId}
+            isMenuLocationOwned={isMenuLocationOwned}
+            onMoveUp={onMoveCategoryUp}
+            onMoveDown={onMoveCategoryDown}
+            onToggleVisibility={onToggleVisibility}
+            onResetOverride={onResetOverride}
+            onRemoveCategory={onRemoveCategory}
+            onItemClick={onItemClick}
+            onEditItem={onEditItem}
+            hasOrderChanges={hasCategoryOrderChanges}
+          />
+          {visibleCategories.length > 0 && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Info className="h-4 w-4" />
+              <span>
+                Use the arrows on each card to reorder categories. Click any
+                item chip to open it.
+              </span>
+            </div>
+          )}
+        </>
       ) : (
         <>
           {onCategoryOrderChange && onSaveCategoryOrder && (
@@ -244,6 +322,10 @@ export function MenuCategoriesTab({
               itemOrderChanges={itemOrderChanges}
               savingItemOrderFor={savingItemOrderFor}
               reorderedItemsMap={reorderedItemsMap}
+              isSelectionMode={isSelectionMode}
+              selectedItemIds={selectedItemIds}
+              onToggleItem={onToggleItem}
+              onToggleCategoryItems={onToggleCategoryItems}
             />
           )}
 

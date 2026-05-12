@@ -237,6 +237,8 @@ interface PlatformSettlementBatchRpcRow {
   business_date: string | null
   opened_at: string | null
   closed_at: string | null
+  batch_number: string | null
+  acquirer: string | null
   settlement_date: string | null
   funded_date: string | null
   transaction_count: number | string | null
@@ -257,6 +259,10 @@ interface PlatformSettlementBatchRpcRow {
 export interface PlatformSettlementBatch {
   id: string
   batch_id: string
+  /** Host batch number from the acquirer (e.g. '009'). Preferred display label. */
+  batch_number?: string
+  /** Acquirer code (e.g. 'TSYS'). */
+  acquirer?: string
   merchant_id: string
   merchant_name: string
   location_id?: string
@@ -1033,6 +1039,8 @@ function mapRpcRowToSettlementBatch(row: PlatformSettlementBatchRpcRow): Platfor
   return {
     id: row.id,
     batch_id: row.batch_id || '',
+    batch_number: row.batch_number || undefined,
+    acquirer: row.acquirer || undefined,
     merchant_id: row.merchant_id || '',
     merchant_name: row.merchant_name || 'Unknown',
     location_id: row.location_id || undefined,
