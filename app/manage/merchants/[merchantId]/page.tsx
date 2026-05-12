@@ -22,8 +22,18 @@ import {
     MapPin,
     Globe,
     FileSpreadsheet,
+    Download,
+    ChevronDown,
     type LucideIcon,
 } from 'lucide-react'
+import {
+    DropdownMenu,
+    DropdownMenuTrigger,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 import { useAdminMerchantDetails } from '@/lib/queries/use-admin-merchant'
 import { useAdminPermissions } from '@/lib/hooks/useAdminPermissions'
@@ -166,10 +176,23 @@ export default function MerchantDetailsPage() {
 
             {canImportMenu && (
                 <div className="flex justify-end">
-                    <Button variant="outline" size="sm" onClick={() => setCloverImportOpen(true)}>
-                        <FileSpreadsheet className="h-3.5 w-3.5 mr-1.5" />
-                        Import menu from Clover
-                    </Button>
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="outline" size="sm">
+                                <Download className="h-3.5 w-3.5 mr-1.5" />
+                                Import
+                                <ChevronDown className="h-3.5 w-3.5 ml-1.5 opacity-60" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-56">
+                            <DropdownMenuLabel>Import menu from…</DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onClick={() => setCloverImportOpen(true)}>
+                                <FileSpreadsheet className="h-3.5 w-3.5 mr-2" />
+                                From Clover (.xlsx)
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
                 </div>
             )}
 
