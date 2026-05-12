@@ -21,6 +21,9 @@ import { OrderStatusWatcher } from "./OrderStatusWatcher";
 import { motion, AnimatePresence } from "motion/react";
 import { ChevronUp } from "lucide-react";
 import { SiteThemeConfig } from "@/types/site";
+import { HeroLayout } from "./templates/HeroLayout";
+import { MarketLayout } from "./templates/MarketLayout";
+import { BoutiqueLayout } from "./templates/BoutiqueLayout";
 
 interface StorefrontLayoutProps {
   site: Site | null;
@@ -47,6 +50,25 @@ export function StorefrontLayout({
   menus,
   slug,
 }: StorefrontLayoutProps) {
+  const templateId: SiteThemeConfig["templateId"] =
+    site?.theme_config?.templateId || "classic";
+
+  // Delegate to dedicated layout components for new templates
+  if (templateId === "hero") {
+    return <HeroLayout site={site} location={location} menus={menus} slug={slug} />;
+  }
+  if (templateId === "market") {
+    return <MarketLayout site={site} location={location} menus={menus} slug={slug} />;
+  }
+  if (templateId === "boutique") {
+    return <BoutiqueLayout site={site} location={location} menus={menus} slug={slug} />;
+  }
+
+  // Classic (and legacy minimal/bold) layout
+  return <ClassicLayout site={site} location={location} menus={menus} slug={slug} />;
+}
+
+function ClassicLayout({ site, location, menus, slug }: StorefrontLayoutProps) {
   useSessionInit(site?.id);
   const router = useRouter();
   const activeOrderId = useSession((s) => s.activeOrderId);
@@ -101,7 +123,7 @@ export function StorefrontLayout({
   const menuLayout = site?.online_ordering_config?.menuLayout ?? "cards";
 
   const mainContainerClass =
-    templateId === "minimal"
+    (templateId as string) === "minimal"
       ? "mx-auto max-w-3xl px-4 sm:px-6 py-6 lg:pb-8 pb-6"
       : "container mx-auto px-4 py-6 lg:pb-8 pb-6";
 
@@ -151,7 +173,7 @@ export function StorefrontLayout({
 
           {/* Story / description section */}
           <div className={
-            templateId === "minimal"
+            (templateId as string) === "minimal"
               ? "max-w-3xl mx-auto px-4 mt-4"
               : "container mx-auto px-4 mt-4"
           }>
