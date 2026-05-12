@@ -23,6 +23,9 @@ interface PaymentCardFormProps {
   tokenizationKey?: string | null;
   onError: (error: string) => void;
   disabled?: boolean;
+  country?: string;
+  currency?: string;
+  price?: string;
 }
 
 interface CollectJsFieldState {
@@ -132,7 +135,17 @@ function loadCollectJs(tokenizationKey: string): Promise<void> {
 export const PaymentCardForm = forwardRef<
   PaymentCardFormHandle,
   PaymentCardFormProps
->(function PaymentCardForm({ tokenizationKey, onError, disabled }, ref) {
+>(function PaymentCardForm(
+  {
+    tokenizationKey,
+    onError,
+    disabled,
+    country,
+    currency,
+    price,
+  },
+  ref
+) {
   const collectIdRef = useRef(`collect-${Math.random().toString(36).slice(2, 10)}`);
   const pendingTokenizeRef = useRef<{
     resolve: (value: {
@@ -181,6 +194,9 @@ export const PaymentCardForm = forwardRef<
         window.CollectJS.configure({
           variant: "inline",
           paymentSelector: `#${paymentButtonId}`,
+          ...(country ? { country } : {}),
+          ...(currency ? { currency } : {}),
+          ...(price ? { price } : {}),
           fields: {
             ccnumber: {
               selector: `#${ccNumberId}`,

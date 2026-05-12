@@ -34,6 +34,66 @@ export interface ProgramWithStats extends LoyaltyProgram {
   total_rewards_given: number;
 }
 
+type ProgramLocationScope = string[] | null | undefined;
+
+function normalizeLocationScope(locationIds: ProgramLocationScope): string[] | null {
+  if (!locationIds || locationIds.length === 0) return null;
+  return locationIds;
+}
+
+function locationsOverlap(
+  first: ProgramLocationScope,
+  second: ProgramLocationScope
+): boolean {
+  const normalizedFirst = normalizeLocationScope(first);
+  const normalizedSecond = normalizeLocationScope(second);
+
+  // Null/empty means "all locations", so it overlaps with everything.
+  if (!normalizedFirst || !normalizedSecond) return true;
+
+  return normalizedFirst.some((locationId) => normalizedSecond.includes(locationId));
+}
+
+async function deactivateOverlappingActivePrograms(params: {
+  supabase: ReturnType<typeof createServerSupabaseClient>;
+  merchantId: string;
+  locationIds: ProgramLocationScope;
+  excludeProgramId?: string;
+}) {
+  const { supabase, merchantId, locationIds, excludeProgramId } = params;
+
+  const { data: activePrograms, error } = await supabase
+    .from("loyalty_programs")
+    .select("id, location_ids")
+    .eq("merchant_id", merchantId)
+    .eq("is_active", true);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const overlappingProgramIds = (activePrograms || [])
+    .filter((program) => program.id !== excludeProgramId)
+    .filter((program) => locationsOverlap(program.location_ids, locationIds))
+    .map((program) => program.id);
+
+  if (overlappingProgramIds.length === 0) {
+    return 0;
+  }
+
+  const { error: deactivateError } = await supabase
+    .from("loyalty_programs")
+    .update({ is_active: false })
+    .eq("merchant_id", merchantId)
+    .in("id", overlappingProgramIds);
+
+  if (deactivateError) {
+    throw new Error(deactivateError.message);
+  }
+
+  return overlappingProgramIds.length;
+}
+
 // ============================================================================
 // Helper: Get merchant_id from clerkOrgId
 // ============================================================================
@@ -181,6 +241,14 @@ export async function CreateLoyaltyProgram(
 
     console.log("[CreateLoyaltyProgram] Insert data:", insertData);
 
+    if (insertData.is_active) {
+      await deactivateOverlappingActivePrograms({
+        supabase,
+        merchantId,
+        locationIds: insertData.location_ids,
+      });
+    }
+
     const { data, error } = await supabase
       .from("loyalty_programs")
       .insert(insertData)
@@ -243,13 +311,26 @@ export async function UpdateLoyaltyProgram(
     // Verify program belongs to merchant
     const { data: existing } = await supabase
       .from("loyalty_programs")
-      .select("name")
+      .select("name, is_active, location_ids")
       .eq("id", programId)
       .eq("merchant_id", merchantId)
       .single();
 
     if (!existing) {
       return { success: false, error: "Program not found or belongs to another merchant", data: null };
+    }
+
+    const nextIsActive = input.is_active ?? existing.is_active;
+    const nextLocationIds =
+      input.location_ids !== undefined ? input.location_ids : existing.location_ids;
+
+    if (nextIsActive) {
+      await deactivateOverlappingActivePrograms({
+        supabase,
+        merchantId,
+        locationIds: nextLocationIds,
+        excludeProgramId: programId,
+      });
     }
 
     const { data, error } = await supabase
@@ -313,13 +394,22 @@ export async function ToggleLoyaltyProgram(
     // Get existing program for audit
     const { data: existing } = await supabase
       .from("loyalty_programs")
-      .select("name, is_active")
+      .select("name, is_active, location_ids")
       .eq("id", programId)
       .eq("merchant_id", merchantId)
       .single();
 
     if (!existing) {
       return { success: false, error: "Program not found or belongs to another merchant", data: null };
+    }
+
+    if (isActive) {
+      await deactivateOverlappingActivePrograms({
+        supabase,
+        merchantId,
+        locationIds: existing.location_ids,
+        excludeProgramId: programId,
+      });
     }
 
     const { data, error } = await supabase
