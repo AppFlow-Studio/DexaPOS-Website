@@ -14,8 +14,8 @@ export const FONT_GOOGLE_URLS: Record<string, string> = {
 };
 
 // Templates available for selection in the admin UI.
-// "bold" is intentionally excluded — its rendering code is preserved but the template is disabled.
-export const AVAILABLE_TEMPLATES = ["classic", "minimal"] as const;
+// "bold" and "minimal" are excluded — code preserved but disabled.
+export const AVAILABLE_TEMPLATES = ["classic", "hero", "market", "boutique"] as const;
 export type AvailableTemplateId = (typeof AVAILABLE_TEMPLATES)[number];
 
 // Typography and geometry vary per template — colors do not.
@@ -55,6 +55,45 @@ export const TEMPLATE_DEFAULTS = {
     fontDisplay: "'DM Serif Display', serif",
     fontUrl:
       "https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=DM+Serif+Display&display=swap",
+  },
+  // Hero: sticky horizontal category nav, horizontal cards (image right), slide-in cart drawer
+  hero: {
+    bg: "#F8F9FA",
+    card: "#FFFFFF",
+    text: "#1A1A1A",
+    textSecondary: "#666666",
+    border: "#E5E5E5",
+    radius: "12px",
+    font: "'Inter', sans-serif",
+    fontDisplay: "'Inter', sans-serif",
+    fontUrl:
+      "https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap",
+  },
+  // Market: sidebar w/ filters + sort dropdown + grid/list toggle
+  market: {
+    bg: "#F9FAFB",
+    card: "#FFFFFF",
+    text: "#111827",
+    textSecondary: "#6B7280",
+    border: "#E5E7EB",
+    radius: "12px",
+    font: "'Inter', sans-serif",
+    fontDisplay: "'Inter', sans-serif",
+    fontUrl:
+      "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap",
+  },
+  // Boutique: 320px sticky side-nav + hero banner + vertical cards with hover-reveal add
+  boutique: {
+    bg: "#FFFFFF",
+    card: "#FFFFFF",
+    text: "#1A1A1A",
+    textSecondary: "#6B7280",
+    border: "#E5E7EB",
+    radius: "16px",
+    font: "'Playfair Display', serif",
+    fontDisplay: "'Playfair Display', serif",
+    fontUrl:
+      "https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap",
   },
 } as const;
 
