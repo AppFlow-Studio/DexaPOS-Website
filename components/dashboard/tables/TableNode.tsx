@@ -385,7 +385,7 @@ export function TableNode ({
                 variant='destructive'
                 size='icon'
                 className='h-6 w-6 rounded-full shadow-lg'
-                title='Delete table (Delete key)'
+                title='Delete object (Delete key)'
               >
                 <Trash2 className='h-3 w-3' />
               </Button>

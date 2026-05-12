@@ -124,6 +124,31 @@ export function FloorPlanCanvasView({ locationId, initialFloorPlanId, onBack, re
     const [canvasWidth, setCanvasWidth] = useState<string>('')
     const [canvasHeight, setCanvasHeight] = useState<string>('')
 
+    const getObjectDescriptor = useCallback((object?: FloorPlanObject | null) => {
+        if (!object) return 'object'
+        if (object.category === 'table') return 'table'
+        if (object.category === 'booth') return 'booth'
+
+        const shapeLabel = TABLE_SHAPES[object.shape_id]?.label?.trim()
+        return shapeLabel ? shapeLabel.toLowerCase() : 'object'
+    }, [])
+
+    const getSelectionDescriptor = useCallback((objectIds: string[]) => {
+        const selectedObjects = objectIds
+            .map((id) => draftTables.find((table) => table.id === id))
+            .filter((table): table is FloorPlanObject => Boolean(table))
+
+        if (selectedObjects.length === 0) return 'objects'
+
+        const descriptors = new Set(selectedObjects.map((object) => getObjectDescriptor(object)))
+        if (descriptors.size === 1) {
+            const [descriptor] = Array.from(descriptors)
+            return selectedObjects.length === 1 ? descriptor : `${descriptor}s`
+        }
+
+        return 'objects'
+    }, [draftTables, getObjectDescriptor])
+
     const buildUniqueName = useCallback((baseName: string, usedNames: Set<string>) => {
         let index = 1
         let candidate = `${baseName} ${index}`
@@ -400,24 +425,22 @@ export function FloorPlanCanvasView({ locationId, initialFloorPlanId, onBack, re
                 e.preventDefault()
                 handleRedo()
             } else if (e.key === 'Delete' || e.key === 'Backspace') {
-                // Delete selected tables
+                // Delete selected objects
                 if (selectedTableIds.length > 0) {
                     e.preventDefault()
-                    // Show confirmation for first table, or delete all if confirmed
                     if (selectedTableIds.length === 1) {
                         setTableToDelete(selectedTableIds[0])
                     } else {
-                        // For multiple tables, show confirmation
+                        const selectionDescriptor = getSelectionDescriptor(selectedTableIds)
                         const confirmed = window.confirm(
-                            `Are you sure you want to delete ${selectedTableIds.length} tables? This action can be undone.`
+                            `Are you sure you want to delete ${selectedTableIds.length} ${selectionDescriptor}? This action can be undone.`
                         )
                         if (confirmed) {
-                            // removeTableFromDraft already saves snapshots internally
                             selectedTableIds.forEach((tableId) => {
                                 removeTableFromDraft(tableId)
                             })
                             clearSelection()
-                            toast.success(`${selectedTableIds.length} tables deleted`)
+                            toast.success(`${selectedTableIds.length} ${selectionDescriptor} deleted`)
                         }
                     }
                 }
@@ -435,7 +458,7 @@ export function FloorPlanCanvasView({ locationId, initialFloorPlanId, onBack, re
             window.removeEventListener('keydown', handleKeyDown)
             window.removeEventListener('keyup', handleKeyUp)
         }
-    }, [handleUndo, handleRedo, selectedTableIds, removeTableFromDraft, clearSelection])
+    }, [clearSelection, getSelectionDescriptor, handleRedo, handleUndo, removeTableFromDraft, selectedTableIds])
 
     // --- HANDLERS ---
 
@@ -638,6 +661,13 @@ export function FloorPlanCanvasView({ locationId, initialFloorPlanId, onBack, re
     const canUndo = past.length > 0
     const canRedo = future.length > 0
     const selectedTableId = selectedTableIds[0]
+    const objectToDelete = tableToDelete
+        ? draftTables.find((table) => table.id === tableToDelete) || null
+        : null
+    const objectDescriptor = getObjectDescriptor(objectToDelete)
+    const dialogTitleDescriptor = objectDescriptor === 'object'
+        ? 'Object'
+        : objectDescriptor.replace(/\b\w/g, (char) => char.toUpperCase())
 
     return (
         <div className="flex flex-col max-h-screen h-[90vh] bg-background shadow-xl rounded-lg overflow-hidden">
@@ -902,9 +932,9 @@ export function FloorPlanCanvasView({ locationId, initialFloorPlanId, onBack, re
             <Dialog open={!!tableToDelete} onOpenChange={(open) => !open && setTableToDelete(null)}>
                 <DialogContent>
                     <DialogHeader>
-                        <DialogTitle>Delete Table</DialogTitle>
+                        <DialogTitle>Delete {dialogTitleDescriptor}</DialogTitle>
                         <DialogDescription>
-                            Are you sure you want to delete this table? This action can be undone using the Undo button.
+                            Are you sure you want to delete this {objectDescriptor}? This action can be undone using the Undo button.
                         </DialogDescription>
                     </DialogHeader>
                     <DialogFooter>
