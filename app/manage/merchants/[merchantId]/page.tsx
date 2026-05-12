@@ -21,6 +21,7 @@ import {
     Monitor,
     MapPin,
     Globe,
+    FileSpreadsheet,
     type LucideIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -41,6 +42,7 @@ import { SettlementsSection } from './components/sections/SettlementsSection'
 import { DisputesSection } from './components/sections/DisputesSection'
 import { SupportTicketsSection } from './components/sections/SupportTicketsSection'
 import { LocationsSection } from './components/sections/LocationsSection'
+import { CloverImportDialog } from './components/CloverImportDialog'
 import { MerchantInfoModel } from '@/types/db-modles'
 
 type SectionKey =
@@ -120,6 +122,9 @@ export default function MerchantDetailsPage() {
 
     const canManageDevices = hasPermission('users.manage')
     const canManageMerchantStatus = hasPermission('hq.merchant.update')
+    const canImportMenu = hasPermission('hq.merchant.menu.import')
+
+    const [cloverImportOpen, setCloverImportOpen] = useState(false)
 
     const requestedTab = searchParams.get('tab') as SectionKey | null
     const initial: SectionKey =
@@ -158,6 +163,21 @@ export default function MerchantDetailsPage() {
 
             <MerchantHeaderBar merchant={merchantDetails} />
             <RiskStrip merchant={merchantDetails} />
+
+            {canImportMenu && (
+                <div className="flex justify-end">
+                    <Button variant="outline" size="sm" onClick={() => setCloverImportOpen(true)}>
+                        <FileSpreadsheet className="h-3.5 w-3.5 mr-1.5" />
+                        Import menu from Clover
+                    </Button>
+                </div>
+            )}
+
+            <CloverImportDialog
+                merchantId={merchantId as string}
+                open={cloverImportOpen}
+                onOpenChange={setCloverImportOpen}
+            />
 
             <Card>
                 <CardContent className="pt-6">

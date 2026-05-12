@@ -14,8 +14,8 @@ CREATE TABLE public.admin_merchant_access (
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT admin_merchant_access_pkey PRIMARY KEY (id),
   CONSTRAINT admin_merchant_access_admin_user_id_fkey FOREIGN KEY (admin_user_id) REFERENCES public.users(id),
-  CONSTRAINT admin_merchant_access_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
-  CONSTRAINT admin_merchant_access_granted_by_fkey FOREIGN KEY (granted_by) REFERENCES public.users(id)
+  CONSTRAINT admin_merchant_access_granted_by_fkey FOREIGN KEY (granted_by) REFERENCES public.users(id),
+  CONSTRAINT admin_merchant_access_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id)
 );
 CREATE TABLE public.audit_logs (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -42,13 +42,35 @@ CREATE TABLE public.audit_logs (
   location_id uuid,
   resource_id uuid,
   staff_profile_id uuid,
+  pii_access_type text CHECK (pii_access_type IS NULL OR (pii_access_type = ANY (ARRAY['attachment_view'::text, 'customer_pii_view'::text, 'customer_pii_export'::text, 'staff_pii_view'::text, 'merchant_billing_view'::text]))),
+  impersonation_session_id uuid,
+  is_impersonation boolean NOT NULL DEFAULT false,
+  impersonator_user_id text,
   CONSTRAINT audit_logs_pkey PRIMARY KEY (id),
-  CONSTRAINT audit_logs_actor_user_id_fkey FOREIGN KEY (actor_user_id) REFERENCES public.users(id),
   CONSTRAINT audit_logs_carrier_id_fkey FOREIGN KEY (carrier_id) REFERENCES public.organizations(id),
-  CONSTRAINT audit_logs_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(id),
-  CONSTRAINT audit_logs_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
   CONSTRAINT audit_logs_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
-  CONSTRAINT audit_logs_staff_profile_id_fkey FOREIGN KEY (staff_profile_id) REFERENCES public.staff_profiles(id)
+  CONSTRAINT audit_logs_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(id),
+  CONSTRAINT audit_logs_staff_profile_id_fkey FOREIGN KEY (staff_profile_id) REFERENCES public.staff_profiles(id),
+  CONSTRAINT audit_logs_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
+  CONSTRAINT audit_logs_actor_user_id_fkey FOREIGN KEY (actor_user_id) REFERENCES public.users(id),
+  CONSTRAINT audit_logs_impersonation_session_id_fkey FOREIGN KEY (impersonation_session_id) REFERENCES public.impersonation_sessions(id)
+);
+CREATE TABLE public.billable_services (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  service_code text NOT NULL UNIQUE,
+  display_name text NOT NULL,
+  service_category text NOT NULL CHECK (service_category = ANY (ARRAY['hardware'::text, 'software'::text, 'service'::text])),
+  pricing_model text NOT NULL CHECK (pricing_model = ANY (ARRAY['flat'::text, 'per_unit'::text, 'tiered'::text])),
+  base_price_monthly numeric NOT NULL CHECK (base_price_monthly >= 0::numeric),
+  additional_unit_price numeric CHECK (additional_unit_price IS NULL OR additional_unit_price >= 0::numeric),
+  included_quantity integer NOT NULL DEFAULT 1 CHECK (included_quantity >= 0),
+  card_surcharge_pct numeric NOT NULL DEFAULT 4.00 CHECK (card_surcharge_pct >= 0::numeric),
+  unit_label text NOT NULL DEFAULT 'unit'::text,
+  is_active boolean NOT NULL DEFAULT true,
+  metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT billable_services_pkey PRIMARY KEY (id)
 );
 CREATE TABLE public.carriers (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -64,22 +86,24 @@ CREATE TABLE public.cash_drawer_operations (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   session_id uuid NOT NULL,
   cash_drawer_id uuid NOT NULL,
-  operation_type character varying NOT NULL CHECK (operation_type::text = ANY (ARRAY['sale'::character varying, 'refund'::character varying, 'paid_in'::character varying, 'paid_out'::character varying, 'tip_out'::character varying, 'drop'::character varying, 'opening'::character varying, 'closing'::character varying, 'adjustment'::character varying]::text[])),
-  amount integer NOT NULL,
+  operation_type character varying NOT NULL CHECK (operation_type::text = ANY (ARRAY['cash_sale'::character varying::text, 'cash_refund'::character varying::text, 'pay_in'::character varying::text, 'pay_out'::character varying::text, 'no_sale'::character varying::text, 'cash_drop'::character varying::text, 'opening_count'::character varying::text, 'closing_count'::character varying::text, 'tip_out'::character varying::text])),
+  amount numeric NOT NULL,
   payment_id uuid,
   order_id uuid,
   reason character varying,
   performed_by uuid NOT NULL,
   approved_by uuid,
-  balance_after integer,
+  balance_after numeric,
   performed_at timestamp with time zone NOT NULL DEFAULT now(),
+  receipt_printed boolean DEFAULT false,
+  requires_approval boolean DEFAULT false,
   CONSTRAINT cash_drawer_operations_pkey PRIMARY KEY (id),
-  CONSTRAINT cash_drawer_operations_session_id_fkey FOREIGN KEY (session_id) REFERENCES public.cash_drawer_sessions(id),
+  CONSTRAINT cash_drawer_operations_approved_by_fkey FOREIGN KEY (approved_by) REFERENCES public.staff_profiles(id),
   CONSTRAINT cash_drawer_operations_cash_drawer_id_fkey FOREIGN KEY (cash_drawer_id) REFERENCES public.cash_drawers(id),
-  CONSTRAINT cash_drawer_operations_payment_id_fkey FOREIGN KEY (payment_id) REFERENCES public.order_payments(id),
   CONSTRAINT cash_drawer_operations_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id),
+  CONSTRAINT cash_drawer_operations_payment_id_fkey FOREIGN KEY (payment_id) REFERENCES public.order_payments(id),
   CONSTRAINT cash_drawer_operations_performed_by_fkey FOREIGN KEY (performed_by) REFERENCES public.staff_profiles(id),
-  CONSTRAINT cash_drawer_operations_approved_by_fkey FOREIGN KEY (approved_by) REFERENCES public.staff_profiles(id)
+  CONSTRAINT cash_drawer_operations_session_id_fkey FOREIGN KEY (session_id) REFERENCES public.cash_drawer_sessions(id)
 );
 CREATE TABLE public.cash_drawer_sessions (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -89,25 +113,26 @@ CREATE TABLE public.cash_drawer_sessions (
   business_date date NOT NULL DEFAULT CURRENT_DATE,
   opened_by uuid NOT NULL,
   opened_at timestamp with time zone NOT NULL DEFAULT now(),
-  opening_amount integer NOT NULL,
+  opening_amount numeric NOT NULL,
   opening_count_verified boolean DEFAULT false,
   opening_count_details jsonb,
   closed_by uuid,
   closed_at timestamp with time zone,
-  closing_amount integer,
+  closing_amount numeric,
   closing_count_verified boolean DEFAULT false,
   closing_count_details jsonb,
-  expected_cash integer,
-  variance integer,
+  expected_cash numeric,
+  variance numeric,
   variance_notes text,
-  status character varying DEFAULT 'open'::character varying CHECK (status::text = ANY (ARRAY['open'::character varying, 'closed'::character varying, 'reconciled'::character varying]::text[])),
+  status character varying DEFAULT 'open'::character varying CHECK (status::text = ANY (ARRAY['open'::character varying::text, 'counting'::character varying::text, 'closed'::character varying::text, 'reconciled'::character varying::text])),
   created_at timestamp with time zone NOT NULL DEFAULT now(),
+  is_blind_count boolean DEFAULT true,
   CONSTRAINT cash_drawer_sessions_pkey PRIMARY KEY (id),
   CONSTRAINT cash_drawer_sessions_cash_drawer_id_fkey FOREIGN KEY (cash_drawer_id) REFERENCES public.cash_drawers(id),
-  CONSTRAINT cash_drawer_sessions_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
+  CONSTRAINT cash_drawer_sessions_closed_by_fkey FOREIGN KEY (closed_by) REFERENCES public.staff_profiles(id),
   CONSTRAINT cash_drawer_sessions_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
-  CONSTRAINT cash_drawer_sessions_opened_by_fkey FOREIGN KEY (opened_by) REFERENCES public.staff_profiles(id),
-  CONSTRAINT cash_drawer_sessions_closed_by_fkey FOREIGN KEY (closed_by) REFERENCES public.staff_profiles(id)
+  CONSTRAINT cash_drawer_sessions_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
+  CONSTRAINT cash_drawer_sessions_opened_by_fkey FOREIGN KEY (opened_by) REFERENCES public.staff_profiles(id)
 );
 CREATE TABLE public.cash_drawers (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -121,9 +146,12 @@ CREATE TABLE public.cash_drawers (
   is_open boolean DEFAULT false,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  device_id uuid,
   CONSTRAINT cash_drawers_pkey PRIMARY KEY (id),
+  CONSTRAINT cash_drawers_device_id_fkey FOREIGN KEY (device_id) REFERENCES public.device_catalog(id),
+  CONSTRAINT cash_drawers_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
   CONSTRAINT cash_drawers_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
-  CONSTRAINT cash_drawers_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id)
+  CONSTRAINT cash_drawers_station_id_fkey FOREIGN KEY (station_id) REFERENCES public.stations(id)
 );
 CREATE TABLE public.categories (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -154,10 +182,28 @@ CREATE TABLE public.category_items (
   is_available boolean DEFAULT true,
   is_featured boolean DEFAULT false,
   updated_at timestamp with time zone,
+  custom_delivery_price numeric,
+  menu_id uuid,
   CONSTRAINT category_items_pkey PRIMARY KEY (id),
-  CONSTRAINT menu_item_categories_menu_item_id_fkey FOREIGN KEY (menu_item_id) REFERENCES public.menu_items(id),
   CONSTRAINT menu_item_categories_category_id_fkey FOREIGN KEY (category_id) REFERENCES public.categories(id),
-  CONSTRAINT menu_item_categories_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id)
+  CONSTRAINT menu_item_categories_menu_item_id_fkey FOREIGN KEY (menu_item_id) REFERENCES public.menu_items(id),
+  CONSTRAINT menu_item_categories_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
+  CONSTRAINT category_items_menu_id_fkey FOREIGN KEY (menu_id) REFERENCES public.menus(id)
+);
+CREATE TABLE public.category_modifier_groups (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  category_id uuid NOT NULL,
+  modifier_group_id uuid NOT NULL,
+  merchant_id uuid NOT NULL,
+  display_order integer,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  location_id uuid,
+  CONSTRAINT category_modifier_groups_pkey PRIMARY KEY (id),
+  CONSTRAINT category_modifier_groups_category_id_fkey FOREIGN KEY (category_id) REFERENCES public.categories(id),
+  CONSTRAINT category_modifier_groups_modifier_group_id_fkey FOREIGN KEY (modifier_group_id) REFERENCES public.modifier_groups(id),
+  CONSTRAINT category_modifier_groups_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
+  CONSTRAINT category_modifier_groups_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id)
 );
 CREATE TABLE public.category_schedules (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -167,9 +213,9 @@ CREATE TABLE public.category_schedules (
   menu_id uuid,
   merchant_id uuid,
   CONSTRAINT category_schedules_pkey PRIMARY KEY (id),
+  CONSTRAINT category_schedules_category_id_fkey FOREIGN KEY (category_id) REFERENCES public.categories(id),
   CONSTRAINT category_schedules_menu_id_fkey FOREIGN KEY (menu_id) REFERENCES public.location_menus(id),
   CONSTRAINT category_schedules_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
-  CONSTRAINT category_schedules_category_id_fkey FOREIGN KEY (category_id) REFERENCES public.categories(id),
   CONSTRAINT category_schedules_schedule_id_fkey FOREIGN KEY (schedule_id) REFERENCES public.schedules(id)
 );
 CREATE TABLE public.cfd_carousel_images (
@@ -183,6 +229,18 @@ CREATE TABLE public.cfd_carousel_images (
   CONSTRAINT cfd_carousel_images_pkey PRIMARY KEY (id),
   CONSTRAINT cfd_carousel_images_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id)
 );
+CREATE TABLE public.cfd_ordering_panel_images (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  location_id uuid NOT NULL,
+  panel_slot text NOT NULL CHECK (panel_slot = ANY (ARRAY['primary'::text, 'secondary'::text])),
+  image_url text NOT NULL,
+  is_active boolean DEFAULT true,
+  display_order integer DEFAULT 1,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT cfd_ordering_panel_images_pkey PRIMARY KEY (id),
+  CONSTRAINT cfd_ordering_panel_images_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id)
+);
 CREATE TABLE public.chargebacks (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   original_payment_id uuid NOT NULL,
@@ -193,7 +251,7 @@ CREATE TABLE public.chargebacks (
   reason_code character varying NOT NULL,
   reason_description character varying,
   card_network character varying,
-  status character varying NOT NULL DEFAULT 'notified'::character varying CHECK (status::text = ANY (ARRAY['notified'::character varying, 'under_review'::character varying, 'defended'::character varying, 'won'::character varying, 'lost'::character varying, 'expired'::character varying]::text[])),
+  status character varying NOT NULL DEFAULT 'notified'::character varying CHECK (status::text = ANY (ARRAY['notified'::character varying::text, 'under_review'::character varying::text, 'defended'::character varying::text, 'won'::character varying::text, 'lost'::character varying::text, 'expired'::character varying::text])),
   defendable boolean DEFAULT true,
   defense_deadline timestamp with time zone,
   defense_submitted_at timestamp with time zone,
@@ -205,9 +263,9 @@ CREATE TABLE public.chargebacks (
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT chargebacks_pkey PRIMARY KEY (id),
-  CONSTRAINT chargebacks_original_payment_id_fkey FOREIGN KEY (original_payment_id) REFERENCES public.order_payments(id),
+  CONSTRAINT chargebacks_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
   CONSTRAINT chargebacks_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
-  CONSTRAINT chargebacks_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id)
+  CONSTRAINT chargebacks_original_payment_id_fkey FOREIGN KEY (original_payment_id) REFERENCES public.order_payments(id)
 );
 CREATE TABLE public.customer_activities (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -221,6 +279,91 @@ CREATE TABLE public.customer_activities (
   CONSTRAINT customer_activities_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.customers(id),
   CONSTRAINT customer_activities_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
   CONSTRAINT customer_activities_related_order_id_fkey FOREIGN KEY (related_order_id) REFERENCES public.orders(id)
+);
+CREATE TABLE public.customer_feedback (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  merchant_id uuid NOT NULL,
+  location_id uuid NOT NULL,
+  customer_id uuid NOT NULL,
+  order_id uuid,
+  session_id uuid,
+  overall_rating smallint NOT NULL CHECK (overall_rating >= 1 AND overall_rating <= 5),
+  food_rating smallint CHECK (food_rating >= 1 AND food_rating <= 5),
+  service_rating smallint CHECK (service_rating >= 1 AND service_rating <= 5),
+  ambiance_rating smallint CHECK (ambiance_rating >= 1 AND ambiance_rating <= 5),
+  value_rating smallint CHECK (value_rating >= 1 AND value_rating <= 5),
+  comment text,
+  server_staff_id uuid,
+  source text NOT NULL DEFAULT 'receipt_link'::text,
+  response text,
+  responded_at timestamp with time zone,
+  responded_by text,
+  is_public boolean DEFAULT false,
+  is_flagged boolean DEFAULT false,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT customer_feedback_pkey PRIMARY KEY (id),
+  CONSTRAINT customer_feedback_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.customers(id),
+  CONSTRAINT customer_feedback_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
+  CONSTRAINT customer_feedback_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
+  CONSTRAINT customer_feedback_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id),
+  CONSTRAINT customer_feedback_responded_by_fkey FOREIGN KEY (responded_by) REFERENCES public.users(id),
+  CONSTRAINT customer_feedback_server_staff_id_fkey FOREIGN KEY (server_staff_id) REFERENCES public.staff_profiles(id),
+  CONSTRAINT customer_feedback_session_id_fkey FOREIGN KEY (session_id) REFERENCES public.table_sessions(id)
+);
+CREATE TABLE public.customer_notes (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  customer_id uuid NOT NULL,
+  merchant_id uuid NOT NULL,
+  content text NOT NULL,
+  created_by text,
+  created_by_name text,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT customer_notes_pkey PRIMARY KEY (id),
+  CONSTRAINT customer_notes_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id),
+  CONSTRAINT customer_notes_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.customers(id),
+  CONSTRAINT customer_notes_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id)
+);
+CREATE TABLE public.customer_payment_methods (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  merchant_id uuid NOT NULL,
+  customer_id uuid NOT NULL,
+  payment_device_id uuid NOT NULL,
+  customer_vault_id text NOT NULL,
+  payment_method_token text,
+  card_brand text,
+  card_last_four text,
+  card_exp_month integer CHECK (card_exp_month IS NULL OR card_exp_month >= 1 AND card_exp_month <= 12),
+  card_exp_year integer CHECK (card_exp_year IS NULL OR card_exp_year >= 2024),
+  cardholder_name text,
+  billing_address_line1 text,
+  billing_postal_code text,
+  is_default boolean NOT NULL DEFAULT false,
+  is_active boolean NOT NULL DEFAULT true,
+  last_used_at timestamp with time zone,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT customer_payment_methods_pkey PRIMARY KEY (id),
+  CONSTRAINT customer_payment_methods_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
+  CONSTRAINT customer_payment_methods_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.customers(id),
+  CONSTRAINT customer_payment_methods_payment_device_id_fkey FOREIGN KEY (payment_device_id) REFERENCES public.location_payment_devices(id)
+);
+CREATE TABLE public.customer_saved_addresses (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  customer_id uuid NOT NULL,
+  label text NOT NULL DEFAULT 'Home'::text,
+  address_line1 text NOT NULL,
+  address_line2 text,
+  city text NOT NULL,
+  state text NOT NULL,
+  postal_code text NOT NULL,
+  delivery_notes text,
+  is_default boolean NOT NULL DEFAULT false,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT customer_saved_addresses_pkey PRIMARY KEY (id),
+  CONSTRAINT customer_saved_addresses_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.customers(id)
 );
 CREATE TABLE public.customers (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -240,12 +383,136 @@ CREATE TABLE public.customers (
   notes text,
   updated_at timestamp with time zone DEFAULT now(),
   address text,
+  sms_opt_in boolean DEFAULT false,
+  email_opt_in boolean DEFAULT false,
+  marketing_unsubscribed_at timestamp with time zone,
+  sms_opt_in_at timestamp with time zone,
+  email_opt_in_at timestamp with time zone,
+  receipt_via_sms boolean DEFAULT false,
+  receipt_via_email boolean DEFAULT false,
+  preferred_language text DEFAULT 'en'::text,
+  birthday date,
+  anniversary date,
+  dietary_preferences ARRAY DEFAULT '{}'::text[],
+  allergy_notes text,
+  preferred_server_id uuid,
+  preferred_table text,
+  preferred_seating text,
+  company_name text,
+  vip_level text DEFAULT 'none'::text,
+  is_active boolean DEFAULT true,
+  referral_code text UNIQUE,
+  referred_by_customer_id uuid,
   CONSTRAINT customers_pkey PRIMARY KEY (id),
-  CONSTRAINT customers_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id)
+  CONSTRAINT customers_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
+  CONSTRAINT customers_preferred_server_id_fkey FOREIGN KEY (preferred_server_id) REFERENCES public.staff_profiles(id),
+  CONSTRAINT customers_referred_by_customer_id_fkey FOREIGN KEY (referred_by_customer_id) REFERENCES public.customers(id)
+);
+CREATE TABLE public.delivery_zones (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  store_config_id uuid NOT NULL,
+  zone_name text NOT NULL,
+  zone_type text NOT NULL CHECK (zone_type = ANY (ARRAY['radius'::text, 'polygon'::text])),
+  radius_miles numeric,
+  polygon_coordinates jsonb,
+  delivery_fee_cents integer NOT NULL DEFAULT 0,
+  min_order_cents integer DEFAULT 0,
+  free_delivery_threshold_cents integer,
+  estimated_minutes integer DEFAULT 30,
+  is_active boolean NOT NULL DEFAULT true,
+  display_order integer NOT NULL DEFAULT 0,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  delivery_fee numeric,
+  free_delivery_threshold numeric,
+  min_order numeric,
+  CONSTRAINT delivery_zones_pkey PRIMARY KEY (id),
+  CONSTRAINT delivery_zones_store_config_id_fkey FOREIGN KEY (store_config_id) REFERENCES public.online_store_config(id)
+);
+CREATE TABLE public.device_alerts (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  merchant_id uuid NOT NULL,
+  location_id uuid NOT NULL,
+  station_id uuid,
+  alert_type text NOT NULL,
+  severity text NOT NULL DEFAULT 'warning'::text,
+  title text NOT NULL,
+  message text NOT NULL,
+  device_name text,
+  is_resolved boolean DEFAULT false,
+  resolved_at timestamp with time zone,
+  resolved_by text,
+  auto_resolved boolean DEFAULT false,
+  acknowledged_at timestamp with time zone,
+  acknowledged_by text,
+  created_at timestamp with time zone DEFAULT now(),
+  alert_key text NOT NULL,
+  CONSTRAINT device_alerts_pkey PRIMARY KEY (id),
+  CONSTRAINT device_alerts_acknowledged_by_fkey FOREIGN KEY (acknowledged_by) REFERENCES public.members(id),
+  CONSTRAINT device_alerts_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
+  CONSTRAINT device_alerts_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
+  CONSTRAINT device_alerts_resolved_by_fkey FOREIGN KEY (resolved_by) REFERENCES public.members(id),
+  CONSTRAINT device_alerts_station_id_fkey FOREIGN KEY (station_id) REFERENCES public.stations(id)
+);
+CREATE TABLE public.device_assignments (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  device_id uuid NOT NULL,
+  previous_status USER-DEFINED,
+  new_status USER-DEFINED NOT NULL,
+  from_merchant_id uuid,
+  to_merchant_id uuid,
+  from_location_id uuid,
+  to_location_id uuid,
+  performed_by text NOT NULL,
+  performed_by_name text,
+  tracking_number text,
+  reason text,
+  notes text,
+  assigned_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT device_assignments_pkey PRIMARY KEY (id),
+  CONSTRAINT device_assignments_device_id_fkey FOREIGN KEY (device_id) REFERENCES public.device_inventory(id),
+  CONSTRAINT device_assignments_from_location_id_fkey FOREIGN KEY (from_location_id) REFERENCES public.locations(id),
+  CONSTRAINT device_assignments_from_merchant_id_fkey FOREIGN KEY (from_merchant_id) REFERENCES public.merchants(id),
+  CONSTRAINT device_assignments_to_location_id_fkey FOREIGN KEY (to_location_id) REFERENCES public.locations(id),
+  CONSTRAINT device_assignments_to_merchant_id_fkey FOREIGN KEY (to_merchant_id) REFERENCES public.merchants(id)
+);
+CREATE TABLE public.device_catalog (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  device_category text NOT NULL CHECK (device_category = ANY (ARRAY['pos_tablet'::text, 'cfd'::text, 'kds'::text, 'payment_terminal'::text, 'receipt_printer'::text, 'kitchen_printer'::text, 'cash_drawer'::text])),
+  manufacturer text NOT NULL,
+  model_name text NOT NULL,
+  model_sku text UNIQUE,
+  hardware_revision text,
+  specs jsonb NOT NULL DEFAULT '{}'::jsonb,
+  unit_cost_cents integer,
+  monthly_fee_cents integer,
+  is_active boolean NOT NULL DEFAULT true,
+  discontinued_at timestamp with time zone,
+  image_url text,
+  notes text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  unit_cost numeric,
+  monthly_fee numeric,
+  CONSTRAINT device_catalog_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.device_config_history (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  device_id uuid NOT NULL,
+  change_type text NOT NULL CHECK (change_type = ANY (ARRAY['firmware_update'::text, 'app_update'::text, 'config_change'::text, 'factory_reset'::text, 'reprovisioning'::text])),
+  previous_value text,
+  new_value text,
+  config_snapshot jsonb,
+  performed_by text,
+  performed_by_name text,
+  notes text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT device_config_history_pkey PRIMARY KEY (id),
+  CONSTRAINT device_config_history_device_id_fkey FOREIGN KEY (device_id) REFERENCES public.device_inventory(id)
 );
 CREATE TABLE public.device_heartbeats (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
-  station_id uuid NOT NULL,
+  station_id uuid NOT NULL UNIQUE,
   location_id uuid NOT NULL,
   heartbeat_at timestamp with time zone NOT NULL DEFAULT now(),
   is_online boolean NOT NULL DEFAULT true,
@@ -258,9 +525,78 @@ CREATE TABLE public.device_heartbeats (
   printer_status text,
   cfd_connected boolean,
   metadata jsonb DEFAULT '{}'::jsonb,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT device_heartbeats_pkey PRIMARY KEY (id),
-  CONSTRAINT device_heartbeats_station_id_fkey FOREIGN KEY (station_id) REFERENCES public.stations(id),
-  CONSTRAINT device_heartbeats_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id)
+  CONSTRAINT device_heartbeats_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
+  CONSTRAINT device_heartbeats_station_id_fkey FOREIGN KEY (station_id) REFERENCES public.stations(id)
+);
+CREATE TABLE public.device_inventory (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  catalog_id uuid NOT NULL,
+  serial_number text NOT NULL,
+  mac_address text,
+  status USER-DEFINED NOT NULL DEFAULT 'in_warehouse'::device_lifecycle_status,
+  merchant_id uuid,
+  location_id uuid,
+  linked_station_id uuid,
+  linked_payment_terminal_id uuid,
+  linked_printer_id uuid,
+  purchased_at date,
+  warranty_expires_at date,
+  purchase_order_number text,
+  firmware_version text,
+  app_version text,
+  last_config_at timestamp with time zone,
+  condition text NOT NULL DEFAULT 'new'::text CHECK (condition = ANY (ARRAY['new'::text, 'good'::text, 'fair'::text, 'damaged'::text, 'refurbished'::text])),
+  notes text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  created_by text,
+  CONSTRAINT device_inventory_pkey PRIMARY KEY (id),
+  CONSTRAINT device_inventory_catalog_id_fkey FOREIGN KEY (catalog_id) REFERENCES public.device_catalog(id),
+  CONSTRAINT device_inventory_linked_payment_terminal_id_fkey FOREIGN KEY (linked_payment_terminal_id) REFERENCES public.payment_terminals(id),
+  CONSTRAINT device_inventory_linked_printer_id_fkey FOREIGN KEY (linked_printer_id) REFERENCES public.printers(id),
+  CONSTRAINT device_inventory_linked_station_id_fkey FOREIGN KEY (linked_station_id) REFERENCES public.stations(id),
+  CONSTRAINT device_inventory_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
+  CONSTRAINT device_inventory_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id)
+);
+CREATE TABLE public.device_login_history (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  station_id uuid NOT NULL,
+  merchant_id uuid NOT NULL,
+  location_id uuid NOT NULL,
+  session_id uuid,
+  device_id text NOT NULL,
+  device_name text,
+  device_model text,
+  staff_id uuid,
+  staff_name text,
+  app_version text,
+  os_version text,
+  ip_address inet,
+  logged_in_at timestamp with time zone NOT NULL DEFAULT now(),
+  logged_out_at timestamp with time zone,
+  logout_reason text CHECK (logout_reason IS NULL OR (logout_reason = ANY (ARRAY['logout'::text, 'kicked'::text, 'ended'::text, 'expired'::text]))),
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT device_login_history_pkey PRIMARY KEY (id),
+  CONSTRAINT device_login_history_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
+  CONSTRAINT device_login_history_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
+  CONSTRAINT device_login_history_session_id_fkey FOREIGN KEY (session_id) REFERENCES public.station_sessions(id),
+  CONSTRAINT device_login_history_staff_id_fkey FOREIGN KEY (staff_id) REFERENCES public.staff_profiles(id),
+  CONSTRAINT device_login_history_station_id_fkey FOREIGN KEY (station_id) REFERENCES public.stations(id)
+);
+CREATE TABLE public.device_notes (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  device_id uuid NOT NULL,
+  note_type text NOT NULL DEFAULT 'general'::text CHECK (note_type = ANY (ARRAY['support'::text, 'maintenance'::text, 'incident'::text, 'general'::text, 'warranty_claim'::text])),
+  content text NOT NULL,
+  created_by text NOT NULL,
+  created_by_name text,
+  external_ticket_id text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT device_notes_pkey PRIMARY KEY (id),
+  CONSTRAINT device_notes_device_id_fkey FOREIGN KEY (device_id) REFERENCES public.device_inventory(id)
 );
 CREATE TABLE public.discount_usage_log (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -275,11 +611,11 @@ CREATE TABLE public.discount_usage_log (
   voided boolean DEFAULT false,
   voided_at timestamp with time zone,
   CONSTRAINT discount_usage_log_pkey PRIMARY KEY (id),
+  CONSTRAINT discount_usage_log_applied_by_staff_profiles_id_fkey FOREIGN KEY (applied_by_staff_profiles_id) REFERENCES public.staff_profiles(id),
   CONSTRAINT discount_usage_log_discount_id_fkey FOREIGN KEY (discount_id) REFERENCES public.discounts(id),
   CONSTRAINT discount_usage_log_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
   CONSTRAINT discount_usage_log_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id),
-  CONSTRAINT discount_usage_log_order_item_id_fkey FOREIGN KEY (order_item_id) REFERENCES public.order_items(id),
-  CONSTRAINT discount_usage_log_applied_by_staff_profiles_id_fkey FOREIGN KEY (applied_by_staff_profiles_id) REFERENCES public.staff_profiles(id)
+  CONSTRAINT discount_usage_log_order_item_id_fkey FOREIGN KEY (order_item_id) REFERENCES public.order_items(id)
 );
 CREATE TABLE public.discounts (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -311,8 +647,8 @@ CREATE TABLE public.discounts (
   display_order integer DEFAULT 0,
   location_id uuid,
   CONSTRAINT discounts_pkey PRIMARY KEY (id),
-  CONSTRAINT discounts_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
-  CONSTRAINT discounts_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id)
+  CONSTRAINT discounts_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
+  CONSTRAINT discounts_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id)
 );
 CREATE TABLE public.employee_daily_tips (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -320,25 +656,27 @@ CREATE TABLE public.employee_daily_tips (
   merchant_id uuid NOT NULL,
   location_id uuid NOT NULL,
   shift_date date NOT NULL,
-  cash_tips_declared integer DEFAULT 0,
-  charged_tips integer DEFAULT 0,
-  tip_pool_received integer DEFAULT 0,
-  tip_pool_contributed integer DEFAULT 0,
-  tip_out_given integer DEFAULT 0,
-  tip_out_received integer DEFAULT 0,
-  total_tips integer DEFAULT (((((cash_tips_declared + charged_tips) + tip_pool_received) - tip_pool_contributed) + tip_out_received) - tip_out_given),
+  cash_tips_declared numeric DEFAULT 0.00,
+  charged_tips numeric DEFAULT 0.00,
+  tip_pool_received numeric DEFAULT 0.00,
+  tip_pool_contributed numeric DEFAULT 0.00,
+  tip_out_given numeric DEFAULT 0.00,
+  tip_out_received numeric DEFAULT 0.00,
   hours_worked numeric,
-  gross_sales integer,
+  gross_sales numeric,
   cover_count integer,
   is_verified boolean DEFAULT false,
   verified_by uuid,
   verified_at timestamp with time zone,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  cash_payment_tips numeric NOT NULL DEFAULT 0,
+  total_tips numeric DEFAULT ((((((cash_tips_declared + cash_payment_tips) + charged_tips) + tip_pool_received) - tip_pool_contributed) + tip_out_received) - tip_out_given),
+  charged_tips_processor_fee numeric NOT NULL DEFAULT 0,
   CONSTRAINT employee_daily_tips_pkey PRIMARY KEY (id),
-  CONSTRAINT employee_daily_tips_staff_profile_id_fkey FOREIGN KEY (staff_profile_id) REFERENCES public.staff_profiles(id),
-  CONSTRAINT employee_daily_tips_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
   CONSTRAINT employee_daily_tips_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
+  CONSTRAINT employee_daily_tips_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
+  CONSTRAINT employee_daily_tips_staff_profile_id_fkey FOREIGN KEY (staff_profile_id) REFERENCES public.staff_profiles(id),
   CONSTRAINT employee_daily_tips_verified_by_fkey FOREIGN KEY (verified_by) REFERENCES public.staff_profiles(id)
 );
 CREATE TABLE public.floor_plan_objects (
@@ -370,8 +708,8 @@ CREATE TABLE public.floor_plan_objects (
   updated_at timestamp with time zone DEFAULT now(),
   CONSTRAINT floor_plan_objects_pkey PRIMARY KEY (id),
   CONSTRAINT floor_plan_objects_floor_plan_id_fkey FOREIGN KEY (floor_plan_id) REFERENCES public.floor_plans(id),
-  CONSTRAINT floor_plan_objects_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
-  CONSTRAINT floor_plan_objects_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id)
+  CONSTRAINT floor_plan_objects_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
+  CONSTRAINT floor_plan_objects_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id)
 );
 CREATE TABLE public.floor_plans (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -390,9 +728,69 @@ CREATE TABLE public.floor_plans (
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
   CONSTRAINT floor_plans_pkey PRIMARY KEY (id),
-  CONSTRAINT floor_plans_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
+  CONSTRAINT floor_plans_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.staff_profiles(id),
   CONSTRAINT floor_plans_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
-  CONSTRAINT floor_plans_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.staff_profiles(id)
+  CONSTRAINT floor_plans_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id)
+);
+CREATE TABLE public.idempotency_keys (
+  key uuid NOT NULL,
+  op text NOT NULL,
+  result_json jsonb,
+  status text NOT NULL DEFAULT 'claimed'::text CHECK (status = ANY (ARRAY['claimed'::text, 'completed'::text])),
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  completed_at timestamp with time zone,
+  CONSTRAINT idempotency_keys_pkey PRIMARY KEY (key, op)
+);
+CREATE TABLE public.impersonation_sessions (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  hq_user_id text NOT NULL,
+  target_merchant_id uuid NOT NULL,
+  started_at timestamp with time zone NOT NULL DEFAULT now(),
+  ended_at timestamp with time zone,
+  end_reason text CHECK (end_reason IS NULL OR (end_reason = ANY (ARRAY['user_exit'::text, 'idle_timeout'::text, 'revoked_access'::text, 'session_expired'::text, 'superseded'::text]))),
+  last_validated_at timestamp with time zone NOT NULL DEFAULT now(),
+  ip_address inet,
+  user_agent text,
+  reason text,
+  CONSTRAINT impersonation_sessions_pkey PRIMARY KEY (id),
+  CONSTRAINT impersonation_sessions_target_merchant_id_fkey FOREIGN KEY (target_merchant_id) REFERENCES public.merchants(id)
+);
+CREATE TABLE public.inventory_count_items (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  count_id uuid NOT NULL,
+  inventory_item_id uuid NOT NULL,
+  expected_quantity numeric NOT NULL DEFAULT 0,
+  counted_quantity numeric,
+  variance numeric DEFAULT 
+CASE
+    WHEN (counted_quantity IS NOT NULL) THEN (counted_quantity - expected_quantity)
+    ELSE NULL::numeric
+END,
+  variance_cost numeric,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT inventory_count_items_pkey PRIMARY KEY (id),
+  CONSTRAINT inventory_count_items_count_id_fkey FOREIGN KEY (count_id) REFERENCES public.inventory_counts(id),
+  CONSTRAINT inventory_count_items_inventory_item_id_fkey FOREIGN KEY (inventory_item_id) REFERENCES public.inventory_items(id)
+);
+CREATE TABLE public.inventory_counts (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  merchant_id uuid NOT NULL,
+  location_id uuid NOT NULL,
+  count_name text NOT NULL,
+  status text NOT NULL DEFAULT 'draft'::text CHECK (status = ANY (ARRAY['draft'::text, 'in_progress'::text, 'completed'::text, 'approved'::text])),
+  assigned_to_user_id text,
+  assigned_to_name text,
+  approved_by_user_id text,
+  approved_by_name text,
+  notes text,
+  started_at timestamp with time zone,
+  completed_at timestamp with time zone,
+  approved_at timestamp with time zone,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT inventory_counts_pkey PRIMARY KEY (id),
+  CONSTRAINT inventory_counts_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
+  CONSTRAINT inventory_counts_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id)
 );
 CREATE TABLE public.inventory_items (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -406,14 +804,58 @@ CREATE TABLE public.inventory_items (
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
   location_id uuid,
-  stock_mode text DEFAULT 'in_stock'::text CHECK (stock_mode = ANY (ARRAY['in_stock'::text, 'stock_tracking'::text, 'out_of_stock'::text])),
+  stock_mode USER-DEFINED DEFAULT 'in_stock'::inventory_stock_mode,
   current_stock numeric DEFAULT 0,
   reorder_point numeric DEFAULT 0,
   is_active boolean DEFAULT true,
+  reorder_quantity numeric,
   CONSTRAINT inventory_items_pkey PRIMARY KEY (id),
-  CONSTRAINT inventory_items_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
   CONSTRAINT inventory_items_default_vendor_id_fkey FOREIGN KEY (vendor_id) REFERENCES public.vendors(id),
-  CONSTRAINT inventory_items_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id)
+  CONSTRAINT inventory_items_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
+  CONSTRAINT inventory_items_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id)
+);
+CREATE TABLE public.invoice_items (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  invoice_id uuid NOT NULL,
+  menu_item_id uuid,
+  name text NOT NULL,
+  description text,
+  quantity numeric NOT NULL DEFAULT 1 CHECK (quantity > 0::numeric),
+  unit_price numeric NOT NULL DEFAULT 0,
+  total_price numeric NOT NULL DEFAULT 0,
+  sort_order integer NOT NULL DEFAULT 0,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT invoice_items_pkey PRIMARY KEY (id),
+  CONSTRAINT invoice_items_invoice_id_fkey FOREIGN KEY (invoice_id) REFERENCES public.invoices(id),
+  CONSTRAINT invoice_items_menu_item_id_fkey FOREIGN KEY (menu_item_id) REFERENCES public.menu_items(id)
+);
+CREATE TABLE public.invoice_number_sequences (
+  merchant_id uuid NOT NULL,
+  last_number integer NOT NULL DEFAULT 0,
+  CONSTRAINT invoice_number_sequences_pkey PRIMARY KEY (merchant_id),
+  CONSTRAINT invoice_number_sequences_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id)
+);
+CREATE TABLE public.invoices (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  merchant_id uuid NOT NULL,
+  location_id uuid,
+  customer_id uuid,
+  invoice_number text NOT NULL,
+  status text NOT NULL DEFAULT 'draft'::text CHECK (status = ANY (ARRAY['draft'::text, 'sent'::text, 'viewed'::text, 'paid'::text, 'overdue'::text, 'cancelled'::text])),
+  payment_due_type text NOT NULL DEFAULT 'upon_receipt'::text CHECK (payment_due_type = ANY (ARRAY['upon_receipt'::text, 'net_15'::text, 'net_30'::text, 'net_60'::text, 'custom'::text])),
+  due_date date,
+  subtotal numeric NOT NULL DEFAULT 0,
+  discount_amount numeric NOT NULL DEFAULT 0,
+  tax_rate numeric NOT NULL DEFAULT 0,
+  tax_amount numeric NOT NULL DEFAULT 0,
+  total_amount numeric NOT NULL DEFAULT 0,
+  note text CHECK (char_length(note) <= 200),
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT invoices_pkey PRIMARY KEY (id),
+  CONSTRAINT invoices_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.customers(id),
+  CONSTRAINT invoices_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
+  CONSTRAINT invoices_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id)
 );
 CREATE TABLE public.item_addons (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -482,10 +924,11 @@ CREATE TABLE public.kds_displays (
   is_active boolean DEFAULT true,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
+  sound_config jsonb,
   CONSTRAINT kds_displays_pkey PRIMARY KEY (id),
-  CONSTRAINT kds_displays_station_id_fkey FOREIGN KEY (station_id) REFERENCES public.stations(id),
+  CONSTRAINT kds_displays_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
   CONSTRAINT kds_displays_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
-  CONSTRAINT kds_displays_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id)
+  CONSTRAINT kds_displays_station_id_fkey FOREIGN KEY (station_id) REFERENCES public.stations(id)
 );
 CREATE TABLE public.kds_item_status (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -499,10 +942,10 @@ CREATE TABLE public.kds_item_status (
   bumped_by uuid,
   created_at timestamp with time zone DEFAULT now(),
   CONSTRAINT kds_item_status_pkey PRIMARY KEY (id),
+  CONSTRAINT kds_item_status_bumped_by_fkey FOREIGN KEY (bumped_by) REFERENCES public.location_members(id),
   CONSTRAINT kds_item_status_kds_display_id_fkey FOREIGN KEY (kds_display_id) REFERENCES public.kds_displays(id),
   CONSTRAINT kds_item_status_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id),
-  CONSTRAINT kds_item_status_order_item_id_fkey FOREIGN KEY (order_item_id) REFERENCES public.order_items(id),
-  CONSTRAINT kds_item_status_bumped_by_fkey FOREIGN KEY (bumped_by) REFERENCES public.location_members(id)
+  CONSTRAINT kds_item_status_order_item_id_fkey FOREIGN KEY (order_item_id) REFERENCES public.order_items(id)
 );
 CREATE TABLE public.kds_routing_rules (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -512,6 +955,29 @@ CREATE TABLE public.kds_routing_rules (
   created_at timestamp with time zone DEFAULT now(),
   CONSTRAINT kds_routing_rules_pkey PRIMARY KEY (id),
   CONSTRAINT kds_routing_rules_kds_display_id_fkey FOREIGN KEY (kds_display_id) REFERENCES public.kds_displays(id)
+);
+CREATE TABLE public.location_banking_profiles (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  location_id uuid NOT NULL,
+  merchant_id uuid NOT NULL,
+  bank_name text NOT NULL,
+  account_holder_name text NOT NULL,
+  account_number_last_four text NOT NULL CHECK (account_number_last_four ~ '^[0-9]{4}$'::text),
+  routing_number_last_four text NOT NULL CHECK (routing_number_last_four ~ '^[0-9]{4}$'::text),
+  account_type text NOT NULL DEFAULT 'checking'::text CHECK (account_type = ANY (ARRAY['checking'::text, 'savings'::text])),
+  bank_account_token text,
+  payout_frequency text NOT NULL DEFAULT 'daily'::text CHECK (payout_frequency = ANY (ARRAY['daily'::text, 'weekly'::text, 'monthly'::text])),
+  payout_day_of_week integer CHECK (payout_day_of_week IS NULL OR payout_day_of_week >= 0 AND payout_day_of_week <= 6),
+  payout_day_of_month integer CHECK (payout_day_of_month IS NULL OR payout_day_of_month >= 1 AND payout_day_of_month <= 28),
+  minimum_payout_amount numeric NOT NULL DEFAULT 0.00,
+  is_verified boolean NOT NULL DEFAULT false,
+  verified_at timestamp with time zone,
+  is_active boolean NOT NULL DEFAULT true,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT location_banking_profiles_pkey PRIMARY KEY (id),
+  CONSTRAINT location_banking_profiles_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
+  CONSTRAINT location_banking_profiles_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id)
 );
 CREATE TABLE public.location_category_item_overrides (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -526,9 +992,10 @@ CREATE TABLE public.location_category_item_overrides (
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
   is_tax_exempt boolean DEFAULT false,
+  custom_delivery_price numeric,
   CONSTRAINT location_category_item_overrides_pkey PRIMARY KEY (id),
-  CONSTRAINT location_category_item_overrides_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
   CONSTRAINT location_category_item_overrides_category_id_fkey FOREIGN KEY (category_id) REFERENCES public.categories(id),
+  CONSTRAINT location_category_item_overrides_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
   CONSTRAINT location_category_item_overrides_menu_item_id_fkey FOREIGN KEY (menu_item_id) REFERENCES public.menu_items(id)
 );
 CREATE TABLE public.location_category_overrides (
@@ -543,8 +1010,8 @@ CREATE TABLE public.location_category_overrides (
   custom_subtitle text,
   custom_image text,
   CONSTRAINT location_category_overrides_pkey PRIMARY KEY (id),
-  CONSTRAINT location_category_overrides_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
-  CONSTRAINT location_category_overrides_category_id_fkey FOREIGN KEY (category_id) REFERENCES public.categories(id)
+  CONSTRAINT location_category_overrides_category_id_fkey FOREIGN KEY (category_id) REFERENCES public.categories(id),
+  CONSTRAINT location_category_overrides_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id)
 );
 CREATE TABLE public.location_category_prep_defaults (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -555,10 +1022,10 @@ CREATE TABLE public.location_category_prep_defaults (
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT location_category_prep_defaults_pkey PRIMARY KEY (id),
-  CONSTRAINT location_category_prep_defaults_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
   CONSTRAINT location_category_prep_defaults_category_id_fkey FOREIGN KEY (category_id) REFERENCES public.categories(id),
-  CONSTRAINT location_category_prep_defaults_prep_station_id_fkey FOREIGN KEY (prep_station_id) REFERENCES public.prep_stations(id),
-  CONSTRAINT location_category_prep_defaults_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id)
+  CONSTRAINT location_category_prep_defaults_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
+  CONSTRAINT location_category_prep_defaults_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
+  CONSTRAINT location_category_prep_defaults_prep_station_id_fkey FOREIGN KEY (prep_station_id) REFERENCES public.prep_stations(id)
 );
 CREATE TABLE public.location_exclusive_items (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -578,8 +1045,8 @@ CREATE TABLE public.location_exclusive_items (
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT location_exclusive_items_pkey PRIMARY KEY (id),
-  CONSTRAINT location_exclusive_items_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
-  CONSTRAINT location_exclusive_items_category_id_fkey FOREIGN KEY (category_id) REFERENCES public.categories(id)
+  CONSTRAINT location_exclusive_items_category_id_fkey FOREIGN KEY (category_id) REFERENCES public.categories(id),
+  CONSTRAINT location_exclusive_items_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id)
 );
 CREATE TABLE public.location_inventory_overrides (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -590,9 +1057,11 @@ CREATE TABLE public.location_inventory_overrides (
   notes text,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
+  cost_per_unit numeric,
+  reorder_point numeric,
   CONSTRAINT location_inventory_overrides_pkey PRIMARY KEY (id),
-  CONSTRAINT location_inventory_overrides_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
-  CONSTRAINT location_inventory_overrides_inventory_item_id_fkey FOREIGN KEY (inventory_item_id) REFERENCES public.inventory_items(id)
+  CONSTRAINT location_inventory_overrides_inventory_item_id_fkey FOREIGN KEY (inventory_item_id) REFERENCES public.inventory_items(id),
+  CONSTRAINT location_inventory_overrides_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id)
 );
 CREATE TABLE public.location_inventory_stock (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -603,8 +1072,8 @@ CREATE TABLE public.location_inventory_stock (
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
   CONSTRAINT location_inventory_stock_pkey PRIMARY KEY (id),
-  CONSTRAINT location_inventory_stock_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
-  CONSTRAINT location_inventory_stock_inventory_item_id_fkey FOREIGN KEY (inventory_item_id) REFERENCES public.inventory_items(id)
+  CONSTRAINT location_inventory_stock_inventory_item_id_fkey FOREIGN KEY (inventory_item_id) REFERENCES public.inventory_items(id),
+  CONSTRAINT location_inventory_stock_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id)
 );
 CREATE TABLE public.location_invites (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -617,7 +1086,7 @@ CREATE TABLE public.location_invites (
   accepted_at timestamp with time zone,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
-  hourly_rate double precision,
+  hourly_rate numeric,
   merchant_id uuid,
   invite_type text,
   first_name text,
@@ -626,10 +1095,25 @@ CREATE TABLE public.location_invites (
   location_assignments jsonb,
   location_id uuid,
   CONSTRAINT location_invites_pkey PRIMARY KEY (id),
+  CONSTRAINT location_invites_invited_by_user_id_fkey FOREIGN KEY (invited_by_user_id) REFERENCES public.users(id),
   CONSTRAINT location_invites_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
-  CONSTRAINT location_invites_role_code_fkey FOREIGN KEY (role_code) REFERENCES public.roles(code),
   CONSTRAINT location_invites_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
-  CONSTRAINT location_invites_invited_by_user_id_fkey FOREIGN KEY (invited_by_user_id) REFERENCES public.users(id)
+  CONSTRAINT location_invites_role_code_fkey FOREIGN KEY (role_code) REFERENCES public.roles(code)
+);
+CREATE TABLE public.location_item_modifier_groups (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  location_id uuid NOT NULL,
+  menu_item_id uuid NOT NULL,
+  modifier_group_id uuid NOT NULL,
+  merchant_id uuid NOT NULL,
+  display_order integer,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT location_item_modifier_groups_pkey PRIMARY KEY (id),
+  CONSTRAINT location_item_modifier_groups_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
+  CONSTRAINT location_item_modifier_groups_menu_item_id_fkey FOREIGN KEY (menu_item_id) REFERENCES public.menu_items(id),
+  CONSTRAINT location_item_modifier_groups_modifier_group_id_fkey FOREIGN KEY (modifier_group_id) REFERENCES public.modifier_groups(id),
+  CONSTRAINT location_item_modifier_groups_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id)
 );
 CREATE TABLE public.location_item_overrides (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -649,7 +1133,9 @@ CREATE TABLE public.location_item_overrides (
   is_tax_exempt boolean,
   available_channels jsonb,
   prep_station_id uuid,
+  custom_delivery_price numeric,
   is_popular boolean NOT NULL DEFAULT false,
+  is_new boolean NOT NULL DEFAULT false,
   CONSTRAINT location_item_overrides_pkey PRIMARY KEY (id),
   CONSTRAINT location_item_overrides_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
   CONSTRAINT location_item_overrides_menu_item_id_fkey FOREIGN KEY (menu_item_id) REFERENCES public.menu_items(id),
@@ -669,12 +1155,14 @@ CREATE TABLE public.location_members (
   merchant_id uuid,
   is_primary_location boolean,
   staff_profile_id uuid,
+  pin_plain text,
+  pin_hashed text,
   CONSTRAINT location_members_pkey PRIMARY KEY (id),
-  CONSTRAINT location_members_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
-  CONSTRAINT location_members_staff_profile_id_fkey FOREIGN KEY (staff_profile_id) REFERENCES public.staff_profiles(id),
   CONSTRAINT location_members_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
-  CONSTRAINT location_members_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id),
-  CONSTRAINT location_members_role_code_fkey FOREIGN KEY (role_code) REFERENCES public.roles(code)
+  CONSTRAINT location_members_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
+  CONSTRAINT location_members_role_code_fkey FOREIGN KEY (role_code) REFERENCES public.roles(code),
+  CONSTRAINT location_members_staff_profile_id_fkey FOREIGN KEY (staff_profile_id) REFERENCES public.staff_profiles(id),
+  CONSTRAINT location_members_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id)
 );
 CREATE TABLE public.location_menu_category_overrides (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -687,9 +1175,9 @@ CREATE TABLE public.location_menu_category_overrides (
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT location_menu_category_overrides_pkey PRIMARY KEY (id),
+  CONSTRAINT location_menu_category_overrides_category_id_fkey FOREIGN KEY (category_id) REFERENCES public.categories(id),
   CONSTRAINT location_menu_category_overrides_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
-  CONSTRAINT location_menu_category_overrides_menu_id_fkey FOREIGN KEY (menu_id) REFERENCES public.menus(id),
-  CONSTRAINT location_menu_category_overrides_category_id_fkey FOREIGN KEY (category_id) REFERENCES public.categories(id)
+  CONSTRAINT location_menu_category_overrides_menu_id_fkey FOREIGN KEY (menu_id) REFERENCES public.menus(id)
 );
 CREATE TABLE public.location_menu_item_overrides (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -703,11 +1191,12 @@ CREATE TABLE public.location_menu_item_overrides (
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
   menu_id uuid,
   category_id uuid,
+  custom_delivery_price numeric,
   CONSTRAINT location_menu_item_overrides_pkey PRIMARY KEY (id),
-  CONSTRAINT location_menu_item_overrides_menu_id_fkey FOREIGN KEY (menu_id) REFERENCES public.menus(id),
   CONSTRAINT location_menu_item_overrides_category_id_fkey FOREIGN KEY (category_id) REFERENCES public.categories(id),
-  CONSTRAINT location_menu_item_overrides_menu_item_id_fkey FOREIGN KEY (menu_item_id) REFERENCES public.menu_items(id),
-  CONSTRAINT location_menu_item_overrides_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id)
+  CONSTRAINT location_menu_item_overrides_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
+  CONSTRAINT location_menu_item_overrides_menu_id_fkey FOREIGN KEY (menu_id) REFERENCES public.menus(id),
+  CONSTRAINT location_menu_item_overrides_menu_item_id_fkey FOREIGN KEY (menu_item_id) REFERENCES public.menu_items(id)
 );
 CREATE TABLE public.location_menus (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -731,8 +1220,8 @@ CREATE TABLE public.location_modifier_group_overrides (
   updated_at timestamp with time zone DEFAULT now(),
   CONSTRAINT location_modifier_group_overrides_pkey PRIMARY KEY (id),
   CONSTRAINT location_modifier_group_overrides_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
-  CONSTRAINT location_modifier_group_overrides_modifier_group_id_fkey FOREIGN KEY (modifier_group_id) REFERENCES public.modifier_groups(id),
-  CONSTRAINT location_modifier_group_overrides_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id)
+  CONSTRAINT location_modifier_group_overrides_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
+  CONSTRAINT location_modifier_group_overrides_modifier_group_id_fkey FOREIGN KEY (modifier_group_id) REFERENCES public.modifier_groups(id)
 );
 CREATE TABLE public.location_modifier_item_overrides (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -747,10 +1236,47 @@ CREATE TABLE public.location_modifier_item_overrides (
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
   display_order integer,
+  delivery_price_modifier numeric,
   CONSTRAINT location_modifier_item_overrides_pkey PRIMARY KEY (id),
   CONSTRAINT location_modifier_item_overrides_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
-  CONSTRAINT location_modifier_item_overrides_modifier_group_item_id_fkey FOREIGN KEY (modifier_group_item_id) REFERENCES public.modifier_group_items(id),
-  CONSTRAINT location_modifier_item_overrides_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id)
+  CONSTRAINT location_modifier_item_overrides_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
+  CONSTRAINT location_modifier_item_overrides_modifier_group_item_id_fkey FOREIGN KEY (modifier_group_item_id) REFERENCES public.modifier_group_items(id)
+);
+CREATE TABLE public.location_payment_devices (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  merchant_id uuid NOT NULL,
+  carrier_id uuid NOT NULL,
+  location_id uuid NOT NULL,
+  provider text NOT NULL DEFAULT 'dejavoo'::text CHECK (provider = ANY (ARRAY['dejavoo'::text, 'ipospays'::text, 'nmi'::text])),
+  device_label text,
+  tpn text,
+  provider_secret_id uuid,
+  whitelist_origins ARRAY NOT NULL DEFAULT '{}'::text[],
+  whitelist_synced_at timestamp with time zone,
+  last_synced_from_crm_at timestamp with time zone,
+  is_active boolean NOT NULL DEFAULT true,
+  use_for_online_ordering boolean NOT NULL DEFAULT false,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  provider_merchant_id text,
+  provider_gateway_id text,
+  provider_public_key text,
+  webhook_secret_id uuid,
+  environment text NOT NULL DEFAULT 'production'::text CHECK (environment = ANY (ARRAY['sandbox'::text, 'production'::text])),
+  status text NOT NULL DEFAULT 'active'::text CHECK (status = ANY (ARRAY['pending_creation'::text, 'pending_processor_setup'::text, 'active'::text, 'suspended'::text, 'closed'::text])),
+  supports_customer_vault boolean NOT NULL DEFAULT false,
+  supports_apple_pay boolean NOT NULL DEFAULT false,
+  supports_google_pay boolean NOT NULL DEFAULT false,
+  last_health_check_at timestamp with time zone,
+  last_health_check_status text,
+  activated_at timestamp with time zone,
+  suspended_at timestamp with time zone,
+  suspended_reason text,
+  metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+  CONSTRAINT location_payment_devices_pkey PRIMARY KEY (id),
+  CONSTRAINT location_payment_devices_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
+  CONSTRAINT location_payment_devices_carrier_id_fkey FOREIGN KEY (carrier_id) REFERENCES public.carriers(id),
+  CONSTRAINT location_payment_devices_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id)
 );
 CREATE TABLE public.location_schedule_overrides (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -762,8 +1288,8 @@ CREATE TABLE public.location_schedule_overrides (
   updated_at timestamp with time zone DEFAULT now(),
   CONSTRAINT location_schedule_overrides_pkey PRIMARY KEY (id),
   CONSTRAINT location_schedule_overrides_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
-  CONSTRAINT location_schedule_overrides_schedule_id_fkey FOREIGN KEY (schedule_id) REFERENCES public.schedules(id),
-  CONSTRAINT location_schedule_overrides_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id)
+  CONSTRAINT location_schedule_overrides_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
+  CONSTRAINT location_schedule_overrides_schedule_id_fkey FOREIGN KEY (schedule_id) REFERENCES public.schedules(id)
 );
 CREATE TABLE public.location_vendor_pricing (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -773,9 +1299,9 @@ CREATE TABLE public.location_vendor_pricing (
   unit_cost numeric NOT NULL,
   last_updated timestamp with time zone DEFAULT now(),
   CONSTRAINT location_vendor_pricing_pkey PRIMARY KEY (id),
+  CONSTRAINT location_vendor_pricing_inventory_item_id_fkey FOREIGN KEY (inventory_item_id) REFERENCES public.inventory_items(id),
   CONSTRAINT location_vendor_pricing_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
-  CONSTRAINT location_vendor_pricing_vendor_id_fkey FOREIGN KEY (vendor_id) REFERENCES public.vendors(id),
-  CONSTRAINT location_vendor_pricing_inventory_item_id_fkey FOREIGN KEY (inventory_item_id) REFERENCES public.inventory_items(id)
+  CONSTRAINT location_vendor_pricing_vendor_id_fkey FOREIGN KEY (vendor_id) REFERENCES public.vendors(id)
 );
 CREATE TABLE public.location_vendors (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -815,8 +1341,367 @@ CREATE TABLE public.locations (
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
   pricing_strategy text NOT NULL DEFAULT 'manual'::text CHECK (pricing_strategy = ANY (ARRAY['manual'::text, 'dual'::text])),
   dual_pricing_percentage numeric NOT NULL DEFAULT 4.0 CHECK (dual_pricing_percentage >= 0::numeric AND dual_pricing_percentage <= 100::numeric),
+  use_merchant_pricing_defaults boolean NOT NULL DEFAULT true,
+  ein text,
+  ein_last_four text CHECK (ein_last_four IS NULL OR ein_last_four ~ '^[0-9]{4}$'::text),
+  tax_id text,
+  sales_tax_rate numeric CHECK (sales_tax_rate IS NULL OR sales_tax_rate >= 0::numeric AND sales_tax_rate <= 1::numeric),
+  tax_registration_status text DEFAULT 'pending'::text CHECK (tax_registration_status = ANY (ARRAY['pending'::text, 'verified'::text, 'expired'::text])),
+  onboarding_step integer DEFAULT 0 CHECK (onboarding_step IS NULL OR onboarding_step >= 0 AND onboarding_step <= 10),
+  onboarding_completed boolean DEFAULT false,
+  kds_workflow_mode text NOT NULL DEFAULT '3-step'::text CHECK (kds_workflow_mode = ANY (ARRAY['2-step'::text, '3-step'::text])),
+  pos_config jsonb NOT NULL DEFAULT '{}'::jsonb,
+  business_day_start_hour smallint DEFAULT 0 CHECK (business_day_start_hour >= 0 AND business_day_start_hour <= 23),
+  business_day_end_hour integer NOT NULL DEFAULT 0 CHECK (business_day_end_hour >= 0 AND business_day_end_hour <= 23),
+  tip_surcharge_percentage numeric NOT NULL DEFAULT 0 CHECK (tip_surcharge_percentage >= 0::numeric AND tip_surcharge_percentage <= 50::numeric),
+  processor_fee_percentage numeric NOT NULL DEFAULT 4.00 CHECK (processor_fee_percentage >= 0::numeric AND processor_fee_percentage <= 50::numeric),
+  luqra_mid text,
+  luqra_mid_descriptor text,
+  luqra_mid_status text NOT NULL DEFAULT 'pending'::text CHECK (luqra_mid_status = ANY (ARRAY['pending'::text, 'review'::text, 'live'::text, 'offline'::text])),
+  luqra_mid_assigned_at timestamp with time zone,
   CONSTRAINT locations_pkey PRIMARY KEY (id),
   CONSTRAINT locations_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id)
+);
+CREATE TABLE public.loyalty_enrollments (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  program_id uuid NOT NULL,
+  customer_id uuid NOT NULL,
+  merchant_id uuid NOT NULL,
+  current_points integer NOT NULL DEFAULT 0,
+  lifetime_points integer NOT NULL DEFAULT 0,
+  current_visits integer NOT NULL DEFAULT 0,
+  lifetime_visits integer NOT NULL DEFAULT 0,
+  current_punches integer NOT NULL DEFAULT 0,
+  lifetime_punches integer NOT NULL DEFAULT 0,
+  total_rewards_earned integer NOT NULL DEFAULT 0,
+  total_rewards_redeemed integer NOT NULL DEFAULT 0,
+  total_reward_value numeric NOT NULL DEFAULT 0,
+  enrolled_at timestamp with time zone DEFAULT now(),
+  last_earn_at timestamp with time zone,
+  last_redeem_at timestamp with time zone,
+  is_active boolean DEFAULT true,
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT loyalty_enrollments_pkey PRIMARY KEY (id),
+  CONSTRAINT loyalty_enrollments_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.customers(id),
+  CONSTRAINT loyalty_enrollments_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
+  CONSTRAINT loyalty_enrollments_program_id_fkey FOREIGN KEY (program_id) REFERENCES public.loyalty_programs(id)
+);
+CREATE TABLE public.loyalty_programs (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  merchant_id uuid NOT NULL,
+  name text NOT NULL,
+  description text,
+  program_type text NOT NULL CHECK (program_type = ANY (ARRAY['visits'::text, 'points'::text, 'punch_card'::text])),
+  visits_required integer,
+  points_per_dollar numeric DEFAULT 1,
+  points_redemption_threshold integer,
+  points_redemption_value numeric,
+  punch_target_type text CHECK (punch_target_type = ANY (ARRAY['item'::text, 'category'::text])),
+  punch_menu_item_id uuid,
+  punch_category_id uuid,
+  punches_required integer,
+  reward_type text NOT NULL CHECK (reward_type = ANY (ARRAY['discount_fixed'::text, 'discount_percent'::text, 'free_item'::text, 'free_category_item'::text])),
+  reward_value numeric,
+  reward_description text NOT NULL,
+  reward_menu_item_id uuid,
+  reward_category_id uuid,
+  reward_max_value numeric,
+  min_order_amount numeric DEFAULT 0,
+  excluded_categories ARRAY,
+  excluded_item_ids ARRAY,
+  earn_on_discounted boolean DEFAULT true,
+  reward_expiry_days integer,
+  max_active_rewards integer DEFAULT 5,
+  cooldown_minutes integer DEFAULT 0,
+  is_stackable boolean DEFAULT false,
+  auto_enroll boolean DEFAULT true,
+  is_active boolean DEFAULT true,
+  starts_at timestamp with time zone,
+  ends_at timestamp with time zone,
+  location_ids ARRAY,
+  display_color text DEFAULT '#6366f1'::text,
+  display_icon text DEFAULT 'star'::text,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  created_by text,
+  CONSTRAINT loyalty_programs_pkey PRIMARY KEY (id),
+  CONSTRAINT loyalty_programs_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id),
+  CONSTRAINT loyalty_programs_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
+  CONSTRAINT loyalty_programs_punch_category_id_fkey FOREIGN KEY (punch_category_id) REFERENCES public.categories(id),
+  CONSTRAINT loyalty_programs_punch_menu_item_id_fkey FOREIGN KEY (punch_menu_item_id) REFERENCES public.menu_items(id),
+  CONSTRAINT loyalty_programs_reward_category_id_fkey FOREIGN KEY (reward_category_id) REFERENCES public.categories(id),
+  CONSTRAINT loyalty_programs_reward_menu_item_id_fkey FOREIGN KEY (reward_menu_item_id) REFERENCES public.menu_items(id)
+);
+CREATE TABLE public.loyalty_rewards (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  enrollment_id uuid NOT NULL,
+  program_id uuid NOT NULL,
+  customer_id uuid NOT NULL,
+  merchant_id uuid NOT NULL,
+  reward_type text NOT NULL,
+  reward_value numeric NOT NULL,
+  reward_description text NOT NULL,
+  reward_menu_item_id uuid,
+  reward_category_id uuid,
+  reward_max_value numeric,
+  status text NOT NULL DEFAULT 'available'::text CHECK (status = ANY (ARRAY['available'::text, 'redeemed'::text, 'expired'::text, 'voided'::text])),
+  earned_at timestamp with time zone DEFAULT now(),
+  expires_at timestamp with time zone,
+  redeemed_at timestamp with time zone,
+  redeemed_order_id uuid,
+  redeemed_location_id uuid,
+  voided_at timestamp with time zone,
+  voided_reason text,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT loyalty_rewards_pkey PRIMARY KEY (id),
+  CONSTRAINT loyalty_rewards_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.customers(id),
+  CONSTRAINT loyalty_rewards_enrollment_id_fkey FOREIGN KEY (enrollment_id) REFERENCES public.loyalty_enrollments(id),
+  CONSTRAINT loyalty_rewards_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
+  CONSTRAINT loyalty_rewards_program_id_fkey FOREIGN KEY (program_id) REFERENCES public.loyalty_programs(id),
+  CONSTRAINT loyalty_rewards_redeemed_location_id_fkey FOREIGN KEY (redeemed_location_id) REFERENCES public.locations(id),
+  CONSTRAINT loyalty_rewards_redeemed_order_id_fkey FOREIGN KEY (redeemed_order_id) REFERENCES public.orders(id),
+  CONSTRAINT loyalty_rewards_reward_category_id_fkey FOREIGN KEY (reward_category_id) REFERENCES public.categories(id),
+  CONSTRAINT loyalty_rewards_reward_menu_item_id_fkey FOREIGN KEY (reward_menu_item_id) REFERENCES public.menu_items(id)
+);
+CREATE TABLE public.loyalty_transactions (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  enrollment_id uuid NOT NULL,
+  program_id uuid NOT NULL,
+  customer_id uuid NOT NULL,
+  merchant_id uuid NOT NULL,
+  location_id uuid,
+  order_id uuid,
+  transaction_type text NOT NULL CHECK (transaction_type = ANY (ARRAY['earn_points'::text, 'earn_visit'::text, 'earn_punch'::text, 'threshold_crossed'::text, 'redeem'::text, 'bonus'::text, 'adjust'::text, 'expire'::text, 'void'::text])),
+  points_delta integer NOT NULL DEFAULT 0,
+  visits_delta integer NOT NULL DEFAULT 0,
+  punches_delta integer NOT NULL DEFAULT 0,
+  balance_points integer NOT NULL DEFAULT 0,
+  balance_visits integer NOT NULL DEFAULT 0,
+  balance_punches integer NOT NULL DEFAULT 0,
+  reward_id uuid,
+  description text NOT NULL,
+  staff_id uuid,
+  metadata jsonb DEFAULT '{}'::jsonb,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT loyalty_transactions_pkey PRIMARY KEY (id),
+  CONSTRAINT loyalty_transactions_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.customers(id),
+  CONSTRAINT loyalty_transactions_enrollment_id_fkey FOREIGN KEY (enrollment_id) REFERENCES public.loyalty_enrollments(id),
+  CONSTRAINT loyalty_transactions_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
+  CONSTRAINT loyalty_transactions_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
+  CONSTRAINT loyalty_transactions_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id),
+  CONSTRAINT loyalty_transactions_program_id_fkey FOREIGN KEY (program_id) REFERENCES public.loyalty_programs(id),
+  CONSTRAINT loyalty_transactions_reward_id_fkey FOREIGN KEY (reward_id) REFERENCES public.loyalty_rewards(id),
+  CONSTRAINT loyalty_transactions_staff_id_fkey FOREIGN KEY (staff_id) REFERENCES public.staff_profiles(id)
+);
+CREATE TABLE public.luqra_batches (
+  id text NOT NULL,
+  merchant_id uuid NOT NULL,
+  location_id uuid,
+  mid text NOT NULL,
+  batch_date date,
+  statement_date date,
+  merchant_reference_number text,
+  reject_reason text,
+  transactions_count integer NOT NULL DEFAULT 0,
+  has_duplicate_rejects_within_30_days boolean NOT NULL DEFAULT false,
+  net_deposit numeric NOT NULL DEFAULT 0,
+  batched_amount numeric NOT NULL DEFAULT 0,
+  approved_batches numeric NOT NULL DEFAULT 0,
+  credits_amount numeric NOT NULL DEFAULT 0,
+  rejects_amount numeric NOT NULL DEFAULT 0,
+  visa_sales numeric NOT NULL DEFAULT 0,
+  visa_count integer NOT NULL DEFAULT 0,
+  mastercard_sales numeric NOT NULL DEFAULT 0,
+  mastercard_count integer NOT NULL DEFAULT 0,
+  amex_sales numeric NOT NULL DEFAULT 0,
+  amex_count integer NOT NULL DEFAULT 0,
+  discover_sales numeric NOT NULL DEFAULT 0,
+  discover_count integer NOT NULL DEFAULT 0,
+  ebt_sales numeric NOT NULL DEFAULT 0,
+  ebt_count integer NOT NULL DEFAULT 0,
+  pin_sales numeric NOT NULL DEFAULT 0,
+  pin_count integer NOT NULL DEFAULT 0,
+  deposit_id text,
+  doing_business_as text,
+  raw jsonb NOT NULL DEFAULT '{}'::jsonb,
+  first_seen_at timestamp with time zone NOT NULL DEFAULT now(),
+  last_seen_at timestamp with time zone NOT NULL DEFAULT now(),
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT luqra_batches_pkey PRIMARY KEY (id),
+  CONSTRAINT luqra_batches_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
+  CONSTRAINT luqra_batches_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
+  CONSTRAINT luqra_batches_deposit_id_fkey FOREIGN KEY (deposit_id) REFERENCES public.luqra_deposits(id)
+);
+CREATE TABLE public.luqra_chargebacks (
+  id bigint NOT NULL,
+  merchant_id uuid NOT NULL,
+  location_id uuid,
+  mid text NOT NULL,
+  case_number text NOT NULL,
+  acquirer_reference_number text,
+  application_id text,
+  doing_business_as text,
+  date_loaded timestamp with time zone,
+  last_date_loaded timestamp with time zone,
+  date_transaction timestamp with time zone,
+  debit_credit text,
+  merch_amount numeric NOT NULL DEFAULT 0,
+  case_amount numeric NOT NULL DEFAULT 0,
+  case_type integer,
+  item_type integer,
+  resolution_to text,
+  reason_code text,
+  reason_description text,
+  card_brand integer,
+  cardholder_account_number text,
+  auth_code text,
+  trans_id text,
+  current_status text,
+  dispute_type text,
+  is_reversal text,
+  status_id integer,
+  history jsonb NOT NULL DEFAULT '[]'::jsonb,
+  raw jsonb NOT NULL DEFAULT '{}'::jsonb,
+  reconciled_payment_id uuid,
+  reconciled_at timestamp with time zone,
+  first_seen_at timestamp with time zone NOT NULL DEFAULT now(),
+  last_seen_at timestamp with time zone NOT NULL DEFAULT now(),
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT luqra_chargebacks_pkey PRIMARY KEY (id),
+  CONSTRAINT luqra_chargebacks_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
+  CONSTRAINT luqra_chargebacks_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
+  CONSTRAINT luqra_chargebacks_reconciled_payment_id_fkey FOREIGN KEY (reconciled_payment_id) REFERENCES public.order_payments(id)
+);
+CREATE TABLE public.luqra_deposits (
+  id text NOT NULL,
+  merchant_id uuid NOT NULL,
+  location_id uuid,
+  mid text NOT NULL,
+  deposit_date date NOT NULL,
+  statement_date date,
+  reference_number text,
+  routing_number text,
+  dda_number text,
+  batch_total numeric NOT NULL DEFAULT 0,
+  daily_fees numeric NOT NULL DEFAULT 0,
+  chargeback_amount numeric NOT NULL DEFAULT 0,
+  reserved_funds numeric NOT NULL DEFAULT 0,
+  adjustment_amount numeric NOT NULL DEFAULT 0,
+  net_batches numeric NOT NULL DEFAULT 0,
+  net_deposit numeric NOT NULL DEFAULT 0,
+  split_funding_amount numeric NOT NULL DEFAULT 0,
+  chargeback_case_number text,
+  doing_business_as text,
+  raw jsonb NOT NULL DEFAULT '{}'::jsonb,
+  first_seen_at timestamp with time zone NOT NULL DEFAULT now(),
+  last_seen_at timestamp with time zone NOT NULL DEFAULT now(),
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT luqra_deposits_pkey PRIMARY KEY (id),
+  CONSTRAINT luqra_deposits_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
+  CONSTRAINT luqra_deposits_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id)
+);
+CREATE TABLE public.luqra_sync_runs (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  merchant_id uuid NOT NULL,
+  location_id uuid,
+  mid text NOT NULL,
+  resource text NOT NULL CHECK (resource = ANY (ARRAY['transactions'::text, 'chargebacks'::text, 'deposits'::text, 'batches'::text])),
+  date_from date,
+  date_to date,
+  pages_fetched integer NOT NULL DEFAULT 0,
+  rows_ingested integer NOT NULL DEFAULT 0,
+  rows_updated integer NOT NULL DEFAULT 0,
+  rows_reconciled integer NOT NULL DEFAULT 0,
+  status text NOT NULL DEFAULT 'ok'::text CHECK (status = ANY (ARRAY['ok'::text, 'partial'::text, 'error'::text])),
+  error_code text,
+  started_at timestamp with time zone NOT NULL DEFAULT now(),
+  finished_at timestamp with time zone,
+  CONSTRAINT luqra_sync_runs_pkey PRIMARY KEY (id),
+  CONSTRAINT luqra_sync_runs_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
+  CONSTRAINT luqra_sync_runs_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id)
+);
+CREATE TABLE public.luqra_transactions (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  merchant_id uuid NOT NULL,
+  location_id uuid,
+  mid text NOT NULL,
+  batch_id text NOT NULL,
+  authorization_number text NOT NULL,
+  transaction_date date,
+  original_transaction_date date NOT NULL,
+  terminal_id text,
+  pos_entry_mode text,
+  card_type text,
+  account_first6 text,
+  account_last4 text,
+  reject_reason text,
+  debit_credit_indicator text,
+  amount_dollars numeric NOT NULL DEFAULT 0,
+  doing_business_as text,
+  legal_business_name text,
+  transaction_code text,
+  transaction_code_description text,
+  raw jsonb NOT NULL DEFAULT '{}'::jsonb,
+  reconciled_payment_id uuid,
+  reconciled_order_id uuid,
+  reconciled_at timestamp with time zone,
+  first_seen_at timestamp with time zone NOT NULL DEFAULT now(),
+  last_seen_at timestamp with time zone NOT NULL DEFAULT now(),
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  deposit_id text,
+  CONSTRAINT luqra_transactions_pkey PRIMARY KEY (id),
+  CONSTRAINT luqra_transactions_deposit_id_fkey FOREIGN KEY (deposit_id) REFERENCES public.luqra_deposits(id),
+  CONSTRAINT luqra_transactions_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
+  CONSTRAINT luqra_transactions_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
+  CONSTRAINT luqra_transactions_reconciled_payment_id_fkey FOREIGN KEY (reconciled_payment_id) REFERENCES public.order_payments(id)
+);
+CREATE TABLE public.marketing_campaigns (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  merchant_id uuid NOT NULL,
+  name text NOT NULL,
+  campaign_type text NOT NULL,
+  subject text,
+  body text NOT NULL,
+  audience_type text NOT NULL DEFAULT 'all'::text,
+  audience_tags ARRAY,
+  audience_filter jsonb,
+  status text NOT NULL DEFAULT 'draft'::text,
+  scheduled_for timestamp with time zone,
+  sent_at timestamp with time zone,
+  total_recipients integer DEFAULT 0,
+  total_delivered integer DEFAULT 0,
+  total_opened integer DEFAULT 0,
+  total_clicked integer DEFAULT 0,
+  total_bounced integer DEFAULT 0,
+  total_unsubscribed integer DEFAULT 0,
+  created_by text,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT marketing_campaigns_pkey PRIMARY KEY (id),
+  CONSTRAINT marketing_campaigns_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id),
+  CONSTRAINT marketing_campaigns_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id)
+);
+CREATE TABLE public.marketing_recipients (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  campaign_id uuid NOT NULL,
+  customer_id uuid NOT NULL,
+  channel text NOT NULL,
+  destination text NOT NULL,
+  status text NOT NULL DEFAULT 'pending'::text,
+  sent_at timestamp with time zone,
+  delivered_at timestamp with time zone,
+  opened_at timestamp with time zone,
+  clicked_at timestamp with time zone,
+  unsubscribed_at timestamp with time zone,
+  error_message text,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT marketing_recipients_pkey PRIMARY KEY (id),
+  CONSTRAINT marketing_recipients_campaign_id_fkey FOREIGN KEY (campaign_id) REFERENCES public.marketing_campaigns(id),
+  CONSTRAINT marketing_recipients_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.customers(id)
 );
 CREATE TABLE public.members (
   user_id text,
@@ -824,13 +1709,13 @@ CREATE TABLE public.members (
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone,
   id text NOT NULL DEFAULT gen_random_uuid(),
-  role text,
+  role text CHECK (role IS NULL OR btrim(role) <> ''::text),
   staff_profile_id uuid,
   CONSTRAINT members_pkey PRIMARY KEY (id),
-  CONSTRAINT members_role_fkey FOREIGN KEY (role) REFERENCES public.roles(code),
-  CONSTRAINT members_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id),
   CONSTRAINT members_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(id),
-  CONSTRAINT members_staff_profile_id_fkey FOREIGN KEY (staff_profile_id) REFERENCES public.staff_profiles(id)
+  CONSTRAINT members_role_fkey FOREIGN KEY (role) REFERENCES public.roles(code),
+  CONSTRAINT members_staff_profile_id_fkey FOREIGN KEY (staff_profile_id) REFERENCES public.staff_profiles(id),
+  CONSTRAINT members_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id)
 );
 CREATE TABLE public.menu_categories (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -845,8 +1730,8 @@ CREATE TABLE public.menu_categories (
   custom_image text,
   updated_at timestamp with time zone DEFAULT now(),
   CONSTRAINT menu_categories_pkey PRIMARY KEY (id),
-  CONSTRAINT menu_categories_menu_id_fkey FOREIGN KEY (menu_id) REFERENCES public.menus(id),
   CONSTRAINT menu_categories_category_id_fkey FOREIGN KEY (category_id) REFERENCES public.categories(id),
+  CONSTRAINT menu_categories_menu_id_fkey FOREIGN KEY (menu_id) REFERENCES public.menus(id),
   CONSTRAINT menu_categories_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id)
 );
 CREATE TABLE public.menu_item_discounts (
@@ -856,8 +1741,8 @@ CREATE TABLE public.menu_item_discounts (
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   merchant_id uuid NOT NULL,
   CONSTRAINT menu_item_discounts_pkey PRIMARY KEY (id),
-  CONSTRAINT menu_item_discounts_menu_item_id_fkey FOREIGN KEY (menu_item_id) REFERENCES public.menu_items(id),
   CONSTRAINT menu_item_discounts_discount_id_fkey FOREIGN KEY (discount_id) REFERENCES public.discounts(id),
+  CONSTRAINT menu_item_discounts_menu_item_id_fkey FOREIGN KEY (menu_item_id) REFERENCES public.menu_items(id),
   CONSTRAINT menu_item_discounts_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id)
 );
 CREATE TABLE public.menu_item_menus (
@@ -873,8 +1758,8 @@ CREATE TABLE public.menu_item_menus (
   merchant_id uuid NOT NULL,
   is_migrated boolean DEFAULT false,
   CONSTRAINT menu_item_menus_pkey PRIMARY KEY (id),
-  CONSTRAINT menu_item_menus_menu_item_id_fkey FOREIGN KEY (menu_item_id) REFERENCES public.menu_items(id),
   CONSTRAINT menu_item_menus_menu_id_fkey FOREIGN KEY (menu_id) REFERENCES public.menus(id),
+  CONSTRAINT menu_item_menus_menu_item_id_fkey FOREIGN KEY (menu_item_id) REFERENCES public.menu_items(id),
   CONSTRAINT menu_item_menus_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id)
 );
 CREATE TABLE public.menu_item_modifier_groups (
@@ -886,8 +1771,8 @@ CREATE TABLE public.menu_item_modifier_groups (
   merchant_id uuid NOT NULL,
   CONSTRAINT menu_item_modifier_groups_pkey PRIMARY KEY (id),
   CONSTRAINT menu_item_modifier_groups_menu_item_id_fkey FOREIGN KEY (menu_item_id) REFERENCES public.menu_items(id),
-  CONSTRAINT menu_item_modifier_groups_modifier_group_id_fkey FOREIGN KEY (modifier_group_id) REFERENCES public.modifier_groups(id),
-  CONSTRAINT menu_item_modifier_groups_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id)
+  CONSTRAINT menu_item_modifier_groups_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
+  CONSTRAINT menu_item_modifier_groups_modifier_group_id_fkey FOREIGN KEY (modifier_group_id) REFERENCES public.modifier_groups(id)
 );
 CREATE TABLE public.menu_item_recipes (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -900,10 +1785,10 @@ CREATE TABLE public.menu_item_recipes (
   inventory_item_id uuid,
   quantity_used numeric DEFAULT 1,
   CONSTRAINT menu_item_recipes_pkey PRIMARY KEY (id),
+  CONSTRAINT menu_item_recipes_inventory_item_id_fkey FOREIGN KEY (inventory_item_id) REFERENCES public.inventory_items(id),
   CONSTRAINT menu_item_recipes_menu_item_id_fkey FOREIGN KEY (menu_item_id) REFERENCES public.menu_items(id),
-  CONSTRAINT menu_item_recipes_recipe_id_fkey FOREIGN KEY (recipe_id) REFERENCES public.recipes(id),
   CONSTRAINT menu_item_recipes_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
-  CONSTRAINT menu_item_recipes_inventory_item_id_fkey FOREIGN KEY (inventory_item_id) REFERENCES public.inventory_items(id)
+  CONSTRAINT menu_item_recipes_recipe_id_fkey FOREIGN KEY (recipe_id) REFERENCES public.recipes(id)
 );
 CREATE TABLE public.menu_items (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -924,9 +1809,13 @@ CREATE TABLE public.menu_items (
   is_tax_exempt boolean DEFAULT false,
   available_channels jsonb DEFAULT '["pos", "online"]'::jsonb,
   location_id uuid,
+  delivery_price numeric,
+  use_delivery_price boolean DEFAULT false,
+  version bigint NOT NULL DEFAULT 0,
+  dietary_flags ARRAY NOT NULL DEFAULT '{}'::text[],
   CONSTRAINT menu_items_pkey PRIMARY KEY (id),
-  CONSTRAINT menu_items_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
-  CONSTRAINT menu_items_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id)
+  CONSTRAINT menu_items_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
+  CONSTRAINT menu_items_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id)
 );
 CREATE TABLE public.menu_schedules (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -936,10 +1825,10 @@ CREATE TABLE public.menu_schedules (
   merchant_id uuid NOT NULL,
   location_id uuid,
   CONSTRAINT menu_schedules_pkey PRIMARY KEY (id),
+  CONSTRAINT menu_schedules_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
   CONSTRAINT menu_schedules_menu_id_fkey FOREIGN KEY (menu_id) REFERENCES public.menus(id),
-  CONSTRAINT menu_schedules_schedule_id_fkey FOREIGN KEY (schedule_id) REFERENCES public.schedules(id),
   CONSTRAINT menu_schedules_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
-  CONSTRAINT menu_schedules_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id)
+  CONSTRAINT menu_schedules_schedule_id_fkey FOREIGN KEY (schedule_id) REFERENCES public.schedules(id)
 );
 CREATE TABLE public.menus (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -952,22 +1841,157 @@ CREATE TABLE public.menus (
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
   created_by text,
+  image text,
   CONSTRAINT menus_pkey PRIMARY KEY (id),
-  CONSTRAINT menus_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
-  CONSTRAINT menus_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id)
+  CONSTRAINT menus_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
+  CONSTRAINT menus_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id)
+);
+CREATE TABLE public.merchant_billing_profiles (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  merchant_id uuid NOT NULL,
+  billing_method text NOT NULL DEFAULT 'ach'::text CHECK (billing_method = ANY (ARRAY['ach'::text, 'card'::text])),
+  bank_name text,
+  account_holder_name text,
+  account_number_last_four text CHECK (account_number_last_four IS NULL OR account_number_last_four ~ '^[0-9]{4}$'::text),
+  routing_number_last_four text CHECK (routing_number_last_four IS NULL OR routing_number_last_four ~ '^[0-9]{4}$'::text),
+  account_type text CHECK (account_type IS NULL OR (account_type = ANY (ARRAY['checking'::text, 'savings'::text]))),
+  card_brand text,
+  card_last_four text CHECK (card_last_four IS NULL OR card_last_four ~ '^[0-9]{4}$'::text),
+  card_exp_month integer CHECK (card_exp_month IS NULL OR card_exp_month >= 1 AND card_exp_month <= 12),
+  card_exp_year integer,
+  card_token text,
+  is_verified boolean NOT NULL DEFAULT false,
+  verified_at timestamp with time zone,
+  is_primary boolean NOT NULL DEFAULT true,
+  is_active boolean NOT NULL DEFAULT true,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  payment_device_id uuid,
+  customer_vault_id text,
+  vault_initial_transaction_id text,
+  platform_billing_config_id uuid,
+  location_id uuid,
+  billing_email text,
+  CONSTRAINT merchant_billing_profiles_pkey PRIMARY KEY (id),
+  CONSTRAINT merchant_billing_profiles_platform_billing_config_id_fkey FOREIGN KEY (platform_billing_config_id) REFERENCES public.platform_billing_provider_configs(id),
+  CONSTRAINT merchant_billing_profiles_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
+  CONSTRAINT merchant_billing_profiles_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
+  CONSTRAINT merchant_billing_profiles_payment_device_id_fkey FOREIGN KEY (payment_device_id) REFERENCES public.location_payment_devices(id)
+);
+CREATE TABLE public.merchant_notes (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  merchant_id uuid NOT NULL,
+  author_user_id text NOT NULL,
+  author_name text NOT NULL,
+  author_role text,
+  content text NOT NULL CHECK (length(TRIM(BOTH FROM content)) > 0),
+  is_pinned boolean NOT NULL DEFAULT false,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT merchant_notes_pkey PRIMARY KEY (id),
+  CONSTRAINT merchant_notes_author_user_id_fkey FOREIGN KEY (author_user_id) REFERENCES public.users(id),
+  CONSTRAINT merchant_notes_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id)
+);
+CREATE TABLE public.merchant_payment_credential_access_log (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  merchant_payment_credential_id uuid,
+  merchant_id uuid NOT NULL,
+  function_name text NOT NULL,
+  store_config_id uuid,
+  actor_user_id text,
+  called_at timestamp with time zone NOT NULL DEFAULT now(),
+  metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+  CONSTRAINT merchant_payment_credential_access_log_pkey PRIMARY KEY (id),
+  CONSTRAINT merchant_payment_credential_a_merchant_payment_credential__fkey FOREIGN KEY (merchant_payment_credential_id) REFERENCES public.merchant_payment_credentials(id),
+  CONSTRAINT merchant_payment_credential_access_log_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
+  CONSTRAINT merchant_payment_credential_access_log_store_config_id_fkey FOREIGN KEY (store_config_id) REFERENCES public.online_store_config(id)
+);
+CREATE TABLE public.merchant_payment_credentials (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  merchant_id uuid NOT NULL,
+  provider text NOT NULL CHECK (provider = ANY (ARRAY['nmi'::text])),
+  tokenization_key text NOT NULL,
+  private_api_key_secret_id uuid NOT NULL,
+  is_active boolean NOT NULL DEFAULT true,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT merchant_payment_credentials_pkey PRIMARY KEY (id),
+  CONSTRAINT merchant_payment_credentials_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id)
+);
+CREATE TABLE public.merchant_subscription_services (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  subscription_id uuid NOT NULL,
+  service_id uuid NOT NULL,
+  quantity integer NOT NULL DEFAULT 1 CHECK (quantity >= 0),
+  is_enabled boolean NOT NULL DEFAULT true,
+  metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT merchant_subscription_services_pkey PRIMARY KEY (id),
+  CONSTRAINT merchant_subscription_services_subscription_id_fkey FOREIGN KEY (subscription_id) REFERENCES public.merchant_subscriptions(id),
+  CONSTRAINT merchant_subscription_services_service_id_fkey FOREIGN KEY (service_id) REFERENCES public.billable_services(id)
+);
+CREATE TABLE public.merchant_subscriptions (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  merchant_id uuid NOT NULL,
+  location_id uuid NOT NULL UNIQUE,
+  plan_id uuid NOT NULL,
+  started_at timestamp with time zone NOT NULL DEFAULT now(),
+  current_period_start date NOT NULL,
+  current_period_end date NOT NULL,
+  next_billing_date date NOT NULL,
+  station_count integer NOT NULL DEFAULT 1 CHECK (station_count >= 0),
+  monthly_amount numeric NOT NULL CHECK (monthly_amount >= 0::numeric),
+  status text NOT NULL DEFAULT 'active'::text CHECK (status = ANY (ARRAY['trial'::text, 'active'::text, 'past_due'::text, 'suspended'::text, 'canceled'::text])),
+  trial_ends_at timestamp with time zone,
+  canceled_at timestamp with time zone,
+  cancel_reason text,
+  billing_profile_id uuid,
+  metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT merchant_subscriptions_pkey PRIMARY KEY (id),
+  CONSTRAINT merchant_subscriptions_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
+  CONSTRAINT merchant_subscriptions_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
+  CONSTRAINT merchant_subscriptions_plan_id_fkey FOREIGN KEY (plan_id) REFERENCES public.subscription_plans(id),
+  CONSTRAINT merchant_subscriptions_billing_profile_id_fkey FOREIGN KEY (billing_profile_id) REFERENCES public.merchant_billing_profiles(id)
 );
 CREATE TABLE public.merchants (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   clerk_org_id text NOT NULL UNIQUE,
-  carrier_id uuid NOT NULL,
+  carrier_id uuid,
   name text NOT NULL,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone,
   type text,
   public_metadata jsonb,
+  business_legal_name text,
+  dba_name text,
+  business_type text CHECK (business_type IS NULL OR (business_type = ANY (ARRAY['llc'::text, 'corporation'::text, 'sole_proprietor'::text, 'partnership'::text, 'nonprofit'::text]))),
+  owner_first_name text,
+  owner_last_name text,
+  owner_email text,
+  owner_phone text,
+  ein_last_four text CHECK (ein_last_four IS NULL OR ein_last_four ~ '^[0-9]{4}$'::text),
+  onboarding_status text NOT NULL DEFAULT 'created'::text CHECK (onboarding_status = ANY (ARRAY['created'::text, 'onboarding'::text, 'active'::text, 'suspending'::text, 'suspended'::text, 'cancelled'::text])),
+  onboarding_completed_at timestamp with time zone,
+  activated_at timestamp with time zone,
+  business_address_line1 text,
+  business_address_line2 text,
+  business_city text,
+  business_state text,
+  business_postal_code text,
+  business_country text DEFAULT 'US'::text,
+  pricing_strategy text NOT NULL DEFAULT 'manual'::text CHECK (pricing_strategy = ANY (ARRAY['manual'::text, 'dual'::text])),
+  dual_pricing_percentage numeric NOT NULL DEFAULT 4.0 CHECK (dual_pricing_percentage >= 0::numeric AND dual_pricing_percentage <= 100::numeric),
+  external_merchant_id text CHECK (external_merchant_id IS NULL OR external_merchant_id ~ '^[A-Za-z0-9]{12}$'::text),
+  suspended_at timestamp with time zone,
+  suspension_initiated_at timestamp with time zone,
+  suspension_reason text,
+  cascade_is_settled_enabled boolean NOT NULL DEFAULT true,
   CONSTRAINT merchants_pkey PRIMARY KEY (id),
-  CONSTRAINT merchants_clerk_org_id_fkey FOREIGN KEY (clerk_org_id) REFERENCES public.organizations(id),
-  CONSTRAINT merchants_carrier_id_fkey FOREIGN KEY (carrier_id) REFERENCES public.carriers(id)
+  CONSTRAINT merchants_carrier_id_fkey FOREIGN KEY (carrier_id) REFERENCES public.carriers(id),
+  CONSTRAINT merchants_clerk_org_id_fkey FOREIGN KEY (clerk_org_id) REFERENCES public.organizations(id)
 );
 CREATE TABLE public.modifier_group_item_recipes (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -978,9 +2002,9 @@ CREATE TABLE public.modifier_group_item_recipes (
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
   CONSTRAINT modifier_group_item_recipes_pkey PRIMARY KEY (id),
-  CONSTRAINT modifier_group_item_recipes_modifier_group_item_id_fkey FOREIGN KEY (modifier_group_item_id) REFERENCES public.modifier_group_items(id),
   CONSTRAINT modifier_group_item_recipes_inventory_item_id_fkey FOREIGN KEY (inventory_item_id) REFERENCES public.inventory_items(id),
-  CONSTRAINT modifier_group_item_recipes_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id)
+  CONSTRAINT modifier_group_item_recipes_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
+  CONSTRAINT modifier_group_item_recipes_modifier_group_item_id_fkey FOREIGN KEY (modifier_group_item_id) REFERENCES public.modifier_group_items(id)
 );
 CREATE TABLE public.modifier_group_items (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -994,9 +2018,10 @@ CREATE TABLE public.modifier_group_items (
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
   merchant_id uuid NOT NULL,
   is_default boolean DEFAULT false,
+  delivery_price_modifier numeric,
   CONSTRAINT modifier_group_items_pkey PRIMARY KEY (id),
-  CONSTRAINT modifier_group_items_modifier_group_id_fkey FOREIGN KEY (modifier_group_id) REFERENCES public.modifier_groups(id),
-  CONSTRAINT modifier_group_items_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id)
+  CONSTRAINT modifier_group_items_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
+  CONSTRAINT modifier_group_items_modifier_group_id_fkey FOREIGN KEY (modifier_group_id) REFERENCES public.modifier_groups(id)
 );
 CREATE TABLE public.modifier_groups (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -1015,6 +2040,186 @@ CREATE TABLE public.modifier_groups (
   CONSTRAINT modifier_groups_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
   CONSTRAINT modifier_groups_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id)
 );
+CREATE TABLE public.online_order_payment_intents (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  store_config_id uuid NOT NULL,
+  session_id uuid NOT NULL,
+  location_id uuid NOT NULL,
+  merchant_id uuid NOT NULL,
+  transaction_reference_id text NOT NULL UNIQUE,
+  ipospays_tpn text NOT NULL,
+  order_data jsonb NOT NULL,
+  amount_cents integer NOT NULL,
+  subtotal_cents integer NOT NULL,
+  tax_cents integer NOT NULL,
+  tip_cents integer NOT NULL DEFAULT 0,
+  delivery_fee_cents integer NOT NULL DEFAULT 0,
+  status text NOT NULL DEFAULT 'pending'::text CHECK (status = ANY (ARRAY['pending'::text, 'paid'::text, 'failed'::text, 'expired'::text, 'refunded'::text])),
+  payment_method text CHECK (payment_method = ANY (ARRAY['hpp'::text, 'card_token'::text])),
+  payment_response jsonb,
+  card_token text,
+  card_last4 text,
+  card_type text,
+  order_id uuid,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  expires_at timestamp with time zone NOT NULL DEFAULT (now() + '00:30:00'::interval),
+  amount numeric,
+  subtotal numeric,
+  tax numeric,
+  tip numeric,
+  delivery_fee numeric,
+  CONSTRAINT online_order_payment_intents_pkey PRIMARY KEY (id),
+  CONSTRAINT online_order_payment_intents_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
+  CONSTRAINT online_order_payment_intents_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
+  CONSTRAINT online_order_payment_intents_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id),
+  CONSTRAINT online_order_payment_intents_session_id_fkey FOREIGN KEY (session_id) REFERENCES public.online_order_sessions(id),
+  CONSTRAINT online_order_payment_intents_store_config_id_fkey FOREIGN KEY (store_config_id) REFERENCES public.online_store_config(id)
+);
+CREATE TABLE public.online_order_sessions (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  store_config_id uuid NOT NULL,
+  customer_id uuid,
+  customer_phone text,
+  customer_name text,
+  customer_email text,
+  supabase_auth_id uuid,
+  is_authenticated boolean NOT NULL DEFAULT false,
+  order_type text CHECK (order_type = ANY (ARRAY['pickup'::text, 'delivery'::text])),
+  delivery_address jsonb,
+  delivery_zone_id uuid,
+  cart_data jsonb DEFAULT '[]'::jsonb,
+  loyalty_points_balance integer DEFAULT 0,
+  loyalty_points_to_apply integer DEFAULT 0,
+  order_id uuid,
+  requested_time timestamp with time zone,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  expires_at timestamp with time zone DEFAULT (now() + '02:00:00'::interval),
+  session_token text DEFAULT encode(gen_random_bytes(32), 'hex'::text) UNIQUE,
+  customer_email_opt_in boolean NOT NULL DEFAULT true,
+  customer_sms_opt_in boolean NOT NULL DEFAULT true,
+  CONSTRAINT online_order_sessions_pkey PRIMARY KEY (id),
+  CONSTRAINT online_order_sessions_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.customers(id),
+  CONSTRAINT online_order_sessions_delivery_zone_id_fkey FOREIGN KEY (delivery_zone_id) REFERENCES public.delivery_zones(id),
+  CONSTRAINT online_order_sessions_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id),
+  CONSTRAINT online_order_sessions_store_config_id_fkey FOREIGN KEY (store_config_id) REFERENCES public.online_store_config(id)
+);
+CREATE TABLE public.online_orders (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  order_id uuid NOT NULL,
+  location_id uuid NOT NULL,
+  merchant_id uuid NOT NULL,
+  provider USER-DEFINED NOT NULL,
+  provider_order_id text NOT NULL,
+  provider_restaurant_id text,
+  external_reference text,
+  delivery_company text,
+  delivery_driver text,
+  delivery_tracking text,
+  placed_at timestamp with time zone,
+  ready_by timestamp with time zone,
+  estimated_delivery timestamp with time zone,
+  provider_metadata jsonb DEFAULT '{}'::jsonb,
+  raw_payload jsonb,
+  provider_status text NOT NULL DEFAULT 'received'::text,
+  status_updated_at timestamp with time zone DEFAULT now(),
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT online_orders_pkey PRIMARY KEY (id),
+  CONSTRAINT online_orders_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
+  CONSTRAINT online_orders_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
+  CONSTRAINT online_orders_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id)
+);
+CREATE TABLE public.online_store_config (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  merchant_id uuid NOT NULL,
+  location_id uuid NOT NULL,
+  slug text NOT NULL UNIQUE,
+  custom_domain text UNIQUE,
+  store_name text NOT NULL,
+  template_id text NOT NULL DEFAULT 'classic'::text CHECK (template_id = ANY (ARRAY['classic'::text, 'hero'::text, 'market'::text, 'boutique'::text])),
+  primary_color text NOT NULL DEFAULT '#2DD4BF'::text,
+  secondary_color text,
+  accent_color text,
+  background_color text NOT NULL DEFAULT '#FFFFFF'::text,
+  text_color text NOT NULL DEFAULT '#111827'::text,
+  font_family text DEFAULT 'DM Sans'::text,
+  logo_url text,
+  hero_image_url text,
+  favicon_url text,
+  og_image_url text,
+  description text,
+  phone text,
+  email text,
+  address jsonb,
+  operating_hours jsonb NOT NULL DEFAULT '[]'::jsonb,
+  is_active boolean NOT NULL DEFAULT false,
+  accepts_pickup boolean NOT NULL DEFAULT true,
+  accepts_delivery boolean NOT NULL DEFAULT false,
+  min_order_cents integer DEFAULT 0,
+  estimated_prep_minutes integer DEFAULT 20,
+  max_future_order_days integer DEFAULT 0,
+  delivery_fee_cents integer DEFAULT 0,
+  free_delivery_threshold_cents integer,
+  delivery_radius_miles numeric,
+  tip_enabled boolean NOT NULL DEFAULT true,
+  tip_presets jsonb DEFAULT '[15, 18, 20, 25]'::jsonb,
+  ipospays_tpn text,
+  meta_title text,
+  meta_description text,
+  google_analytics_id text,
+  facebook_pixel_id text,
+  published_at timestamp with time zone,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  header_style text NOT NULL DEFAULT 'filled'::text CHECK (header_style = ANY (ARRAY['filled'::text, 'transparent'::text, 'outlined'::text])),
+  header_text_color text,
+  menu_layout text NOT NULL DEFAULT 'cards'::text CHECK (menu_layout = ANY (ARRAY['cards'::text, 'sidebyside'::text, 'no-images'::text])),
+  accepts_online_payments boolean NOT NULL DEFAULT true,
+  accepts_cash_on_delivery boolean NOT NULL DEFAULT false,
+  accepts_card_on_delivery boolean NOT NULL DEFAULT false,
+  border_color text,
+  card_color text,
+  auto_accept_orders boolean NOT NULL DEFAULT false,
+  ipospays_ftd_ecom_key text,
+  setup_request_status text NOT NULL DEFAULT 'setup_completed'::text CHECK (setup_request_status = ANY (ARRAY['pending_review'::text, 'approved'::text, 'rejected'::text, 'setup_completed'::text])),
+  setup_requested_at timestamp with time zone,
+  setup_requested_by text,
+  setup_reviewed_at timestamp with time zone,
+  setup_reviewed_by text,
+  setup_rejection_reason text,
+  setup_approved_at timestamp with time zone,
+  setup_completed_at timestamp with time zone,
+  pricing_disclosure_text text DEFAULT 'Prices reflect online delivery rates and may differ from in-store pricing.'::text,
+  delivery_fee numeric,
+  free_delivery_threshold numeric,
+  min_order numeric,
+  notification_prefs jsonb NOT NULL DEFAULT jsonb_build_object('email_on_order_placed', true, 'sms_on_order_placed', true, 'email_on_status', jsonb_build_array('ready', 'cancelled'), 'sms_on_status', jsonb_build_array('accepted', 'ready', 'cancelled'), 'admin_test_email', NULL::unknown, 'admin_test_phone', NULL::unknown),
+  CONSTRAINT online_store_config_pkey PRIMARY KEY (id),
+  CONSTRAINT online_store_config_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
+  CONSTRAINT online_store_config_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id)
+);
+CREATE TABLE public.online_store_pages (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  store_config_id uuid NOT NULL,
+  page_type text NOT NULL DEFAULT 'home'::text CHECK (page_type = ANY (ARRAY['home'::text, 'about'::text, 'custom'::text])),
+  section_type text NOT NULL CHECK (section_type = ANY (ARRAY['hero'::text, 'announcement'::text, 'about'::text, 'gallery'::text, 'hours'::text, 'location_map'::text, 'reviews'::text, 'custom_html'::text])),
+  title text,
+  subtitle text,
+  body_text text,
+  image_url text,
+  images jsonb,
+  cta_text text,
+  cta_link text,
+  display_order integer NOT NULL DEFAULT 0,
+  is_visible boolean NOT NULL DEFAULT true,
+  style_overrides jsonb DEFAULT '{}'::jsonb,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT online_store_pages_pkey PRIMARY KEY (id),
+  CONSTRAINT online_store_pages_store_config_id_fkey FOREIGN KEY (store_config_id) REFERENCES public.online_store_config(id)
+);
 CREATE TABLE public.open_item_categories (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
   merchant_id uuid NOT NULL,
@@ -1030,8 +2235,8 @@ CREATE TABLE public.open_item_categories (
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT open_item_categories_pkey PRIMARY KEY (id),
-  CONSTRAINT open_item_categories_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
-  CONSTRAINT open_item_categories_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id)
+  CONSTRAINT open_item_categories_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
+  CONSTRAINT open_item_categories_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id)
 );
 CREATE TABLE public.order_courses (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -1046,8 +2251,8 @@ CREATE TABLE public.order_courses (
   completed_at timestamp with time zone,
   notes text,
   CONSTRAINT order_courses_pkey PRIMARY KEY (id),
-  CONSTRAINT order_courses_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id),
-  CONSTRAINT order_courses_fired_by_fkey FOREIGN KEY (fired_by) REFERENCES public.staff_profiles(id)
+  CONSTRAINT order_courses_fired_by_fkey FOREIGN KEY (fired_by) REFERENCES public.staff_profiles(id),
+  CONSTRAINT order_courses_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id)
 );
 CREATE TABLE public.order_discounts (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -1071,10 +2276,10 @@ CREATE TABLE public.order_discounts (
   calculated_cash_amount numeric DEFAULT '0'::numeric,
   pre_discount_cash_subtotal numeric DEFAULT '0'::numeric,
   CONSTRAINT order_discounts_pkey PRIMARY KEY (id),
-  CONSTRAINT order_discounts_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id),
-  CONSTRAINT order_discounts_discount_id_fkey FOREIGN KEY (discount_id) REFERENCES public.discounts(id),
   CONSTRAINT order_discounts_applied_by_staff_profiles_id_fkey FOREIGN KEY (applied_by_staff_profiles_id) REFERENCES public.staff_profiles(id),
   CONSTRAINT order_discounts_approved_by_staff_profiles_id_fkey FOREIGN KEY (approved_by_staff_profiles_id) REFERENCES public.staff_profiles(id),
+  CONSTRAINT order_discounts_discount_id_fkey FOREIGN KEY (discount_id) REFERENCES public.discounts(id),
+  CONSTRAINT order_discounts_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id),
   CONSTRAINT order_discounts_voided_by_fkey FOREIGN KEY (voided_by) REFERENCES public.staff_profiles(id)
 );
 CREATE TABLE public.order_item_modifiers (
@@ -1088,10 +2293,12 @@ CREATE TABLE public.order_item_modifiers (
   quantity integer NOT NULL DEFAULT 1 CHECK (quantity > 0),
   total_price numeric NOT NULL DEFAULT 0.00,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
+  metadata jsonb,
+  is_no boolean NOT NULL DEFAULT false,
   CONSTRAINT order_item_modifiers_pkey PRIMARY KEY (id),
-  CONSTRAINT order_item_modifiers_order_item_id_fkey FOREIGN KEY (order_item_id) REFERENCES public.order_items(id),
   CONSTRAINT order_item_modifiers_modifier_group_id_fkey FOREIGN KEY (modifier_group_id) REFERENCES public.modifier_groups(id),
-  CONSTRAINT order_item_modifiers_modifier_item_id_fkey FOREIGN KEY (modifier_item_id) REFERENCES public.modifier_group_items(id)
+  CONSTRAINT order_item_modifiers_modifier_item_id_fkey FOREIGN KEY (modifier_item_id) REFERENCES public.modifier_group_items(id),
+  CONSTRAINT order_item_modifiers_order_item_id_fkey FOREIGN KEY (order_item_id) REFERENCES public.order_items(id)
 );
 CREATE TABLE public.order_items (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -1159,16 +2366,41 @@ CREATE TABLE public.order_items (
   menu_id uuid,
   menu_name text,
   category_id uuid,
+  is_prioritized boolean DEFAULT false,
+  seat_number integer,
   CONSTRAINT order_items_pkey PRIMARY KEY (id),
   CONSTRAINT order_items_assigned_to_staff_id_fkey FOREIGN KEY (assigned_to_staff_id) REFERENCES public.staff_profiles(id),
-  CONSTRAINT order_items_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id),
-  CONSTRAINT order_items_location_exclusive_item_id_fkey FOREIGN KEY (location_exclusive_item_id) REFERENCES public.location_exclusive_items(id),
-  CONSTRAINT order_items_selected_size_id_fkey FOREIGN KEY (selected_size_id) REFERENCES public.item_sizes(id),
-  CONSTRAINT order_items_voided_by_fkey FOREIGN KEY (voided_by) REFERENCES public.staff_profiles(id),
-  CONSTRAINT order_items_discount_id_fkey FOREIGN KEY (discount_id) REFERENCES public.discounts(id),
   CONSTRAINT order_items_discount_applied_by_fkey FOREIGN KEY (discount_applied_by) REFERENCES public.staff_profiles(id),
   CONSTRAINT order_items_discount_approved_by_fkey FOREIGN KEY (discount_approved_by) REFERENCES public.staff_profiles(id),
-  CONSTRAINT order_items_menu_item_id_fkey FOREIGN KEY (menu_item_id) REFERENCES public.menu_items(id)
+  CONSTRAINT order_items_discount_id_fkey FOREIGN KEY (discount_id) REFERENCES public.discounts(id),
+  CONSTRAINT order_items_location_exclusive_item_id_fkey FOREIGN KEY (location_exclusive_item_id) REFERENCES public.location_exclusive_items(id),
+  CONSTRAINT order_items_menu_item_id_fkey FOREIGN KEY (menu_item_id) REFERENCES public.menu_items(id),
+  CONSTRAINT order_items_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id),
+  CONSTRAINT order_items_voided_by_fkey FOREIGN KEY (voided_by) REFERENCES public.staff_profiles(id),
+  CONSTRAINT order_items_selected_size_id_fkey FOREIGN KEY (selected_size_id) REFERENCES public.item_sizes(id)
+);
+CREATE TABLE public.order_notifications (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  order_id uuid NOT NULL,
+  merchant_id uuid NOT NULL,
+  channel text NOT NULL CHECK (channel = ANY (ARRAY['email'::text, 'sms'::text])),
+  event text NOT NULL,
+  recipient text NOT NULL,
+  status text NOT NULL CHECK (status = ANY (ARRAY['sent'::text, 'failed'::text, 'skipped'::text])),
+  provider_id text,
+  error text,
+  sent_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT order_notifications_pkey PRIMARY KEY (id),
+  CONSTRAINT order_notifications_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id),
+  CONSTRAINT order_notifications_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id)
+);
+CREATE TABLE public.order_number_day_sequences (
+  sequence_name text NOT NULL,
+  merchant_id uuid NOT NULL,
+  date_str text NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT order_number_day_sequences_pkey PRIMARY KEY (sequence_name),
+  CONSTRAINT order_number_day_sequences_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id)
 );
 CREATE TABLE public.order_payment_items (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -1180,8 +2412,8 @@ CREATE TABLE public.order_payment_items (
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   tax_paid numeric DEFAULT '0'::numeric,
   CONSTRAINT order_payment_items_pkey PRIMARY KEY (id),
-  CONSTRAINT order_payment_items_order_payment_id_fkey FOREIGN KEY (order_payment_id) REFERENCES public.order_payments(id),
-  CONSTRAINT order_payment_items_order_item_id_fkey FOREIGN KEY (order_item_id) REFERENCES public.order_items(id)
+  CONSTRAINT order_payment_items_order_item_id_fkey FOREIGN KEY (order_item_id) REFERENCES public.order_items(id),
+  CONSTRAINT order_payment_items_order_payment_id_fkey FOREIGN KEY (order_payment_id) REFERENCES public.order_payments(id)
 );
 CREATE TABLE public.order_payments (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -1246,7 +2478,7 @@ CREATE TABLE public.order_payments (
   rrn character varying,
   result_code character varying,
   result_message text,
-  batch_number character varying,
+  batch_number text,
   is_settled boolean DEFAULT false,
   settled_at timestamp with time zone,
   is_returned boolean DEFAULT false,
@@ -1269,17 +2501,38 @@ CREATE TABLE public.order_payments (
   approved_at timestamp with time zone,
   merchant_id uuid,
   location_id uuid,
+  initiated_by uuid,
+  settlement_batch_id uuid,
+  payment_device_id uuid,
+  avs_response_code text,
+  cvv_response_code text,
+  processor_response_code text,
+  processor_response_text text,
+  customer_vault_id text,
+  idempotency_key text,
+  dual_pricing_fee numeric NOT NULL DEFAULT 0,
+  tip_fee numeric NOT NULL DEFAULT 0,
+  refunded_dual_pricing_fee numeric NOT NULL DEFAULT 0,
+  refunded_tip_fee numeric NOT NULL DEFAULT 0,
+  original_tip_fee numeric,
+  dual_pricing_percentage_snapshot numeric NOT NULL DEFAULT 0,
+  tip_surcharge_percentage_snapshot numeric NOT NULL DEFAULT 0,
+  processor_fee_percentage_snapshot numeric NOT NULL DEFAULT 0,
+  acquirer text,
   CONSTRAINT order_payments_pkey PRIMARY KEY (id),
-  CONSTRAINT order_payments_refunded_by_fkey FOREIGN KEY (refunded_by) REFERENCES public.staff_profiles(id),
+  CONSTRAINT order_payments_initiated_by_fkey FOREIGN KEY (initiated_by) REFERENCES public.staff_profiles(id),
+  CONSTRAINT order_payments_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
+  CONSTRAINT order_payments_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
   CONSTRAINT order_payments_parent_payment_id_fkey FOREIGN KEY (parent_payment_id) REFERENCES public.order_payments(id),
   CONSTRAINT order_payments_processed_by_staff_id_fkey FOREIGN KEY (processed_by_staff_id) REFERENCES public.staff_profiles(id),
   CONSTRAINT order_payments_processed_by_user_id_fkey FOREIGN KEY (processed_by_user_id) REFERENCES public.users(id),
-  CONSTRAINT order_payments_voided_by_fkey FOREIGN KEY (voided_by) REFERENCES public.staff_profiles(id),
-  CONSTRAINT order_payments_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id),
+  CONSTRAINT order_payments_refunded_by_fkey FOREIGN KEY (refunded_by) REFERENCES public.staff_profiles(id),
   CONSTRAINT order_payments_returned_by_fkey FOREIGN KEY (returned_by) REFERENCES public.staff_profiles(id),
   CONSTRAINT order_payments_tip_adjusted_by_fkey FOREIGN KEY (tip_adjusted_by) REFERENCES public.staff_profiles(id),
-  CONSTRAINT order_payments_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
-  CONSTRAINT order_payments_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id)
+  CONSTRAINT order_payments_voided_by_fkey FOREIGN KEY (voided_by) REFERENCES public.staff_profiles(id),
+  CONSTRAINT order_payments_settlement_batch_id_fkey FOREIGN KEY (settlement_batch_id) REFERENCES public.settlement_batches(id),
+  CONSTRAINT order_payments_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id),
+  CONSTRAINT order_payments_payment_device_id_fkey FOREIGN KEY (payment_device_id) REFERENCES public.location_payment_devices(id)
 );
 CREATE TABLE public.order_refund_items (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -1297,9 +2550,9 @@ CREATE TABLE public.order_refund_items (
   inventory_updated boolean DEFAULT false,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT order_refund_items_pkey PRIMARY KEY (id),
-  CONSTRAINT order_refund_items_reversal_id_fkey FOREIGN KEY (reversal_id) REFERENCES public.reversals(id),
   CONSTRAINT order_refund_items_order_item_id_fkey FOREIGN KEY (order_item_id) REFERENCES public.order_items(id),
-  CONSTRAINT order_refund_items_order_payment_item_id_fkey FOREIGN KEY (order_payment_item_id) REFERENCES public.order_payment_items(id)
+  CONSTRAINT order_refund_items_order_payment_item_id_fkey FOREIGN KEY (order_payment_item_id) REFERENCES public.order_payment_items(id),
+  CONSTRAINT order_refund_items_reversal_id_fkey FOREIGN KEY (reversal_id) REFERENCES public.reversals(id)
 );
 CREATE TABLE public.order_sequences (
   location_id uuid NOT NULL,
@@ -1321,9 +2574,120 @@ CREATE TABLE public.order_status_history (
   changed_at timestamp with time zone NOT NULL DEFAULT now(),
   metadata jsonb DEFAULT '{}'::jsonb,
   CONSTRAINT order_status_history_pkey PRIMARY KEY (id),
-  CONSTRAINT order_status_history_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id),
   CONSTRAINT order_status_history_changed_by_staff_id_fkey FOREIGN KEY (changed_by_staff_id) REFERENCES public.staff_profiles(id),
-  CONSTRAINT order_status_history_changed_by_user_id_fkey FOREIGN KEY (changed_by_user_id) REFERENCES public.users(id)
+  CONSTRAINT order_status_history_changed_by_user_id_fkey FOREIGN KEY (changed_by_user_id) REFERENCES public.users(id),
+  CONSTRAINT order_status_history_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id)
+);
+CREATE TABLE public.orderout_accounts (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  merchant_id uuid NOT NULL UNIQUE,
+  oo_account_id text,
+  oo_billing_account_id text NOT NULL DEFAULT '5546155819794432'::text,
+  account_manager_email text NOT NULL,
+  status text NOT NULL DEFAULT 'pending'::text CHECK (status = ANY (ARRAY['pending'::text, 'active'::text, 'suspended'::text, 'error'::text])),
+  raw_response jsonb,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT orderout_accounts_pkey PRIMARY KEY (id),
+  CONSTRAINT orderout_accounts_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id)
+);
+CREATE TABLE public.orderout_menu_links (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  orderout_restaurant_id uuid NOT NULL,
+  menu_id uuid NOT NULL,
+  oo_menu_id text NOT NULL,
+  oo_menu_name text,
+  is_active boolean NOT NULL DEFAULT true,
+  platform_statuses jsonb NOT NULL DEFAULT '{}'::jsonb,
+  last_pushed_at timestamp with time zone,
+  last_sync_id uuid,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT orderout_menu_links_pkey PRIMARY KEY (id),
+  CONSTRAINT orderout_menu_links_last_sync_id_fkey FOREIGN KEY (last_sync_id) REFERENCES public.orderout_menu_syncs(id),
+  CONSTRAINT orderout_menu_links_menu_id_fkey FOREIGN KEY (menu_id) REFERENCES public.menus(id),
+  CONSTRAINT orderout_menu_links_orderout_restaurant_id_fkey FOREIGN KEY (orderout_restaurant_id) REFERENCES public.orderout_restaurants(id)
+);
+CREATE TABLE public.orderout_menu_syncs (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  orderout_restaurant_id uuid NOT NULL,
+  oo_menu_id text,
+  menu_id uuid,
+  sync_direction text NOT NULL CHECK (sync_direction = ANY (ARRAY['push'::text, 'pull'::text])),
+  sync_status text NOT NULL DEFAULT 'pending'::text CHECK (sync_status = ANY (ARRAY['pending'::text, 'syncing'::text, 'success'::text, 'failed'::text, 'partial'::text])),
+  items_synced integer NOT NULL DEFAULT 0,
+  items_failed integer NOT NULL DEFAULT 0,
+  error_details jsonb,
+  pushed_to_channels ARRAY,
+  menu_payload_snapshot jsonb,
+  synced_at timestamp with time zone,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  expected_channels ARRAY,
+  CONSTRAINT orderout_menu_syncs_pkey PRIMARY KEY (id),
+  CONSTRAINT orderout_menu_syncs_menu_id_fkey FOREIGN KEY (menu_id) REFERENCES public.menus(id),
+  CONSTRAINT orderout_menu_syncs_orderout_restaurant_id_fkey FOREIGN KEY (orderout_restaurant_id) REFERENCES public.orderout_restaurants(id)
+);
+CREATE TABLE public.orderout_orders (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  order_id uuid NOT NULL UNIQUE,
+  orderout_restaurant_id uuid NOT NULL,
+  oo_order_number text NOT NULL,
+  oo_external_reference_id text,
+  delivery_platform text NOT NULL,
+  event_type text NOT NULL CHECK (event_type = ANY (ARRAY['received'::text, 'cancelled'::text, 'modified'::text])),
+  order_type text NOT NULL CHECK (order_type = ANY (ARRAY['PICKUP'::text, 'DELIVERY'::text])),
+  customer_name text,
+  customer_phone text,
+  customer_email text,
+  delivery_address jsonb,
+  ready_by timestamp with time zone,
+  placed_on timestamp with time zone,
+  platform_payment_status text,
+  platform_subtotal numeric,
+  platform_tax numeric,
+  platform_delivery_fee numeric,
+  platform_service_fee numeric,
+  platform_tip numeric,
+  platform_discount numeric,
+  platform_total numeric,
+  accept_status text NOT NULL DEFAULT 'pending'::text CHECK (accept_status = ANY (ARRAY['pending'::text, 'accepted'::text, 'rejected'::text])),
+  accepted_at timestamp with time zone,
+  rejected_at timestamp with time zone,
+  reject_reason text,
+  cancelled_at timestamp with time zone,
+  cancel_source text CHECK (cancel_source IS NULL OR (cancel_source = ANY (ARRAY['platform'::text, 'merchant'::text, 'customer'::text]))),
+  raw_webhook_payload jsonb NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT orderout_orders_pkey PRIMARY KEY (id),
+  CONSTRAINT orderout_orders_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id),
+  CONSTRAINT orderout_orders_orderout_restaurant_id_fkey FOREIGN KEY (orderout_restaurant_id) REFERENCES public.orderout_restaurants(id)
+);
+CREATE TABLE public.orderout_restaurants (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  orderout_account_id uuid NOT NULL,
+  location_id uuid NOT NULL UNIQUE,
+  oo_restaurant_id text,
+  pos_uuid text NOT NULL UNIQUE,
+  status text NOT NULL DEFAULT 'pending'::text CHECK (status = ANY (ARRAY['pending'::text, 'active'::text, 'paused'::text, 'error'::text])),
+  connected_channels jsonb DEFAULT '{}'::jsonb,
+  auto_accept_orders boolean NOT NULL DEFAULT true,
+  auto_print boolean NOT NULL DEFAULT true,
+  prep_time_minutes integer NOT NULL DEFAULT 20 CHECK (prep_time_minutes > 0 AND prep_time_minutes <= 120),
+  is_accepting_orders boolean NOT NULL DEFAULT true,
+  use_delivery_pricing boolean NOT NULL DEFAULT true,
+  last_order_received_at timestamp with time zone,
+  raw_response jsonb,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  oo_account_id text,
+  merchant_id uuid,
+  channels_confirmed_by_merchant ARRAY NOT NULL DEFAULT '{}'::text[],
+  channels_confirmed_at timestamp with time zone,
+  channels_confirmed_by_user_id text,
+  CONSTRAINT orderout_restaurants_pkey PRIMARY KEY (id),
+  CONSTRAINT orderout_restaurants_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
+  CONSTRAINT orderout_restaurants_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
+  CONSTRAINT orderout_restaurants_orderout_account_id_fkey FOREIGN KEY (orderout_account_id) REFERENCES public.orderout_accounts(id)
 );
 CREATE TABLE public.orders (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -1391,16 +2755,27 @@ CREATE TABLE public.orders (
   effective_cash_amount_due numeric DEFAULT '0'::numeric,
   check_status text DEFAULT 'Opened'::text,
   session_id uuid,
+  order_source text DEFAULT 'pos'::text,
+  delivery_platform text,
+  platform_order_number text,
+  estimated_ready_at timestamp with time zone,
+  is_prepaid boolean DEFAULT false,
+  split_payment_path USER-DEFINED,
+  accepted_at timestamp with time zone,
+  declined_at timestamp with time zone,
+  declined_reason text,
+  cancelled_by text CHECK (cancelled_by = ANY (ARRAY['customer'::text, 'merchant'::text, 'system'::text])),
+  inventory_deducted boolean NOT NULL DEFAULT false,
   CONSTRAINT orders_pkey PRIMARY KEY (id),
-  CONSTRAINT orders_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.customers(id),
-  CONSTRAINT orders_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
-  CONSTRAINT orders_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
-  CONSTRAINT orders_created_by_staff_id_fkey FOREIGN KEY (created_by_staff_id) REFERENCES public.staff_profiles(id),
   CONSTRAINT orders_assigned_server_id_fkey FOREIGN KEY (assigned_server_id) REFERENCES public.staff_profiles(id),
-  CONSTRAINT orders_station_id_fkey FOREIGN KEY (station_id) REFERENCES public.stations(id),
-  CONSTRAINT orders_voided_by_fkey FOREIGN KEY (voided_by) REFERENCES public.staff_profiles(id),
+  CONSTRAINT orders_created_by_staff_id_fkey FOREIGN KEY (created_by_staff_id) REFERENCES public.staff_profiles(id),
+  CONSTRAINT orders_created_by_user_id_fkey FOREIGN KEY (created_by_user_id) REFERENCES public.users(id),
+  CONSTRAINT orders_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.customers(id),
+  CONSTRAINT orders_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
+  CONSTRAINT orders_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
   CONSTRAINT orders_session_id_fkey FOREIGN KEY (session_id) REFERENCES public.table_sessions(id),
-  CONSTRAINT orders_created_by_user_id_fkey FOREIGN KEY (created_by_user_id) REFERENCES public.users(id)
+  CONSTRAINT orders_station_id_fkey FOREIGN KEY (station_id) REFERENCES public.stations(id),
+  CONSTRAINT orders_voided_by_fkey FOREIGN KEY (voided_by) REFERENCES public.staff_profiles(id)
 );
 CREATE TABLE public.organizations (
   name text,
@@ -1431,10 +2806,22 @@ CREATE TABLE public.payment_audit_log (
   event_timestamp timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT payment_audit_log_pkey PRIMARY KEY (id)
 );
+CREATE TABLE public.payment_credential_access_log (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  device_id uuid NOT NULL,
+  function_name text NOT NULL,
+  store_config_id uuid,
+  actor_user_id text,
+  called_at timestamp with time zone NOT NULL DEFAULT now(),
+  metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+  CONSTRAINT payment_credential_access_log_pkey PRIMARY KEY (id),
+  CONSTRAINT payment_credential_access_log_device_id_fkey FOREIGN KEY (device_id) REFERENCES public.location_payment_devices(id),
+  CONSTRAINT payment_credential_access_log_store_config_id_fkey FOREIGN KEY (store_config_id) REFERENCES public.online_store_config(id)
+);
 CREATE TABLE public.payment_events (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   payment_id uuid NOT NULL,
-  event_type character varying NOT NULL CHECK (event_type::text = ANY (ARRAY['created'::character varying, 'authorized'::character varying, 'auth_adjusted'::character varying, 'tip_adjusted'::character varying, 'captured'::character varying, 'settled'::character varying, 'voided'::character varying, 'declined'::character varying, 'error'::character varying, 'expired'::character varying, 'refund_initiated'::character varying, 'refund_completed'::character varying, 'chargeback_received'::character varying, 'chargeback_defended'::character varying, 'chargeback_resolved'::character varying]::text[])),
+  event_type character varying NOT NULL CHECK (event_type::text = ANY (ARRAY['created'::character varying::text, 'authorized'::character varying::text, 'auth_adjusted'::character varying::text, 'tip_adjusted'::character varying::text, 'captured'::character varying::text, 'settled'::character varying::text, 'voided'::character varying::text, 'declined'::character varying::text, 'error'::character varying::text, 'expired'::character varying::text, 'refund_initiated'::character varying::text, 'refund_completed'::character varying::text, 'chargeback_received'::character varying::text, 'chargeback_defended'::character varying::text, 'chargeback_resolved'::character varying::text])),
   previous_status character varying,
   new_status character varying,
   amount numeric,
@@ -1451,10 +2838,10 @@ CREATE TABLE public.payment_events (
   tip_amount numeric,
   reason text,
   CONSTRAINT payment_events_pkey PRIMARY KEY (id),
-  CONSTRAINT payment_events_payment_id_fkey FOREIGN KEY (payment_id) REFERENCES public.order_payments(id),
-  CONSTRAINT payment_events_staff_id_fkey FOREIGN KEY (staff_id) REFERENCES public.staff_profiles(id),
+  CONSTRAINT payment_events_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
   CONSTRAINT payment_events_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id),
-  CONSTRAINT payment_events_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id)
+  CONSTRAINT payment_events_payment_id_fkey FOREIGN KEY (payment_id) REFERENCES public.order_payments(id),
+  CONSTRAINT payment_events_staff_id_fkey FOREIGN KEY (staff_id) REFERENCES public.staff_profiles(id)
 );
 CREATE TABLE public.payment_terminals (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -1462,12 +2849,14 @@ CREATE TABLE public.payment_terminals (
   location_id uuid NOT NULL,
   station_id uuid,
   terminal_name text NOT NULL,
-  terminal_type text NOT NULL DEFAULT 'dejavoo'::text CHECK (terminal_type = ANY (ARRAY['dejavoo'::text, 'pax'::text])),
+  terminal_type text DEFAULT 'dejavoo'::text CHECK (terminal_type = ANY (ARRAY['dejavoo'::text, 'castles'::text])),
   terminal_model text,
   serial_number text,
-  auth_key text NOT NULL,
-  auth_key_encrypted bytea NOT NULL,
-  register_id text NOT NULL,
+  tpn text,
+  auth_key text,
+  tpn_encrypted bytea,
+  auth_key_encrypted bytea,
+  register_id text,
   api_environment text DEFAULT 'sandbox'::text CHECK (api_environment = ANY (ARRAY['sandbox'::text, 'production'::text])),
   api_base_url text,
   spin_proxy_timeout integer DEFAULT 120,
@@ -1493,19 +2882,47 @@ CREATE TABLE public.payment_terminals (
   metadata jsonb DEFAULT '{}'::jsonb,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
+  firmware_version text,
+  battery_level integer,
+  last_batch_at timestamp with time zone,
+  open_batch_count integer DEFAULT 0,
+  consecutive_failures integer DEFAULT 0,
+  last_error_message text,
+  health_check_interval integer DEFAULT 300,
+  castles_txn_counter integer NOT NULL DEFAULT 0,
+  castles_batch_number text,
+  castles_counter_updated_at timestamp with time zone DEFAULT now(),
+  castles_last_pos_txn_id text NOT NULL DEFAULT '000000'::text,
+  castles_ip_address text,
+  castles_port integer NOT NULL DEFAULT 8080,
+  auth_key_secret_id uuid,
   CONSTRAINT payment_terminals_pkey PRIMARY KEY (id),
-  CONSTRAINT payment_terminals_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
   CONSTRAINT payment_terminals_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
-  CONSTRAINT payment_terminals_station_id_fkey FOREIGN KEY (station_id) REFERENCES public.stations(id),
-  CONSTRAINT payment_terminals_merchant_register_id_unique UNIQUE (merchant_id, register_id)
+  CONSTRAINT payment_terminals_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
+  CONSTRAINT payment_terminals_station_id_fkey FOREIGN KEY (station_id) REFERENCES public.stations(id)
+);
+CREATE TABLE public.pci_export_function_registry (
+  function_name text NOT NULL,
+  registered_at timestamp with time zone NOT NULL DEFAULT now(),
+  notes text,
+  CONSTRAINT pci_export_function_registry_pkey PRIMARY KEY (function_name)
+);
+CREATE TABLE public.pending_finalize_journal (
+  batch_uuid uuid NOT NULL,
+  merchant_id uuid NOT NULL,
+  terminal_id text NOT NULL,
+  castles_response jsonb NOT NULL,
+  saved_at timestamp with time zone NOT NULL DEFAULT now(),
+  retried_at timestamp with time zone,
+  CONSTRAINT pending_finalize_journal_pkey PRIMARY KEY (batch_uuid)
 );
 CREATE TABLE public.pending_org_admin_invites (
   id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
   organization_id text,
   email text,
   clerk_invite_id text,
-  status text,
-  role text,
+  status text CHECK (status IS NULL OR (status = ANY (ARRAY['pending'::text, 'revoked'::text, 'accepted'::text, 'expired'::text, 'cancelled'::text, 'failed'::text, 'direct_created'::text]))),
+  role text CHECK (role IS NULL OR btrim(role) <> ''::text),
   accepted_at timestamp with time zone,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   clerk_user_id text,
@@ -1515,8 +2932,8 @@ CREATE TABLE public.pending_org_admin_invites (
   updated_at timestamp with time zone,
   invited_by text,
   CONSTRAINT pending_org_admin_invites_pkey PRIMARY KEY (id),
-  CONSTRAINT pending-org-admin-invites_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(id),
   CONSTRAINT invitee_user FOREIGN KEY (clerk_user_id) REFERENCES public.users(id),
+  CONSTRAINT pending-org-admin-invites_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(id),
   CONSTRAINT pending_org_admin_invites_invited_by_fkey FOREIGN KEY (invited_by) REFERENCES public.users(id)
 );
 CREATE TABLE public.permissions (
@@ -1529,6 +2946,42 @@ CREATE TABLE public.permissions (
   created_at timestamp with time zone DEFAULT now(),
   CONSTRAINT permissions_pkey PRIMARY KEY (id)
 );
+CREATE TABLE public.phone_verifications (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  phone text NOT NULL,
+  code_hash text NOT NULL,
+  merchant_id uuid NOT NULL,
+  attempts integer NOT NULL DEFAULT 0,
+  max_attempts integer NOT NULL DEFAULT 3,
+  expires_at timestamp with time zone NOT NULL DEFAULT (now() + '00:05:00'::interval),
+  verified_at timestamp with time zone,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  request_ip inet,
+  CONSTRAINT phone_verifications_pkey PRIMARY KEY (id),
+  CONSTRAINT phone_verifications_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id)
+);
+CREATE TABLE public.pin_login_attempts (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  location_id uuid NOT NULL,
+  device_id text NOT NULL,
+  ip_address inet,
+  attempted_at timestamp with time zone NOT NULL DEFAULT now(),
+  succeeded boolean NOT NULL,
+  staff_profile_id uuid,
+  CONSTRAINT pin_login_attempts_pkey PRIMARY KEY (id),
+  CONSTRAINT pin_login_attempts_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id)
+);
+CREATE TABLE public.platform_billing_provider_configs (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  provider text NOT NULL UNIQUE CHECK (provider = ANY (ARRAY['nmi'::text])),
+  label text NOT NULL DEFAULT 'Dexa Billing'::text,
+  tokenization_key text NOT NULL,
+  private_api_key_secret_id uuid NOT NULL,
+  is_active boolean NOT NULL DEFAULT true,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT platform_billing_provider_configs_pkey PRIMARY KEY (id)
+);
 CREATE TABLE public.prep_stations (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   merchant_id uuid NOT NULL,
@@ -1540,8 +2993,18 @@ CREATE TABLE public.prep_stations (
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT prep_stations_pkey PRIMARY KEY (id),
-  CONSTRAINT prep_stations_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
-  CONSTRAINT prep_stations_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id)
+  CONSTRAINT prep_stations_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
+  CONSTRAINT prep_stations_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id)
+);
+CREATE TABLE public.printer_routing_rules (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  printer_id uuid NOT NULL,
+  rule_type text NOT NULL,
+  rule_value text NOT NULL,
+  is_enabled boolean NOT NULL DEFAULT true,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT printer_routing_rules_pkey PRIMARY KEY (id),
+  CONSTRAINT printer_routing_rules_printer_id_fkey FOREIGN KEY (printer_id) REFERENCES public.printers(id)
 );
 CREATE TABLE public.printers (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -1583,10 +3046,77 @@ CREATE TABLE public.printers (
   metadata jsonb DEFAULT '{}'::jsonb,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
+  routing_mode text NOT NULL DEFAULT 'all'::text,
+  print_modifiers boolean NOT NULL DEFAULT true,
+  device_id text,
   CONSTRAINT printers_pkey PRIMARY KEY (id),
-  CONSTRAINT printers_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
   CONSTRAINT printers_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
+  CONSTRAINT printers_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
   CONSTRAINT printers_station_id_fkey FOREIGN KEY (station_id) REFERENCES public.stations(id)
+);
+CREATE TABLE public.promotion_usage (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  promotion_id uuid NOT NULL,
+  customer_id uuid,
+  order_id uuid NOT NULL,
+  location_id uuid NOT NULL,
+  merchant_id uuid NOT NULL,
+  discount_applied numeric NOT NULL,
+  applied_by_staff_id uuid,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT promotion_usage_pkey PRIMARY KEY (id),
+  CONSTRAINT promotion_usage_applied_by_staff_id_fkey FOREIGN KEY (applied_by_staff_id) REFERENCES public.staff_profiles(id),
+  CONSTRAINT promotion_usage_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.customers(id),
+  CONSTRAINT promotion_usage_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
+  CONSTRAINT promotion_usage_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
+  CONSTRAINT promotion_usage_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id),
+  CONSTRAINT promotion_usage_promotion_id_fkey FOREIGN KEY (promotion_id) REFERENCES public.promotions(id)
+);
+CREATE TABLE public.promotions (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  merchant_id uuid NOT NULL,
+  name text NOT NULL,
+  description text,
+  promo_code text,
+  promo_type text NOT NULL CHECK (promo_type = ANY (ARRAY['happy_hour'::text, 'birthday'::text, 'first_visit'::text, 'comeback'::text, 'referral'::text, 'seasonal'::text, 'threshold'::text, 'bogo'::text, 'bundle'::text])),
+  discount_type text NOT NULL CHECK (discount_type = ANY (ARRAY['percentage'::text, 'fixed_amount'::text, 'free_item'::text, 'bogo'::text])),
+  discount_value numeric,
+  discount_max numeric,
+  free_item_id uuid,
+  applies_to text DEFAULT 'order'::text CHECK (applies_to = ANY (ARRAY['order'::text, 'item'::text, 'category'::text])),
+  target_categories ARRAY,
+  target_item_ids ARRAY,
+  location_ids ARRAY,
+  min_order_amount numeric DEFAULT 0,
+  is_active boolean DEFAULT true,
+  starts_at timestamp with time zone,
+  ends_at timestamp with time zone,
+  active_days ARRAY,
+  active_time_start time without time zone,
+  active_time_end time without time zone,
+  max_uses_total integer,
+  max_uses_per_customer integer,
+  max_uses_per_day integer,
+  current_uses integer DEFAULT 0,
+  comeback_days integer,
+  birthday_window text DEFAULT 'week'::text CHECK (birthday_window = ANY (ARRAY['day'::text, 'week'::text, 'month'::text])),
+  bogo_buy_quantity integer DEFAULT 1,
+  bogo_get_quantity integer DEFAULT 1,
+  bogo_get_item_id uuid,
+  bogo_get_category_id uuid,
+  threshold_amount numeric,
+  total_redemptions integer DEFAULT 0,
+  total_discount_given numeric DEFAULT 0,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  created_by text,
+  auto_apply boolean DEFAULT false,
+  CONSTRAINT promotions_pkey PRIMARY KEY (id),
+  CONSTRAINT promotions_bogo_get_category_id_fkey FOREIGN KEY (bogo_get_category_id) REFERENCES public.categories(id),
+  CONSTRAINT promotions_bogo_get_item_id_fkey FOREIGN KEY (bogo_get_item_id) REFERENCES public.menu_items(id),
+  CONSTRAINT promotions_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id),
+  CONSTRAINT promotions_free_item_id_fkey FOREIGN KEY (free_item_id) REFERENCES public.menu_items(id),
+  CONSTRAINT promotions_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id)
 );
 CREATE TABLE public.pto_ledger (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -1625,8 +3155,8 @@ CREATE TABLE public.purchase_order_items (
   item_unit_type character varying,
   item_category character varying,
   CONSTRAINT purchase_order_items_pkey PRIMARY KEY (id),
-  CONSTRAINT purchase_order_items_purchase_order_id_fkey FOREIGN KEY (purchase_order_id) REFERENCES public.purchase_orders(id),
-  CONSTRAINT purchase_order_items_inventory_item_id_fkey FOREIGN KEY (inventory_item_id) REFERENCES public.inventory_items(id)
+  CONSTRAINT purchase_order_items_inventory_item_id_fkey FOREIGN KEY (inventory_item_id) REFERENCES public.inventory_items(id),
+  CONSTRAINT purchase_order_items_purchase_order_id_fkey FOREIGN KEY (purchase_order_id) REFERENCES public.purchase_orders(id)
 );
 CREATE TABLE public.purchase_order_payments (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -1672,9 +3202,25 @@ CREATE TABLE public.purchase_orders (
   payment_method text CHECK (payment_method = ANY (ARRAY['card'::text, 'cash'::text, 'check'::text, 'bank_transfer'::text])),
   card_last_four character varying,
   CONSTRAINT purchase_orders_pkey PRIMARY KEY (id),
-  CONSTRAINT purchase_orders_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
   CONSTRAINT purchase_orders_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
+  CONSTRAINT purchase_orders_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
   CONSTRAINT purchase_orders_vendor_id_fkey FOREIGN KEY (vendor_id) REFERENCES public.vendors(id)
+);
+CREATE TABLE public.receipt_sends (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  order_id uuid NOT NULL,
+  merchant_id uuid NOT NULL,
+  delivery_method text NOT NULL CHECK (delivery_method = ANY (ARRAY['email'::text, 'sms'::text])),
+  recipient text NOT NULL,
+  status text NOT NULL CHECK (status = ANY (ARRAY['sent'::text, 'failed'::text])),
+  error_message text,
+  receipt_template_id uuid,
+  created_by text,
+  sent_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT receipt_sends_pkey PRIMARY KEY (id),
+  CONSTRAINT receipt_sends_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id),
+  CONSTRAINT receipt_sends_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
+  CONSTRAINT receipt_sends_receipt_template_id_fkey FOREIGN KEY (receipt_template_id) REFERENCES public.receipt_templates(id)
 );
 CREATE TABLE public.receipt_templates (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -1682,7 +3228,7 @@ CREATE TABLE public.receipt_templates (
   location_id uuid,
   template_type text NOT NULL,
   template_name text NOT NULL,
-  show_logo boolean DEFAULT true,
+  show_logo boolean DEFAULT false,
   logo_url text,
   header_text text,
   footer_text text,
@@ -1701,6 +3247,12 @@ CREATE TABLE public.receipt_templates (
   is_active boolean DEFAULT true,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
+  show_loyalty_rewards boolean DEFAULT false,
+  modifier_style text NOT NULL DEFAULT 'inverted'::text,
+  group_by_seat boolean NOT NULL DEFAULT false,
+  show_approved_by boolean DEFAULT false,
+  show_break_details boolean DEFAULT false,
+  show_void_reason boolean DEFAULT false,
   CONSTRAINT receipt_templates_pkey PRIMARY KEY (id),
   CONSTRAINT receipt_templates_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
   CONSTRAINT receipt_templates_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id)
@@ -1715,9 +3267,11 @@ CREATE TABLE public.recipe_items (
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
   merchant_id uuid NOT NULL,
+  inventory_item_id uuid,
   CONSTRAINT recipe_items_pkey PRIMARY KEY (id),
-  CONSTRAINT recipe_items_recipe_id_fkey FOREIGN KEY (recipe_id) REFERENCES public.recipes(id),
-  CONSTRAINT recipe_items_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id)
+  CONSTRAINT recipe_items_inventory_item_id_fkey FOREIGN KEY (inventory_item_id) REFERENCES public.inventory_items(id),
+  CONSTRAINT recipe_items_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
+  CONSTRAINT recipe_items_recipe_id_fkey FOREIGN KEY (recipe_id) REFERENCES public.recipes(id)
 );
 CREATE TABLE public.recipes (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -1767,11 +3321,13 @@ CREATE TABLE public.reservations (
   created_by_staff_id uuid,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
+  customer_id uuid,
   CONSTRAINT reservations_pkey PRIMARY KEY (id),
-  CONSTRAINT reservations_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
+  CONSTRAINT reservations_created_by_staff_id_fkey FOREIGN KEY (created_by_staff_id) REFERENCES public.staff_profiles(id),
+  CONSTRAINT reservations_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.customers(id),
   CONSTRAINT reservations_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
-  CONSTRAINT reservations_seated_session_id_fkey FOREIGN KEY (seated_session_id) REFERENCES public.table_sessions(id),
-  CONSTRAINT reservations_created_by_staff_id_fkey FOREIGN KEY (created_by_staff_id) REFERENCES public.staff_profiles(id)
+  CONSTRAINT reservations_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
+  CONSTRAINT reservations_seated_session_id_fkey FOREIGN KEY (seated_session_id) REFERENCES public.table_sessions(id)
 );
 CREATE TABLE public.reversals (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -1785,7 +3341,7 @@ CREATE TABLE public.reversals (
   amount numeric NOT NULL,
   reason_code character varying,
   reason_description text,
-  status character varying NOT NULL DEFAULT 'pending'::character varying CHECK (status::text = ANY (ARRAY['pending'::character varying, 'processing'::character varying, 'completed'::character varying, 'failed'::character varying]::text[])),
+  status character varying NOT NULL DEFAULT 'pending'::character varying CHECK (status::text = ANY (ARRAY['pending'::character varying::text, 'processing'::character varying::text, 'completed'::character varying::text, 'failed'::character varying::text])),
   result_code character varying,
   response_message character varying,
   initiated_by uuid,
@@ -1797,12 +3353,13 @@ CREATE TABLE public.reversals (
   completed_at timestamp with time zone,
   failed_at timestamp with time zone,
   terminal_response jsonb,
+  idempotency_key uuid,
   CONSTRAINT reversals_pkey PRIMARY KEY (id),
-  CONSTRAINT reversals_original_payment_id_fkey FOREIGN KEY (original_payment_id) REFERENCES public.order_payments(id),
-  CONSTRAINT reversals_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
-  CONSTRAINT reversals_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
+  CONSTRAINT reversals_approved_by_fkey FOREIGN KEY (approved_by) REFERENCES public.staff_profiles(id),
   CONSTRAINT reversals_initiated_by_fkey FOREIGN KEY (initiated_by) REFERENCES public.staff_profiles(id),
-  CONSTRAINT reversals_approved_by_fkey FOREIGN KEY (approved_by) REFERENCES public.staff_profiles(id)
+  CONSTRAINT reversals_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
+  CONSTRAINT reversals_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
+  CONSTRAINT reversals_original_payment_id_fkey FOREIGN KEY (original_payment_id) REFERENCES public.order_payments(id)
 );
 CREATE TABLE public.role_permissions (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -1810,8 +3367,8 @@ CREATE TABLE public.role_permissions (
   permission_code text,
   created_at timestamp with time zone DEFAULT now(),
   CONSTRAINT role_permissions_pkey PRIMARY KEY (id),
-  CONSTRAINT role_permissions_role_code_fkey FOREIGN KEY (role_code) REFERENCES public.roles(code),
-  CONSTRAINT role_permissions_permission_code_fkey FOREIGN KEY (permission_code) REFERENCES public.permissions(code)
+  CONSTRAINT role_permissions_permission_code_fkey FOREIGN KEY (permission_code) REFERENCES public.permissions(code),
+  CONSTRAINT role_permissions_role_code_fkey FOREIGN KEY (role_code) REFERENCES public.roles(code)
 );
 CREATE TABLE public.roles (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -1838,8 +3395,8 @@ CREATE TABLE public.schedule_time_slots (
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
   merchant_id uuid NOT NULL,
   CONSTRAINT schedule_time_slots_pkey PRIMARY KEY (id),
-  CONSTRAINT schedule_time_slots_schedule_id_fkey FOREIGN KEY (schedule_id) REFERENCES public.schedules(id),
-  CONSTRAINT schedule_time_slots_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id)
+  CONSTRAINT schedule_time_slots_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
+  CONSTRAINT schedule_time_slots_schedule_id_fkey FOREIGN KEY (schedule_id) REFERENCES public.schedules(id)
 );
 CREATE TABLE public.schedules (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -1851,8 +3408,19 @@ CREATE TABLE public.schedules (
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
   location_id uuid,
   CONSTRAINT schedules_pkey PRIMARY KEY (id),
-  CONSTRAINT schedules_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
-  CONSTRAINT schedules_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id)
+  CONSTRAINT schedules_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
+  CONSTRAINT schedules_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id)
+);
+CREATE TABLE public.security_alerts (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  alert_type text NOT NULL,
+  location_id uuid,
+  device_id text,
+  ip_address inet,
+  details jsonb,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  acknowledged_at timestamp with time zone,
+  CONSTRAINT security_alerts_pkey PRIMARY KEY (id)
 );
 CREATE TABLE public.server_sections (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -1868,9 +3436,9 @@ CREATE TABLE public.server_sections (
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
   CONSTRAINT server_sections_pkey PRIMARY KEY (id),
+  CONSTRAINT server_sections_assigned_staff_id_fkey FOREIGN KEY (assigned_staff_id) REFERENCES public.staff_profiles(id),
   CONSTRAINT server_sections_floor_plan_id_fkey FOREIGN KEY (floor_plan_id) REFERENCES public.floor_plans(id),
-  CONSTRAINT server_sections_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
-  CONSTRAINT server_sections_assigned_staff_id_fkey FOREIGN KEY (assigned_staff_id) REFERENCES public.staff_profiles(id)
+  CONSTRAINT server_sections_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id)
 );
 CREATE TABLE public.session_kick_notifications (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -1884,7 +3452,7 @@ CREATE TABLE public.session_kick_notifications (
 );
 CREATE TABLE public.settlement_batches (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
-  batch_id character varying NOT NULL,
+  batch_id text NOT NULL,
   merchant_id uuid NOT NULL,
   location_id uuid NOT NULL,
   terminal_id character varying,
@@ -1897,20 +3465,33 @@ CREATE TABLE public.settlement_batches (
   sales_count integer DEFAULT 0,
   refund_count integer DEFAULT 0,
   void_count integer DEFAULT 0,
-  gross_amount integer DEFAULT 0,
-  tip_amount integer DEFAULT 0,
-  refund_amount integer DEFAULT 0,
-  interchange_fees integer DEFAULT 0,
-  assessment_fees integer DEFAULT 0,
-  processor_fees integer DEFAULT 0,
-  net_deposit integer DEFAULT 0,
-  status character varying DEFAULT 'open'::character varying CHECK (status::text = ANY (ARRAY['open'::character varying, 'closed'::character varying, 'submitted'::character varying, 'settled'::character varying, 'funded'::character varying]::text[])),
+  gross_amount numeric DEFAULT 0,
+  tip_amount numeric DEFAULT 0,
+  refund_amount numeric DEFAULT 0,
+  interchange_fees numeric DEFAULT 0,
+  assessment_fees numeric DEFAULT 0,
+  processor_fees numeric DEFAULT 0,
+  net_deposit numeric DEFAULT 0,
+  status character varying DEFAULT 'open'::character varying CHECK (status::text = ANY (ARRAY['open'::text, 'pending'::text, 'settling'::text, 'settled'::text, 'partial_failure'::text, 'retry'::text, 'failed'::text, 'terminal_unavailable'::text, 'closed'::text])),
   raw_response jsonb,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  payment_terminal_id uuid,
+  retry_count integer NOT NULL DEFAULT 0,
+  last_attempt_at timestamp with time zone,
+  failure_reason text,
+  business_date_start date,
+  business_date_end date,
+  castles_pos_txn_id text,
+  castles_return_code text,
+  castles_batch_num text,
+  castles_settle_info jsonb,
+  acquirer text,
+  batch_number text,
   CONSTRAINT settlement_batches_pkey PRIMARY KEY (id),
+  CONSTRAINT settlement_batches_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
   CONSTRAINT settlement_batches_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
-  CONSTRAINT settlement_batches_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id)
+  CONSTRAINT settlement_batches_payment_terminal_id_fkey FOREIGN KEY (payment_terminal_id) REFERENCES public.payment_terminals(id)
 );
 CREATE TABLE public.shift_trade_requests (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -1926,10 +3507,10 @@ CREATE TABLE public.shift_trade_requests (
   created_at timestamp with time zone DEFAULT now(),
   CONSTRAINT shift_trade_requests_pkey PRIMARY KEY (id),
   CONSTRAINT shift_trade_requests_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
-  CONSTRAINT shift_trade_requests_requester_id_fkey FOREIGN KEY (requester_id) REFERENCES public.staff_profiles(id),
   CONSTRAINT shift_trade_requests_offered_shift_id_fkey FOREIGN KEY (offered_shift_id) REFERENCES public.shifts(id),
-  CONSTRAINT shift_trade_requests_requested_shift_id_fkey FOREIGN KEY (requested_shift_id) REFERENCES public.shifts(id),
   CONSTRAINT shift_trade_requests_recipient_id_fkey FOREIGN KEY (recipient_id) REFERENCES public.staff_profiles(id),
+  CONSTRAINT shift_trade_requests_requested_shift_id_fkey FOREIGN KEY (requested_shift_id) REFERENCES public.shifts(id),
+  CONSTRAINT shift_trade_requests_requester_id_fkey FOREIGN KEY (requester_id) REFERENCES public.staff_profiles(id),
   CONSTRAINT shift_trade_requests_reviewed_by_fkey FOREIGN KEY (reviewed_by) REFERENCES public.staff_profiles(id)
 );
 CREATE TABLE public.shifts (
@@ -1948,10 +3529,10 @@ CREATE TABLE public.shifts (
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
   CONSTRAINT shifts_pkey PRIMARY KEY (id),
-  CONSTRAINT shifts_schedule_id_fkey FOREIGN KEY (schedule_id) REFERENCES public.schedules(id),
-  CONSTRAINT shifts_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
+  CONSTRAINT shifts_employee_id_fkey FOREIGN KEY (employee_id) REFERENCES public.staff_profiles(id),
   CONSTRAINT shifts_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
-  CONSTRAINT shifts_employee_id_fkey FOREIGN KEY (employee_id) REFERENCES public.staff_profiles(id)
+  CONSTRAINT shifts_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
+  CONSTRAINT shifts_schedule_id_fkey FOREIGN KEY (schedule_id) REFERENCES public.schedules(id)
 );
 CREATE TABLE public.sites (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -1968,9 +3549,11 @@ CREATE TABLE public.sites (
   updated_at timestamp with time zone DEFAULT now(),
   banner_text text,
   online_ordering_config jsonb DEFAULT '{}'::jsonb,
+  payment_device_id uuid,
   CONSTRAINT sites_pkey PRIMARY KEY (id),
+  CONSTRAINT sites_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
   CONSTRAINT sites_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
-  CONSTRAINT sites_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id)
+  CONSTRAINT sites_payment_device_id_fkey FOREIGN KEY (payment_device_id) REFERENCES public.location_payment_devices(id)
 );
 CREATE TABLE public.staff_profiles (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -2008,12 +3591,14 @@ CREATE TABLE public.staff_shifts (
   updated_at timestamp with time zone DEFAULT now(),
   station_id uuid,
   station_session_id uuid,
+  declared_cash_tips numeric NOT NULL DEFAULT 0.00,
+  tips_declared_at timestamp with time zone,
   CONSTRAINT staff_shifts_pkey PRIMARY KEY (id),
-  CONSTRAINT staff_shifts_station_id_fkey FOREIGN KEY (station_id) REFERENCES public.stations(id),
-  CONSTRAINT staff_shifts_station_session_id_fkey FOREIGN KEY (station_session_id) REFERENCES public.station_sessions(id),
-  CONSTRAINT staff_shifts_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
   CONSTRAINT staff_shifts_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
-  CONSTRAINT staff_shifts_staff_profile_id_fkey FOREIGN KEY (staff_profile_id) REFERENCES public.staff_profiles(id)
+  CONSTRAINT staff_shifts_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
+  CONSTRAINT staff_shifts_staff_profile_id_fkey FOREIGN KEY (staff_profile_id) REFERENCES public.staff_profiles(id),
+  CONSTRAINT staff_shifts_station_id_fkey FOREIGN KEY (station_id) REFERENCES public.stations(id),
+  CONSTRAINT staff_shifts_station_session_id_fkey FOREIGN KEY (station_session_id) REFERENCES public.station_sessions(id)
 );
 CREATE TABLE public.station_devices (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -2021,7 +3606,7 @@ CREATE TABLE public.station_devices (
   merchant_id uuid NOT NULL,
   location_id uuid NOT NULL,
   payment_terminal_id uuid,
-  device_type text NOT NULL CHECK (device_type = ANY (ARRAY['payment_terminal'::text, 'receipt_printer'::text, 'label_printer'::text, 'kitchen_printer'::text, 'cash_drawer'::text, 'barcode_scanner'::text, 'scale'::text, 'customer_display'::text])),
+  device_type text NOT NULL CHECK (device_type = ANY (ARRAY['payment_terminal'::text, 'receipt_printer'::text, 'label_printer'::text, 'kitchen_printer'::text, 'cash_drawer'::text, 'barcode_scanner'::text, 'scale'::text, 'customer_display'::text, 'pos_device'::text])),
   device_name text NOT NULL,
   device_model text,
   serial_number text,
@@ -2038,11 +3623,20 @@ CREATE TABLE public.station_devices (
   last_error text,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
+  device_id text,
+  staff_id uuid,
+  staff_name text,
+  session_id uuid,
+  app_version text,
+  os_version text,
+  ip_address inet,
   CONSTRAINT station_devices_pkey PRIMARY KEY (id),
-  CONSTRAINT station_devices_station_id_fkey FOREIGN KEY (station_id) REFERENCES public.stations(id),
-  CONSTRAINT station_devices_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
   CONSTRAINT station_devices_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
-  CONSTRAINT station_devices_payment_terminal_id_fkey FOREIGN KEY (payment_terminal_id) REFERENCES public.payment_terminals(id)
+  CONSTRAINT station_devices_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
+  CONSTRAINT station_devices_payment_terminal_id_fkey FOREIGN KEY (payment_terminal_id) REFERENCES public.payment_terminals(id),
+  CONSTRAINT station_devices_session_id_fkey FOREIGN KEY (session_id) REFERENCES public.station_sessions(id),
+  CONSTRAINT station_devices_staff_id_fkey FOREIGN KEY (staff_id) REFERENCES public.staff_profiles(id),
+  CONSTRAINT station_devices_station_id_fkey FOREIGN KEY (station_id) REFERENCES public.stations(id)
 );
 CREATE TABLE public.station_sessions (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -2066,10 +3660,10 @@ CREATE TABLE public.station_sessions (
   os_version text,
   hardware_model text,
   CONSTRAINT station_sessions_pkey PRIMARY KEY (id),
-  CONSTRAINT station_sessions_station_id_fkey FOREIGN KEY (station_id) REFERENCES public.stations(id),
-  CONSTRAINT station_sessions_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
   CONSTRAINT station_sessions_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
-  CONSTRAINT station_sessions_staff_profile_id_fkey FOREIGN KEY (staff_profile_id) REFERENCES public.staff_profiles(id)
+  CONSTRAINT station_sessions_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
+  CONSTRAINT station_sessions_staff_profile_id_fkey FOREIGN KEY (staff_profile_id) REFERENCES public.staff_profiles(id),
+  CONSTRAINT station_sessions_station_id_fkey FOREIGN KEY (station_id) REFERENCES public.stations(id)
 );
 CREATE TABLE public.stations (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -2118,9 +3712,9 @@ CREATE TABLE public.stations (
   network_ssid text,
   local_ip_address inet,
   CONSTRAINT stations_pkey PRIMARY KEY (id),
-  CONSTRAINT stations_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
+  CONSTRAINT stations_deactivated_by_fkey FOREIGN KEY (deactivated_by) REFERENCES public.staff_profiles(id),
   CONSTRAINT stations_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
-  CONSTRAINT stations_deactivated_by_fkey FOREIGN KEY (deactivated_by) REFERENCES public.staff_profiles(id)
+  CONSTRAINT stations_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id)
 );
 CREATE TABLE public.stock_update_log (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -2130,17 +3724,165 @@ CREATE TABLE public.stock_update_log (
   previous_stock numeric,
   new_stock numeric,
   change_amount numeric,
-  update_reason text,
+  update_reason text CHECK (update_reason IS NULL OR (update_reason = ANY (ARRAY['received_delivery'::text, 'manual_adjustment'::text, 'sale_deduction'::text, 'waste_spoilage'::text, 'physical_count'::text, 'transfer_in'::text, 'transfer_out'::text, 'initial_stock'::text, 'other'::text]))),
   update_source text NOT NULL CHECK (update_source = ANY (ARRAY['manual'::text, 'delivery'::text, 'sale'::text, 'waste'::text, 'adjustment'::text, 'transfer'::text])),
   updated_by_user_id text,
   updated_by_name text,
   purchase_order_id uuid,
   created_at timestamp with time zone DEFAULT now(),
   CONSTRAINT stock_update_log_pkey PRIMARY KEY (id),
-  CONSTRAINT stock_update_log_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
-  CONSTRAINT stock_update_log_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
   CONSTRAINT stock_update_log_inventory_item_id_fkey FOREIGN KEY (inventory_item_id) REFERENCES public.inventory_items(id),
+  CONSTRAINT stock_update_log_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
+  CONSTRAINT stock_update_log_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
   CONSTRAINT stock_update_log_purchase_order_id_fkey FOREIGN KEY (purchase_order_id) REFERENCES public.purchase_orders(id)
+);
+CREATE TABLE public.subscription_invoice_sequences (
+  yearmonth text NOT NULL CHECK (yearmonth ~ '^[0-9]{6}$'::text),
+  last_number integer NOT NULL DEFAULT 0 CHECK (last_number >= 0),
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT subscription_invoice_sequences_pkey PRIMARY KEY (yearmonth)
+);
+CREATE TABLE public.subscription_invoices (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  subscription_id uuid NOT NULL,
+  merchant_id uuid NOT NULL,
+  location_id uuid NOT NULL,
+  invoice_number text NOT NULL UNIQUE,
+  billing_period_start date NOT NULL,
+  billing_period_end date NOT NULL,
+  station_count_snapshot integer NOT NULL DEFAULT 1 CHECK (station_count_snapshot >= 0),
+  billing_method text NOT NULL CHECK (billing_method = ANY (ARRAY['ach'::text, 'card'::text])),
+  line_items jsonb NOT NULL DEFAULT '[]'::jsonb,
+  subtotal numeric NOT NULL CHECK (subtotal >= 0::numeric),
+  card_surcharge numeric NOT NULL DEFAULT 0 CHECK (card_surcharge >= 0::numeric),
+  total_amount numeric NOT NULL CHECK (total_amount >= 0::numeric),
+  status text NOT NULL DEFAULT 'open'::text CHECK (status = ANY (ARRAY['open'::text, 'processing'::text, 'paid'::text, 'failed'::text, 'refunded'::text, 'voided'::text])),
+  due_date date NOT NULL,
+  paid_at timestamp with time zone,
+  payment_attempt_count integer NOT NULL DEFAULT 0,
+  last_payment_attempt_at timestamp with time zone,
+  last_payment_error text,
+  billing_profile_id uuid,
+  nmi_transaction_id text,
+  nmi_response jsonb,
+  metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT subscription_invoices_pkey PRIMARY KEY (id),
+  CONSTRAINT subscription_invoices_subscription_id_fkey FOREIGN KEY (subscription_id) REFERENCES public.merchant_subscriptions(id),
+  CONSTRAINT subscription_invoices_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
+  CONSTRAINT subscription_invoices_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
+  CONSTRAINT subscription_invoices_billing_profile_id_fkey FOREIGN KEY (billing_profile_id) REFERENCES public.merchant_billing_profiles(id)
+);
+CREATE TABLE public.subscription_plans (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  plan_code text NOT NULL UNIQUE,
+  display_name text NOT NULL,
+  base_price_monthly numeric NOT NULL CHECK (base_price_monthly >= 0::numeric),
+  included_stations integer NOT NULL DEFAULT 1 CHECK (included_stations >= 0),
+  per_extra_station_price numeric NOT NULL DEFAULT 79.00 CHECK (per_extra_station_price >= 0::numeric),
+  card_surcharge_pct numeric NOT NULL DEFAULT 4.00 CHECK (card_surcharge_pct >= 0::numeric),
+  is_active boolean NOT NULL DEFAULT true,
+  metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT subscription_plans_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.support_ticket_attachments (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  ticket_id uuid NOT NULL,
+  message_id uuid,
+  uploaded_by text NOT NULL,
+  file_name text NOT NULL,
+  file_path text NOT NULL,
+  file_size integer NOT NULL,
+  file_type text NOT NULL,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT support_ticket_attachments_pkey PRIMARY KEY (id),
+  CONSTRAINT support_ticket_attachments_message_id_fkey FOREIGN KEY (message_id) REFERENCES public.support_ticket_messages(id),
+  CONSTRAINT support_ticket_attachments_ticket_id_fkey FOREIGN KEY (ticket_id) REFERENCES public.support_tickets(id),
+  CONSTRAINT support_ticket_attachments_uploaded_by_fkey FOREIGN KEY (uploaded_by) REFERENCES public.users(id)
+);
+CREATE TABLE public.support_ticket_messages (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  ticket_id uuid NOT NULL,
+  sender_id text NOT NULL,
+  sender_name text NOT NULL,
+  sender_role text NOT NULL CHECK (sender_role = ANY (ARRAY['merchant'::text, 'carrier'::text, 'admin'::text])),
+  message text NOT NULL,
+  is_internal boolean DEFAULT false,
+  created_at timestamp with time zone DEFAULT now(),
+  edited_at timestamp with time zone,
+  read_by_merchant boolean DEFAULT false,
+  read_by_admin boolean DEFAULT false,
+  CONSTRAINT support_ticket_messages_pkey PRIMARY KEY (id),
+  CONSTRAINT support_ticket_messages_sender_id_fkey FOREIGN KEY (sender_id) REFERENCES public.users(id),
+  CONSTRAINT support_ticket_messages_ticket_id_fkey FOREIGN KEY (ticket_id) REFERENCES public.support_tickets(id)
+);
+CREATE TABLE public.support_tickets (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  ticket_number text NOT NULL UNIQUE,
+  merchant_id uuid NOT NULL,
+  location_id uuid,
+  submitted_by text NOT NULL,
+  submitted_by_name text NOT NULL,
+  submitted_by_email text,
+  carrier_id uuid,
+  subject text NOT NULL,
+  description text NOT NULL,
+  category text NOT NULL DEFAULT 'general'::text CHECK (category = ANY (ARRAY['general'::text, 'billing'::text, 'hardware'::text, 'pos_app'::text, 'menu'::text, 'payments'::text, 'kitchen'::text, 'feature_request'::text, 'onboarding'::text])),
+  priority text NOT NULL DEFAULT 'normal'::text CHECK (priority = ANY (ARRAY['low'::text, 'normal'::text, 'high'::text, 'urgent'::text])),
+  status text NOT NULL DEFAULT 'open'::text CHECK (status = ANY (ARRAY['open'::text, 'in_progress'::text, 'waiting_on_merchant'::text, 'resolved'::text, 'closed'::text])),
+  assigned_to text,
+  assigned_to_name text,
+  assigned_at timestamp with time zone,
+  resolved_at timestamp with time zone,
+  resolved_by text,
+  resolution_notes text,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  last_message_at timestamp with time zone DEFAULT now(),
+  first_response_at timestamp with time zone,
+  metadata jsonb DEFAULT '{}'::jsonb,
+  tags ARRAY DEFAULT '{}'::text[],
+  CONSTRAINT support_tickets_pkey PRIMARY KEY (id),
+  CONSTRAINT support_tickets_assigned_to_fkey FOREIGN KEY (assigned_to) REFERENCES public.users(id),
+  CONSTRAINT support_tickets_carrier_id_fkey FOREIGN KEY (carrier_id) REFERENCES public.carriers(id),
+  CONSTRAINT support_tickets_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
+  CONSTRAINT support_tickets_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
+  CONSTRAINT support_tickets_resolved_by_fkey FOREIGN KEY (resolved_by) REFERENCES public.users(id),
+  CONSTRAINT support_tickets_submitted_by_fkey FOREIGN KEY (submitted_by) REFERENCES public.users(id)
+);
+CREATE TABLE public.suspension_events (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  merchant_id uuid NOT NULL,
+  event_type text NOT NULL CHECK (event_type = ANY (ARRAY['requested'::text, 'forced'::text, 'completed'::text, 'cancelled'::text])),
+  forced boolean NOT NULL DEFAULT false,
+  reason text,
+  initiated_by_user_id text,
+  open_orders jsonb NOT NULL DEFAULT '[]'::jsonb,
+  open_drawer_sessions jsonb NOT NULL DEFAULT '[]'::jsonb,
+  open_orders_count integer NOT NULL DEFAULT 0,
+  open_drawer_sessions_count integer NOT NULL DEFAULT 0,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT suspension_events_pkey PRIMARY KEY (id),
+  CONSTRAINT suspension_events_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id)
+);
+CREATE TABLE public.sync_resolution_events (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  merchant_id uuid NOT NULL,
+  location_id uuid,
+  order_id uuid,
+  payment_id uuid,
+  op_type text NOT NULL,
+  resolution text NOT NULL CHECK (resolution = ANY (ARRAY['discarded'::text, 'retried'::text, 'force_resynced'::text])),
+  reason text NOT NULL CHECK (length(btrim(reason)) >= 10),
+  staff_id text NOT NULL,
+  idempotency_key text,
+  metadata jsonb,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT sync_resolution_events_pkey PRIMARY KEY (id)
 );
 CREATE TABLE public.table_metrics (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -2224,12 +3966,14 @@ CREATE TABLE public.table_sessions (
   closed_by uuid,
   closed_at timestamp with time zone,
   working_course integer DEFAULT 1,
+  customer_id uuid,
   CONSTRAINT table_sessions_pkey PRIMARY KEY (id),
-  CONSTRAINT table_sessions_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
-  CONSTRAINT table_sessions_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
-  CONSTRAINT table_sessions_server_staff_id_fkey FOREIGN KEY (server_staff_id) REFERENCES public.staff_profiles(id),
   CONSTRAINT table_sessions_closed_by_fkey FOREIGN KEY (closed_by) REFERENCES public.staff_profiles(id),
-  CONSTRAINT table_sessions_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id)
+  CONSTRAINT table_sessions_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.customers(id),
+  CONSTRAINT table_sessions_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
+  CONSTRAINT table_sessions_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
+  CONSTRAINT table_sessions_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id),
+  CONSTRAINT table_sessions_server_staff_id_fkey FOREIGN KEY (server_staff_id) REFERENCES public.staff_profiles(id)
 );
 CREATE TABLE public.tax_rates (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -2256,9 +4000,143 @@ CREATE TABLE public.time_off_requests (
   reviewed_at timestamp with time zone,
   created_at timestamp with time zone DEFAULT now(),
   CONSTRAINT time_off_requests_pkey PRIMARY KEY (id),
-  CONSTRAINT time_off_requests_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
   CONSTRAINT time_off_requests_employee_id_fkey FOREIGN KEY (employee_id) REFERENCES public.staff_profiles(id),
+  CONSTRAINT time_off_requests_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
   CONSTRAINT time_off_requests_reviewed_by_fkey FOREIGN KEY (reviewed_by) REFERENCES public.staff_profiles(id)
+);
+CREATE TABLE public.tip_distribution_details (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  session_id uuid NOT NULL,
+  staff_profile_id uuid NOT NULL,
+  role_code text NOT NULL,
+  hours_worked numeric DEFAULT 0,
+  gross_sales numeric DEFAULT 0,
+  individual_tips_earned numeric DEFAULT 0,
+  charged_tips numeric DEFAULT 0,
+  cash_tips numeric DEFAULT 0,
+  tip_pool_contributed numeric DEFAULT 0,
+  tip_pool_received numeric DEFAULT 0,
+  tip_out_given numeric DEFAULT 0,
+  tip_out_received numeric DEFAULT 0,
+  manual_adjustment numeric DEFAULT 0,
+  net_tips numeric DEFAULT 0,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  staff_name text,
+  tip_out_clipped numeric NOT NULL DEFAULT 0.00,
+  CONSTRAINT tip_distribution_details_pkey PRIMARY KEY (id),
+  CONSTRAINT tip_distribution_details_session_id_fkey FOREIGN KEY (session_id) REFERENCES public.tip_distribution_sessions(id),
+  CONSTRAINT tip_distribution_details_staff_profile_id_fkey FOREIGN KEY (staff_profile_id) REFERENCES public.staff_profiles(id)
+);
+CREATE TABLE public.tip_distribution_sessions (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  merchant_id uuid NOT NULL,
+  location_id uuid NOT NULL,
+  session_date date NOT NULL,
+  shift_period text DEFAULT 'full_day'::text CHECK (shift_period = ANY (ARRAY['full_day'::text, 'lunch'::text, 'dinner'::text, 'custom'::text])),
+  total_tips_collected numeric DEFAULT 0,
+  total_tips_pooled numeric DEFAULT 0,
+  total_tip_outs numeric DEFAULT 0,
+  total_distributed numeric DEFAULT 0,
+  rounding_adjustment numeric DEFAULT 0,
+  status text DEFAULT 'draft'::text CHECK (status = ANY (ARRAY['draft'::text, 'calculated'::text, 'approved'::text, 'exported'::text, 'voided'::text])),
+  calculated_at timestamp with time zone,
+  calculated_by uuid,
+  approved_at timestamp with time zone,
+  approved_by uuid,
+  approval_notes text,
+  config_snapshot jsonb,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  voided_at timestamp with time zone,
+  voided_by uuid,
+  void_reason text,
+  data_start_after timestamp with time zone,
+  data_cutoff_at timestamp with time zone,
+  sequence_number integer NOT NULL DEFAULT 1,
+  reconciliation_acknowledged_at timestamp with time zone,
+  CONSTRAINT tip_distribution_sessions_pkey PRIMARY KEY (id),
+  CONSTRAINT tip_distribution_sessions_approved_by_fkey FOREIGN KEY (approved_by) REFERENCES public.staff_profiles(id),
+  CONSTRAINT tip_distribution_sessions_calculated_by_fkey FOREIGN KEY (calculated_by) REFERENCES public.staff_profiles(id),
+  CONSTRAINT tip_distribution_sessions_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
+  CONSTRAINT tip_distribution_sessions_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
+  CONSTRAINT tip_distribution_sessions_voided_by_fkey FOREIGN KEY (voided_by) REFERENCES public.staff_profiles(id)
+);
+CREATE TABLE public.tip_out_rules (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  merchant_id uuid NOT NULL,
+  location_id uuid NOT NULL,
+  from_role_code text NOT NULL,
+  to_role_code text NOT NULL,
+  tip_out_type text NOT NULL CHECK (tip_out_type = ANY (ARRAY['percentage_of_tips'::text, 'percentage_of_sales'::text, 'flat_amount'::text])),
+  tip_out_value numeric NOT NULL,
+  is_active boolean DEFAULT true,
+  effective_date date DEFAULT CURRENT_DATE,
+  end_date date,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT tip_out_rules_pkey PRIMARY KEY (id),
+  CONSTRAINT tip_out_rules_from_role_code_fkey FOREIGN KEY (from_role_code) REFERENCES public.roles(code),
+  CONSTRAINT tip_out_rules_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
+  CONSTRAINT tip_out_rules_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
+  CONSTRAINT tip_out_rules_to_role_code_fkey FOREIGN KEY (to_role_code) REFERENCES public.roles(code)
+);
+CREATE TABLE public.tip_payroll_exports (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  session_id uuid NOT NULL,
+  merchant_id uuid NOT NULL,
+  location_id uuid NOT NULL,
+  destination text NOT NULL CHECK (destination = ANY (ARRAY['gusto'::text, 'adp'::text, 'csv'::text])),
+  status text NOT NULL DEFAULT 'pending'::text CHECK (status = ANY (ARRAY['pending'::text, 'sent'::text, 'failed'::text, 'downloaded'::text])),
+  external_reference text,
+  payload jsonb,
+  response jsonb,
+  error_message text,
+  exported_by uuid,
+  exported_at timestamp with time zone NOT NULL DEFAULT now(),
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT tip_payroll_exports_pkey PRIMARY KEY (id),
+  CONSTRAINT tip_payroll_exports_session_id_fkey FOREIGN KEY (session_id) REFERENCES public.tip_distribution_sessions(id),
+  CONSTRAINT tip_payroll_exports_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
+  CONSTRAINT tip_payroll_exports_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
+  CONSTRAINT tip_payroll_exports_exported_by_fkey FOREIGN KEY (exported_by) REFERENCES public.staff_profiles(id)
+);
+CREATE TABLE public.tip_pool_configs (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  merchant_id uuid NOT NULL,
+  location_id uuid NOT NULL,
+  name text NOT NULL,
+  description text,
+  distribution_method text NOT NULL DEFAULT 'percentage'::text CHECK (distribution_method = ANY (ARRAY['percentage'::text, 'hours_weighted'::text, 'equal_split'::text, 'points'::text])),
+  tip_source text NOT NULL DEFAULT 'charged_tips'::text CHECK (tip_source = ANY (ARRAY['charged_tips'::text, 'all_tips'::text, 'cash_only'::text])),
+  source_percentage numeric DEFAULT 100.00,
+  contributing_role_codes ARRAY NOT NULL DEFAULT '{}'::text[],
+  is_active boolean DEFAULT true,
+  effective_date date DEFAULT CURRENT_DATE,
+  end_date date,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  created_by uuid,
+  priority integer NOT NULL DEFAULT 100,
+  policy_interval text NOT NULL DEFAULT 'full_workday'::text CHECK (policy_interval = ANY (ARRAY['full_workday'::text, 'by_shift'::text, 'order'::text])),
+  CONSTRAINT tip_pool_configs_pkey PRIMARY KEY (id),
+  CONSTRAINT tip_pool_configs_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.staff_profiles(id),
+  CONSTRAINT tip_pool_configs_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
+  CONSTRAINT tip_pool_configs_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id)
+);
+CREATE TABLE public.tip_pool_role_shares (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  tip_pool_config_id uuid NOT NULL,
+  role_code text NOT NULL,
+  share_percentage numeric,
+  points_per_hour numeric,
+  is_eligible boolean DEFAULT true,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT tip_pool_role_shares_pkey PRIMARY KEY (id),
+  CONSTRAINT tip_pool_role_shares_role_code_fkey FOREIGN KEY (role_code) REFERENCES public.roles(code),
+  CONSTRAINT tip_pool_role_shares_tip_pool_config_id_fkey FOREIGN KEY (tip_pool_config_id) REFERENCES public.tip_pool_configs(id)
 );
 CREATE TABLE public.user_roles (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -2266,8 +4144,8 @@ CREATE TABLE public.user_roles (
   role_code text NOT NULL,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT user_roles_pkey PRIMARY KEY (id),
-  CONSTRAINT user_roles_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id),
-  CONSTRAINT user_roles_role_code_fkey FOREIGN KEY (role_code) REFERENCES public.roles(code)
+  CONSTRAINT user_roles_role_code_fkey FOREIGN KEY (role_code) REFERENCES public.roles(code),
+  CONSTRAINT user_roles_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id)
 );
 CREATE TABLE public.users (
   first_name text,
@@ -2285,14 +4163,14 @@ CREATE TABLE public.vendor_items (
   vendor_id uuid NOT NULL,
   inventory_item_id uuid NOT NULL,
   vendor_sku text,
-  default_cost numeric DEFAULT 0,
+  default_cost numeric DEFAULT NULL::numeric,
   pack_size text,
   is_preferred boolean DEFAULT false,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
   CONSTRAINT vendor_items_pkey PRIMARY KEY (id),
-  CONSTRAINT vendor_items_vendor_id_fkey FOREIGN KEY (vendor_id) REFERENCES public.vendors(id),
-  CONSTRAINT vendor_items_inventory_item_id_fkey FOREIGN KEY (inventory_item_id) REFERENCES public.inventory_items(id)
+  CONSTRAINT vendor_items_inventory_item_id_fkey FOREIGN KEY (inventory_item_id) REFERENCES public.inventory_items(id),
+  CONSTRAINT vendor_items_vendor_id_fkey FOREIGN KEY (vendor_id) REFERENCES public.vendors(id)
 );
 CREATE TABLE public.vendors (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -2312,8 +4190,8 @@ CREATE TABLE public.vendors (
   payment_terms text,
   is_active boolean DEFAULT true,
   CONSTRAINT vendors_pkey PRIMARY KEY (id),
-  CONSTRAINT vendors_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
-  CONSTRAINT vendors_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id)
+  CONSTRAINT vendors_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
+  CONSTRAINT vendors_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id)
 );
 CREATE TABLE public.waitlist (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -2342,9 +4220,51 @@ CREATE TABLE public.waitlist (
   notification_count integer DEFAULT 0,
   last_notification_type text,
   notification_failures integer DEFAULT 0,
+  customer_id uuid,
   CONSTRAINT waitlist_pkey PRIMARY KEY (id),
-  CONSTRAINT waitlist_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
+  CONSTRAINT waitlist_created_by_staff_id_fkey FOREIGN KEY (created_by_staff_id) REFERENCES public.staff_profiles(id),
+  CONSTRAINT waitlist_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.customers(id),
   CONSTRAINT waitlist_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
-  CONSTRAINT waitlist_seated_session_id_fkey FOREIGN KEY (seated_session_id) REFERENCES public.table_sessions(id),
-  CONSTRAINT waitlist_created_by_staff_id_fkey FOREIGN KEY (created_by_staff_id) REFERENCES public.staff_profiles(id)
+  CONSTRAINT waitlist_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
+  CONSTRAINT waitlist_seated_session_id_fkey FOREIGN KEY (seated_session_id) REFERENCES public.table_sessions(id)
+);
+CREATE TABLE public.waitlist_sms_rate_limit (
+  id bigint NOT NULL DEFAULT nextval('waitlist_sms_rate_limit_id_seq'::regclass),
+  merchant_id uuid NOT NULL,
+  sent_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT waitlist_sms_rate_limit_pkey PRIMARY KEY (id),
+  CONSTRAINT waitlist_sms_rate_limit_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id)
+);
+CREATE TABLE public.waste_logs (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  merchant_id uuid NOT NULL,
+  location_id uuid NOT NULL,
+  inventory_item_id uuid NOT NULL,
+  quantity numeric NOT NULL CHECK (quantity > 0::numeric),
+  reason text NOT NULL CHECK (reason = ANY (ARRAY['spoilage'::text, 'overproduction'::text, 'spill'::text, 'theft'::text, 'damaged'::text, 'expired'::text, 'other'::text])),
+  notes text,
+  waste_date date NOT NULL DEFAULT CURRENT_DATE,
+  estimated_cost numeric DEFAULT 0,
+  logged_by_user_id text,
+  logged_by_name text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT waste_logs_pkey PRIMARY KEY (id),
+  CONSTRAINT waste_logs_inventory_item_id_fkey FOREIGN KEY (inventory_item_id) REFERENCES public.inventory_items(id),
+  CONSTRAINT waste_logs_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
+  CONSTRAINT waste_logs_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id)
+);
+CREATE TABLE public.webhook_dead_letter_queue (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  source text NOT NULL DEFAULT 'orderout'::text,
+  event_type text,
+  raw_payload jsonb NOT NULL,
+  error_message text,
+  retry_count integer NOT NULL DEFAULT 0,
+  max_retries integer NOT NULL DEFAULT 5,
+  next_retry_at timestamp with time zone,
+  status text NOT NULL DEFAULT 'pending'::text CHECK (status = ANY (ARRAY['pending'::text, 'retrying'::text, 'resolved'::text, 'abandoned'::text])),
+  resolved_at timestamp with time zone,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT webhook_dead_letter_queue_pkey PRIMARY KEY (id)
 );
