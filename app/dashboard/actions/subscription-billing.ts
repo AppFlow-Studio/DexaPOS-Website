@@ -80,6 +80,22 @@ export interface MerchantSubscriptionInvoiceViewRecord {
   updated_at: string
 }
 
+export interface MerchantSubscriptionBillingProfileViewRecord {
+  id: string
+  location_id: string | null
+  billing_email: string | null
+  account_holder_name: string | null
+  billing_method: 'ach' | 'card'
+  bank_name: string | null
+  account_number_last_four: string | null
+  card_brand: string | null
+  card_last_four: string | null
+  card_exp_month: number | null
+  card_exp_year: number | null
+  is_primary: boolean
+  is_active: boolean
+}
+
 function toNumber(value: unknown): number {
   const amount = Number(value ?? 0)
   return Number.isFinite(amount) ? amount : 0
@@ -181,6 +197,7 @@ export async function getMerchantSubscriptionOverview(): Promise<{
   subscriptions: MerchantSubscriptionViewRecord[]
   assignmentsBySubscriptionId: Record<string, MerchantSubscriptionAssignmentViewRecord[]>
   invoices: MerchantSubscriptionInvoiceViewRecord[]
+  billingProfilesByLocationId: Record<string, MerchantSubscriptionBillingProfileViewRecord>
 }> {
   const { merchantId, merchantName, serviceRole } = await resolveMerchantForCurrentOrg()
 
@@ -208,6 +225,33 @@ export async function getMerchantSubscriptionOverview(): Promise<{
   if (invoicesError) {
     console.error('[getMerchantSubscriptionOverview] invoices error:', invoicesError)
     throw new Error('Failed to load subscription invoices.')
+  }
+
+  const { data: billingProfiles, error: billingProfilesError } = await serviceRole
+    .from('merchant_billing_profiles')
+    .select(`
+      id,
+      location_id,
+      billing_email,
+      account_holder_name,
+      billing_method,
+      bank_name,
+      account_number_last_four,
+      card_brand,
+      card_last_four,
+      card_exp_month,
+      card_exp_year,
+      is_primary,
+      is_active
+    `)
+    .eq('merchant_id', merchantId)
+    .eq('is_primary', true)
+    .eq('is_active', true)
+    .not('location_id', 'is', null)
+
+  if (billingProfilesError) {
+    console.error('[getMerchantSubscriptionOverview] billing profile error:', billingProfilesError)
+    throw new Error('Failed to load billing profiles.')
   }
 
   const normalizedSubscriptions = ((subscriptions ?? []) as MerchantSubscriptionViewRecord[]).map((row) => ({
@@ -255,6 +299,11 @@ export async function getMerchantSubscriptionOverview(): Promise<{
     subscriptions: normalizedSubscriptions,
     assignmentsBySubscriptionId: Object.fromEntries(assignmentEntries),
     invoices: normalizedInvoices,
+    billingProfilesByLocationId: Object.fromEntries(
+      ((billingProfiles ?? []) as MerchantSubscriptionBillingProfileViewRecord[])
+        .filter((profile) => typeof profile.location_id === 'string' && profile.location_id.length > 0)
+        .map((profile) => [profile.location_id as string, profile]),
+    ),
   }
 }
 
