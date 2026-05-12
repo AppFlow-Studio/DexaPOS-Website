@@ -22,14 +22,22 @@ import { formatPhoneForDisplay } from '@/lib/phone'
 import { cn } from '@/lib/utils'
 
 const STATUS_COLORS: Record<Reservation['status'], string> = {
-  pending: 'border-amber-200 bg-amber-50/90 text-amber-900',
-  confirmed: 'border-sky-200 bg-sky-50/90 text-sky-900',
-  reminded: 'border-fuchsia-200 bg-fuchsia-50/90 text-fuchsia-900',
-  arrived: 'border-orange-200 bg-orange-50/90 text-orange-900',
-  seated: 'border-emerald-200 bg-emerald-50/90 text-emerald-900',
-  completed: 'border-slate-200 bg-slate-100/90 text-slate-700',
-  no_show: 'border-rose-200 bg-rose-50/90 text-rose-900',
-  cancelled: 'border-rose-200 bg-rose-50/90 text-rose-900'
+  pending:
+    'border-amber-500/25 bg-amber-500/12 text-amber-100 dark:border-amber-400/25 dark:bg-amber-400/12 dark:text-amber-100',
+  confirmed:
+    'border-sky-500/25 bg-sky-500/12 text-sky-100 dark:border-sky-400/25 dark:bg-sky-400/12 dark:text-sky-100',
+  reminded:
+    'border-fuchsia-500/25 bg-fuchsia-500/12 text-fuchsia-100 dark:border-fuchsia-400/25 dark:bg-fuchsia-400/12 dark:text-fuchsia-100',
+  arrived:
+    'border-orange-500/25 bg-orange-500/12 text-orange-100 dark:border-orange-400/25 dark:bg-orange-400/12 dark:text-orange-100',
+  seated:
+    'border-emerald-500/25 bg-emerald-500/12 text-emerald-100 dark:border-emerald-400/25 dark:bg-emerald-400/12 dark:text-emerald-100',
+  completed:
+    'border-slate-500/25 bg-slate-500/12 text-slate-100 dark:border-slate-400/25 dark:bg-slate-400/12 dark:text-slate-100',
+  no_show:
+    'border-rose-500/25 bg-rose-500/12 text-rose-100 dark:border-rose-400/25 dark:bg-rose-400/12 dark:text-rose-100',
+  cancelled:
+    'border-rose-500/25 bg-rose-500/12 text-rose-100 dark:border-rose-400/25 dark:bg-rose-400/12 dark:text-rose-100'
 }
 
 type StatusTransition = {
@@ -174,7 +182,7 @@ export default function ReservationDetailSheet ({
                         {displayedReservation.party_name}
                       </SheetTitle>
                       {displayedReservation.is_vip && (
-                        <Badge className='border-amber-200 bg-amber-50 text-amber-900'>
+                        <Badge className='border-amber-500/25 bg-amber-500/12 text-amber-100 dark:border-amber-400/25 dark:bg-amber-400/12 dark:text-amber-100'>
                           <Star className='mr-1 h-3 w-3 fill-current' />
                           VIP
                         </Badge>
