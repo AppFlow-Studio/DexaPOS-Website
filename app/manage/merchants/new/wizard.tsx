@@ -25,10 +25,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Textarea } from '@/components/ui/textarea'
 import { AddressAutocomplete } from '@/components/ui/address-autocomplete'
 import { PhoneInput } from '@/components/ui/phone-input'
-import { isValidPhone, normalizePhone, formatPhoneForDisplay } from '@/lib/phone'
+import { normalizePhone, formatPhoneForDisplay } from '@/lib/phone'
 import { ImagePlus, X, Loader2 } from 'lucide-react'
 import {
   createMerchantOnboarding,
@@ -39,38 +38,27 @@ import { uploadOrganizationDocument, uploadOrganizationLogo } from '@/lib/cdn/se
 import { cn } from '@/lib/utils'
 
 const createMerchantSchema = z.object({
-  // Step 1 — Business Identity
   businessLegalName: z.string().min(2, 'Business legal name is required.'),
+  dbaName: z.string().optional(),
   businessType: z.enum(['llc', 'corporation', 'sole_proprietor', 'partnership', 'nonprofit']),
   einTaxId: z.string().regex(/^\d{2}-?\d{7}$/, 'EIN / Tax ID must be 9 digits.'),
   ownerFirstName: z.string().min(1, 'Owner first name is required.'),
   ownerLastName: z.string().min(1, 'Owner last name is required.'),
-  dbaName: z.string().optional(),
-
-  // Step 2 — Primary Contact
   ownerEmail: z.string().email('Valid owner email is required.'),
-  ownerPhone: z.string().refine(v => !v || isValidPhone(v), { message: 'Enter a valid phone number' }),
+  ownerPhone: z
+    .string()
+    .min(1, 'Owner phone is required.')
+    .refine(v => Boolean(normalizePhone(v)), { message: 'Enter a valid phone number' }),
   ownerDob: z.string().min(1, 'Owner date of birth is required.'),
-
-  // Step 3 — First Location
   businessAddressLine1: z.string().min(1, 'Address line 1 is required.'),
+  businessAddressLine2: z.string().optional(),
   businessCity: z.string().min(1, 'City is required.'),
   businessState: z.string().min(2, 'State is required.'),
   businessPostalCode: z.string().min(3, 'Postal code is required.'),
-  businessAddressLine2: z.string().optional(),
   businessCountry: z.string().default('US'),
-  locationPhone: z
-    .string()
-    .optional()
-    .refine(v => !v || isValidPhone(v), { message: 'Enter a valid phone number' }),
-  locationHours: z.string().optional(),
-
-  // Step 4 — Payment Processing
-  lucraMid: z.string().optional(),
 })
 
 type CreateMerchantWizardValues = z.infer<typeof createMerchantSchema>
-type WizardField = keyof CreateMerchantWizardValues
 
 const FIELD_LABELS: Record<string, string> = {
   businessLegalName: 'Business Legal Name',
@@ -87,15 +75,8 @@ const FIELD_LABELS: Record<string, string> = {
   businessPostalCode: 'Postal Code',
 }
 
-const STEP_TITLES = [
-  'Business Identity',
-  'Primary Contact',
-  'First Location',
-  'Payment Processing',
-  'Review & Create',
-] as const
-type StepNumber = 1 | 2 | 3 | 4 | 5
-const TOTAL_STEPS = 5
+const STEP_TITLES = ['Business Info', 'Owner Contact', 'Review & Create'] as const
+type StepNumber = 1 | 2 | 3
 
 const ALLOWED_LOGO_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml']
 const MAX_LOGO_SIZE = 5 * 1024 * 1024
@@ -181,19 +162,24 @@ export function CreateMerchantWizard() {
       businessState: '',
       businessPostalCode: '',
       businessCountry: 'US',
-      locationPhone: '',
-      locationHours: '',
-      lucraMid: '',
     },
   })
 
-  const stepFields = useMemo<Record<StepNumber, WizardField[]>>(
+  const stepFields = useMemo(
     () => ({
-      1: ['businessLegalName', 'businessType', 'einTaxId', 'ownerFirstName', 'ownerLastName'],
-      2: ['ownerEmail', 'ownerPhone', 'ownerDob'],
-      3: ['businessAddressLine1', 'businessCity', 'businessState', 'businessPostalCode'],
-      4: [],
-      5: [],
+      1: ['businessLegalName', 'businessType', 'einTaxId'] as const,
+      2: [
+        'ownerFirstName',
+        'ownerLastName',
+        'ownerEmail',
+        'ownerPhone',
+        'ownerDob',
+        'businessAddressLine1',
+        'businessCity',
+        'businessState',
+        'businessPostalCode',
+      ] as const,
+      3: [] as const,
     }),
     []
   )
@@ -201,8 +187,20 @@ export function CreateMerchantWizard() {
   const values = form.watch()
 
   const nextStep = async () => {
-    const valid = await form.trigger(stepFields[step] as any)
+    if (step === 2) {
+      const currentPhone = form.getValues('ownerPhone')
+      const normalizedOwnerPhone = normalizePhone(currentPhone)
+      if (normalizedOwnerPhone) {
+        form.setValue('ownerPhone', normalizedOwnerPhone, {
+          shouldDirty: true,
+          shouldValidate: true,
+        })
+      }
+    }
 
+    const valid = await form.trigger(stepFields[step])
+
+    // Collect all missing items for the toast
     const missingItems: string[] = []
 
     if (!valid) {
@@ -223,6 +221,7 @@ export function CreateMerchantWizard() {
       toast.error('Please complete all required fields before continuing.', {
         description: `Missing: ${missingItems.join(', ')}`,
       })
+      // Scroll to first invalid form field
       if (!valid) {
         const firstErrorField = stepFields[step].find(
           (field) => !!form.formState.errors[field as keyof typeof form.formState.errors]
@@ -235,7 +234,7 @@ export function CreateMerchantWizard() {
       return
     }
 
-    if (step < TOTAL_STEPS) setStep((step + 1) as StepNumber)
+    if (step < 3) setStep((step + 1) as StepNumber)
   }
 
   const previousStep = () => {
@@ -243,7 +242,7 @@ export function CreateMerchantWizard() {
   }
 
   const onSubmit = (data: CreateMerchantWizardValues) => {
-    if (step !== 5 || hasSubmitted.current) return
+    if (step !== 3 || hasSubmitted.current) return
     hasSubmitted.current = true
     startTransition(async () => {
       const result = await createMerchantOnboarding({
@@ -297,10 +296,6 @@ export function CreateMerchantWizard() {
           }
         }
 
-        if (data.locationPhone) metadataUpdates.location_phone = normalizePhone(data.locationPhone) ?? data.locationPhone
-        if (data.locationHours) metadataUpdates.location_hours = data.locationHours
-        if (data.lucraMid?.trim()) metadataUpdates.lucra_mid = data.lucraMid.trim()
-
         if (Object.keys(metadataUpdates).length > 0) {
           await updateMerchantOnboardingMetadata(result.organizationId, metadataUpdates)
         }
@@ -316,11 +311,9 @@ export function CreateMerchantWizard() {
       <div className="space-y-6">
         <Card>
           <CardHeader>
-            <CardTitle>Create New Merchant: Step {step} of {TOTAL_STEPS}</CardTitle>
+            <CardTitle>Create New Merchant: Step {step} of 3</CardTitle>
             <CardDescription>{STEP_TITLES[step - 1]}</CardDescription>
-
-            {/* Step progress indicator */}
-            <div className="flex gap-1 pt-2 overflow-x-auto pb-0.5">
+            <div className="grid grid-cols-3 gap-2 pt-2">
               {STEP_TITLES.map((title, index) => {
                 const stepNumber = index + 1
                 const isActive = step === stepNumber
@@ -329,10 +322,9 @@ export function CreateMerchantWizard() {
                   <div
                     key={title}
                     className={cn(
-                      'flex-1 min-w-0 rounded border px-2 py-1.5 text-xs truncate',
-                      isActive && 'border-primary bg-primary/5 font-medium',
-                      isComplete && 'border-green-500 bg-green-50 dark:bg-green-950/20 text-green-700 dark:text-green-400',
-                      !isActive && !isComplete && 'border-muted-foreground/20 text-muted-foreground'
+                      'rounded-md border px-3 py-2 text-xs sm:text-sm truncate',
+                      isActive && 'border-primary bg-primary/5',
+                      isComplete && 'border-green-500 bg-green-50 dark:bg-green-950/20'
                     )}
                   >
                     {stepNumber}. {title}
@@ -344,10 +336,9 @@ export function CreateMerchantWizard() {
 
           <CardContent className="space-y-4">
 
-            {/* ── Step 1: Business Identity ───────────────────────────────── */}
+            {/* ── Step 1: Business Info ───────────────────────────────────── */}
             {step === 1 && (
               <>
-                {/* Required fields */}
                 <div className="grid gap-4 sm:grid-cols-2">
                   <FormField
                     control={form.control}
@@ -357,6 +348,20 @@ export function CreateMerchantWizard() {
                         <FormLabel>Business Legal Name</FormLabel>
                         <FormControl>
                           <Input {...field} placeholder="Joe's Coffee LLC" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="dbaName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>DBA Name <span className="text-muted-foreground font-normal">(Optional)</span></FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="Joe's Coffee" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -407,62 +412,13 @@ export function CreateMerchantWizard() {
                       </FormItem>
                     )}
                   />
-
-                  <FormField
-                    control={form.control}
-                    name="ownerFirstName"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Owner First Name</FormLabel>
-                        <FormControl>
-                          <Input {...field} placeholder="John" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="ownerLastName"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Owner Last Name</FormLabel>
-                        <FormControl>
-                          <Input {...field} placeholder="Doe" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  {/* Optional */}
-                  <FormField
-                    control={form.control}
-                    name="dbaName"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>
-                          DBA Name{' '}
-                          <span className="text-muted-foreground font-normal">(Optional)</span>
-                        </FormLabel>
-                        <FormControl>
-                          <Input {...field} placeholder="Joe's Coffee" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
                 </div>
 
-                {/* Business Logo — optional */}
+                {/* Business Logo Upload */}
                 <div className="rounded-lg border bg-muted/30 p-4 sm:p-5">
                   <div className="flex items-start justify-between gap-4 sm:gap-6">
                     <div className="flex-1 min-w-0 space-y-1">
-                      <Label className="text-sm font-semibold">
-                        Business Logo{' '}
-                        <span className="text-muted-foreground font-normal">(Optional)</span>
-                      </Label>
+                      <Label className="text-sm font-semibold">Business Logo</Label>
                       <p className="text-xs text-muted-foreground">
                         PNG, JPG, WEBP, or SVG — max 5 MB, recommended 512×512 px.
                       </p>
@@ -523,11 +479,38 @@ export function CreateMerchantWizard() {
               </>
             )}
 
-            {/* ── Step 2: Primary Contact ─────────────────────────────────── */}
+            {/* ── Step 2: Owner Contact ───────────────────────────────────── */}
             {step === 2 && (
               <div className="space-y-4">
-                {/* Required fields */}
                 <div className="grid gap-4 sm:grid-cols-2">
+                  <FormField
+                    control={form.control}
+                    name="ownerFirstName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Owner First Name</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="John" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="ownerLastName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Owner Last Name</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="Doe" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
                   <FormField
                     control={form.control}
                     name="ownerEmail"
@@ -553,6 +536,7 @@ export function CreateMerchantWizard() {
                             value={field.value}
                             onChange={field.onChange}
                             onBlur={field.onBlur}
+                            name={field.name}
                           />
                         </FormControl>
                         <FormMessage />
@@ -575,20 +559,17 @@ export function CreateMerchantWizard() {
                   />
                 </div>
 
-                {/* Government ID — required */}
-                <div
-                  className={cn(
-                    'rounded-lg border p-4 space-y-3',
-                    ownerIdError && 'border-destructive'
-                  )}
-                >
+                {/* Government ID upload — full width */}
+                <div className={cn(
+                  'rounded-lg border p-4 space-y-3',
+                  ownerIdError && 'border-destructive'
+                )}>
                   <div>
                     <Label className={ownerIdError ? 'text-destructive' : ''}>
                       Government ID <span className="text-destructive">*</span>
                     </Label>
                     <p className="text-xs text-muted-foreground mt-1">
-                      Upload the owner government ID used for storefront compliance review. PDF,
-                      PNG, JPG, or WEBP — max 10 MB.
+                      Upload the owner government ID used for storefront compliance review. PDF, PNG, JPG, or WEBP — max 10 MB.
                     </p>
                   </div>
                   <div className="flex items-center gap-2 min-w-0">
@@ -603,9 +584,7 @@ export function CreateMerchantWizard() {
                     </Button>
                     {ownerIdFile ? (
                       <>
-                        <span className="text-sm text-muted-foreground truncate min-w-0">
-                          {ownerIdFile.name}
-                        </span>
+                        <span className="text-sm text-muted-foreground truncate min-w-0">{ownerIdFile.name}</span>
                         <Button
                           type="button"
                           variant="ghost"
@@ -631,55 +610,46 @@ export function CreateMerchantWizard() {
                     onChange={(e) => handleOwnerIdSelect(e.target.files?.[0] || null)}
                   />
                 </div>
-              </div>
-            )}
 
-            {/* ── Step 3: First Location ──────────────────────────────────── */}
-            {step === 3 && (
-              <div className="space-y-4">
-                {/* Required address fields */}
+                {/* Business address */}
                 <div className="grid gap-4 sm:grid-cols-2">
                   <FormField
                     control={form.control}
                     name="businessAddressLine1"
                     render={({ field }) => (
                       <FormItem className="sm:col-span-2">
-                        <FormLabel>Address Line 1</FormLabel>
+                        <FormLabel>Business Address Line 1</FormLabel>
                         <FormControl>
                           <AddressAutocomplete
                             value={field.value ?? ''}
                             onInputChange={(v) =>
-                              form.setValue('businessAddressLine1', v, {
-                                shouldDirty: true,
-                                shouldValidate: true,
-                              })
+                              form.setValue('businessAddressLine1', v, { shouldDirty: true, shouldValidate: true })
                             }
                             onAddressSelected={(parts) => {
-                              form.setValue('businessAddressLine1', parts.address_line1, {
-                                shouldDirty: true,
-                                shouldValidate: true,
-                              })
-                              form.setValue('businessCity', parts.city, {
-                                shouldDirty: true,
-                                shouldValidate: true,
-                              })
-                              form.setValue('businessState', parts.state, {
-                                shouldDirty: true,
-                                shouldValidate: true,
-                              })
-                              form.setValue('businessPostalCode', parts.postal_code, {
-                                shouldDirty: true,
-                                shouldValidate: true,
-                              })
+                              form.setValue('businessAddressLine1', parts.address_line1, { shouldDirty: true, shouldValidate: true })
+                              form.setValue('businessCity', parts.city, { shouldDirty: true, shouldValidate: true })
+                              form.setValue('businessState', parts.state, { shouldDirty: true, shouldValidate: true })
+                              form.setValue('businessPostalCode', parts.postal_code, { shouldDirty: true, shouldValidate: true })
                               if (parts.country) {
-                                form.setValue('businessCountry', parts.country, {
-                                  shouldDirty: true,
-                                  shouldValidate: true,
-                                })
+                                form.setValue('businessCountry', parts.country, { shouldDirty: true, shouldValidate: true })
                               }
                             }}
                             placeholder="123 Main St"
                           />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="businessAddressLine2"
+                    render={({ field }) => (
+                      <FormItem className="sm:col-span-2">
+                        <FormLabel>Address Line 2 <span className="text-muted-foreground font-normal">(Optional)</span></FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="Suite 100" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -728,102 +698,28 @@ export function CreateMerchantWizard() {
                     )}
                   />
 
-                  {/* Optional address fields */}
                   <FormField
                     control={form.control}
-                    name="businessAddressLine2"
-                    render={({ field }) => (
-                      <FormItem className="sm:col-span-2">
-                        <FormLabel>
-                          Address Line 2{' '}
-                          <span className="text-muted-foreground font-normal">(Optional)</span>
-                        </FormLabel>
-                        <FormControl>
-                          <Input {...field} placeholder="Suite 100" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="locationPhone"
+                    name="businessCountry"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>
-                          Location Phone{' '}
-                          <span className="text-muted-foreground font-normal">(Optional)</span>
-                        </FormLabel>
+                        <FormLabel>Country</FormLabel>
                         <FormControl>
-                          <PhoneInput
-                            value={field.value ?? ''}
-                            onChange={field.onChange}
-                            onBlur={field.onBlur}
-                          />
+                          <Input {...field} placeholder="US" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
                 </div>
-
-                <FormField
-                  control={form.control}
-                  name="locationHours"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>
-                        Operating Hours{' '}
-                        <span className="text-muted-foreground font-normal">(Optional)</span>
-                      </FormLabel>
-                      <FormControl>
-                        <Textarea
-                          {...field}
-                          placeholder="e.g. Mon–Fri 9am–9pm, Sat–Sun 10am–6pm"
-                          rows={3}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
               </div>
             )}
 
-            {/* ── Step 4: Payment Processing ──────────────────────────────── */}
-            {step === 4 && (
-              <div className="space-y-4">
-                <div className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
-                  Enter the Lucra Merchant ID (MID) assigned to this merchant. This can be added
-                  later from the merchant settings page if not yet available.
-                </div>
-
-                <FormField
-                  control={form.control}
-                  name="lucraMid"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>
-                        Lucra MID{' '}
-                        <span className="text-muted-foreground font-normal">(Optional)</span>
-                      </FormLabel>
-                      <FormControl>
-                        <Input {...field} placeholder="e.g. LUCRA-00012345" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-            )}
-
-            {/* ── Step 5: Review & Create ─────────────────────────────────── */}
-            {step === 5 && (
+            {/* ── Step 3: Review ──────────────────────────────────────────── */}
+            {step === 3 && (
               <div className="space-y-5">
-                {/* Business Identity */}
-                <div className="rounded-md border p-4 space-y-3">
-                  <h3 className="font-semibold text-sm">Business Identity</h3>
+                <div className="rounded-md border p-4">
+                  <h3 className="mb-3 font-semibold">Review</h3>
                   <div className="flex gap-4 flex-wrap sm:flex-nowrap">
                     {logoPreview && (
                       // eslint-disable-next-line @next/next/no-img-element
@@ -833,66 +729,43 @@ export function CreateMerchantWizard() {
                         className="h-16 w-16 rounded-lg object-cover border shrink-0"
                       />
                     )}
-                    <dl className="space-y-1 text-sm min-w-0 w-full">
-                      <ReviewRow label="Legal Name" value={values.businessLegalName} />
-                      {values.dbaName && <ReviewRow label="DBA Name" value={values.dbaName} />}
-                      <ReviewRow label="Business Type" value={values.businessType} />
-                      <ReviewRow label="EIN / Tax ID" value={values.einTaxId} />
-                      <ReviewRow
-                        label="Owner"
-                        value={`${values.ownerFirstName} ${values.ownerLastName}`}
-                      />
-                    </dl>
+                    <div className="space-y-1 text-sm text-muted-foreground min-w-0">
+                      <p>
+                        <span className="font-medium text-foreground">Business:</span>{' '}
+                        {values.dbaName?.trim() || values.businessLegalName}
+                      </p>
+                      <p>
+                        <span className="font-medium text-foreground">Legal Name:</span> {values.businessLegalName}
+                      </p>
+                      <p>
+                        <span className="font-medium text-foreground">Type:</span> {values.businessType}
+                      </p>
+                      <p>
+                        <span className="font-medium text-foreground">EIN / Tax ID:</span> {values.einTaxId}
+                      </p>
+                      <p>
+                        <span className="font-medium text-foreground">Owner:</span> {values.ownerFirstName}{' '}
+                        {values.ownerLastName} — {values.ownerEmail}
+                      </p>
+                      <p>
+                        <span className="font-medium text-foreground">Phone:</span> {formatPhoneForDisplay(values.ownerPhone)}
+                      </p>
+                      <p>
+                        <span className="font-medium text-foreground">DOB:</span> {values.ownerDob}
+                      </p>
+                      <p>
+                        <span className="font-medium text-foreground">Government ID:</span>{' '}
+                        {ownerIdFile?.name || <span className="text-destructive">Missing</span>}
+                      </p>
+                      <p className="truncate">
+                        <span className="font-medium text-foreground">Address:</span>{' '}
+                        {values.businessAddressLine1}
+                        {values.businessAddressLine2 ? `, ${values.businessAddressLine2}` : ''},{' '}
+                        {values.businessCity}, {values.businessState} {values.businessPostalCode}
+                      </p>
+                    </div>
                   </div>
                 </div>
-
-                {/* Primary Contact */}
-                <div className="rounded-md border p-4 space-y-1">
-                  <h3 className="font-semibold text-sm mb-3">Primary Contact</h3>
-                  <ReviewRow label="Email" value={values.ownerEmail} />
-                  <ReviewRow label="Phone" value={formatPhoneForDisplay(values.ownerPhone)} />
-                  <ReviewRow label="Date of Birth" value={values.ownerDob} />
-                  <ReviewRow
-                    label="Government ID"
-                    value={
-                      ownerIdFile?.name ?? (
-                        <span className="text-destructive">Missing</span>
-                      )
-                    }
-                  />
-                </div>
-
-                {/* First Location */}
-                <div className="rounded-md border p-4 space-y-1">
-                  <h3 className="font-semibold text-sm mb-3">First Location</h3>
-                  <ReviewRow
-                    label="Address"
-                    value={[
-                      values.businessAddressLine1,
-                      values.businessAddressLine2,
-                      `${values.businessCity}, ${values.businessState} ${values.businessPostalCode}`,
-                    ]
-                      .filter(Boolean)
-                      .join(', ')}
-                  />
-                  {values.locationPhone && (
-                    <ReviewRow
-                      label="Location Phone"
-                      value={formatPhoneForDisplay(values.locationPhone)}
-                    />
-                  )}
-                  {values.locationHours && (
-                    <ReviewRow label="Hours" value={values.locationHours} />
-                  )}
-                </div>
-
-                {/* Payment Processing */}
-                {values.lucraMid?.trim() && (
-                  <div className="rounded-md border p-4 space-y-1">
-                    <h3 className="font-semibold text-sm mb-3">Payment Processing</h3>
-                    <ReviewRow label="Lucra MID" value={values.lucraMid} />
-                  </div>
-                )}
 
                 <div className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
                   Owner will receive an organization invitation email after creation.
@@ -912,7 +785,7 @@ export function CreateMerchantWizard() {
             Back
           </Button>
 
-          {step < TOTAL_STEPS ? (
+          {step < 3 ? (
             <Button type="button" onClick={nextStep} disabled={isSubmitting}>
               Continue
             </Button>
@@ -923,10 +796,7 @@ export function CreateMerchantWizard() {
               onClick={form.handleSubmit(onSubmit)}
             >
               {isSubmitting ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Creating…
-                </>
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Creating…</>
               ) : (
                 'Create Merchant'
               )}
@@ -939,20 +809,5 @@ export function CreateMerchantWizard() {
         </p>
       </div>
     </Form>
-  )
-}
-
-function ReviewRow({
-  label,
-  value,
-}: {
-  label: string
-  value: React.ReactNode
-}) {
-  return (
-    <div className="flex gap-1.5 text-sm min-w-0">
-      <span className="font-medium text-foreground shrink-0">{label}:</span>
-      <span className="text-muted-foreground truncate">{value}</span>
-    </div>
   )
 }
