@@ -264,7 +264,24 @@ export function FloorPlanEditorSidebar({
         </div>
       </div>
 
-      <ScrollArea className="min-h-0 flex-1">
+      <ScrollArea
+        className={`
+          min-h-0 flex-1
+          [&_[data-slot=scroll-area-viewport]]:pr-1
+          [&_[data-slot=scroll-area-scrollbar]]:w-3
+          [&_[data-slot=scroll-area-scrollbar]]:p-0.5
+          [&_[data-slot=scroll-area-thumb]]:rounded-full
+          [&_[data-slot=scroll-area-thumb]]:bg-slate-300/80
+          [&_[data-slot=scroll-area-thumb]]:border
+          [&_[data-slot=scroll-area-thumb]]:border-white/60
+          [&_[data-slot=scroll-area-thumb]]:shadow-sm
+          [&_[data-slot=scroll-area-thumb]]:transition-colors
+          [&_[data-slot=scroll-area-thumb]]:hover:bg-slate-400/90
+          dark:[&_[data-slot=scroll-area-thumb]]:bg-slate-600/85
+          dark:[&_[data-slot=scroll-area-thumb]]:border-slate-800/70
+          dark:[&_[data-slot=scroll-area-thumb]]:hover:bg-slate-500
+        `}
+      >
         <div className="p-3 pb-8 space-y-4">
           {(Object.keys(CATEGORY_CONFIG) as ShapeCategory[]).map((category) => {
             const shapes = shapesByCategory[category] || []

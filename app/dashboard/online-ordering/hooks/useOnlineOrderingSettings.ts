@@ -54,7 +54,7 @@ export interface OnlineOrderingSettings {
   address: string;
 
   // Template & Branding
-  templateId: "classic" | "minimal";
+  templateId: "classic" | "hero" | "market" | "boutique";
   primaryColor: string;
   secondaryColor: string;
   accentColor: string | null;
