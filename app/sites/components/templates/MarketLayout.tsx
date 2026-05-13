@@ -46,18 +46,6 @@ function isValidImageSrc(src?: string | null): boolean {
   return !!src && (src.startsWith("http://") || src.startsWith("https://") || src.startsWith("/"));
 }
 
-function flattenItems(menus: StorefrontMenu[]): StorefrontItem[] {
-  const seen = new Map<string, StorefrontItem>();
-  menus.forEach((menu) =>
-    menu.categories?.forEach((cat) =>
-      cat.items?.forEach((i) => {
-        if (!seen.has(i.id)) seen.set(i.id, i);
-      })
-    )
-  );
-  return Array.from(seen.values());
-}
-
 const POPULAR_TAGS = ["Popular", "New", "Vegan", "Gluten-Free", "Spicy"];
 
 export function MarketLayout({ site, location, menus, slug }: MarketLayoutProps) {
@@ -73,7 +61,7 @@ export function MarketLayout({ site, location, menus, slug }: MarketLayoutProps)
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [headerHeight, setHeaderHeight] = useState(56);
 
-  const [activeMenuId, setActiveMenuId] = useState<string>("");
+  const [activeMenuId, setActiveMenuId] = useState<string>(() => menus[0]?.id ?? "");
   const [activeCategory, setActiveCategory] = useState<string>("__all__");
   const [selectedItem, setSelectedItem] = useState<StorefrontItem | null>(null);
   const [selectedCategoryItems, setSelectedCategoryItems] = useState<StorefrontItem[]>([]);
@@ -104,19 +92,17 @@ export function MarketLayout({ site, location, menus, slug }: MarketLayoutProps)
     return () => ro.disconnect();
   }, []);
 
-  useEffect(() => {
-    if (menus.length > 0 && !activeMenuId) setActiveMenuId(menus[0].id);
-  }, [menus, activeMenuId]);
-
   const activeMenu = menus.find((m) => m.id === activeMenuId);
-  const allItems = useMemo(() => flattenItems(menus), [menus]);
-
   const allCategories = activeMenu?.categories ?? [];
 
+  // Items scoped to the active menu only (not all menus)
+  const allItems = useMemo(
+    () => allCategories.flatMap((c) => c.items),
+    [allCategories]
+  );
+
   const itemsInCategory = useMemo(() => {
-    if (activeCategory === "__all__") {
-      return allItems;
-    }
+    if (activeCategory === "__all__") return allItems;
     return allCategories.find((c) => c.id === activeCategory)?.items ?? [];
   }, [activeCategory, allItems, allCategories]);
 
@@ -169,7 +155,7 @@ export function MarketLayout({ site, location, menus, slug }: MarketLayoutProps)
     name: "Name A–Z",
   };
 
-  // Tags that actually have matches
+  // Tags that actually have matches in the active menu
   const activeTags = POPULAR_TAGS.filter((tag) => {
     if (tag === "Popular") return allItems.some((i) => i.is_popular);
     if (tag === "New") return allItems.some((i) => i.is_new);
@@ -196,179 +182,263 @@ export function MarketLayout({ site, location, menus, slug }: MarketLayoutProps)
       />
 
       {activeTab === "menu" ? (
-        <div className="container mx-auto px-4 py-6 pb-32 lg:pb-8 flex flex-col lg:flex-row gap-6">
-          {/* Left sidebar — desktop only */}
-          <aside
-            className="hidden lg:block shrink-0 w-56 lg:sticky self-start"
-            style={{ top: headerHeight + 16 }}
-          >
-            {/* Search */}
-            <div className="mb-4">
-              <MenuSearch
-                menus={menus}
-                variant="bar"
-                placeholder="Search…"
-                onResultClick={handleItemClick}
-              />
-            </div>
-
-            <div className="rounded-xl border p-4 mb-4" style={{ backgroundColor: "#FFFFFF", border: "1px solid #E5E7EB" }}>
-              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "#6B7280" }}>
-                <SlidersHorizontal className="h-3.5 w-3.5" />
-                Categories
-              </div>
-              <nav className="space-y-0.5">
-                {[{ id: "__all__", name: "All Items" }, ...allCategories].map((cat) => {
-                  const isActive = activeCategory === cat.id;
+        <>
+          {/* Menu tabs — only when multiple menus */}
+          {menus.length > 1 && (
+            <div className="container mx-auto px-4 border-b" style={{ borderColor: "#E5E7EB" }}>
+              <div className="flex overflow-x-auto gap-1" style={{ scrollbarWidth: "none" }}>
+                {menus.map((menu) => {
+                  const isActive = activeMenuId === menu.id;
                   return (
                     <button
-                      key={cat.id}
+                      key={menu.id}
                       type="button"
-                      onClick={() => setActiveCategory(cat.id)}
-                      className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-all"
+                      onClick={() => setActiveMenuId(menu.id)}
+                      className="px-4 py-3 text-xs font-semibold whitespace-nowrap transition-colors border-b-2 -mb-px shrink-0 uppercase tracking-wide"
                       style={{
-                        backgroundColor: isActive ? "color-mix(in srgb, var(--primary) 8%, #FFFFFF)" : "transparent",
-                        color: isActive ? "var(--primary)" : "#6B7280",
-                        fontWeight: isActive ? 600 : 400,
-                        borderLeft: isActive ? "3px solid var(--primary)" : "3px solid transparent",
+                        borderColor: isActive ? "var(--primary)" : "transparent",
+                        color: isActive ? "var(--primary)" : "#9CA3AF",
+                        backgroundColor: "transparent",
                       }}
                     >
-                      <span>{cat.name}</span>
-                      <span className="text-xs" style={{ color: isActive ? "var(--primary)" : "#9CA3AF" }}>
-                        {categoryCounts[cat.id] ?? 0}
-                      </span>
+                      {menu.name}
                     </button>
                   );
                 })}
-              </nav>
+              </div>
             </div>
+          )}
+          <div className="container mx-auto px-4 py-6 pb-32 lg:pb-8 flex flex-col lg:flex-row gap-6">
+            {/* Left sidebar — desktop only */}
+            <aside
+              className="hidden lg:block shrink-0 w-56 lg:sticky self-start"
+              style={{ top: headerHeight + 16 }}
+            >
+              {/* Search */}
+              <div className="mb-4">
+                <MenuSearch
+                  menus={menus}
+                  variant="bar"
+                  placeholder="Search…"
+                  onResultClick={handleItemClick}
+                />
+              </div>
 
-            {activeTags.length > 0 && (
-              <div className="rounded-xl border p-4" style={{ backgroundColor: "#FFFFFF", border: "1px solid #E5E7EB" }}>
-                <div className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "#6B7280" }}>
-                  Popular Tags
+              <div className="rounded-xl border p-4 mb-4" style={{ backgroundColor: "#FFFFFF", border: "1px solid #E5E7EB" }}>
+                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "#6B7280" }}>
+                  <SlidersHorizontal className="h-3.5 w-3.5" />
+                  Categories
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  {activeTags.map((tag) => {
-                    const isActive = activeTag === tag;
+                <nav className="space-y-0.5">
+                  {[{ id: "__all__", name: "All Items" }, ...allCategories].map((cat) => {
+                    const isActive = activeCategory === cat.id;
                     return (
                       <button
-                        key={tag}
+                        key={cat.id}
                         type="button"
-                        onClick={() => setActiveTag(isActive ? null : tag)}
-                        className="px-3 py-1.5 rounded-full text-xs font-medium transition-all"
+                        onClick={() => setActiveCategory(cat.id)}
+                        className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-all"
                         style={{
-                          backgroundColor: isActive ? "var(--primary)" : "#F3F4F6",
-                          color: isActive ? "var(--primary-text)" : "#374151",
+                          backgroundColor: isActive ? "color-mix(in srgb, var(--primary) 8%, #FFFFFF)" : "transparent",
+                          color: isActive ? "var(--primary)" : "#6B7280",
+                          fontWeight: isActive ? 600 : 400,
+                          borderLeft: isActive ? "3px solid var(--primary)" : "3px solid transparent",
                         }}
                       >
-                        {tag}
+                        <span>{cat.name}</span>
+                        <span className="text-xs" style={{ color: isActive ? "var(--primary)" : "#9CA3AF" }}>
+                          {categoryCounts[cat.id] ?? 0}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </nav>
+              </div>
+
+              {activeTags.length > 0 && (
+                <div className="rounded-xl border p-4" style={{ backgroundColor: "#FFFFFF", border: "1px solid #E5E7EB" }}>
+                  <div className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "#6B7280" }}>
+                    Popular Tags
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {activeTags.map((tag) => {
+                      const isActive = activeTag === tag;
+                      return (
+                        <button
+                          key={tag}
+                          type="button"
+                          onClick={() => setActiveTag(isActive ? null : tag)}
+                          className="px-3 py-1.5 rounded-full text-xs font-medium transition-all"
+                          style={{
+                            backgroundColor: isActive ? "var(--primary)" : "#F3F4F6",
+                            color: isActive ? "var(--primary-text)" : "#374151",
+                          }}
+                        >
+                          {tag}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </aside>
+
+            {/* Main content */}
+            <div className="flex-1 min-w-0">
+              {/* Mobile search */}
+              <div className="lg:hidden mb-3">
+                <MenuSearch
+                  menus={menus}
+                  variant="bar"
+                  placeholder="Search menu…"
+                  onResultClick={handleItemClick}
+                />
+              </div>
+
+              {/* Mobile category pills */}
+              <div className="lg:hidden overflow-x-auto pb-2 mb-4" style={{ scrollbarWidth: "none" }}>
+                <div className="flex gap-2">
+                  {[{ id: "__all__", name: "All" }, ...allCategories].map((cat) => {
+                    const isActive = activeCategory === cat.id;
+                    return (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => setActiveCategory(cat.id)}
+                        className="shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-all"
+                        style={{
+                          backgroundColor: isActive ? "var(--primary)" : "#FFFFFF",
+                          color: isActive ? "var(--primary-text)" : "#6B7280",
+                          border: `1px solid ${isActive ? "var(--primary)" : "#E5E7EB"}`,
+                        }}
+                      >
+                        {cat.name}
                       </button>
                     );
                   })}
                 </div>
               </div>
-            )}
-          </aside>
 
-          {/* Main content */}
-          <div className="flex-1 min-w-0">
-            {/* Mobile search */}
-            <div className="lg:hidden mb-3">
-              <MenuSearch
-                menus={menus}
-                variant="bar"
-                placeholder="Search menu…"
-                onResultClick={handleItemClick}
-              />
-            </div>
-
-            {/* Mobile category pills */}
-            <div className="lg:hidden overflow-x-auto pb-2 mb-4" style={{ scrollbarWidth: "none" }}>
-              <div className="flex gap-2">
-                {[{ id: "__all__", name: "All" }, ...allCategories].map((cat) => {
-                  const isActive = activeCategory === cat.id;
-                  return (
-                    <button
-                      key={cat.id}
-                      type="button"
-                      onClick={() => setActiveCategory(cat.id)}
-                      className="shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-all"
-                      style={{
-                        backgroundColor: isActive ? "var(--primary)" : "#FFFFFF",
-                        color: isActive ? "var(--primary-text)" : "#6B7280",
-                        border: `1px solid ${isActive ? "var(--primary)" : "#E5E7EB"}`,
-                      }}
-                    >
-                      {cat.name}
-                    </button>
-                  );
-                })}
+              {/* Toolbar */}
+              <div className="flex items-center justify-between mb-4">
+                <p className="text-sm" style={{ color: "#6B7280" }}>
+                  {activeCategory === "__all__"
+                    ? `${filteredItems.length} item${filteredItems.length !== 1 ? "s" : ""}`
+                    : `${filteredItems.length} item${filteredItems.length !== 1 ? "s" : ""} in ${allCategories.find((c) => c.id === activeCategory)?.name ?? ""}`
+                  }
+                </p>
+                <div className="flex items-center gap-2">
+                  <select
+                    value={sortOption}
+                    onChange={(e) => setSortOption(e.target.value as SortOption)}
+                    className="text-xs rounded-lg border px-3 py-1.5 h-8"
+                    style={{ backgroundColor: "#FFFFFF", border: "1px solid #E5E7EB", color: "#374151" }}
+                  >
+                    {(Object.keys(sortLabels) as SortOption[]).map((opt) => (
+                      <option key={opt} value={opt}>{sortLabels[opt]}</option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => setViewMode(viewMode === "grid" ? "list" : "grid")}
+                    className="h-8 w-8 flex items-center justify-center rounded-lg border transition-colors"
+                    style={{ backgroundColor: "#FFFFFF", border: "1px solid #E5E7EB", color: "#6B7280" }}
+                  >
+                    {viewMode === "grid" ? <LayoutList className="h-4 w-4" /> : <LayoutGrid className="h-4 w-4" />}
+                  </button>
+                </div>
               </div>
-            </div>
 
-            {/* Toolbar */}
-            <div className="flex items-center justify-between mb-4">
-              <p className="text-sm" style={{ color: "#6B7280" }}>
-                {filteredItems.length} item{filteredItems.length !== 1 ? "s" : ""}
-              </p>
-              <div className="flex items-center gap-2">
-                <select
-                  value={sortOption}
-                  onChange={(e) => setSortOption(e.target.value as SortOption)}
-                  className="text-xs rounded-lg border px-3 py-1.5 h-8"
-                  style={{ backgroundColor: "#FFFFFF", border: "1px solid #E5E7EB", color: "#374151" }}
+              {/* Item grid / list */}
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={`${activeCategory}-${sortOption}-${viewMode}-${activeTag}`}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.2 }}
                 >
-                  {(Object.keys(sortLabels) as SortOption[]).map((opt) => (
-                    <option key={opt} value={opt}>{sortLabels[opt]}</option>
-                  ))}
-                </select>
-                <button
-                  type="button"
-                  onClick={() => setViewMode(viewMode === "grid" ? "list" : "grid")}
-                  className="h-8 w-8 flex items-center justify-center rounded-lg border transition-colors"
-                  style={{ backgroundColor: "#FFFFFF", border: "1px solid #E5E7EB", color: "#6B7280" }}
-                >
-                  {viewMode === "grid" ? <LayoutList className="h-4 w-4" /> : <LayoutGrid className="h-4 w-4" />}
-                </button>
-              </div>
+                  {activeCategory === "__all__" ? (
+                    /* Show all categories with section headers */
+                    (() => {
+                      const sectionsWithItems = allCategories
+                        .map((cat) => {
+                          let items = cat.items;
+                          if (activeTag === "Popular") items = items.filter((i) => i.is_popular);
+                          else if (activeTag === "New") items = items.filter((i) => i.is_new);
+                          else if (activeTag) items = items.filter((i) => (i.dietary_tags || []).some((t) => t.toLowerCase().includes(activeTag.toLowerCase())));
+                          switch (sortOption) {
+                            case "price_asc": items = [...items].sort((a, b) => a.delivery_price - b.delivery_price); break;
+                            case "price_desc": items = [...items].sort((a, b) => b.delivery_price - a.delivery_price); break;
+                            case "name": items = [...items].sort((a, b) => a.name.localeCompare(b.name)); break;
+                          }
+                          return { cat, items };
+                        })
+                        .filter(({ items }) => items.length > 0);
+
+                      if (sectionsWithItems.length === 0) {
+                        return (
+                          <div className="flex flex-col items-center justify-center py-20 text-center">
+                            <p className="text-lg font-semibold" style={{ color: "#111827" }}>No items found</p>
+                            <p className="mt-1 text-sm" style={{ color: "#6B7280" }}>Try a different tag or sort</p>
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <div className="space-y-10">
+                          {sectionsWithItems.map(({ cat, items }) => (
+                            <section key={cat.id}>
+                              <h2 className="text-base font-semibold mb-3 pb-2 border-b" style={{ color: "var(--primary)", borderColor: "#E5E7EB" }}>
+                                {cat.name}
+                                <span className="ml-2 text-xs font-normal" style={{ color: "#9CA3AF" }}>({items.length})</span>
+                              </h2>
+                              <div className={viewMode === "grid" ? "grid gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-3" : "flex flex-col gap-3"}>
+                                {items.map((item) => (
+                                  <MarketItemCard
+                                    key={item.id}
+                                    item={item}
+                                    viewMode={viewMode}
+                                    failedImageIds={failedImageIds}
+                                    onImageError={handleImageError}
+                                    onClick={() => handleItemClick(item)}
+                                  />
+                                ))}
+                              </div>
+                            </section>
+                          ))}
+                        </div>
+                      );
+                    })()
+                  ) : (
+                    /* Single category — flat grid */
+                    <>
+                      {filteredItems.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-20 text-center">
+                          <p className="text-lg font-semibold" style={{ color: "#111827" }}>No items found</p>
+                          <p className="mt-1 text-sm" style={{ color: "#6B7280" }}>Try a different tag or sort</p>
+                        </div>
+                      ) : (
+                        <div className={viewMode === "grid" ? "grid gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-3" : "flex flex-col gap-3"}>
+                          {filteredItems.map((item) => (
+                            <MarketItemCard
+                              key={item.id}
+                              item={item}
+                              viewMode={viewMode}
+                              failedImageIds={failedImageIds}
+                              onImageError={handleImageError}
+                              onClick={() => handleItemClick(item)}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </motion.div>
+              </AnimatePresence>
             </div>
-
-            {/* Item grid / list */}
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={`${activeCategory}-${sortOption}-${viewMode}-${activeTag}`}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.2 }}
-                className={
-                  viewMode === "grid"
-                    ? "grid gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-3"
-                    : "flex flex-col gap-3"
-                }
-              >
-                {filteredItems.map((item) => (
-                  <MarketItemCard
-                    key={item.id}
-                    item={item}
-                    viewMode={viewMode}
-                    failedImageIds={failedImageIds}
-                    onImageError={handleImageError}
-                    onClick={() => handleItemClick(item)}
-                  />
-                ))}
-              </motion.div>
-            </AnimatePresence>
-
-            {filteredItems.length === 0 && (
-              <div className="flex flex-col items-center justify-center py-20 text-center">
-                <p className="text-lg font-semibold" style={{ color: "#111827" }}>No items found</p>
-                <p className="mt-1 text-sm" style={{ color: "#6B7280" }}>Try a different category or tag</p>
-              </div>
-            )}
           </div>
-        </div>
+        </>
       ) : (
         <main className="container mx-auto px-4 py-6 pb-28">
           <OrdersPanel slug={slug} storeConfigId={site?.id} />
