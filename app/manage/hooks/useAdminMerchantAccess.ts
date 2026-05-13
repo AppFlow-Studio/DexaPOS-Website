@@ -18,13 +18,11 @@ export function useAdminMerchantAccess(adminUserId: string) {
     queryFn: async () => {
       if (!adminUserId) return []
 
-      // Get token from session
-      const token = await session?.getToken()
-      if (!token) {
-        throw new Error('No authentication token available')
+      if (!session) {
+        throw new Error('No authentication session available')
       }
 
-      const supabase = createBrowserSupabaseClient(token)
+      const supabase = createBrowserSupabaseClient(() => session.getToken())
       const { data, error } = await supabase
         .from('admin_merchant_access')
         .select(`
