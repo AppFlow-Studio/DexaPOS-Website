@@ -145,6 +145,7 @@ export const RuntimeFloorPlanView = forwardRef<
       y: number
       scale: number
     } | null>(null)
+    const lastAutoFitFloorPlanIdRef = useRef<string | null>(null)
     const fitToViewLatestRef = useRef<() => void>(() => {})
 
     // --- 1. DOM Transform ---
@@ -420,21 +421,31 @@ export const RuntimeFloorPlanView = forwardRef<
       []
     )
 
-    // Auto fit on mount or when floor plan/tables change
+    // Auto fit only when a floor plan first appears or the active floor plan changes.
     useLayoutEffect(() => {
-      if (initialTables.length > 0) {
-        // Reset transform when floor plan changes (detected by floorPlan.id)
-        if (floorPlan?.id) {
-          initialTransformRef.current = null
-        }
-
-        // Small delay to ensure container is rendered
-        const timer = setTimeout(() => {
-          fitToViewLatestRef.current()
-        }, 100)
-        return () => clearTimeout(timer)
+      if (!floorPlan?.id) {
+        lastAutoFitFloorPlanIdRef.current = null
+        return
       }
-    }, [initialTables.length, floorPlan?.id])
+
+      const shouldAutoFit =
+        lastAutoFitFloorPlanIdRef.current !== floorPlan.id ||
+        initialTransformRef.current === null
+
+      if (!shouldAutoFit) {
+        return
+      }
+
+      initialTransformRef.current = null
+      lastAutoFitFloorPlanIdRef.current = floorPlan.id
+
+      // Small delay to ensure container is rendered
+      const timer = setTimeout(() => {
+        fitToViewLatestRef.current()
+      }, 100)
+
+      return () => clearTimeout(timer)
+    }, [floorPlan?.id])
 
     // --- 3. TABLE DRAG TRACKING ---
     // These wrappers set/unset isDraggingTableRef so the canvas pan gesture
