@@ -20,6 +20,7 @@ import {
   notifyReservationCancelled,
 } from '@/app/actions/notifications/reservation'
 import { normalizePhone } from '@/lib/phone'
+import { getNextAvailableTableNumber } from '@/utils/tables/floor-plan-helpers'
 
 /**
  * Resolves the active merchant id for the current request, honoring HQ
@@ -229,12 +230,32 @@ export async function AddTableAction (
   }
 ) {
   const supabase = createServerSupabaseClient()
+  let resolvedName = tableData.name?.trim()
+  const category = tableData.category || 'table'
+
+  if (!resolvedName && (category === 'table' || category === 'booth')) {
+    const { data: existingObjects, error: existingObjectsError } = await supabase
+      .from('floor_plan_objects')
+      .select('name')
+      .eq('floor_plan_id', floorPlanId)
+      .in('category', ['table', 'booth'])
+
+    if (existingObjectsError) throw existingObjectsError
+
+    resolvedName = String(
+      getNextAvailableTableNumber((existingObjects || []).map(object => object.name))
+    )
+  }
+
+  if (!resolvedName) {
+    resolvedName = 'Table'
+  }
 
   const { data, error } = await supabase.rpc('add_floor_plan_object', {
     p_floor_plan_id: floorPlanId,
-    p_name: tableData.name || 'Table',
+    p_name: resolvedName,
     p_shape_id: tableData.shape_id,
-    p_category: tableData.category || 'table',
+    p_category: category,
     p_x: tableData.x,
     p_y: tableData.y,
     p_rotation: tableData.rotation || 0,
@@ -247,11 +268,11 @@ export async function AddTableAction (
 
   // Log Audit Event
   await LogAuditEvent({
-    action: `Added Table: ${tableData.name || 'Table'}`,
+    action: `Added Table: ${resolvedName}`,
     actionCategory: 'settings',
     resourceType: 'table',
     resourceId: data.object_id,
-    resourceName: tableData.name || 'Table',
+    resourceName: resolvedName,
     changes: { after: tableData as any }
   })
 
@@ -535,6 +556,8 @@ export async function UpdateTablePropertiesAction (
     zone_name?: string | null
     label_override?: string | null
     color_override?: string | null
+    width?: number | null
+    height?: number | null
   }
 ) {
   const supabase = createServerSupabaseClient()

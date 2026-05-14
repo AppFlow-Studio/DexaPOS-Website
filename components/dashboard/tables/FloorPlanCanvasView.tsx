@@ -29,6 +29,7 @@ import { useFloorPlans } from '@/app/dashboard/hooks/useFloorPlan'
 import { useFloorPlanStore } from '@/stores/floor-plan-store'
 import { FloorPlanObject } from '@/types/floor-plan'
 import { TABLE_SHAPES } from '@/utils/tables/table-shapes'
+import { getNextAvailableTableNumber } from '@/utils/tables/floor-plan-helpers'
 import { CreateFloorPlanAction, UpdateFloorPlanAction, DeleteFloorPlanAction } from '@/app/dashboard/actions/floor-plan-actions'
 
 interface FloorPlanCanvasViewProps {
@@ -178,6 +179,7 @@ export function FloorPlanCanvasView({ locationId, initialFloorPlanId, onBack, re
                 .map((table) => table.name?.trim().toLowerCase())
                 .filter((name): name is string => Boolean(name))
         )
+        const reservedTableNames = draftTables.map((table) => table.name)
 
         let cursorX = margin
         let cursorY = margin
@@ -204,16 +206,31 @@ export function FloorPlanCanvasView({ locationId, initialFloorPlanId, onBack, re
                 rowHeight = 0
             }
 
-            const baseName =
-                item.name?.trim() ||
-                (shape.category === 'booth' ? 'Booth' : shape.type === 'table' ? 'Table' : shape.label)
+            const explicitName = item.name?.trim()
+            const resolvedName = (() => {
+                if (explicitName) {
+                    return usedNames.has(explicitName.toLowerCase())
+                        ? buildUniqueName(explicitName, usedNames)
+                        : (() => {
+                            usedNames.add(explicitName.toLowerCase())
+                            return explicitName
+                        })()
+                }
 
-            const resolvedName = usedNames.has(baseName.toLowerCase())
-                ? buildUniqueName(baseName, usedNames)
-                : (() => {
-                    usedNames.add(baseName.toLowerCase())
-                    return baseName
-                })()
+                if (shape.type === 'table') {
+                    const nextName = String(getNextAvailableTableNumber(reservedTableNames))
+                    reservedTableNames.push(nextName)
+                    usedNames.add(nextName.toLowerCase())
+                    return nextName
+                }
+
+                return usedNames.has(shape.label.toLowerCase())
+                    ? buildUniqueName(shape.label, usedNames)
+                    : (() => {
+                        usedNames.add(shape.label.toLowerCase())
+                        return shape.label
+                    })()
+            })()
 
             const placement = {
                 shape_id: item.shapeId,
@@ -478,14 +495,16 @@ export function FloorPlanCanvasView({ locationId, initialFloorPlanId, onBack, re
                 width: shapeDef.width,
                 height: shapeDef.height,
                 rotation: 0,
-                name: `New ${shapeDef.label}`,
+                name: shapeDef.type === 'table'
+                    ? String(getNextAvailableTableNumber(draftTables.map((table) => table.name)))
+                    : `New ${shapeDef.label}`,
                 capacity: shapeDef.capacity,
                 z_index: 1,
                 is_active: true,
                 is_visible: true,
             })
         },
-        [activeFloorPlan, addTableToDraft]
+        [activeFloorPlan, addTableToDraft, draftTables]
     )
 
     const handleAddShapeFromLibrary = useCallback((shapeId: keyof typeof TABLE_SHAPES) => {
@@ -497,12 +516,12 @@ export function FloorPlanCanvasView({ locationId, initialFloorPlanId, onBack, re
 
     const handleAddShapeFromDialog = useCallback((payload: {
         shapeId: keyof typeof TABLE_SHAPES
-        name: string
+        name?: string
     }) => {
         const [placement] = buildAutoPlacements([{ shapeId: payload.shapeId, name: payload.name }])
         if (!placement) return
         addTableToDraft(placement)
-        toast.success(`${payload.name} added to the draft`)
+        toast.success(`${placement.name} added to the draft`)
     }, [addTableToDraft, buildAutoPlacements])
 
     const handleQuickSetupApply = useCallback((items: Array<{ shapeId: keyof typeof TABLE_SHAPES; quantity: number }>) => {
