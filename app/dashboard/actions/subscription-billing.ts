@@ -96,6 +96,44 @@ export interface MerchantSubscriptionBillingProfileViewRecord {
   is_active: boolean
 }
 
+export interface MerchantPlanStatusView {
+  plan: {
+    code: string
+    name: string
+    min_locations: number | null
+    max_locations: number | null
+    monthly_price_cents: number
+    description: string | null
+  } | null
+  active_location_count: number
+  is_over_limit: boolean
+  required_plan_code: string | null
+  subscription_status: 'active' | 'past_due' | 'suspended' | 'cancelled' | null
+  current_period_end: string | null
+}
+
+export interface MerchantBillingLocationViewRecord {
+  id: string
+  name: string
+  address_line1: string | null
+  city: string | null
+  state: string | null
+  postal_code: string | null
+  is_active: boolean
+  device_count: number
+}
+
+export interface MerchantProvisionedDeviceViewRecord {
+  id: string
+  location_id: string | null
+  location_name: string | null
+  model_name: string
+  serial_number: string
+  status: string
+  linked_station_id: string | null
+  linked_station_name: string | null
+}
+
 function toNumber(value: unknown): number {
   const amount = Number(value ?? 0)
   return Number.isFinite(amount) ? amount : 0
@@ -194,97 +232,89 @@ function buildInvoiceStatusSummary(invoice: {
 export async function getMerchantSubscriptionOverview(): Promise<{
   merchantId: string
   merchantName: string
-  subscriptions: MerchantSubscriptionViewRecord[]
-  assignmentsBySubscriptionId: Record<string, MerchantSubscriptionAssignmentViewRecord[]>
+  merchantPlanStatus: MerchantPlanStatusView
+  locations: MerchantBillingLocationViewRecord[]
+  devicesByLocationId: Record<string, MerchantProvisionedDeviceViewRecord[]>
   invoices: MerchantSubscriptionInvoiceViewRecord[]
   billingProfilesByLocationId: Record<string, MerchantSubscriptionBillingProfileViewRecord>
 }> {
   const { merchantId, merchantName, serviceRole } = await resolveMerchantForCurrentOrg()
 
-  const { data: subscriptions, error: subscriptionsError } = await serviceRole.rpc(
-    'list_merchant_subscriptions',
-    {
+  const [
+    merchantPlanStatusResult,
+    locationsResult,
+    invoicesResult,
+    billingProfilesResult,
+    devicesResult,
+  ] = await Promise.all([
+    serviceRole.rpc('get_merchant_subscription_status', {
       p_merchant_id: merchantId,
-    },
-  )
-
-  if (subscriptionsError) {
-    console.error('[getMerchantSubscriptionOverview] subscriptions error:', subscriptionsError)
-    throw new Error('Failed to load subscriptions.')
-  }
-
-  const { data: invoices, error: invoicesError } = await serviceRole.rpc(
-    'list_subscription_invoices',
-    {
+    }),
+    serviceRole
+      .from('locations')
+      .select('id, name, address_line1, city, state, postal_code, is_active')
+      .eq('merchant_id', merchantId)
+      .order('name', { ascending: true }),
+    serviceRole.rpc('list_subscription_invoices', {
       p_merchant_id: merchantId,
       p_location_id: null,
       p_limit: 100,
-    },
-  )
+    }),
+    serviceRole
+      .from('merchant_billing_profiles')
+      .select(`
+        id,
+        location_id,
+        billing_email,
+        account_holder_name,
+        billing_method,
+        bank_name,
+        account_number_last_four,
+        card_brand,
+        card_last_four,
+        card_exp_month,
+        card_exp_year,
+        is_primary,
+        is_active
+      `)
+      .eq('merchant_id', merchantId)
+      .eq('is_primary', true)
+      .eq('is_active', true)
+      .not('location_id', 'is', null),
+    serviceRole
+      .from('admin_device_inventory')
+      .select('id, location_id, location_name, model_name, serial_number, status, linked_station_id')
+      .eq('merchant_id', merchantId)
+      .order('location_name', { ascending: true })
+      .order('model_name', { ascending: true }),
+  ])
 
-  if (invoicesError) {
-    console.error('[getMerchantSubscriptionOverview] invoices error:', invoicesError)
+  if (merchantPlanStatusResult.error) {
+    console.error('[getMerchantSubscriptionOverview] merchant plan status error:', merchantPlanStatusResult.error)
+    throw new Error('Failed to load current plan.')
+  }
+
+  if (locationsResult.error) {
+    console.error('[getMerchantSubscriptionOverview] locations error:', locationsResult.error)
+    throw new Error('Failed to load locations.')
+  }
+
+  if (invoicesResult.error) {
+    console.error('[getMerchantSubscriptionOverview] invoices error:', invoicesResult.error)
     throw new Error('Failed to load subscription invoices.')
   }
 
-  const { data: billingProfiles, error: billingProfilesError } = await serviceRole
-    .from('merchant_billing_profiles')
-    .select(`
-      id,
-      location_id,
-      billing_email,
-      account_holder_name,
-      billing_method,
-      bank_name,
-      account_number_last_four,
-      card_brand,
-      card_last_four,
-      card_exp_month,
-      card_exp_year,
-      is_primary,
-      is_active
-    `)
-    .eq('merchant_id', merchantId)
-    .eq('is_primary', true)
-    .eq('is_active', true)
-    .not('location_id', 'is', null)
-
-  if (billingProfilesError) {
-    console.error('[getMerchantSubscriptionOverview] billing profile error:', billingProfilesError)
+  if (billingProfilesResult.error) {
+    console.error('[getMerchantSubscriptionOverview] billing profile error:', billingProfilesResult.error)
     throw new Error('Failed to load billing profiles.')
   }
 
-  const normalizedSubscriptions = ((subscriptions ?? []) as MerchantSubscriptionViewRecord[]).map((row) => ({
-    ...row,
-    station_count: toNumber(row.station_count),
-    monthly_amount: toNumber(row.monthly_amount),
-  }))
+  if (devicesResult.error) {
+    console.error('[getMerchantSubscriptionOverview] device inventory error:', devicesResult.error)
+    throw new Error('Failed to load provisioned devices.')
+  }
 
-  const assignmentEntries = await Promise.all(
-    normalizedSubscriptions.map(async (subscription) => {
-      const { data, error } = await serviceRole.rpc('list_subscription_service_assignments', {
-        p_subscription_id: subscription.id,
-      })
-
-      if (error) {
-        console.error('[getMerchantSubscriptionOverview] assignment error:', error)
-        throw new Error('Failed to load subscription services.')
-      }
-
-      const normalizedAssignments = ((data ?? []) as MerchantSubscriptionAssignmentViewRecord[]).map((row) => ({
-        ...row,
-        quantity: toNumber(row.quantity),
-        base_price_monthly: toNumber(row.base_price_monthly),
-        additional_unit_price: row.additional_unit_price === null ? null : toNumber(row.additional_unit_price),
-        included_quantity: toNumber(row.included_quantity),
-        card_surcharge_pct: toNumber(row.card_surcharge_pct),
-      }))
-
-      return [subscription.id, normalizedAssignments] as const
-    }),
-  )
-
-  const normalizedInvoices = ((invoices ?? []) as MerchantSubscriptionInvoiceViewRecord[]).map((row) => ({
+  const normalizedInvoices = ((invoicesResult.data ?? []) as MerchantSubscriptionInvoiceViewRecord[]).map((row) => ({
     ...row,
     station_count_snapshot: toNumber(row.station_count_snapshot),
     subtotal: toNumber(row.subtotal),
@@ -293,14 +323,112 @@ export async function getMerchantSubscriptionOverview(): Promise<{
     payment_attempt_count: toNumber(row.payment_attempt_count),
   }))
 
+  const stationIds = Array.from(
+    new Set(
+      ((devicesResult.data ?? []) as Array<{ linked_station_id: string | null }>)
+        .map((row) => row.linked_station_id)
+        .filter((value): value is string => Boolean(value)),
+    ),
+  )
+
+  const stationNameMap = new Map<string, string>()
+  if (stationIds.length > 0) {
+    const { data: stations, error: stationsError } = await serviceRole
+      .from('stations')
+      .select('id, station_name')
+      .in('id', stationIds)
+
+    if (stationsError) {
+      console.error('[getMerchantSubscriptionOverview] stations error:', stationsError)
+      throw new Error('Failed to load linked station names.')
+    }
+
+    for (const station of stations ?? []) {
+      stationNameMap.set(station.id as string, station.station_name as string)
+    }
+  }
+
+  const normalizedDevices = ((devicesResult.data ?? []) as Array<{
+    id: string
+    location_id: string | null
+    location_name: string | null
+    model_name: string
+    serial_number: string
+    status: string
+    linked_station_id: string | null
+  }>).map((row) => ({
+    id: row.id,
+    location_id: row.location_id,
+    location_name: row.location_name,
+    model_name: row.model_name,
+    serial_number: row.serial_number,
+    status: row.status,
+    linked_station_id: row.linked_station_id,
+    linked_station_name: row.linked_station_id ? stationNameMap.get(row.linked_station_id) ?? null : null,
+  }))
+
+  const deviceCountsByLocationId = new Map<string, number>()
+  const devicesByLocationId = normalizedDevices.reduce<Record<string, MerchantProvisionedDeviceViewRecord[]>>(
+    (acc, device) => {
+      if (!device.location_id) return acc
+      acc[device.location_id] = acc[device.location_id] ?? []
+      acc[device.location_id].push(device)
+      deviceCountsByLocationId.set(device.location_id, (deviceCountsByLocationId.get(device.location_id) ?? 0) + 1)
+      return acc
+    },
+    {},
+  )
+
+  const normalizedLocations = ((locationsResult.data ?? []) as Array<{
+    id: string
+    name: string
+    address_line1: string | null
+    city: string | null
+    state: string | null
+    postal_code: string | null
+    is_active: boolean | null
+  }>).map((location) => ({
+    ...location,
+    is_active: Boolean(location.is_active),
+    device_count: deviceCountsByLocationId.get(location.id) ?? 0,
+  }))
+
+  const rawPlanStatus = (merchantPlanStatusResult.data ?? {}) as Record<string, any>
+  const merchantPlanStatus: MerchantPlanStatusView = {
+    plan: rawPlanStatus.plan
+      ? {
+          code: String(rawPlanStatus.plan.code),
+          name: String(rawPlanStatus.plan.name),
+          min_locations:
+            rawPlanStatus.plan.min_locations === null ? null : toNumber(rawPlanStatus.plan.min_locations),
+          max_locations:
+            rawPlanStatus.plan.max_locations === null ? null : toNumber(rawPlanStatus.plan.max_locations),
+          monthly_price_cents: toNumber(rawPlanStatus.plan.monthly_price_cents),
+          description:
+            typeof rawPlanStatus.plan.description === 'string' ? rawPlanStatus.plan.description : null,
+        }
+      : null,
+    active_location_count: toNumber(rawPlanStatus.active_location_count),
+    is_over_limit: Boolean(rawPlanStatus.is_over_limit),
+    required_plan_code:
+      typeof rawPlanStatus.required_plan_code === 'string' ? rawPlanStatus.required_plan_code : null,
+    subscription_status:
+      typeof rawPlanStatus.subscription_status === 'string'
+        ? (rawPlanStatus.subscription_status as MerchantPlanStatusView['subscription_status'])
+        : null,
+    current_period_end:
+      typeof rawPlanStatus.current_period_end === 'string' ? rawPlanStatus.current_period_end : null,
+  }
+
   return {
     merchantId,
     merchantName,
-    subscriptions: normalizedSubscriptions,
-    assignmentsBySubscriptionId: Object.fromEntries(assignmentEntries),
+    merchantPlanStatus,
+    locations: normalizedLocations,
+    devicesByLocationId,
     invoices: normalizedInvoices,
     billingProfilesByLocationId: Object.fromEntries(
-      ((billingProfiles ?? []) as MerchantSubscriptionBillingProfileViewRecord[])
+      ((billingProfilesResult.data ?? []) as MerchantSubscriptionBillingProfileViewRecord[])
         .filter((profile) => typeof profile.location_id === 'string' && profile.location_id.length > 0)
         .map((profile) => [profile.location_id as string, profile]),
     ),

@@ -3,7 +3,7 @@
 import * as React from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { cn, isValidImageUrl } from '@/lib/utils'
+import { cn, isTransientImageUrl, isValidImageUrl } from '@/lib/utils'
 import Image from 'next/image'
 
 interface ItemPreviewCardProps {
@@ -33,7 +33,9 @@ export function ItemPreviewCard({
 }: ItemPreviewCardProps) {
     const safePrice = Number(price) || 0
     const safeCashPrice = cashPrice ? Number(cashPrice) : undefined
-    const validImage = isValidImageUrl(image) ? image : null
+    const validImage =
+        image && (isValidImageUrl(image) || isTransientImageUrl(image)) ? image : null
+    const useNativeImage = isTransientImageUrl(validImage)
 
     return (
         <Card className={cn(
@@ -45,12 +47,20 @@ export function ItemPreviewCard({
             {/* Image Section */}
             <div className="relative aspect-square bg-muted/30 overflow-hidden">
                 {validImage ? (
-                    <Image
-                        src={validImage}
-                        alt={name || 'Menu item'}
-                        fill
-                        className="object-cover transition-transform duration-500 hover:scale-105"
-                    />
+                    useNativeImage ? (
+                        <img
+                            src={validImage}
+                            alt={name || 'Menu item'}
+                            className="h-full w-full object-cover transition-transform duration-500 hover:scale-105"
+                        />
+                    ) : (
+                        <Image
+                            src={validImage}
+                            alt={name || 'Menu item'}
+                            fill
+                            className="object-cover transition-transform duration-500 hover:scale-105"
+                        />
+                    )
                 ) : (
                     <div className="absolute inset-0 flex items-center justify-center">
                         <div className="w-24 h-24 rounded-full bg-muted/50 flex items-center justify-center">
@@ -169,7 +179,9 @@ export function ItemPreviewRow({
 }: ItemPreviewCardProps) {
     const safePrice = Number(price) || 0
     const safeCashPrice = cashPrice ? Number(cashPrice) : undefined
-    const validImage = isValidImageUrl(image) ? image : null
+    const validImage =
+        image && (isValidImageUrl(image) || isTransientImageUrl(image)) ? image : null
+    const useNativeImage = isTransientImageUrl(validImage)
 
     return (
         <div className={cn(
@@ -180,12 +192,20 @@ export function ItemPreviewRow({
             {/* Image */}
             <div className="relative w-16 h-16 rounded-lg overflow-hidden bg-muted/30 shrink-0">
                 {validImage ? (
-                    <Image
-                        src={validImage}
-                        alt={name || 'Menu item'}
-                        fill
-                        className="object-cover"
-                    />
+                    useNativeImage ? (
+                        <img
+                            src={validImage}
+                            alt={name || 'Menu item'}
+                            className="h-full w-full object-cover"
+                        />
+                    ) : (
+                        <Image
+                            src={validImage}
+                            alt={name || 'Menu item'}
+                            fill
+                            className="object-cover"
+                        />
+                    )
                 ) : (
                     <div className="absolute inset-0 flex items-center justify-center">
                         <svg
