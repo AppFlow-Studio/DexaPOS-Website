@@ -61,7 +61,7 @@ export type MenuLayout = "cards" | "sidebyside" | "no-images";
 interface MenuBrowserProps {
   menus: StorefrontMenu[];
   menuLayout?: MenuLayout;
-  templateId?: "classic" | "bold" | "minimal";
+  templateId?: "classic" | "bold" | "minimal" | "hero" | "market" | "boutique";
 }
 
 function isValidImageSrc(src?: string | null): boolean {
@@ -85,6 +85,10 @@ export function MenuBrowser({
   menuLayout = "cards",
   templateId = "classic",
 }: MenuBrowserProps) {
+  // New templates have their own layout components; MenuBrowser treats them as classic
+  const effectiveTemplateId = (templateId === "hero" || templateId === "market" || templateId === "boutique")
+    ? "classic"
+    : templateId;
   const [activeMenuId, setActiveMenuId] = useState<string>("");
   const [activeCategory, setActiveCategory] = useState<string>("");
   const [selectedItem, setSelectedItem] = useState<StorefrontItem | null>(null);
@@ -99,7 +103,7 @@ export function MenuBrowser({
   const [headerHeight, setHeaderHeight] = useState(56);
   const suggestionsRef = useRef<HTMLDivElement>(null);
   const desktopSuggestionsRef = useRef<HTMLDivElement>(null);
-  const isMinimalTemplate = templateId === "minimal";
+
 
   const { pendingModalItem, clearPendingModalItem } = useCart();
 
@@ -504,7 +508,7 @@ export function MenuBrowser({
           </div>
         </div>
 
-        {/* Desktop dietary chips + category pills (minimal) */}
+        {/* Desktop dietary chips + category pills */}
         <div className="hidden lg:block">
           {allItems.some((i) => (i.dietary_tags?.length ?? 0) > 0) && (
             <div className="flex flex-wrap gap-2 pb-2">
@@ -521,64 +525,20 @@ export function MenuBrowser({
               })}
             </div>
           )}
-          {isMinimalTemplate && (
-            <div className="flex overflow-x-auto no-scrollbar gap-2 pb-2">
-              {categories.map((cat) => {
-                const isActive = activeCategory === cat.id;
-                return (
-                  <button key={cat.id} onClick={() => scrollToCategory(cat.id)} className="px-3.5 py-1.5 text-xs font-medium whitespace-nowrap transition-all duration-200 shrink-0 rounded-full" style={{ backgroundColor: isActive ? "var(--primary)" : "#FFFFFF", color: isActive ? "var(--primary-text)" : "#6B7280", border: `1px solid ${isActive ? "var(--primary)" : "#E5E7EB"}` }}>
-                    {cat.name}
-                  </button>
-                );
-              })}
-            </div>
-          )}
+          <div className="flex overflow-x-auto no-scrollbar gap-2 pb-2">
+            {categories.map((cat) => {
+              const isActive = activeCategory === cat.id;
+              return (
+                <button key={cat.id} onClick={() => scrollToCategory(cat.id)} className="px-3.5 py-1.5 text-xs font-medium whitespace-nowrap transition-all duration-200 shrink-0 rounded-full" style={{ backgroundColor: isActive ? "var(--primary)" : "#FFFFFF", color: isActive ? "var(--primary-text)" : "#6B7280", border: `1px solid ${isActive ? "var(--primary)" : "#E5E7EB"}` }}>
+                  {cat.name}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </nav>
 
-      <div className="flex flex-col lg:flex-row gap-8 relative items-start">
-        {/* Desktop Sidebar — classic and bold only */}
-        {!isMinimalTemplate && (
-          <aside
-            aria-label="Category list"
-            className="hidden lg:block w-56 shrink-0 lg:sticky self-start overflow-y-auto"
-            style={{
-              top: headerHeight + 12,
-              maxHeight: `calc(100vh - ${headerHeight + 24}px)`,
-              backgroundColor: "#FFFFFF",
-              border: "1px solid #E5E7EB",
-              borderRadius: "var(--radius)",
-              padding: "12px 8px",
-            }}
-          >
-            <h3 className="font-semibold text-base mb-3 px-2" style={{ color: "#111827" }}>
-              Categories
-            </h3>
-            <nav aria-label="Category list" className="space-y-0.5">
-              {categories.map((cat) => {
-                const isActive = activeCategory === cat.id;
-                return (
-                  <button
-                    key={cat.id}
-                    onClick={() => scrollToCategory(cat.id)}
-                    className="w-full text-left flex items-center px-3 py-2 text-sm rounded-lg transition-all duration-150"
-                    style={{
-                      backgroundColor: isActive ? "color-mix(in srgb, var(--primary) 8%, #FFFFFF)" : "transparent",
-                      color: isActive ? "var(--primary)" : "#6B7280",
-                      borderLeft: isActive ? "3px solid var(--primary)" : "3px solid transparent",
-                      fontWeight: isActive ? 600 : 400,
-                    }}
-                  >
-                    {cat.name}
-                  </button>
-                );
-              })}
-            </nav>
-          </aside>
-        )}
-
-        {/* Main Content */}
-        <div className="flex-1 min-w-0 w-full space-y-12 pb-48 lg:pb-20">
+      <div className="min-w-0 w-full space-y-12 pb-48 lg:pb-20">
           <AnimatePresence mode="wait">
             <motion.div
               key={activeMenu.id}
@@ -589,7 +549,7 @@ export function MenuBrowser({
               className="min-w-0"
             >
               {/* Most Ordered strip */}
-              {popularItems.length > 0 && !isMinimalTemplate && (
+              {popularItems.length > 0 && (
                 <section className="mb-10 min-w-0">
                   <div className="mb-1">
                     <h2 className="text-lg font-semibold" style={{ color: "var(--primary)", fontFamily: "var(--font-display)" }}>
@@ -657,20 +617,12 @@ export function MenuBrowser({
                   {/* Category heading */}
                   <div className="mb-5">
                     <h2
-                      className={
-                        templateId === "bold"
-                          ? "text-3xl font-extrabold tracking-tight"
-                          : isMinimalTemplate
-                          ? "text-xl font-semibold"
-                          : "text-2xl font-bold"
-                      }
+                      className="text-2xl font-bold"
                       style={{ color: "var(--primary)", fontFamily: "var(--font-display)" }}
                     >
                       {category.name}
                     </h2>
-                    {!isMinimalTemplate && (
-                      <div className="mt-1.5 h-0.5 w-8 rounded-full" style={{ backgroundColor: "var(--primary)" }} />
-                    )}
+                    <div className="mt-1.5 h-0.5 w-8 rounded-full" style={{ backgroundColor: "var(--primary)" }} />
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
@@ -680,7 +632,7 @@ export function MenuBrowser({
                         item={item}
                         layout={menuLayout}
                         onClick={() => handleItemClick(item)}
-                        templateId={templateId}
+                        templateId={effectiveTemplateId}
                         showBadges={true}
                         failedImageIds={failedImageIds}
                         onImageError={handleImageError}
@@ -692,7 +644,6 @@ export function MenuBrowser({
             </motion.div>
           </AnimatePresence>
         </div>
-      </div>
     </main>
   );
 }

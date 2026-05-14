@@ -94,6 +94,9 @@ export function TablesSidebar ({
   const [activeTab, setActiveTab] = React.useState('tables')
   const [tableFilter, setTableFilter] = React.useState<TableFilter>('all')
 
+  const themedScrollbarClass =
+    'scrollbar-thin scrollbar-track-transparent scrollbar-thumb-slate-300/70 hover:scrollbar-thumb-slate-400/85 dark:scrollbar-thumb-slate-600/80 dark:hover:scrollbar-thumb-slate-500 [scrollbar-color:rgba(148,163,184,0.72)_transparent] dark:[scrollbar-color:rgba(100,116,139,0.82)_transparent] [&::-webkit-scrollbar]:w-3 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:border-[3px] [&::-webkit-scrollbar-thumb]:border-solid [&::-webkit-scrollbar-thumb]:border-transparent [&::-webkit-scrollbar-thumb]:bg-clip-padding [&::-webkit-scrollbar-thumb]:bg-slate-300/70 dark:[&::-webkit-scrollbar-thumb]:bg-slate-600/80 [&::-webkit-scrollbar-thumb:hover]:bg-slate-400/85 dark:[&::-webkit-scrollbar-thumb:hover]:bg-slate-500 [&::-webkit-scrollbar-track]:bg-transparent'
+
   const seatableTables = React.useMemo(
     () =>
       tables.filter(
@@ -255,7 +258,7 @@ export function TablesSidebar ({
             </div>
 
             <CapacityIndicator tables={tables} />
-            <div className='flex-1 overflow-y-auto'>
+            <div className={cn('flex-1 overflow-y-auto', themedScrollbarClass)}>
               <div className='p-1 space-y-1'>
                 {sortedTables.length === 0 ? (
                   <div className='text-center text-muted-foreground py-4'>
@@ -347,7 +350,7 @@ export function TablesSidebar ({
           </TabsContent>
 
           <TabsContent value='waitlist' className='m-0 h-full'>
-            <div className='h-full overflow-y-auto'>
+            <div className={cn('h-full overflow-y-auto', themedScrollbarClass)}>
               <div className='p-2'>
                 <WaitlistPanel
                   locationId={locationId}
@@ -364,7 +367,7 @@ export function TablesSidebar ({
           </TabsContent>
 
           <TabsContent value='seated' className='m-0 h-full'>
-            <div className='h-full overflow-y-auto'>
+            <div className={cn('h-full overflow-y-auto', themedScrollbarClass)}>
               <div className='p-2'>
                 <SeatedPanel
                   tables={tables}
@@ -377,7 +380,7 @@ export function TablesSidebar ({
           </TabsContent>
 
           <TabsContent value='history' className='m-0 h-full'>
-            <div className='h-full overflow-y-auto'>
+            <div className={cn('h-full overflow-y-auto', themedScrollbarClass)}>
               <div className='p-2'>
                 <HistoryPanel sessions={[]} />
               </div>

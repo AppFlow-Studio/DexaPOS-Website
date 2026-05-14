@@ -506,7 +506,7 @@ function mapConfigToSettings(
       ? `${location.address_line1 ?? ""}, ${location.city ?? ""}, ${location.state ?? ""} ${location.postal_code ?? ""}`
       : "",
 
-    templateId: (config.template_id === "minimal" ? "minimal" : "classic") as "classic" | "minimal",
+    templateId: (["hero", "market", "boutique"].includes(config.template_id ?? "") ? config.template_id : "classic") as "classic" | "hero" | "market" | "boutique",
     primaryColor: config.primary_color ?? "#2DD4BF",
     secondaryColor: config.secondary_color ?? "#10b981",
     accentColor: config.accent_color ?? null,

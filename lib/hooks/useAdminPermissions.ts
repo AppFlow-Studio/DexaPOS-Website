@@ -65,13 +65,7 @@ export function useAdminPermissions(): AdminPermissions {
         return null
       }
 
-      const token = await session.getToken()
-      if (!token) {
-        clearSnapshot()
-        return null
-      }
-
-      const supabase = createBrowserSupabaseClient(token)
+      const supabase = createBrowserSupabaseClient(() => session.getToken())
 
       const [{ data: roleData, error: roleError }, { data: permissionRows, error: permissionError }] =
         await Promise.all([

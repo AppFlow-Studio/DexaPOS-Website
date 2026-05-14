@@ -3,6 +3,8 @@ import Booth2Person from './svg/Booth2Person'
 import Booth4Person from './svg/Booth4Person'
 import CashierStand from './svg/CashierStand'
 import DecorativePlant from './svg/DecorativePlant'
+import DoorDouble from './svg/DoorDouble'
+import DoorSingle from './svg/DoorSingle'
 import HostStand from './svg/HostStand'
 import KitchenPass from './svg/KitchenPass'
 import Pillar from './svg/Pillar'
@@ -197,6 +199,26 @@ export const TABLE_SHAPES = {
     capacity: 0,
     width: 200,
     height: 10,
+    type: 'static-object' as const,
+    category: 'structure'
+  },
+  'door-single': {
+    id: 'door-single',
+    label: 'Single Door',
+    component: DoorSingle,
+    capacity: 0,
+    width: 55,
+    height: 55,
+    type: 'static-object' as const,
+    category: 'structure'
+  },
+  'door-double': {
+    id: 'door-double',
+    label: 'Double Door',
+    component: DoorDouble,
+    capacity: 0,
+    width: 110,
+    height: 55,
     type: 'static-object' as const,
     category: 'structure'
   },

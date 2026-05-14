@@ -21,7 +21,7 @@ export default async function AdminMerchantBillingPage({ params }: AdminMerchant
   const supabase = createServerSupabaseClient()
   const { data: merchant, error } = await supabase
     .from('merchants')
-    .select('id, name, clerk_org_id')
+    .select('id, name, clerk_org_id, locations(id, name)')
     .eq(idField, merchantParam)
     .single()
 
@@ -37,6 +37,7 @@ export default async function AdminMerchantBillingPage({ params }: AdminMerchant
         merchantName={merchant.name}
         context="admin"
         canEdit={hasPermission('hq.merchant.update')}
+        locations={(merchant.locations ?? []) as Array<{ id: string; name: string }>}
       />
     </div>
   )

@@ -1083,7 +1083,9 @@ export function OnlineStoreTab({
                                                 className="h-10 w-full rounded-md border bg-background px-3 text-sm"
                                             >
                                                 <option value="classic">Classic</option>
-                                                <option value="minimal">Minimal</option>
+                                                <option value="hero">Hero</option>
+                                                <option value="market">Market</option>
+                                                <option value="boutique">Boutique</option>
                                             </select>
                                         </div>
                                         <div className="space-y-3">

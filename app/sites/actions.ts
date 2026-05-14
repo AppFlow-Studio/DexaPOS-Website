@@ -38,7 +38,7 @@ function mapStoreConfigToSite(config: any): Site {
     backgroundColor: config.background_color,
     textColor: config.text_color,
     fontFamily: config.font_family,
-    templateId: (config.template_id === "minimal" ? "minimal" : "classic") as "classic" | "minimal",
+    templateId: (["hero", "market", "boutique", "classic"].includes(config.template_id) ? config.template_id : "classic") as "classic" | "hero" | "market" | "boutique",
     heroImageUrl: config.hero_image_url,
     faviconUrl: config.favicon_url,
     headerStyle: config.header_style,
