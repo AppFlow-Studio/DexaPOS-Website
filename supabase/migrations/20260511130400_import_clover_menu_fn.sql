@@ -197,7 +197,7 @@ BEGIN
     CREATE TEMP TABLE _clover_item_map(clover_id text PRIMARY KEY, db_id uuid NOT NULL) ON COMMIT DROP;
 
     -- 4a. Upsert categories.
-    FOR v_cat_rec IN SELECT * FROM jsonb_array_elements(COALESCE(v_payload->'categories', '[]'::jsonb))
+    FOR v_cat_rec IN SELECT * FROM jsonb_array_elements(COALESCE(v_payload->'ir'->'categories', '[]'::jsonb))
     LOOP
         v_clover_id := v_cat_rec->>'clover_id';
         v_name      := v_cat_rec->>'name';
@@ -269,7 +269,7 @@ BEGIN
     END LOOP;
 
     -- 4b. Upsert modifier_groups (same shape as categories).
-    FOR v_mg_rec IN SELECT * FROM jsonb_array_elements(COALESCE(v_payload->'modifier_groups', '[]'::jsonb))
+    FOR v_mg_rec IN SELECT * FROM jsonb_array_elements(COALESCE(v_payload->'ir'->'modifier_groups', '[]'::jsonb))
     LOOP
         v_clover_id := v_mg_rec->>'clover_id';
         v_name      := v_mg_rec->>'name';
@@ -382,7 +382,7 @@ BEGIN
     END LOOP;
 
     -- 4d. Upsert menu_items.
-    FOR v_item_rec IN SELECT * FROM jsonb_array_elements(COALESCE(v_payload->'items', '[]'::jsonb))
+    FOR v_item_rec IN SELECT * FROM jsonb_array_elements(COALESCE(v_payload->'ir'->'items', '[]'::jsonb))
     LOOP
         v_clover_id := v_item_rec->>'clover_id';
         v_name      := v_item_rec->>'name';
@@ -436,7 +436,7 @@ BEGIN
     -- The category_items branch *does* have a partial unique index (added in
     -- R-IMP-0 indexes), but we use the same pattern for consistency.
 
-    FOR v_item_rec IN SELECT * FROM jsonb_array_elements(COALESCE(v_payload->'items', '[]'::jsonb))
+    FOR v_item_rec IN SELECT * FROM jsonb_array_elements(COALESCE(v_payload->'ir'->'items', '[]'::jsonb))
     LOOP
         SELECT db_id INTO v_new_id FROM _clover_item_map WHERE clover_id = v_item_rec->>'clover_id';
 
@@ -458,7 +458,9 @@ BEGIN
         END IF;
         v_join_item_menu := v_join_item_menu + 1;
 
-        -- category_items: one row per (item, category, target_menu).
+        -- category_items: L2 membership rows (menu_id IS NULL).
+        -- get_menu_with_categories only reads WHERE menu_id IS NULL to build
+        -- the item list; menu_id IS NOT NULL rows are L4 pricing-only.
         FOR v_cat_rec IN SELECT * FROM jsonb_array_elements(COALESCE(v_item_rec->'category_clover_ids', '[]'::jsonb))
         LOOP
             SELECT db_id INTO v_cat_id FROM _clover_cat_map WHERE clover_id = (v_cat_rec #>> '{}');
@@ -466,23 +468,24 @@ BEGIN
 
             IF EXISTS (
                 SELECT 1 FROM public.category_items
-                 WHERE merchant_id = v_merchant_id
-                   AND menu_id     = v_target_menu_id
-                   AND category_id = v_cat_id
+                 WHERE merchant_id  = v_merchant_id
+                   AND menu_id      IS NULL
+                   AND category_id  = v_cat_id
                    AND menu_item_id = v_new_id
             ) THEN
                 UPDATE public.category_items
                    SET display_order = COALESCE(NULLIF(v_item_rec->>'display_order', '')::int, display_order),
                        updated_at    = now()
-                 WHERE merchant_id = v_merchant_id
-                   AND menu_id     = v_target_menu_id
-                   AND category_id = v_cat_id
+                 WHERE merchant_id  = v_merchant_id
+                   AND menu_id      IS NULL
+                   AND category_id  = v_cat_id
                    AND menu_item_id = v_new_id;
             ELSE
-                INSERT INTO public.category_items (menu_item_id, category_id, merchant_id, menu_id, display_order)
+                INSERT INTO public.category_items (menu_item_id, category_id, merchant_id, menu_id, display_order, created_at, updated_at)
                 VALUES (
-                    v_new_id, v_cat_id, v_merchant_id, v_target_menu_id,
-                    NULLIF(v_item_rec->>'display_order', '')::int
+                    v_new_id, v_cat_id, v_merchant_id, NULL,
+                    NULLIF(v_item_rec->>'display_order', '')::int,
+                    now(), now()
                 );
             END IF;
             v_join_cat_item := v_join_cat_item + 1;
@@ -507,7 +510,7 @@ BEGIN
     END LOOP;
 
     -- menu_categories: one row per (target_menu, category).
-    FOR v_cat_rec IN SELECT * FROM jsonb_array_elements(COALESCE(v_payload->'categories', '[]'::jsonb))
+    FOR v_cat_rec IN SELECT * FROM jsonb_array_elements(COALESCE(v_payload->'ir'->'categories', '[]'::jsonb))
     LOOP
         SELECT db_id INTO v_cat_id FROM _clover_cat_map WHERE clover_id = v_cat_rec->>'clover_id';
         CONTINUE WHEN v_cat_id IS NULL;

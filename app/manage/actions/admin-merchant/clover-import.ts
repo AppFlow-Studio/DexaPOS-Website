@@ -1,6 +1,7 @@
 "use server";
 
 import { auth } from "@clerk/nextjs/server";
+import { cookies } from "next/headers";
 import { createHash } from "node:crypto";
 
 import { LogAuditEvent } from "@/app/dashboard/actions/audit-logs";
@@ -31,6 +32,11 @@ export async function parseAndPreviewCloverImport(
     await assertHQPermission("hq.merchant.menu.import");
     const { userId } = await auth();
     if (!userId) return { error: "Unauthorized" };
+
+    const cookieLocationId = (await cookies()).get("x-location-id")?.value;
+    if (cookieLocationId && cookieLocationId !== "all") {
+      return { error: "GATE-1: Switch to All Locations to run a menu import." };
+    }
 
     const buffer = Buffer.from(args.fileBase64, "base64");
     if (buffer.length === 0) return { error: "Empty file" };
@@ -158,6 +164,11 @@ export async function commitCloverImport(
     await assertHQPermission("hq.merchant.menu.import");
     const { userId } = await auth();
     if (!userId) return { error: "Unauthorized" };
+
+    const cookieLocationId = (await cookies()).get("x-location-id")?.value;
+    if (cookieLocationId && cookieLocationId !== "all") {
+      return { error: "GATE-1: Switch to All Locations to run a menu import." };
+    }
 
     if (!args.target || (args.target.mode !== "existing" && args.target.mode !== "create")) {
       return { error: "GATE-6: target must be { mode: 'existing', menu_id } or { mode: 'create', name }" };

@@ -97,13 +97,15 @@ CREATE TABLE public.cash_drawer_operations (
   performed_at timestamp with time zone NOT NULL DEFAULT now(),
   receipt_printed boolean DEFAULT false,
   requires_approval boolean DEFAULT false,
+  vendor_id uuid,
   CONSTRAINT cash_drawer_operations_pkey PRIMARY KEY (id),
   CONSTRAINT cash_drawer_operations_approved_by_fkey FOREIGN KEY (approved_by) REFERENCES public.staff_profiles(id),
   CONSTRAINT cash_drawer_operations_cash_drawer_id_fkey FOREIGN KEY (cash_drawer_id) REFERENCES public.cash_drawers(id),
   CONSTRAINT cash_drawer_operations_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id),
   CONSTRAINT cash_drawer_operations_payment_id_fkey FOREIGN KEY (payment_id) REFERENCES public.order_payments(id),
   CONSTRAINT cash_drawer_operations_performed_by_fkey FOREIGN KEY (performed_by) REFERENCES public.staff_profiles(id),
-  CONSTRAINT cash_drawer_operations_session_id_fkey FOREIGN KEY (session_id) REFERENCES public.cash_drawer_sessions(id)
+  CONSTRAINT cash_drawer_operations_session_id_fkey FOREIGN KEY (session_id) REFERENCES public.cash_drawer_sessions(id),
+  CONSTRAINT cash_drawer_operations_vendor_id_fkey FOREIGN KEY (vendor_id) REFERENCES public.vendors(id)
 );
 CREATE TABLE public.cash_drawer_sessions (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -166,6 +168,8 @@ CREATE TABLE public.categories (
   location_id uuid,
   is_global boolean DEFAULT true,
   created_by text,
+  source_external_id text,
+  source_system text,
   CONSTRAINT categories_pkey PRIMARY KEY (id),
   CONSTRAINT categories_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
   CONSTRAINT categories_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id)
@@ -266,6 +270,21 @@ CREATE TABLE public.chargebacks (
   CONSTRAINT chargebacks_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
   CONSTRAINT chargebacks_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
   CONSTRAINT chargebacks_original_payment_id_fkey FOREIGN KEY (original_payment_id) REFERENCES public.order_payments(id)
+);
+CREATE TABLE public.clover_import_dry_runs (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  merchant_id uuid NOT NULL,
+  created_by_clerk_user_id text NOT NULL,
+  file_name text NOT NULL,
+  file_hash text NOT NULL,
+  payload jsonb NOT NULL,
+  fingerprint text NOT NULL,
+  status text NOT NULL DEFAULT 'pending'::text CHECK (status = ANY (ARRAY['pending'::text, 'committed'::text, 'expired'::text, 'aborted'::text])),
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  expires_at timestamp with time zone NOT NULL DEFAULT (now() + '00:15:00'::interval),
+  committed_at timestamp with time zone,
+  CONSTRAINT clover_import_dry_runs_pkey PRIMARY KEY (id),
+  CONSTRAINT clover_import_dry_runs_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id)
 );
 CREATE TABLE public.customer_activities (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -1813,6 +1832,8 @@ CREATE TABLE public.menu_items (
   use_delivery_price boolean DEFAULT false,
   version bigint NOT NULL DEFAULT 0,
   dietary_flags ARRAY NOT NULL DEFAULT '{}'::text[],
+  source_external_id text,
+  source_system text,
   CONSTRAINT menu_items_pkey PRIMARY KEY (id),
   CONSTRAINT menu_items_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
   CONSTRAINT menu_items_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id)
@@ -1842,6 +1863,8 @@ CREATE TABLE public.menus (
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
   created_by text,
   image text,
+  source_external_id text,
+  source_system text,
   CONSTRAINT menus_pkey PRIMARY KEY (id),
   CONSTRAINT menus_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
   CONSTRAINT menus_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id)
@@ -2019,6 +2042,8 @@ CREATE TABLE public.modifier_group_items (
   merchant_id uuid NOT NULL,
   is_default boolean DEFAULT false,
   delivery_price_modifier numeric,
+  source_external_id text,
+  source_system text,
   CONSTRAINT modifier_group_items_pkey PRIMARY KEY (id),
   CONSTRAINT modifier_group_items_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
   CONSTRAINT modifier_group_items_modifier_group_id_fkey FOREIGN KEY (modifier_group_id) REFERENCES public.modifier_groups(id)
@@ -2036,6 +2061,8 @@ CREATE TABLE public.modifier_groups (
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
   location_id uuid,
   is_active boolean DEFAULT true,
+  source_external_id text,
+  source_system text,
   CONSTRAINT modifier_groups_pkey PRIMARY KEY (id),
   CONSTRAINT modifier_groups_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
   CONSTRAINT modifier_groups_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id)
