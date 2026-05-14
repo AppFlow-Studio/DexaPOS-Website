@@ -10,6 +10,7 @@ import {
 import { LocationLibraryItem } from "@/types/menu";
 import { LogAuditEvent } from "./audit-logs";
 import { getCurrentUserMerchantRole } from "./role-check";
+import { assertNameAvailable } from "./_name-uniqueness";
 
 // ============================================================================
 // TYPES
@@ -485,6 +486,11 @@ export async function CreateMenuItem(
     return { error: "Merchant not found" };
   }
 
+  const nameCheck = await assertNameAvailable(supabase, merchant.id, data.name);
+  if (nameCheck.error) {
+    return { error: nameCheck.error };
+  }
+
   const { data: item, error } = await supabase
     .from("menu_items")
     .insert({
@@ -637,6 +643,29 @@ export async function UpdateMenuItem(
       // Location-specific item: manager can only edit items in their assigned locations
       if (!roleInfo.assignedLocationIds.includes(itemLocationId)) {
         return { error: "You do not have access to this menu item" };
+      }
+    }
+  }
+
+  if (data.name !== undefined) {
+    const { data: existingItem } = await supabase
+      .from("menu_items")
+      .select("merchant_id, name")
+      .eq("id", itemId)
+      .single();
+    if (
+      existingItem &&
+      data.name.trim().toLowerCase() !==
+        (existingItem.name ?? "").trim().toLowerCase()
+    ) {
+      const nameCheck = await assertNameAvailable(
+        supabase,
+        existingItem.merchant_id,
+        data.name,
+        { excludeTable: "menu_items", excludeId: itemId },
+      );
+      if (nameCheck.error) {
+        return { error: nameCheck.error };
       }
     }
   }

@@ -50,9 +50,9 @@ import {
     History,
     LogOut,
     Monitor,
-    Plug,
     AlertOctagon,
     Receipt,
+    CircleDollarSign,
     LucideIcon,
 } from 'lucide-react'
 import Link from 'next/link'
@@ -132,6 +132,12 @@ const navMain: NavGroup[] = [
                 icon: Receipt,
                 requiredPermission: 'hq.merchant.transactions' as PermissionCode,
             },
+            {
+                title: 'Subscriptions',
+                url: '/manage/subscriptions',
+                icon: CircleDollarSign,
+                requiredPermission: 'system.billing.manage' as PermissionCode,
+            },
         ]
     },
     {
@@ -191,20 +197,14 @@ const navMain: NavGroup[] = [
                 icon: Monitor,
                 requiredPermission: 'system.config.manage' as PermissionCode,
             },
-            // {
-            //     title: 'Integrations',
-            //     url: '/manage/settings/integrations',
-            //     icon: Plug,
-            //     requiredPermission: 'hq.merchant.update' as PermissionCode,
-            // },
         ]
     }
 ]
 
 const navFooter = [
     {
-        title: 'Settings',
-        url: '/manage/settings',
+        title: 'NMI Integration',
+        url: '/manage/nmi-integration',
         icon: Settings,
         requiredPermission: 'system.config.manage' as PermissionCode,
     },

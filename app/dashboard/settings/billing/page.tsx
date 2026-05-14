@@ -13,7 +13,7 @@ export default async function MerchantBillingSettingsPage() {
   const supabase = createServerSupabaseClient()
   const { data: merchant, error } = await supabase
     .from('merchants')
-    .select('id, name, clerk_org_id')
+    .select('id, name, clerk_org_id, locations(id, name)')
     .eq('clerk_org_id', orgId)
     .single()
 
@@ -28,6 +28,7 @@ export default async function MerchantBillingSettingsPage() {
       merchantName={merchant.name}
       context="merchant"
       canEdit
+      locations={(merchant.locations ?? []) as Array<{ id: string; name: string }>}
     />
   )
 }

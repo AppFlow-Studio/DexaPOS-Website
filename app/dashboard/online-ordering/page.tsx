@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, Globe, Clock3, CheckCircle2, AlertTriangle, Ban, ExternalLink, Building2, Store, Palette, Truck, Plug, LayoutTemplate, LayoutGrid, Columns2, ImageOff, Check, Bell } from "lucide-react";
+import { Loader2, Globe, Clock3, CheckCircle2, AlertTriangle, Ban, ExternalLink, Building2, Store, Palette, Truck, Plug, LayoutTemplate, Check, Bell } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
@@ -433,72 +433,255 @@ function CompletedSetupPanel({
               </div>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-4">
                 {([
-                  { value: "classic", label: "Classic", description: "Clean layout with a traditional menu grid" },
-                  { value: "minimal", label: "Minimal", description: "Simple, text-focused with subtle accents" },
+                  {
+                    value: "classic",
+                    label: "Classic",
+                    description: "Traditional grid menu with hero banner and info strip",
+                    preview: (
+                      <svg viewBox="0 0 160 100" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
+                        {/* header bar */}
+                        <rect width="160" height="12" fill="#F3F4F6"/>
+                        <rect x="6" y="4" width="20" height="4" rx="2" fill="#D1D5DB"/>
+                        <rect x="130" y="4" width="10" height="4" rx="2" fill="#0C4FD1" opacity="0.7"/>
+                        <rect x="144" y="4" width="10" height="4" rx="2" fill="#0C4FD1" opacity="0.9"/>
+                        {/* hero strip */}
+                        <rect y="12" width="160" height="22" fill="#E0E7FF"/>
+                        <rect x="20" y="19" width="40" height="4" rx="2" fill="#0C4FD1" opacity="0.6"/>
+                        <rect x="20" y="25" width="60" height="3" rx="1.5" fill="#0C4FD1" opacity="0.3"/>
+                        {/* info strip */}
+                        <rect y="34" width="160" height="8" fill="#F9FAFB"/>
+                        <rect x="6" y="36" width="30" height="2" rx="1" fill="#D1D5DB"/>
+                        <rect x="50" y="36" width="20" height="2" rx="1" fill="#D1D5DB"/>
+                        {/* item cards row 1 */}
+                        <rect x="6" y="46" width="44" height="24" rx="3" fill="#F3F4F6"/>
+                        <rect x="6" y="46" width="44" height="12" rx="3" fill="#E5E7EB"/>
+                        <rect x="8" y="60" width="24" height="2.5" rx="1.2" fill="#6B7280"/>
+                        <rect x="8" y="64" width="16" height="2" rx="1" fill="#9CA3AF"/>
+                        <rect x="57" y="46" width="44" height="24" rx="3" fill="#F3F4F6"/>
+                        <rect x="57" y="46" width="44" height="12" rx="3" fill="#E5E7EB"/>
+                        <rect x="59" y="60" width="24" height="2.5" rx="1.2" fill="#6B7280"/>
+                        <rect x="59" y="64" width="16" height="2" rx="1" fill="#9CA3AF"/>
+                        <rect x="108" y="46" width="44" height="24" rx="3" fill="#F3F4F6"/>
+                        <rect x="108" y="46" width="44" height="12" rx="3" fill="#E5E7EB"/>
+                        <rect x="110" y="60" width="24" height="2.5" rx="1.2" fill="#6B7280"/>
+                        <rect x="110" y="64" width="16" height="2" rx="1" fill="#9CA3AF"/>
+                        {/* item cards row 2 */}
+                        <rect x="6" y="74" width="44" height="20" rx="3" fill="#F3F4F6"/>
+                        <rect x="6" y="74" width="44" height="10" rx="3" fill="#E5E7EB"/>
+                        <rect x="57" y="74" width="44" height="20" rx="3" fill="#F3F4F6"/>
+                        <rect x="57" y="74" width="44" height="10" rx="3" fill="#E5E7EB"/>
+                        <rect x="108" y="74" width="44" height="20" rx="3" fill="#F3F4F6"/>
+                        <rect x="108" y="74" width="44" height="10" rx="3" fill="#E5E7EB"/>
+                      </svg>
+                    ),
+                  },
+                  {
+                    value: "hero",
+                    label: "Hero",
+                    description: "Large banner, sticky category tab bar, horizontal item cards",
+                    preview: (
+                      <svg viewBox="0 0 160 100" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
+                        {/* header */}
+                        <rect width="160" height="10" fill="#F3F4F6"/>
+                        <rect x="6" y="3" width="16" height="4" rx="2" fill="#D1D5DB"/>
+                        <rect x="144" y="3" width="10" height="4" rx="2" fill="#0C4FD1" opacity="0.8"/>
+                        {/* big hero banner */}
+                        <rect y="10" width="160" height="32" fill="#0C4FD1" opacity="0.15"/>
+                        <rect y="10" width="160" height="32" fill="url(#heroGrad)"/>
+                        <rect x="10" y="24" width="50" height="5" rx="2.5" fill="white" opacity="0.9"/>
+                        <rect x="10" y="31" width="35" height="3" rx="1.5" fill="white" opacity="0.6"/>
+                        <defs>
+                          <linearGradient id="heroGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#0C4FD1" stopOpacity="0.7"/>
+                            <stop offset="100%" stopColor="#0C4FD1" stopOpacity="0.4"/>
+                          </linearGradient>
+                        </defs>
+                        {/* sticky category tab row */}
+                        <rect y="42" width="160" height="10" fill="white"/>
+                        <rect y="51" width="160" height="0.5" fill="#E5E7EB"/>
+                        <rect x="6" y="44" width="22" height="4" rx="2" fill="#0C4FD1" opacity="0.9"/>
+                        <rect x="6" y="49.5" width="22" height="1" rx="0.5" fill="#0C4FD1"/>
+                        <rect x="32" y="44" width="18" height="4" rx="2" fill="#D1D5DB"/>
+                        <rect x="54" y="44" width="18" height="4" rx="2" fill="#D1D5DB"/>
+                        <rect x="76" y="44" width="18" height="4" rx="2" fill="#D1D5DB"/>
+                        {/* horizontal cards */}
+                        <rect x="6" y="55" width="69" height="18" rx="3" fill="#F9FAFB" stroke="#E5E7EB" strokeWidth="0.5"/>
+                        <rect x="8" y="57" width="24" height="14" rx="2" fill="#E5E7EB"/>
+                        <rect x="35" y="58" width="30" height="3" rx="1.5" fill="#374151"/>
+                        <rect x="35" y="63" width="20" height="2" rx="1" fill="#9CA3AF"/>
+                        <rect x="35" y="67" width="12" height="2.5" rx="1.2" fill="#0C4FD1" opacity="0.8"/>
+                        <rect x="85" y="55" width="69" height="18" rx="3" fill="#F9FAFB" stroke="#E5E7EB" strokeWidth="0.5"/>
+                        <rect x="87" y="57" width="24" height="14" rx="2" fill="#E5E7EB"/>
+                        <rect x="114" y="58" width="30" height="3" rx="1.5" fill="#374151"/>
+                        <rect x="114" y="63" width="20" height="2" rx="1" fill="#9CA3AF"/>
+                        <rect x="114" y="67" width="12" height="2.5" rx="1.2" fill="#0C4FD1" opacity="0.8"/>
+                        <rect x="6" y="77" width="69" height="18" rx="3" fill="#F9FAFB" stroke="#E5E7EB" strokeWidth="0.5"/>
+                        <rect x="8" y="79" width="24" height="14" rx="2" fill="#E5E7EB"/>
+                        <rect x="35" y="80" width="30" height="3" rx="1.5" fill="#374151"/>
+                        <rect x="35" y="85" width="20" height="2" rx="1" fill="#9CA3AF"/>
+                        <rect x="35" y="89" width="12" height="2.5" rx="1.2" fill="#0C4FD1" opacity="0.8"/>
+                        <rect x="85" y="77" width="69" height="18" rx="3" fill="#F9FAFB" stroke="#E5E7EB" strokeWidth="0.5"/>
+                        <rect x="87" y="79" width="24" height="14" rx="2" fill="#E5E7EB"/>
+                        <rect x="114" y="80" width="30" height="3" rx="1.5" fill="#374151"/>
+                        <rect x="114" y="85" width="20" height="2" rx="1" fill="#9CA3AF"/>
+                        <rect x="114" y="89" width="12" height="2.5" rx="1.2" fill="#0C4FD1" opacity="0.8"/>
+                      </svg>
+                    ),
+                  },
+                  {
+                    value: "market",
+                    label: "Market",
+                    description: "Left sidebar with filters and tags, sortable grid with list toggle",
+                    preview: (
+                      <svg viewBox="0 0 160 100" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
+                        {/* header */}
+                        <rect width="160" height="10" fill="#F3F4F6"/>
+                        <rect x="6" y="3" width="20" height="4" rx="2" fill="#D1D5DB"/>
+                        <rect x="144" y="3" width="10" height="4" rx="2" fill="#0C4FD1" opacity="0.8"/>
+                        {/* left sidebar */}
+                        <rect x="0" y="10" width="38" height="90" fill="#FAFAFA"/>
+                        <rect x="0" y="10" width="38" height="90" fill="none" stroke="#E5E7EB" strokeWidth="0.5"/>
+                        {/* sidebar categories */}
+                        <rect x="4" y="14" width="14" height="2.5" rx="1.2" fill="#374151"/>
+                        <rect x="4" y="19" width="28" height="2" rx="1" fill="#E5E7EB"/>
+                        <rect x="4" y="23" width="0.5" height="6" rx="0.25" fill="#0C4FD1"/>
+                        <rect x="7" y="23" width="20" height="2" rx="1" fill="#0C4FD1" opacity="0.8"/>
+                        <rect x="27" y="23" width="8" height="2" rx="1" fill="#0C4FD1" opacity="0.5"/>
+                        <rect x="4" y="27" width="20" height="2" rx="1" fill="#9CA3AF"/>
+                        <rect x="4" y="31" width="20" height="2" rx="1" fill="#9CA3AF"/>
+                        <rect x="4" y="35" width="20" height="2" rx="1" fill="#9CA3AF"/>
+                        <rect x="4" y="39" width="20" height="2" rx="1" fill="#9CA3AF"/>
+                        {/* sidebar tags */}
+                        <rect x="4" y="47" width="12" height="2.5" rx="1.2" fill="#374151"/>
+                        <rect x="4" y="52" width="14" height="5" rx="2.5" fill="#0C4FD1" opacity="0.15"/>
+                        <rect x="20" y="52" width="14" height="5" rx="2.5" fill="#F3F4F6"/>
+                        <rect x="4" y="59" width="14" height="5" rx="2.5" fill="#F3F4F6"/>
+                        <rect x="20" y="59" width="14" height="5" rx="2.5" fill="#F3F4F6"/>
+                        {/* main area toolbar */}
+                        <rect x="42" y="13" width="30" height="3.5" rx="1.75" fill="#D1D5DB"/>
+                        <rect x="124" y="13" width="18" height="3.5" rx="1.75" fill="#E5E7EB"/>
+                        <rect x="146" y="13" width="7" height="3.5" rx="1.75" fill="#E5E7EB"/>
+                        <rect x="155" y="13" width="4" height="3.5" rx="1.75" fill="#E5E7EB"/>
+                        {/* item cards 2x3 grid */}
+                        <rect x="42" y="20" width="36" height="26" rx="3" fill="#F9FAFB" stroke="#E5E7EB" strokeWidth="0.5"/>
+                        <rect x="42" y="20" width="36" height="14" rx="3" fill="#E5E7EB"/>
+                        <rect x="44" y="36" width="22" height="2.5" rx="1.2" fill="#374151"/>
+                        <rect x="44" y="40" width="14" height="2" rx="1" fill="#9CA3AF"/>
+                        <rect x="44" y="43" width="10" height="2" rx="1" fill="#0C4FD1" opacity="0.7"/>
+                        <rect x="81" y="20" width="36" height="26" rx="3" fill="#F9FAFB" stroke="#E5E7EB" strokeWidth="0.5"/>
+                        <rect x="81" y="20" width="36" height="14" rx="3" fill="#E5E7EB"/>
+                        <rect x="83" y="36" width="22" height="2.5" rx="1.2" fill="#374151"/>
+                        <rect x="83" y="40" width="14" height="2" rx="1" fill="#9CA3AF"/>
+                        <rect x="83" y="43" width="10" height="2" rx="1" fill="#0C4FD1" opacity="0.7"/>
+                        <rect x="120" y="20" width="36" height="26" rx="3" fill="#F9FAFB" stroke="#E5E7EB" strokeWidth="0.5"/>
+                        <rect x="120" y="20" width="36" height="14" rx="3" fill="#E5E7EB"/>
+                        <rect x="122" y="36" width="22" height="2.5" rx="1.2" fill="#374151"/>
+                        <rect x="122" y="40" width="14" height="2" rx="1" fill="#9CA3AF"/>
+                        <rect x="122" y="43" width="10" height="2" rx="1" fill="#0C4FD1" opacity="0.7"/>
+                        <rect x="42" y="50" width="36" height="26" rx="3" fill="#F9FAFB" stroke="#E5E7EB" strokeWidth="0.5"/>
+                        <rect x="42" y="50" width="36" height="14" rx="3" fill="#E5E7EB"/>
+                        <rect x="81" y="50" width="36" height="26" rx="3" fill="#F9FAFB" stroke="#E5E7EB" strokeWidth="0.5"/>
+                        <rect x="81" y="50" width="36" height="14" rx="3" fill="#E5E7EB"/>
+                        <rect x="120" y="50" width="36" height="26" rx="3" fill="#F9FAFB" stroke="#E5E7EB" strokeWidth="0.5"/>
+                        <rect x="120" y="50" width="36" height="14" rx="3" fill="#E5E7EB"/>
+                      </svg>
+                    ),
+                  },
+                  {
+                    value: "boutique",
+                    label: "Boutique",
+                    description: "Sticky editorial side-nav, full-width hero banner, image-forward cards",
+                    preview: (
+                      <svg viewBox="0 0 160 100" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
+                        {/* header */}
+                        <rect width="160" height="10" fill="#F3F4F6"/>
+                        <rect x="6" y="3" width="20" height="4" rx="2" fill="#D1D5DB"/>
+                        <rect x="144" y="3" width="10" height="4" rx="2" fill="#0C4FD1" opacity="0.8"/>
+                        {/* side nav */}
+                        <rect x="0" y="10" width="42" height="90" fill="white"/>
+                        <rect x="41.5" y="10" width="0.5" height="90" fill="#E5E7EB"/>
+                        {/* brand in nav */}
+                        <rect x="6" y="15" width="26" height="4" rx="2" fill="#0C4FD1" opacity="0.8"/>
+                        <rect x="6" y="21" width="18" height="2" rx="1" fill="#D1D5DB"/>
+                        <rect x="6" y="25" width="30" height="0.5" fill="#E5E7EB"/>
+                        {/* menu label */}
+                        <rect x="6" y="29" width="10" height="2" rx="1" fill="#D1D5DB"/>
+                        {/* numbered nav items */}
+                        <rect x="6" y="34" width="30" height="6" rx="3" fill="#EEF2FF"/>
+                        <rect x="9" y="36" width="4" height="2" rx="1" fill="#0C4FD1" opacity="0.5"/>
+                        <rect x="16" y="36" width="16" height="2" rx="1" fill="#0C4FD1"/>
+                        <rect x="6" y="43" width="4" height="2" rx="1" fill="#D1D5DB"/>
+                        <rect x="13" y="43" width="14" height="2" rx="1" fill="#9CA3AF"/>
+                        <rect x="6" y="49" width="4" height="2" rx="1" fill="#D1D5DB"/>
+                        <rect x="13" y="49" width="14" height="2" rx="1" fill="#9CA3AF"/>
+                        <rect x="6" y="55" width="4" height="2" rx="1" fill="#D1D5DB"/>
+                        <rect x="13" y="55" width="14" height="2" rx="1" fill="#9CA3AF"/>
+                        {/* view cart button */}
+                        <rect x="6" y="88" width="30" height="8" rx="4" fill="#0C4FD1" opacity="0.9"/>
+                        <rect x="14" y="91" width="14" height="2" rx="1" fill="white" opacity="0.9"/>
+                        {/* main area: hero banner */}
+                        <rect x="42" y="10" width="118" height="36" fill="#0C4FD1" opacity="0.12"/>
+                        <rect x="42" y="10" width="118" height="36" fill="url(#boutGrad)"/>
+                        <rect x="62" y="21" width="78" height="5" rx="2.5" fill="white" opacity="0.9"/>
+                        <rect x="72" y="29" width="58" height="3" rx="1.5" fill="white" opacity="0.6"/>
+                        <defs>
+                          <linearGradient id="boutGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#0C4FD1" stopOpacity="0.55"/>
+                            <stop offset="100%" stopColor="#0C4FD1" stopOpacity="0.3"/>
+                          </linearGradient>
+                        </defs>
+                        {/* item cards 3-col */}
+                        <rect x="44" y="50" width="36" height="30" rx="3" fill="#F9FAFB" stroke="#E5E7EB" strokeWidth="0.5"/>
+                        <rect x="44" y="50" width="36" height="18" rx="3" fill="#E5E7EB"/>
+                        <rect x="46" y="70" width="22" height="2.5" rx="1.2" fill="#374151"/>
+                        <rect x="46" y="74" width="14" height="2" rx="1" fill="#9CA3AF"/>
+                        <rect x="46" y="77" width="10" height="2" rx="1" fill="#0C4FD1" opacity="0.7"/>
+                        <rect x="83" y="50" width="36" height="30" rx="3" fill="#F9FAFB" stroke="#E5E7EB" strokeWidth="0.5"/>
+                        <rect x="83" y="50" width="36" height="18" rx="3" fill="#E5E7EB"/>
+                        <rect x="85" y="70" width="22" height="2.5" rx="1.2" fill="#374151"/>
+                        <rect x="85" y="74" width="14" height="2" rx="1" fill="#9CA3AF"/>
+                        <rect x="85" y="77" width="10" height="2" rx="1" fill="#0C4FD1" opacity="0.7"/>
+                        <rect x="122" y="50" width="36" height="30" rx="3" fill="#F9FAFB" stroke="#E5E7EB" strokeWidth="0.5"/>
+                        <rect x="122" y="50" width="36" height="18" rx="3" fill="#E5E7EB"/>
+                        <rect x="124" y="70" width="22" height="2.5" rx="1.2" fill="#374151"/>
+                        <rect x="124" y="74" width="14" height="2" rx="1" fill="#9CA3AF"/>
+                        <rect x="124" y="77" width="10" height="2" rx="1" fill="#0C4FD1" opacity="0.7"/>
+                      </svg>
+                    ),
+                  },
                 ] as const).map((opt) => (
                   <button
                     key={opt.value}
                     type="button"
                     onClick={() => onUpdate({ templateId: opt.value })}
                     className={cn(
-                      "relative rounded-lg border-2 p-4 text-left transition-colors hover:border-primary/50",
+                      "relative rounded-xl border-2 text-left transition-all hover:border-primary/50 overflow-hidden group",
                       settings.templateId === opt.value
-                        ? "border-primary bg-primary/5"
+                        ? "border-primary ring-1 ring-primary/20"
                         : "border-border bg-background"
                     )}
                   >
-                    {settings.templateId === opt.value && (
-                      <div className="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-primary">
-                        <Check className="h-3 w-3 text-white" />
-                      </div>
-                    )}
-                    <p className="text-sm font-semibold">{opt.label}</p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">{opt.description}</p>
-                  </button>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Menu Layout */}
-          <Card>
-            <CardHeader>
-              <div className="flex items-center gap-3">
-                <LayoutGrid className="h-5 w-5 text-muted-foreground" />
-                <div>
-                  <CardTitle>Menu Layout</CardTitle>
-                  <CardDescription>How menu items are displayed on the ordering page</CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-3 gap-3">
-                {([
-                  { value: "cards",      label: "Cards",       description: "Image on top, compact cards",    icon: LayoutGrid },
-                  { value: "sidebyside", label: "Side by Side", description: "Image on right, content on left", icon: Columns2 },
-                  { value: "no-images",  label: "No Images",   description: "List layout, text only",         icon: ImageOff },
-                ] as const).map(({ value, label, description, icon: Icon }) => (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => onUpdate({ menuLayout: value })}
-                    className={cn(
-                      "relative rounded-lg border-2 p-4 text-left transition-colors hover:border-primary/50",
-                      settings.menuLayout === value
-                        ? "border-primary bg-primary/5"
-                        : "border-border bg-background"
-                    )}
-                  >
-                    {settings.menuLayout === value && (
-                      <div className="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-primary">
-                        <Check className="h-3 w-3 text-white" />
-                      </div>
-                    )}
-                    <Icon className="mb-2 h-5 w-5 text-muted-foreground" />
-                    <p className="text-sm font-semibold">{label}</p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
+                    {/* thumbnail */}
+                    <div
+                      className={cn(
+                        "w-full aspect-video flex items-center justify-center overflow-hidden transition-colors",
+                        settings.templateId === opt.value ? "bg-primary/5" : "bg-muted/40 group-hover:bg-muted/60"
+                      )}
+                    >
+                      <div className="w-full h-full">{opt.preview}</div>
+                    </div>
+                    {/* label row */}
+                    <div className="px-3 py-2.5 relative">
+                      {settings.templateId === opt.value && (
+                        <div className="absolute right-2.5 top-2.5 flex h-5 w-5 items-center justify-center rounded-full bg-primary">
+                          <Check className="h-3 w-3 text-white" />
+                        </div>
+                      )}
+                      <p className="text-sm font-semibold pr-6">{opt.label}</p>
+                      <p className="mt-0.5 text-xs text-muted-foreground leading-snug">{opt.description}</p>
+                    </div>
                   </button>
                 ))}
               </div>
