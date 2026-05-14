@@ -59,6 +59,11 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useMerchantCdnImageUpload } from "@/lib/cdn/use-merchant-cdn-image-upload";
+import {
+  clearLocalStorageDraft,
+  readLocalStorageDraft,
+  writeLocalStorageDraft,
+} from "@/lib/browser/local-storage-draft";
 import { MenuItemsModel } from "@/types/db-modles";
 import { AddItemToCategory } from "@/app/dashboard/actions/item-assignments";
 import { CreateItemInCategory } from "@/app/dashboard/actions/item-assignments";
@@ -119,6 +124,12 @@ interface AddItemToCategoryWizardProps {
   isAllLocations?: boolean;
 }
 
+interface AddItemToCategoryDraft {
+  activeTab: "existing" | "create";
+  values: ItemFormValues;
+  modifierIds: string[];
+}
+
 // ============================================================================
 // SCHEMA
 // ============================================================================
@@ -170,6 +181,13 @@ export function AddItemToCategoryWizard({
     category: "menu-items",
     fileNamePrefix: "item",
   });
+  const draftHydratedRef = React.useRef(false);
+  const draftKey = React.useMemo(() => {
+    const scopeKey = isAllLocations ? "global" : selectedLocationId ?? "location-none";
+    return merchantId
+      ? `menu-item-draft:add-to-category:${merchantId}:${categoryId}:${scopeKey}`
+      : null;
+  }, [categoryId, isAllLocations, merchantId, selectedLocationId]);
 
   // Modifier groups
   const { data: allModifierGroups = [] } = useModifierGroups(
@@ -259,6 +277,7 @@ export function AddItemToCategoryWizard({
   // Reset on close
   useEffect(() => {
     if (!open) {
+      draftHydratedRef.current = false;
       setSelectedItems(new Set());
       setSearchQuery("");
       setActiveTab("existing");
@@ -268,6 +287,44 @@ export function AddItemToCategoryWizard({
       setModifierSearchQuery("");
     }
   }, [form, imageUpload.reset, open]);
+
+  useEffect(() => {
+    if (!open || !draftKey || draftHydratedRef.current) return;
+
+    const draft = readLocalStorageDraft<AddItemToCategoryDraft>(draftKey);
+    if (draft) {
+      setActiveTab(draft.activeTab ?? "existing");
+      form.reset({
+        name: "",
+        description: "",
+        image: "",
+        price: 0,
+        cash_price: null,
+        allergens: [],
+        meal_types: [],
+        card_bg_color: "",
+        availability: true,
+        tax_category: "standard",
+        is_tax_exempt: false,
+        stock_tracking_mode: "in_stock",
+        available_channels: ["pos", "online", "kiosk"],
+        ...draft.values,
+      });
+      setNewModifierIds(draft.modifierIds ?? []);
+    }
+
+    draftHydratedRef.current = true;
+  }, [draftKey, form, open]);
+
+  useEffect(() => {
+    if (!open || !draftKey || !draftHydratedRef.current) return;
+
+    writeLocalStorageDraft(draftKey, {
+      activeTab,
+      values: watchedValues,
+      modifierIds: newModifierIds,
+    } satisfies AddItemToCategoryDraft);
+  }, [activeTab, draftKey, newModifierIds, open, watchedValues]);
 
   // Toggle item selection
   const handleToggleItem = (itemId: string) => {
@@ -401,6 +458,9 @@ export function AddItemToCategoryWizard({
       toast.success("Item created", {
         description: `"${values.name}" has been added to ${categoryName}`,
       });
+      if (draftKey) {
+        clearLocalStorageDraft(draftKey);
+      }
 
       queryClient.invalidateQueries({ queryKey: ["categories-with-items"] });
       queryClient.invalidateQueries({ queryKey: ["menu-items"] });
