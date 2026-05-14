@@ -123,6 +123,9 @@ export function useAdminUpdateMerchant() {
         queryClient.invalidateQueries({
           queryKey: adminKeys.merchantDetail(variables.merchantId),
         })
+        queryClient.invalidateQueries({
+          queryKey: adminKeys.merchants(),
+        })
       }
     },
   })
