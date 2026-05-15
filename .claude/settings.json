@@ -44,7 +44,10 @@
       "Bash(Select-Object -First 30)",
       "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\HP i5\\\\Desktop\\\\mdptech\\\\DexaPOS-website\\\\DexaPOS-Website\" -Recurse -Directory)",
       "Bash(Select-Object -First 20 FullName)",
-      "Bash(npx vitest *)"
+      "Bash(npx vitest *)",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\HP i5\\\\Desktop\\\\mdptech\\\\DexaPOS-website\\\\DexaPOS-Website\\\\app\\\\dashboard\" -Recurse -Filter \"*.tsx\")",
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "Bash(Select-String -Pattern \"clover|import\")"
     ],
     "additionalDirectories": [
       "C:\\Users\\HP i5\\Desktop\\mdptech\\DexaPOS-website\\DexaPOS-Website\\tasks",
