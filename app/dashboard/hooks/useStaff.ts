@@ -198,20 +198,14 @@ export function useCreateClerkUserDirectly() {
         return;
       }
 
-      // Show enhanced credential toast if password or PIN was generated
-      if (result.data?.temp_password || result.data?.generated_pin) {
-        showCredentialToast(
-          result.data?.generated_pin,
-          result.data?.temp_password
-        );
-      } else {
-        toast.success("User created successfully", {
-          description: "User account has been created",
-        });
+      toast.success("Account created", {
+        description: "Sign-in email sent with a temporary password.",
+      });
+
+      if (result.data?.generated_pin) {
+        showCredentialToast(result.data.generated_pin);
       }
 
-      // Soft warning when Clerk rejected the phone (already linked to another
-      // account). The user was still created; phone is stored on staff_profiles.
       if (result.data?.phone_skipped) {
         toast.warning("Phone not linked to login", {
           description:
