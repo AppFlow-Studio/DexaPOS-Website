@@ -47,21 +47,21 @@ export default function Dashboard() {
         <TabsList className="inline-flex h-auto p-1 bg-white/80 backdrop-blur-sm border border-blue-100/50 shadow-sm rounded-xl">
           <TabsTrigger
             value="dashboard"
-            className="gap-2 px-4 py-2.5 rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md transition-all duration-200"
+            className="gap-2 px-4 py-2.5 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md transition-all duration-200"
           >
             <Zap className="h-4 w-4" />
             <span className="hidden sm:inline">Dashboard</span>
           </TabsTrigger>
           <TabsTrigger
             value="health"
-            className="gap-2 px-4 py-2.5 rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md transition-all duration-200"
+            className="gap-2 px-4 py-2.5 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md transition-all duration-200"
           >
             <Activity className="h-4 w-4" />
             <span className="hidden sm:inline">Health</span>
           </TabsTrigger>
           <TabsTrigger
             value="analytics"
-            className="gap-2 px-4 py-2.5 rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md transition-all duration-200"
+            className="gap-2 px-4 py-2.5 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md transition-all duration-200"
           >
             <BarChart3 className="h-4 w-4" />
             <span className="hidden sm:inline">Analytics</span>

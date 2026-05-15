@@ -50,6 +50,7 @@ import {
   type MerchantProvisionedDeviceViewRecord,
   type MerchantSubscriptionBillingProfileViewRecord,
   type MerchantSubscriptionInvoiceViewRecord,
+  type MerchantTierPlanViewRecord,
 } from '@/app/dashboard/actions/subscription-billing'
 import {
   renderSubscriptionInvoiceHtml,
@@ -140,6 +141,35 @@ function buildPaymentMethodLabel(profile: MerchantSubscriptionBillingProfileView
   return [bank, suffix].filter(Boolean).join(' ')
 }
 
+function formatTierPrice(monthlyPriceCents: number): string {
+  return monthlyPriceCents > 0 ? `${formatMoney(monthlyPriceCents / 100)}/mo` : 'Contact for pricing'
+}
+
+function formatTierCapacity(plan: MerchantTierPlanViewRecord): string {
+  if (plan.max_locations === null) {
+    return `${plan.min_locations ?? 0}+ locations`
+  }
+
+  if (plan.min_locations === plan.max_locations) {
+    return `${plan.max_locations} location`
+  }
+
+  return `${plan.min_locations ?? 0}-${plan.max_locations} locations`
+}
+
+function merchantTierHighlights(plan: MerchantTierPlanViewRecord): string[] {
+  switch (plan.plan_code) {
+    case 'basic':
+      return ['Single-location coverage', 'Flat monthly plan visibility', 'Contact Dexa for activation']
+    case 'multi_location':
+      return ['Supports 2 to 5 locations', 'Flat monthly tier', 'Built for growing merchant groups']
+    case 'franchise':
+      return ['Supports 6 or more locations', 'Unlimited cap in V1', 'Best fit for large operators']
+    default:
+      return ['Merchant-wide plan', 'Flat monthly structure', 'Contact Dexa for activation']
+  }
+}
+
 function usageTone(planStatus: MerchantPlanStatusView): {
   label: string
   className: string
@@ -187,6 +217,7 @@ export function MerchantSubscriptionOverviewCard({
     current_period_end: null,
   })
   const [locations, setLocations] = useState<MerchantBillingLocationViewRecord[]>([])
+  const [merchantTierPlans, setMerchantTierPlans] = useState<MerchantTierPlanViewRecord[]>([])
   const [devicesByLocationId, setDevicesByLocationId] = useState<Record<string, MerchantProvisionedDeviceViewRecord[]>>({})
   const [invoices, setInvoices] = useState<MerchantSubscriptionInvoiceViewRecord[]>([])
   const [billingProfilesByLocationId, setBillingProfilesByLocationId] = useState<
@@ -252,6 +283,7 @@ export function MerchantSubscriptionOverviewCard({
     try {
       const overview = await getMerchantSubscriptionOverview()
       setMerchantPlanStatus(overview.merchantPlanStatus)
+      setMerchantTierPlans(overview.merchantTierPlans)
       setLocations(overview.locations)
       setDevicesByLocationId(overview.devicesByLocationId)
       setInvoices(overview.invoices)
@@ -412,68 +444,100 @@ export function MerchantSubscriptionOverviewCard({
               Read-only visibility into your merchant-wide subscription tier and plan capacity.
             </CardDescription>
           </div>
-          <Button
-            type="button"
-            className="bg-[#0C4FD1] hover:bg-[#0A45BA]"
-            onClick={() => setContactModalMode('plan')}
-          >
+          <Button type="button" onClick={() => setContactModalMode('plan')}>
             Manage plan
           </Button>
         </CardHeader>
         <CardContent className="space-y-5">
           {!merchantPlanStatus.plan ? (
-            <div className="rounded-lg border border-dashed border-slate-300 p-4 text-sm text-muted-foreground">
-              <div className="font-medium text-foreground">No active plan</div>
-              <div className="mt-1">Contact your DEXA rep to assign your subscription tier and billing coverage.</div>
+            <div className="space-y-4">
+              <div className="rounded-lg border border-dashed border-slate-300 p-4 text-sm text-muted-foreground">
+                <div className="font-medium text-foreground">No active plan</div>
+                <div className="mt-1">Choose a tier below, then contact Dexa to activate billing coverage for your merchant.</div>
+              </div>
+              <div className="grid gap-4 xl:grid-cols-3">
+                {merchantTierPlans.map((plan) => (
+                  <div
+                    key={plan.id}
+                    className="flex min-h-[360px] flex-col rounded-2xl border border-slate-200 bg-white p-6 shadow-none"
+                  >
+                    <div className="text-3xl font-semibold tracking-tight">{formatTierPrice(plan.monthly_price_cents)}</div>
+                    <div className="mt-4 text-xl font-semibold">{plan.display_name}</div>
+                    <div className="mt-2 text-sm text-muted-foreground">
+                      {plan.description || formatTierCapacity(plan)}
+                    </div>
+                    <div className="mt-6 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700">
+                      {formatTierCapacity(plan)}
+                    </div>
+                    <div className="mt-6 space-y-3 text-sm text-muted-foreground">
+                      {merchantTierHighlights(plan).map((line) => (
+                        <div key={`${plan.id}-${line}`} className="flex items-start gap-2">
+                          <div className="mt-1 h-1.5 w-1.5 rounded-full bg-primary" />
+                          <span>{line}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-auto pt-8">
+                      <Button type="button" className="w-full" onClick={() => setContactModalMode('plan')}>
+                        Contact Dexa
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           ) : (
             <>
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-                <div className="space-y-2">
-                  <div className="text-sm text-muted-foreground">Plan</div>
-                  <div className="flex items-center gap-2">
+              <div className="grid gap-4 lg:grid-cols-3">
+                <div className="rounded-xl border border-slate-200 bg-white p-4">
+                  <div className="text-sm text-muted-foreground">Current Tier</div>
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
                     <div className="text-2xl font-semibold">{merchantPlanStatus.plan.name}</div>
                     <Badge className={planBadgeClass(merchantPlanStatus.subscription_status)}>
                       {merchantPlanStatus.plan.code.replace('_', ' ')}
                     </Badge>
                   </div>
+                  <div className="mt-3 text-sm text-muted-foreground">
+                    {merchantPlanStatus.plan.description || 'No description available'}
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <div className="text-sm text-muted-foreground">Coverage</div>
-                  <Badge variant="outline" className={usage.className}>
-                    {usage.label}
-                  </Badge>
+
+                <div className="rounded-xl border border-slate-200 bg-white p-4">
+                  <div className="text-sm text-muted-foreground">Location Coverage</div>
+                  <div className="mt-3">
+                    <Badge variant="outline" className={usage.className}>
+                      {usage.label}
+                    </Badge>
+                  </div>
+                  <div className="mt-3 text-sm text-muted-foreground">
+                    Status:{' '}
+                    <span className="font-medium text-foreground">
+                      {(merchantPlanStatus.subscription_status || 'inactive').replace('_', ' ')}
+                    </span>
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <div className="text-sm text-muted-foreground">Next Billing Date</div>
-                  <div className="text-lg font-semibold">{formatDate(merchantPlanStatus.current_period_end)}</div>
-                </div>
-                <div className="space-y-2">
-                  <div className="text-sm text-muted-foreground">Amount</div>
-                  <div className="text-lg font-semibold">{planAmountLabel}</div>
-                </div>
-                <div className="space-y-2">
-                  <div className="text-sm text-muted-foreground">Payment Method</div>
-                  <div className="text-lg font-semibold">{buildPaymentMethodLabel(selectedBillingProfile)}</div>
+
+                <div className="rounded-xl border border-slate-200 bg-white p-4">
+                  <div className="text-sm text-muted-foreground">Next Charge</div>
+                  <div className="mt-3 text-2xl font-semibold">{planAmountLabel}</div>
+                  <div className="mt-2 text-sm text-muted-foreground">
+                    {formatDate(merchantPlanStatus.current_period_end)}
+                  </div>
                 </div>
               </div>
 
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 <div>
-                  <div className="text-sm text-muted-foreground">Plan Description</div>
-                  <div className="mt-1 font-medium">{merchantPlanStatus.plan.description || 'No description available'}</div>
-                </div>
-                <div>
-                  <div className="text-sm text-muted-foreground">Status</div>
-                  <div className="mt-1">
-                    <Badge className={planBadgeClass(merchantPlanStatus.subscription_status)}>
-                      {(merchantPlanStatus.subscription_status || 'inactive').replace('_', ' ')}
-                    </Badge>
-                  </div>
+                  <div className="text-sm text-muted-foreground">Payment Method</div>
+                  <div className="mt-1 font-medium">{buildPaymentMethodLabel(selectedBillingProfile)}</div>
                 </div>
                 <div>
                   <div className="text-sm text-muted-foreground">Billing Contact</div>
                   <div className="mt-1 font-medium">{selectedBillingProfile?.billing_email || 'Not set'}</div>
+                </div>
+                <div>
+                  <div className="text-sm text-muted-foreground">Selected Location</div>
+                  <div className="mt-1 font-medium">{selectedLocation?.name || 'No location selected'}</div>
                 </div>
               </div>
             </>
@@ -488,12 +552,7 @@ export function MerchantSubscriptionOverviewCard({
                     You are over your plan limit ({merchantPlanStatus.active_location_count}/{merchantPlanStatus.plan.max_locations} locations).
                   </div>
                   <div>Contact us to upgrade{requiredPlanLabel ? ` to ${requiredPlanLabel}` : ''}.</div>
-                  <Button
-                    type="button"
-                    size="sm"
-                    className="bg-[#0C4FD1] hover:bg-[#0A45BA]"
-                    onClick={() => setContactModalMode('plan')}
-                  >
+                  <Button type="button" size="sm" onClick={() => setContactModalMode('plan')}>
                     Contact your DEXA rep
                   </Button>
                 </div>
