@@ -845,7 +845,7 @@ export function HqSubscriptionsWorkspace({
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="grid gap-4 xl:grid-cols-[1.1fr_1.3fr]">
+          <div className="grid gap-4">
             <div className="space-y-4 rounded-xl border bg-muted/20 p-4">
               <div className="flex flex-wrap items-center gap-2">
                 <div className="text-lg font-semibold">
