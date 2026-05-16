@@ -9,10 +9,6 @@ export function isValidImageUrl(url: string | null | undefined): url is string {
   return !!url && (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('/'))
 }
 
-export function isTransientImageUrl(url: string | null | undefined): url is string {
-  return !!url && (url.startsWith('blob:') || url.startsWith('data:image/'))
-}
-
 export const formatCurrency = (amount: number) =>
   new Intl.NumberFormat('en-US', {
     style: 'currency',

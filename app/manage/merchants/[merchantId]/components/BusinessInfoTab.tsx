@@ -13,8 +13,7 @@ import {
     Calendar,
     Store,
     Edit,
-    Loader2,
-    DollarSign
+    Loader2
 } from 'lucide-react'
 import { MerchantDetails } from '@/types/merchant'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -71,11 +70,6 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
     const einTaxId = merchantInfo?.ein_last_four ? `****${merchantInfo.ein_last_four}` : 'Not provided'
     const businessType = merchantInfo?.business_type || 'Not specified'
     const businessLicenseNumber = (merchantInfo?.public_metadata as any)?.business_license_number || 'Not provided'
-    const pricingStrategy = merchantInfo?.pricing_strategy || 'manual'
-    const dualPricingPercentage = merchantInfo?.dual_pricing_percentage ?? 4
-    const pricingStrategyLabel = pricingStrategy === 'dual'
-        ? `Dual Pricing (${dualPricingPercentage}% cash discount)`
-        : 'No Surcharge (Manual Pricing)'
 
     const formatAddress = (loc: any) => {
         return [loc.address_line1, loc.city, loc.state].filter(Boolean).join(', ')
@@ -98,9 +92,7 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
         business_type: '',
         business_license_number: '',
         merchant_type: '',
-        status: '',
-        pricing_strategy: 'manual' as 'manual' | 'dual',
-        dual_pricing_percentage: 4
+        status: ''
     })
 
     useEffect(() => {
@@ -112,9 +104,7 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                 business_type: merchantInfo?.business_type || '',
                 business_license_number: (merchantInfo?.public_metadata as any)?.business_license_number || '',
                 merchant_type: merchantInfo?.business_type || '',
-                status: merchantInfo?.onboarding_status || '',
-                pricing_strategy: (merchantInfo?.pricing_strategy as 'manual' | 'dual') || 'manual',
-                dual_pricing_percentage: merchantInfo?.dual_pricing_percentage ?? 4
+                status: merchantInfo?.onboarding_status || ''
             })
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -129,10 +119,6 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                     dba_name: formData.dba_name || null,
                     ein_last_four: formData.ein_tax_id || null,
                     business_type: formData.business_type || null,
-                    pricing_strategy: formData.pricing_strategy,
-                    ...(formData.pricing_strategy === 'dual'
-                        ? { dual_pricing_percentage: formData.dual_pricing_percentage }
-                        : {}),
                 }
             })
 
@@ -265,21 +251,6 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                                     </div>
                                     <div className="text-base font-medium font-mono">
                                         {businessLicenseNumber}
-                                    </div>
-                                </div>
-
-                                <div className="space-y-2">
-                                    <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                                        <DollarSign className="h-4 w-4" />
-                                        Default Pricing Strategy
-                                    </div>
-                                    <div>
-                                        <Badge variant="outline" className="text-base px-3 py-1">
-                                            {pricingStrategyLabel}
-                                        </Badge>
-                                        <div className="text-sm text-muted-foreground mt-1">
-                                            Applies to all locations unless individually overridden.
-                                        </div>
                                     </div>
                                 </div>
 
@@ -555,44 +526,6 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                                 placeholder="e.g. Restaurant, Retail"
                             />
                         </div>
-
-                        <div className="space-y-2">
-                            <Label htmlFor="pricing_strategy">Default Pricing Strategy</Label>
-                            <Select
-                                value={formData.pricing_strategy}
-                                onValueChange={(value) =>
-                                    setFormData({ ...formData, pricing_strategy: value as 'manual' | 'dual' })
-                                }
-                            >
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Select pricing strategy" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="manual">No Surcharge (Manual Pricing)</SelectItem>
-                                    <SelectItem value="dual">Dual Pricing (Cash Discount)</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-
-                        {formData.pricing_strategy === 'dual' && (
-                            <div className="space-y-2">
-                                <Label htmlFor="dual_pricing_percentage">Cash Discount %</Label>
-                                <Input
-                                    id="dual_pricing_percentage"
-                                    type="number"
-                                    min={0}
-                                    max={100}
-                                    step="0.1"
-                                    value={formData.dual_pricing_percentage}
-                                    onChange={(e) =>
-                                        setFormData({
-                                            ...formData,
-                                            dual_pricing_percentage: Number(e.target.value),
-                                        })
-                                    }
-                                />
-                            </div>
-                        )}
 
                         <div className="space-y-2">
                             <Label htmlFor="status">Merchant Status</Label>

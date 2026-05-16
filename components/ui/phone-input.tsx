@@ -10,7 +10,6 @@ interface PhoneInputProps {
   value: string
   onChange: (value: string) => void
   onBlur?: () => void
-  name?: string
   defaultCountry?: string
   placeholder?: string
   disabled?: boolean
@@ -23,7 +22,6 @@ function PhoneInput({
   value,
   onChange,
   onBlur,
-  name,
   defaultCountry = 'us',
   placeholder,
   disabled,
@@ -51,7 +49,7 @@ function PhoneInput({
       onBlur={handleBlur}
       disabled={disabled}
       placeholder={placeholder}
-      inputProps={{ id, name, 'aria-invalid': ariaInvalid }}
+      inputProps={{ id, 'aria-invalid': ariaInvalid }}
       style={
         {
           '--react-international-phone-border-radius': 'calc(var(--radius) - 2px)',

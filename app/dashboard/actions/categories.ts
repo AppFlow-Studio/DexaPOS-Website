@@ -5,7 +5,6 @@ import { CategoriesModel } from "@/types/db-modles";
 import { CategoryWithItems } from "@/types/menu";
 import { LogAuditEvent } from "./audit-logs";
 import { getCurrentUserMerchantRole } from "./role-check";
-import { assertNameAvailable } from "./_name-uniqueness";
 
 // ============================================================================
 // GET OPERATIONS
@@ -257,11 +256,6 @@ export async function CreateCategory(
     }
   }
 
-  const nameCheck = await assertNameAvailable(supabase, merchant.id, data.name);
-  if (nameCheck.error) {
-    return { error: nameCheck.error };
-  }
-
   const { data: category, error } = await supabase
     .from("categories")
     .insert({
@@ -367,29 +361,6 @@ export async function UpdateCategory(
 
       if (menuError || !menu) {
         return { error: "Menu not found or does not belong to merchant" };
-      }
-    }
-  }
-
-  if (data.name !== undefined) {
-    const { data: existing } = await supabase
-      .from("categories")
-      .select("merchant_id, name")
-      .eq("id", categoryId)
-      .single();
-    if (
-      existing &&
-      data.name.trim().toLowerCase() !==
-        (existing.name ?? "").trim().toLowerCase()
-    ) {
-      const nameCheck = await assertNameAvailable(
-        supabase,
-        existing.merchant_id,
-        data.name,
-        { excludeTable: "categories", excludeId: categoryId },
-      );
-      if (nameCheck.error) {
-        return { error: nameCheck.error };
       }
     }
   }
