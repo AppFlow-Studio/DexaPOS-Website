@@ -59,15 +59,16 @@ export function useMerchantCdnImageUpload({
   }, [revokeObjectUrl])
 
   const createSupabaseClient = useCallback(async () => {
-    const token =
-      await getToken({ template: 'supabase' }).catch(() => null) ||
-      await getToken()
+    const tokenGetter = async () =>
+      (await getToken({ template: 'supabase' }).catch(() => null)) ||
+      (await getToken())
 
+    const token = await tokenGetter()
     if (!token) {
       throw new Error('Authentication required for CDN upload')
     }
 
-    return createBrowserSupabaseClient(token)
+    return createBrowserSupabaseClient(tokenGetter)
   }, [getToken])
 
   const reset = useCallback((url?: string | null) => {

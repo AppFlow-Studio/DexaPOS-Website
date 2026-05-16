@@ -9,6 +9,7 @@ import {
 import { MenuWithCategories, MenuForLocation } from '@/types/menu'
 import { LogAuditEvent } from './audit-logs'
 import { getCurrentUserMerchantRole } from './role-check'
+import { assertNameAvailable } from './_name-uniqueness'
 
 // ============================================================================
 // TYPES
@@ -416,6 +417,11 @@ export async function CreateMenu (
     }
   }
 
+  const nameCheck = await assertNameAvailable(supabase, merchant.id, data.name)
+  if (nameCheck.error) {
+    return { error: nameCheck.error }
+  }
+
   const { data: menu, error } = await supabase
     .from('menus')
     .insert({
@@ -545,6 +551,22 @@ export async function UpdateMenu (
       if (locationError || !location) {
         return { error: 'Location not found or does not belong to merchant' }
       }
+    }
+  }
+
+  if (
+    data.name !== undefined &&
+    data.name.trim().toLowerCase() !==
+      (beforeMenu.name ?? '').trim().toLowerCase()
+  ) {
+    const nameCheck = await assertNameAvailable(
+      supabase,
+      beforeMenu.merchant_id,
+      data.name,
+      { excludeTable: 'menus', excludeId: menuId }
+    )
+    if (nameCheck.error) {
+      return { error: nameCheck.error }
     }
   }
 

@@ -116,9 +116,9 @@ export const RuntimeFloorPlanView = forwardRef<
     },
     ref
   ) => {
-    const MIN_SCALE = 0.25
     const MAX_SCALE = 4
-    const WHEEL_ZOOM_STEP_FACTOR = 1.02
+    const WHEEL_ZOOM_DELTA_PER_PIXEL = 0.000002
+    const MAX_WHEEL_ZOOM_DELTA = 0.0008
     const BUTTON_ZOOM_STEP_FACTOR = 1.2
 
     // Support both single and multi-select
@@ -127,8 +127,6 @@ export const RuntimeFloorPlanView = forwardRef<
     const containerRef = useRef<HTMLDivElement>(null)
     const contentRef = useRef<HTMLDivElement>(null)
     const transformRef = useRef({ x: 0, y: 0, scale: 1 })
-    const wheelGestureConsumedRef = useRef(false)
-    const wheelIdleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
     const scaleRef = useRef(1)
     const [interactionMode, setInteractionMode] = useState<'select' | 'pan'>(
       'select'
@@ -147,9 +145,25 @@ export const RuntimeFloorPlanView = forwardRef<
       y: number
       scale: number
     } | null>(null)
+    const lastAutoFitFloorPlanIdRef = useRef<string | null>(null)
     const fitToViewLatestRef = useRef<() => void>(() => {})
 
     // --- 1. DOM Transform ---
+    const getMinScale = React.useCallback(() => {
+      if (!containerRef.current) return 0.25
+
+      const rect = containerRef.current.getBoundingClientRect()
+      const canvasWidth = floorPlan?.canvas_width || 1200
+      const canvasHeight = floorPlan?.canvas_height || 800
+      const padding = 80
+
+      return Math.min(
+        1,
+        rect.width / (canvasWidth + padding),
+        rect.height / (canvasHeight + padding)
+      )
+    }, [floorPlan?.canvas_width, floorPlan?.canvas_height])
+
     const updateTransform = () => {
       if (contentRef.current) {
         const { x, y, scale } = transformRef.current
@@ -168,7 +182,9 @@ export const RuntimeFloorPlanView = forwardRef<
       const scaledWidth = canvasWidth * transformRef.current.scale
       const scaledHeight = canvasHeight * transformRef.current.scale
 
-      const overscroll = 160
+      const scale = transformRef.current.scale
+      const overscroll =
+        Math.max(240, Math.min(containerWidth, containerHeight) * 0.35) * scale
 
       let minX = containerWidth - scaledWidth - overscroll
       let maxX = overscroll
@@ -199,7 +215,10 @@ export const RuntimeFloorPlanView = forwardRef<
 
     const zoomAroundPoint = React.useCallback(
       (nextScale: number, pointX: number, pointY: number) => {
-        const clampedScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, nextScale))
+        const clampedScale = Math.max(
+          getMinScale(),
+          Math.min(MAX_SCALE, nextScale)
+        )
         const currentScale = transformRef.current.scale
         if (clampedScale === currentScale) return
 
@@ -213,7 +232,7 @@ export const RuntimeFloorPlanView = forwardRef<
         clampPanToBounds()
         updateTransform()
       },
-      [clampPanToBounds]
+      [clampPanToBounds, getMinScale]
     )
 
     const zoomAroundViewportCenter = React.useCallback(
@@ -227,27 +246,6 @@ export const RuntimeFloorPlanView = forwardRef<
       },
       [zoomAroundPoint]
     )
-
-    const stepZoomIn = React.useCallback(() => {
-      zoomAroundViewportCenter(
-        transformRef.current.scale * WHEEL_ZOOM_STEP_FACTOR
-      )
-    }, [zoomAroundViewportCenter])
-
-    const stepZoomOut = React.useCallback(() => {
-      zoomAroundViewportCenter(
-        transformRef.current.scale / WHEEL_ZOOM_STEP_FACTOR
-      )
-    }, [zoomAroundViewportCenter])
-
-    React.useEffect(() => {
-      return () => {
-        if (wheelIdleTimerRef.current) {
-          clearTimeout(wheelIdleTimerRef.current)
-          wheelIdleTimerRef.current = null
-        }
-      }
-    }, [])
 
     // --- 2. Canvas Gestures (Pan/Zoom) ---
     useGesture(
@@ -270,7 +268,6 @@ export const RuntimeFloorPlanView = forwardRef<
           zoomAroundViewportCenter(d)
         },
         onWheel: ({ delta: [, dy], event }) => {
-          // Keep wheel behavior identical to +/- buttons: centered, discrete steps, no pan shift.
           const wheelEvent = event as WheelEvent
           wheelEvent.preventDefault()
 
@@ -281,30 +278,19 @@ export const RuntimeFloorPlanView = forwardRef<
               ? dy * 800
               : dy
 
-          // Ignore tiny jitter/noise from touchpads and high-resolution wheels.
-          if (Math.abs(normalizedDy) < 8) return
+          // Use a tiny capped scale delta so high-resolution wheels and trackpads
+          // cannot jump across the whole zoom range in a few scrolls.
+          if (Math.abs(normalizedDy) < 1) return
 
-          // Re-arm after wheel settles; while active, only first event can zoom.
-          const wheelIdleMs = 420
-          if (wheelIdleTimerRef.current) {
-            clearTimeout(wheelIdleTimerRef.current)
-          }
-          wheelIdleTimerRef.current = setTimeout(() => {
-            wheelGestureConsumedRef.current = false
-            wheelIdleTimerRef.current = null
-          }, wheelIdleMs)
+          const zoomDelta = Math.max(
+            -MAX_WHEEL_ZOOM_DELTA,
+            Math.min(
+              MAX_WHEEL_ZOOM_DELTA,
+              -normalizedDy * WHEEL_ZOOM_DELTA_PER_PIXEL
+            )
+          )
 
-          if (wheelGestureConsumedRef.current) {
-            return
-          }
-
-          if (normalizedDy < 0) {
-            stepZoomIn()
-          } else {
-            stepZoomOut()
-          }
-
-          wheelGestureConsumedRef.current = true
+          zoomAroundViewportCenter(transformRef.current.scale * (1 + zoomDelta))
         }
       },
       {
@@ -314,7 +300,7 @@ export const RuntimeFloorPlanView = forwardRef<
           filterTaps: true
         },
         pinch: {
-          scaleBounds: { min: MIN_SCALE, max: MAX_SCALE },
+          scaleBounds: () => ({ min: getMinScale(), max: MAX_SCALE }),
           modifierKey: null
         },
         wheel: { eventOptions: { passive: false } }
@@ -336,10 +322,13 @@ export const RuntimeFloorPlanView = forwardRef<
         const rect = containerRef.current.getBoundingClientRect()
         const containerWidth = rect.width
         const containerHeight = rect.height
-        const zoom = Math.min(
-          containerWidth / (canvasWidth + 200),
-          containerHeight / (canvasHeight + 200),
-          1
+        const zoom = Math.max(
+          getMinScale(),
+          Math.min(
+            containerWidth / (canvasWidth + 200),
+            containerHeight / (canvasHeight + 200),
+            1
+          )
         )
 
         transformRef.current = {
@@ -380,7 +369,7 @@ export const RuntimeFloorPlanView = forwardRef<
       // Calculate zoom to fit
       const zoomX = containerWidth / boundsWidth
       const zoomY = containerHeight / boundsHeight
-      const zoom = Math.min(zoomX, zoomY, 1) // Don't zoom in beyond 1x
+      const zoom = Math.max(getMinScale(), Math.min(zoomX, zoomY, 1)) // Don't zoom out beyond the full canvas.
 
       // Calculate center position
       const centerX = (minX + maxX) / 2
@@ -399,7 +388,12 @@ export const RuntimeFloorPlanView = forwardRef<
       }
 
       updateTransform()
-    }, [initialTables, floorPlan?.canvas_width, floorPlan?.canvas_height])
+    }, [
+      initialTables,
+      floorPlan?.canvas_width,
+      floorPlan?.canvas_height,
+      getMinScale
+    ])
 
     React.useEffect(() => {
       fitToViewLatestRef.current = fitToView
@@ -427,21 +421,31 @@ export const RuntimeFloorPlanView = forwardRef<
       []
     )
 
-    // Auto fit on mount or when floor plan/tables change
+    // Auto fit only when a floor plan first appears or the active floor plan changes.
     useLayoutEffect(() => {
-      if (initialTables.length > 0) {
-        // Reset transform when floor plan changes (detected by floorPlan.id)
-        if (floorPlan?.id) {
-          initialTransformRef.current = null
-        }
-
-        // Small delay to ensure container is rendered
-        const timer = setTimeout(() => {
-          fitToViewLatestRef.current()
-        }, 100)
-        return () => clearTimeout(timer)
+      if (!floorPlan?.id) {
+        lastAutoFitFloorPlanIdRef.current = null
+        return
       }
-    }, [initialTables.length, floorPlan?.id])
+
+      const shouldAutoFit =
+        lastAutoFitFloorPlanIdRef.current !== floorPlan.id ||
+        initialTransformRef.current === null
+
+      if (!shouldAutoFit) {
+        return
+      }
+
+      initialTransformRef.current = null
+      lastAutoFitFloorPlanIdRef.current = floorPlan.id
+
+      // Small delay to ensure container is rendered
+      const timer = setTimeout(() => {
+        fitToViewLatestRef.current()
+      }, 100)
+
+      return () => clearTimeout(timer)
+    }, [floorPlan?.id])
 
     // --- 3. TABLE DRAG TRACKING ---
     // These wrappers set/unset isDraggingTableRef so the canvas pan gesture
