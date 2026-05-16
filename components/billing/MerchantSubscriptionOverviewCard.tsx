@@ -44,7 +44,6 @@ import {
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import {
   getMerchantSubscriptionInvoiceDocument,
-  getMerchantSubscriptionOverview,
   type MerchantBillingLocationViewRecord,
   type MerchantPlanStatusView,
   type MerchantProvisionedDeviceViewRecord,
@@ -52,6 +51,10 @@ import {
   type MerchantSubscriptionInvoiceViewRecord,
   type MerchantTierPlanViewRecord,
 } from '@/app/dashboard/actions/subscription-billing'
+import {
+  useMerchantSubscriptionOverview,
+  useMerchantTierPlans,
+} from '@/lib/queries/use-dashboard-subscription-billing'
 import {
   renderSubscriptionInvoiceHtml,
   type SubscriptionInvoiceDocumentData,
@@ -207,22 +210,8 @@ function usageTone(planStatus: MerchantPlanStatusView): {
 export function MerchantSubscriptionOverviewCard({
   merchantName,
 }: MerchantSubscriptionOverviewCardProps) {
-  const [isLoading, setIsLoading] = useState(true)
-  const [merchantPlanStatus, setMerchantPlanStatus] = useState<MerchantPlanStatusView>({
-    plan: null,
-    active_location_count: 0,
-    is_over_limit: false,
-    required_plan_code: null,
-    subscription_status: null,
-    current_period_end: null,
-  })
-  const [locations, setLocations] = useState<MerchantBillingLocationViewRecord[]>([])
-  const [merchantTierPlans, setMerchantTierPlans] = useState<MerchantTierPlanViewRecord[]>([])
-  const [devicesByLocationId, setDevicesByLocationId] = useState<Record<string, MerchantProvisionedDeviceViewRecord[]>>({})
-  const [invoices, setInvoices] = useState<MerchantSubscriptionInvoiceViewRecord[]>([])
-  const [billingProfilesByLocationId, setBillingProfilesByLocationId] = useState<
-    Record<string, MerchantSubscriptionBillingProfileViewRecord>
-  >({})
+  const overviewQuery = useMerchantSubscriptionOverview()
+  const merchantTierPlansQuery = useMerchantTierPlans()
   const [selectedLocationId, setSelectedLocationId] = useState('')
   const [invoicePreviewDocument, setInvoicePreviewDocument] = useState<SubscriptionInvoiceDocumentData | null>(null)
   const [isInvoicePreviewOpen, setIsInvoicePreviewOpen] = useState(false)
@@ -233,6 +222,23 @@ export function MerchantSubscriptionOverviewCard({
   const [openLocationIds, setOpenLocationIds] = useState<string[]>([])
 
   const devicesRef = useRef<HTMLDivElement | null>(null)
+  const isLoading = overviewQuery.isLoading
+  const merchantPlanStatus: MerchantPlanStatusView = overviewQuery.data?.merchantPlanStatus ?? {
+    plan: null,
+    active_location_count: 0,
+    is_over_limit: false,
+    required_plan_code: null,
+    subscription_status: null,
+    current_period_end: null,
+  }
+  const locations: MerchantBillingLocationViewRecord[] = overviewQuery.data?.locations ?? []
+  const merchantTierPlans: MerchantTierPlanViewRecord[] =
+    merchantTierPlansQuery.data ?? overviewQuery.data?.merchantTierPlans ?? []
+  const devicesByLocationId: Record<string, MerchantProvisionedDeviceViewRecord[]> =
+    overviewQuery.data?.devicesByLocationId ?? {}
+  const invoices: MerchantSubscriptionInvoiceViewRecord[] = overviewQuery.data?.invoices ?? []
+  const billingProfilesByLocationId: Record<string, MerchantSubscriptionBillingProfileViewRecord> =
+    overviewQuery.data?.billingProfilesByLocationId ?? {}
 
   const invoicePreviewHtml = useMemo(
     () => (invoicePreviewDocument ? renderSubscriptionInvoiceHtml(invoicePreviewDocument) : ''),
@@ -279,31 +285,41 @@ export function MerchantSubscriptionOverviewCard({
   }, [locationPage, locations])
 
   const refresh = async () => {
-    setIsLoading(true)
-    try {
-      const overview = await getMerchantSubscriptionOverview()
-      setMerchantPlanStatus(overview.merchantPlanStatus)
-      setMerchantTierPlans(overview.merchantTierPlans)
-      setLocations(overview.locations)
-      setDevicesByLocationId(overview.devicesByLocationId)
-      setInvoices(overview.invoices)
-      setBillingProfilesByLocationId(overview.billingProfilesByLocationId)
-    } catch (error: any) {
-      toast.error(error?.message || 'Failed to load subscription billing data.')
-    } finally {
-      setIsLoading(false)
+    const [overviewResult, tierPlansResult] = await Promise.all([
+      overviewQuery.refetch(),
+      merchantTierPlansQuery.refetch(),
+    ])
+
+    const errorMessage =
+      overviewResult.error instanceof Error
+        ? overviewResult.error.message
+        : tierPlansResult.error instanceof Error
+          ? tierPlansResult.error.message
+          : ''
+
+    if (errorMessage) {
+      toast.error(errorMessage || 'Failed to load subscription billing data.')
     }
   }
-
-  useEffect(() => {
-    void refresh()
-  }, [])
 
   useEffect(() => {
     if (!selectedLocationId && locations[0]?.id) {
       setSelectedLocationId(locations[0].id)
     }
   }, [locations, selectedLocationId])
+
+  useEffect(() => {
+    const errorMessage =
+      overviewQuery.error instanceof Error
+        ? overviewQuery.error.message
+        : merchantTierPlansQuery.error instanceof Error
+          ? merchantTierPlansQuery.error.message
+          : ''
+
+    if (errorMessage) {
+      toast.error(errorMessage)
+    }
+  }, [merchantTierPlansQuery.error, overviewQuery.error])
 
   useEffect(() => {
     if (!selectedLocation?.id) return
