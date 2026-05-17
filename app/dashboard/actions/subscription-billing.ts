@@ -112,6 +112,41 @@ export interface MerchantPlanStatusView {
   current_period_end: string | null
 }
 
+export interface MerchantTierPlanViewRecord {
+  id: string
+  plan_code: string
+  display_name: string
+  min_locations: number | null
+  max_locations: number | null
+  monthly_price_cents: number
+  description: string | null
+  display_order: number
+}
+
+function normalizeMerchantTierPlans(
+  rows: Array<{
+    id: string
+    plan_code: string
+    display_name: string
+    min_locations: number | null
+    max_locations: number | null
+    monthly_price_cents: number | null
+    description: string | null
+    display_order: number | null
+  }> | null | undefined,
+): MerchantTierPlanViewRecord[] {
+  return (rows ?? []).map((plan) => ({
+    id: plan.id,
+    plan_code: plan.plan_code,
+    display_name: plan.display_name,
+    min_locations: plan.min_locations === null ? null : toNumber(plan.min_locations),
+    max_locations: plan.max_locations === null ? null : toNumber(plan.max_locations),
+    monthly_price_cents: toNumber(plan.monthly_price_cents),
+    description: plan.description,
+    display_order: toNumber(plan.display_order),
+  }))
+}
+
 export interface MerchantBillingLocationViewRecord {
   id: string
   name: string
@@ -233,6 +268,7 @@ export async function getMerchantSubscriptionOverview(): Promise<{
   merchantId: string
   merchantName: string
   merchantPlanStatus: MerchantPlanStatusView
+  merchantTierPlans: MerchantTierPlanViewRecord[]
   locations: MerchantBillingLocationViewRecord[]
   devicesByLocationId: Record<string, MerchantProvisionedDeviceViewRecord[]>
   invoices: MerchantSubscriptionInvoiceViewRecord[]
@@ -242,6 +278,7 @@ export async function getMerchantSubscriptionOverview(): Promise<{
 
   const [
     merchantPlanStatusResult,
+    merchantTierPlansResult,
     locationsResult,
     invoicesResult,
     billingProfilesResult,
@@ -250,6 +287,13 @@ export async function getMerchantSubscriptionOverview(): Promise<{
     serviceRole.rpc('get_merchant_subscription_status', {
       p_merchant_id: merchantId,
     }),
+    serviceRole
+      .from('subscription_plans')
+      .select('id, plan_code, display_name, min_locations, max_locations, monthly_price_cents, description, display_order')
+      .eq('plan_scope', 'merchant_tier')
+      .eq('is_active', true)
+      .order('display_order', { ascending: true })
+      .order('display_name', { ascending: true }),
     serviceRole
       .from('locations')
       .select('id, name, address_line1, city, state, postal_code, is_active')
@@ -297,6 +341,11 @@ export async function getMerchantSubscriptionOverview(): Promise<{
   if (locationsResult.error) {
     console.error('[getMerchantSubscriptionOverview] locations error:', locationsResult.error)
     throw new Error('Failed to load locations.')
+  }
+
+  if (merchantTierPlansResult.error) {
+    console.error('[getMerchantSubscriptionOverview] merchant tier plans error:', merchantTierPlansResult.error)
+    throw new Error('Failed to load plan tiers.')
   }
 
   if (invoicesResult.error) {
@@ -394,6 +443,19 @@ export async function getMerchantSubscriptionOverview(): Promise<{
   }))
 
   const rawPlanStatus = (merchantPlanStatusResult.data ?? {}) as Record<string, any>
+  const merchantTierPlans = normalizeMerchantTierPlans(
+    (merchantTierPlansResult.data ?? []) as Array<{
+      id: string
+      plan_code: string
+      display_name: string
+      min_locations: number | null
+      max_locations: number | null
+      monthly_price_cents: number | null
+      description: string | null
+      display_order: number | null
+    }>,
+  )
+
   const merchantPlanStatus: MerchantPlanStatusView = {
     plan: rawPlanStatus.plan
       ? {
@@ -424,6 +486,7 @@ export async function getMerchantSubscriptionOverview(): Promise<{
     merchantId,
     merchantName,
     merchantPlanStatus,
+    merchantTierPlans,
     locations: normalizedLocations,
     devicesByLocationId,
     invoices: normalizedInvoices,
@@ -433,6 +496,40 @@ export async function getMerchantSubscriptionOverview(): Promise<{
         .map((profile) => [profile.location_id as string, profile]),
     ),
   }
+}
+
+export async function getMerchantTierPlansForCurrentMerchant(): Promise<MerchantTierPlanViewRecord[]> {
+  const { userId } = await auth()
+  if (!userId) {
+    throw new Error('Unauthorized')
+  }
+
+  const { serviceRole } = await resolveMerchantForCurrentOrg()
+  const { data, error } = await serviceRole
+    .from('subscription_plans')
+    .select('id, plan_code, display_name, min_locations, max_locations, monthly_price_cents, description, display_order')
+    .eq('plan_scope', 'merchant_tier')
+    .eq('is_active', true)
+    .order('display_order', { ascending: true })
+    .order('display_name', { ascending: true })
+
+  if (error) {
+    console.error('[getMerchantTierPlansForCurrentMerchant] error:', error)
+    throw new Error('Failed to load plan tiers.')
+  }
+
+  return normalizeMerchantTierPlans(
+    (data ?? []) as Array<{
+      id: string
+      plan_code: string
+      display_name: string
+      min_locations: number | null
+      max_locations: number | null
+      monthly_price_cents: number | null
+      description: string | null
+      display_order: number | null
+    }>,
+  )
 }
 
 export async function getMerchantSubscriptionInvoiceDocument(

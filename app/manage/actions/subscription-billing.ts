@@ -129,6 +129,61 @@ export interface SubscriptionInvoiceRecord {
   updated_at: string
 }
 
+export interface MerchantTierPlanRecord {
+  id: string
+  plan_code: string
+  display_name: string
+  min_locations: number | null
+  max_locations: number | null
+  monthly_price_cents: number
+  description: string | null
+  display_order: number
+  is_active: boolean
+}
+
+export interface MerchantTierSubscriptionRecord {
+  id: string
+  merchant_id: string
+  plan_id: string
+  plan_code: string
+  display_name: string
+  min_locations: number | null
+  max_locations: number | null
+  monthly_price_cents: number
+  description: string | null
+  status: 'active' | 'past_due' | 'suspended' | 'cancelled'
+  current_period_start: string
+  current_period_end: string
+  trial_ends_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface MerchantTierStatusRecord {
+  plan: {
+    code: string
+    name: string
+    min_locations: number | null
+    max_locations: number | null
+    monthly_price_cents: number
+    description: string | null
+  } | null
+  active_location_count: number
+  is_over_limit: boolean
+  required_plan_code: string | null
+  subscription_status: 'active' | 'past_due' | 'suspended' | 'cancelled' | null
+  current_period_end: string | null
+}
+
+export interface UpsertMerchantTierSubscriptionParams {
+  merchantId: string
+  planId: string
+  status: 'active' | 'past_due' | 'suspended' | 'cancelled'
+  currentPeriodStart: string
+  currentPeriodEnd: string
+  trialEndsAt?: string | null
+}
+
 export interface UpsertMerchantSubscriptionParams {
   subscriptionId?: string
   merchantId: string
@@ -345,6 +400,195 @@ export async function getSubscriptionPlans(): Promise<SubscriptionPlanRecord[]> 
   }
 
   return (data ?? []) as SubscriptionPlanRecord[]
+}
+
+export async function getMerchantTierPlans(): Promise<MerchantTierPlanRecord[]> {
+  await assertHQPermission('system.billing.manage')
+
+  const supabase = createServerSupabaseClient()
+  const { data, error } = await supabase
+    .from('subscription_plans')
+    .select('id, plan_code, display_name, min_locations, max_locations, monthly_price_cents, description, display_order, is_active')
+    .eq('plan_scope', 'merchant_tier')
+    .eq('is_active', true)
+    .order('display_order', { ascending: true })
+    .order('display_name', { ascending: true })
+
+  if (error) {
+    console.error('[getMerchantTierPlans] Error:', error)
+    throw new Error('Failed to load merchant tier plans.')
+  }
+
+  return ((data ?? []) as MerchantTierPlanRecord[]).map((row) => ({
+    ...row,
+    min_locations: row.min_locations === null ? null : Number(row.min_locations || 0),
+    max_locations: row.max_locations === null ? null : Number(row.max_locations || 0),
+    monthly_price_cents: Number(row.monthly_price_cents || 0),
+    display_order: Number(row.display_order || 0),
+  }))
+}
+
+export async function getMerchantTierStatus(
+  merchantId: string,
+): Promise<MerchantTierStatusRecord> {
+  await assertHQPermission('system.billing.manage')
+
+  const supabase = createServerSupabaseClient()
+  const { data, error } = await supabase.rpc('get_merchant_subscription_status', {
+    p_merchant_id: merchantId,
+  })
+
+  if (error) {
+    console.error('[getMerchantTierStatus] Error:', error)
+    throw new Error('Failed to load merchant plan status.')
+  }
+
+  const raw = (data ?? {}) as Record<string, any>
+
+  return {
+    plan: raw.plan
+      ? {
+          code: String(raw.plan.code),
+          name: String(raw.plan.name),
+          min_locations: raw.plan.min_locations === null ? null : Number(raw.plan.min_locations || 0),
+          max_locations: raw.plan.max_locations === null ? null : Number(raw.plan.max_locations || 0),
+          monthly_price_cents: Number(raw.plan.monthly_price_cents || 0),
+          description: typeof raw.plan.description === 'string' ? raw.plan.description : null,
+        }
+      : null,
+    active_location_count: Number(raw.active_location_count || 0),
+    is_over_limit: Boolean(raw.is_over_limit),
+    required_plan_code: typeof raw.required_plan_code === 'string' ? raw.required_plan_code : null,
+    subscription_status:
+      typeof raw.subscription_status === 'string'
+        ? (raw.subscription_status as MerchantTierStatusRecord['subscription_status'])
+        : null,
+    current_period_end: typeof raw.current_period_end === 'string' ? raw.current_period_end : null,
+  }
+}
+
+export async function getMerchantTierSubscription(
+  merchantId: string,
+): Promise<MerchantTierSubscriptionRecord | null> {
+  await assertHQPermission('system.billing.manage')
+
+  const serviceRole = createServiceRoleClient()
+  const { data, error } = await serviceRole
+    .from('merchant_plan_subscriptions')
+    .select(`
+      id,
+      merchant_id,
+      plan_id,
+      status,
+      current_period_start,
+      current_period_end,
+      trial_ends_at,
+      created_at,
+      updated_at,
+      subscription_plans!inner(
+        plan_code,
+        display_name,
+        min_locations,
+        max_locations,
+        monthly_price_cents,
+        description
+      )
+    `)
+    .eq('merchant_id', merchantId)
+    .eq('subscription_plans.plan_scope', 'merchant_tier')
+    .order('updated_at', { ascending: false })
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (error) {
+    console.error('[getMerchantTierSubscription] Error:', error)
+    throw new Error('Failed to load merchant plan subscription.')
+  }
+
+  if (!data) {
+    return null
+  }
+
+  const plan = Array.isArray((data as any).subscription_plans)
+    ? (data as any).subscription_plans[0]
+    : (data as any).subscription_plans
+
+  return {
+    id: data.id as string,
+    merchant_id: data.merchant_id as string,
+    plan_id: data.plan_id as string,
+    plan_code: String(plan?.plan_code || ''),
+    display_name: String(plan?.display_name || ''),
+    min_locations: plan?.min_locations === null ? null : Number(plan?.min_locations || 0),
+    max_locations: plan?.max_locations === null ? null : Number(plan?.max_locations || 0),
+    monthly_price_cents: Number(plan?.monthly_price_cents || 0),
+    description: typeof plan?.description === 'string' ? plan.description : null,
+    status: data.status as MerchantTierSubscriptionRecord['status'],
+    current_period_start: data.current_period_start as string,
+    current_period_end: data.current_period_end as string,
+    trial_ends_at: (data.trial_ends_at as string | null) ?? null,
+    created_at: data.created_at as string,
+    updated_at: data.updated_at as string,
+  }
+}
+
+export async function upsertMerchantTierSubscription(
+  params: UpsertMerchantTierSubscriptionParams,
+): Promise<{ success: boolean; subscriptionId?: string; error?: string }> {
+  await assertHQPermission('system.billing.manage')
+
+  if (!params.merchantId || !params.planId) {
+    return { success: false, error: 'merchantId and planId are required.' }
+  }
+
+  const serviceRole = createServiceRoleClient()
+  const { data: existing, error: existingError } = await serviceRole
+    .from('merchant_plan_subscriptions')
+    .select('id, status')
+    .eq('merchant_id', params.merchantId)
+    .order('updated_at', { ascending: false })
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (existingError) {
+    console.error('[upsertMerchantTierSubscription] Existing lookup error:', existingError)
+    return { success: false, error: 'Failed to load existing merchant plan.' }
+  }
+
+  const payload = {
+    merchant_id: params.merchantId,
+    plan_id: params.planId,
+    status: params.status,
+    current_period_start: params.currentPeriodStart,
+    current_period_end: params.currentPeriodEnd,
+    trial_ends_at: params.trialEndsAt ?? null,
+  }
+
+  const result = existing?.id
+    ? await serviceRole
+        .from('merchant_plan_subscriptions')
+        .update(payload)
+        .eq('id', existing.id)
+        .select('id')
+        .single()
+    : await serviceRole
+        .from('merchant_plan_subscriptions')
+        .insert(payload)
+        .select('id')
+        .single()
+
+  if (result.error || !result.data) {
+    console.error('[upsertMerchantTierSubscription] Upsert error:', result.error)
+    return { success: false, error: result.error?.message || 'Failed to save merchant plan.' }
+  }
+
+  revalidatePath('/manage/subscriptions')
+  revalidatePath(`/manage/subscriptions/${params.merchantId}`)
+  revalidatePath('/dashboard/subscriptions')
+
+  return { success: true, subscriptionId: result.data.id as string }
 }
 
 export async function getBillableServices(): Promise<BillableServiceRecord[]> {
