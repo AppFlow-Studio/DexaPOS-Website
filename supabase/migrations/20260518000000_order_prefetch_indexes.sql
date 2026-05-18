@@ -6,17 +6,18 @@
 --   - usePreviousOrdersStore -> OrderService.getHistoryOrders (orders by location_id + created_at)
 --   - useOrderStore.syncOrderFromDatabase items fetch (order_items by order_id, is_voided=false)
 --
--- CREATE INDEX CONCURRENTLY cannot run inside a transaction block. If
--- apply_migration wraps statements, run these individually instead.
+-- Note: CONCURRENTLY was removed because supabase CLI wraps migrations
+-- in a transaction (SQLSTATE 25001). Index creation will take a brief
+-- ACCESS EXCLUSIVE lock on each table; acceptable for these table sizes.
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_orders_location_created_at
+CREATE INDEX IF NOT EXISTS idx_orders_location_created_at
   ON public.orders (location_id, created_at DESC);
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_order_items_order_active
+CREATE INDEX IF NOT EXISTS idx_order_items_order_active
   ON public.order_items (order_id)
   WHERE is_voided = false;
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_order_payments_order_id
+CREATE INDEX IF NOT EXISTS idx_order_payments_order_id
   ON public.order_payments (order_id);
 
 -- Note: useOrderStore.syncOrderFromDatabase queries a non-existent
