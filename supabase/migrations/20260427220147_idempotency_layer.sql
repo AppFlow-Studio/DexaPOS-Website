@@ -4,7 +4,6 @@ BEGIN
     RAISE NOTICE 'pg_cron not installed; daily purge job will NOT be scheduled. Use Edge Function fallback.';
   END IF;
 END $outer$;
-
 CREATE TABLE IF NOT EXISTS public.idempotency_keys (
   key UUID PRIMARY KEY,
   op TEXT NOT NULL,
@@ -13,12 +12,9 @@ CREATE TABLE IF NOT EXISTS public.idempotency_keys (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   completed_at TIMESTAMPTZ
 );
-
 CREATE INDEX IF NOT EXISTS idempotency_keys_created_at_idx
   ON public.idempotency_keys (created_at);
-
 ALTER TABLE public.idempotency_keys ENABLE ROW LEVEL SECURITY;
-
 CREATE OR REPLACE FUNCTION public._idempotency_claim(p_key UUID, p_op TEXT)
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -54,7 +50,6 @@ BEGIN
   RETURN NULL;
 END;
 $fn$;
-
 CREATE OR REPLACE FUNCTION public._idempotency_complete(p_key UUID, p_op TEXT, p_result JSONB)
 RETURNS VOID
 LANGUAGE plpgsql
@@ -74,17 +69,14 @@ BEGIN
   WHERE key = p_key AND op = p_op;
 END;
 $fn$;
-
 REVOKE ALL ON FUNCTION public._idempotency_claim(UUID, TEXT) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public._idempotency_complete(UUID, TEXT, JSONB) FROM PUBLIC;
-
 COMMENT ON TABLE public.idempotency_keys IS
   'At-most-once execution ledger for Category B RPCs (bad-WiFi Phase 2). Purged daily by pg_cron after 24h.';
 COMMENT ON FUNCTION public._idempotency_claim IS
   'Atomic claim-then-record helper. Returns cached result if completed, raises serialization_failure if in-flight (<60s), takes over stale claim (>60s).';
 COMMENT ON FUNCTION public._idempotency_complete IS
   'Stores RPC result against a claimed key. Refuses to cache results >32KB (deletes the row instead).';
-
 DO $outer$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_cron') THEN
@@ -97,4 +89,4 @@ BEGIN
       'DELETE FROM public.idempotency_keys WHERE created_at < now() - INTERVAL ''24 hours'''
     );
   END IF;
-END $outer$;;
+END $outer$;

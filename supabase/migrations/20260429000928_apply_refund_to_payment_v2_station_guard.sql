@@ -1,6 +1,5 @@
 -- Migration: apply_refund_to_payment_v2 — Wave 2.2 station-ownership guard
 DROP FUNCTION IF EXISTS public.apply_refund_to_payment_v2(uuid, numeric, reversal_type, text, text, text, text, text, uuid, boolean, uuid);
-
 CREATE OR REPLACE FUNCTION public.apply_refund_to_payment_v2(
   p_payment_id uuid,
   p_refund_amount numeric,
@@ -96,5 +95,4 @@ BEGIN
   END IF;
 END;
 $function$;
-
-GRANT EXECUTE ON FUNCTION public.apply_refund_to_payment_v2(uuid, numeric, reversal_type, text, text, text, text, text, uuid, boolean, uuid, uuid) TO authenticated;;
+GRANT EXECUTE ON FUNCTION public.apply_refund_to_payment_v2(uuid, numeric, reversal_type, text, text, text, text, text, uuid, boolean, uuid, uuid) TO authenticated;

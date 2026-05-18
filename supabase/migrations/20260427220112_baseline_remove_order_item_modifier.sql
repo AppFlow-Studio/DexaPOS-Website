@@ -54,8 +54,6 @@ BEGIN
   RETURN v_result;
 END;
 $function$;
-
 GRANT EXECUTE ON FUNCTION public.remove_order_item_modifier(uuid) TO authenticated;
-
 COMMENT ON FUNCTION public.remove_order_item_modifier IS
-  'Removes a modifier from an order item and recalculates subtotal. Baselined into repo 2026-04-27 from prod.';;
+  'Removes a modifier from an order item and recalculates subtotal. Baselined into repo 2026-04-27 from prod.';

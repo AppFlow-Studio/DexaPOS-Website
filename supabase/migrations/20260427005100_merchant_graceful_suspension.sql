@@ -10,7 +10,6 @@
 -- ---------------------------------------------------------------------------
 ALTER TABLE public.merchants
   DROP CONSTRAINT IF EXISTS merchants_onboarding_status_check;
-
 ALTER TABLE public.merchants
   ADD CONSTRAINT merchants_onboarding_status_check
   CHECK (
@@ -23,12 +22,10 @@ ALTER TABLE public.merchants
       'cancelled'
     )
   );
-
 ALTER TABLE public.merchants
   ADD COLUMN IF NOT EXISTS suspended_at timestamptz,
   ADD COLUMN IF NOT EXISTS suspension_initiated_at timestamptz,
   ADD COLUMN IF NOT EXISTS suspension_reason text;
-
 -- ---------------------------------------------------------------------------
 -- 2) Audit table for forced suspensions — captures every still-open artifact
 --    so it can be reconciled later.
@@ -46,17 +43,15 @@ CREATE TABLE IF NOT EXISTS public.suspension_events (
   open_drawer_sessions_count integer NOT NULL DEFAULT 0,
   created_at timestamptz NOT NULL DEFAULT now()
 );
-
 CREATE INDEX IF NOT EXISTS suspension_events_merchant_id_created_at_idx
   ON public.suspension_events (merchant_id, created_at DESC);
-
 ALTER TABLE public.suspension_events ENABLE ROW LEVEL SECURITY;
-
 DROP POLICY IF EXISTS "HQ admins read suspension_events" ON public.suspension_events;
 CREATE POLICY "HQ admins read suspension_events"
   ON public.suspension_events
   FOR SELECT
-  USING (true);  -- service role / HQ-gated server actions only; no client direct access
+  USING (true);
+-- service role / HQ-gated server actions only; no client direct access
 
 -- ---------------------------------------------------------------------------
 -- 3) Drain primitives — reusable for both suspend and (future) delete.
@@ -70,7 +65,6 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
   WHERE o.merchant_id = p_merchant_id
     AND o.status::text IN ('pending', 'sent_to_kitchen', 'preparing', 'ready', 'accepted');
 $$;
-
 CREATE OR REPLACE FUNCTION public.merchant_open_drawer_sessions(p_merchant_id uuid)
 RETURNS TABLE (id uuid, cash_drawer_id uuid, location_id uuid, opened_at timestamptz)
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
@@ -79,7 +73,6 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
   WHERE s.merchant_id = p_merchant_id
     AND s.status::text = 'open';
 $$;
-
 CREATE OR REPLACE FUNCTION public.get_merchant_drain_status(p_merchant_id uuid)
 RETURNS jsonb
 LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public AS $$
@@ -111,7 +104,6 @@ BEGIN
   );
 END;
 $$;
-
 -- ---------------------------------------------------------------------------
 -- 4) Suspend RPC — graceful by default, force=true captures + cuts immediately.
 -- ---------------------------------------------------------------------------
@@ -194,7 +186,6 @@ BEGIN
   );
 END;
 $$;
-
 -- Reactivation — leaves suspension_events intact for audit trail.
 CREATE OR REPLACE FUNCTION public.cancel_merchant_suspension(
   p_merchant_id uuid,
@@ -230,7 +221,6 @@ BEGIN
   RETURN jsonb_build_object('status', 'active', 'changed', true);
 END;
 $$;
-
 -- ---------------------------------------------------------------------------
 -- 5) Guard trigger — block creating new orders/drawer sessions while a merchant
 --    is suspending or suspended.
@@ -253,17 +243,14 @@ BEGIN
   RETURN NEW;
 END;
 $$;
-
 DROP TRIGGER IF EXISTS trg_guard_suspension_on_orders ON public.orders;
 CREATE TRIGGER trg_guard_suspension_on_orders
   BEFORE INSERT ON public.orders
   FOR EACH ROW EXECUTE FUNCTION public.guard_merchant_suspension();
-
 DROP TRIGGER IF EXISTS trg_guard_suspension_on_drawer_sessions ON public.cash_drawer_sessions;
 CREATE TRIGGER trg_guard_suspension_on_drawer_sessions
   BEFORE INSERT ON public.cash_drawer_sessions
   FOR EACH ROW EXECUTE FUNCTION public.guard_merchant_suspension();
-
 -- ---------------------------------------------------------------------------
 -- 6) Drain watcher — when an order finalizes or a drawer closes on a
 --    'suspending' merchant, check if drain is complete and auto-promote.
@@ -300,21 +287,18 @@ BEGIN
   RETURN NEW;
 END;
 $$;
-
 DROP TRIGGER IF EXISTS trg_drain_watcher_on_orders ON public.orders;
 CREATE TRIGGER trg_drain_watcher_on_orders
   AFTER UPDATE OF status ON public.orders
   FOR EACH ROW
   WHEN (NEW.status::text IN ('completed', 'cancelled', 'refunded', 'void', 'declined'))
   EXECUTE FUNCTION public.maybe_complete_merchant_suspension();
-
 DROP TRIGGER IF EXISTS trg_drain_watcher_on_drawer_sessions ON public.cash_drawer_sessions;
 CREATE TRIGGER trg_drain_watcher_on_drawer_sessions
   AFTER UPDATE OF status ON public.cash_drawer_sessions
   FOR EACH ROW
   WHEN (NEW.status::text IN ('closed', 'reconciled'))
   EXECUTE FUNCTION public.maybe_complete_merchant_suspension();
-
 -- ---------------------------------------------------------------------------
 -- 7) Grants.
 -- ---------------------------------------------------------------------------

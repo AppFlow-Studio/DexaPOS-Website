@@ -43,5 +43,4 @@ BEGIN
   END IF;
 END;
 $function$;
-
-GRANT EXECUTE ON FUNCTION public.recall_kds_items_v2(uuid[], text, uuid) TO authenticated;;
+GRANT EXECUTE ON FUNCTION public.recall_kds_items_v2(uuid[], text, uuid) TO authenticated;

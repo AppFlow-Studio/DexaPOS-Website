@@ -2,7 +2,6 @@
 -- Migration: add_order_item_v3 — Wave 1.1 station-ownership guard
 -- =====================================================================
 DROP FUNCTION IF EXISTS public.add_order_item_v3(uuid, uuid, integer, numeric, numeric, text, text, uuid, uuid, text, numeric, jsonb, text, integer, integer, uuid, text, uuid, uuid);
-
 CREATE OR REPLACE FUNCTION public.add_order_item_v3(
   p_order_id uuid,
   p_menu_item_id uuid DEFAULT NULL,
@@ -198,5 +197,4 @@ BEGIN
   RETURN v_result;
 END;
 $function$;
-
-GRANT EXECUTE ON FUNCTION public.add_order_item_v3(uuid, uuid, integer, numeric, numeric, text, text, uuid, uuid, text, numeric, jsonb, text, integer, integer, uuid, text, uuid, uuid, uuid) TO authenticated;;
+GRANT EXECUTE ON FUNCTION public.add_order_item_v3(uuid, uuid, integer, numeric, numeric, text, text, uuid, uuid, text, numeric, jsonb, text, integer, integer, uuid, text, uuid, uuid, uuid) TO authenticated;

@@ -103,6 +103,5 @@ BEGIN
 
 END;
 $function$;
-
 COMMENT ON FUNCTION public.void_payment(uuid, text) IS
   'Voids a payment, restores paid_quantity on covered items, recomputes order totals, and resets payment_status. G2 fix: payment_status no longer claims ''paid'' when amount_paid is zero.';

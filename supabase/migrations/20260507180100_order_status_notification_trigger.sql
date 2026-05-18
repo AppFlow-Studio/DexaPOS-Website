@@ -8,7 +8,6 @@
 -- If either is unset the trigger is a no-op.
 
 CREATE EXTENSION IF NOT EXISTS pg_net;
-
 CREATE OR REPLACE FUNCTION public.notify_order_status_change()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -36,13 +35,12 @@ BEGIN
   END IF;
 
   event_name := CASE NEW.to_status
-    WHEN 'accepted'        THEN 'accepted'
-    WHEN 'sent_to_kitchen' THEN 'sent_to_kitchen'
-    WHEN 'preparing'       THEN 'preparing'
-    WHEN 'ready'           THEN 'ready'
-    WHEN 'completed'       THEN 'completed'
-    WHEN 'cancelled'       THEN 'cancelled'
-    WHEN 'declined'        THEN 'declined'
+    WHEN 'accepted'  THEN 'accepted'
+    WHEN 'preparing' THEN 'preparing'
+    WHEN 'ready'     THEN 'ready'
+    WHEN 'completed' THEN 'completed'
+    WHEN 'cancelled' THEN 'cancelled'
+    WHEN 'declined'  THEN 'declined'
     ELSE NULL
   END;
 
@@ -62,9 +60,7 @@ BEGIN
   RETURN NEW;
 END;
 $$;
-
 DROP TRIGGER IF EXISTS trg_notify_order_status_change ON public.order_status_history;
-
 CREATE TRIGGER trg_notify_order_status_change
   AFTER INSERT ON public.order_status_history
   FOR EACH ROW

@@ -25,7 +25,6 @@ CREATE POLICY "cash_drawers_select"
       WHERE staff_profiles.user_id = public.current_user_id()
     )
   );
-
 DROP POLICY IF EXISTS "cash_drawers_update" ON public.cash_drawers;
 CREATE POLICY "cash_drawers_update"
   ON public.cash_drawers
@@ -47,7 +46,6 @@ CREATE POLICY "cash_drawers_update"
       WHERE staff_profiles.user_id = public.current_user_id()
     )
   );
-
 DROP POLICY IF EXISTS "cash_drawers_insert" ON public.cash_drawers;
 CREATE POLICY "cash_drawers_insert"
   ON public.cash_drawers

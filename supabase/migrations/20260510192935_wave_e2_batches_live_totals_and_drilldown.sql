@@ -107,4 +107,4 @@ BEGIN
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION public.get_batch_payments_v1(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_batch_payments_v1(uuid) TO authenticated;;

@@ -1,6 +1,5 @@
 -- Migration: add_order_item_modifier_v2 — Wave 1.3 station-ownership guard
 DROP FUNCTION IF EXISTS public.add_order_item_modifier_v2(uuid, uuid, uuid, text, text, numeric, integer, uuid);
-
 CREATE OR REPLACE FUNCTION public.add_order_item_modifier_v2(
   p_order_item_id uuid,
   p_modifier_group_id uuid,
@@ -87,8 +86,6 @@ BEGIN
   RETURN v_result;
 END;
 $function$;
-
 GRANT EXECUTE ON FUNCTION public.add_order_item_modifier_v2(uuid, uuid, uuid, text, text, numeric, integer, uuid, uuid) TO authenticated;
-
 COMMENT ON FUNCTION public.add_order_item_modifier_v2 IS
-  'Adds a modifier to an order item. v2 adds optional p_idempotency_key for at-most-once execution. Wave 1.3 adds optional p_station_id for cross-station ownership enforcement (NULL = bypass).';;
+  'Adds a modifier to an order item. v2 adds optional p_idempotency_key for at-most-once execution. Wave 1.3 adds optional p_station_id for cross-station ownership enforcement (NULL = bypass).';

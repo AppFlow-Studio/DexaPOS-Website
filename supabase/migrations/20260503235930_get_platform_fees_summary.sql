@@ -49,4 +49,4 @@ GRANT EXECUTE ON FUNCTION public.get_platform_fees_summary(uuid, timestamptz, ti
   TO authenticated;
 
 COMMENT ON FUNCTION public.get_platform_fees_summary IS
-  'Merchant-scoped platform-fee reporting RPC. Sums gross/refunded dual_pricing_fee + tip_fee over [period_start, period_end). RLS-guarded via user_merchant_id() / user_location_ids(). Status predicate matches idx_order_payments_fees_location_period.';
+  'Merchant-scoped platform-fee reporting RPC. Sums gross/refunded dual_pricing_fee + tip_fee over [period_start, period_end). RLS-guarded via user_merchant_id() / user_location_ids(). Status predicate matches idx_order_payments_fees_location_period.';;
