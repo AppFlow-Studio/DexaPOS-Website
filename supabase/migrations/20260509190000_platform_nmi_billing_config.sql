@@ -10,30 +10,39 @@ create table if not exists public.platform_billing_provider_configs (
   constraint platform_billing_provider_configs_provider_check
     check (provider = any (array['nmi'::text]))
 );
+
 comment on table public.platform_billing_provider_configs is
   'Platform-level billing rail credentials owned by Dexa. Separate from location payment devices and used only for Dexa subscription billing and merchant billing-card vault storage.';
+
 comment on column public.platform_billing_provider_configs.tokenization_key is
   'Public NMI tokenization key for the Dexa Billing merchant account.';
+
 comment on column public.platform_billing_provider_configs.private_api_key_secret_id is
   'Vault secret id for the Dexa Billing merchant account private NMI API key.';
+
 alter table public.merchant_billing_profiles
   add column if not exists platform_billing_config_id uuid references public.platform_billing_provider_configs(id) on delete set null;
+
 create index if not exists idx_merchant_billing_profiles_platform_billing_config
   on public.merchant_billing_profiles(platform_billing_config_id);
+
 alter table public.platform_billing_provider_configs enable row level security;
 alter table public.platform_billing_provider_configs force row level security;
+
 drop policy if exists platform_billing_provider_configs_select on public.platform_billing_provider_configs;
 create policy platform_billing_provider_configs_select
   on public.platform_billing_provider_configs
   for select
   to authenticated
   using (public.is_dexapos_admin());
+
 drop policy if exists platform_billing_provider_configs_insert on public.platform_billing_provider_configs;
 create policy platform_billing_provider_configs_insert
   on public.platform_billing_provider_configs
   for insert
   to authenticated
   with check (public.is_dexapos_admin());
+
 drop policy if exists platform_billing_provider_configs_update on public.platform_billing_provider_configs;
 create policy platform_billing_provider_configs_update
   on public.platform_billing_provider_configs
@@ -41,6 +50,7 @@ create policy platform_billing_provider_configs_update
   to authenticated
   using (public.is_dexapos_admin())
   with check (public.is_dexapos_admin());
+
 create or replace function public.get_platform_billing_provider_config(
   p_provider text default 'nmi'
 )
@@ -76,6 +86,7 @@ as $$
     )
   limit 1;
 $$;
+
 create or replace function public.get_platform_billing_provider_secret(
   p_provider text default 'nmi'
 )
@@ -127,6 +138,7 @@ begin
   limit 1;
 end;
 $$;
+
 create or replace function public.upsert_platform_billing_provider_config(
   p_provider text default 'nmi',
   p_label text default 'Dexa Billing',
@@ -224,9 +236,12 @@ begin
   return v_config_id;
 end;
 $$;
+
 revoke all on function public.get_platform_billing_provider_config(text) from public, anon;
 grant execute on function public.get_platform_billing_provider_config(text) to authenticated, service_role;
+
 revoke all on function public.get_platform_billing_provider_secret(text) from public, anon;
 grant execute on function public.get_platform_billing_provider_secret(text) to authenticated, service_role;
+
 revoke all on function public.upsert_platform_billing_provider_config(text, text, text, text, boolean) from public, anon;
 grant execute on function public.upsert_platform_billing_provider_config(text, text, text, text, boolean) to authenticated, service_role;

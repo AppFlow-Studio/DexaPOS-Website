@@ -27,6 +27,7 @@ create table if not exists public.billable_services (
   constraint billable_services_included_quantity_nonnegative check (included_quantity >= 0),
   constraint billable_services_surcharge_nonnegative check (card_surcharge_pct >= 0)
 );
+
 create table if not exists public.merchant_subscription_services (
   id uuid primary key default gen_random_uuid(),
   subscription_id uuid not null references public.merchant_subscriptions(id) on delete cascade,
@@ -39,33 +40,41 @@ create table if not exists public.merchant_subscription_services (
   unique (subscription_id, service_id),
   constraint merchant_subscription_services_quantity_nonnegative check (quantity >= 0)
 );
+
 create index if not exists idx_billable_services_active
   on public.billable_services(is_active, service_category, pricing_model);
+
 create index if not exists idx_merchant_subscription_services_subscription
   on public.merchant_subscription_services(subscription_id);
+
 drop trigger if exists update_billable_services_updated_at on public.billable_services;
 create trigger update_billable_services_updated_at
 before update on public.billable_services
 for each row execute function public.update_updated_at_column();
+
 drop trigger if exists update_merchant_subscription_services_updated_at on public.merchant_subscription_services;
 create trigger update_merchant_subscription_services_updated_at
 before update on public.merchant_subscription_services
 for each row execute function public.update_updated_at_column();
+
 alter table public.billable_services enable row level security;
 alter table public.billable_services force row level security;
 alter table public.merchant_subscription_services enable row level security;
 alter table public.merchant_subscription_services force row level security;
+
 drop policy if exists billable_services_read on public.billable_services;
 create policy billable_services_read
 on public.billable_services
 for select
 using (true);
+
 drop policy if exists billable_services_manage_hq on public.billable_services;
 create policy billable_services_manage_hq
 on public.billable_services
 for all
 using (public.is_dexapos_admin())
 with check (public.is_dexapos_admin());
+
 drop policy if exists merchant_subscription_services_self on public.merchant_subscription_services;
 create policy merchant_subscription_services_self
 on public.merchant_subscription_services
@@ -81,16 +90,19 @@ using (
       )
   )
 );
+
 drop policy if exists merchant_subscription_services_manage_hq on public.merchant_subscription_services;
 create policy merchant_subscription_services_manage_hq
 on public.merchant_subscription_services
 for all
 using (public.is_dexapos_admin())
 with check (public.is_dexapos_admin());
+
 grant select on public.billable_services to authenticated, service_role;
 grant select on public.merchant_subscription_services to authenticated, service_role;
 grant all on public.billable_services to service_role;
 grant all on public.merchant_subscription_services to service_role;
+
 insert into public.subscription_plans (
   plan_code,
   display_name,
@@ -111,6 +123,7 @@ insert into public.subscription_plans (
   jsonb_build_object('internal_placeholder', true, 'pricing_model', 'service_catalog')
 )
 on conflict (plan_code) do nothing;
+
 create or replace function public.calculate_billable_service_amounts(
   p_service_id uuid,
   p_quantity integer,
@@ -194,8 +207,10 @@ begin
     round(v_subtotal + v_surcharge, 2);
 end;
 $function$;
+
 revoke all on function public.calculate_billable_service_amounts(uuid, integer, text) from public;
 grant execute on function public.calculate_billable_service_amounts(uuid, integer, text) to authenticated, service_role;
+
 create or replace function public.list_billable_services()
 returns setof public.billable_services
 language sql
@@ -208,8 +223,10 @@ as $function$
   where bs.is_active = true
   order by bs.service_category asc, bs.display_name asc;
 $function$;
+
 revoke all on function public.list_billable_services() from public;
 grant execute on function public.list_billable_services() to authenticated, service_role;
+
 create or replace function public.list_subscription_service_assignments(
   p_subscription_id uuid
 )
@@ -282,8 +299,10 @@ begin
   order by bs.service_category asc, bs.display_name asc;
 end;
 $function$;
+
 revoke all on function public.list_subscription_service_assignments(uuid) from public;
 grant execute on function public.list_subscription_service_assignments(uuid) to authenticated, service_role;
+
 create or replace function public.replace_merchant_subscription_services(
   p_subscription_id uuid,
   p_services jsonb default '[]'::jsonb
@@ -402,8 +421,10 @@ begin
   );
 end;
 $function$;
+
 revoke all on function public.replace_merchant_subscription_services(uuid, jsonb) from public;
 grant execute on function public.replace_merchant_subscription_services(uuid, jsonb) to authenticated, service_role;
+
 create or replace function public.upsert_merchant_subscription(
   p_subscription_id uuid default null,
   p_merchant_id uuid default null,
@@ -566,8 +587,10 @@ begin
   return v_subscription_id;
 end;
 $function$;
+
 revoke all on function public.upsert_merchant_subscription(uuid, uuid, uuid, uuid, date, date, date, text, timestamptz, uuid, jsonb) from public;
 grant execute on function public.upsert_merchant_subscription(uuid, uuid, uuid, uuid, date, date, date, text, timestamptz, uuid, jsonb) to authenticated, service_role;
+
 create or replace function public.generate_subscription_invoice(
   p_subscription_id uuid,
   p_due_date date default null
@@ -816,8 +839,10 @@ begin
   return v_invoice_id;
 end;
 $function$;
+
 revoke all on function public.generate_subscription_invoice(uuid, date) from public;
 grant execute on function public.generate_subscription_invoice(uuid, date) to authenticated, service_role;
+
 insert into public.billable_services (
   service_code,
   display_name,

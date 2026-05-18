@@ -1,17 +1,23 @@
 alter table public.merchant_billing_profiles
   add column if not exists location_id uuid references public.locations(id) on delete cascade;
+
 comment on column public.merchant_billing_profiles.location_id is
   'Optional location scope for the billing profile. Null means merchant-wide legacy profile; non-null means the billing method belongs to a specific location.';
+
 drop index if exists public.uq_merchant_billing_profiles_primary;
+
 create index if not exists idx_merchant_billing_profiles_location
   on public.merchant_billing_profiles(location_id)
   where location_id is not null;
+
 create unique index if not exists uq_merchant_billing_profiles_primary_merchant_global
   on public.merchant_billing_profiles(merchant_id)
   where is_primary = true and is_active = true and location_id is null;
+
 create unique index if not exists uq_merchant_billing_profiles_primary_merchant_location
   on public.merchant_billing_profiles(merchant_id, location_id)
   where is_primary = true and is_active = true and location_id is not null;
+
 create or replace function public.upsert_merchant_subscription(
   p_subscription_id uuid default null,
   p_merchant_id uuid default null,
@@ -178,6 +184,7 @@ begin
   return v_subscription_id;
 end;
 $function$;
+
 create or replace function public.list_merchant_subscriptions(
   p_merchant_id uuid default null
 )
