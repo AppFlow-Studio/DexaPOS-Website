@@ -1,22 +1,3 @@
--- =====================================================================
--- Wave H.5 — admin batch RPCs scope payments by terminal, not just number
--- =====================================================================
--- Why: get_admin_settlement_batch_payments and get_admin_settlement_batches
--- matched order_payments via raw batch_number text. TSYS host batch numbers
--- wrap (1..999), so a historical TSYS-10 from a previous cycle bled into
--- today's TSYS-10 drilldown. Same bleed contaminated linked_payment_amount
--- in the listing RPC.
---
--- Fix: prefer the canonical op.settlement_batch_id = sb.id link (the lazy-
--- link trigger populates this on capture). Fall back to terminal-scoped
--- (payment_terminal_id, acquirer, batch_number) only for old rows where
--- settlement_batch_id IS NULL.
---
--- Also drops the dejavoo_batch_number shim from the matching predicate
--- now that v11 writes the canonical batch_number column. The shim column
--- is removed by Wave H.3's sentinel deadline.
--- =====================================================================
-
 CREATE OR REPLACE FUNCTION public.get_admin_settlement_batch_payments(
     p_batch_id text,
     p_merchant_id uuid DEFAULT NULL::uuid
@@ -66,8 +47,6 @@ BEGIN
         v_filter_merchants := v_allowed_merchants;
     END IF;
 
-    -- Resolve the canonical batch row. Capture its UUID (for the canonical
-    -- link path) AND its host coordinates (for the legacy fallback).
     IF v_input ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN
         SELECT sb.id, sb.batch_number, sb.batch_id, sb.acquirer,
                sb.payment_terminal_id, sb.merchant_id
@@ -88,7 +67,7 @@ BEGIN
     END IF;
 
     IF v_batch_uuid IS NULL THEN
-        RETURN; -- unknown / out-of-scope batch
+        RETURN;
     END IF;
 
     RETURN QUERY
@@ -110,12 +89,8 @@ BEGIN
     LEFT JOIN public.locations l ON l.id = o.location_id
     WHERE o.merchant_id = ANY (v_filter_merchants)
       AND (
-            -- Canonical link (lazy-link trigger populates this).
             op.settlement_batch_id = v_batch_uuid
-            OR
-            -- Legacy fallback for pre-link rows. Terminal-scoped so that
-            -- wrap-around batch numbers from prior cycles cannot bleed in.
-            (
+            OR (
                 op.settlement_batch_id IS NULL
                 AND v_batch_number IS NOT NULL
                 AND op.batch_number = v_batch_number
@@ -124,10 +99,7 @@ BEGIN
                 AND op.terminal_id = v_payment_terminal_id::text
                 AND (v_acquirer IS NULL OR op.acquirer IS NULL OR op.acquirer = v_acquirer)
             )
-            OR
-            -- Pre-host-keyed legacy DEXA batches: matched by batch_id text only,
-            -- and only when the batch itself has no host number.
-            (
+            OR (
                 op.settlement_batch_id IS NULL
                 AND v_batch_number IS NULL
                 AND v_batch_id_text IS NOT NULL
@@ -242,4 +214,4 @@ BEGIN
     ) lp ON true
     ORDER BY b.business_date DESC, b.closed_at DESC NULLS LAST, b.opened_at DESC;
 END;
-$function$;
+$function$;;

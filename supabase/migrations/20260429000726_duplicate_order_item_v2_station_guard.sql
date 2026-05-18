@@ -1,6 +1,5 @@
 -- Migration: duplicate_order_item_v2 — Wave 1.4 station-ownership guard
 DROP FUNCTION IF EXISTS public.duplicate_order_item_v2(uuid, integer, uuid);
-
 CREATE OR REPLACE FUNCTION public.duplicate_order_item_v2(
   p_order_item_id uuid,
   p_quantity integer DEFAULT NULL,
@@ -95,8 +94,6 @@ BEGIN
   RETURN v_result;
 END;
 $function$;
-
 GRANT EXECUTE ON FUNCTION public.duplicate_order_item_v2(uuid, integer, uuid, uuid) TO authenticated;
-
 COMMENT ON FUNCTION public.duplicate_order_item_v2 IS
-  'Duplicates an order item. v2 adds optional p_idempotency_key. Wave 1.4 adds optional p_station_id (NULL = bypass) for cross-station ownership enforcement.';;
+  'Duplicates an order item. v2 adds optional p_idempotency_key. Wave 1.4 adds optional p_station_id (NULL = bypass) for cross-station ownership enforcement.';

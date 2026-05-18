@@ -10,13 +10,11 @@ ALTER TABLE online_store_config
     'admin_test_email', null,
     'admin_test_phone', null
   );
-
 -- Customer-level transactional opt-in flags (default true since checkout
 -- already collects the contact specifically for receipt/status delivery).
 ALTER TABLE online_order_sessions
   ADD COLUMN IF NOT EXISTS customer_email_opt_in BOOLEAN NOT NULL DEFAULT true,
   ADD COLUMN IF NOT EXISTS customer_sms_opt_in   BOOLEAN NOT NULL DEFAULT true;
-
 -- Audit trail for every notification we attempt to send for an online order.
 CREATE TABLE IF NOT EXISTS order_notifications (
   id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -30,14 +28,11 @@ CREATE TABLE IF NOT EXISTS order_notifications (
   error       text,
   sent_at     timestamptz NOT NULL DEFAULT now()
 );
-
 CREATE INDEX IF NOT EXISTS order_notifications_order_id_idx
   ON order_notifications (order_id);
 CREATE INDEX IF NOT EXISTS order_notifications_merchant_recent_idx
   ON order_notifications (merchant_id, sent_at DESC);
-
 ALTER TABLE order_notifications ENABLE ROW LEVEL SECURITY;
-
 CREATE POLICY order_notifications_admin_read
   ON order_notifications FOR SELECT
   USING (is_merchant_admin(merchant_id));

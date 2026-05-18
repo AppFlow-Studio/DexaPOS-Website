@@ -58,11 +58,9 @@ BEGIN
   END IF;
 END;
 $function$;
-
 GRANT EXECUTE ON FUNCTION public.update_reversal_status_v2(
   uuid, reversal_status_type, jsonb, jsonb, text, text, text, uuid
 ) TO authenticated;
-
 COMMENT ON FUNCTION public.update_reversal_status_v2 IS
   'Sets reversal terminal response + status. v2 adds optional p_idempotency_key — '
   'on cache hit returns immediately so retry-storms do not overwrite terminal_response. '

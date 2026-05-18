@@ -65,7 +65,6 @@ CREATE TABLE IF NOT EXISTS public.impersonation_sessions (
          OR (ended_at IS NOT NULL AND end_reason IS NOT NULL)
         )
 );
-
 COMMENT ON TABLE  public.impersonation_sessions IS
     'One row per HQ admin impersonation session. Anchors per-action audit_logs rows via FK.';
 COMMENT ON COLUMN public.impersonation_sessions.hq_user_id IS
@@ -76,17 +75,13 @@ COMMENT ON COLUMN public.impersonation_sessions.last_validated_at IS
     'Updated on every touch_impersonation_session call. Sliding 30-min TTL is enforced against this column.';
 COMMENT ON COLUMN public.impersonation_sessions.end_reason IS
     'How the session ended. NULL while active. CHECK enforces enum values.';
-
 -- One active session per HQ admin (multi-tab opens overwrite via 'superseded').
 CREATE UNIQUE INDEX IF NOT EXISTS impersonation_sessions_one_active_per_admin_idx
     ON public.impersonation_sessions (hq_user_id)
     WHERE ended_at IS NULL;
-
 -- "Who has impersonated this merchant lately" — for merchant-side disputes.
 CREATE INDEX IF NOT EXISTS impersonation_sessions_target_started_idx
     ON public.impersonation_sessions (target_merchant_id, started_at DESC);
-
-
 -- -----------------------------------------------------------------------------
 -- 2. RLS on impersonation_sessions
 -- -----------------------------------------------------------------------------
@@ -99,22 +94,18 @@ CREATE INDEX IF NOT EXISTS impersonation_sessions_target_started_idx
 -- is the security boundary.
 
 ALTER TABLE public.impersonation_sessions ENABLE ROW LEVEL SECURITY;
-
 DROP POLICY IF EXISTS impersonation_sessions_hq_select ON public.impersonation_sessions;
 CREATE POLICY impersonation_sessions_hq_select
     ON public.impersonation_sessions
     FOR SELECT
     TO authenticated
     USING (public.is_dexapos_admin());
-
 DROP POLICY IF EXISTS impersonation_sessions_merchant_owner_select ON public.impersonation_sessions;
 CREATE POLICY impersonation_sessions_merchant_owner_select
     ON public.impersonation_sessions
     FOR SELECT
     TO authenticated
     USING (public.is_merchant_owner(target_merchant_id));
-
-
 -- -----------------------------------------------------------------------------
 -- 3. audit_logs column adds
 -- -----------------------------------------------------------------------------
@@ -122,21 +113,16 @@ CREATE POLICY impersonation_sessions_merchant_owner_select
 ALTER TABLE public.audit_logs
     ADD COLUMN IF NOT EXISTS impersonation_session_id uuid NULL
         REFERENCES public.impersonation_sessions(id) ON DELETE SET NULL;
-
 ALTER TABLE public.audit_logs
     ADD COLUMN IF NOT EXISTS is_impersonation boolean NOT NULL DEFAULT false;
-
 ALTER TABLE public.audit_logs
     ADD COLUMN IF NOT EXISTS impersonator_user_id text NULL;
-
 COMMENT ON COLUMN public.audit_logs.impersonation_session_id IS
     'FK to impersonation_sessions. NULL for normal merchant actions. Allows clean session-scoped queries.';
 COMMENT ON COLUMN public.audit_logs.is_impersonation IS
     'True iff this row was written during an active HQ impersonation session. Denormalized for index speed (see audit_logs_impersonation_idx).';
 COMMENT ON COLUMN public.audit_logs.impersonator_user_id IS
     'Denormalized copy of actor_user_id when is_impersonation=true. Same human, kept separate for filter speed.';
-
-
 -- -----------------------------------------------------------------------------
 -- 4. log_audit_event — extend with two optional params at the end
 -- -----------------------------------------------------------------------------
@@ -155,7 +141,6 @@ COMMENT ON COLUMN public.audit_logs.impersonator_user_id IS
 DROP FUNCTION IF EXISTS public.log_audit_event(
     uuid, uuid, text, text, text, text, text, text, text, uuid, text, jsonb, jsonb, text
 );
-
 CREATE OR REPLACE FUNCTION public.log_audit_event(
     p_merchant_id              uuid,
     p_location_id              uuid,
@@ -224,8 +209,6 @@ BEGIN
     RETURN v_log_id;
 END;
 $$;
-
-
 -- -----------------------------------------------------------------------------
 -- 5. hq_can_impersonate_merchant — the gate
 -- -----------------------------------------------------------------------------
@@ -281,14 +264,10 @@ BEGIN
     );
 END;
 $$;
-
 REVOKE ALL    ON FUNCTION public.hq_can_impersonate_merchant(uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.hq_can_impersonate_merchant(uuid) TO authenticated;
-
 COMMENT ON FUNCTION public.hq_can_impersonate_merchant(uuid) IS
     'Returns true iff current user is HQ admin AND (is hq.super_admin OR has active admin_merchant_access). Called by start_impersonation_session and used by /manage UI to gate the "View as merchant" button.';
-
-
 -- -----------------------------------------------------------------------------
 -- 6. start_impersonation_session
 -- -----------------------------------------------------------------------------
@@ -349,14 +328,10 @@ BEGIN
     RETURN v_session_id;
 END;
 $$;
-
 REVOKE ALL    ON FUNCTION public.start_impersonation_session(uuid, text, inet, text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.start_impersonation_session(uuid, text, inet, text) TO authenticated;
-
 COMMENT ON FUNCTION public.start_impersonation_session(uuid, text, inet, text) IS
     'Begins a new impersonation session for the calling HQ admin. Supersedes any prior active session. Raises 42501 if not authorized.';
-
-
 -- -----------------------------------------------------------------------------
 -- 7. end_impersonation_session — idempotent
 -- -----------------------------------------------------------------------------
@@ -387,14 +362,10 @@ BEGIN
        AND ended_at IS NULL;
 END;
 $$;
-
 REVOKE ALL    ON FUNCTION public.end_impersonation_session(uuid, text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.end_impersonation_session(uuid, text) TO authenticated;
-
 COMMENT ON FUNCTION public.end_impersonation_session(uuid, text) IS
     'Marks an impersonation session ended. Idempotent. Only the originating admin can end their own session.';
-
-
 -- -----------------------------------------------------------------------------
 -- 8. touch_impersonation_session — sliding TTL + revalidation in one round-trip
 -- -----------------------------------------------------------------------------
@@ -465,14 +436,10 @@ BEGIN
     RETURN true;
 END;
 $$;
-
 REVOKE ALL    ON FUNCTION public.touch_impersonation_session(uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.touch_impersonation_session(uuid) TO authenticated;
-
 COMMENT ON FUNCTION public.touch_impersonation_session(uuid) IS
     'Re-validates an impersonation session and slides its 30-min TTL. Returns true if still valid; ends the session and returns false otherwise. Called on every request that resolves merchant context.';
-
-
 -- -----------------------------------------------------------------------------
 -- 9. (intentionally omitted)
 -- -----------------------------------------------------------------------------
@@ -482,4 +449,4 @@ COMMENT ON FUNCTION public.touch_impersonation_session(uuid) IS
 -- so the impersonation OR-branch never adds anything for HQ admins. Existing
 -- merchant-data policies that gate on is_merchant_admin already permit
 -- impersonating HQ admins through. See the audit-trail story (sessions +
--- per-action rows) for what impersonation actually buys today.
+-- per-action rows) for what impersonation actually buys today.;

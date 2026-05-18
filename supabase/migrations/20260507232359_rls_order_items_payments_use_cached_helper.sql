@@ -42,4 +42,4 @@ CREATE POLICY "merchant_select_order_payments"
   TO public
   USING (
     merchant_id = (SELECT public.user_merchant_id())
-  );
+  );;

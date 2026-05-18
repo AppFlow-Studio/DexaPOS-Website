@@ -65,5 +65,4 @@ BEGIN
   RETURN v_result;
 END;
 $function$;
-
-GRANT EXECUTE ON FUNCTION public.add_open_item_v3(uuid, text, numeric, integer, text, boolean, integer, uuid) TO authenticated;;
+GRANT EXECUTE ON FUNCTION public.add_open_item_v3(uuid, text, numeric, integer, text, boolean, integer, uuid) TO authenticated;

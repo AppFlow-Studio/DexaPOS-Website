@@ -119,5 +119,4 @@ BEGIN
   RETURN v_result;
 END;
 $function$;
-
-GRANT EXECUTE ON FUNCTION public.replace_order_item_modifiers_v2(uuid, jsonb, uuid) TO authenticated;;
+GRANT EXECUTE ON FUNCTION public.replace_order_item_modifiers_v2(uuid, jsonb, uuid) TO authenticated;

@@ -14,10 +14,8 @@
 
 ALTER TABLE public.audit_logs
     ADD COLUMN IF NOT EXISTS pii_access_type text NULL;
-
 ALTER TABLE public.audit_logs
     DROP CONSTRAINT IF EXISTS audit_logs_pii_access_type_check;
-
 ALTER TABLE public.audit_logs
     ADD CONSTRAINT audit_logs_pii_access_type_check
     CHECK (
@@ -30,13 +28,11 @@ ALTER TABLE public.audit_logs
             'merchant_billing_view'
         )
     );
-
 -- Partial index — only index rows that ARE PII access. Keeps the index small
 -- since the vast majority of audit rows are non-PII.
 CREATE INDEX IF NOT EXISTS idx_audit_logs_pii_access
     ON public.audit_logs (pii_access_type, created_at DESC)
     WHERE pii_access_type IS NOT NULL;
-
 -- =============================================================================
 -- Update log_audit_event RPC to accept the new field
 -- =============================================================================

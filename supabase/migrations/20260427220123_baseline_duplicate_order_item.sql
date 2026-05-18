@@ -76,8 +76,6 @@ BEGIN
   RETURN v_result;
 END;
 $function$;
-
 GRANT EXECUTE ON FUNCTION public.duplicate_order_item(uuid, integer) TO authenticated;
-
 COMMENT ON FUNCTION public.duplicate_order_item IS
-  'Duplicates an order item (with modifiers) and optionally overrides quantity. Baselined into repo 2026-04-27 from prod.';;
+  'Duplicates an order item (with modifiers) and optionally overrides quantity. Baselined into repo 2026-04-27 from prod.';

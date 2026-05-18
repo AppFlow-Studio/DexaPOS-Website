@@ -141,7 +141,6 @@ BEGIN
   );
 END;
 $function$;
-
 -- ============================================================================
 -- close_cash_drawer_session — add FOR UPDATE lock + variance audit log (B3)
 -- ============================================================================
@@ -271,9 +270,7 @@ BEGIN
   );
 END;
 $function$;
-
 COMMENT ON FUNCTION public.record_cash_operation(uuid, uuid, text, numeric, uuid, uuid, uuid, text, uuid)
   IS 'Records a cash drawer operation. Acquires FOR UPDATE row lock on cash_drawer_sessions to serialize concurrent writes against the same session. search_path=''''.';
-
 COMMENT ON FUNCTION public.close_cash_drawer_session(uuid, uuid, uuid, numeric, jsonb, text, boolean)
   IS 'Closes a cash drawer session. Acquires FOR UPDATE row lock so expected_cash always equals SUM(cash_drawer_operations) at close time. Emits audit_logs entry documenting variance computation source. search_path=''''.';

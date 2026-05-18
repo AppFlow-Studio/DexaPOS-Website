@@ -107,7 +107,6 @@ BEGIN
   );
 END;
 $$;
-
 -- ============================================================
 -- update_preauth_amount_v3
 -- ============================================================
@@ -159,7 +158,6 @@ BEGIN
   );
 END;
 $$;
-
 -- ============================================================
 -- capture_preauth_v3
 -- ============================================================
@@ -243,9 +241,8 @@ BEGIN
     FROM locations WHERE id = v_order.location_id;
   END IF;
 
-  -- Fee base = full charge amount sent to the bank. tip is rolled in.
-  v_dual_pricing_fee := ROUND(v_total_collected * v_processor_fee_pct / 100, 2);
-  v_tip_fee := 0;
+  v_dual_pricing_fee := ROUND(v_subtotal_portion * v_processor_fee_pct / 100, 2);
+  v_tip_fee := ROUND(COALESCE(p_tip_amount, 0) * v_processor_fee_pct / 100, 2);
 
   IF v_order_fully_paid THEN
     SELECT COALESCE(array_agg(id), '{}')
@@ -328,7 +325,6 @@ BEGIN
   );
 END;
 $$;
-
 GRANT EXECUTE ON FUNCTION process_preauth_v3(UUID, NUMERIC, JSONB, UUID, TEXT) TO authenticated;
 GRANT EXECUTE ON FUNCTION update_preauth_amount_v3(UUID, NUMERIC, JSONB) TO authenticated;
 GRANT EXECUTE ON FUNCTION capture_preauth_v3(UUID, NUMERIC, NUMERIC, JSONB, UUID) TO authenticated;

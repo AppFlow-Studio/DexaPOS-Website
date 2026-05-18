@@ -68,8 +68,6 @@ BEGIN
   RETURN v_result;
 END;
 $function$;
-
 GRANT EXECUTE ON FUNCTION public.add_order_item_modifier(uuid, uuid, uuid, text, text, numeric, integer) TO authenticated;
-
 COMMENT ON FUNCTION public.add_order_item_modifier IS
-  'Adds a modifier to an order item and recalculates subtotal. Baselined into repo 2026-04-27 from prod.';;
+  'Adds a modifier to an order item and recalculates subtotal. Baselined into repo 2026-04-27 from prod.';

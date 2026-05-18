@@ -1,31 +1,15 @@
 -- Fix: 42883 / 42P01 errors raised from RPCs with `SET search_path = ''`
 -- whose bodies still reference public.* objects without qualification.
 --
--- History:
---   20260427110000_fix_empty_search_path_rpcs.sql      (Option B: ALTER ... SET search_path = public)
---   20260427120000_fix_remaining_empty_search_path_rpcs.sql  (Option B: same)
---
--- Those metadata-only ALTERs were silently undone whenever a later
--- CREATE OR REPLACE FUNCTION re-asserted `SET search_path = ''` for the
--- same function. To prevent the regression from recurring, this migration
--- schema-qualifies every public reference inside the body, so the secure
+-- Schema-qualifies every public reference inside the body so the secure
 -- empty-search_path setting can stay in place and the function still works.
 --
--- Pre-deploy audit (run against staging) found these broken functions:
---   public.process_payment_v8(uuid,text,numeric,numeric,numeric,jsonb,uuid,jsonb,integer,integer,boolean,uuid)
---   public.apply_refund_to_payment(uuid,numeric,reversal_type,text,text,text,text,text,uuid)
---   public.apply_refund_to_payment(uuid,numeric,reversal_type,text,text,text,text,text,uuid,boolean)
+-- Functions touched:
+--   public.process_payment_v8(...)
+--   public.apply_refund_to_payment(...)  (two overloads)
 --   public.remove_order_item(uuid)
---   public.void_payment(uuid,text)
---
--- Bodies are reproduced verbatim from pg_get_functiondef with `public.`
--- inserted in front of every previously-unqualified public reference
--- (function calls, table refs in apply_refund_to_payment, and enum casts).
--- No behavioral changes.
+--   public.void_payment(uuid, text)
 
--- ============================================================
--- 1. process_payment_v8
--- ============================================================
 CREATE OR REPLACE FUNCTION public.process_payment_v8(
   p_order_id uuid,
   p_payment_method text,
@@ -103,7 +87,6 @@ BEGIN
     v_is_item_payment := p_item_allocations IS NOT NULL AND jsonb_array_length(p_item_allocations) > 0;
     v_is_split_payment := p_split_count IS NOT NULL AND p_split_count > 1;
 
-    -- 1. Get order with auth guard
     SELECT * INTO v_order
     FROM public.orders
     WHERE id = p_order_id
@@ -120,7 +103,6 @@ BEGIN
 
     v_current_pricing_mode := v_order.payment_pricing_mode::text;
 
-    -- 2. Pre-payment unpaid totals
     SELECT
         COUNT(*),
         COALESCE(SUM(
@@ -189,7 +171,6 @@ BEGIN
         RAISE EXCEPTION 'No unpaid items remaining on this order';
     END IF;
 
-    -- 3. Existing payment totals
     SELECT
         COALESCE(SUM(CASE WHEN is_cash_priced THEN total_amount ELSE 0 END), 0),
         COALESCE(SUM(CASE WHEN NOT is_cash_priced THEN total_amount ELSE 0 END), 0)
@@ -198,7 +179,6 @@ BEGIN
     WHERE order_id = p_order_id
       AND status = 'captured';
 
-    -- 4. Split validation
     IF v_is_split_payment THEN
         IF p_split_portion_index IS NULL THEN
             RAISE EXCEPTION 'Split portion index is required for split payments';
@@ -230,7 +210,6 @@ BEGIN
         v_is_last_portion := (v_portions_remaining = 0);
     END IF;
 
-    -- 5. Pricing mode
     IF v_current_pricing_mode IS NULL THEN
         v_new_pricing_mode := CASE WHEN v_use_cash_pricing THEN 'cash' ELSE 'card' END;
     ELSIF v_current_pricing_mode = 'card' AND v_use_cash_pricing THEN
@@ -241,7 +220,6 @@ BEGIN
         v_new_pricing_mode := v_current_pricing_mode;
     END IF;
 
-    -- 6. Payment amount by scenario
     IF v_is_item_payment THEN
         WITH payment_calc AS (
             SELECT
@@ -461,7 +439,6 @@ BEGIN
         END IF;
     END IF;
 
-    -- 6.5 Cash change
     IF v_is_cash THEN
         v_change_given := GREATEST(
             COALESCE(p_amount_tendered, v_payment_total) - (v_payment_total + COALESCE(p_tip_amount, 0)),
@@ -469,7 +446,6 @@ BEGIN
         );
     END IF;
 
-    -- 6.6 Dejavoo
     IF p_terminal_response ? 'dejavoo_transaction' THEN
         v_has_dejavoo_transaction := true;
         v_dejavoo_reference_id := p_terminal_response->'dejavoo_transaction'->>'referenceId';
@@ -484,7 +460,6 @@ BEGIN
         v_dejavoo_last_four := p_terminal_response->'dejavoo_transaction'->>'cardLast4';
     END IF;
 
-    -- 6.7 Castles
     IF p_terminal_response ? 'castles_transaction' THEN
         v_has_dejavoo_transaction := true;
         v_dejavoo_reference_id := p_terminal_response->'castles_transaction'->>'referenceId';
@@ -498,7 +473,6 @@ BEGIN
         v_dejavoo_last_four := p_terminal_response->'castles_transaction'->>'cardLast4';
     END IF;
 
-    -- 6.8 Terminal id
     v_terminal_id := COALESCE(
         p_terminal_id,
         (p_terminal_response->'castles_transaction'->>'terminalId')::uuid,
@@ -506,7 +480,6 @@ BEGIN
         (p_terminal_response->>'terminal_id')::uuid
     );
 
-    -- 7. Create payment
     INSERT INTO public.order_payments (
         order_id, payment_method, amount, tip_amount, total_amount,
         subtotal_portion, tax_portion, amount_tendered, change_given,
@@ -604,7 +577,6 @@ BEGIN
         p_reason := NULL
     );
 
-    -- 8. Per-item payment items
     IF v_is_item_payment AND array_length(v_covered_items, 1) > 0 THEN
         INSERT INTO public.order_payment_items (
             order_payment_id, order_item_id, quantity_paid,
@@ -645,7 +617,6 @@ BEGIN
         FROM jsonb_array_elements(v_covered_items_json) AS ci;
     END IF;
 
-    -- 9. Update payment totals
     IF v_use_cash_pricing THEN
         v_total_cash_paid := v_total_cash_paid + v_payment_total + COALESCE(p_tip_amount, 0);
     ELSE
@@ -654,7 +625,6 @@ BEGIN
 
     v_new_amount_paid := v_total_cash_paid + v_total_card_paid;
 
-    -- 10. New unpaid totals
     SELECT
         COUNT(*),
         COALESCE(SUM(
@@ -697,7 +667,6 @@ BEGIN
         v_unpaid_card_total := v_payment_based_due;
     END IF;
 
-    -- 11. Fully paid?
     IF v_is_item_payment THEN
         v_order_fully_paid := (v_unpaid_items_count = 0);
 
@@ -721,7 +690,6 @@ BEGIN
         );
     END IF;
 
-    -- 12. Split-complete + non-split fallback
     IF v_is_split_payment THEN
         SELECT COUNT(*) INTO v_portions_paid
         FROM public.order_payments
@@ -772,7 +740,6 @@ BEGIN
         END IF;
     END IF;
 
-    -- 13. amount_due
     IF v_order_fully_paid THEN
         v_new_amount_due := 0;
         v_new_cash_amount_due := 0;
@@ -783,7 +750,6 @@ BEGIN
         v_new_cash_amount_due := v_unpaid_cash_total;
     END IF;
 
-    -- 14. Update order
     UPDATE public.orders SET
         amount_paid = v_new_amount_paid,
         amount_due = v_new_amount_due,
@@ -801,7 +767,6 @@ BEGIN
 
     v_new_sync_version := public.increment_order_sync_version(p_order_id);
 
-    -- 15. Result
     RETURN jsonb_build_object(
         'success', true,
         'payment_id', v_payment_id,
@@ -837,9 +802,6 @@ BEGIN
 END;
 $function$;
 
--- ============================================================
--- 2. apply_refund_to_payment (9-arg overload)
--- ============================================================
 CREATE OR REPLACE FUNCTION public.apply_refund_to_payment(
   p_payment_id uuid,
   p_refund_amount numeric,
@@ -900,9 +862,6 @@ BEGIN
 END;
 $function$;
 
--- ============================================================
--- 3. apply_refund_to_payment (10-arg overload, with p_restore_paid_quantity)
--- ============================================================
 CREATE OR REPLACE FUNCTION public.apply_refund_to_payment(
   p_payment_id uuid,
   p_refund_amount numeric,
@@ -984,9 +943,6 @@ BEGIN
 END;
 $function$;
 
--- ============================================================
--- 4. remove_order_item
--- ============================================================
 CREATE OR REPLACE FUNCTION public.remove_order_item(p_order_item_id uuid)
 RETURNS json
 LANGUAGE plpgsql
@@ -1041,9 +997,6 @@ BEGIN
 END;
 $function$;
 
--- ============================================================
--- 5. void_payment
--- ============================================================
 CREATE OR REPLACE FUNCTION public.void_payment(
   p_payment_id uuid,
   p_void_reason text DEFAULT 'User voided'::text
@@ -1122,4 +1075,4 @@ BEGIN
 END;
 $function$;
 
-NOTIFY pgrst, 'reload schema';
+NOTIFY pgrst, 'reload schema';;

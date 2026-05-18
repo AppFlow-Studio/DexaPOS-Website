@@ -83,4 +83,4 @@ WHERE status='open'
       WHERE op.settlement_batch_id = settlement_batches.id
         AND op.status = 'captured'
         AND op.is_settled = false
-  );
+  );;

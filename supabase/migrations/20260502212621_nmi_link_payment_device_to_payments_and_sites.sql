@@ -1,5 +1,3 @@
--- Pulled from Supabase staging branch (project dfwqakoyittmrwbqvxgw) on 2026-05-03 to reconcile local migration history.
-
 
 ALTER TABLE public.order_payments
   ADD COLUMN payment_device_id        uuid REFERENCES public.location_payment_devices(id),
@@ -20,3 +18,4 @@ ALTER TABLE public.sites
   ADD COLUMN payment_device_id uuid REFERENCES public.location_payment_devices(id);
 
 CREATE INDEX idx_sites_payment_device ON public.sites(payment_device_id);
+;

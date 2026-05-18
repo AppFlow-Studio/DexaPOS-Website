@@ -1,19 +1,3 @@
--- =====================================================================
--- Wave H.4 — get_batch_payments_v2 surfaces refunded_amount
--- =====================================================================
--- Why: BatchoutPanel drilldown showed payments with any partial refund as
--- "REFUNDED" without indicating how much, because v1 returned only
--- is_returned (boolean) and the status. A $33.75 partial refund on a
--- $114.31 sale rendered identically to a full refund.
---
--- v2 adds:
---   - refunded_amount (numeric, source: order_payments.refunded_amount)
---   - status now reliably surfaces 'partially_refunded' so the UI can
---     branch on it (already in v1, retained).
---
--- Caller switched to v2 in components/settings/batchout/BatchoutPanel.tsx.
--- =====================================================================
-
 CREATE OR REPLACE FUNCTION public.get_batch_payments_v2(
     p_settlement_batch_id uuid
 )
@@ -67,4 +51,4 @@ BEGIN
 
     RETURN v_result;
 END;
-$function$;
+$function$;;

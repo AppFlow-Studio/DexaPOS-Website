@@ -1,17 +1,3 @@
--- =====================================================================
--- Migration: process_payment_v10 — full-total fee base
--- =====================================================================
--- Replaces process_payment_v10_processor_fee_pivot. Two changes:
---   1. Reads locations.dual_pricing_percentage (the markup added to card
---      prices) instead of processor_fee_percentage (a separate bank fee
---      concept). Reporting must match what the customer actually paid.
---   2. dual_pricing_fee is now computed on the FULL charge sent to the
---      bank (v_payment_total + tip = subtotal + tax + tip), not on
---      v_subtotal_portion. tip_fee = 0 (tip is rolled into dual_pricing_fee).
---
--- Idempotency op string unchanged: 'process_payment_v10'.
--- =====================================================================
-
 CREATE OR REPLACE FUNCTION public.process_payment_v10(
     p_order_id uuid,
     p_payment_method text,
@@ -327,16 +313,9 @@ BEGIN
         (p_terminal_response->'dejavoo_transaction'->>'terminalId')::uuid,
         (p_terminal_response->>'terminal_id')::uuid);
 
-    -- Dual pricing fee compute. Reads dual_pricing_percentage (the markup
-    -- already applied to card prices). Pure reporting — never modifies the
-    -- charge or payout. Snapshot the rate so historical rows reflect the
-    -- rate at capture time.
     SELECT COALESCE(dual_pricing_percentage, 0) INTO v_processor_fee_pct
     FROM public.locations WHERE id = v_order.location_id;
 
-    -- Cash payments: zero fee (no card processing). Card payments: fee is
-    -- pct% of the FULL charge sent to the bank (capture + tip). tip_fee
-    -- stays 0 because tip is already included in dual_pricing_fee.
     IF v_is_cash THEN
         v_dual_pricing_fee := 0; v_tip_fee := 0;
     ELSE
@@ -556,4 +535,4 @@ GRANT EXECUTE ON FUNCTION public.process_payment_v10(
 ) TO authenticated;
 
 COMMENT ON FUNCTION public.process_payment_v10 IS
-  'Idempotent payment-processing RPC. dual_pricing_fee = (v_payment_total + tip) * locations.dual_pricing_percentage / 100 (computed on full charge sent to the bank). tip_fee = 0 (tip rolled into dual_pricing_fee). Cash payments produce zero fees. Pure reporting — never modifies card charge or merchant payout. Idempotency op namespace: process_payment_v10.';
+  'Idempotent payment-processing RPC. dual_pricing_fee = (v_payment_total + tip) * locations.dual_pricing_percentage / 100 (computed on full charge sent to the bank). tip_fee = 0. Cash payments produce zero fees. Idempotency op namespace: process_payment_v10.';;

@@ -1,6 +1,5 @@
 -- Migration: add_open_item_v3 — Wave 1.2 station-ownership guard
 DROP FUNCTION IF EXISTS public.add_open_item_v3(uuid, text, numeric, integer, text, boolean, integer, uuid);
-
 CREATE OR REPLACE FUNCTION public.add_open_item_v3(
   p_order_id uuid,
   p_item_name text,
@@ -97,5 +96,4 @@ BEGIN
   RETURN v_result;
 END;
 $function$;
-
-GRANT EXECUTE ON FUNCTION public.add_open_item_v3(uuid, text, numeric, integer, text, boolean, integer, uuid, uuid) TO authenticated;;
+GRANT EXECUTE ON FUNCTION public.add_open_item_v3(uuid, text, numeric, integer, text, boolean, integer, uuid, uuid) TO authenticated;
