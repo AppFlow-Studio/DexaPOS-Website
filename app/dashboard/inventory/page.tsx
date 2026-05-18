@@ -30,6 +30,8 @@ import {
   ChevronDown,
   ChevronsUpDown,
   X,
+  Trash2,
+  ClipboardList,
 } from "lucide-react";
 import {
   Popover,
@@ -63,6 +65,8 @@ import { PurchaseOrderDetailSheet } from "./components/PurchaseOrderDetailSheet"
 import { ActivityLogSheet } from "./components/ActivityLogSheet";
 import { StockUpdateDialog } from "./components/StockUpdateDialog";
 import { CreateExpenseDialog } from "./components/CreateExpenseDialog";
+import { WasteTab } from "./components/WasteTab";
+import { CountsTab } from "./components/CountsTab";
 import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
 import {
   DropdownMenu,
@@ -679,13 +683,15 @@ export default function InventoryPage() {
             <Download className="h-4 w-4" />
             Export
           </Button>
-          <Button
-            className="gap-2 shadow-lg shadow-primary/25"
-            onClick={getAddButtonAction()}
-          >
-            <Plus className="h-4 w-4" />
-            {getAddButtonLabel()}
-          </Button>
+          {activeTab !== "waste" && activeTab !== "counts" && (
+            <Button
+              className="gap-2 shadow-lg shadow-primary/25"
+              onClick={getAddButtonAction()}
+            >
+              <Plus className="h-4 w-4" />
+              {getAddButtonLabel()}
+            </Button>
+          )}
         </div>
       </div>
 
@@ -791,6 +797,20 @@ export default function InventoryPage() {
                   >
                     {purchaseOrders.length}
                   </Badge>
+                </TabsTrigger>
+                <TabsTrigger
+                  value="waste"
+                  className="gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm px-4 py-2"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Waste
+                </TabsTrigger>
+                <TabsTrigger
+                  value="counts"
+                  className="gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm px-4 py-2"
+                >
+                  <ClipboardList className="h-4 w-4" />
+                  Counts
                 </TabsTrigger>
               </TabsList>
 
@@ -1457,6 +1477,16 @@ export default function InventoryPage() {
                   </div>
                 </div>
               )}
+            </TabsContent>
+
+            {/* Waste Tab */}
+            <TabsContent value="waste" className="m-0">
+              <WasteTab items={items} isAllLocations={isAllLocations} />
+            </TabsContent>
+
+            {/* Counts Tab */}
+            <TabsContent value="counts" className="m-0">
+              <CountsTab items={items} isAllLocations={isAllLocations} />
             </TabsContent>
           </CardContent>
         </Tabs>
