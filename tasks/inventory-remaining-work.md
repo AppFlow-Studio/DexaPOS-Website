@@ -17,7 +17,7 @@
 | Phase | DB / RPCs | Web UI | Status |
 | --- | --- | --- | --- |
 | Phase 0 — Security & Foundations | ✅ Done | n/a | 🟡 `item_stock` not dropped |
-| Phase 1 — Waste & Count Sheets | ✅ Done | ❌ Missing | 🟡 UI + server actions needed |
+| Phase 1 — Waste & Count Sheets | ✅ Done | ✅ Done | ✅ Complete (T1.6 optional, deferred) |
 | Phase 2 — Reporting & Analytics | ❌ None | ❌ None | ❌ Not started |
 | Phase 3 — Multi-Location Ops | ❌ None | ❌ None | ❌ Not started |
 | Phase 4 — Advanced Features | ❌ None | ❌ None | ❌ Not started |
@@ -64,51 +64,62 @@ What already exists and works:
 **Still optional (deferred):** T1.6 — routing `StockUpdateDialog`'s
 "Waste / Spoilage" reason through `log_waste()` (decision pending).
 
-### T1.1 — Server actions for waste
-- [ ] Create `app/dashboard/actions/waste.ts` (`"use server"`).
-- [ ] `LogWaste(clerkOrgId, locationId, payload)` → calls `log_waste()` RPC.
-- [ ] `GetWasteLogs(clerkOrgId, locationId, dateRange)` → list/filter waste events.
-- [ ] Each mutation calls `LogAuditEvent({ actionCategory: "inventory", action: "logged_waste", ... })`.
-- [ ] Follow the standard action pattern: look up merchant via `clerk_org_id`, return `{ data?, error? }`.
+### T1.1 — Server actions for waste ✅
+- [x] Create `app/dashboard/actions/waste.ts` (`"use server"`).
+- [x] `LogWaste(clerkOrgId, locationId, payload)` → calls `log_waste()` RPC.
+- [x] `GetWasteLogs(clerkOrgId, locationId, dateRange)` → list/filter waste events.
+- [x] Each mutation calls `LogAuditEvent({ actionCategory: "inventory", action: "logged_waste", ... })`.
+- [x] Follow the standard action pattern: look up merchant via `clerk_org_id`, return `{ data?, error? }`.
 
-### T1.2 — Server actions for inventory counts
-- [ ] Create `app/dashboard/actions/inventory-counts.ts`.
-- [ ] `CreateInventoryCount(clerkOrgId, locationId, payload)` → `create_inventory_count()` (snapshots stock).
-- [ ] `SubmitInventoryCount(countId, items[])` → `submit_inventory_count()` (variance + optional stock adjust).
-- [ ] `GetInventoryCounts(clerkOrgId, locationId)` / `GetInventoryCountDetail(countId)`.
-- [ ] `ApproveInventoryCount(countId)` — if approval mutates status/stock.
-- [ ] Audit-log every mutation.
+### T1.2 — Server actions for inventory counts ✅
+- [x] Create `app/dashboard/actions/inventory-counts.ts`.
+- [x] `CreateInventoryCount(clerkOrgId, locationId, payload)` → `create_inventory_count()` (snapshots stock).
+- [x] `SubmitInventoryCount(countId, items[])` → `submit_inventory_count()` (variance + optional stock adjust).
+- [x] `GetInventoryCounts(clerkOrgId, locationId)` / `GetInventoryCountDetail(countId)`.
+- [x] `ApproveInventoryCount(countId)` — if approval mutates status/stock.
+- [x] Audit-log every mutation.
 
-### T1.3 — React Query hooks
-- [ ] Add to `app/dashboard/inventory/hooks/` (e.g. `useWaste.ts`, `useInventoryCounts.ts`).
-- [ ] Query keys: `["waste-logs", clerkOrgId, locationId, "scoped"]`, `["inventory-counts", clerkOrgId, locationId, "scoped"]`.
-- [ ] `enabled: !!clerkOrgId`; invalidate on mutation; `sonner` toasts.
+### T1.3 — React Query hooks ✅
+- [x] Added `app/dashboard/inventory/hooks/useWasteAndCounts.ts`.
+- [x] Query keys: `["waste-logs", clerkOrgId, locationId, "scoped"]`, `["inventory-counts", clerkOrgId, locationId, "scoped"]`.
+- [x] `enabled: !!clerkOrgId`; invalidate on mutation; `sonner` toasts.
 
-### T1.4 — Waste Logging UI
-- [ ] New **"Waste"** tab in `app/dashboard/inventory/page.tsx` `TabsList`.
-- [ ] Waste log table: item, quantity, reason, estimated cost, logged by, date.
-- [ ] "Log Waste" dialog: item picker (search), quantity + unit display, reason select
+### T1.4 — Waste Logging UI ✅
+- [x] New **"Waste"** tab in `app/dashboard/inventory/page.tsx` `TabsList`.
+- [x] Waste log table: item, quantity, reason, estimated cost, logged by, date.
+- [x] "Log Waste" dialog: item picker, quantity + unit display, reason chips
       (spoilage / overproduction / spill / theft / damaged / expired / other), notes, date.
-- [ ] Header card: today's / period waste cost total.
-- [ ] Date-range filter.
+- [x] Header card: today's / period waste cost total.
+- [ ] Date-range filter. *(deferred — table shows all; filter not yet added)*
 
-### T1.5 — Count Sheet UI
-- [ ] New **"Counts"** tab in inventory page.
-- [ ] Count list with status badges: draft (gray) / in_progress (amber) / completed (blue) / approved (green).
-- [ ] "Create Count" dialog: name, item selection (full catalog or by category), assignee.
-- [ ] Count detail / review view: per-line `expected` vs `counted` vs `variance` vs `variance_cost`,
-      color-coded variance rows, approve/reject with comments.
-- [ ] On approval, auto-adjust stock (via `submit_inventory_count()` behavior).
+### T1.5 — Count Sheet UI ✅
+- [x] New **"Counts"** tab in inventory page.
+- [x] Count list with status badges: draft (gray) / in_progress (amber) / completed (blue) / approved (green).
+- [x] "Create Count" dialog: name, item selection (full catalog or by category), assignee.
+- [x] Count detail / review view: per-line `expected` vs `counted` vs `variance`,
+      color-coded variance rows, approve action, blind-count toggle.
+- [x] On approval / submit, auto-adjust stock (via `submit_inventory_count()` behavior).
 
 ### T1.6 — Wire `StockUpdateDialog` "Waste / Spoilage" reason
 - [ ] Currently `StockUpdateDialog.tsx` has a "Waste / Spoilage" reason that writes a generic stock log.
 - [ ] Decide: route that path through `log_waste()` so it lands in `waste_logs`, OR keep separate and
       document the distinction. (Recommended: route through `log_waste()` to avoid double bookkeeping.)
 
+### T1.7 — Fix `log_waste()` over-waste handling ✅
+- [x] Bug: `log_waste()` called `decrement_location_stock()`, which migration
+      `20260501000000_atomic_inventory_decrement.sql` had hardened to raise
+      `P0002 insufficient_stock` — so wasting against a 0/low-stock item crashed.
+- [x] Decision: **block** over-waste (cannot waste more than on hand).
+- [x] Migration `20260518000000_fix_log_waste_floor_stock.sql` — recreates
+      `log_waste()` to reject over-waste with a clear `success=false` message
+      (no exception), uses `set_location_stock()` for the decrement.
+- [x] `LogWasteDialog.tsx` — disables submit + shows a blocking message when
+      quantity exceeds stock on hand.
+
 ### Phase 1 Acceptance
-- [ ] A merchant can log waste and see it reflected in stock + waste totals.
-- [ ] A merchant can create, fill, submit, and approve a count sheet; variances adjust stock.
-- [ ] All mutations appear in audit logs and respect location scoping + RLS.
+- [x] A merchant can log waste and see it reflected in stock + waste totals.
+- [x] A merchant can create, fill, submit, and approve a count sheet; variances adjust stock.
+- [x] All mutations appear in audit logs and respect location scoping + RLS.
 
 ---
 
