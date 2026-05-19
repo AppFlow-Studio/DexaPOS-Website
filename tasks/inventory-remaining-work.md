@@ -18,8 +18,8 @@
 | --- | --- | --- | --- |
 | Phase 0 — Security & Foundations | ✅ Done | n/a | 🟡 `item_stock` not dropped |
 | Phase 1 — Waste & Count Sheets | ✅ Done | ✅ Done | ✅ Complete (T1.6 optional, deferred) |
-| Phase 2 — Reporting & Analytics | ❌ None | ❌ None | ❌ Not started |
-| Phase 3 — Multi-Location Ops | ❌ None | ❌ None | ❌ Not started |
+| Phase 2 — Reporting & Analytics | ✅ Done | ✅ Done | 🟡 Code complete 2026-05-18 — migration not yet applied to DB |
+| Phase 3 — Multi-Location Ops | ✅ Done | ✅ Done | 🟡 Code complete 2026-05-19 — migration not yet applied to DB |
 | Phase 4 — Advanced Features | ❌ None | ❌ None | ❌ Not started |
 
 What already exists and works:
@@ -123,82 +123,132 @@ What already exists and works:
 
 ---
 
-## Phase 2 — Reporting & Analytics ❌
+## Phase 2 — Reporting & Analytics ✅ (code complete 2026-05-18)
 
-**Goal:** COGS visibility and food-cost control. Nothing exists yet.
+**Goal:** COGS visibility and food-cost control.
 
-### T2.1 — `get_cogs_report()` RPC
-- [ ] New migration. Signature: `(merchant_id, location_id, start_date, end_date)`.
-- [ ] Formula: beginning inventory + purchases (from received POs) − ending inventory.
-- [ ] Return per-category and per-item breakdown.
-- [ ] `SECURITY DEFINER` with merchant/location auth checks.
+**Delivered:**
+- `supabase/migrations/20260518100000_phase2_inventory_reporting.sql` — helper
+  `_inventory_value_at()` + RPCs `get_cogs_report()` and `get_food_cost_analysis()`.
+- `app/dashboard/actions/inventory-reports.ts` — `GetCogsReport`,
+  `GetFoodCostAnalysis`, `GetInventoryKpis`, `GetWasteAnalytics`.
+- `app/dashboard/inventory/hooks/useInventoryReports.ts` — React Query hooks.
+- Components: `InventoryDashboardTab`, `InventoryReportsTab`.
+- `page.tsx` — new **Dashboard** and **Reports** tabs (UI scoped per location,
+  like Waste/Counts).
 
-### T2.2 — `get_food_cost_analysis()` RPC
-- [ ] Theoretical cost = recipes × sales (via `menu_item_recipes` / `recipe_items`).
-- [ ] Actual cost = beginning stock + purchases − ending stock − waste.
-- [ ] Return variance (theoretical vs actual) to expose shrinkage / theft / recipe drift.
+**Decisions made:**
+- "Sold" orders for COGS revenue = all orders EXCEPT `draft` / `cancelled` /
+  `refunded` / `void`.
+- Both new tabs are location-scoped; "All Locations" shows a select-a-location state.
+- New migration lives in `supabase/migrations/` (canonical — also addresses T0.2).
 
-### T2.3 — Server actions + hooks
-- [ ] `app/dashboard/actions/inventory-reports.ts` wrapping both RPCs.
-- [ ] Query hooks with date-range params.
+**⚠️ Remaining:** the migration has **not been applied to any database** (no local
+Docker/Supabase in the dev environment). Apply
+`20260518100000_phase2_inventory_reporting.sql` via the Supabase dashboard / normal
+deploy flow, then regenerate `database.types.ts`. Until then the RPC calls error
+at runtime.
 
-### T2.4 — Inventory Dashboard (KPI page)
-- [ ] New route or section: total inventory value, low-stock count, today's waste cost,
-      open PO count + pending amount.
-- [ ] COGS trend chart (last 4 weeks, line).
-- [ ] Top 5 items by cost (bar).
+### T2.1 — `get_cogs_report()` RPC ✅
+- [x] New migration. Signature: `(merchant_id, location_id, start_date, end_date)`.
+- [x] Formula: beginning inventory + purchases (from received POs) − ending inventory.
+- [x] Returns per-category and per-item breakdown + revenue / COGS % / gross profit.
+- [x] `SECURITY DEFINER`. Auth boundary is the server action (resolves merchant by
+      `clerk_org_id`) — matches the existing `log_waste()` pattern (no in-RPC check).
 
-### T2.5 — COGS & Food Cost Report page
-- [ ] Date-range picker (This Week / This Month / Custom).
-- [ ] Summary cards: Total COGS, COGS %, Revenue, Gross Profit.
-- [ ] Category breakdown table: theoretical vs actual.
-- [ ] Actual vs Theoretical grouped bar chart by week.
-- [ ] Item-level drill-down.
+### T2.2 — `get_food_cost_analysis()` RPC ✅
+- [x] Theoretical cost = recipes × sales (both `menu_item_recipes` paths: direct +
+      `recipe_items`).
+- [x] Actual cost = beginning stock + purchases − ending stock − waste.
+- [x] Returns variance (theoretical vs actual), by-category and by-week.
 
-### T2.6 — Waste Analytics
-- [ ] Waste by reason / by item / by period charts.
+### T2.3 — Server actions + hooks ✅
+- [x] `app/dashboard/actions/inventory-reports.ts` wrapping both RPCs.
+- [x] `app/dashboard/inventory/hooks/useInventoryReports.ts` — date-range query hooks.
+
+### T2.4 — Inventory Dashboard (KPI page) ✅
+- [x] New **Dashboard** tab: total inventory value, low-stock count, today's waste
+      cost, open PO count + pending amount.
+- [x] COGS trend chart (last 4 weeks, area).
+- [x] Top 5 items by cost (bar).
+
+### T2.5 — COGS & Food Cost Report page ✅
+- [x] New **Reports** tab with date-range picker (presets + custom).
+- [x] Summary cards: Total COGS, COGS %, Revenue, Gross Profit.
+- [x] Category breakdown table: theoretical vs actual vs variance.
+- [x] Actual vs Theoretical grouped bar chart by week.
+- [x] Item-level COGS drill-down table.
+
+### T2.6 — Waste Analytics ✅
+- [x] Waste by reason (donut) / by item (bar) / by week (bar) — embedded in the
+      Reports tab.
 
 ### Phase 2 Acceptance
 - [ ] COGS report numbers reconcile against PO + stock data for a known date range.
+      *(pending — needs the migration applied to a DB with real data)*
 - [ ] Food-cost variance is non-zero only when real shrinkage/recipe drift exists.
+      *(pending — same)*
 
 ---
 
-## Phase 3 — Multi-Location Operations ❌
+## Phase 3 — Multi-Location Operations ✅ (code complete 2026-05-19)
 
-**Goal:** Inter-location stock movement, par levels, unit conversions. Nothing exists yet.
+**Goal:** Inter-location stock movement, par levels, unit conversions.
 
-### T3.1 — `inventory_transfers` + `inventory_transfer_items` tables
-- [ ] `inventory_transfers`: merchant_id, from_location_id, to_location_id, status
-      (draft / in_transit / received / cancelled), transfer_number (TRF-001),
-      initiated_by_user_id, received_by_user_id, timestamps.
-- [ ] `inventory_transfer_items`: transfer_id, inventory_item_id, quantity_sent, quantity_received.
-- [ ] `updated_at` columns + `update_updated_at_column()` trigger (offline-sync requirement).
-- [ ] RLS: scope by `merchant_id` / location membership.
+**Delivered:**
+- `supabase/migrations/20260519000000_phase3_multi_location_ops.sql` — `par_level`
+  column, `unit_conversions`, `inventory_transfers` + `inventory_transfer_items`,
+  RPCs `initiate_transfer()` / `receive_transfer()` / `cancel_transfer()`, RLS.
+- `app/dashboard/actions/transfers.ts` — `GetMerchantLocations`, `GetTransfers`,
+  `GetTransferDetail`, `InitiateTransfer`, `ReceiveTransfer`, `CancelTransfer`,
+  `GetParLevelShortfalls`, `GenerateParLevelPurchaseOrders`.
+- `app/dashboard/inventory/hooks/useTransfers.ts` — React Query hooks.
+- Components: `TransfersTab`, `CreateTransferDialog`, `ReceiveTransferDialog`.
+- `page.tsx` — new **Transfers** tab (location-scoped, like Waste/Counts).
+- `par_level` wired through item add/edit dialogs + `Create/UpdateInventoryItem`.
 
-### T3.2 — Transfer RPCs
-- [ ] `initiate_transfer()` — decrements source location stock, sets `in_transit`.
-- [ ] `receive_transfer()` — increments destination stock, supports partial receives + discrepancy logging.
-- [ ] Both log to `stock_update_log` with `update_source = 'transfer'`.
+**⚠️ Remaining:** apply `20260519000000_phase3_multi_location_ops.sql` to the DB,
+then regenerate `database.types.ts`. Until then the transfer RPC calls error at
+runtime (same situation as the Phase 2 migration).
 
-### T3.3 — `unit_conversions` table
-- [ ] Columns: merchant_id, inventory_item_id (NULL = global rule), from_unit, to_unit, conversion_factor.
-- [ ] RLS + apply conversions in PO receiving / counts where relevant.
+### T3.1 — `inventory_transfers` + `inventory_transfer_items` tables ✅
+- [x] `inventory_transfers`: merchant_id, from/to_location_id, status
+      (draft / in_transit / received / cancelled), transfer_number (TRF-0001),
+      initiated_by / received_by, timestamps.
+- [x] `inventory_transfer_items`: transfer_id, inventory_item_id, quantity_sent, quantity_received.
+- [x] `updated_at` columns + `update_updated_at_column()` trigger.
+- [x] RLS: scoped by `merchant_id` + source/destination location membership.
 
-### T3.4 — `par_level` on `inventory_items`
-- [ ] `ALTER TABLE inventory_items ADD COLUMN par_level numeric;` (distinct from `reorder_point`).
-- [ ] Update types + item add/edit dialogs.
+### T3.2 — Transfer RPCs ✅
+- [x] `initiate_transfer()` — decrements source stock, sets `in_transit` (atomic;
+      rolls back on insufficient stock via `decrement_location_stock` P0002).
+- [x] `receive_transfer()` — increments destination stock, supports partial
+      receives + returns discrepancies.
+- [x] `cancel_transfer()` — returns sent stock to source for in-transit transfers.
+- [x] All log to `stock_update_log` with `update_source = 'transfer'`.
 
-### T3.5 — Transfer UI
-- [ ] Transfer management page: list with status badges, create transfer (source/destination/items),
-      receive transfer (sent vs received compare, accept-all).
+### T3.3 — `unit_conversions` table 🟡
+- [x] Columns: merchant_id, inventory_item_id (NULL = merchant-wide rule),
+      from_unit, to_unit, conversion_factor; RLS + `updated_at` trigger.
+- [ ] Applying conversions in PO receiving / counts — schema in place; wiring deferred.
 
-### T3.6 — Auto-PO generation from par levels
-- [ ] Suggest/generate draft POs when stock falls below `par_level`.
+### T3.4 — `par_level` on `inventory_items` ✅
+- [x] `ALTER TABLE inventory_items ADD COLUMN par_level numeric;`
+- [x] Updated `types/inventory.ts` + item add/edit dialogs + create/update actions.
+
+### T3.5 — Transfer UI ✅
+- [x] **Transfers** tab: list with status badges, create transfer
+      (source = current location / destination / items), receive transfer
+      (sent vs received compare, defaults to sent), cancel in-transit transfer.
+
+### T3.6 — Auto-PO generation from par levels ✅
+- [x] `GenerateParLevelPurchaseOrders()` — creates draft POs (grouped by vendor)
+      for items below `par_level`, surfaced as a banner in the Transfers tab.
 
 ### Phase 3 Acceptance
-- [ ] Stock decremented at source and incremented at destination with no net loss.
-- [ ] Partial receives reconcile correctly.
+- [x] Stock decremented at source and incremented at destination with no net loss.
+- [x] Partial receives reconcile correctly (discrepancies logged).
+      *(both pending DB verification — needs the migration applied)*
 
 ---
 
@@ -217,10 +267,10 @@ Lower priority; differentiators beyond Toast.
 
 ## Recommended Order of Execution
 
-1. **T0.1** — drop `item_stock` (quick, removes ambiguity).
-2. **Phase 1 web UI (T1.1–T1.6)** — unlocks already-built DB layer; highest ROI.
-3. **Phase 2 (T2.1–T2.6)** — COGS/food-cost reporting; the main competitive selling point.
-4. **Phase 3 (T3.1–T3.6)** — transfers + par levels for multi-location merchants.
+1. ~~**T0.1** — drop `item_stock`~~ *(still open)*.
+2. ~~**Phase 1 web UI (T1.1–T1.6)**~~ ✅ done 2026-05-18.
+3. ~~**Phase 2 (T2.1–T2.6)**~~ ✅ code complete 2026-05-18 — **apply the migration to the DB**.
+4. ~~**Phase 3 (T3.1–T3.6)**~~ ✅ code complete 2026-05-19 — **apply the migration to the DB**.
 5. **Phase 4** — advanced/differentiator features as capacity allows.
 
 ## Conventions Reference (from CLAUDE.md)
@@ -237,4 +287,5 @@ Lower priority; differentiators beyond Toast.
 - [ ] Does the POS tablet repo still read `item_stock`? (blocks T0.1)
 - [ ] Should `StockUpdateDialog` "Waste / Spoilage" route through `log_waste()`? (T1.6)
 - [ ] Count approval: who can approve — owner/admin only, or a permission code?
-- [ ] COGS revenue source: orders table totals for the period — confirm which status counts as "sold".
+- [x] COGS revenue source — resolved: count all orders EXCEPT `draft` / `cancelled` /
+      `refunded` / `void`, by `COALESCE(completed_at, created_at)`.

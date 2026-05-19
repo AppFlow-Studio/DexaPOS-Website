@@ -34,6 +34,7 @@ import {
   X,
   Trash2,
   ClipboardList,
+  ArrowRightLeft,
 } from "lucide-react";
 import {
   Popover,
@@ -69,6 +70,7 @@ import { StockUpdateDialog } from "./components/StockUpdateDialog";
 import { CreateExpenseDialog } from "./components/CreateExpenseDialog";
 import { WasteTab } from "./components/WasteTab";
 import { CountsTab } from "./components/CountsTab";
+import { TransfersTab } from "./components/TransfersTab";
 import { InventoryDashboardTab } from "./components/InventoryDashboardTab";
 import { InventoryReportsTab } from "./components/InventoryReportsTab";
 import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
@@ -689,6 +691,7 @@ export default function InventoryPage() {
           </Button>
           {activeTab !== "waste" &&
             activeTab !== "counts" &&
+            activeTab !== "transfers" &&
             activeTab !== "dashboard" &&
             activeTab !== "reports" && (
             <Button
@@ -818,6 +821,13 @@ export default function InventoryPage() {
                 >
                   <ClipboardList className="h-4 w-4" />
                   Counts
+                </TabsTrigger>
+                <TabsTrigger
+                  value="transfers"
+                  className="gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm px-4 py-2"
+                >
+                  <ArrowRightLeft className="h-4 w-4" />
+                  Transfers
                 </TabsTrigger>
                 <TabsTrigger
                   value="dashboard"
@@ -1512,6 +1522,11 @@ export default function InventoryPage() {
             {/* Counts Tab */}
             <TabsContent value="counts" className="m-0">
               <CountsTab items={items} isAllLocations={isAllLocations} />
+            </TabsContent>
+
+            {/* Transfers Tab */}
+            <TabsContent value="transfers" className="m-0">
+              <TransfersTab items={items} isAllLocations={isAllLocations} />
             </TabsContent>
 
             {/* Dashboard Tab */}
