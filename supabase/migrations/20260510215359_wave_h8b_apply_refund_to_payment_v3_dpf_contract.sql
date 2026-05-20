@@ -62,4 +62,4 @@ BEGIN
         PERFORM public._idempotency_complete(p_idempotency_key, 'apply_refund_to_payment_v3', '{}'::jsonb);
     END IF;
 END;
-$function$;
+$function$;;

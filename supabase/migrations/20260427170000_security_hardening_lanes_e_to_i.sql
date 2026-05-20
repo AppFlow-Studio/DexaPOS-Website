@@ -1,5 +1,4 @@
 begin;
-
 -- =============================================================================
 -- Saturday security hardening follow-up (Lanes E-I)
 -- =============================================================================
@@ -20,24 +19,19 @@ begin;
 
 alter table public.members
   drop constraint if exists members_role_not_blank_check;
-
 alter table public.members
   add constraint members_role_not_blank_check
   check (role is null or btrim(role) <> '');
-
 alter table public.pending_org_admin_invites
   drop constraint if exists pending_org_admin_invites_role_check;
-
 alter table public.pending_org_admin_invites
   add constraint pending_org_admin_invites_role_check
   check (
     role is null
     or btrim(role) <> ''
   );
-
 alter table public.pending_org_admin_invites
   drop constraint if exists pending_org_admin_invites_status_check;
-
 alter table public.pending_org_admin_invites
   add constraint pending_org_admin_invites_status_check
   check (
@@ -54,7 +48,6 @@ alter table public.pending_org_admin_invites
       ]
     )
   );
-
 -- -----------------------------------------------------------------------------
 -- Lane F - Storage bucket lockdown
 -- -----------------------------------------------------------------------------
@@ -76,7 +69,6 @@ on conflict (id) do update
 set public = excluded.public,
     file_size_limit = excluded.file_size_limit,
     allowed_mime_types = excluded.allowed_mime_types;
-
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values (
   'cfd-images',
@@ -93,7 +85,6 @@ on conflict (id) do update
 set public = excluded.public,
     file_size_limit = excluded.file_size_limit,
     allowed_mime_types = excluded.allowed_mime_types;
-
 drop policy if exists support_attachments_insert on storage.objects;
 create policy support_attachments_insert
 on storage.objects
@@ -113,7 +104,6 @@ with check (
     )
   )
 );
-
 drop policy if exists support_attachments_update on storage.objects;
 create policy support_attachments_update
 on storage.objects
@@ -147,7 +137,6 @@ with check (
     )
   )
 );
-
 drop policy if exists support_attachments_delete on storage.objects;
 create policy support_attachments_delete
 on storage.objects
@@ -167,7 +156,6 @@ using (
     )
   )
 );
-
 -- -----------------------------------------------------------------------------
 -- Lane G - postgres-owned views -> security_invoker
 -- -----------------------------------------------------------------------------
@@ -182,7 +170,6 @@ alter view public.admin_device_summary set (security_invoker = true);
 alter view public.admin_device_inventory set (security_invoker = true);
 alter view public.location_summary set (security_invoker = true);
 alter view public.v_location_menu_items set (security_invoker = true);
-
 -- -----------------------------------------------------------------------------
 -- Lane I - Helper verification and search_path hardening
 -- -----------------------------------------------------------------------------
@@ -195,7 +182,6 @@ set search_path = ''
 as $function$
   select auth.jwt()->>claim;
 $function$;
-
 create or replace function public.current_user_id()
 returns text
 language plpgsql
@@ -207,7 +193,6 @@ begin
   return public.get_my_claim('sub')::text;
 end;
 $function$;
-
 create or replace function public.user_staff_profile_id()
 returns uuid
 language sql
@@ -220,7 +205,6 @@ as $function$
   where sp.user_id = public.get_my_claim('sub')
   limit 1;
 $function$;
-
 create or replace function public.user_merchant_id()
 returns uuid
 language sql
@@ -233,7 +217,6 @@ as $function$
   where sp.user_id = public.get_my_claim('sub')
   limit 1;
 $function$;
-
 create or replace function public.user_location_ids()
 returns uuid[]
 language sql
@@ -272,7 +255,6 @@ as $function$
   ) all_locations
   where location_id is not null;
 $function$;
-
 create or replace function public.is_merchant_admin(p_merchant_id uuid)
 returns boolean
 language sql
@@ -299,7 +281,6 @@ as $function$
     )
   );
 $function$;
-
 create or replace function public.user_belongs_to_merchant(p_merchant_id uuid)
 returns boolean
 language sql
@@ -352,7 +333,6 @@ as $function$
       )
     );
 $function$;
-
 create or replace function public.update_terminal_status(
   p_terminal_id uuid,
   p_status text,
@@ -384,5 +364,4 @@ begin
   return json_build_object('success', true);
 end;
 $function$;
-
 commit;

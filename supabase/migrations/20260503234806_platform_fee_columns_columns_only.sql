@@ -67,4 +67,4 @@ COMMENT ON COLUMN public.order_payments.original_tip_fee IS
 COMMENT ON COLUMN public.order_payments.dual_pricing_percentage_snapshot IS
   'Locked snapshot of locations.dual_pricing_percentage at capture time. Pre-migration rows = 0.';
 COMMENT ON COLUMN public.order_payments.tip_surcharge_percentage_snapshot IS
-  'Locked snapshot of locations.tip_surcharge_percentage at capture time. Pre-migration rows = 0.';
+  'Locked snapshot of locations.tip_surcharge_percentage at capture time. Pre-migration rows = 0.';;

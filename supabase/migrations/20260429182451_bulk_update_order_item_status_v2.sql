@@ -126,8 +126,6 @@ BEGIN
   RETURN v_result;
 END;
 $function$;
-
 GRANT EXECUTE ON FUNCTION public.bulk_update_order_item_status_v2(uuid[], text, uuid, uuid) TO authenticated;
-
 COMMENT ON FUNCTION public.bulk_update_order_item_status_v2 IS
-  'Bulk-update kitchen_status on order_items + cascade to kds_item_status / orders. v2 adds optional p_idempotency_key for at-most-once execution. On replay returns the cached {updated_count, affected_order_ids} jsonb and SKIPS the UPDATE entirely — fire_time / sync_version stamped once.';;
+  'Bulk-update kitchen_status on order_items + cascade to kds_item_status / orders. v2 adds optional p_idempotency_key for at-most-once execution. On replay returns the cached {updated_count, affected_order_ids} jsonb and SKIPS the UPDATE entirely — fire_time / sync_version stamped once.';

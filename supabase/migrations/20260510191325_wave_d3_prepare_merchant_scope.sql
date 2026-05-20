@@ -160,4 +160,4 @@ BEGIN
         'castles_request', jsonb_build_object('txnPosTxnId', v_pos_txn_id, 'txnType', 'settlement')
     );
 END;
-$$;
+$$;;

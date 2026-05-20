@@ -54,4 +54,4 @@ $function$;
 GRANT EXECUTE ON FUNCTION public.get_business_day_summary_v1(uuid, date) TO authenticated;
 
 COMMENT ON FUNCTION public.get_business_day_summary_v1 IS
-  'Business-day rollup of all settlement batches for a location. Wraps get_batch_summary_v1 per row plus daily totals. Uses get_business_day_bounds for the time window.';
+  'Business-day rollup of all settlement batches for a location. Wraps get_batch_summary_v1 per row plus daily totals. Uses get_business_day_bounds for the time window.';;

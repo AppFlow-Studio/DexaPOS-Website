@@ -83,4 +83,4 @@ SET merchant_id = '2add44cb-f498-4653-aca3-a8f0ca258e70',
     castles_pos_txn_id = NULL,
     updated_at = NOW()
 WHERE id = 'a59f40fb-2960-4939-b019-c80d0fcf93ad'
-  AND merchant_id = 'a9aca1d8-730b-4f97-98f7-2230639f64b1';
+  AND merchant_id = 'a9aca1d8-730b-4f97-98f7-2230639f64b1';;

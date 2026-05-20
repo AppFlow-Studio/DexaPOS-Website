@@ -53,5 +53,4 @@ AS $$
     AND o.merchant_id = public.user_merchant_id()
     AND o.location_id = ANY(public.user_location_ids());
 $$;
-
 GRANT EXECUTE ON FUNCTION public.reconcile_orders_summary(uuid[]) TO authenticated;

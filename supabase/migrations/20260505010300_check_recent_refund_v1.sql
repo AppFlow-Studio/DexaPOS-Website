@@ -126,10 +126,8 @@ BEGIN
   );
 END;
 $$;
-
 DROP FUNCTION IF EXISTS public.check_recent_refund(UUID, INTEGER, BIGINT);
 GRANT EXECUTE ON FUNCTION public.check_recent_refund(UUID, INTEGER, BIGINT, UUID) TO authenticated;
-
 COMMENT ON FUNCTION public.check_recent_refund IS
   'Wave R-2 retry-safety check: server-side lookup for a recent reversal matching order + optional amount/key. '
   'Mirrors check_recent_payment. Conservative: callers must treat any error/timeout as "cannot verify". '

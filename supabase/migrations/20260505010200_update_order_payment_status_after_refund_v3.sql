@@ -112,9 +112,7 @@ BEGIN
   END IF;
 END;
 $$;
-
 GRANT EXECUTE ON FUNCTION public.update_order_payment_status_after_refund_v3(uuid, uuid) TO authenticated;
-
 COMMENT ON FUNCTION public.update_order_payment_status_after_refund_v3 IS
   'Recalculates order payment_status after a refund. v3 adds optional '
   'p_idempotency_key so parallel/retry calls from the refund pipeline '

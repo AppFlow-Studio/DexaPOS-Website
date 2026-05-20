@@ -28,8 +28,6 @@ as $function$
     'org_3Bu8LTB01a5vXfYnOc9ZUznm8lL'   -- prod HQ
   );
 $function$;
-
 revoke all on function public.is_dexapos_admin() from public;
 grant execute on function public.is_dexapos_admin() to authenticated, service_role;
-
 notify pgrst, 'reload schema';

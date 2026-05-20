@@ -98,13 +98,10 @@ BEGIN
           THEN p_order_type::order_type
         ELSE order_type
       END,
-    -- delivery_address is jsonb on the live schema, so wrap the text param
-    -- with to_jsonb() — both CASE branches need to resolve to jsonb or PG
-    -- raises 42804 ("CASE types jsonb and text cannot be matched").
     delivery_address =
       CASE
         WHEN p_update_delivery_address
-          THEN to_jsonb(p_delivery_address)
+          THEN p_delivery_address
         ELSE delivery_address
       END,
     special_instructions =
@@ -124,7 +121,6 @@ BEGIN
   );
 END;
 $function$;
-
 GRANT EXECUTE ON FUNCTION public.update_order_details_v1(
   uuid, uuid,
   boolean, uuid, text, text, text,

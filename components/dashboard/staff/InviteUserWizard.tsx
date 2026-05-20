@@ -119,6 +119,7 @@ export function InviteUserWizard({
   const onOpenChange = controlledOnOpenChange || setInternalOpen;
 
   const [currentStep, setCurrentStep] = React.useState<Step>("type");
+  const [showDiscardConfirm, setShowDiscardConfirm] = React.useState(false);
   const { data: rolesData, isLoading: isRolesLoading } = useQuery({
     queryKey: ["merchant-roles"],
     queryFn: () => GetMerchantRoles(),
@@ -195,6 +196,7 @@ export function InviteUserWizard({
   React.useEffect(() => {
     if (!open) {
       setCurrentStep("type");
+      setShowDiscardConfirm(false);
       setStaffType("clerk");
       setFirstName("");
       setLastName("");
@@ -350,6 +352,36 @@ export function InviteUserWizard({
     }
   };
 
+  // Dirty = the user typed into a data-entry field. Locations/role are
+  // excluded because they can be auto-selected (defaultLocationId, first role).
+  const isFormDirty =
+    firstName.trim() !== "" ||
+    lastName.trim() !== "" ||
+    email.trim() !== "" ||
+    phone.trim() !== "" ||
+    pinCode.trim() !== "" ||
+    hourlyRate.trim() !== "" ||
+    employmentType !== null;
+
+  // Called by the footer Cancel button AND the BottomSheet "X" button.
+  const handleRequestClose = () => {
+    if (isFormDirty) {
+      setShowDiscardConfirm(true);
+    } else {
+      onOpenChange(false);
+    }
+  };
+
+  // Intercepts Radix open-change. With backdrop/Escape blocked on the content,
+  // the only false-event reaching here is the built-in "X" close button.
+  const handleSheetOpenChange = (next: boolean) => {
+    if (next) {
+      onOpenChange(true);
+    } else {
+      handleRequestClose();
+    }
+  };
+
   // Filter roles based on staff type and current user's level
   const filteredRoles = React.useMemo(() => {
     let baseFilteredRoles = [];
@@ -431,9 +463,14 @@ export function InviteUserWizard({
   };
 
   return (
-    <BottomSheet open={open} onOpenChange={onOpenChange}>
+    <BottomSheet open={open} onOpenChange={handleSheetOpenChange}>
       {children && <BottomSheetTrigger asChild>{children}</BottomSheetTrigger>}
-      <BottomSheetContent className="w-full" height="95">
+      <BottomSheetContent
+        className="w-full"
+        height="95"
+        onInteractOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => e.preventDefault()}
+      >
         <div className="flex h-full">
           {/* Left Sidebar - Steps */}
           <div className="w-64 border-r bg-muted/30 p-6 flex flex-col">
@@ -1307,15 +1344,20 @@ export function InviteUserWizard({
 
             <BottomSheetFooter className="border-t flex flex-col items-center justify-between">
               <div className="flex items-center justify-between w-full">
-                <Button
-                  variant="ghost"
-                  onClick={handleBack}
-                  disabled={currentStepIndex === 0}
-                  className="gap-2"
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                  Back
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button variant="ghost" onClick={handleRequestClose}>
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={handleBack}
+                    disabled={currentStepIndex === 0}
+                    className="gap-2"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                    Back
+                  </Button>
+                </div>
                 <Button
                   onClick={handleNext}
                   disabled={
@@ -1346,6 +1388,39 @@ export function InviteUserWizard({
             </BottomSheetFooter>
           </div>
         </div>
+
+        {/* Discard confirmation — rendered inside the sheet so it stacks above it */}
+        {showDiscardConfirm && (
+          <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/50 rounded-t-[20px]">
+            <div className="bg-background rounded-lg border shadow-lg p-6 max-w-sm w-full mx-4 space-y-4">
+              <div className="space-y-2">
+                <h3 className="text-lg font-semibold">
+                  Discard staff creation?
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  All entered information will be lost.
+                </p>
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowDiscardConfirm(false)}
+                >
+                  Keep editing
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={() => {
+                    setShowDiscardConfirm(false);
+                    onOpenChange(false);
+                  }}
+                >
+                  Discard
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
       </BottomSheetContent>
     </BottomSheet>
   );

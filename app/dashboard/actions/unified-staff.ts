@@ -18,6 +18,8 @@ import { isValidEmail, normalizeEmail } from "@/lib/utils/email";
 import { findEmailConflict } from "@/app/manage/actions/email-duplicates";
 import { emailConflictMessage } from "@/lib/utils/email";
 import { resolveOrgInviterUserId } from "@/lib/clerk/org-inviter";
+import { sendEmail, buildEmailTemplate } from "@/lib/messaging/resend";
+import { normalizePhone } from "@/lib/phone";
 
 // ============================================================================
 // CONSTANTS
@@ -447,7 +449,7 @@ export async function CreatePOSStaff(
  */
 function generateSecurePassword(length: number = 12): string {
   const charset =
-    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*";
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
   let password = "";
   for (let i = 0; i < length; i++) {
     password += charset.charAt(Math.floor(Math.random() * charset.length));
@@ -456,11 +458,9 @@ function generateSecurePassword(length: number = 12): string {
 }
 
 /**
- * Create Clerk user directly with password (no invitation email)
- *
- * @param clerkOrgId - Organization ID from Clerk
- * @param formData - Staff creation form data
- * @returns Success response with member data or error
+ * Create Clerk user directly with a generated temp password. The password is
+ * emailed to the new hire (never shown to the admin); the user can sign in
+ * immediately and change it later.
  */
 export async function CreateClerkUserDirectly(
   clerkOrgId: string,
@@ -470,7 +470,7 @@ export async function CreateClerkUserDirectly(
     member_id: string;
     user_id: string;
     generated_pin?: string;
-    temp_password: string;
+    phone_skipped?: boolean;
   }>
 > {
   if (!clerkOrgId) {
@@ -489,10 +489,9 @@ export async function CreateClerkUserDirectly(
   const supabase = createServerSupabaseClient();
 
   try {
-    // Get merchant ID from clerk org
     const { data: merchant, error: merchantError } = await supabase
       .from("merchants")
-      .select("id")
+      .select("id, name")
       .eq("clerk_org_id", clerkOrgId)
       .single();
 
@@ -501,6 +500,7 @@ export async function CreateClerkUserDirectly(
     }
 
     const merchantId = merchant.id;
+    const merchantName = (merchant as any).name ?? "DexaPOS";
 
     const conflict = await findEmailConflict(normalizedEmail, {
       scope: { merchantId },
@@ -509,14 +509,20 @@ export async function CreateClerkUserDirectly(
       return { error: emailConflictMessage(conflict) };
     }
 
-    // Owners/admins are auto-provisioned to every location
     const resolvedLocationIds = await resolveLocationIds(
       supabase,
       merchantId,
       formData,
     );
 
-    // 1. Generate password and PIN upfront
+    // Phone is optional; if present, must normalize to E.164 (Clerk requirement).
+    // We never reject the request over an unparseable phone — we drop it from
+    // the Clerk payload and persist it raw on staff_profiles for contact use.
+    const rawPhone = formData?.phone?.trim() || null;
+    const e164Phone = rawPhone ? normalizePhone(rawPhone) : null;
+    const phoneForClerk = e164Phone; // null if invalid or empty
+    const phoneForProfile = e164Phone ?? rawPhone; // keep raw if unparseable
+
     const tempPassword = generateSecurePassword(12);
 
     let pinCode: string | null = null;
@@ -529,16 +535,24 @@ export async function CreateClerkUserDirectly(
       pinCode = formData.pin_code;
     }
 
-    // Check PIN uniqueness across all assigned locations
     if (pinCode) {
-      const conflictLocationId = await checkPinConflict(supabase, pinCode, resolvedLocationIds);
+      const conflictLocationId = await checkPinConflict(
+        supabase,
+        pinCode,
+        resolvedLocationIds,
+      );
       if (conflictLocationId) {
-        const { data: loc } = await supabase.from("locations").select("name").eq("id", conflictLocationId).single();
-        return { error: `PIN is already in use at ${loc?.name ?? "another location"}. Each staff member at a location must have a unique PIN.` };
+        const { data: loc } = await supabase
+          .from("locations")
+          .select("name")
+          .eq("id", conflictLocationId)
+          .single();
+        return {
+          error: `PIN is already in use at ${loc?.name ?? "another location"}. Each staff member at a location must have a unique PIN.`,
+        };
       }
     }
 
-    // 2. Prepare location assignments for publicMetadata (webhook fallback)
     const locationAssignments = resolvedLocationIds.map((locationId) => ({
       locationId,
       roleCode: formData.role_code,
@@ -548,11 +562,6 @@ export async function CreateClerkUserDirectly(
       pinCode,
     }));
 
-    // 3. Create Clerk user with password.
-    //    Phone is GLOBALLY unique on Clerk's side. If a phone is rejected
-    //    (already attached to another Clerk user / org), don't fail the whole
-    //    create — retry without the phone and still store it on staff_profiles
-    //    so the merchant has it for contact purposes.
     const clerk = await clerkClient();
     const buildCreateUserPayload = (includePhone: boolean) => ({
       emailAddress: [formData.email],
@@ -560,15 +569,15 @@ export async function CreateClerkUserDirectly(
       firstName: formData.first_name,
       lastName: formData.last_name,
       phoneNumber:
-        includePhone && formData?.phone ? [formData.phone] : undefined,
+        includePhone && phoneForClerk ? [phoneForClerk] : undefined,
       publicMetadata: {
         creationType: "direct",
         organizationId: clerkOrgId,
         merchantId,
         roleCode: formData.role_code,
         locationAssignments,
-        phone: formData.phone,
-        phoneNotLinkedToClerk: !includePhone && !!formData?.phone,
+        phone: phoneForProfile,
+        phoneNotLinkedToClerk: !includePhone && !!phoneForClerk,
       },
       skipPasswordRequirement: false,
       skipPasswordChecks: false,
@@ -581,8 +590,7 @@ export async function CreateClerkUserDirectly(
         const msg: string = (e?.longMessage || e?.message || "").toLowerCase();
         return (
           code === "form_identifier_exists" &&
-          (e?.meta?.paramName === "phone_number" ||
-            msg.includes("phone"))
+          (e?.meta?.paramName === "phone_number" || msg.includes("phone"))
         );
       });
 
@@ -591,7 +599,7 @@ export async function CreateClerkUserDirectly(
     try {
       clerkUser = await clerk.users.createUser(buildCreateUserPayload(true));
     } catch (createErr: any) {
-      if (formData?.phone && isPhoneConflict(createErr)) {
+      if (phoneForClerk && isPhoneConflict(createErr)) {
         console.warn(
           "[CreateClerkUserDirectly] Phone already used in Clerk — retrying create without phone",
         );
@@ -606,7 +614,6 @@ export async function CreateClerkUserDirectly(
       return { error: "Failed to create Clerk user" };
     }
 
-    // 4. Add user to organization — capture membership ID for idempotent DB write
     let membership;
     try {
       membership = await clerk.organizations.createOrganizationMembership({
@@ -625,9 +632,6 @@ export async function CreateClerkUserDirectly(
       };
     }
 
-    // 4b. Eagerly create the users row — members.user_id is a FK to users.id and the
-    //     user.created webhook hasn't fired yet, so we write it now (upsert = safe on retry).
-    //     Must use service role — users table RLS is reserved for the Clerk webhook.
     const { error: userUpsertError } = await createServiceRoleClient()
       .from("users")
       .upsert(
@@ -650,7 +654,6 @@ export async function CreateClerkUserDirectly(
       return { error: "Failed to create user record" };
     }
 
-    // 5. Eagerly create staff_profile (webhook acts as fallback/sync, not primary writer)
     const { data: staffProfile, error: profileError } = await supabase
       .from("staff_profiles")
       .insert({
@@ -659,7 +662,7 @@ export async function CreateClerkUserDirectly(
         first_name: formData.first_name,
         last_name: formData.last_name,
         email: formData.email,
-        phone: formData.phone,
+        phone: phoneForProfile,
         account_type: "clerk",
         is_active: true,
       })
@@ -675,8 +678,6 @@ export async function CreateClerkUserDirectly(
       return { error: "Failed to create staff profile" };
     }
 
-    // 6. Eagerly create member record — use Clerk membership ID so webhook upsert is a no-op
-    // Must use service role client — members table has no RLS INSERT policy
     const { data: member, error: memberError } = await createServiceRoleClient()
       .from("members")
       .insert({
@@ -699,7 +700,6 @@ export async function CreateClerkUserDirectly(
       return { error: "Failed to create member record" };
     }
 
-    // 7. Eagerly create location_members records (skip if merchant has no locations yet)
     if (resolvedLocationIds.length > 0) {
       const primaryLocationId =
         formData.primary_location_id &&
@@ -721,18 +721,11 @@ export async function CreateClerkUserDirectly(
         employment_type: formData.employment_type,
       }));
 
-      // Use service role for the insert — location_members RLS may not have an
-      // INSERT policy reachable from the Clerk-authed client mid-flow, and the
-      // webhook also writes here using service role.
       const { error: assignmentError } = await createServiceRoleClient()
         .from("location_members")
         .insert(locationMembersData);
 
       if (assignmentError) {
-        // 23505 = unique_violation. The Clerk org-membership webhook fires in
-        // parallel and also inserts into location_members. If it landed first,
-        // the rows are already there — treat that as success rather than
-        // tearing down the whole user.
         if ((assignmentError as any).code === "23505") {
           console.warn(
             "[CreateClerkUserDirectly] location_members already inserted (likely by webhook race) — continuing",
@@ -743,9 +736,11 @@ export async function CreateClerkUserDirectly(
             assignmentError,
           );
           await supabase.from("members").delete().eq("id", member.id);
-          await supabase.from("staff_profiles").delete().eq("id", staffProfile.id);
+          await supabase
+            .from("staff_profiles")
+            .delete()
+            .eq("id", staffProfile.id);
           await clerk.users.deleteUser(clerkUser.id);
-          // Surface the underlying reason instead of a generic message.
           const detail =
             (assignmentError as any).code === "23503"
               ? "One of the selected locations no longer exists."
@@ -758,8 +753,6 @@ export async function CreateClerkUserDirectly(
 
     revalidatePath("/dashboard/staff");
 
-    // Insert a 'direct_created' audit record in location_invites.
-    // This is purely for history — the user already exists; status is never 'pending'.
     const { userId: actorUserId } = await auth();
     if (actorUserId) {
       await supabase.from("location_invites").insert({
@@ -769,7 +762,7 @@ export async function CreateClerkUserDirectly(
         email: formData.email,
         first_name: formData.first_name,
         last_name: formData.last_name,
-        phone: formData.phone ?? null,
+        phone: phoneForProfile,
         role_code: formData.role_code,
         invite_type: "direct_clerk",
         status: "direct_created",
@@ -778,7 +771,35 @@ export async function CreateClerkUserDirectly(
       });
     }
 
-    // Log audit event — use staffProfile.id (UUID), not clerkUser.id (Clerk string ID)
+    // Send Maria her temp-password email. Failure is logged but non-fatal —
+    // the account exists; the admin can trigger a password reset out-of-band.
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+    const signInUrl = appUrl ? `${appUrl}/sign-in` : "the DexaPOS sign-in page";
+    const emailBody = `Hi ${formData.first_name ?? "there"},
+
+Your account at ${merchantName} on DexaPOS is ready.
+
+Sign in here: ${signInUrl}
+Email: ${formData.email}
+Temporary password: ${tempPassword}
+
+For your security, please change your password after signing in.`;
+    const emailResult = await sendEmail(
+      formData.email,
+      `Your ${merchantName} account is ready`,
+      buildEmailTemplate(
+        merchantName,
+        `Your ${merchantName} account is ready`,
+        emailBody,
+      ),
+    );
+    if ("error" in emailResult) {
+      console.error(
+        "[CreateClerkUserDirectly] Failed to send sign-in email:",
+        emailResult.error,
+      );
+    }
+
     await LogAuditEvent({
       merchantId,
       action: `Created Staff (Clerk): ${formData.first_name} ${formData.last_name}`,
@@ -799,7 +820,6 @@ export async function CreateClerkUserDirectly(
         member_id: member.id,
         user_id: clerkUser.id,
         generated_pin: generatedPin,
-        temp_password: tempPassword,
         phone_skipped: phoneSkippedDueToConflict,
       },
     };
@@ -816,14 +836,12 @@ export async function CreateClerkUserDirectly(
         .join("; ");
       return { error: msg };
     }
-    // Surface DB / unknown error messages instead of swallowing them.
     const fallback =
       (error as any)?.message ||
       (typeof error === "string" ? error : "An unexpected error occurred");
     return { error: fallback };
   }
 }
-
 /**
  * Invite Clerk user to organization
  * @param userId - User who invited

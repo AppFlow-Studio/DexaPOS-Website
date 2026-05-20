@@ -81,5 +81,4 @@ BEGIN
   RETURN v_result;
 END;
 $function$;
-
-GRANT EXECUTE ON FUNCTION public.add_order_item_modifier_v2(uuid, uuid, uuid, text, text, numeric, integer, uuid) TO authenticated;;
+GRANT EXECUTE ON FUNCTION public.add_order_item_modifier_v2(uuid, uuid, uuid, text, text, numeric, integer, uuid) TO authenticated;
