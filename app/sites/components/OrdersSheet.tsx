@@ -42,7 +42,7 @@ export function OrdersSheet({ isOpen, onOpenChange, slug, storeConfigId }: Order
           </SheetTitle>
         </SheetHeader>
 
-        <ScrollArea className="flex-1 p-6">
+        <ScrollArea className="flex-1 min-h-0 p-6">
           <OrdersPanel slug={slug} storeConfigId={storeConfigId} />
         </ScrollArea>
       </SheetContent>

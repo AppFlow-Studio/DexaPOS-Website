@@ -10,6 +10,32 @@ export interface CartItem extends StorefrontItem {
   totalPrice: number; // Unit price (base + modifiers)
 }
 
+/**
+ * The single source of truth for what a cart line costs the customer.
+ * MUST mirror the server pricing in supabase/functions/create-online-order:
+ *   - separate delivery pricing ON  + delivery order → delivery price
+ *   - separate delivery pricing ON  + pickup order   → regular price
+ *   - separate delivery pricing OFF (any order type) → regular price
+ * Adds selected modifier prices. Use this everywhere the customer is shown a
+ * price for an in-cart item (subtotal, confirmation receipt) so the displayed
+ * total always equals what the server charges and what order tracking shows.
+ */
+export function resolveCartUnitPrice(
+  item: CartItem,
+  orderType: "pickup" | "delivery",
+  deliveryPricingEnabled: boolean
+): number {
+  const base =
+    deliveryPricingEnabled && orderType === "delivery"
+      ? item.delivery_price ?? item.price
+      : item.price;
+  const modifiers = (item.selectedModifiers ?? []).reduce(
+    (sum, m) => sum + m.price,
+    0
+  );
+  return base + modifiers;
+}
+
 interface CartStore {
   // State
   items: CartItem[];

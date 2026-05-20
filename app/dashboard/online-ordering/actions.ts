@@ -523,6 +523,7 @@ function mapConfigToSettings(
 
     pickupEnabled: config.accepts_pickup ?? true,
     deliveryEnabled: config.accepts_delivery ?? false,
+    deliveryPricingEnabled: config.delivery_pricing_enabled ?? true,
     autoAcceptOrders: config.auto_accept_orders ?? false,
     minimumOrderAmount: Number(config.min_order ?? 0),
     preparationLeadTime: config.estimated_prep_minutes ?? 20,
@@ -820,6 +821,7 @@ export async function saveOnlineOrderingSettings(
   // Ordering
   if (settings.pickupEnabled !== undefined) configData.accepts_pickup = Boolean(settings.pickupEnabled);
   if (settings.deliveryEnabled !== undefined) configData.accepts_delivery = Boolean(settings.deliveryEnabled);
+  if (settings.deliveryPricingEnabled !== undefined) configData.delivery_pricing_enabled = Boolean(settings.deliveryPricingEnabled);
   if (settings.autoAcceptOrders !== undefined) configData.auto_accept_orders = Boolean(settings.autoAcceptOrders);
   if (settings.preparationLeadTime !== undefined) configData.estimated_prep_minutes = Number(settings.preparationLeadTime) || 0;
   if (settings.futureOrderMaxDays !== undefined) configData.max_future_order_days = Number(settings.futureOrderMaxDays) || 0;
