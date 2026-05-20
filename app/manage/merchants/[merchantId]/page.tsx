@@ -183,7 +183,7 @@ export default function MerchantDetailsPage() {
                         <DropdownMenuTrigger asChild>
                             <Button variant="outline" size="sm">
                                 <Download className="h-3.5 w-3.5 mr-1.5" />
-                                Import
+                                Import Menu
                                 <ChevronDown className="h-3.5 w-3.5 ml-1.5 opacity-60" />
                             </Button>
                         </DropdownMenuTrigger>
