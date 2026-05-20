@@ -286,6 +286,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         online_store_config!inner(
           id, location_id, merchant_id, is_active,
           operating_hours, accepts_pickup, accepts_delivery,
+          delivery_pricing_enabled,
           min_order, estimated_prep_minutes,
           delivery_radius_miles, delivery_fee,
           free_delivery_threshold, address,
@@ -311,6 +312,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       .select(`
         id, location_id, merchant_id, is_active,
         operating_hours, accepts_pickup, accepts_delivery,
+        delivery_pricing_enabled,
         min_order, estimated_prep_minutes,
         delivery_radius_miles, delivery_fee,
         free_delivery_threshold, address,
@@ -516,8 +518,13 @@ Deno.serve(async (req: Request): Promise<Response> => {
     // Use the canonical DB price from get_effective_price() (full 5-level cascade).
     // Falls back to the cart-submitted price only if the RPC returned nothing
     // (item not found in DB — should not happen in practice).
+    //
+    // delivery_pricing_enabled (default true) controls whether online orders
+    // use the separate delivery price. When false, every online order — pickup
+    // or delivery — uses the regular price, matching what the storefront shows.
+    const deliveryPricingEnabled = storeConfig.delivery_pricing_enabled !== false
     let unitPrice: number
-    if (body.order_type === 'delivery') {
+    if (deliveryPricingEnabled && body.order_type === 'delivery') {
       unitPrice = serverPrices?.effective_delivery_price ?? serverPrices?.effective_price ?? cartItem.price
     } else {
       unitPrice = serverPrices?.effective_price ?? cartItem.price
