@@ -1,5 +1,3 @@
--- Pulled from Supabase staging branch (project dfwqakoyittmrwbqvxgw) on 2026-05-03 to reconcile local migration history.
-
 
 CREATE TABLE public.customer_payment_methods (
   id                          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -49,3 +47,4 @@ CREATE POLICY merchant_access_cpm
   ON public.customer_payment_methods FOR ALL
   USING (is_merchant_admin(merchant_id))
   WITH CHECK (is_merchant_admin(merchant_id));
+;

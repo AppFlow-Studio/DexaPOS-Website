@@ -28,7 +28,6 @@ create table if not exists public.subscription_plans (
   constraint subscription_plans_extra_station_nonnegative check (per_extra_station_price >= 0),
   constraint subscription_plans_surcharge_nonnegative check (card_surcharge_pct >= 0)
 );
-
 create table if not exists public.merchant_subscriptions (
   id uuid primary key default gen_random_uuid(),
   merchant_id uuid not null references public.merchants(id) on delete cascade,
@@ -55,7 +54,6 @@ create table if not exists public.merchant_subscriptions (
   constraint merchant_subscriptions_monthly_amount_nonnegative check (monthly_amount >= 0),
   constraint merchant_subscriptions_period_order check (current_period_end >= current_period_start)
 );
-
 create table if not exists public.subscription_invoices (
   id uuid primary key default gen_random_uuid(),
   subscription_id uuid not null references public.merchant_subscriptions(id) on delete cascade,
@@ -90,7 +88,6 @@ create table if not exists public.subscription_invoices (
   constraint subscription_invoices_total_nonnegative check (total_amount >= 0),
   constraint subscription_invoices_period_order check (billing_period_end >= billing_period_start)
 );
-
 create table if not exists public.subscription_invoice_sequences (
   yearmonth text primary key,
   last_number integer not null default 0,
@@ -99,62 +96,49 @@ create table if not exists public.subscription_invoice_sequences (
   constraint subscription_invoice_sequences_yearmonth_format check (yearmonth ~ '^[0-9]{6}$'),
   constraint subscription_invoice_sequences_last_number_nonnegative check (last_number >= 0)
 );
-
 create unique index if not exists uq_subscription_invoices_period
   on public.subscription_invoices(subscription_id, billing_period_start);
-
 create index if not exists idx_merchant_subscriptions_merchant
   on public.merchant_subscriptions(merchant_id);
-
 create index if not exists idx_merchant_subscriptions_status_next_billing
   on public.merchant_subscriptions(status, next_billing_date);
-
 create index if not exists idx_subscription_invoices_merchant_status_due
   on public.subscription_invoices(merchant_id, status, due_date);
-
 create index if not exists idx_subscription_invoices_location
   on public.subscription_invoices(location_id, created_at desc);
-
 drop trigger if exists update_subscription_plans_updated_at on public.subscription_plans;
 create trigger update_subscription_plans_updated_at
 before update on public.subscription_plans
 for each row execute function public.update_updated_at_column();
-
 drop trigger if exists update_merchant_subscriptions_updated_at on public.merchant_subscriptions;
 create trigger update_merchant_subscriptions_updated_at
 before update on public.merchant_subscriptions
 for each row execute function public.update_updated_at_column();
-
 drop trigger if exists update_subscription_invoices_updated_at on public.subscription_invoices;
 create trigger update_subscription_invoices_updated_at
 before update on public.subscription_invoices
 for each row execute function public.update_updated_at_column();
-
 drop trigger if exists update_subscription_invoice_sequences_updated_at on public.subscription_invoice_sequences;
 create trigger update_subscription_invoice_sequences_updated_at
 before update on public.subscription_invoice_sequences
 for each row execute function public.update_updated_at_column();
-
 alter table public.subscription_plans enable row level security;
 alter table public.subscription_plans force row level security;
 alter table public.merchant_subscriptions enable row level security;
 alter table public.merchant_subscriptions force row level security;
 alter table public.subscription_invoices enable row level security;
 alter table public.subscription_invoices force row level security;
-
 drop policy if exists subscription_plans_read on public.subscription_plans;
 create policy subscription_plans_read
 on public.subscription_plans
 for select
 using (true);
-
 drop policy if exists subscription_plans_manage_hq on public.subscription_plans;
 create policy subscription_plans_manage_hq
 on public.subscription_plans
 for all
 using (public.is_dexapos_admin())
 with check (public.is_dexapos_admin());
-
 drop policy if exists merchant_subscriptions_self on public.merchant_subscriptions;
 create policy merchant_subscriptions_self
 on public.merchant_subscriptions
@@ -163,14 +147,12 @@ using (
   public.user_belongs_to_merchant(merchant_id)
   or public.is_dexapos_admin()
 );
-
 drop policy if exists merchant_subscriptions_manage_hq on public.merchant_subscriptions;
 create policy merchant_subscriptions_manage_hq
 on public.merchant_subscriptions
 for all
 using (public.is_dexapos_admin())
 with check (public.is_dexapos_admin());
-
 drop policy if exists subscription_invoices_self on public.subscription_invoices;
 create policy subscription_invoices_self
 on public.subscription_invoices
@@ -179,14 +161,12 @@ using (
   public.user_belongs_to_merchant(merchant_id)
   or public.is_dexapos_admin()
 );
-
 drop policy if exists subscription_invoices_manage_hq on public.subscription_invoices;
 create policy subscription_invoices_manage_hq
 on public.subscription_invoices
 for all
 using (public.is_dexapos_admin())
 with check (public.is_dexapos_admin());
-
 grant select on public.subscription_plans to authenticated, service_role;
 grant select on public.merchant_subscriptions to authenticated, service_role;
 grant select on public.subscription_invoices to authenticated, service_role;
@@ -194,7 +174,6 @@ grant all on public.subscription_plans to service_role;
 grant all on public.merchant_subscriptions to service_role;
 grant all on public.subscription_invoices to service_role;
 grant all on public.subscription_invoice_sequences to service_role;
-
 create or replace function public.log_subscription_billing_event(
   p_action text,
   p_merchant_id uuid,
@@ -244,10 +223,8 @@ begin
   );
 end;
 $function$;
-
 revoke all on function public.log_subscription_billing_event(text, uuid, uuid, text, text, uuid, jsonb, jsonb, text, text) from public;
 grant execute on function public.log_subscription_billing_event(text, uuid, uuid, text, text, uuid, jsonb, jsonb, text, text) to authenticated, service_role;
-
 create or replace function public.get_active_station_count(
   p_location_id uuid
 )
@@ -263,10 +240,8 @@ as $function$
     and s.is_active = true
     and s.deactivated_at is null;
 $function$;
-
 revoke all on function public.get_active_station_count(uuid) from public;
 grant execute on function public.get_active_station_count(uuid) to authenticated, service_role;
-
 create or replace function public.calculate_subscription_amounts(
   p_plan_id uuid,
   p_station_count integer,
@@ -326,10 +301,8 @@ begin
     round(v_subtotal + v_surcharge, 2);
 end;
 $function$;
-
 revoke all on function public.calculate_subscription_amounts(uuid, integer, text) from public;
 grant execute on function public.calculate_subscription_amounts(uuid, integer, text) to authenticated, service_role;
-
 create or replace function public.generate_subscription_invoice_number(
   p_for_date date default current_date
 )
@@ -354,10 +327,8 @@ begin
   return 'SUB-' || v_yearmonth || '-' || lpad(v_next_number::text, 4, '0');
 end;
 $function$;
-
 revoke all on function public.generate_subscription_invoice_number(date) from public;
 grant execute on function public.generate_subscription_invoice_number(date) to authenticated, service_role;
-
 create or replace function public.list_subscription_plans()
 returns setof public.subscription_plans
 language sql
@@ -370,10 +341,8 @@ as $function$
   where sp.is_active = true
   order by sp.display_name asc;
 $function$;
-
 revoke all on function public.list_subscription_plans() from public;
 grant execute on function public.list_subscription_plans() to authenticated, service_role;
-
 create or replace function public.upsert_subscription_plan(
   p_plan_id uuid default null,
   p_plan_code text default null,
@@ -463,10 +432,8 @@ begin
   return v_plan_id;
 end;
 $function$;
-
 revoke all on function public.upsert_subscription_plan(uuid, text, text, numeric, integer, numeric, numeric, boolean, jsonb) from public;
 grant execute on function public.upsert_subscription_plan(uuid, text, text, numeric, integer, numeric, numeric, boolean, jsonb) to authenticated, service_role;
-
 create or replace function public.upsert_merchant_subscription(
   p_subscription_id uuid default null,
   p_merchant_id uuid default null,
@@ -612,10 +579,8 @@ begin
   return v_subscription_id;
 end;
 $function$;
-
 revoke all on function public.upsert_merchant_subscription(uuid, uuid, uuid, uuid, date, date, date, text, timestamptz, uuid, jsonb) from public;
 grant execute on function public.upsert_merchant_subscription(uuid, uuid, uuid, uuid, date, date, date, text, timestamptz, uuid, jsonb) to authenticated, service_role;
-
 create or replace function public.list_merchant_subscriptions(
   p_merchant_id uuid default null
 )
@@ -688,10 +653,8 @@ begin
   order by l.name asc, ms.created_at desc;
 end;
 $function$;
-
 revoke all on function public.list_merchant_subscriptions(uuid) from public;
 grant execute on function public.list_merchant_subscriptions(uuid) to authenticated, service_role;
-
 create or replace function public.list_subscription_invoices(
   p_merchant_id uuid default null,
   p_location_id uuid default null,
@@ -774,10 +737,8 @@ begin
   limit greatest(coalesce(p_limit, 100), 1);
 end;
 $function$;
-
 revoke all on function public.list_subscription_invoices(uuid, uuid, integer) from public;
 grant execute on function public.list_subscription_invoices(uuid, uuid, integer) to authenticated, service_role;
-
 create or replace function public.generate_subscription_invoice(
   p_subscription_id uuid,
   p_due_date date default null
@@ -975,10 +936,8 @@ begin
   return v_invoice_id;
 end;
 $function$;
-
 revoke all on function public.generate_subscription_invoice(uuid, date) from public;
 grant execute on function public.generate_subscription_invoice(uuid, date) to authenticated, service_role;
-
 insert into public.subscription_plans (
   plan_code,
   display_name,

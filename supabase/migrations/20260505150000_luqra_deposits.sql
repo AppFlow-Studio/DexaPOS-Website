@@ -46,42 +46,33 @@ CREATE TABLE IF NOT EXISTS public.luqra_deposits (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-
 CREATE INDEX IF NOT EXISTS luqra_dep_merchant_date_idx
   ON public.luqra_deposits (merchant_id, deposit_date DESC);
 CREATE INDEX IF NOT EXISTS luqra_dep_mid_date_idx
   ON public.luqra_deposits (mid, deposit_date DESC);
-
 DROP TRIGGER IF EXISTS update_luqra_deposits_updated_at ON public.luqra_deposits;
 CREATE TRIGGER update_luqra_deposits_updated_at
   BEFORE UPDATE ON public.luqra_deposits
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
-
 ALTER TABLE public.luqra_deposits ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.luqra_deposits FORCE ROW LEVEL SECURITY;
-
 DROP POLICY IF EXISTS luqra_dep_admin_select ON public.luqra_deposits;
 CREATE POLICY luqra_dep_admin_select ON public.luqra_deposits
   FOR SELECT
   USING (public.is_dexapos_admin());
-
 DROP POLICY IF EXISTS luqra_dep_merchant_admin_select ON public.luqra_deposits;
 CREATE POLICY luqra_dep_merchant_admin_select ON public.luqra_deposits
   FOR SELECT
   USING (public.is_merchant_admin(merchant_id));
-
 -- Add the FK from transactions → deposits (nullable; set at sync time).
 ALTER TABLE public.luqra_transactions
   ADD COLUMN IF NOT EXISTS deposit_id TEXT REFERENCES public.luqra_deposits(id) ON DELETE SET NULL;
-
 CREATE INDEX IF NOT EXISTS luqra_txn_deposit_idx
   ON public.luqra_transactions (deposit_id)
   WHERE deposit_id IS NOT NULL;
-
 -- Sync runs already covers transactions/chargebacks; widen the check.
 ALTER TABLE public.luqra_sync_runs
   DROP CONSTRAINT IF EXISTS luqra_sync_runs_resource_check;
-
 ALTER TABLE public.luqra_sync_runs
   ADD CONSTRAINT luqra_sync_runs_resource_check
     CHECK (resource IN ('transactions', 'chargebacks', 'deposits'));

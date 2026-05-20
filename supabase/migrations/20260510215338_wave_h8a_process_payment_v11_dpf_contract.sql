@@ -398,4 +398,4 @@ BEGIN
     END IF;
     RETURN v_result;
 END;
-$function$;
+$function$;;

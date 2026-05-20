@@ -96,5 +96,4 @@ SELECT
 
 FROM public.merchants m
 LEFT JOIN public.organizations org ON m.clerk_org_id = org.id;
-
 ALTER VIEW "public"."admin_merchant_summary" OWNER TO postgres;

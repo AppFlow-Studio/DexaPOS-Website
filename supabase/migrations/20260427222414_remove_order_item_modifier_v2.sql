@@ -67,5 +67,4 @@ BEGIN
   RETURN v_result;
 END;
 $function$;
-
-GRANT EXECUTE ON FUNCTION public.remove_order_item_modifier_v2(uuid, uuid) TO authenticated;;
+GRANT EXECUTE ON FUNCTION public.remove_order_item_modifier_v2(uuid, uuid) TO authenticated;

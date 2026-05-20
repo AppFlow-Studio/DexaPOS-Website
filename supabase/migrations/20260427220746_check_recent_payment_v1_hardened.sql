@@ -59,8 +59,6 @@ BEGIN
   );
 END;
 $$;
-
 GRANT EXECUTE ON FUNCTION public.check_recent_payment(UUID, INTEGER, BIGINT) TO authenticated;
-
 COMMENT ON FUNCTION public.check_recent_payment(UUID, INTEGER, BIGINT) IS
-  'Wave 1 retry-safety check: server-side lookup for a recent payment matching order + amount. Avoids client clock skew. Conservative: callers should treat any error/timeout as cannot verify. Raises insufficient_privilege if caller has no merchant/location context.';;
+  'Wave 1 retry-safety check: server-side lookup for a recent payment matching order + amount. Avoids client clock skew. Conservative: callers should treat any error/timeout as cannot verify. Raises insufficient_privilege if caller has no merchant/location context.';

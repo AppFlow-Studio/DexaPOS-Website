@@ -192,4 +192,4 @@ BEGIN
         'sync_version', v_new_sync_version
     );
 END
-$function$;;
+$function$;

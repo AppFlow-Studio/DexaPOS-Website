@@ -159,8 +159,6 @@ BEGIN
     RETURN v_result;
 END;
 $function$;
-
 GRANT EXECUTE ON FUNCTION public.update_order_item_quantity_v3(uuid, integer, uuid) TO authenticated;
-
 COMMENT ON FUNCTION public.update_order_item_quantity_v3 IS
-  'Wave 3.0a: hot-path quantity update with optional p_idempotency_key for at-most-once execution. Forks from v2; same-intent retries dedupe via _idempotency_claim cache. Different qty values produce distinct keys and execute independently.';;
+  'Wave 3.0a: hot-path quantity update with optional p_idempotency_key for at-most-once execution. Forks from v2; same-intent retries dedupe via _idempotency_claim cache. Different qty values produce distinct keys and execute independently.';

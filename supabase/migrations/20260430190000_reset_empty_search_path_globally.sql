@@ -52,7 +52,6 @@ begin
   raise notice 'Total functions reset: %', v_count;
 end;
 $$;
-
 -- Force PostgREST to refresh its schema cache so the changes take effect
 -- immediately on the API surface.
 notify pgrst, 'reload schema';

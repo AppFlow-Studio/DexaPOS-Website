@@ -26,7 +26,6 @@ using (
       and public.user_belongs_to_merchant(mer.id)
   )
 );
-
 -- ─── organizations ──────────────────────────────────────────────────────────
 drop policy if exists "organizations_tenant_select" on public.organizations;
 create policy "organizations_tenant_select"
@@ -43,7 +42,6 @@ using (
       and public.user_belongs_to_merchant(mer.id)
   )
 );
-
 -- ─── users ──────────────────────────────────────────────────────────────────
 drop policy if exists "users_tenant_select" on public.users;
 create policy "users_tenant_select"
@@ -68,7 +66,6 @@ using (
       and public.user_belongs_to_merchant(mer.id)
   )
 );
-
 -- ─── audit_logs ─────────────────────────────────────────────────────────────
 -- Original policy required merchant_id IS NOT NULL, so HQ-level audit rows
 -- (merchant_id NULL) were invisible to HQ admins.
@@ -84,5 +81,4 @@ using (
     and public.user_belongs_to_merchant(merchant_id)
   )
 );
-
 notify pgrst, 'reload schema';

@@ -341,6 +341,7 @@ export function AuthDialog({
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent
+        elevation="above-sheet"
         className="sm:max-w-[400px]"
         style={{
           backgroundColor: "var(--card, #fff)",

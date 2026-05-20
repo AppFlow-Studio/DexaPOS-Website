@@ -16,6 +16,7 @@ import { Label } from '@/components/ui/label'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { TABLE_SHAPES, SHAPE_OPTIONS } from '@/utils/tables/table-shapes'
+import { toast } from 'sonner'
 
 type ShapeCategory = 'table' | 'booth' | 'functional' | 'structure' | 'decor' | 'zone'
 
@@ -24,7 +25,7 @@ interface TableShapePickerDialogProps {
     onOpenChange: (open: boolean) => void
     onAdd: (payload: {
         shapeId: keyof typeof TABLE_SHAPES
-        name?: string
+        name: string
     }) => void
 }
 
@@ -77,10 +78,14 @@ export function TableShapePickerDialog({
 
     const handleSubmit = () => {
         const trimmedName = name.trim()
+        if (!trimmedName) {
+            toast.error('Enter a name for the new object.')
+            return
+        }
 
         onAdd({
             shapeId: selectedShapeId,
-            name: trimmedName || undefined,
+            name: trimmedName,
         })
         onOpenChange(false)
     }

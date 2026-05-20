@@ -1,14 +1,9 @@
 -- Migration: luqra_chargebacks table + reconcile_luqra_chargebacks() RPC
--- Creates the TSYS sync target table and the reconciliation function that
--- matches incoming chargebacks to existing order_payments records.
+-- Table already exists on remote — all DDL is fully idempotent.
 
 -- ─── luqra_chargebacks ────────────────────────────────────────────────────────
--- Idempotent: drop existing table (CASCADE removes dependent policy/trigger/indexes)
--- and function so this migration can be re-run safely. Prod table is empty.
-DROP FUNCTION IF EXISTS public.reconcile_luqra_chargebacks(uuid, timestamptz);
-DROP TABLE IF EXISTS public.luqra_chargebacks CASCADE;
 
-CREATE TABLE public.luqra_chargebacks (
+CREATE TABLE IF NOT EXISTS public.luqra_chargebacks (
   id                       bigint       PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
   merchant_id              uuid         NOT NULL REFERENCES public.merchants(id) ON DELETE CASCADE,
   location_id              uuid         REFERENCES public.locations(id) ON DELETE SET NULL,
@@ -39,39 +34,49 @@ CREATE TABLE public.luqra_chargebacks (
   created_at               timestamptz  NOT NULL DEFAULT now(),
   updated_at               timestamptz  NOT NULL DEFAULT now()
 );
-
 CREATE INDEX IF NOT EXISTS luqra_chargebacks_merchant_id_idx
   ON public.luqra_chargebacks (merchant_id);
-
 CREATE INDEX IF NOT EXISTS luqra_chargebacks_reconciled_payment_id_idx
   ON public.luqra_chargebacks (reconciled_payment_id);
-
 CREATE INDEX IF NOT EXISTS luqra_chargebacks_case_number_idx
   ON public.luqra_chargebacks (case_number)
   WHERE case_number IS NOT NULL;
-
 ALTER TABLE public.luqra_chargebacks ENABLE ROW LEVEL SECURITY;
-
 -- HQ-only direct access; merchant sync goes through SECURITY DEFINER RPCs
-DROP POLICY IF EXISTS "hq_full_access_luqra_chargebacks" ON public.luqra_chargebacks;
-CREATE POLICY "hq_full_access_luqra_chargebacks"
-  ON public.luqra_chargebacks
-  FOR ALL
-  USING (
-    EXISTS (
-      SELECT 1
-      FROM   public.members  m
-      JOIN   public.roles    r ON r.code = m.role
-      WHERE  m.user_id            = current_user_id()
-        AND  r.organization_type  = 'hq'
-    )
-  );
-
-DROP TRIGGER IF EXISTS update_luqra_chargebacks_updated_at ON public.luqra_chargebacks;
-CREATE TRIGGER update_luqra_chargebacks_updated_at
-  BEFORE UPDATE ON public.luqra_chargebacks
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename  = 'luqra_chargebacks'
+      AND policyname = 'hq_full_access_luqra_chargebacks'
+  ) THEN
+    CREATE POLICY "hq_full_access_luqra_chargebacks"
+      ON public.luqra_chargebacks
+      FOR ALL
+      USING (
+        EXISTS (
+          SELECT 1
+          FROM   public.members  m
+          JOIN   public.roles    r ON r.code = m.role
+          WHERE  m.user_id            = current_user_id()
+            AND  r.organization_type  = 'hq'
+        )
+      );
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_trigger
+    WHERE tgname   = 'update_luqra_chargebacks_updated_at'
+      AND tgrelid  = 'public.luqra_chargebacks'::regclass
+  ) THEN
+    CREATE TRIGGER update_luqra_chargebacks_updated_at
+      BEFORE UPDATE ON public.luqra_chargebacks
+      FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+  END IF;
+END $$;
 -- ─── reconcile_luqra_chargebacks() ───────────────────────────────────────────
 --
 -- Scans unreconciled luqra_chargebacks rows for a merchant and tries to match
@@ -187,6 +192,5 @@ BEGIN
   );
 END;
 $$;
-
 COMMENT ON FUNCTION public.reconcile_luqra_chargebacks(uuid, timestamptz) IS
   'Matches unreconciled luqra_chargebacks rows to order_payments by auth_code/trans_id + last4 + amount. Creates chargebacks rows for single confident matches. Returns {matched, ambiguous, unmatched}.';

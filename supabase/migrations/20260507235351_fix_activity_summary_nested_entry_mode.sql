@@ -211,4 +211,4 @@ BEGIN
     'batches', v_batches
   );
 END;
-$function$;
+$function$;;

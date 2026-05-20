@@ -76,13 +76,10 @@ BEGIN
     RETURN result;
 END;
 $function$;
-
 -- Re-assert search_path on dependent / sibling RPCs in case earlier
 -- search_path fixes never reached this DB. Metadata-only ALTERs.
 ALTER FUNCTION public.get_categories_for_location(uuid, uuid)
   SET search_path TO 'public', 'pg_temp';
-
 ALTER FUNCTION public.get_menu_with_categories(uuid, uuid)
   SET search_path TO 'public', 'pg_temp';
-
 NOTIFY pgrst, 'reload schema';

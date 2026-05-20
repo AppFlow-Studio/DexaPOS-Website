@@ -916,7 +916,7 @@ export function AccountDrawer({
               </div>
 
               {/* Content */}
-              <ScrollArea className="flex-1 overflow-auto">
+              <ScrollArea className="flex-1 min-h-0 overflow-hidden">
                 {renderContent()}
               </ScrollArea>
           </SheetPrimitive.Content>

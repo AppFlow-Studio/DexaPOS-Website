@@ -1,32 +1,3 @@
--- =====================================================================
--- Wave H.7 — Batch summary correctness + acquirer/serial on header
--- =====================================================================
--- Why: get_batch_summary_v1 lumped partially_refunded rows together with
--- fully refunded ones via the is_returned predicate. For our $114.31 sale
--- with a $33.75 partial refund this produced:
---   gross_sales = $11.16   (the partial-refund row dropped from gross)
---   refund     = $129.01  (full sale $95.26 + refunded_amount $33.75
---                          double-counted)
---   approvals  = 1         (only the captured row)
--- The receipt printed nonsensical totals (Net = $11.16 − $129.01).
---
--- Fix:
---   * gross_sales = SUM(amount) over every in_sales row. Sales count
---     fully, refunds reduce net via the refund column only.
---   * refund_amount = SUM(refunded_amount) over in_sales — refunded_amount
---     is authoritative for both partial and full refunds (full refund
---     rows have refunded_amount = total_amount).
---   * approvals_count = COUNT(in_sales) (every sale was approved at the
---     terminal). refunds_count counts rows with refunded_amount > 0.
---
--- Also adds:
---   * header.terminal_serial — payment_terminals.serial_number, surfaced
---     on the printed receipt.
---   * header.net_deposit — computed gross + tips − refunds so the print
---     template can fall back to it when the batch is still open and
---     settlement_batches.net_deposit is zero.
--- =====================================================================
-
 CREATE OR REPLACE FUNCTION public.get_batch_summary_v1(p_settlement_batch_id uuid)
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -193,4 +164,4 @@ BEGIN
         )
     );
 END;
-$function$;
+$function$;;

@@ -61,5 +61,4 @@ BEGIN
   END IF;
 END;
 $function$;
-
-GRANT EXECUTE ON FUNCTION public.apply_refund_to_payment_v2(uuid, numeric, reversal_type, text, text, text, text, text, uuid, boolean, uuid) TO authenticated;;
+GRANT EXECUTE ON FUNCTION public.apply_refund_to_payment_v2(uuid, numeric, reversal_type, text, text, text, text, text, uuid, boolean, uuid) TO authenticated;

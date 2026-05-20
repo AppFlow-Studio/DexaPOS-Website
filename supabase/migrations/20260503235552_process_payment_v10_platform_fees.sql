@@ -768,4 +768,4 @@ GRANT EXECUTE ON FUNCTION public.process_payment_v10(
 ) TO authenticated;
 
 COMMENT ON FUNCTION public.process_payment_v10 IS
-  'Idempotent payment-processing RPC with platform-fee tracking. Forks v9 with fee-decomposition deltas: dual_pricing_fee, tip_fee, dual_pricing_percentage_snapshot, tip_surcharge_percentage_snapshot. Customer-invisible — frontend bakes tip surcharge into displayed amounts (P1). Cash payments produce zero fees (P2 — guarded on v_is_cash, not v_use_cash_pricing). Idempotency op namespace: process_payment_v10.';
+  'Idempotent payment-processing RPC with platform-fee tracking. Forks v9 with fee-decomposition deltas: dual_pricing_fee, tip_fee, dual_pricing_percentage_snapshot, tip_surcharge_percentage_snapshot. Customer-invisible — frontend bakes tip surcharge into displayed amounts (P1). Cash payments produce zero fees (P2 — guarded on v_is_cash, not v_use_cash_pricing). Idempotency op namespace: process_payment_v10.';;

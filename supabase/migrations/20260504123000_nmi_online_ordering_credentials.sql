@@ -20,7 +20,6 @@ create table if not exists public.merchant_payment_credentials (
   constraint merchant_payment_credentials_unique_provider
     unique (merchant_id, provider)
 );
-
 create table if not exists public.merchant_payment_credential_access_log (
   id uuid primary key default gen_random_uuid(),
   merchant_payment_credential_id uuid references public.merchant_payment_credentials(id) on delete set null,
@@ -31,22 +30,16 @@ create table if not exists public.merchant_payment_credential_access_log (
   called_at timestamptz not null default now(),
   metadata jsonb not null default '{}'::jsonb
 );
-
 create index if not exists idx_merchant_payment_credentials_merchant
   on public.merchant_payment_credentials (merchant_id, provider, is_active);
-
 create index if not exists idx_merchant_payment_credential_access_log_credential_called_at
   on public.merchant_payment_credential_access_log (merchant_payment_credential_id, called_at desc);
-
 create index if not exists idx_merchant_payment_credential_access_log_merchant_called_at
   on public.merchant_payment_credential_access_log (merchant_id, called_at desc);
-
 alter table public.merchant_payment_credentials enable row level security;
 alter table public.merchant_payment_credentials force row level security;
-
 alter table public.merchant_payment_credential_access_log enable row level security;
 alter table public.merchant_payment_credential_access_log force row level security;
-
 drop policy if exists merchant_payment_credentials_select on public.merchant_payment_credentials;
 create policy merchant_payment_credentials_select
   on public.merchant_payment_credentials
@@ -55,7 +48,6 @@ create policy merchant_payment_credentials_select
   using (
     public.is_dexapos_admin()
   );
-
 drop policy if exists merchant_payment_credentials_insert on public.merchant_payment_credentials;
 create policy merchant_payment_credentials_insert
   on public.merchant_payment_credentials
@@ -64,7 +56,6 @@ create policy merchant_payment_credentials_insert
   with check (
     public.is_dexapos_admin()
   );
-
 drop policy if exists merchant_payment_credentials_update on public.merchant_payment_credentials;
 create policy merchant_payment_credentials_update
   on public.merchant_payment_credentials
@@ -76,7 +67,6 @@ create policy merchant_payment_credentials_update
   with check (
     public.is_dexapos_admin()
   );
-
 drop policy if exists merchant_payment_credential_access_log_select on public.merchant_payment_credential_access_log;
 create policy merchant_payment_credential_access_log_select
   on public.merchant_payment_credential_access_log
@@ -85,7 +75,6 @@ create policy merchant_payment_credential_access_log_select
   using (
     public.is_dexapos_admin()
   );
-
 create or replace function public.list_merchant_payment_credentials(
   p_merchant_id uuid
 )
@@ -120,7 +109,6 @@ as $$
       or public.is_dexapos_admin()
     );
 $$;
-
 create or replace function public.get_merchant_payment_api_secret(
   p_merchant_id uuid,
   p_provider text default 'nmi'
@@ -174,7 +162,6 @@ begin
   limit 1;
 end;
 $$;
-
 create or replace function public.upsert_merchant_payment_credentials(
   p_merchant_id uuid,
   p_provider text default 'nmi',
@@ -281,12 +268,9 @@ begin
   return v_secret_id;
 end;
 $$;
-
 revoke all on function public.list_merchant_payment_credentials(uuid) from public, anon;
 grant execute on function public.list_merchant_payment_credentials(uuid) to authenticated, service_role;
-
 revoke all on function public.get_merchant_payment_api_secret(uuid, text) from public, anon;
 grant execute on function public.get_merchant_payment_api_secret(uuid, text) to authenticated, service_role;
-
 revoke all on function public.upsert_merchant_payment_credentials(uuid, text, text, text, boolean) from public, anon;
 grant execute on function public.upsert_merchant_payment_credentials(uuid, text, text, text, boolean) to authenticated, service_role;

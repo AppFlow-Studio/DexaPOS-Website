@@ -1,0 +1,76 @@
+name: Migrations Guard
+
+on:
+  pull_request:
+    branches: [main, dexaposwebsite-preview]
+
+jobs:
+  protect-migrations:
+    name: Block migration deletions & revert-merges
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fail if any supabase/migrations/*.sql was deleted
+        if: ${{ !contains(github.event.pull_request.labels.*.name, 'allow-migration-delete') }}
+        run: |
+          base="origin/${{ github.base_ref }}"
+          deleted=$(git diff --diff-filter=D --name-only "$base...HEAD" -- 'supabase/migrations/*.sql' 'supabase/migrations/**/*.sql')
+          if [ -n "$deleted" ]; then
+            echo "::error::Migration files were deleted. Migrations are append-only."
+            echo "::error::If this is intentional, add the 'allow-migration-delete' label."
+            echo "$deleted"
+            exit 1
+          fi
+
+      - name: Warn on large schema.sql shrinkage
+        run: |
+          base="origin/${{ github.base_ref }}"
+          stats=$(git diff --numstat "$base...HEAD" -- schema.sql || true)
+          if [ -z "$stats" ]; then
+            echo "schema.sql unchanged."
+            exit 0
+          fi
+          added=$(echo "$stats"  | awk '{print $1}')
+          removed=$(echo "$stats" | awk '{print $2}')
+          echo "schema.sql diff: +$added / -$removed"
+          if [ "${removed:-0}" -gt 200 ] && [ "${removed:-0}" -gt $((added * 2)) ]; then
+            if ! ${{ contains(github.event.pull_request.labels.*.name, 'allow-schema-shrink') }}; then
+              echo "::error::schema.sql shrank by $removed lines (added only $added). This usually indicates a bad merge/revert."
+              echo "::error::If intentional, add the 'allow-schema-shrink' label."
+              exit 1
+            fi
+          fi
+
+      - name: Block "Revert \"Merge ...\"" commits
+        if: ${{ !contains(github.event.pull_request.labels.*.name, 'allow-revert-merge') }}
+        run: |
+          base="origin/${{ github.base_ref }}"
+          bad=$(git log --format='%H %s' "$base..HEAD" | grep -E '^[0-9a-f]+ Revert "Merge ' || true)
+          if [ -n "$bad" ]; then
+            echo "::error::PR contains a 'Revert \"Merge ...\"' commit. These silently delete sibling work."
+            echo "::error::Resolve forward instead. To override, add the 'allow-revert-merge' label."
+            echo "$bad"
+            exit 1
+          fi
+
+      - name: Verify new migrations are strictly newer than base
+        run: |
+          base="origin/${{ github.base_ref }}"
+          latest_on_base=$(git ls-tree -r --name-only "$base" -- supabase/migrations/ \
+            | grep -E 'supabase/migrations/[0-9]{14}_' \
+            | sed -E 's|supabase/migrations/([0-9]{14})_.*|\1|' \
+            | sort | tail -1)
+          echo "Latest migration on $base: $latest_on_base"
+          added=$(git diff --diff-filter=A --name-only "$base...HEAD" -- 'supabase/migrations/*.sql')
+          fail=0
+          for f in $added; do
+            ts=$(echo "$f" | sed -E 's|supabase/migrations/([0-9]{14})_.*|\1|')
+            if [ -n "$latest_on_base" ] && [ "$ts" \< "$latest_on_base" ]; then
+              echo "::error::$f has timestamp $ts which is older than the latest base migration $latest_on_base."
+              fail=1
+            fi
+          done
+          exit $fail

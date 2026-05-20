@@ -88,7 +88,9 @@ export const inviteStaffSchema = z
     phone: z
       .string()
       .regex(/^\+?1?\d{10,14}$/, "Invalid phone number")
-      .nullable(),
+      .or(z.literal(""))
+      .nullable()
+      .optional(),
     role_code: z.string().min(1, "Role is required"),
     location_ids: z
       .array(z.string().uuid())

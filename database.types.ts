@@ -7106,6 +7106,7 @@ export type Database = {
           accent_color: string | null
           accepts_delivery: boolean
           accepts_pickup: boolean
+          delivery_pricing_enabled: boolean
           address: Json | null
           background_color: string
           created_at: string
@@ -7151,6 +7152,7 @@ export type Database = {
           accent_color?: string | null
           accepts_delivery?: boolean
           accepts_pickup?: boolean
+          delivery_pricing_enabled?: boolean
           address?: Json | null
           background_color?: string
           created_at?: string
@@ -7196,6 +7198,7 @@ export type Database = {
           accent_color?: string | null
           accepts_delivery?: boolean
           accepts_pickup?: boolean
+          delivery_pricing_enabled?: boolean
           address?: Json | null
           background_color?: string
           created_at?: string
