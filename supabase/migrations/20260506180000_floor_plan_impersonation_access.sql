@@ -60,8 +60,6 @@ BEGIN
   );
 END;
 $$;
-
-
 CREATE OR REPLACE FUNCTION public.update_floor_plan_object_position(
   p_object_id uuid,
   p_x numeric,
@@ -94,8 +92,6 @@ BEGIN
   );
 END;
 $$;
-
-
 CREATE OR REPLACE FUNCTION public.update_floor_plan_objects_batch(
   p_updates jsonb
 ) RETURNS json
@@ -128,8 +124,6 @@ BEGIN
   );
 END;
 $$;
-
-
 CREATE OR REPLACE FUNCTION public.get_floor_plan_status(
   p_floor_plan_id uuid
 ) RETURNS json
@@ -228,8 +222,6 @@ BEGIN
   );
 END;
 $$;
-
-
 CREATE OR REPLACE FUNCTION public.get_location_floor_plans(
   p_location_id uuid
 ) RETURNS json

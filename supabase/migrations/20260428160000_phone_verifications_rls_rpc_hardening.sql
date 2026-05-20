@@ -8,7 +8,6 @@
 -- =============================================================================
 
 begin;
-
 -- -----------------------------------------------------------------------------
 -- 1. Store hashed OTP values instead of plaintext codes
 -- -----------------------------------------------------------------------------
@@ -32,25 +31,19 @@ begin
   end if;
 end
 $$;
-
 alter table public.phone_verifications
   add column if not exists request_ip inet;
-
 comment on column public.phone_verifications.code_hash is
   'bcrypt hash of the OTP code. Plaintext OTP values must never be stored.';
-
 comment on column public.phone_verifications.request_ip is
   'Request IP captured during OTP issuance for coarse rate limiting and abuse review.';
-
 update public.phone_verifications
 set code_hash = extensions.crypt(code_hash, extensions.gen_salt('bf', 10))
 where code_hash is not null
   and code_hash !~ '^\$2[aby]\$';
-
 create index if not exists idx_phone_verifications_request_ip_created
   on public.phone_verifications (request_ip, created_at desc)
   where request_ip is not null;
-
 -- -----------------------------------------------------------------------------
 -- 2. RLS policy: no direct table access for anon/authenticated
 --    Legitimate access goes through SECURITY DEFINER RPCs below.
@@ -61,14 +54,12 @@ drop policy if exists phone_verifications_insert on public.phone_verifications;
 drop policy if exists phone_verifications_select on public.phone_verifications;
 drop policy if exists phone_verifications_update on public.phone_verifications;
 drop policy if exists phone_verifications_delete on public.phone_verifications;
-
 create policy phone_verifications_direct_access_denied
 on public.phone_verifications
 for all
 to anon, authenticated
 using (false)
 with check (false);
-
 -- -----------------------------------------------------------------------------
 -- 3. OTP issue RPC
 -- -----------------------------------------------------------------------------
@@ -161,12 +152,10 @@ begin
   );
 end;
 $function$;
-
 revoke all on function public.issue_phone_verification_otp(text, uuid, text, inet, timestamptz) from public;
 revoke all on function public.issue_phone_verification_otp(text, uuid, text, inet, timestamptz) from anon;
 revoke all on function public.issue_phone_verification_otp(text, uuid, text, inet, timestamptz) from authenticated;
 grant execute on function public.issue_phone_verification_otp(text, uuid, text, inet, timestamptz) to service_role;
-
 -- -----------------------------------------------------------------------------
 -- 4. OTP verify RPC
 -- -----------------------------------------------------------------------------
@@ -250,12 +239,10 @@ begin
   );
 end;
 $function$;
-
 revoke all on function public.verify_phone_verification_otp(text, uuid, text) from public;
 revoke all on function public.verify_phone_verification_otp(text, uuid, text) from anon;
 revoke all on function public.verify_phone_verification_otp(text, uuid, text) from authenticated;
 grant execute on function public.verify_phone_verification_otp(text, uuid, text) to service_role;
-
 -- -----------------------------------------------------------------------------
 -- 5. Cleanup function + daily schedule
 -- -----------------------------------------------------------------------------
@@ -277,10 +264,8 @@ begin
   return v_deleted;
 end;
 $function$;
-
 revoke all on function public.cleanup_phone_verifications() from public;
 grant execute on function public.cleanup_phone_verifications() to service_role;
-
 do $$
 declare
   v_job_id bigint;
@@ -314,5 +299,4 @@ begin
   end;
 end
 $$;
-
 commit;

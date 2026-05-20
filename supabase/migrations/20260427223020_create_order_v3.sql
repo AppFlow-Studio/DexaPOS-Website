@@ -68,5 +68,4 @@ BEGIN
   RETURN v_result;
 END;
 $function$;
-
-GRANT EXECUTE ON FUNCTION public.create_order_v3(uuid, uuid, order_type, text, text, text, text, text, uuid, uuid, uuid) TO authenticated;;
+GRANT EXECUTE ON FUNCTION public.create_order_v3(uuid, uuid, order_type, text, text, text, text, text, uuid, uuid, uuid) TO authenticated;

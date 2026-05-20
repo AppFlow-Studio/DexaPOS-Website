@@ -76,16 +76,12 @@ BEGIN
   RETURN NEW;
 END;
 $function$;
-
 REVOKE ALL ON FUNCTION public.enforce_order_math() FROM PUBLIC;
-
 DROP TRIGGER IF EXISTS enforce_order_math ON public.orders;
-
 CREATE CONSTRAINT TRIGGER enforce_order_math
   AFTER INSERT OR UPDATE ON public.orders
   DEFERRABLE INITIALLY DEFERRED
   FOR EACH ROW
   EXECUTE FUNCTION public.enforce_order_math();
-
 COMMENT ON FUNCTION public.enforce_order_math() IS
   'G4: asserts orders.amount_paid/amount_due/payment_status invariants. Fires as a deferred constraint trigger so multi-step transactions can temporarily violate intermediate states. Raises P0005 on any final-state violation.';

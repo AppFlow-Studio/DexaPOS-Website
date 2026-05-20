@@ -26,8 +26,6 @@ BEGIN
   END IF;
 END;
 $function$;
-
 GRANT EXECUTE ON FUNCTION public._assert_order_station_match(uuid, uuid) TO authenticated;
-
 COMMENT ON FUNCTION public._assert_order_station_match(uuid, uuid) IS
-'Lever 2 — raises ORDER_OWNED_BY_OTHER_STATION when caller''s station doesn''t own the order. Pass NULL p_station_id to bypass (backwards-compat for legacy clients). Wire into hot-path mutation RPCs in a follow-up wave.';;
+'Lever 2 — raises ORDER_OWNED_BY_OTHER_STATION when caller''s station doesn''t own the order. Pass NULL p_station_id to bypass (backwards-compat for legacy clients). Wire into hot-path mutation RPCs in a follow-up wave.';

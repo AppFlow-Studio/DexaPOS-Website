@@ -1,0 +1,9 @@
+# Migrations are append-only and have prod impact — require Temur's review.
+/supabase/migrations/   @Temur662
+/schema.sql             @Temur662
+
+# Edge functions touch prod runtime.
+/supabase/functions/    @Temur662
+
+# CI + branch protection config.
+/.github/               @Temur662

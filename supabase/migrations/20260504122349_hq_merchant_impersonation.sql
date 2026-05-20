@@ -424,3 +424,4 @@ GRANT EXECUTE ON FUNCTION public.is_merchant_admin_or_impersonating(uuid) TO aut
 
 COMMENT ON FUNCTION public.is_merchant_admin_or_impersonating(uuid) IS
     'Returns true if current user is a merchant admin for the given merchant OR is an HQ admin with an active, fresh (<30min) impersonation session targeting it. Drop-in replacement for is_merchant_admin in policies that should allow impersonation.';
+;

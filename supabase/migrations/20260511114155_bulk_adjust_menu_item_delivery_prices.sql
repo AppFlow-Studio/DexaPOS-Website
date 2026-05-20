@@ -1,34 +1,4 @@
 -- Bulk delivery (online) price adjustment RPC.
--- Mirrors bulk_adjust_menu_item_prices but writes the delivery cascade
--- (menu_items.delivery_price + use_delivery_price flag at L1, or
--- location_item_overrides.custom_delivery_price at L2).
---
--- Markup math always recomputes from the current card price (per spec): the
--- "Markup 20% over $10 card with old delivery=$11" case must yield $12, not
--- $13.20. This means card_price is read fresh inside the RPC each call.
---
--- Reset is special: at L1 we null out delivery_price AND flip use_delivery_price
--- back to false (so the cascade falls through to card_price). At L2 we clear
--- only the delivery column on the override row, leaving any card-price override
--- intact. The ticket's "DELETE the row" wording would also wipe an unrelated
--- card-price override on lio, which would silently regress storefront pricing —
--- so we only null the delivery column here.
---
--- Also augments v_location_menu_items with effective_delivery_price exposing
--- the full cascade (L5 lmio → L2 lio → L1 mi.delivery_price when
--- use_delivery_price=true → fallback to effective card price). Keep this view
--- in sync with the JS resolver in lib/menu/cascade-labels.ts.
-
--- ─────────────────────────────────────────────────────────────────────────────
--- View: add delivery-related columns
---
--- Postgres' CREATE OR REPLACE VIEW only allows APPENDING columns to the end of
--- the existing list — it cannot insert into the middle without renaming
--- columns (which fails with 42P16). So the new delivery columns
--- (base_delivery_price, use_delivery_price, location_delivery_price,
--- effective_delivery_price) are appended after has_location_override. The
--- original column order is preserved exactly.
--- ─────────────────────────────────────────────────────────────────────────────
 CREATE OR REPLACE VIEW public.v_location_menu_items AS
 SELECT
   m.id              AS menu_id,
@@ -59,7 +29,6 @@ SELECT
   COALESCE(lmio.is_available, mim.is_available, mi.availability) AS effective_available,
   COALESCE(lmio.stock_tracking_mode, mi.stock_tracking_mode)     AS effective_stock_mode,
   (lmio.id IS NOT NULL) AS has_location_override,
-  -- New delivery columns (appended; do not reorder above)
   mi.delivery_price          AS base_delivery_price,
   mi.use_delivery_price      AS use_delivery_price,
   lmio.custom_delivery_price AS location_delivery_price,
@@ -88,16 +57,13 @@ GRANT ALL ON TABLE public.v_location_menu_items TO anon;
 GRANT ALL ON TABLE public.v_location_menu_items TO authenticated;
 GRANT ALL ON TABLE public.v_location_menu_items TO service_role;
 
--- ─────────────────────────────────────────────────────────────────────────────
--- RPC: bulk_adjust_menu_item_delivery_prices
--- ─────────────────────────────────────────────────────────────────────────────
 CREATE OR REPLACE FUNCTION public.bulk_adjust_menu_item_delivery_prices(
   p_merchant_id   uuid,
-  p_location_id   uuid,            -- NULL => write menu_items.delivery_price (base)
+  p_location_id   uuid,
   p_item_ids      uuid[],
-  p_operation     text,            -- markup_pct|markup_amt|set_fixed|reset
-  p_value         numeric,         -- ignored for reset
-  p_rounding      text,            -- cent|nickel_up|ninety_nine_up
+  p_operation     text,
+  p_value         numeric,
+  p_rounding      text,
   p_actor_user_id text
 ) RETURNS jsonb
 LANGUAGE plpgsql
@@ -122,7 +88,6 @@ BEGIN
     RETURN jsonb_build_object('updated', 0, 'skipped', 0, 'changes', '[]'::jsonb);
   END IF;
 
-  -- ── RESET branch ──────────────────────────────────────────────────────────
   IF p_operation = 'reset' THEN
     IF p_location_id IS NULL THEN
       WITH reset AS (
@@ -143,9 +108,6 @@ BEGIN
         INTO v_changes, v_updated
         FROM reset;
     ELSE
-      -- Clear only the delivery column on the override row. Do NOT delete the
-      -- lio row outright — that would also wipe any unrelated custom_price
-      -- (card) override the location is using.
       WITH reset AS (
         UPDATE location_item_overrides lio
            SET custom_delivery_price = NULL,
@@ -173,14 +135,10 @@ BEGIN
     );
   END IF;
 
-  -- ── MARKUP / SET_FIXED branch ─────────────────────────────────────────────
   WITH base AS (
     SELECT
       mi.id,
       mi.name,
-      -- Card price the markup is computed from. At L2 we honor any card-price
-      -- override on lio; at L1 we always use mi.price. The OLD delivery price
-      -- is reported (for audit) from the same level we're writing to.
       CASE
         WHEN p_location_id IS NULL THEN mi.price
         ELSE COALESCE(lio.custom_price, mi.price)
@@ -280,4 +238,4 @@ REVOKE ALL ON FUNCTION public.bulk_adjust_menu_item_delivery_prices(
 
 GRANT EXECUTE ON FUNCTION public.bulk_adjust_menu_item_delivery_prices(
   uuid, uuid, uuid[], text, numeric, text, text
-) TO authenticated, service_role;
+) TO authenticated, service_role;;

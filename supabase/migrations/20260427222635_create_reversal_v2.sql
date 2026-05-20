@@ -57,5 +57,4 @@ BEGIN
   RETURN v_reversal;
 END;
 $function$;
-
-GRANT EXECUTE ON FUNCTION public.create_reversal_v2(uuid, text, text, reversal_type, numeric, refund_reason_type, text, uuid, uuid, uuid) TO authenticated;;
+GRANT EXECUTE ON FUNCTION public.create_reversal_v2(uuid, text, text, reversal_type, numeric, refund_reason_type, text, uuid, uuid, uuid) TO authenticated;

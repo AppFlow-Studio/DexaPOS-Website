@@ -151,8 +151,6 @@ BEGIN
     );
 END;
 $$;
-
-
 -- =============================================================================
 -- PART 2 — Fix get_categories_for_location
 -- Bug: effective_price L2 used only lio.custom_price, ignoring price_modifier.
@@ -452,8 +450,6 @@ AS $$BEGIN
           )
     );
 END;$$;
-
-
 -- =============================================================================
 -- PART 3 — Fix get_menu_item_details
 -- Bug: effective_price used COALESCE(lio.custom_price, mi.price), ignoring
@@ -613,8 +609,6 @@ BEGIN
     );
 END;
 $$;
-
-
 -- =============================================================================
 -- PART 4 — Fix get_items_for_location_library
 -- Bug: effective_price used COALESCE(lio.custom_price, mi.price), ignoring

@@ -1,6 +1,5 @@
 -- Drop old 3-arg signature first (different param list, so CREATE OR REPLACE wouldn't replace it)
 DROP FUNCTION IF EXISTS public.check_recent_payment(UUID, INTEGER, BIGINT);
-
 CREATE OR REPLACE FUNCTION public.check_recent_payment(
   p_order_id UUID,
   p_lookback_seconds INTEGER DEFAULT 120,
@@ -68,8 +67,6 @@ BEGIN
   );
 END;
 $$;
-
 GRANT EXECUTE ON FUNCTION public.check_recent_payment(UUID, INTEGER, BIGINT, INTEGER) TO authenticated;
-
 COMMENT ON FUNCTION public.check_recent_payment(UUID, INTEGER, BIGINT, INTEGER) IS
-  'Wave 1 retry-safety check: server-side lookup for a recent payment matching order + amount + optional split portion. Avoids client clock skew. Conservative: callers should treat any error/timeout as cannot verify. Raises insufficient_privilege if caller has no merchant/location context.';;
+  'Wave 1 retry-safety check: server-side lookup for a recent payment matching order + amount + optional split portion. Avoids client clock skew. Conservative: callers should treat any error/timeout as cannot verify. Raises insufficient_privilege if caller has no merchant/location context.';

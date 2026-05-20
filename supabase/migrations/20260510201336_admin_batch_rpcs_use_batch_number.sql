@@ -168,4 +168,4 @@ BEGIN
     )
   ORDER BY COALESCE(op.captured_at, op.initiated_at, o.created_at) DESC;
 END;
-$function$;
+$function$;;

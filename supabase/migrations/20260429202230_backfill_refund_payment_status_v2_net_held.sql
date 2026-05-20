@@ -38,4 +38,4 @@ BEGIN
   END LOOP;
 
   RAISE NOTICE 'backfill_refund_payment_status_v1: fixed % orders', v_fixed_count;
-END $$;;
+END $$;

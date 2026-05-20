@@ -13,17 +13,13 @@ CREATE TABLE IF NOT EXISTS public.waitlist_sms_rate_limit (
   merchant_id uuid        NOT NULL REFERENCES public.merchants(id) ON DELETE CASCADE,
   sent_at     timestamptz NOT NULL DEFAULT now()
 );
-
 CREATE INDEX IF NOT EXISTS idx_waitlist_sms_rate_limit_merchant_time
   ON public.waitlist_sms_rate_limit (merchant_id, sent_at DESC);
-
 -- Lock down — only SECURITY DEFINER RPCs touch this table.
 ALTER TABLE public.waitlist_sms_rate_limit ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ONLY public.waitlist_sms_rate_limit FORCE ROW LEVEL SECURITY;
-
 REVOKE ALL ON TABLE public.waitlist_sms_rate_limit FROM PUBLIC, anon, authenticated;
 GRANT  ALL ON TABLE public.waitlist_sms_rate_limit TO service_role;
-
 -- ============================================================================
 -- claim_waitlist_sms_slot — atomic rate-limit gate
 -- Returns jsonb { allowed: bool, count: int, limit: int, reason?: text }
@@ -79,9 +75,7 @@ BEGIN
   );
 END;
 $function$;
-
 REVOKE ALL ON FUNCTION public.claim_waitlist_sms_slot(uuid, int) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.claim_waitlist_sms_slot(uuid, int) TO service_role;
-
 COMMENT ON FUNCTION public.claim_waitlist_sms_slot(uuid, int) IS
   'Atomically claims a waitlist SMS rate-limit slot for a merchant. Returns { allowed, count, limit }. Service-role only — invoked by the notify-waitlist-guest edge function.';

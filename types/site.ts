@@ -43,6 +43,13 @@ export interface OnlineOrderingConfig {
   // Pickup & Delivery
   pickupEnabled?: boolean;
   deliveryEnabled?: boolean;
+  /**
+   * When true (default), online orders use the item's delivery_price
+   * (separate online/delivery pricing). When false, online orders use the
+   * regular item price — no online upcharge. Applied consistently across the
+   * storefront display and the create-online-order edge function.
+   */
+  deliveryPricingEnabled?: boolean;
   preparationLeadTime?: number; // minutes
   acceptFutureOrdersOnly?: boolean;
   futureOrderMinDays?: number;

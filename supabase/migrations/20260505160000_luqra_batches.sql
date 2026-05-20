@@ -59,7 +59,6 @@ CREATE TABLE IF NOT EXISTS public.luqra_batches (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-
 CREATE INDEX IF NOT EXISTS luqra_batch_merchant_date_idx
   ON public.luqra_batches (merchant_id, statement_date DESC);
 CREATE INDEX IF NOT EXISTS luqra_batch_mid_date_idx
@@ -67,25 +66,20 @@ CREATE INDEX IF NOT EXISTS luqra_batch_mid_date_idx
 CREATE INDEX IF NOT EXISTS luqra_batch_deposit_idx
   ON public.luqra_batches (deposit_id)
   WHERE deposit_id IS NOT NULL;
-
 DROP TRIGGER IF EXISTS update_luqra_batches_updated_at ON public.luqra_batches;
 CREATE TRIGGER update_luqra_batches_updated_at
   BEFORE UPDATE ON public.luqra_batches
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
-
 ALTER TABLE public.luqra_batches ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.luqra_batches FORCE ROW LEVEL SECURITY;
-
 DROP POLICY IF EXISTS luqra_batch_admin_select ON public.luqra_batches;
 CREATE POLICY luqra_batch_admin_select ON public.luqra_batches
   FOR SELECT
   USING (public.is_dexapos_admin());
-
 DROP POLICY IF EXISTS luqra_batch_merchant_admin_select ON public.luqra_batches;
 CREATE POLICY luqra_batch_merchant_admin_select ON public.luqra_batches
   FOR SELECT
   USING (public.is_merchant_admin(merchant_id));
-
 ALTER TABLE public.luqra_sync_runs
   DROP CONSTRAINT IF EXISTS luqra_sync_runs_resource_check;
 ALTER TABLE public.luqra_sync_runs

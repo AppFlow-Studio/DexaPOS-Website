@@ -19,4 +19,4 @@ COMMENT ON FUNCTION ping IS 'Connection-quality probe. Returns server epoch ms. 
 -- =====================================================================
 -- Verification:
 --   SELECT ping();  -- should return current epoch ms within ~1ms
--- =====================================================================;
+-- =====================================================================;;

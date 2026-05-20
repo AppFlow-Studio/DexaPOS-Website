@@ -78,4 +78,4 @@ $$;
 GRANT EXECUTE ON FUNCTION public.manual_mark_batch_settled(uuid, uuid, text, uuid) TO authenticated;
 
 COMMENT ON FUNCTION public.manual_mark_batch_settled IS
-    'Manual reconcile RPC. Marks a non-settled settlement_batches row + every linked unsettled order_payments row as settled. Requires non-empty reason >= 10 chars + non-null staff_id. Writes one payment_events row per affected payment with event_type=manual_mark_settled for chargeback/audit. Does NOT contact the terminal; use only when the terminal already closed the host batch in a prior session.';
+    'Manual reconcile RPC. Marks a non-settled settlement_batches row + every linked unsettled order_payments row as settled. Requires non-empty reason >= 10 chars + non-null staff_id. Writes one payment_events row per affected payment with event_type=manual_mark_settled for chargeback/audit. Does NOT contact the terminal; use only when the terminal already closed the host batch in a prior session.';;

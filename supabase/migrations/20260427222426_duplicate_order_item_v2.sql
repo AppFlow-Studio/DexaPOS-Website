@@ -89,5 +89,4 @@ BEGIN
   RETURN v_result;
 END;
 $function$;
-
-GRANT EXECUTE ON FUNCTION public.duplicate_order_item_v2(uuid, integer, uuid) TO authenticated;;
+GRANT EXECUTE ON FUNCTION public.duplicate_order_item_v2(uuid, integer, uuid) TO authenticated;

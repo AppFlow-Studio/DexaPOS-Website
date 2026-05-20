@@ -4,18 +4,11 @@ import { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 import Link from "next/link";
 import {
-  CheckCircle2,
-  Clock,
-  Flame,
-  Package,
-  CircleCheck,
   AlertTriangle,
   ArrowLeft,
   Phone,
   Loader2,
-  Hourglass,
   XCircle,
-  CalendarClock,
   MapPin,
   Navigation,
   Store as StoreIcon,
@@ -118,88 +111,40 @@ const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   void: { bg: "color-mix(in srgb, #ef4444 15%, var(--bg))", text: "#ef4444" },
 };
 
-interface TimelineStep {
-  label: string;
-  icon: React.ReactNode;
-  timestamp: string | null;
-  isActive: boolean;
-  isDone: boolean;
-}
-
-function buildTimeline(order: OrderTrackingData): TimelineStep[] {
-  // Acceptance step is always shown.
-  // isDone when acceptedAt is set (manual accept) or sentToKitchenAt is set (auto-accept skips acceptedAt).
-  const acceptanceDone = !!order.acceptedAt || !!order.sentToKitchenAt;
-  const acceptanceTimestamp = order.acceptedAt ?? order.sentToKitchenAt;
-
-  const steps: TimelineStep[] = [
-    {
-      label: "Order Placed",
-      icon: <CheckCircle2 className="h-5 w-5" />,
-      timestamp: order.createdAt,
-      isActive: true,
-      isDone: true,
-    },
-    {
-      label: "Awaiting Acceptance",
-      icon: <Hourglass className="h-5 w-5" />,
-      timestamp: acceptanceTimestamp,
-      isActive: order.status === "pending" || acceptanceDone,
-      isDone: acceptanceDone,
-    },
-    {
-      label: "Sent to Kitchen",
-      icon: <Clock className="h-5 w-5" />,
-      timestamp: order.sentToKitchenAt,
-      isActive: !!order.sentToKitchenAt,
-      isDone: !!order.sentToKitchenAt,
-    },
-    {
-      label: "Preparing",
-      icon: <Flame className="h-5 w-5" />,
-      timestamp: order.startedPreparingAt,
-      isActive: !!order.startedPreparingAt,
-      isDone: !!order.startedPreparingAt,
-    },
-    {
-      label: "Ready for Pickup",
-      icon: <Package className="h-5 w-5" />,
-      timestamp: order.readyAt,
-      isActive: !!order.readyAt,
-      isDone: !!order.readyAt,
-    },
-    {
-      label: "Completed",
-      icon: <CircleCheck className="h-5 w-5" />,
-      timestamp: order.completedAt,
-      isActive: !!order.completedAt,
-      isDone: !!order.completedAt,
-    },
-  ];
-
-  return steps;
-}
-
-
 function formatTime(isoString: string | null): string {
   if (!isoString) return "";
   const date = new Date(isoString);
   return date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 }
 
-function getEstimatedReadyTime(order: OrderTrackingData): string | null {
+function getEstimatedReadyTime(order: OrderTrackingData): { label: string; wallClock: string } | null {
   if (order.readyAt || order.completedAt || order.cancelledAt || order.declinedAt) return null;
 
-  // Use sentToKitchenAt (when prep actually started) as the anchor; fall back to createdAt
   const anchor = order.sentToKitchenAt ?? order.createdAt;
   const readyAt = new Date(new Date(anchor).getTime() + order.estimatedPrepMinutes * 60 * 1000);
   const now = new Date();
   const diffMs = readyAt.getTime() - now.getTime();
   const diffMin = Math.max(0, Math.ceil(diffMs / 60000));
+  const wallClock = readyAt.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 
-  if (diffMin === 0) return "Any moment now";
-  return `~${diffMin} min`;
+  if (diffMin <= 1) return { label: "~1 min", wallClock };
+  return { label: `~${diffMin} min`, wallClock };
 }
+
+// Maps order status to a 0-based index in the 5-step horizontal strip
+function statusToStepIndex(status: string): number {
+  switch (status) {
+    case "pending":         return 0;
+    case "accepted":        return 1;
+    case "sent_to_kitchen": return 2;
+    case "preparing":       return 2;
+    case "ready":           return 3;
+    case "completed":       return 4;
+    default:                return 0;
+  }
+}
+
+const PROGRESS_STEPS = ["Placed", "Accepted", "Preparing", "Ready", "Done"] as const;
 
 export function OrderTrackingPage({
   initialOrder,
@@ -223,6 +168,7 @@ export function OrderTrackingPage({
   const [isCancelling, setIsCancelling] = useState(false);
   const [cancelError, setCancelError] = useState<string | null>(null);
   const [pendingCountdown, setPendingCountdown] = useState<number | null>(null);
+  const [orderDetailsOpen, setOrderDetailsOpen] = useState(false);
   const storePath = useStorefrontPath(slug);
 
 
@@ -309,18 +255,10 @@ export function OrderTrackingPage({
   const isDeclined = order.status === "declined";
   const isPending = order.status === "pending";
   const canCustomerCancel = isPending && !!sessionToken;
-  const timeline = buildTimeline(order);
-  // Pulse on the first active-but-not-done step (current waiting step).
-  // Fall back to the last completed step if all are done.
-  const lastDoneIndex = timeline.reduce((acc, step, i) => (step.isDone ? i : acc), -1);
-  const activeNotDoneIndex = timeline.findIndex((step) => step.isActive && !step.isDone);
-  const pulseIndex = activeNotDoneIndex >= 0 ? activeNotDoneIndex : lastDoneIndex;
-  const estimatedTime = getEstimatedReadyTime(order);
+  const estimatedReady = getEstimatedReadyTime(order);
   const statusColor = STATUS_COLORS[order.status] ?? STATUS_COLORS.pending;
+  const currentStepIndex = statusToStepIndex(order.status);
 
-  // Use the stored tax_amount (actual amount charged at time of order).
-  // Fall back to recomputing from the live rate only for old orders that stored $0 tax
-  // due to the prior tax_category SQL bug.
   const storedRate = order.taxRatePercent != null ? order.taxRatePercent / 100 : null;
   const effectiveRate = storedRate ?? taxRate;
   const displayedTax = order.tax > 0
@@ -341,7 +279,7 @@ export function OrderTrackingPage({
       : null;
 
   return (
-    <div className="min-h-screen flex flex-col lg:flex-row" style={{ backgroundColor: "var(--bg)" }}>
+    <div className="min-h-screen flex flex-col lg:flex-row bg-white">
       {!isTerminal && (
         <OrderStatusWatcher
           orderId={orderId}
@@ -350,485 +288,315 @@ export function OrderTrackingPage({
         />
       )}
 
-      {/* Left panel — order details (Uber Eats style sidebar) */}
+      {/* Left panel */}
       <section
-        className="w-full lg:w-[440px] lg:min-w-[440px] lg:h-screen lg:overflow-y-auto flex flex-col"
-        style={{
-          backgroundColor: "var(--bg)",
-          borderRight: "1px solid var(--border)",
-        }}
+        className="w-full lg:w-[440px] lg:min-w-[440px] lg:h-screen lg:overflow-y-auto flex flex-col bg-white"
+        style={{ borderRight: "1px solid #e5e7eb" }}
       >
         <header
-          className="sticky top-0 z-30 px-4 py-3 flex items-center justify-between"
-          style={{
-            backgroundColor: "var(--bg)",
-            borderBottom: "1px solid var(--border)",
-          }}
+          className="sticky top-0 z-30 px-4 py-3 flex items-center justify-between bg-white"
+          style={{ borderBottom: "1px solid #e5e7eb" }}
         >
           <Link
             href={storePath()}
             className="flex items-center gap-2 text-sm font-medium"
-            style={{ color: "var(--text)" }}
+            style={{ color: "#111827" }}
           >
             <ArrowLeft className="h-4 w-4" style={{ color: "var(--primary)" }} />
             Back to menu
           </Link>
-          <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full"
-            style={{
-              backgroundColor: "color-mix(in srgb, var(--primary) 12%, var(--bg))",
-              color: "var(--primary)",
-            }}
-          >
-            <StoreIcon className="h-3 w-3" />
-            Pickup
-          </span>
+          {!TERMINAL_STATUSES.includes(order.status) && (
+            <span className="flex items-center gap-1.5 text-xs" style={{ color: "#6b7280" }}>
+              {isFetching
+                ? <Loader2 className="h-3 w-3 animate-spin" />
+                : <span className="inline-block h-2 w-2 rounded-full animate-pulse" style={{ backgroundColor: "#22c55e" }} />}
+              {isFetching ? "Updating…" : "Live"}
+            </span>
+          )}
         </header>
 
-        <main className="px-4 py-4 space-y-6">
-        {/* Order banner */}
-        <div className="text-center space-y-2">
-          <h1
-            className="text-4xl font-bold"
-            style={{ fontFamily: "var(--font-display)", color: "var(--text)" }}
-          >
-            {order.displayNumber}
-          </h1>
-          <div className="flex items-center justify-center gap-2 flex-wrap">
-            <span
-              className="inline-block px-3 py-1 rounded-full text-sm font-semibold"
-              style={{
-                backgroundColor: statusColor.bg,
-                color: statusColor.text,
-              }}
-            >
-              {STATUS_LABELS[order.status] ?? order.status}
-            </span>
-            {!TERMINAL_STATUSES.includes(order.status) && (
-              <span className="flex items-center gap-1">
-                {isFetching ? (
-                  <Loader2 className="h-3 w-3 animate-spin" style={{ color: "var(--text-secondary)" }} />
-                ) : (
-                  <span className="inline-block h-2 w-2 rounded-full animate-pulse" style={{ backgroundColor: "#22c55e" }} />
-                )}
-                <span className="text-xs" style={{ color: "var(--text-secondary)" }}>
-                  {isFetching ? "Updating…" : "Live"}
-                </span>
+        <main className="px-4 py-6 space-y-5">
+
+          {/* ── Hero: ETA as H1 ── */}
+          <div className="text-center space-y-1">
+            {estimatedReady && !isCancelled && !isDeclined ? (
+              <>
+                <h1 className="text-3xl font-bold tracking-tight" style={{ color: "#111827" }}>
+                  Ready by {estimatedReady.wallClock}
+                </h1>
+                <p className="text-sm" style={{ color: "#6b7280" }}>
+                  {estimatedReady.label} · Order #{order.displayNumber}
+                </p>
+              </>
+            ) : order.requestedTime ? (
+              <>
+                <h1 className="text-2xl font-bold tracking-tight" style={{ color: "#111827" }}>
+                  Scheduled for {formatScheduledTime(order.requestedTime, order.locationTimezone)}
+                </h1>
+                <p className="text-sm" style={{ color: "#6b7280" }}>Order #{order.displayNumber}</p>
+              </>
+            ) : (
+              <>
+                <h1 className="text-2xl font-bold tracking-tight" style={{ color: "#111827" }}>
+                  {STATUS_LABELS[order.status] ?? order.status}
+                </h1>
+                <p className="text-sm" style={{ color: "#6b7280" }}>Order #{order.displayNumber}</p>
+              </>
+            )}
+            {/* Status pill */}
+            <div className="flex justify-center pt-1">
+              <span
+                className="inline-flex items-center px-3 py-1 text-xs font-semibold"
+                style={{
+                  backgroundColor: statusColor.bg,
+                  color: statusColor.text,
+                  borderRadius: "6px",
+                }}
+              >
+                {STATUS_LABELS[order.status] ?? order.status}
               </span>
-            )}
-          </div>
-        </div>
-
-        {/* Scheduled time banner */}
-        {order.requestedTime && (
-          <div
-            className="flex items-center gap-3 px-4 py-3 rounded-xl"
-            style={{
-              backgroundColor: "var(--card)",
-              border: "1px solid var(--border)",
-              borderRadius: "var(--radius)",
-            }}
-          >
-            <CalendarClock className="h-5 w-5 flex-shrink-0" style={{ color: "var(--primary)" }} />
-            <div>
-              <p className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
-                Scheduled for
-              </p>
-              <p className="text-sm font-semibold" style={{ color: "var(--text)" }}>
-                {formatScheduledTime(order.requestedTime, order.locationTimezone)}
-              </p>
             </div>
           </div>
-        )}
 
-        {/* Pending countdown + cancel — single amber card */}
-        {isPending && pendingCountdown !== null && (
-          <div
-            className="px-5 py-4 rounded-xl space-y-3"
-            style={{
-              backgroundColor: "color-mix(in srgb, #f59e0b 10%, var(--bg))",
-              border: "1px solid #f59e0b",
-              borderRadius: "var(--radius)",
-            }}
-          >
-            {/* Countdown row */}
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-base font-semibold" style={{ color: "#f59e0b" }}>
-                  Waiting for restaurant
-                </p>
-                <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>
-                  Auto-cancels if no response
-                </p>
-              </div>
-              <div className="text-right">
-                <p className="text-xl font-bold tabular-nums" style={{ color: "#f59e0b" }}>
-                  {pendingCountdown}s
-                </p>
-                <p className="text-xs" style={{ color: "var(--text-secondary)" }}>remaining</p>
-              </div>
-            </div>
-
-            {/* Inline cancel */}
-            {canCustomerCancel && (
-              <div style={{ borderTop: "1px solid color-mix(in srgb, #f59e0b 30%, transparent)", paddingTop: "12px" }}>
-                {!showCancelForm ? (
-                  <button
-                    type="button"
-                    onClick={() => setShowCancelForm(true)}
-                    className="text-sm"
-                    style={{ color: "var(--text-secondary)" }}
-                  >
-                    Cancel this order
-                  </button>
-                ) : (
-                  <div className="space-y-3">
-                    <p className="text-sm font-semibold" style={{ color: "var(--text)" }}>
-                      Why do you want to cancel?
-                    </p>
-                    <textarea
-                      rows={3}
-                      value={cancelReason}
-                      onChange={(e) => setCancelReason(e.target.value)}
-                      placeholder="e.g. Changed my mind, ordered by mistake…"
-                      className="w-full text-sm px-3 py-2 rounded-lg resize-none outline-none"
-                      style={{
-                        backgroundColor: "var(--bg)",
-                        border: "1px solid var(--border)",
-                        color: "var(--text)",
-                      }}
-                    />
-                    {cancelError && (
-                      <p className="text-xs" style={{ color: "#ef4444" }}>{cancelError}</p>
-                    )}
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => { setShowCancelForm(false); setCancelReason(""); setCancelError(null); }}
-                        disabled={isCancelling}
-                        className="flex-1 text-sm font-medium py-2 rounded-lg"
-                        style={{ backgroundColor: "var(--bg)", border: "1px solid var(--border)", color: "var(--text)" }}
-                      >
-                        Keep Order
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleCancel}
-                        disabled={isCancelling || !cancelReason.trim()}
-                        className="flex-1 text-sm font-semibold py-2 rounded-lg disabled:opacity-50"
-                        style={{ backgroundColor: "#ef4444", color: "#ffffff" }}
-                      >
-                        {isCancelling ? "Cancelling…" : "Confirm Cancel"}
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Estimated time card */}
-        {estimatedTime && !isCancelled && !isDeclined && !isPending && (
-          <div
-            className="text-center px-6 py-4 rounded-xl"
-            style={{
-              backgroundColor: "var(--card)",
-              border: "1px solid var(--border)",
-              borderRadius: "var(--radius)",
-            }}
-          >
-            <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
-              Estimated ready in
-            </p>
-            <p className="text-2xl font-bold" style={{ color: "var(--text)" }}>
-              {estimatedTime}
-            </p>
-          </div>
-        )}
-
-        {/* Declined banner */}
-        {isDeclined && (
-          <div
-            className="flex items-start gap-3 px-4 py-3 rounded-xl"
-            style={{
-              backgroundColor: "color-mix(in srgb, #ef4444 10%, var(--bg))",
-              border: "1px solid #ef4444",
-              borderRadius: "var(--radius)",
-            }}
-          >
-            <XCircle className="h-5 w-5 flex-shrink-0 mt-0.5" style={{ color: "#ef4444" }} />
-            <div className="flex-1 min-w-0">
-              <p className="font-semibold text-sm" style={{ color: "#ef4444" }}>
-                Your order was declined by the restaurant
-                {order.declinedAt && (
-                  <span className="font-normal ml-2 opacity-75">{formatTime(order.declinedAt)}</span>
-                )}
-              </p>
-              {order.declinedReason && (
-                <p className="text-sm mt-1" style={{ color: "var(--text-secondary)" }}>
-                  Reason: {order.declinedReason}
-                </p>
-              )}
-              {storePhone && (
-                <a
-                  href={`tel:${storePhone}`}
-                  className="inline-flex items-center gap-1.5 mt-2 text-sm font-medium"
-                  style={{ color: "#ef4444" }}
-                >
-                  <Phone className="h-4 w-4" />
-                  Call {storeName}
-                </a>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Cancelled banner */}
-        {isCancelled && (
-          <div
-            className="flex items-start gap-3 px-4 py-3 rounded-xl"
-            style={{
-              backgroundColor: "color-mix(in srgb, #ef4444 10%, var(--bg))",
-              border: "1px solid #ef4444",
-              borderRadius: "var(--radius)",
-            }}
-          >
-            <AlertTriangle className="h-5 w-5 flex-shrink-0 mt-0.5" style={{ color: "#ef4444" }} />
-            <div className="flex-1 min-w-0">
-              <p className="font-semibold text-sm" style={{ color: "#ef4444" }}>
-                {order.cancelledBy === "customer"
-                  ? "You cancelled this order"
-                  : order.status === "void"
-                  ? "Order Voided"
-                  : "Order Cancelled"}
-                {order.cancelledAt && (
-                  <span className="font-normal ml-2 opacity-75">{formatTime(order.cancelledAt)}</span>
-                )}
-              </p>
-              {order.cancellationReason && (
-                <p className="text-sm mt-1" style={{ color: "var(--text-secondary)" }}>
-                  Reason: {order.cancellationReason}
-                </p>
-              )}
-              {storePhone && order.cancelledBy !== "customer" && (
-                <a
-                  href={`tel:${storePhone}`}
-                  className="inline-flex items-center gap-1.5 mt-2 text-sm font-medium"
-                  style={{ color: "#ef4444" }}
-                >
-                  <Phone className="h-4 w-4" />
-                  Call {storeName}
-                </a>
-              )}
-            </div>
-          </div>
-        )}
-
-
-        {/* Status timeline */}
-        {!isCancelled && !isDeclined && (
-          <div
-            className="px-4 py-5 rounded-xl"
-            style={{
-              backgroundColor: "var(--card)",
-              border: "1px solid var(--border)",
-              borderRadius: "var(--radius)",
-            }}
-          >
-            <h2
-              className="text-sm font-semibold mb-4"
-              style={{ color: "var(--text)" }}
-            >
-              Order Progress
-            </h2>
-            <div className="space-y-0">
-              {timeline.map((step, i) => {
-                const isLast = i === timeline.length - 1;
-                const isCurrent = !isTerminal && i === pulseIndex && !step.isDone;
-                return (
-                  <div key={step.label} className="flex gap-3">
-                    {/* Icon + line */}
-                    <div className="flex flex-col items-center">
+          {/* ── Horizontal progress strip ── */}
+          {!isCancelled && !isDeclined && (
+            <div className="rounded-xl px-4 py-4" style={{ border: "1px solid #e5e7eb" }}>
+              <div className="flex justify-between mb-2">
+                {PROGRESS_STEPS.map((label, i) => {
+                  const isCompleted = i < currentStepIndex;
+                  const isCurrent = i === currentStepIndex;
+                  return (
+                    <div key={label} className="flex flex-col items-center gap-1 flex-1 min-w-0">
                       <div
-                        className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0${isCurrent ? " animate-pulse" : ""}`}
+                        className="w-2.5 h-2.5 rounded-full flex-shrink-0"
                         style={{
-                          backgroundColor: step.isDone
-                            ? "var(--primary)"
-                            : isCurrent
-                            ? "color-mix(in srgb, var(--primary) 15%, var(--bg))"
-                            : "var(--bg)",
-                          color: step.isDone
-                            ? "#FFFFFF"
-                            : isCurrent
-                            ? "var(--primary)"
-                            : "var(--text-secondary)",
-                          border: step.isDone
-                            ? "none"
-                            : isCurrent
-                            ? "2px solid var(--primary)"
-                            : "2px solid var(--border)",
+                          backgroundColor: isCompleted ? "#16a34a" : isCurrent ? "var(--primary)" : "#d1d5db",
                         }}
+                      />
+                      <span
+                        className="text-[10px] font-medium text-center leading-tight"
+                        style={{ color: isCompleted ? "#16a34a" : isCurrent ? "var(--primary)" : "#9ca3af" }}
                       >
-                        {step.icon}
-                      </div>
-                      {!isLast && (
-                        <div
-                          className="w-0.5 flex-1 min-h-6"
-                          style={{
-                            backgroundColor: step.isDone && timeline[i + 1]?.isDone
-                              ? "var(--primary)"
-                              : "var(--border)",
-                          }}
-                        />
-                      )}
+                        {label}
+                      </span>
                     </div>
-                    {/* Label + time */}
-                    <div className="pb-6">
-                      <p
-                        className={`text-sm ${step.isDone || isCurrent ? "font-semibold" : "font-medium"}`}
-                        style={{
-                          color: step.isDone || isCurrent ? "var(--text)" : "var(--text-secondary)",
-                        }}
-                      >
-                        {step.label}
+                  );
+                })}
+              </div>
+              <div className="relative h-1 rounded-full" style={{ backgroundColor: "#e5e7eb" }}>
+                <div
+                  className="absolute inset-y-0 left-0 rounded-full transition-all duration-700"
+                  style={{
+                    backgroundColor: "var(--primary)",
+                    width: `${(currentStepIndex / (PROGRESS_STEPS.length - 1)) * 100}%`,
+                  }}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* ── Pending countdown ── */}
+          {isPending && pendingCountdown !== null && (
+            <div
+              className="px-5 py-4 rounded-xl space-y-3"
+              style={{ backgroundColor: "#fffbeb", border: "1px solid #fcd34d" }}
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-base font-semibold" style={{ color: "#92400e" }}>
+                    Waiting for restaurant
+                  </p>
+                  <p className="text-xs mt-0.5" style={{ color: "#b45309" }}>
+                    Auto-cancels if no response
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-xl font-bold tabular-nums" style={{ color: "#d97706" }}>
+                    {pendingCountdown}s
+                  </p>
+                  <p className="text-xs" style={{ color: "#b45309" }}>remaining</p>
+                </div>
+              </div>
+              {canCustomerCancel && (
+                <div style={{ borderTop: "1px solid #fcd34d", paddingTop: "12px" }}>
+                  {!showCancelForm ? (
+                    <button
+                      type="button"
+                      onClick={() => setShowCancelForm(true)}
+                      className="text-sm"
+                      style={{ color: "#6b7280" }}
+                    >
+                      Cancel this order
+                    </button>
+                  ) : (
+                    <div className="space-y-3">
+                      <p className="text-sm font-semibold" style={{ color: "#111827" }}>
+                        Why do you want to cancel?
                       </p>
-                      {step.timestamp && (
-                        <p
-                          className="text-xs mt-0.5"
-                          style={{ color: "var(--text-secondary)" }}
+                      <textarea
+                        rows={3}
+                        value={cancelReason}
+                        onChange={(e) => setCancelReason(e.target.value)}
+                        placeholder="e.g. Changed my mind, ordered by mistake…"
+                        className="w-full text-sm px-3 py-2 rounded-lg resize-none outline-none"
+                        style={{ backgroundColor: "#ffffff", border: "1px solid #e5e7eb", color: "#111827" }}
+                      />
+                      {cancelError && <p className="text-xs" style={{ color: "#ef4444" }}>{cancelError}</p>}
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => { setShowCancelForm(false); setCancelReason(""); setCancelError(null); }}
+                          disabled={isCancelling}
+                          className="flex-1 text-sm font-medium py-2 rounded-lg"
+                          style={{ backgroundColor: "#ffffff", border: "1px solid #e5e7eb", color: "#374151" }}
                         >
-                          {formatTime(step.timestamp)}
-                        </p>
-                      )}
+                          Keep Order
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleCancel}
+                          disabled={isCancelling || !cancelReason.trim()}
+                          className="flex-1 text-sm font-semibold py-2 rounded-lg disabled:opacity-50"
+                          style={{ backgroundColor: "#ef4444", color: "#ffffff" }}
+                        >
+                          {isCancelling ? "Cancelling…" : "Confirm Cancel"}
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
+                  )}
+                </div>
+              )}
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Order summary */}
-        <div
-          className="px-4 py-5 rounded-xl"
-          style={{
-            backgroundColor: "var(--card)",
-            border: "1px solid var(--border)",
-            borderRadius: "var(--radius)",
-          }}
-        >
-          <h2
-            className="text-sm font-semibold mb-3"
-            style={{ color: "var(--text)" }}
-          >
-            Order Summary
-          </h2>
-
-          {/* Items */}
-          <div className="space-y-2 mb-4">
-            {order.items.map((item, i) => (
-              <div
-                key={i}
-                className="flex justify-between text-sm"
-                style={{ color: "var(--text)" }}
-              >
-                <span>
-                  {item.quantity}x {item.name}
-                </span>
-                <span className="font-medium">${item.subtotal.toFixed(2)}</span>
+          {/* ── Declined banner ── */}
+          {isDeclined && (
+            <div
+              className="flex items-start gap-3 px-4 py-3 rounded-xl"
+              style={{ backgroundColor: "#fef2f2", border: "1px solid #fca5a5" }}
+            >
+              <XCircle className="h-5 w-5 flex-shrink-0 mt-0.5" style={{ color: "#ef4444" }} />
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-sm" style={{ color: "#991b1b" }}>
+                  Your order was declined by the restaurant
+                  {order.declinedAt && (
+                    <span className="font-normal ml-2 opacity-75">{formatTime(order.declinedAt)}</span>
+                  )}
+                </p>
+                {order.declinedReason && (
+                  <p className="text-sm mt-1" style={{ color: "#6b7280" }}>Reason: {order.declinedReason}</p>
+                )}
+                {storePhone && (
+                  <a href={`tel:${storePhone}`} className="inline-flex items-center gap-1.5 mt-2 text-sm font-medium" style={{ color: "#ef4444" }}>
+                    <Phone className="h-4 w-4" />
+                    Call {storeName}
+                  </a>
+                )}
               </div>
-            ))}
-          </div>
+            </div>
+          )}
 
-          <div
-            className="pt-3 space-y-1"
-            style={{ borderTop: "1px solid var(--border)" }}
-          >
+          {/* ── Cancelled banner ── */}
+          {isCancelled && (
             <div
-              className="flex justify-between text-sm"
-              style={{ color: "var(--text)" }}
+              className="flex items-start gap-3 px-4 py-3 rounded-xl"
+              style={{ backgroundColor: "#fef2f2", border: "1px solid #fca5a5" }}
             >
-              <span>Subtotal</span>
-              <span>${order.subtotal.toFixed(2)}</span>
-            </div>
-            <div
-              className="flex justify-between text-sm"
-              style={{ color: "var(--text)" }}
-            >
-              <span>Tax{effectiveRate > 0 ? ` (${parseFloat((effectiveRate * 100).toFixed(2))}%)` : ""}</span>
-              <span>${displayedTax.toFixed(2)}</span>
-            </div>
-            {order.tip > 0 && (
-              <div
-                className="flex justify-between text-sm"
-                style={{ color: "var(--text)" }}
-              >
-                <span>Tip</span>
-                <span>${order.tip.toFixed(2)}</span>
+              <AlertTriangle className="h-5 w-5 flex-shrink-0 mt-0.5" style={{ color: "#ef4444" }} />
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-sm" style={{ color: "#991b1b" }}>
+                  {order.cancelledBy === "customer"
+                    ? "You cancelled this order"
+                    : order.status === "void"
+                    ? "Order Voided"
+                    : "Order Cancelled"}
+                  {order.cancelledAt && (
+                    <span className="font-normal ml-2 opacity-75">{formatTime(order.cancelledAt)}</span>
+                  )}
+                </p>
+                {order.cancellationReason && (
+                  <p className="text-sm mt-1" style={{ color: "#6b7280" }}>Reason: {order.cancellationReason}</p>
+                )}
+                {storePhone && order.cancelledBy !== "customer" && (
+                  <a href={`tel:${storePhone}`} className="inline-flex items-center gap-1.5 mt-2 text-sm font-medium" style={{ color: "#ef4444" }}>
+                    <Phone className="h-4 w-4" />
+                    Call {storeName}
+                  </a>
+                )}
               </div>
-            )}
-            <div
-              className="flex justify-between text-sm font-bold pt-2"
-              style={{
-                color: "var(--text)",
-                borderTop: "1px solid var(--border)",
-              }}
-            >
-              <span>Total</span>
-              <span>${displayedTotal.toFixed(2)}</span>
             </div>
-          </div>
-        </div>
+          )}
 
-        {/* Pickup location card */}
-        {(storeAddress || storeLat) && (
-          <div
-            className="rounded-xl overflow-hidden lg:hidden"
-            style={{
-              backgroundColor: "var(--card)",
-              border: "1px solid var(--border)",
-              borderRadius: "var(--radius)",
-            }}
-          >
-            {mapEmbedSrc && (
-              <iframe
-                title="Pickup location"
-                width="100%"
-                height="180"
-                style={{ border: 0, display: "block" }}
-                loading="lazy"
-                referrerPolicy="no-referrer-when-downgrade"
-                src={mapEmbedSrc}
+          {/* ── Store info card ── */}
+          {(storeAddress || storeLat) && (
+            <div className="rounded-xl overflow-hidden" style={{ border: "1px solid #e5e7eb" }}>
+              <StoreInfoBlock
+                storeName={storeName}
+                storeAddress={storeAddress ?? null}
+                storePhone={storePhone ?? null}
+                hoursLabel={hoursLabel}
+                directionsHref={directionsHref}
               />
-            )}
-            <StoreInfoBlock
-              storeName={storeName}
-              storeAddress={storeAddress ?? null}
-              storePhone={storePhone ?? null}
-              hoursLabel={hoursLabel}
-              directionsHref={directionsHref}
-            />
-          </div>
-        )}
+            </div>
+          )}
 
-        {/* Continue shopping + contact */}
-        <div className="text-center pb-8 space-y-3">
-          <Link
-            href={storePath()}
-            className="text-sm font-medium block"
-            style={{ color: "var(--primary)" }}
-          >
-            Continue Shopping
-          </Link>
-        </div>
+          {/* ── Order details — collapsible ── */}
+          <div className="rounded-xl overflow-hidden" style={{ border: "1px solid #e5e7eb" }}>
+            <button
+              type="button"
+              onClick={() => setOrderDetailsOpen((v) => !v)}
+              className="w-full flex items-center justify-between px-4 py-3 text-sm font-semibold text-left"
+              style={{ color: "#111827", backgroundColor: "#f9fafb" }}
+            >
+              <span>Order details</span>
+              <span style={{ color: "#9ca3af", fontSize: "18px", lineHeight: 1 }}>
+                {orderDetailsOpen ? "−" : "+"}
+              </span>
+            </button>
+            {orderDetailsOpen && (
+              <div className="px-4 pt-3 pb-4 space-y-2 bg-white">
+                {order.items.map((item, i) => (
+                  <div key={i} className="flex justify-between text-sm" style={{ color: "#374151" }}>
+                    <span>{item.quantity}× {item.name}</span>
+                    <span className="font-medium">${item.subtotal.toFixed(2)}</span>
+                  </div>
+                ))}
+                <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: "8px" }} className="space-y-1">
+                  <div className="flex justify-between text-sm" style={{ color: "#6b7280" }}>
+                    <span>Subtotal</span>
+                    <span>${order.subtotal.toFixed(2)}</span>
+                  </div>
+                  {displayedTax > 0 && (
+                    <div className="flex justify-between text-sm" style={{ color: "#6b7280" }}>
+                      <span>Tax{effectiveRate > 0 ? ` (${parseFloat((effectiveRate * 100).toFixed(2))}%)` : ""}</span>
+                      <span>${displayedTax.toFixed(2)}</span>
+                    </div>
+                  )}
+                  {order.tip > 0 && (
+                    <div className="flex justify-between text-sm" style={{ color: "#6b7280" }}>
+                      <span>Tip</span>
+                      <span>${order.tip.toFixed(2)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between text-sm font-bold pt-1" style={{ color: "#111827", borderTop: "1px solid #e5e7eb" }}>
+                    <span>Total</span>
+                    <span>${displayedTotal.toFixed(2)}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="text-center pb-6">
+            <Link href={storePath()} className="text-sm font-medium" style={{ color: "var(--primary)" }}>
+              Continue Shopping
+            </Link>
+          </div>
         </main>
       </section>
 
-      {/* Right panel — full-bleed Google Map (desktop only) */}
-      <section
-        className="hidden lg:block flex-1 relative"
-        style={{ backgroundColor: "#e5e7eb" }}
-      >
+      {/* Right panel — full-bleed map (desktop only) */}
+      <section className="hidden lg:block flex-1 relative" style={{ backgroundColor: "#e5e7eb" }}>
         {mapEmbedSrc ? (
           <iframe
             title="Pickup location map"
@@ -839,15 +607,11 @@ export function OrderTrackingPage({
             src={mapEmbedSrc}
           />
         ) : (
-          <div className="absolute inset-0 flex items-center justify-center text-sm text-gray-500">
+          <div className="absolute inset-0 flex items-center justify-center text-sm" style={{ color: "#9ca3af" }}>
             Store location unavailable
           </div>
         )}
-
-        {/* Floating store info card overlay */}
-        <div className="absolute top-6 right-6 w-80 rounded-2xl shadow-xl overflow-hidden"
-          style={{ backgroundColor: "#ffffff", border: "1px solid var(--border)" }}
-        >
+        <div className="absolute top-6 right-6 w-80 rounded-2xl shadow-xl overflow-hidden bg-white" style={{ border: "1px solid #e5e7eb" }}>
           <StoreInfoBlock
             storeName={storeName}
             storeAddress={storeAddress ?? null}

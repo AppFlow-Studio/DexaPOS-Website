@@ -71,12 +71,9 @@ BEGIN
   END IF;
 END;
 $$;
-
 GRANT EXECUTE ON FUNCTION public.assert_pci_safe_exports() TO authenticated, service_role;
-
 COMMENT ON FUNCTION public.assert_pci_safe_exports() IS
   'A13 regression check: fails if any registered export function references the raw order_payments table or a @pci-sensitive column. Run in CI.';
-
 -- Run the check now so a faulty migration fails fast at deploy time.
 DO $$
 BEGIN

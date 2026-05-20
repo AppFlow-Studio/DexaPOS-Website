@@ -1,5 +1,3 @@
--- Pulled from Supabase staging branch (project dfwqakoyittmrwbqvxgw) on 2026-05-03 to reconcile local migration history.
-
 
 -- get_location_payment_device_secret: same return shape, updated column reference
 CREATE OR REPLACE FUNCTION public.get_location_payment_device_secret(
@@ -219,3 +217,4 @@ BEGIN
   ORDER BY lpd.use_for_online_ordering DESC, lpd.updated_at DESC, lpd.created_at DESC;
 END;
 $$;
+;

@@ -3,12 +3,14 @@
 import { useState } from "react";
 import { ChevronDown, ChevronUp, Minus, Plus, X } from "lucide-react";
 import Link from "next/link";
-import type { CartItem } from "../../hooks/useCart";
+import { type CartItem, resolveCartUnitPrice } from "../../hooks/useCart";
 import { useStorefrontPath } from "../../lib/use-storefront-path";
 
 interface OrderDetailsSectionProps {
   items: CartItem[];
   slug: string;
+  orderType: "pickup" | "delivery";
+  deliveryPricingEnabled: boolean;
   onUpdateQuantity: (cartItemId: string, quantity: number) => void;
   onRemoveItem: (cartItemId: string) => void;
 }
@@ -16,6 +18,8 @@ interface OrderDetailsSectionProps {
 export function OrderDetailsSection({
   items,
   slug,
+  orderType,
+  deliveryPricingEnabled,
   onUpdateQuantity,
   onRemoveItem,
 }: OrderDetailsSectionProps) {
@@ -44,6 +48,8 @@ export function OrderDetailsSection({
             <OrderDetailItem
               key={item.cartItemId}
               item={item}
+              orderType={orderType}
+              deliveryPricingEnabled={deliveryPricingEnabled}
               onUpdateQuantity={onUpdateQuantity}
               onRemoveItem={onRemoveItem}
             />
@@ -64,10 +70,14 @@ export function OrderDetailsSection({
 
 function OrderDetailItem({
   item,
+  orderType,
+  deliveryPricingEnabled,
   onUpdateQuantity,
   onRemoveItem,
 }: {
   item: CartItem;
+  orderType: "pickup" | "delivery";
+  deliveryPricingEnabled: boolean;
   onUpdateQuantity: (cartItemId: string, quantity: number) => void;
   onRemoveItem: (cartItemId: string) => void;
 }) {
@@ -113,7 +123,7 @@ function OrderDetailItem({
             )}
           </div>
           <span className="font-bold text-sm shrink-0" style={{ color: "#111827" }}>
-            ${(item.totalPrice * item.quantity).toFixed(2)}
+            ${(resolveCartUnitPrice(item, orderType, deliveryPricingEnabled) * item.quantity).toFixed(2)}
           </span>
         </div>
 

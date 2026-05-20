@@ -456,10 +456,22 @@ export interface OrderHistoryEntry {
   total: number;
   createdAt: string;
   items: {
+    /** menu_items.id from the original order. Null for open items or items
+     *  that pre-date menu_item_id capture — those can't be safely reordered. */
+    menuItemId: string | null;
     name: string;
     quantity: number;
+    /** Line unit price as charged. INCLUDES modifier cost (matches how the
+     *  server stores unit_price). Reorder logic must subtract modifiers to get
+     *  the base price before re-adding via addItem(). */
     unitPrice: number;
     subtotal: number;
+    modifiers: {
+      modifierItemId: string | null;
+      name: string;
+      price: number;
+      quantity: number;
+    }[];
   }[];
 }
 
@@ -837,7 +849,10 @@ export async function getOrderHistory(
       `
       id, order_number, display_number, order_type, status,
       subtotal, tax_amount, tip_amount, total_amount, created_at,
-      order_items (item_name, quantity, unit_price, subtotal)
+      order_items (
+        menu_item_id, item_name, quantity, unit_price, subtotal,
+        order_item_modifiers ( modifier_item_id, modifier_name, price_modifier, quantity )
+      )
     `
     )
     .eq("customer_id", session.customer_id)
@@ -861,10 +876,17 @@ export async function getOrderHistory(
       total: Number(o.total_amount) || 0,
       createdAt: o.created_at,
       items: (o.order_items ?? []).map((i: any) => ({
+        menuItemId: i.menu_item_id ?? null,
         name: i.item_name,
         quantity: i.quantity,
         unitPrice: Number(i.unit_price) || 0,
         subtotal: Number(i.subtotal) || 0,
+        modifiers: (i.order_item_modifiers ?? []).map((m: any) => ({
+          modifierItemId: m.modifier_item_id ?? null,
+          name: m.modifier_name,
+          price: Number(m.price_modifier) || 0,
+          quantity: Number(m.quantity) || 1,
+        })),
       })),
     })),
   };

@@ -125,4 +125,4 @@ $function$;
 GRANT EXECUTE ON FUNCTION public.adjust_tips_v2(uuid, jsonb, uuid) TO authenticated;
 
 COMMENT ON FUNCTION public.adjust_tips_v2 IS
-  'Tip adjustment with platform-fee recompute. Forks adjust_tips with original_tip_fee preservation and tip_fee recompute from tip_surcharge_percentage_snapshot. Pre-v10 rows (snapshot=0) are no-op-safe.';
+  'Tip adjustment with platform-fee recompute. Forks adjust_tips with original_tip_fee preservation and tip_fee recompute from tip_surcharge_percentage_snapshot. Pre-v10 rows (snapshot=0) are no-op-safe.';;

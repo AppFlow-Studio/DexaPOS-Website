@@ -46,5 +46,4 @@ BEGIN
   END IF;
 END;
 $function$;
-
-GRANT EXECUTE ON FUNCTION public.record_refund_items_v2(uuid, jsonb, boolean, uuid) TO authenticated;;
+GRANT EXECUTE ON FUNCTION public.record_refund_items_v2(uuid, jsonb, boolean, uuid) TO authenticated;

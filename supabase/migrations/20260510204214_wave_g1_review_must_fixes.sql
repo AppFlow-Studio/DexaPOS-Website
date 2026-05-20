@@ -1,27 +1,3 @@
--- =====================================================================
--- Wave G.1 — must-fixes from senior backend + senior EM review
--- =====================================================================
--- Bundles five corrections discovered in the post-implementation review
--- (see plan file: lets-look-into-this-functional-rivest.md, "Review"
--- section). Items #2 (manual_mark hardening), #8 (cascade kill switch),
--- #9 (server-side journal mirror), #10 (Luqra writer alignment) are
--- separate waves.
---
--- Apply AFTER:
---   - wave_a–f migrations
---   - the staging-applied hotfixes (b.2, c.1 uuid-cast guard, d.2/d.3/d.4)
--- =====================================================================
-
-BEGIN;
-
--- ---------------------------------------------------------------------
--- Fix #5: F.1 cascade settled_at COALESCE order
---
--- Old: COALESCE(settled_at, NEW.closed_at, now()) — first cascade write
--- stamps now(); a later authoritative Luqra closed_at is ignored.
--- New: COALESCE(NEW.closed_at, settled_at, now()) — Luqra's value wins
--- if present.
--- ---------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public._cascade_is_settled_on_batch_close()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -41,23 +17,6 @@ BEGIN
 END;
 $$;
 
--- ---------------------------------------------------------------------
--- Fix #3 + index-name pin in trigger comment.
---
--- Race: prepare promotes a host batch to 'pending' under FOR UPDATE; a
--- concurrent late capture with the same txnBatchNo runs the trigger
--- (no row lock on find-or-create) and stamps settlement_batch_id onto
--- a payment whose batch is mid-settle. That payment is aggregated into
--- the in-flight settle but acquirer-side belongs to the next host
--- batch — totals diverge.
---
--- Fix: if the resolved batch is in 'pending'/'settling', return NEW
--- WITHOUT stamping. The next prepare will pick the row up cleanly
--- once the in-flight settle completes (open or open-after-failure).
--- The unique index `uq_settlement_batches_host_key` is referenced by
--- the ON CONFLICT predicate; pinned in the function comment so future
--- migrations can't drop ON CONFLICT inference silently.
--- ---------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public._lazy_settlement_batch_link()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -88,9 +47,6 @@ BEGIN
     LIMIT 1;
 
     IF v_existing_id IS NOT NULL AND v_existing_status IN ('pending','settling') THEN
-        -- Race guard: don't graft this payment onto an in-flight settle.
-        -- Leave settlement_batch_id NULL; next prepare picks it up after
-        -- the in-flight cycle resolves (open via failed→open or partial_failure→open).
         RETURN NEW;
     END IF;
 
@@ -131,26 +87,8 @@ END;
 $$;
 
 COMMENT ON FUNCTION public._lazy_settlement_batch_link IS
-    'BEFORE INSERT trigger on order_payments. Find-or-creates a settlement_batches row keyed by (payment_terminal_id, merchant_id, acquirer, batch_number) via the partial unique index `uq_settlement_batches_host_key WHERE batch_number IS NOT NULL` and stamps NEW.settlement_batch_id. Skips: rows with existing settlement_batch_id, missing acquirer/batch_number/terminal_id, terminal_type not in (castles,dejavoo), non-UUID terminal_id (draft_<uuid>, cash_drawer), and (Wave G.1 race guard) batches currently in pending/settling. Idempotent under concurrent inserts via ON CONFLICT — predicate must match the index predicate exactly.';
+    'BEFORE INSERT trigger on order_payments. Find-or-creates a settlement_batches row keyed by (payment_terminal_id, merchant_id, acquirer, batch_number) via the partial unique index uq_settlement_batches_host_key WHERE batch_number IS NOT NULL and stamps NEW.settlement_batch_id. Skips: rows with existing settlement_batch_id, missing acquirer/batch_number/terminal_id, terminal_type not in (castles,dejavoo), non-UUID terminal_id, and (Wave G.1 race guard) batches currently in pending/settling.';
 
--- ---------------------------------------------------------------------
--- Fix #6 + #7: prepare picks up partial_failure as recoverable + finalize
--- accepts a re-entry for already-settled rows when incoming response is
--- success.
---
--- #6: partial_failure currently traps a batch — it has is_settled=true
--- payments but the row is in a non-open state, so prepare can't pick it
--- up next time. Treat partial_failure as a "needs another attempt for
--- the failed acquirers" state by flipping it back to 'open' alongside
--- 'failed' in the existing host-keyed cleanup.
---
--- #7: if Luqra's writer flips status to 'settled' before our finalize
--- call lands, finalize raises 'already settled' and the Castles raw
--- response is dropped on the floor. The MMKV journal then never clears.
--- Make finalize idempotent for the success path: on already-settled,
--- still merge raw_response/castles_settle_info if not present, return a
--- success-shaped jsonb so the journal can clear.
--- ---------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.prepare_castles_settlement(
     p_terminal_id uuid,
     p_merchant_id uuid,
@@ -204,9 +142,6 @@ BEGIN
     FROM public.settlement_batches sb
     WHERE op.settlement_batch_id=sb.id AND sb.payment_terminal_id=p_terminal_id AND sb.status='failed' AND sb.acquirer IS NULL;
 
-    -- Wave G.1 #6: include 'partial_failure' alongside 'failed' so the next
-    -- prepare cycle can retry the acquirers that didn't settle. Settled
-    -- payments (those whose acquirer succeeded) keep is_settled=true.
     UPDATE public.settlement_batches SET status='open', updated_at=NOW()
     WHERE payment_terminal_id=p_terminal_id
       AND status IN ('failed','partial_failure')
@@ -346,11 +281,6 @@ BEGIN
     v_return_code := p_castles_response->>'txnReturnCode';
     v_response_is_ok := (v_return_code = '00000000');
 
-    -- Wave G.1 #7: idempotent re-entry against already-settled batches.
-    -- Happens when Luqra writer or the cascade already flipped status to
-    -- settled before our finalize call landed (race between server-side
-    -- reconciliation and POS finalize). Merge raw_response if missing
-    -- and return a success-shaped jsonb so the journal/UI can clear.
     IF v_batch.status = 'settled' THEN
         IF v_response_is_ok THEN
             UPDATE public.settlement_batches
@@ -458,15 +388,6 @@ BEGIN
 END;
 $$;
 
--- ---------------------------------------------------------------------
--- Fix #4: corrective UPDATE for C.2 backfill business_date_end bug.
---
--- C.2 set business_date_end := MIN(captured_at)::date which equals
--- business_date_start. For any host batch spanning the 3am ET cutover
--- this is wrong. Recompute from the actually-linked captured payments.
--- Idempotent — only touches LAZY-keyed rows where end equals start AND
--- there are linked payments that disagree.
--- ---------------------------------------------------------------------
 WITH recomputed AS (
     SELECT sb.id,
            (MIN(op.captured_at) AT TIME ZONE 'America/New_York')::date AS start_d,
@@ -483,6 +404,4 @@ SET business_date_start = r.start_d,
     updated_at = NOW()
 FROM recomputed r
 WHERE sb.id = r.id
-  AND r.start_d IS DISTINCT FROM r.end_d;
-
-COMMIT;
+  AND r.start_d IS DISTINCT FROM r.end_d;;

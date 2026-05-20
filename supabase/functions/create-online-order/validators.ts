@@ -5,7 +5,7 @@
 // Each validator returns { valid: true } or { valid: false, ...details }.
 // ============================================================================
 
-import { type SupabaseClient } from '@supabase/supabase-js'
+import { type SupabaseClient } from 'npm:@supabase/supabase-js@^2'
 
 // ============================================================================
 // STOCK VALIDATION
