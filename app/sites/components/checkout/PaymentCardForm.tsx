@@ -390,7 +390,7 @@ export const PaymentCardForm = forwardRef<
           </span>
         ) : (
           <span className="rounded-full bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-600">
-            {collectReady ? "Awaiting details" : "Loading fields"}
+            {collectReady ? "Enter card details" : "Loading fields"}
           </span>
         )}
       </div>

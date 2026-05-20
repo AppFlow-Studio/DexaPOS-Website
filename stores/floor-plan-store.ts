@@ -12,7 +12,6 @@ import { subscribeWithSelector } from "zustand/middleware";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { createClient } from '@supabase/supabase-js';
 import { TABLE_SHAPES } from "@/utils/tables/table-shapes";
-import { getNextAvailableTableNumber } from "@/utils/tables/floor-plan-helpers";
 
 // Helper to create authenticated Supabase client
 function createAuthenticatedClient() {
@@ -415,15 +414,11 @@ export const useFloorPlanStore = create<FloorPlanState>()(
 
                     const shape = TABLE_SHAPES[tableData.shape_id as keyof typeof TABLE_SHAPES];
                     const tempId = `temp-${Date.now()}-${Math.random()}`;
-                    const name = tableData.name?.trim() ||
-                        (shape?.type === 'table'
-                            ? String(getNextAvailableTableNumber(get().draftTables.map(table => table.name)))
-                            : `New ${shape?.label || 'Table'}`);
 
                     const newTable: FloorPlanObject = {
                         id: tempId,
                         floor_plan_id: floorPlanId,
-                        name,
+                        name: tableData.name || `New ${shape?.label || 'Table'}`,
                         shape_id: tableData.shape_id as keyof typeof TABLE_SHAPES,
                         category: (shape?.category || tableData.category || 'table') as FloorPlanObject['category'],
                         x: tableData.x || 100,
@@ -452,21 +447,14 @@ export const useFloorPlanStore = create<FloorPlanState>()(
                     get().saveSnapshot();
 
                     const timestamp = Date.now();
-                    const reservedNames = get().draftTables.map(table => table.name);
                     const newTables = tablesData.map((tableData, index) => {
                         const shape = TABLE_SHAPES[tableData.shape_id as keyof typeof TABLE_SHAPES];
                         const tempId = `temp-${timestamp}-${index}-${Math.random()}`;
-                        const name = tableData.name?.trim() ||
-                            (shape?.type === 'table'
-                                ? String(getNextAvailableTableNumber(reservedNames))
-                                : `New ${shape?.label || 'Table'}`);
-
-                        reservedNames.push(name);
 
                         return {
                             id: tempId,
                             floor_plan_id: floorPlanId,
-                            name,
+                            name: tableData.name || `New ${shape?.label || 'Table'}`,
                             shape_id: tableData.shape_id as keyof typeof TABLE_SHAPES,
                             category: (shape?.category || tableData.category || 'table') as FloorPlanObject['category'],
                             x: tableData.x || 100,
@@ -753,13 +741,9 @@ export const useFloorPlanStore = create<FloorPlanState>()(
                     get().saveSnapshot();
 
                     const shape = TABLE_SHAPES[tableData.shape_id as keyof typeof TABLE_SHAPES];
-                    const name = tableData.name?.trim() ||
-                        (shape?.type === 'table'
-                            ? String(getNextAvailableTableNumber(get().tables.map(table => table.name)))
-                            : `New ${shape?.label || 'Table'}`);
 
                     const { objectId } = await AddTableAction(floorPlanId, {
-                        name,
+                        name: tableData.name || `Table ${get().tables.length + 1}`,
                         shape_id: tableData.shape_id as string,
                         category: shape?.category || 'table',
                         x: tableData.x || 100,
@@ -861,8 +845,8 @@ export const useFloorPlanStore = create<FloorPlanState>()(
                     if (!locationId) return;
 
                     try {
-                        const response = await LoadWaitlistAction(locationId);
-                        set({ waitlist: response.waitlist || [] });
+                        const waitlist = await LoadWaitlistAction(locationId);
+                        set({ waitlist: waitlist || [] });
                     } catch (error) {
                         console.error('Failed to load waitlist:', error);
                     }

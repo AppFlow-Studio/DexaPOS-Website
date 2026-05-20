@@ -8,12 +8,6 @@ import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import {
-  getSizeForPreset,
-  inferSizePreset,
-  TABLE_SIZE_PRESETS,
-  TableSizePreset
-} from '@/utils/tables/floor-plan-helpers'
-import {
   Card,
   CardContent,
   CardDescription,
@@ -65,11 +59,6 @@ export function FloorPlanPropertiesPanel ({
 
   const isTable =
     selectedTable.category === 'table' || selectedTable.category === 'booth'
-  const activeSizePreset = inferSizePreset(
-    selectedTable.shape_id,
-    selectedTable.width,
-    selectedTable.height
-  )
 
   // Direct update helper — writes to draft store immediately
   const updateProperty = (field: string, value: unknown) => {
@@ -80,15 +69,6 @@ export function FloorPlanPropertiesPanel ({
     updateTableInDraft(selectedTable.id, {
       [field]: value
     } as Partial<FloorPlanObject>)
-  }
-
-  const updateSizePreset = (preset: TableSizePreset) => {
-    if (!snapshotSavedRef.current) {
-      saveSnapshot()
-      snapshotSavedRef.current = true
-    }
-
-    updateTableInDraft(selectedTable.id, getSizeForPreset(selectedTable.shape_id, preset))
   }
 
   return (
@@ -249,26 +229,6 @@ export function FloorPlanPropertiesPanel ({
           {/* Display Options */}
           <div className='space-y-3'>
             <h3 className='text-sm font-semibold'>Display</h3>
-
-            <div className='space-y-1.5'>
-              <Label className='text-sm'>Size</Label>
-              <div className='grid grid-cols-4 gap-2'>
-                {(Object.keys(TABLE_SIZE_PRESETS) as TableSizePreset[]).map(
-                  preset => (
-                    <Button
-                      key={preset}
-                      type='button'
-                      variant={activeSizePreset === preset ? 'default' : 'outline'}
-                      size='sm'
-                      className='h-8'
-                      onClick={() => updateSizePreset(preset)}
-                    >
-                      {preset}
-                    </Button>
-                  )
-                )}
-              </div>
-            </div>
 
             {!isTable && (
               <div className='space-y-1.5'>

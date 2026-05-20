@@ -60,11 +60,6 @@ import { useModifierGroups } from "@/app/dashboard/hooks/useModifierGroups";
 import { PriceInputGroup } from "@/components/dashboard/locations/PriceInputGroup";
 import { useEffectivePricing } from "@/app/dashboard/hooks/useEffectivePricing";
 import { ItemPreviewCard } from "@/components/dashboard/menu/ItemPreviewCard";
-import {
-  clearLocalStorageDraft,
-  readLocalStorageDraft,
-  writeLocalStorageDraft,
-} from "@/lib/browser/local-storage-draft";
 
 // ============================================================================
 // CONSTANTS
@@ -112,25 +107,6 @@ interface CreateItemWizardProps {
   onSuccess?: () => void;
 }
 
-interface CreateItemWizardDraft {
-  name: string;
-  description: string;
-  price: number;
-  cashPrice: number | null;
-  deliveryPrice: number | null;
-  useDeliveryPrice: boolean;
-  allergens: string[];
-  mealTypes: string[];
-  cardBgColor: string;
-  availability: boolean;
-  taxCategory: string;
-  isTaxExempt: boolean;
-  stockTrackingMode: string;
-  availableChannels: string[];
-  selectedCategories: string[];
-  selectedModifiers: string[];
-}
-
 export function CreateItemWizard({
   open,
   onOpenChange,
@@ -154,13 +130,6 @@ export function CreateItemWizard({
     category: "menu-items",
     fileNamePrefix: "item",
   });
-  const draftHydratedRef = React.useRef(false);
-  const draftKey = React.useMemo(() => {
-    const scopeKey = isAllLocations ? "global" : selectedLocationId ?? "location-none";
-    return merchantId
-      ? `menu-item-draft:create-wizard:${merchantId}:${scopeKey}`
-      : null;
-  }, [isAllLocations, merchantId, selectedLocationId]);
 
   // Form state
   const [name, setName] = React.useState("");
@@ -215,7 +184,6 @@ export function CreateItemWizard({
   // Reset on close
   React.useEffect(() => {
     if (!open) {
-      draftHydratedRef.current = false;
       setName("");
       setDescription("");
       setPrice(0);
@@ -237,74 +205,6 @@ export function CreateItemWizard({
       setErrors({});
     }
   }, [imageUpload.reset, open]);
-
-  React.useEffect(() => {
-    if (!open || !draftKey || draftHydratedRef.current) return;
-
-    const draft = readLocalStorageDraft<CreateItemWizardDraft>(draftKey);
-    if (draft) {
-      setName(draft.name ?? "");
-      setDescription(draft.description ?? "");
-      setPrice(draft.price ?? 0);
-      setCashPrice(draft.cashPrice ?? null);
-      setDeliveryPrice(draft.deliveryPrice ?? null);
-      setUseDeliveryPrice(Boolean(draft.useDeliveryPrice));
-      setAllergens(draft.allergens ?? []);
-      setMealTypes(draft.mealTypes ?? []);
-      setCardBgColor(draft.cardBgColor ?? "");
-      setAvailability(draft.availability ?? true);
-      setTaxCategory(draft.taxCategory ?? "standard");
-      setIsTaxExempt(Boolean(draft.isTaxExempt));
-      setStockTrackingMode(draft.stockTrackingMode ?? "in_stock");
-      setAvailableChannels(draft.availableChannels ?? ["pos", "online", "kiosk"]);
-      setSelectedCategories(new Set(draft.selectedCategories ?? []));
-      setSelectedModifiers(new Set(draft.selectedModifiers ?? []));
-    }
-
-    draftHydratedRef.current = true;
-  }, [draftKey, open]);
-
-  React.useEffect(() => {
-    if (!open || !draftKey || !draftHydratedRef.current) return;
-
-    writeLocalStorageDraft(draftKey, {
-      name,
-      description,
-      price,
-      cashPrice,
-      deliveryPrice,
-      useDeliveryPrice,
-      allergens,
-      mealTypes,
-      cardBgColor,
-      availability,
-      taxCategory,
-      isTaxExempt,
-      stockTrackingMode,
-      availableChannels,
-      selectedCategories: Array.from(selectedCategories),
-      selectedModifiers: Array.from(selectedModifiers),
-    } satisfies CreateItemWizardDraft);
-  }, [
-    allergens,
-    availability,
-    availableChannels,
-    cardBgColor,
-    cashPrice,
-    deliveryPrice,
-    draftKey,
-    description,
-    isTaxExempt,
-    mealTypes,
-    name,
-    open,
-    price,
-    selectedCategories,
-    selectedModifiers,
-    stockTrackingMode,
-    taxCategory,
-    useDeliveryPrice,
-  ]);
 
   // Field-label map for user-friendly toast messages
   const FIELD_LABELS: Record<string, string> = {
@@ -487,9 +387,6 @@ export function CreateItemWizard({
       }
 
       if (successCount > 0) {
-        if (draftKey) {
-          clearLocalStorageDraft(draftKey);
-        }
         const successMessage =
           categoryIds.length === 0
             ? "Item created"

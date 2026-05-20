@@ -39,7 +39,9 @@ export default async function CheckoutRoute({ params, searchParams }: PageProps)
   const templateId = theme?.templateId || "classic";
   const defaults = TEMPLATE_DEFAULTS[templateId];
   const themeStyle = buildThemeVars(theme);
-  const bgColor = (themeStyle as Record<string, string>)["--bg"] ?? defaults.bg;
+  // Ordering flow uses a neutral white chassis regardless of merchant theme —
+  // brand color still applies to CTAs/accents via --primary. (DoD: no cream outside hero)
+  const bgColor = "#FFFFFF";
   const textColor = (themeStyle as Record<string, string>)["--text"] ?? defaults.text;
   const rootVarsCss = `:root { ${Object.entries(themeStyle).map(([k, v]) => `${k}: ${v}`).join("; ")} }`;
   return (

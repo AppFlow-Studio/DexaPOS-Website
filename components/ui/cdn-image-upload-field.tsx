@@ -2,7 +2,6 @@
 
 import { Crop, ImageIcon, Loader2, Trash2, Upload } from 'lucide-react'
 import { useRef, useState } from 'react'
-import { useDropzone } from 'react-dropzone'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
@@ -107,32 +106,6 @@ export function CdnImageUploadField({
     setCropOpen(true)
   }
 
-  const { getRootProps, isDragActive } = useDropzone({
-    accept: {
-      'image/jpeg': ['.jpg', '.jpeg'],
-      'image/png': ['.png'],
-      'image/webp': ['.webp'],
-      'image/gif': ['.gif'],
-      'image/svg+xml': ['.svg'],
-    },
-    disabled: disabled || uploading,
-    maxFiles: 1,
-    maxSize: 5 * 1024 * 1024,
-    noClick: true,
-    noKeyboard: true,
-    onDropAccepted: (files) => {
-      handleFilePicked(files[0] ?? null)
-    },
-    onDropRejected: (rejections) => {
-      const firstError = rejections[0]?.errors?.[0]
-      if (firstError?.code === 'file-too-large') {
-        toast.error('Image must be 5 MB or smaller.')
-        return
-      }
-      toast.error('Please drop a single JPG, PNG, WEBP, GIF, or SVG image.')
-    },
-  })
-
   const handleCropConfirm = (croppedFile: File) => {
     onFileSelect(croppedFile)
     setPendingFile(null)
@@ -161,11 +134,9 @@ export function CdnImageUploadField({
       />
 
       <div
-        {...getRootProps()}
         className={cn(
-          'rounded-xl border border-dashed bg-muted/20 p-4 transition-colors',
+          'rounded-xl border border-dashed bg-muted/20 p-4',
           previewUrl ? 'border-border' : 'border-muted-foreground/30',
-          isDragActive && 'border-primary bg-primary/5',
         )}
       >
         {previewUrl ? (
@@ -220,9 +191,6 @@ export function CdnImageUploadField({
                 Remove
               </Button>
             </div>
-            <p className="text-xs text-muted-foreground">
-              Drag and drop to replace, or use the button to browse.
-            </p>
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center gap-3 py-6 text-center">
@@ -230,11 +198,9 @@ export function CdnImageUploadField({
               <ImageIcon className="h-5 w-5 text-muted-foreground" />
             </div>
             <div className="space-y-1">
-              <p className="text-sm font-medium">
-                {isDragActive ? 'Drop image here' : 'No image selected'}
-              </p>
+              <p className="text-sm font-medium">No image selected</p>
               <p className="text-xs text-muted-foreground">
-                Drag and drop, or upload JPG, PNG, WEBP, GIF, or SVG up to 5 MB
+                JPG, PNG, WEBP, GIF, or SVG up to 5 MB
               </p>
             </div>
             <Button
