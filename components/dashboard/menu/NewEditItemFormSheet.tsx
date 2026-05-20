@@ -72,6 +72,11 @@ import {
 import { cn } from "@/lib/utils";
 import { useMerchantCdnImageUpload } from "@/lib/cdn/use-merchant-cdn-image-upload";
 import {
+  clearLocalStorageDraft,
+  readLocalStorageDraft,
+  writeLocalStorageDraft,
+} from "@/lib/browser/local-storage-draft";
+import {
   UpdateMenuItem,
   CreateMenuItem,
   ResetMenuItemToGlobal,
@@ -304,6 +309,12 @@ interface NewEditItemFormSheetProps {
   mode?: "full" | "inline-price";
   /** Called when the user clicks "Open Global Edit". Should navigate to /dashboard/menu/items/[id]/edit */
   onOpenGlobalEdit?: () => void;
+}
+
+interface NewEditItemDraft {
+  values: ItemFormValues;
+  selectedCategories: string[];
+  selectedModifiers: string[];
 }
 
 // Form schema
@@ -879,6 +890,16 @@ export function NewEditItemFormSheet({
     category: "menu-items",
     fileNamePrefix: "item",
   });
+  const draftHydratedRef = React.useRef(false);
+  const draftKey = React.useMemo(() => {
+    const scopeKey = isAllLocations ? "global" : selectedLocationId ?? "location-none";
+    const menuScope = menuId ?? "library";
+    const categoryScope = categoryId ?? "uncategorized";
+
+    return merchantId
+      ? `menu-item-draft:new-edit-sheet:${merchantId}:${menuScope}:${categoryScope}:${scopeKey}`
+      : null;
+  }, [categoryId, isAllLocations, menuId, merchantId, selectedLocationId]);
   const locationIdForEdits = isAllLocations ? null : selectedLocationId;
 
   const isItemLocationOwned =
@@ -1038,6 +1059,12 @@ export function NewEditItemFormSheet({
     },
   });
 
+  React.useEffect(() => {
+    if (!open) {
+      draftHydratedRef.current = false;
+    }
+  }, [open]);
+
   // Reset form when editItem or context changes
   React.useEffect(() => {
     let cancelled = false;
@@ -1120,6 +1147,45 @@ export function NewEditItemFormSheet({
   }, [editItem, form, getPriceForContext, imageUpload.reset]);
 
   const watchedValues = form.watch();
+
+  React.useEffect(() => {
+    if (!open || !!editItem || !draftKey || draftHydratedRef.current) return;
+
+    const draft = readLocalStorageDraft<NewEditItemDraft>(draftKey);
+    if (draft) {
+      form.reset({
+        name: "",
+        description: "",
+        price: 0,
+        cash_price: undefined,
+        delivery_price: null,
+        image_url: "",
+        availability: true,
+        allergens: [],
+        card_bg_color: "",
+        stock_tracking_mode: "in_stock",
+        tax_category: "standard",
+        is_tax_exempt: false,
+        available_channels: ["pos", "online"],
+        prep_station_id: null,
+        ...draft.values,
+      });
+      setSelectedCategories(draft.selectedCategories ?? []);
+      setSelectedModifiers(draft.selectedModifiers ?? []);
+    }
+
+    draftHydratedRef.current = true;
+  }, [draftKey, editItem, form, open]);
+
+  React.useEffect(() => {
+    if (!open || !!editItem || !draftKey || !draftHydratedRef.current) return;
+
+    writeLocalStorageDraft(draftKey, {
+      values: watchedValues,
+      selectedCategories,
+      selectedModifiers,
+    } satisfies NewEditItemDraft);
+  }, [draftKey, editItem, open, selectedCategories, selectedModifiers, watchedValues]);
 
   const toggleSection = (section: keyof typeof expandedSections) => {
     setExpandedSections((prev) => ({ ...prev, [section]: !prev[section] }));
@@ -1379,6 +1445,9 @@ export function NewEditItemFormSheet({
           ? levelMessages[editingContext.level] || "Item saved"
           : `"${values.name}" has been added to your menu.`,
       });
+      if (!editItem && draftKey) {
+        clearLocalStorageDraft(draftKey);
+      }
 
       queryClient.invalidateQueries({ queryKey: ["menu-items"] });
       queryClient.invalidateQueries({ queryKey: ["menu-item", editItem?.id] });
