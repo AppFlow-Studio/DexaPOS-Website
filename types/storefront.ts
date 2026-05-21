@@ -21,6 +21,7 @@ export interface StorefrontItem {
   name: string;
   description: string | null;
   price: number;
+  cash_price: number;
   delivery_price: number;
   image: string | null;
   availability: boolean;

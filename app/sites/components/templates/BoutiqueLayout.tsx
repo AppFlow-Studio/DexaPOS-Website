@@ -17,6 +17,10 @@ import { useSession } from "../../hooks/useSession";
 import { useSessionInit } from "../../hooks/useSessionInit";
 import { useStorefrontPath } from "../../lib/use-storefront-path";
 import { MenuSearch } from "../MenuSearch";
+import {
+  getStorefrontBrowsePrice,
+  getStorefrontDeliveryPriceLabel,
+} from "../../lib/storefront-pricing";
 import { motion, AnimatePresence } from "motion/react";
 import { Plus, ChevronUp, ShoppingBag, Tag } from "lucide-react";
 
@@ -655,8 +659,13 @@ function BoutiqueItemCard({
           </p>
         )}
         <span className="font-semibold text-base mt-auto" style={{ color: "var(--primary)" }}>
-          ${item.delivery_price.toFixed(2)}
+          ${getStorefrontBrowsePrice(item).toFixed(2)}
         </span>
+        {getStorefrontDeliveryPriceLabel(item) && (
+          <span className="text-[10px] mt-1" style={{ color: "#6B7280" }}>
+            {getStorefrontDeliveryPriceLabel(item)}
+          </span>
+        )}
       </div>
     </motion.div>
   );

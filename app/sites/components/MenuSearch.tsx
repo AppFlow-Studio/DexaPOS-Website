@@ -4,6 +4,10 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Search, X } from "lucide-react";
 import { StorefrontMenu, StorefrontItem } from "@/types/storefront";
 import { motion, AnimatePresence } from "motion/react";
+import {
+  getStorefrontBrowsePrice,
+  getStorefrontDeliveryPriceLabel,
+} from "../lib/storefront-pricing";
 
 interface MenuSearchProps {
   menus: StorefrontMenu[];
@@ -227,7 +231,7 @@ function SearchDropdown({
                   )}
                 </div>
                 <span className="text-sm font-semibold shrink-0" style={{ color: "var(--primary)" }}>
-                  ${item.delivery_price.toFixed(2)}
+                  ${getStorefrontBrowsePrice(item).toFixed(2)}
                 </span>
               </button>
             </li>
@@ -237,6 +241,11 @@ function SearchDropdown({
       <div className="px-4 py-2 border-t text-[10px]" style={{ borderColor: "#F3F4F6", color: "#9CA3AF" }}>
         {results.length > 0 ? `${results.length} result${results.length !== 1 ? "s" : ""}` : "Try a different term"}
       </div>
+      {results.length > 0 && results.some((item) => getStorefrontDeliveryPriceLabel(item)) && (
+        <div className="px-4 pb-3 text-[10px]" style={{ color: "#9CA3AF" }}>
+          Delivery pricing appears at checkout when applicable.
+        </div>
+      )}
     </motion.div>
   );
 }
