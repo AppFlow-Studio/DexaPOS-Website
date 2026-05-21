@@ -197,8 +197,14 @@ export function PaymentsLedger({
                         <TableHead>Auth</TableHead>
                         <TableHead>Batch</TableHead>
                         <TableHead className="text-right">
-                        <span className="inline-flex items-center justify-end gap-1">Total <InfoIcon tip="Full payment amount including tip. This is the gross amount charged to the cardholder." side="bottom" /></span>
-                    </TableHead>
+                            <span className="inline-flex items-center justify-end gap-1">Total <InfoIcon tip="Full payment amount including tip. This is the gross amount charged to the cardholder." side="bottom" /></span>
+                        </TableHead>
+                        <TableHead className="text-right">
+                            <span className="inline-flex items-center justify-end gap-1">Net fee <InfoIcon tip="Platform fee deducted from this payment. Equals the dual-pricing fee plus tip fee, minus any refunded fee portions. Reconciles with Lucra line-for-line." side="bottom" /></span>
+                        </TableHead>
+                        <TableHead className="text-right">
+                            <span className="inline-flex items-center justify-end gap-1">Net deposit <InfoIcon tip="Amount deposited to the merchant after deducting the net fee. Formula: Gross − Net fee. Matches the Lucra statement exactly." side="bottom" /></span>
+                        </TableHead>
                         <TableHead>
                             <span className="inline-flex items-center gap-1">Status <InfoIcon tip="Processor status. Captured = funds collected. Authorized = approved pending capture. Refunded = reversed. Failed/Voided = cancelled." side="bottom" /></span>
                         </TableHead>
@@ -214,7 +220,7 @@ export function PaymentsLedger({
                     {isLoading ? (
                         Array.from({ length: 6 }).map((_, idx) => (
                             <TableRow key={`pmt-loading-${idx}`}>
-                                {Array.from({ length: 12 }).map((__, ci) => (
+                                {Array.from({ length: 14 }).map((__, ci) => (
                                     <TableCell key={`pmt-loading-${idx}-${ci}`}>
                                         <Skeleton className="h-4 w-full" />
                                     </TableCell>
@@ -223,7 +229,7 @@ export function PaymentsLedger({
                         ))
                     ) : rows.length === 0 ? (
                         <TableRow>
-                            <TableCell colSpan={12} className="py-10 text-center text-muted-foreground">
+                            <TableCell colSpan={14} className="py-10 text-center text-muted-foreground">
                                 No payments match this filter.
                             </TableCell>
                         </TableRow>
@@ -300,6 +306,18 @@ export function PaymentsLedger({
                                     </TableCell>
                                     <TableCell className="text-right font-mono tabular-nums">
                                         {formatMoney(r.total_amount)}
+                                    </TableCell>
+                                    <TableCell className="text-right font-mono tabular-nums text-[12px]">
+                                        {r.net_fee > 0 ? (
+                                            <span className="text-rose-600 dark:text-rose-400">
+                                                -{formatMoney(r.net_fee)}
+                                            </span>
+                                        ) : (
+                                            <span className="text-muted-foreground">—</span>
+                                        )}
+                                    </TableCell>
+                                    <TableCell className="text-right font-mono tabular-nums text-[12px]">
+                                        {formatMoney(r.net_deposit)}
                                     </TableCell>
                                     <TableCell>
                                         <Badge className={statusTone(r.status)}>{r.status}</Badge>
