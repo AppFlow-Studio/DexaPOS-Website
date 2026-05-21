@@ -1,6 +1,10 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { StorefrontItem, StorefrontModifierOption } from "@/types/storefront";
+import {
+  getStorefrontBrowsePrice,
+  getStorefrontCashPrice,
+} from "../lib/storefront-pricing";
 
 export interface CartItem extends StorefrontItem {
   cartItemId: string; // Unique ID for this instance in cart
@@ -14,6 +18,7 @@ export interface CartItem extends StorefrontItem {
  * The single source of truth for what a cart line costs the customer.
  * MUST mirror the server pricing in supabase/functions/create-online-order:
  *   - separate delivery pricing ON  + delivery order → delivery price
+ *   - pickup + pay cash in store               → cash price
  *   - separate delivery pricing ON  + pickup order   → regular price
  *   - separate delivery pricing OFF (any order type) → regular price
  * Adds selected modifier prices. Use this everywhere the customer is shown a
@@ -23,11 +28,14 @@ export interface CartItem extends StorefrontItem {
 export function resolveCartUnitPrice(
   item: CartItem,
   orderType: "pickup" | "delivery",
-  deliveryPricingEnabled: boolean
+  deliveryPricingEnabled: boolean,
+  useCashPrice = false
 ): number {
   const base =
     deliveryPricingEnabled && orderType === "delivery"
       ? item.delivery_price ?? item.price
+      : useCashPrice && orderType === "pickup"
+        ? getStorefrontCashPrice(item)
       : item.price;
   const modifiers = (item.selectedModifiers ?? []).reduce(
     (sum, m) => sum + m.price,
@@ -79,8 +87,10 @@ export const useCart = create<CartStore>()(
             (acc, mod) => acc + mod.price,
             0
           );
-          // Use delivery_price for the online store (falls back to card price if not set)
-          const basePrice = item.delivery_price ?? item.price;
+          // Browse/cart surfaces don't know the final fulfillment mode yet, so
+          // they must default to the regular online price instead of assuming
+          // delivery pricing.
+          const basePrice = getStorefrontBrowsePrice(item);
           const unitPrice = basePrice + modifiersPrice;
 
           // Generate a signature for comparison

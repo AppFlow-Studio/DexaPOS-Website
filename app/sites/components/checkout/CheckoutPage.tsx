@@ -191,7 +191,7 @@ export function CheckoutPage({
   const deliveryPricingEnabled = config?.deliveryPricingEnabled ?? true;
   const subtotal = items.reduce(
     (sum, i) =>
-      sum + resolveCartUnitPrice(i, orderType, deliveryPricingEnabled) * i.quantity,
+      sum + resolveCartUnitPrice(i, orderType, deliveryPricingEnabled, payCashInStore) * i.quantity,
     0
   );
   const tipAmount =
@@ -512,7 +512,7 @@ export function CheckoutPage({
         const currentItems = useCart.getState().items;
         const currentSubtotal = currentItems.reduce(
           (sum, i) =>
-            sum + resolveCartUnitPrice(i, orderType, deliveryPricingEnabled) * i.quantity,
+            sum + resolveCartUnitPrice(i, orderType, deliveryPricingEnabled, payCashInStore) * i.quantity,
           0
         );
         setOrderResult({
@@ -524,7 +524,7 @@ export function CheckoutPage({
           snapshotItems: currentItems.map((i) => ({
             name: i.name,
             quantity: i.quantity,
-            price: resolveCartUnitPrice(i, orderType, deliveryPricingEnabled) * i.quantity,
+            price: resolveCartUnitPrice(i, orderType, deliveryPricingEnabled, payCashInStore) * i.quantity,
             modifiers: (i.selectedModifiers ?? []).map((m) => ({ name: m.name, price: m.price })),
           })),
           snapshotSubtotal: currentSubtotal,
@@ -936,6 +936,7 @@ export function CheckoutPage({
                 slug={slug}
                 orderType={orderType}
                 deliveryPricingEnabled={deliveryPricingEnabled}
+                useCashPrice={payCashInStore}
                 onUpdateQuantity={updateQuantity}
                 onRemoveItem={removeItem}
               />

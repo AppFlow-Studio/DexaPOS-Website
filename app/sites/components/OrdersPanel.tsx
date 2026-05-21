@@ -102,6 +102,7 @@ function ReorderButton({ order, slug }: { order: OrderHistoryEntry; slug: string
         name: item.name,
         description: null,
         price: basePrice,
+        cash_price: basePrice,
         delivery_price: basePrice,
         image: null,
         availability: true,

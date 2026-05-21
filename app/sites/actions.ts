@@ -29,11 +29,11 @@ export interface StorefrontData {
 
 /**
  * When the merchant has separate online/delivery pricing turned OFF, online
- * orders must use the regular item price everywhere. The whole storefront
- * (menu cards, item modal, cart, checkout) reads item.delivery_price, so the
- * single safe place to enforce this is the data layer: collapse delivery_price
- * onto the regular price before any component sees the menu. When the toggle
- * is ON (default) the menus pass through untouched.
+ * orders must use the regular item price everywhere. The storefront now uses
+ * the regular online/card price as its browse default and only surfaces
+ * delivery pricing as a secondary label when it actually differs, so the
+ * single safe place to collapse delivery pricing remains the data layer.
+ * When the toggle is ON (default) the menus pass through untouched.
  */
 function applyDeliveryPricingPolicy(
   menus: StorefrontMenu[],
@@ -267,6 +267,9 @@ function mapRpcMenuToStorefront(rpcMenu: any): StorefrontMenu | null {
         .map((ci: any) => {
           const mi = ci.menu_item;
           const cardPrice = Number(mi.effective_price) || 0;
+          const cashPrice = mi.effective_cash_price != null
+            ? Number(mi.effective_cash_price)
+            : cardPrice;
           const deliveryPrice = mi.effective_delivery_price != null
             ? Number(mi.effective_delivery_price)
             : null;
@@ -299,6 +302,7 @@ function mapRpcMenuToStorefront(rpcMenu: any): StorefrontMenu | null {
             name: mi.name,
             description: mi.description,
             price: cardPrice,
+            cash_price: cashPrice,
             delivery_price: deliveryPrice ?? cardPrice,
             image: mi.image,
             availability: mi.effective_availability !== false,

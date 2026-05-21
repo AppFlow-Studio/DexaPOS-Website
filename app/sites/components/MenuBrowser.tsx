@@ -30,6 +30,10 @@ import {
 import { motion, AnimatePresence } from "motion/react";
 import { useCart } from "../hooks/useCart";
 import { ItemDetailsModal } from "./ItemDetailsModal";
+import {
+  getStorefrontBrowsePrice,
+  getStorefrontDeliveryPriceLabel,
+} from "../lib/storefront-pricing";
 
 const DIETARY_OPTIONS = ["Vegan", "Vegetarian", "Gluten-Free", "Dairy-Free", "Keto"] as const;
 
@@ -413,7 +417,14 @@ export function MenuBrowser({
                       <span className="font-medium truncate block" style={{ color: "#111827" }}>{item.name}</span>
                       {item.description && <span className="text-xs truncate block" style={{ color: "#6B7280" }}>{item.description}</span>}
                     </div>
-                    <span className="font-semibold shrink-0 text-sm" style={{ color: "#111827" }}>${item.delivery_price.toFixed(2)}</span>
+                    <div className="flex flex-col items-end shrink-0">
+                      <span className="font-semibold text-sm" style={{ color: "#111827" }}>${getStorefrontBrowsePrice(item).toFixed(2)}</span>
+                      {getStorefrontDeliveryPriceLabel(item) && (
+                        <span className="text-[10px]" style={{ color: "#6B7280" }}>
+                          {getStorefrontDeliveryPriceLabel(item)}
+                        </span>
+                      )}
+                    </div>
                   </button>
                 ))}
               </motion.div>
@@ -457,7 +468,14 @@ export function MenuBrowser({
                       <span className="font-medium truncate block" style={{ color: "#111827" }}>{item.name}</span>
                       {item.description && <span className="text-xs truncate block" style={{ color: "#6B7280" }}>{item.description}</span>}
                     </div>
-                    <span className="font-semibold shrink-0 text-sm" style={{ color: "#111827" }}>${item.delivery_price.toFixed(2)}</span>
+                    <div className="flex flex-col items-end shrink-0">
+                      <span className="font-semibold text-sm" style={{ color: "#111827" }}>${getStorefrontBrowsePrice(item).toFixed(2)}</span>
+                      {getStorefrontDeliveryPriceLabel(item) && (
+                        <span className="text-[10px]" style={{ color: "#6B7280" }}>
+                          {getStorefrontDeliveryPriceLabel(item)}
+                        </span>
+                      )}
+                    </div>
                   </button>
                 ))}
               </motion.div>
@@ -590,9 +608,16 @@ export function MenuBrowser({
                             <p className="text-xs font-semibold leading-tight line-clamp-2" style={{ color: "#111827" }}>
                               {item.name}
                             </p>
-                            <p className="text-xs font-semibold" style={{ color: "#6B7280" }}>
-                              ${item.delivery_price.toFixed(2)}
-                            </p>
+                            <div className="space-y-0.5">
+                              <p className="text-xs font-semibold" style={{ color: "#6B7280" }}>
+                                ${getStorefrontBrowsePrice(item).toFixed(2)}
+                              </p>
+                              {getStorefrontDeliveryPriceLabel(item) && (
+                                <p className="text-[10px]" style={{ color: "#9CA3AF" }}>
+                                  {getStorefrontDeliveryPriceLabel(item)}
+                                </p>
+                              )}
+                            </div>
                           </div>
                         </button>
                       ))}
@@ -757,10 +782,10 @@ function ItemCard({
         </div>
         <div className="flex flex-col items-end shrink-0">
           <span className="font-semibold text-sm" style={{ color: "#111827" }}>
-            ${item.delivery_price.toFixed(2)}
+            ${getStorefrontBrowsePrice(item).toFixed(2)}
           </span>
-          {item.price !== item.delivery_price && (
-            <span className="text-[10px] text-slate-500">in-store ${item.price.toFixed(2)}</span>
+          {getStorefrontDeliveryPriceLabel(item) && (
+            <span className="text-[10px] text-slate-500">{getStorefrontDeliveryPriceLabel(item)}</span>
           )}
         </div>
         <AddButton item={item} onClick={onClick} />
@@ -817,10 +842,10 @@ function ItemCard({
           <div className="mt-2 flex items-center justify-between gap-2">
             <div className="flex flex-col">
               <span className="font-semibold text-sm" style={{ color: "#111827" }}>
-                ${item.delivery_price.toFixed(2)}
+                ${getStorefrontBrowsePrice(item).toFixed(2)}
               </span>
-              {item.price !== item.delivery_price && (
-                <span className="text-[10px] text-slate-500">in-store ${item.price.toFixed(2)}</span>
+              {getStorefrontDeliveryPriceLabel(item) && (
+                <span className="text-[10px] text-slate-500">{getStorefrontDeliveryPriceLabel(item)}</span>
               )}
             </div>
             <AddButton item={item} onClick={onClick} />
@@ -915,10 +940,10 @@ function ItemCard({
           <div className="flex items-center justify-between gap-2 mt-auto">
             <div className="flex flex-col">
               <span className="text-base font-bold" style={{ color: "#111827" }}>
-                ${item.delivery_price.toFixed(2)}
+                ${getStorefrontBrowsePrice(item).toFixed(2)}
               </span>
-              {item.price !== item.delivery_price && (
-                <span className="text-[10px] text-slate-500">in-store ${item.price.toFixed(2)}</span>
+              {getStorefrontDeliveryPriceLabel(item) && (
+                <span className="text-[10px] text-slate-500">{getStorefrontDeliveryPriceLabel(item)}</span>
               )}
             </div>
             <AddButton item={item} onClick={onClick} />
@@ -995,10 +1020,10 @@ function ItemCard({
         <div className="flex items-center justify-between gap-2 mt-auto pt-1">
           <div className="flex flex-col">
             <span className="text-sm font-semibold" style={{ color: "#111827" }}>
-              ${item.delivery_price.toFixed(2)}
+              ${getStorefrontBrowsePrice(item).toFixed(2)}
             </span>
-            {item.price !== item.delivery_price && (
-              <span className="text-[10px] text-slate-500">in-store ${item.price.toFixed(2)}</span>
+            {getStorefrontDeliveryPriceLabel(item) && (
+              <span className="text-[10px] text-slate-500">{getStorefrontDeliveryPriceLabel(item)}</span>
             )}
           </div>
           <AddButton item={item} onClick={onClick} />
