@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { format, parseISO } from 'date-fns'
 import { AlertTriangle, Download, RefreshCcwDot } from 'lucide-react'
+import { InfoIcon } from '@/components/ui/info-icon'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -261,7 +262,10 @@ export function BatchReconciliationSection({
       <CardHeader>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <CardTitle>Batch Reconciliation</CardTitle>
+            <CardTitle className="flex items-center gap-1">
+              Batch Reconciliation
+              <InfoIcon tip="A batch groups all card payments submitted to the processor in a single settlement run (usually daily). Each batch shows the gross amount, any refunds, and the net deposit — the amount actually sent to the merchant's bank. A discrepancy means the batch total doesn't match the sum of linked order payments." />
+            </CardTitle>
             <CardDescription>
               Compare settlement batches against linked order payments and flag mismatches.
             </CardDescription>
@@ -343,18 +347,36 @@ export function BatchReconciliationSection({
         <Table containerClassName="max-h-[42vh] overflow-auto rounded-md border">
           <TableHeader className="sticky top-0 z-20 bg-card">
             <TableRow>
-              <TableHead>Batch</TableHead>
+              <TableHead>
+                <span className="inline-flex items-center gap-1">Batch ID <InfoIcon tip="The settlement batch identifier, composed of acquirer prefix and batch number (e.g. TSYS-009)." side="bottom" /></span>
+              </TableHead>
               <TableHead>Merchant</TableHead>
-              <TableHead>Business Date</TableHead>
+              <TableHead>
+                <span className="inline-flex items-center gap-1">Business Date <InfoIcon tip="The processing date the batch belongs to. Usually the calendar date of the settlement run." side="bottom" /></span>
+              </TableHead>
               <TableHead>Opened</TableHead>
               <TableHead>Closed</TableHead>
-              <TableHead className="text-right">Txns</TableHead>
-              <TableHead className="text-right">Gross</TableHead>
-              <TableHead className="text-right">Tip</TableHead>
-              <TableHead className="text-right">Refund</TableHead>
-              <TableHead className="text-right">Net Deposit</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="text-right">Discrepancy</TableHead>
+              <TableHead className="text-right">
+                <span className="inline-flex items-center justify-end gap-1">Txns <InfoIcon tip="Number of payment transactions included in this batch." side="bottom" /></span>
+              </TableHead>
+              <TableHead className="text-right">
+                <span className="inline-flex items-center justify-end gap-1">Gross <InfoIcon tip="Total charged amount before refunds. This is what the processor submitted for settlement." side="bottom" /></span>
+              </TableHead>
+              <TableHead className="text-right">
+                <span className="inline-flex items-center justify-end gap-1">Tip <InfoIcon tip="Total gratuity included in this batch." side="bottom" /></span>
+              </TableHead>
+              <TableHead className="text-right">
+                <span className="inline-flex items-center justify-end gap-1">Refund <InfoIcon tip="Total refunds processed within this batch." side="bottom" /></span>
+              </TableHead>
+              <TableHead className="text-right">
+                <span className="inline-flex items-center justify-end gap-1">Net Deposit <InfoIcon tip="Amount deposited into the merchant's bank account after refunds. Equals Gross minus Refunds minus platform fees. Reconciles line-for-line with Lucra." side="bottom" /></span>
+              </TableHead>
+              <TableHead>
+                <span className="inline-flex items-center gap-1">Status <InfoIcon tip="Open: batch is still collecting payments. Closed: submitted to processor. Settled: processor confirmed receipt. Funded: money deposited to merchant bank." side="bottom" /></span>
+              </TableHead>
+              <TableHead className="text-right">
+                <span className="inline-flex items-center justify-end gap-1">Discrepancy <InfoIcon tip="The difference between the batch gross and the sum of linked order payments. A discrepancy indicates a payment was processed on the terminal but not found in the POS order system (or vice versa)." side="bottom" /></span>
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -439,13 +461,19 @@ export function BatchReconciliationSection({
               <TableHeader className="sticky top-0 z-20 bg-card">
                 <TableRow>
                   <TableHead>Order #</TableHead>
-                  <TableHead>Payment ID</TableHead>
+                  <TableHead>
+                    <span className="inline-flex items-center gap-1">Payment ID <InfoIcon tip="Internal payment record ID linked to this batch entry." side="bottom" /></span>
+                  </TableHead>
                   <TableHead>Method</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Total</TableHead>
+                  <TableHead className="text-right">
+                    <span className="inline-flex items-center justify-end gap-1">Total <InfoIcon tip="Full charge amount for this payment including tip." side="bottom" /></span>
+                  </TableHead>
                   <TableHead className="text-right">Tip</TableHead>
                   <TableHead className="text-right">Refund</TableHead>
-                  <TableHead>Flags</TableHead>
+                  <TableHead>
+                    <span className="inline-flex items-center gap-1">Flags <InfoIcon tip="Void = cancelled before settlement. Returned = reversed after capture." side="bottom" /></span>
+                  </TableHead>
                   <TableHead>Captured</TableHead>
                 </TableRow>
               </TableHeader>

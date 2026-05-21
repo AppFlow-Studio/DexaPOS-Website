@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useQuery } from '@tanstack/react-query'
 import type { DateRange } from 'react-day-picker'
 import { Banknote, CheckCircle2, ChevronRight, CircleAlert, CreditCard, Link2, Link2Off, RefreshCcwDot } from 'lucide-react'
+import { InfoIcon } from '@/components/ui/info-icon'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -114,7 +115,11 @@ export function PaymentsLedger({
                         }}
                     />
                 </Field>
-                <Field label="Unsettled only">
+                <div className="space-y-1">
+                    <span className="flex items-center gap-1 text-[10.5px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                        Settled Only
+                        <InfoIcon tip="Show only payments that have been confirmed settled by the processor." side="top" />
+                    </span>
                     <div className="flex h-9 items-center">
                         <Switch
                             checked={unsettledOnly}
@@ -124,8 +129,12 @@ export function PaymentsLedger({
                             }}
                         />
                     </div>
-                </Field>
-                <Field label="Unmatched only">
+                </div>
+                <div className="space-y-1">
+                    <span className="flex items-center gap-1 text-[10.5px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                        Unmatched Only
+                        <InfoIcon tip="Show only Lucra payments with no corresponding POS order record. Use this to investigate sync gaps." side="top" />
+                    </span>
                     <div className="flex h-9 items-center">
                         <Switch
                             checked={unmatchedOnly}
@@ -135,7 +144,7 @@ export function PaymentsLedger({
                             }}
                         />
                     </div>
-                </Field>
+                </div>
                 <div className="ml-auto flex items-center gap-2">
                     <Button
                         variant="outline"
@@ -151,17 +160,19 @@ export function PaymentsLedger({
 
             {totals && (
                 <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-                    <Tile icon={CreditCard} label="Payments" value={totals.count.toLocaleString()} />
-                    <Tile icon={Banknote} label="Gross" value={formatMoney(totals.grossSum)} />
+                    <Tile icon={CreditCard} label="Payments" tip="Total number of payment records on this page." value={totals.count.toLocaleString()} />
+                    <Tile icon={Banknote} label="Gross" tip="Total charged amount across all payments on this page, before any fees or refunds." value={formatMoney(totals.grossSum)} />
                     <Tile
                         icon={CheckCircle2}
-                        label="Settled"
+                        label="Settled %"
+                        tip="Percentage of payments on this page that have been settled — meaning the funds have been confirmed by the processor and will be deposited."
                         value={rows.length ? `${Math.round((totals.settledCount / rows.length) * 100)}%` : '—'}
                         meta={`${totals.settledCount}/${rows.length} on page`}
                     />
                     <Tile
                         icon={Link2Off}
                         label="Unmatched"
+                        tip="Payments from Lucra that have no matching order in the POS system. An unmatched payment may indicate a sync gap or a payment processed directly on the terminal outside the POS."
                         value={totals.unmatchedCount.toLocaleString()}
                         tone={totals.unmatchedCount > 0 ? 'warn' : 'good'}
                     />
@@ -185,10 +196,18 @@ export function PaymentsLedger({
                         <TableHead>Card</TableHead>
                         <TableHead>Auth</TableHead>
                         <TableHead>Batch</TableHead>
-                        <TableHead className="text-right">Total</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Settled</TableHead>
-                        <TableHead>Luqra</TableHead>
+                        <TableHead className="text-right">
+                        <span className="inline-flex items-center justify-end gap-1">Total <InfoIcon tip="Full payment amount including tip. This is the gross amount charged to the cardholder." side="bottom" /></span>
+                    </TableHead>
+                        <TableHead>
+                            <span className="inline-flex items-center gap-1">Status <InfoIcon tip="Processor status. Captured = funds collected. Authorized = approved pending capture. Refunded = reversed. Failed/Voided = cancelled." side="bottom" /></span>
+                        </TableHead>
+                        <TableHead>
+                            <span className="inline-flex items-center gap-1">Settled <InfoIcon tip="Whether this payment has been confirmed settled by the processor and included in a net deposit to the merchant's bank." side="bottom" /></span>
+                        </TableHead>
+                        <TableHead>
+                            <span className="inline-flex items-center gap-1">Luqra <InfoIcon tip="Whether this payment has a matching Lucra transaction ID. Matched = Lucra confirmed receipt. Unmatched = payment not yet reconciled with Lucra." side="bottom" /></span>
+                        </TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -365,12 +384,14 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 function Tile({
     icon: Icon,
     label,
+    tip,
     value,
     meta,
     tone,
 }: {
     icon: React.ComponentType<{ className?: string }>
     label: string
+    tip?: string
     value: string
     meta?: string
     tone?: 'good' | 'warn'
@@ -386,6 +407,7 @@ function Tile({
             <div className="flex items-center gap-2 text-[10.5px] uppercase tracking-[0.08em] text-muted-foreground">
                 <Icon className="h-3.5 w-3.5" />
                 {label}
+                {tip && <InfoIcon tip={tip} side="top" />}
             </div>
             <div className="mt-1 text-lg font-semibold tabular-nums">{value}</div>
             {meta && <div className="text-[11px] text-muted-foreground">{meta}</div>}
