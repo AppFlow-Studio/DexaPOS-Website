@@ -17,6 +17,10 @@ import { useSession } from "../../hooks/useSession";
 import { useSessionInit } from "../../hooks/useSessionInit";
 import { useStorefrontPath } from "../../lib/use-storefront-path";
 import { MenuSearch } from "../MenuSearch";
+import {
+  getStorefrontBrowsePrice,
+  getStorefrontDeliveryPriceLabel,
+} from "../../lib/storefront-pricing";
 import { motion, AnimatePresence } from "motion/react";
 import { Plus, ChevronUp, SlidersHorizontal, LayoutGrid, LayoutList } from "lucide-react";
 
@@ -113,8 +117,8 @@ export function MarketLayout({ site, location, menus, slug }: MarketLayoutProps)
     else if (activeTag) items = items.filter((i) => (i.dietary_tags || []).some((t) => t.toLowerCase().includes(activeTag.toLowerCase())));
 
     switch (sortOption) {
-      case "price_asc": return [...items].sort((a, b) => a.delivery_price - b.delivery_price);
-      case "price_desc": return [...items].sort((a, b) => b.delivery_price - a.delivery_price);
+      case "price_asc": return [...items].sort((a, b) => getStorefrontBrowsePrice(a) - getStorefrontBrowsePrice(b));
+      case "price_desc": return [...items].sort((a, b) => getStorefrontBrowsePrice(b) - getStorefrontBrowsePrice(a));
       case "name": return [...items].sort((a, b) => a.name.localeCompare(b.name));
       default: return items;
     }
@@ -368,8 +372,8 @@ export function MarketLayout({ site, location, menus, slug }: MarketLayoutProps)
                           else if (activeTag === "New") items = items.filter((i) => i.is_new);
                           else if (activeTag) items = items.filter((i) => (i.dietary_tags || []).some((t) => t.toLowerCase().includes(activeTag.toLowerCase())));
                           switch (sortOption) {
-                            case "price_asc": items = [...items].sort((a, b) => a.delivery_price - b.delivery_price); break;
-                            case "price_desc": items = [...items].sort((a, b) => b.delivery_price - a.delivery_price); break;
+                            case "price_asc": items = [...items].sort((a, b) => getStorefrontBrowsePrice(a) - getStorefrontBrowsePrice(b)); break;
+                            case "price_desc": items = [...items].sort((a, b) => getStorefrontBrowsePrice(b) - getStorefrontBrowsePrice(a)); break;
                             case "name": items = [...items].sort((a, b) => a.name.localeCompare(b.name)); break;
                           }
                           return { cat, items };
@@ -561,7 +565,12 @@ function MarketItemCard({
           )}
         </div>
         <div className="flex items-center gap-3 shrink-0">
-          <span className="font-semibold text-sm" style={{ color: "#111827" }}>${item.delivery_price.toFixed(2)}</span>
+          <div className="flex flex-col items-end">
+            <span className="font-semibold text-sm" style={{ color: "#111827" }}>${getStorefrontBrowsePrice(item).toFixed(2)}</span>
+            {getStorefrontDeliveryPriceLabel(item) && (
+              <span className="text-[10px]" style={{ color: "#6B7280" }}>{getStorefrontDeliveryPriceLabel(item)}</span>
+            )}
+          </div>
           {!isSoldOut && (
             <button
               type="button"
@@ -622,7 +631,12 @@ function MarketItemCard({
           <p className="text-xs line-clamp-2 flex-1 mb-2" style={{ color: "#6B7280" }}>{item.description}</p>
         )}
         <div className="flex items-center justify-between gap-2 mt-auto">
-          <span className="font-semibold text-sm" style={{ color: "#111827" }}>${item.delivery_price.toFixed(2)}</span>
+          <div className="flex flex-col">
+            <span className="font-semibold text-sm" style={{ color: "#111827" }}>${getStorefrontBrowsePrice(item).toFixed(2)}</span>
+            {getStorefrontDeliveryPriceLabel(item) && (
+              <span className="text-[10px]" style={{ color: "#6B7280" }}>{getStorefrontDeliveryPriceLabel(item)}</span>
+            )}
+          </div>
           {!isSoldOut && (
             <button
               type="button"

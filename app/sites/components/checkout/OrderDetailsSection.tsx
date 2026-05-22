@@ -11,6 +11,7 @@ interface OrderDetailsSectionProps {
   slug: string;
   orderType: "pickup" | "delivery";
   deliveryPricingEnabled: boolean;
+  useCashPrice: boolean;
   onUpdateQuantity: (cartItemId: string, quantity: number) => void;
   onRemoveItem: (cartItemId: string) => void;
 }
@@ -20,6 +21,7 @@ export function OrderDetailsSection({
   slug,
   orderType,
   deliveryPricingEnabled,
+  useCashPrice,
   onUpdateQuantity,
   onRemoveItem,
 }: OrderDetailsSectionProps) {
@@ -50,6 +52,7 @@ export function OrderDetailsSection({
               item={item}
               orderType={orderType}
               deliveryPricingEnabled={deliveryPricingEnabled}
+              useCashPrice={useCashPrice}
               onUpdateQuantity={onUpdateQuantity}
               onRemoveItem={onRemoveItem}
             />
@@ -72,12 +75,14 @@ function OrderDetailItem({
   item,
   orderType,
   deliveryPricingEnabled,
+  useCashPrice,
   onUpdateQuantity,
   onRemoveItem,
 }: {
   item: CartItem;
   orderType: "pickup" | "delivery";
   deliveryPricingEnabled: boolean;
+  useCashPrice: boolean;
   onUpdateQuantity: (cartItemId: string, quantity: number) => void;
   onRemoveItem: (cartItemId: string) => void;
 }) {
@@ -123,7 +128,7 @@ function OrderDetailItem({
             )}
           </div>
           <span className="font-bold text-sm shrink-0" style={{ color: "#111827" }}>
-            ${(resolveCartUnitPrice(item, orderType, deliveryPricingEnabled) * item.quantity).toFixed(2)}
+            ${(resolveCartUnitPrice(item, orderType, deliveryPricingEnabled, useCashPrice) * item.quantity).toFixed(2)}
           </span>
         </div>
 

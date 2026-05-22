@@ -526,6 +526,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
     let unitPrice: number
     if (deliveryPricingEnabled && body.order_type === 'delivery') {
       unitPrice = serverPrices?.effective_delivery_price ?? serverPrices?.effective_price ?? cartItem.price
+    } else if (payCashInStore && body.order_type === 'pickup') {
+      unitPrice = serverPrices?.effective_cash_price ?? serverPrices?.effective_price ?? cartItem.price
     } else {
       unitPrice = serverPrices?.effective_price ?? cartItem.price
     }

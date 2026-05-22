@@ -14,6 +14,10 @@ import {
   StorefrontModifierOption,
 } from "@/types/storefront";
 import { useCart } from "../hooks/useCart";
+import {
+  getStorefrontBrowsePrice,
+  getStorefrontDeliveryPriceLabel,
+} from "../lib/storefront-pricing";
 
 function isValidImageSrc(src?: string | null): boolean {
   return !!src && (src.startsWith("http://") || src.startsWith("https://") || src.startsWith("/"));
@@ -246,7 +250,8 @@ export function ItemDetailsModal({
 
   const isUnavailable = item.availability === false;
   const hasImage = isValidImageSrc(item.image) && !imageError;
-  const basePrice = item.delivery_price ?? item.price;
+  const basePrice = getStorefrontBrowsePrice(item);
+  const deliveryPriceLabel = getStorefrontDeliveryPriceLabel(item);
 
   const toggleOption = (group: StorefrontModifierGroup, optionId: string) => {
     setSelectedModifiers((prev) => {
@@ -360,6 +365,11 @@ export function ItemDetailsModal({
               <p className="text-lg font-semibold mt-1" style={{ color: "#111827" }}>
                 ${basePrice.toFixed(2)}
               </p>
+              {deliveryPriceLabel && (
+                <p className="text-xs mt-1" style={{ color: "#6b7280" }}>
+                  {deliveryPriceLabel}
+                </p>
+              )}
               {item.description && (
                 <p className="text-sm mt-2 leading-relaxed" style={{ color: "#6b7280" }}>
                   {item.description}
@@ -471,7 +481,7 @@ export function ItemDetailsModal({
                           {suggestion.name}
                         </p>
                         <p className="text-xs font-medium" style={{ color: "#6b7280" }}>
-                          ${(suggestion.delivery_price ?? suggestion.price).toFixed(2)}
+                          ${getStorefrontBrowsePrice(suggestion).toFixed(2)}
                         </p>
                       </div>
                     </button>

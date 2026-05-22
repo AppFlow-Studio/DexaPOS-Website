@@ -264,7 +264,10 @@ export function OrderTrackingPage({
   const displayedTax = order.tax > 0
     ? order.tax
     : effectiveRate > 0 ? Math.round(order.subtotal * effectiveRate * 100) / 100 : 0;
-  const displayedTotal = order.subtotal + displayedTax + order.tip;
+  const displayedTotal = order.total > 0 ? order.total : order.subtotal + displayedTax + order.tip;
+  const displayedAdjustments = Math.round(
+    (displayedTotal - (order.subtotal + displayedTax + order.tip)) * 100
+  ) / 100;
 
   const hoursLabel = todayHoursLabel(storeHours, storeTimezone ?? null);
   const directionsHref = storeLat && storeLng
@@ -576,6 +579,14 @@ export function OrderTrackingPage({
                     <div className="flex justify-between text-sm" style={{ color: "#6b7280" }}>
                       <span>Tip</span>
                       <span>${order.tip.toFixed(2)}</span>
+                    </div>
+                  )}
+                  {Math.abs(displayedAdjustments) > 0.009 && (
+                    <div className="flex justify-between text-sm" style={{ color: "#6b7280" }}>
+                      <span>{displayedAdjustments > 0 ? "Other fees" : "Adjustments"}</span>
+                      <span>
+                        {displayedAdjustments > 0 ? "" : "−"}${Math.abs(displayedAdjustments).toFixed(2)}
+                      </span>
                     </div>
                   )}
                   <div className="flex justify-between text-sm font-bold pt-1" style={{ color: "#111827", borderTop: "1px solid #e5e7eb" }}>
