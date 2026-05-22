@@ -828,10 +828,43 @@ CREATE TABLE public.inventory_items (
   reorder_point numeric DEFAULT 0,
   is_active boolean DEFAULT true,
   reorder_quantity numeric,
+  par_level numeric,
   CONSTRAINT inventory_items_pkey PRIMARY KEY (id),
   CONSTRAINT inventory_items_default_vendor_id_fkey FOREIGN KEY (vendor_id) REFERENCES public.vendors(id),
   CONSTRAINT inventory_items_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
   CONSTRAINT inventory_items_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id)
+);
+CREATE TABLE public.inventory_transfer_items (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  transfer_id uuid NOT NULL,
+  inventory_item_id uuid NOT NULL,
+  quantity_sent numeric NOT NULL CHECK (quantity_sent > 0::numeric),
+  quantity_received numeric,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT inventory_transfer_items_pkey PRIMARY KEY (id),
+  CONSTRAINT inventory_transfer_items_transfer_id_fkey FOREIGN KEY (transfer_id) REFERENCES public.inventory_transfers(id),
+  CONSTRAINT inventory_transfer_items_inventory_item_id_fkey FOREIGN KEY (inventory_item_id) REFERENCES public.inventory_items(id)
+);
+CREATE TABLE public.inventory_transfers (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  merchant_id uuid NOT NULL,
+  from_location_id uuid NOT NULL,
+  to_location_id uuid NOT NULL,
+  transfer_number text NOT NULL,
+  status text NOT NULL DEFAULT 'in_transit'::text CHECK (status = ANY (ARRAY['draft'::text, 'in_transit'::text, 'received'::text, 'cancelled'::text])),
+  notes text,
+  initiated_by_user_id text,
+  initiated_by_name text,
+  received_by_user_id text,
+  received_by_name text,
+  received_at timestamp with time zone,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT inventory_transfers_pkey PRIMARY KEY (id),
+  CONSTRAINT inventory_transfers_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
+  CONSTRAINT inventory_transfers_from_location_id_fkey FOREIGN KEY (from_location_id) REFERENCES public.locations(id),
+  CONSTRAINT inventory_transfers_to_location_id_fkey FOREIGN KEY (to_location_id) REFERENCES public.locations(id)
 );
 CREATE TABLE public.invoice_items (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -1941,6 +1974,20 @@ CREATE TABLE public.merchant_payment_credentials (
   CONSTRAINT merchant_payment_credentials_pkey PRIMARY KEY (id),
   CONSTRAINT merchant_payment_credentials_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id)
 );
+CREATE TABLE public.merchant_plan_subscriptions (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  merchant_id uuid NOT NULL,
+  plan_id uuid NOT NULL,
+  status text NOT NULL CHECK (status = ANY (ARRAY['active'::text, 'past_due'::text, 'suspended'::text, 'cancelled'::text])),
+  current_period_start timestamp with time zone NOT NULL,
+  current_period_end timestamp with time zone NOT NULL,
+  trial_ends_at timestamp with time zone,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT merchant_plan_subscriptions_pkey PRIMARY KEY (id),
+  CONSTRAINT merchant_plan_subscriptions_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
+  CONSTRAINT merchant_plan_subscriptions_plan_id_fkey FOREIGN KEY (plan_id) REFERENCES public.subscription_plans(id)
+);
 CREATE TABLE public.merchant_subscription_services (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   subscription_id uuid NOT NULL,
@@ -2223,6 +2270,7 @@ CREATE TABLE public.online_store_config (
   free_delivery_threshold numeric,
   min_order numeric,
   notification_prefs jsonb NOT NULL DEFAULT jsonb_build_object('email_on_order_placed', true, 'sms_on_order_placed', true, 'email_on_status', jsonb_build_array('ready', 'cancelled'), 'sms_on_status', jsonb_build_array('accepted', 'ready', 'cancelled'), 'admin_test_email', NULL::unknown, 'admin_test_phone', NULL::unknown),
+  delivery_pricing_enabled boolean NOT NULL DEFAULT true,
   CONSTRAINT online_store_config_pkey PRIMARY KEY (id),
   CONSTRAINT online_store_config_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
   CONSTRAINT online_store_config_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id)
@@ -3814,6 +3862,12 @@ CREATE TABLE public.subscription_plans (
   metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  plan_scope text NOT NULL DEFAULT 'service_billing'::text CHECK (plan_scope = ANY (ARRAY['service_billing'::text, 'merchant_tier'::text])),
+  min_locations integer,
+  max_locations integer,
+  monthly_price_cents integer NOT NULL DEFAULT 0,
+  description text,
+  display_order integer NOT NULL DEFAULT 0,
   CONSTRAINT subscription_plans_pkey PRIMARY KEY (id)
 );
 CREATE TABLE public.support_ticket_attachments (
@@ -4164,6 +4218,19 @@ CREATE TABLE public.tip_pool_role_shares (
   CONSTRAINT tip_pool_role_shares_pkey PRIMARY KEY (id),
   CONSTRAINT tip_pool_role_shares_role_code_fkey FOREIGN KEY (role_code) REFERENCES public.roles(code),
   CONSTRAINT tip_pool_role_shares_tip_pool_config_id_fkey FOREIGN KEY (tip_pool_config_id) REFERENCES public.tip_pool_configs(id)
+);
+CREATE TABLE public.unit_conversions (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  merchant_id uuid NOT NULL,
+  inventory_item_id uuid,
+  from_unit text NOT NULL,
+  to_unit text NOT NULL,
+  conversion_factor numeric NOT NULL CHECK (conversion_factor > 0::numeric),
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT unit_conversions_pkey PRIMARY KEY (id),
+  CONSTRAINT unit_conversions_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
+  CONSTRAINT unit_conversions_inventory_item_id_fkey FOREIGN KEY (inventory_item_id) REFERENCES public.inventory_items(id)
 );
 CREATE TABLE public.user_roles (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),

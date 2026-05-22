@@ -271,6 +271,142 @@ async function buildRequestedStoreSlug(
   return `${baseSlug}-${Date.now().toString().slice(-6)}`
 }
 
+// ============================================================================
+// Storefront whitelist sync (QR-32)
+//
+// Populates location_payment_devices.whitelist_origins with every browser
+// origin the storefront can be reached from. This is a *local mirror* of the
+// allow-list ops registers in the NMI / Dejavoo merchant portal — it does NOT
+// call NMI's API. After this runs, an operator must still register the listed
+// origins in the payment portal for NMI Collect.js to tokenize from them.
+// See docs/RUNBOOK-PAYMENT-WHITELIST-SYNC.md.
+// ============================================================================
+
+export type StorefrontWhitelistSyncResult = {
+  synced: boolean
+  origins: string[]
+  syncedAt: string | null
+  skipped?: boolean
+  skipReason?: string
+  error?: string
+}
+
+function normalizeHost(value: string): string | null {
+  const trimmed = value.trim().toLowerCase()
+  if (!trimmed) return null
+  const withoutScheme = trimmed.replace(/^https?:\/\//, '')
+  const host = withoutScheme.split('/')[0].split('?')[0]
+  return host || null
+}
+
+function computeStorefrontOrigins(
+  slug: string | null | undefined,
+  customDomain: string | null | undefined
+): string[] {
+  const origins: string[] = []
+  const baseDomain = (
+    process.env.NEXT_PUBLIC_STOREFRONT_BASE_DOMAIN ?? 'dexaposai.com'
+  ).replace(/^https?:\/\//, '').replace(/\/.*$/, '')
+
+  if (slug) {
+    origins.push(`https://${slug}.${baseDomain}`)
+  }
+
+  if (customDomain) {
+    const host = normalizeHost(customDomain)
+    if (host) origins.push(`https://${host}`)
+  }
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL?.trim()
+  if (appUrl) {
+    try {
+      origins.push(new URL(appUrl).origin)
+    } catch {
+      // ignore malformed env var
+    }
+  }
+
+  const defaults = (process.env.NMI_DEFAULT_ALLOWED_ORIGINS ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+  origins.push(...defaults)
+
+  return [...new Set(origins)]
+}
+
+async function syncStorefrontWhitelist(
+  supabase: ReturnType<typeof createServerSupabaseClient>,
+  locationId: string
+): Promise<StorefrontWhitelistSyncResult> {
+  try {
+    const { data: device, error: deviceError } = await (supabase as any)
+      .from('location_payment_devices')
+      .select('id, whitelist_origins')
+      .eq('location_id', locationId)
+      .eq('use_for_online_ordering', true)
+      .eq('is_active', true)
+      .maybeSingle()
+
+    if (deviceError) {
+      return { synced: false, origins: [], syncedAt: null, error: deviceError.message }
+    }
+
+    if (!device) {
+      return {
+        synced: false,
+        origins: [],
+        syncedAt: null,
+        skipped: true,
+        skipReason: 'no_active_online_ordering_device',
+      }
+    }
+
+    const { data: config } = await supabase
+      .from('online_store_config')
+      .select('slug, custom_domain')
+      .eq('location_id', locationId)
+      .maybeSingle()
+
+    const computed = computeStorefrontOrigins(config?.slug, config?.custom_domain)
+    const existing: string[] = Array.isArray(device.whitelist_origins)
+      ? (device.whitelist_origins as string[])
+      : []
+    const merged = [...new Set([...existing, ...computed])]
+
+    const existingSorted = [...existing].sort().join('|')
+    const mergedSorted = [...merged].sort().join('|')
+    if (existingSorted === mergedSorted) {
+      return {
+        synced: true,
+        origins: merged,
+        syncedAt: null,
+        skipped: true,
+        skipReason: 'unchanged',
+      }
+    }
+
+    const nowIso = new Date().toISOString()
+    const { error: updateError } = await (supabase as any)
+      .from('location_payment_devices')
+      .update({ whitelist_origins: merged, whitelist_synced_at: nowIso })
+      .eq('id', device.id)
+
+    if (updateError) {
+      return { synced: false, origins: existing, syncedAt: null, error: updateError.message }
+    }
+
+    return { synced: true, origins: merged, syncedAt: nowIso }
+  } catch (e) {
+    return {
+      synced: false,
+      origins: [],
+      syncedAt: null,
+      error: e instanceof Error ? e.message : String(e),
+    }
+  }
+}
+
 async function getReviewContext(
   supabase: ReturnType<typeof createServerSupabaseClient>,
   merchantId: string,
@@ -1330,14 +1466,24 @@ export async function adminSaveOnlineOrderingSettings(
       },
     })
 
+    const whitelist = await syncStorefrontWhitelist(supabase, locationId)
+    if (whitelist.error) {
+      console.error(
+        '[adminSaveOnlineOrderingSettings] Whitelist sync error:',
+        whitelist.error
+      )
+    }
+
     revalidateOnlineStorePaths(merchantId)
 
     return {
       success: true,
       error: null,
-      domainWhitelisted: false,
-      domainWhitelistError: undefined,
-      domainWhitelistSkipped: true,
+      domainWhitelisted: whitelist.synced && !whitelist.skipped,
+      domainWhitelistError: whitelist.error,
+      domainWhitelistSkipped: whitelist.skipped ?? false,
+      whitelistOrigins: whitelist.origins,
+      whitelistSyncedAt: whitelist.syncedAt,
     }
   } catch (error) {
     console.error('[adminSaveOnlineOrderingSettings] Exception:', error)
@@ -1422,12 +1568,25 @@ export async function adminToggleOnlineStore(
       },
     })
 
+    const whitelist = enabled
+      ? await syncStorefrontWhitelist(supabase, locationId)
+      : null
+
+    if (whitelist?.error) {
+      console.error(
+        '[adminToggleOnlineStore] Whitelist sync error:',
+        whitelist.error
+      )
+    }
+
     revalidateOnlineStorePaths(merchantId)
     return {
       success: true,
       error: null,
-      domainWhitelistError: undefined,
-      domainWhitelistSkipped: true,
+      domainWhitelistError: whitelist?.error,
+      domainWhitelistSkipped: whitelist ? (whitelist.skipped ?? false) : true,
+      whitelistOrigins: whitelist?.origins ?? [],
+      whitelistSyncedAt: whitelist?.syncedAt ?? null,
     }
   } catch (error) {
     console.error('[adminToggleOnlineStore] Exception:', error)
