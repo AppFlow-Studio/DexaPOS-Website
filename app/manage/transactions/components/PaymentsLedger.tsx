@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useQuery } from '@tanstack/react-query'
 import type { DateRange } from 'react-day-picker'
 import { Banknote, CheckCircle2, ChevronRight, CircleAlert, CreditCard, Link2, Link2Off, RefreshCcwDot } from 'lucide-react'
+import { InfoIcon } from '@/components/ui/info-icon'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -114,7 +115,11 @@ export function PaymentsLedger({
                         }}
                     />
                 </Field>
-                <Field label="Unsettled only">
+                <div className="space-y-1">
+                    <span className="flex items-center gap-1 text-[10.5px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                        Settled Only
+                        <InfoIcon tip="Show only payments that have been confirmed settled by the processor." side="top" />
+                    </span>
                     <div className="flex h-9 items-center">
                         <Switch
                             checked={unsettledOnly}
@@ -124,8 +129,12 @@ export function PaymentsLedger({
                             }}
                         />
                     </div>
-                </Field>
-                <Field label="Unmatched only">
+                </div>
+                <div className="space-y-1">
+                    <span className="flex items-center gap-1 text-[10.5px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                        Unmatched Only
+                        <InfoIcon tip="Show only Lucra payments with no corresponding POS order record. Use this to investigate sync gaps." side="top" />
+                    </span>
                     <div className="flex h-9 items-center">
                         <Switch
                             checked={unmatchedOnly}
@@ -135,7 +144,7 @@ export function PaymentsLedger({
                             }}
                         />
                     </div>
-                </Field>
+                </div>
                 <div className="ml-auto flex items-center gap-2">
                     <Button
                         variant="outline"
@@ -151,17 +160,19 @@ export function PaymentsLedger({
 
             {totals && (
                 <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-                    <Tile icon={CreditCard} label="Payments" value={totals.count.toLocaleString()} />
-                    <Tile icon={Banknote} label="Gross" value={formatMoney(totals.grossSum)} />
+                    <Tile icon={CreditCard} label="Payments" tip="Total number of payment records on this page." value={totals.count.toLocaleString()} />
+                    <Tile icon={Banknote} label="Gross" tip="Total charged amount across all payments on this page, before any fees or refunds." value={formatMoney(totals.grossSum)} />
                     <Tile
                         icon={CheckCircle2}
-                        label="Settled"
+                        label="Settled %"
+                        tip="Percentage of payments on this page that have been settled — meaning the funds have been confirmed by the processor and will be deposited."
                         value={rows.length ? `${Math.round((totals.settledCount / rows.length) * 100)}%` : '—'}
                         meta={`${totals.settledCount}/${rows.length} on page`}
                     />
                     <Tile
                         icon={Link2Off}
                         label="Unmatched"
+                        tip="Payments from Lucra that have no matching order in the POS system. An unmatched payment may indicate a sync gap or a payment processed directly on the terminal outside the POS."
                         value={totals.unmatchedCount.toLocaleString()}
                         tone={totals.unmatchedCount > 0 ? 'warn' : 'good'}
                     />
@@ -185,17 +196,31 @@ export function PaymentsLedger({
                         <TableHead>Card</TableHead>
                         <TableHead>Auth</TableHead>
                         <TableHead>Batch</TableHead>
-                        <TableHead className="text-right">Total</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Settled</TableHead>
-                        <TableHead>Luqra</TableHead>
+                        <TableHead className="text-right">
+                            <span className="inline-flex items-center justify-end gap-1">Total <InfoIcon tip="Full payment amount including tip. This is the gross amount charged to the cardholder." side="bottom" /></span>
+                        </TableHead>
+                        <TableHead className="text-right">
+                            <span className="inline-flex items-center justify-end gap-1">Net fee <InfoIcon tip="Platform fee deducted from this payment. Equals the dual-pricing fee plus tip fee, minus any refunded fee portions. Reconciles with Lucra line-for-line." side="bottom" /></span>
+                        </TableHead>
+                        <TableHead className="text-right">
+                            <span className="inline-flex items-center justify-end gap-1">Net deposit <InfoIcon tip="Amount deposited to the merchant after deducting the net fee. Formula: Gross − Net fee. Matches the Lucra statement exactly." side="bottom" /></span>
+                        </TableHead>
+                        <TableHead>
+                            <span className="inline-flex items-center gap-1">Status <InfoIcon tip="Processor status. Captured = funds collected. Authorized = approved pending capture. Refunded = reversed. Failed/Voided = cancelled." side="bottom" /></span>
+                        </TableHead>
+                        <TableHead>
+                            <span className="inline-flex items-center gap-1">Settled <InfoIcon tip="Whether this payment has been confirmed settled by the processor and included in a net deposit to the merchant's bank." side="bottom" /></span>
+                        </TableHead>
+                        <TableHead>
+                            <span className="inline-flex items-center gap-1">Luqra <InfoIcon tip="Whether this payment has a matching Lucra transaction ID. Matched = Lucra confirmed receipt. Unmatched = payment not yet reconciled with Lucra." side="bottom" /></span>
+                        </TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
                     {isLoading ? (
                         Array.from({ length: 6 }).map((_, idx) => (
                             <TableRow key={`pmt-loading-${idx}`}>
-                                {Array.from({ length: 12 }).map((__, ci) => (
+                                {Array.from({ length: 14 }).map((__, ci) => (
                                     <TableCell key={`pmt-loading-${idx}-${ci}`}>
                                         <Skeleton className="h-4 w-full" />
                                     </TableCell>
@@ -204,7 +229,7 @@ export function PaymentsLedger({
                         ))
                     ) : rows.length === 0 ? (
                         <TableRow>
-                            <TableCell colSpan={12} className="py-10 text-center text-muted-foreground">
+                            <TableCell colSpan={14} className="py-10 text-center text-muted-foreground">
                                 No payments match this filter.
                             </TableCell>
                         </TableRow>
@@ -281,6 +306,18 @@ export function PaymentsLedger({
                                     </TableCell>
                                     <TableCell className="text-right font-mono tabular-nums">
                                         {formatMoney(r.total_amount)}
+                                    </TableCell>
+                                    <TableCell className="text-right font-mono tabular-nums text-[12px]">
+                                        {r.net_fee > 0 ? (
+                                            <span className="text-rose-600 dark:text-rose-400">
+                                                -{formatMoney(r.net_fee)}
+                                            </span>
+                                        ) : (
+                                            <span className="text-muted-foreground">—</span>
+                                        )}
+                                    </TableCell>
+                                    <TableCell className="text-right font-mono tabular-nums text-[12px]">
+                                        {formatMoney(r.net_deposit)}
                                     </TableCell>
                                     <TableCell>
                                         <Badge className={statusTone(r.status)}>{r.status}</Badge>
@@ -365,12 +402,14 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 function Tile({
     icon: Icon,
     label,
+    tip,
     value,
     meta,
     tone,
 }: {
     icon: React.ComponentType<{ className?: string }>
     label: string
+    tip?: string
     value: string
     meta?: string
     tone?: 'good' | 'warn'
@@ -386,6 +425,7 @@ function Tile({
             <div className="flex items-center gap-2 text-[10.5px] uppercase tracking-[0.08em] text-muted-foreground">
                 <Icon className="h-3.5 w-3.5" />
                 {label}
+                {tip && <InfoIcon tip={tip} side="top" />}
             </div>
             <div className="mt-1 text-lg font-semibold tabular-nums">{value}</div>
             {meta && <div className="text-[11px] text-muted-foreground">{meta}</div>}

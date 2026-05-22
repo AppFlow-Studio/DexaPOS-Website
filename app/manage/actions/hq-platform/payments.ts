@@ -59,6 +59,15 @@ export interface PlatformPaymentRow {
     luqra_transaction_id: string | null
     luqra_batch_id: string | null
     luqra_mid: string | null
+    // Fee fields (from order_payments)
+    dual_pricing_fee: number
+    tip_fee: number
+    refunded_dual_pricing_fee: number
+    refunded_tip_fee: number
+    // Computed: net fee after refunds (dual + tip, minus refunded portions)
+    net_fee: number
+    // Computed: net deposit = gross − net fee
+    net_deposit: number
 }
 
 export async function getPlatformPayments(filters: PlatformPaymentFilters = {}) {
@@ -89,6 +98,7 @@ export async function getPlatformPayments(filters: PlatformPaymentFilters = {}) 
                 status, terminal_type, terminal_id, processor_name, authorization_code, card_type, card_last_four,
                 batch_number, dejavoo_batch_number, acquirer, settlement_batch_id, is_settled, settled_at,
                 captured_at, initiated_at,
+                dual_pricing_fee, tip_fee, refunded_dual_pricing_fee, refunded_tip_fee,
                 orders!inner(id, order_number, merchant_id),
                 merchant:merchants(id, name),
                 location:locations(id, name, luqra_mid),
@@ -150,6 +160,13 @@ export async function getPlatformPayments(filters: PlatformPaymentFilters = {}) 
                 | undefined
             const lm = Array.isArray(lmRaw) ? lmRaw[0] ?? null : lmRaw ?? null
 
+            const dualFee = Number(row.dual_pricing_fee ?? 0)
+            const tipFee = Number(row.tip_fee ?? 0)
+            const refundedDualFee = Number(row.refunded_dual_pricing_fee ?? 0)
+            const refundedTipFee = Number(row.refunded_tip_fee ?? 0)
+            const netFee = Math.max(0, dualFee - refundedDualFee) + Math.max(0, tipFee - refundedTipFee)
+            const totalAmount = Number(row.total_amount ?? 0)
+
             return {
                 id: row.id as string,
                 order_id: row.order_id as string,
@@ -161,7 +178,7 @@ export async function getPlatformPayments(filters: PlatformPaymentFilters = {}) 
                 payment_method: row.payment_method as string,
                 amount: Number(row.amount ?? 0),
                 tip_amount: Number(row.tip_amount ?? 0),
-                total_amount: Number(row.total_amount ?? 0),
+                total_amount: totalAmount,
                 status: row.status as string,
                 terminal_type: row.terminal_type as string,
                 terminal_id: (row.terminal_id as string) ?? null,
@@ -181,6 +198,12 @@ export async function getPlatformPayments(filters: PlatformPaymentFilters = {}) 
                 luqra_transaction_id: lm?.id ?? null,
                 luqra_batch_id: lm?.batch_id ?? null,
                 luqra_mid: loc?.luqra_mid ?? lm?.mid ?? null,
+                dual_pricing_fee: dualFee,
+                tip_fee: tipFee,
+                refunded_dual_pricing_fee: refundedDualFee,
+                refunded_tip_fee: refundedTipFee,
+                net_fee: netFee,
+                net_deposit: totalAmount - netFee,
             }
         })
 

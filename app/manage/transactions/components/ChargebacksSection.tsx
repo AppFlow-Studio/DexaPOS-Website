@@ -4,6 +4,7 @@ import { Fragment, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { format } from 'date-fns'
 import { AlertTriangle, ChevronDown, ChevronUp, RefreshCcwDot, ShieldAlert } from 'lucide-react'
+import { InfoIcon } from '@/components/ui/info-icon'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -215,13 +216,17 @@ export function ChargebacksSection({
               <CardTitle className="flex items-center gap-2">
                 <ShieldAlert className="h-4 w-4" />
                 Chargebacks
+                <InfoIcon tip="A chargeback is when a customer disputes a charge with their bank. The bank reverses the transaction and the merchant must defend it or lose the funds. Each dispute has a deadline — missing it forfeits the right to contest." />
               </CardTitle>
               <CardDescription>
                 Review disputes, deadlines, and defense status across merchants.
               </CardDescription>
             </div>
             <div className="flex items-center gap-2">
-              <Badge variant="outline">{pendingCount.toLocaleString()} pending/notified</Badge>
+              <span className="inline-flex items-center gap-1">
+                <Badge variant="outline">{pendingCount.toLocaleString()} pending/notified</Badge>
+                <InfoIcon tip="Chargebacks that are awaiting action — either just received (Notified) or actively being reviewed. These require attention before their defense deadline." side="left" />
+              </span>
               <Badge variant="outline">{total.toLocaleString()} total</Badge>
               <CollapsibleTrigger asChild>
                 <Button variant="outline" size="sm">
@@ -335,15 +340,27 @@ export function ChargebacksSection({
             <Table containerClassName="max-h-[44vh] overflow-auto rounded-md border">
               <TableHeader className="sticky top-0 z-20 bg-card">
                 <TableRow>
-                  <TableHead>Original Payment</TableHead>
+                  <TableHead>
+                    <span className="inline-flex items-center gap-1">Chargeback ID <InfoIcon tip="The ID of the original payment being disputed. Click to view that transaction in the payments table." side="bottom" /></span>
+                  </TableHead>
                   {!scopedMerchantId && <TableHead>Merchant</TableHead>}
-                  <TableHead className="text-right">Amount</TableHead>
-                  <TableHead>Reason Code</TableHead>
+                  <TableHead className="text-right">
+                    <span className="inline-flex items-center justify-end gap-1">Amount <InfoIcon tip="The amount being disputed by the cardholder." side="bottom" /></span>
+                  </TableHead>
+                  <TableHead>
+                    <span className="inline-flex items-center gap-1">Reason Code <InfoIcon tip="The card network's standardized code for the dispute type (e.g. 4853 = Cardholder Dispute, 4837 = No Cardholder Authorization)." side="bottom" /></span>
+                  </TableHead>
                   <TableHead>Reason Description</TableHead>
                   <TableHead>Card Network</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Defendable</TableHead>
-                  <TableHead>Defense Deadline</TableHead>
+                  <TableHead>
+                    <span className="inline-flex items-center gap-1">Status <InfoIcon tip="Notified: bank has filed the dispute. Under Review: being investigated. Defended: merchant submitted evidence. Won: merchant kept funds. Lost: funds reversed to cardholder." side="bottom" /></span>
+                  </TableHead>
+                  <TableHead>
+                    <span className="inline-flex items-center gap-1">Defendable <InfoIcon tip="Whether there is enough evidence (receipt, EMV data, cardholder signature) to submit a defense before the deadline." side="bottom" /></span>
+                  </TableHead>
+                  <TableHead>
+                    <span className="inline-flex items-center gap-1">Defense Deadline <InfoIcon tip="The final date to submit defense evidence to the card network. Missing this date permanently forfeits the merchant's right to contest the dispute." side="bottom" /></span>
+                  </TableHead>
                   <TableHead>Received</TableHead>
                 </TableRow>
               </TableHeader>
