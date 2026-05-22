@@ -56,7 +56,7 @@ interface CreateOnlineOrderRequest {
       groupName: string | null
     }>
   }>
-  order_type: 'pickup' | 'delivery'
+  order_type: 'pickup' | 'delivery' | 'qr_dine_in'
   delivery_address?: {
     street: string
     unit?: string
@@ -132,6 +132,13 @@ interface LocationEmailRow {
   name: string | null
 }
 
+interface CustomerRow {
+  id: string
+  name: string | null
+  phone: string
+  email: string | null
+}
+
 // ============================================================================
 // CORS
 // ============================================================================
@@ -192,6 +199,139 @@ function toDollars(cents: number): number {
   return cents / 100
 }
 
+function normalizePhone(input?: string | null): string | null {
+  if (!input?.trim()) return null
+
+  const trimmed = input.trim()
+  const digits = trimmed.replace(/\D/g, '')
+
+  if (!digits) return null
+  if (digits.length === 10) return `+1${digits}`
+  if (digits.length === 11 && digits.startsWith('1')) return `+${digits}`
+  if (trimmed.startsWith('+')) return `+${digits}`
+
+  return `+${digits}`
+}
+
+function isQrBoundSession(session: Record<string, unknown> | null | undefined): boolean {
+  if (!session) return false
+
+  return Boolean(
+    session.table_qr_code_id ||
+    session.floor_plan_object_id ||
+    session.table_label
+  )
+}
+
+async function upsertCustomerByPhone(
+  supabase: ReturnType<typeof createClient>,
+  merchantId: string,
+  phone: string,
+  name: string | null,
+  email: string | null,
+): Promise<CustomerRow | null> {
+  const normalizedPhone = normalizePhone(phone)
+  if (!normalizedPhone) return null
+
+  const sanitizedName = name?.trim() || null
+  const sanitizedEmail = email?.trim() || null
+
+  const { data: existing } = await supabase
+    .from('customers')
+    .select('id, name, phone, email')
+    .eq('merchant_id', merchantId)
+    .eq('phone', normalizedPhone)
+    .limit(1)
+    .maybeSingle()
+
+  if (existing) {
+    const updatePayload: Record<string, string | null> = {}
+
+    if (sanitizedName && sanitizedName !== existing.name) {
+      updatePayload.name = sanitizedName
+    }
+    if (sanitizedEmail && sanitizedEmail !== existing.email) {
+      updatePayload.email = sanitizedEmail
+    }
+
+    if (Object.keys(updatePayload).length > 0) {
+      const { data: updated, error: updateError } = await supabase
+        .from('customers')
+        .update(updatePayload)
+        .eq('id', existing.id)
+        .select('id, name, phone, email')
+        .maybeSingle()
+
+      if (updateError) {
+        logError('CUSTOMER', 'Failed to update existing customer from QR/online order', updateError)
+        return existing as CustomerRow
+      }
+
+      return (updated ?? existing) as CustomerRow
+    }
+
+    return existing as CustomerRow
+  }
+
+  const insertPayload = {
+    merchant_id: merchantId,
+    phone: normalizedPhone,
+    name: sanitizedName,
+    email: sanitizedEmail,
+  }
+
+  const { data: inserted, error: insertError } = await supabase
+    .from('customers')
+    .insert(insertPayload)
+    .select('id, name, phone, email')
+    .maybeSingle()
+
+  if (!insertError && inserted) {
+    return inserted as CustomerRow
+  }
+
+  // Concurrent requests can race on the merchant+phone unique index.
+  // Re-fetch and treat it as success if another request inserted first.
+  const { data: racedExisting } = await supabase
+    .from('customers')
+    .select('id, name, phone, email')
+    .eq('merchant_id', merchantId)
+    .eq('phone', normalizedPhone)
+    .limit(1)
+    .maybeSingle()
+
+  if (racedExisting) {
+    return racedExisting as CustomerRow
+  }
+
+  logError('CUSTOMER', 'Failed to upsert customer from online order', insertError)
+  return null
+}
+
+async function broadcastOrderStatus(orderId: string, status: string): Promise<void> {
+  try {
+    await fetch(`${SUPABASE_URL}/realtime/v1/api/broadcast`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+        apikey: SUPABASE_SERVICE_ROLE_KEY,
+      },
+      body: JSON.stringify({
+        messages: [
+          {
+            topic: `order-update:${orderId}`,
+            event: 'status_changed',
+            payload: { orderId, status },
+          },
+        ],
+      }),
+    })
+  } catch (error) {
+    logError('BROADCAST', 'Failed to broadcast order status', error)
+  }
+}
+
 // ============================================================================
 // MAIN HANDLER
 // ============================================================================
@@ -219,8 +359,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
   if (!body.items || body.items.length === 0) {
     return errorResponse('Cart is empty', 'empty_cart', 400)
   }
-  if (!body.order_type || !['pickup', 'delivery'].includes(body.order_type)) {
-    return errorResponse('order_type must be "pickup" or "delivery"', 'invalid_request', 400)
+  if (!body.order_type || !['pickup', 'delivery', 'qr_dine_in'].includes(body.order_type)) {
+    return errorResponse('order_type must be "pickup", "delivery", or "qr_dine_in"', 'invalid_request', 400)
   }
 
   logEvent('HANDLER', 'Received create-online-order request', {
@@ -283,15 +423,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       .from('online_order_sessions')
       .select(`
         *,
-        online_store_config!inner(
-          id, location_id, merchant_id, is_active,
-          operating_hours, accepts_pickup, accepts_delivery,
-          delivery_pricing_enabled,
-          min_order, estimated_prep_minutes,
-          delivery_radius_miles, delivery_fee,
-          free_delivery_threshold, address,
-          slug, auto_accept_orders
-        )
+        online_store_config!inner(*)
       `)
       .eq('session_token', body.session_token)
       .gt('expires_at', new Date().toISOString())
@@ -309,15 +441,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
   } else if (body.store_config_id) {
     const { data: configData, error: configError } = await supabase
       .from('online_store_config')
-      .select(`
-        id, location_id, merchant_id, is_active,
-        operating_hours, accepts_pickup, accepts_delivery,
-        delivery_pricing_enabled,
-        min_order, estimated_prep_minutes,
-        delivery_radius_miles, delivery_fee,
-        free_delivery_threshold, address,
-        slug, auto_accept_orders
-      `)
+      .select('*')
       .eq('id', body.store_config_id)
       .single()
 
@@ -337,6 +461,47 @@ Deno.serve(async (req: Request): Promise<Response> => {
   const merchantId: string = storeConfig.merchant_id
   const storeConfigId: string = storeConfig.id
   const estimatedMinutes: number = storeConfig.estimated_prep_minutes ?? 20
+  const isQrSession = isQrBoundSession(session)
+  const isQrDineIn = body.order_type === 'qr_dine_in' || isQrSession
+
+  if (body.order_type === 'qr_dine_in' && !isQrSession) {
+    return errorResponse(
+      'QR dine-in orders require a valid table-bound session.',
+      'qr_session_required',
+      422,
+    )
+  }
+
+  if (isQrDineIn) {
+    if (storeConfig.accepts_dine_in !== true) {
+      return errorResponse(
+        'QR table ordering is not enabled for this store.',
+        'qr_dine_in_not_available',
+        422,
+      )
+    }
+
+    if (storeConfig.qr_kill_switch === true) {
+      return errorResponse(
+        'QR table ordering is temporarily unavailable.',
+        'qr_kill_switch_enabled',
+        423,
+      )
+    }
+  }
+
+  if (isQrDineIn && body.pay_cash_in_store === true) {
+    return errorResponse(
+      'QR dine-in orders require online payment.',
+      'qr_cash_payment_not_supported',
+      422,
+    )
+  }
+
+  const payCashInStore = body.pay_cash_in_store === true
+  const fulfillmentOrderType: 'pickup' | 'delivery' =
+    !isQrDineIn && body.order_type === 'delivery' ? 'delivery' : 'pickup'
+
   // Auto-create guest session if none exists (guest checkout)
   if (!session && storeConfig) {
     const guestSessionToken = `guest-${crypto.randomUUID()}`
@@ -351,8 +516,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
         customer_name: body.customer_name || 'Guest',
         customer_phone: body.customer_phone || null,
         customer_email: body.customer_email || null,
-        order_type: body.order_type,
-        delivery_address: body.delivery_address || null,
+        order_type: fulfillmentOrderType,
+        delivery_address: fulfillmentOrderType === 'delivery' ? (body.delivery_address || null) : null,
         cart_data: body.items,
         expires_at: expiresAt,
       })
@@ -412,7 +577,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
   let deliveryMinOrderCents = 0
   let deliveryFreeThresholdCents: number | null = null
 
-  if (body.order_type === 'delivery') {
+  if (fulfillmentOrderType === 'delivery') {
     if (!storeConfig.accepts_delivery) {
       return errorResponse(
         'This store does not accept delivery orders',
@@ -455,8 +620,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
     deliveryMinOrderCents = zoneResult.minOrderCents
     deliveryFreeThresholdCents = zoneResult.freeDeliveryThresholdCents
   } else {
-    // Pickup — check accepts_pickup
-    if (!storeConfig.accepts_pickup) {
+    // QR dine-in uses its own enable flag. Standard pickup still respects accepts_pickup.
+    if (!isQrDineIn && !storeConfig.accepts_pickup) {
       return errorResponse(
         'This store does not accept pickup orders',
         'pickup_not_available',
@@ -524,9 +689,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
     // or delivery — uses the regular price, matching what the storefront shows.
     const deliveryPricingEnabled = storeConfig.delivery_pricing_enabled !== false
     let unitPrice: number
-    if (deliveryPricingEnabled && body.order_type === 'delivery') {
+    if (deliveryPricingEnabled && fulfillmentOrderType === 'delivery') {
       unitPrice = serverPrices?.effective_delivery_price ?? serverPrices?.effective_price ?? cartItem.price
-    } else if (payCashInStore && body.order_type === 'pickup') {
+    } else if (payCashInStore && fulfillmentOrderType === 'pickup') {
       unitPrice = serverPrices?.effective_cash_price ?? serverPrices?.effective_price ?? cartItem.price
     } else {
       unitPrice = serverPrices?.effective_price ?? cartItem.price
@@ -561,30 +726,36 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
   const taxCents = Math.round(subtotalCents * (taxPercent / 100))
   const tipCents = toCents(body.tip ?? 0)
+  const qrServiceFeePct = isQrDineIn ? Number(storeConfig.qr_service_fee_pct ?? 0) : 0
+  const qrServiceFeeCents =
+    qrServiceFeePct > 0 ? Math.round(subtotalCents * (qrServiceFeePct / 100)) : 0
 
   // Apply free delivery threshold
   if (
-    body.order_type === 'delivery' &&
+    fulfillmentOrderType === 'delivery' &&
     deliveryFreeThresholdCents !== null &&
     subtotalCents >= deliveryFreeThresholdCents
   ) {
     deliveryFeeCents = 0
   }
 
-  const totalCents = subtotalCents + taxCents + tipCents + deliveryFeeCents
+  const totalCents = subtotalCents + taxCents + tipCents + deliveryFeeCents + qrServiceFeeCents
 
   logEvent('PRICE', 'Server-side price recalculation', {
     subtotalCents,
     taxCents,
     tipCents,
     deliveryFeeCents,
+    qrServiceFeeCents,
     totalCents,
     taxPercent,
+    qrServiceFeePct,
+    isQrDineIn,
   })
 
   // ---- Step 7: Validate minimum order ----
   const storeMinOrderCents = Math.round((storeConfig.min_order ?? 0) * 100)
-  const effectiveMinOrderCents = body.order_type === 'delivery'
+  const effectiveMinOrderCents = fulfillmentOrderType === 'delivery'
     ? Math.max(deliveryMinOrderCents, storeMinOrderCents)
     : storeMinOrderCents
 
@@ -599,7 +770,6 @@ Deno.serve(async (req: Request): Promise<Response> => {
   }
 
   // ---- Step 8: Resolve payment path ----
-  const payCashInStore = body.pay_cash_in_store === true
   const effectivePaymentToken =
     body.payment_token?.trim() ||
     body.payment_token_id?.trim() ||
@@ -706,7 +876,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
   const transactionReferenceId =
     clientIdempotencyKey ?? `dexa-${sessionPrefix}-${crypto.randomUUID()}`
 
-  const deliveryAddr = body.delivery_address
+  const deliveryAddr = fulfillmentOrderType === 'delivery' && body.delivery_address
     ? buildDeliveryAddress(
         body.delivery_address.street,
         body.delivery_address.unit,
@@ -719,8 +889,55 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
   // Use session customer info if authenticated, otherwise fall back to guest info from body
   const customerName = session?.customer_name || body.customer_name || 'Guest'
-  const customerPhone = session?.customer_phone || body.customer_phone || null
+  const customerPhone = normalizePhone(session?.customer_phone || body.customer_phone || null)
   const customerEmail = session?.customer_email || body.customer_email || null
+  let customerIdForOrder = session?.customer_id ?? null
+
+  if (isQrDineIn && !customerPhone) {
+    return errorResponse(
+      'A valid phone number is required for QR table orders.',
+      'customer_phone_required',
+      422,
+    )
+  }
+
+  if (!customerIdForOrder && customerPhone) {
+    const customer = await upsertCustomerByPhone(
+      supabase,
+      merchantId,
+      customerPhone,
+      customerName,
+      customerEmail,
+    )
+
+    if (customer?.id) {
+      customerIdForOrder = customer.id
+
+      if (session?.id) {
+        const { error: sessionCustomerError } = await supabase
+          .from('online_order_sessions')
+          .update({
+            customer_id: customer.id,
+            customer_phone: customer.phone,
+            customer_name: customer.name ?? customerName,
+            customer_email: customer.email ?? customerEmail,
+          })
+          .eq('id', session.id)
+
+        if (sessionCustomerError) {
+          logError('SESSION', 'Failed to attach customer to online session', sessionCustomerError)
+        } else {
+          session = {
+            ...session,
+            customer_id: customer.id,
+            customer_phone: customer.phone,
+            customer_name: customer.name ?? customerName,
+            customer_email: customer.email ?? customerEmail,
+          }
+        }
+      }
+    }
+  }
 
   const sanitizedRpcItems = sanitizeItems(recalculatedItems)
 
@@ -728,7 +945,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     p_location_id: locationId,
     p_provider: 'website',
     p_provider_order_id: transactionReferenceId,
-    p_order_type_raw: body.order_type === 'delivery' ? 'DELIVERY' : 'PICKUP',
+    p_order_type_raw: fulfillmentOrderType === 'delivery' ? 'DELIVERY' : 'PICKUP',
     p_customer_name: customerName,
     p_customer_phone: customerPhone,
     p_customer_email: customerEmail,
@@ -736,13 +953,20 @@ Deno.serve(async (req: Request): Promise<Response> => {
     p_tax: toDollars(taxCents),
     p_total: toDollars(totalCents),
     p_gratuity: toDollars(tipCents),
+    p_surcharge: toDollars(qrServiceFeeCents),
     p_delivery_charge: toDollars(deliveryFeeCents),
     p_items: sanitizedRpcItems,
     p_delivery_address: deliveryAddr,
     p_order_notes: body.special_instructions ?? null,
     p_placed_at: new Date().toISOString(),
     p_ready_by: body.requested_time ?? null,
-    p_auto_accept: storeConfig.auto_accept_orders ?? false,
+    p_auto_accept: false,
+    p_provider_metadata: {
+      is_qr_dine_in: isQrDineIn,
+      table_label: session?.table_label ?? null,
+      floor_plan_object_id: session?.floor_plan_object_id ?? null,
+      table_qr_code_id: session?.table_qr_code_id ?? null,
+    },
   }
 
   // ---- Step 10: Charge card payment via NMI ----
@@ -903,11 +1127,35 @@ Deno.serve(async (req: Request): Promise<Response> => {
       .update({
         order_id: orderResult.order_id,
         cart_data: rpcParams.p_items,
-        order_type: body.order_type,
+        // Keep session order_type inside the legacy pickup|delivery constraint.
+        order_type: fulfillmentOrderType,
         delivery_address: deliveryAddr,
         requested_time: body.requested_time ?? null,
       })
       .eq('id', session.id)
+  }
+
+  const orderUpdatePayload: Record<string, unknown> = {}
+  if (session?.id) {
+    orderUpdatePayload.online_session_id = session.id
+  }
+  if (customerIdForOrder) {
+    orderUpdatePayload.customer_id = customerIdForOrder
+  }
+  if (isQrDineIn) {
+    orderUpdatePayload.order_type = 'qr_dine_in'
+    orderUpdatePayload.table_number = session?.table_label ?? null
+  }
+
+  if (Object.keys(orderUpdatePayload).length > 0) {
+    const { error: orderBindingError } = await supabase
+      .from('orders')
+      .update(orderUpdatePayload)
+      .eq('id', orderResult.order_id)
+
+    if (orderBindingError) {
+      logError('ORDER', 'Failed to bind online session / QR metadata to created order', orderBindingError)
+    }
   }
 
   // ---- Step 12: Update payment record with real transaction details ----
@@ -1061,12 +1309,20 @@ Deno.serve(async (req: Request): Promise<Response> => {
     }
   }
 
-  // Link order to customer if session has customer_id
-  if (session?.customer_id) {
-    await supabase
-      .from('orders')
-      .update({ customer_id: session.customer_id })
-      .eq('id', orderResult.order_id)
+  let autoAccepted = false
+  if (storeConfig.auto_accept_orders === true) {
+    const { data: acceptResult, error: acceptError } = await supabase.rpc('accept_online_order', {
+      p_order_id: orderResult.order_id,
+    })
+
+    if (acceptError) {
+      logError('AUTO_ACCEPT', 'accept_online_order failed after successful payment', acceptError)
+    } else if ((acceptResult as { success?: boolean; error?: string } | null)?.success) {
+      autoAccepted = true
+      await broadcastOrderStatus(orderResult.order_id!, 'accepted')
+    } else {
+      logError('AUTO_ACCEPT', 'accept_online_order returned failure after successful payment', acceptResult)
+    }
   }
 
   logEvent('ORDER', 'Order created successfully', {
@@ -1075,9 +1331,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
     displayNumber: orderResult.display_number,
     payCashInStore,
     charged: !!nmiChargeDetails,
+    isQrDineIn,
+    customerIdForOrder,
+    qrTableLabel: session?.table_label ?? null,
+    qrServiceFeeCents,
+    autoAccepted,
   })
-
-  const autoAccepted: boolean = storeConfig.auto_accept_orders ?? false
 
   return successResponse({
     requires_redirect: false,
