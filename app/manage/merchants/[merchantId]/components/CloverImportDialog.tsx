@@ -478,6 +478,7 @@ function FlagsList({
 }
 
 function ResultGrid({ result }: { result: CommitResponse }) {
+  const orphans = result.orphan_items_attached ?? 0;
   const rows = [
     { label: "Items created", v: result.created_items },
     { label: "Categories created", v: result.created_categories },
@@ -489,13 +490,27 @@ function ResultGrid({ result }: { result: CommitResponse }) {
     { label: "Item↔modifier-group joins", v: result.joined_item_modifier_groups },
   ];
   return (
-    <div className="grid grid-cols-2 gap-2 text-sm">
-      {rows.map((r) => (
-        <div key={r.label} className="flex justify-between rounded-md border px-3 py-1.5">
-          <span className="text-muted-foreground">{r.label}</span>
-          <span className="tabular-nums font-medium">{r.v}</span>
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-2 text-sm">
+        {rows.map((r) => (
+          <div key={r.label} className="flex justify-between rounded-md border px-3 py-1.5">
+            <span className="text-muted-foreground">{r.label}</span>
+            <span className="tabular-nums font-medium">{r.v}</span>
+          </div>
+        ))}
+      </div>
+      {orphans > 0 && (
+        <div className="rounded-md bg-amber-50 border border-amber-200 p-3 flex items-start gap-2">
+          <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+          <div className="text-xs text-amber-900">
+            <p className="font-medium">{orphans} item{orphans === 1 ? "" : "s"} attached to "Unsorted (Clover)".</p>
+            <p className="mt-0.5 text-amber-800">
+              These items had no category in the Clover file (or referenced an unknown category). They are visible
+              under a safety-net category so you can reassign them — no items were silently dropped.
+            </p>
+          </div>
         </div>
-      ))}
+      )}
     </div>
   );
 }

@@ -157,6 +157,7 @@ export interface InventoryItem {
   stock_mode: StockMode;
   current_stock: number;
   reorder_point: number;
+  par_level: number | null; // Target stock level for auto-reorder (Phase 3)
   unit_type: string; // 'pcs', 'kg', 'oz'
   cost_per_unit: number;
   vendor_id: string | null;

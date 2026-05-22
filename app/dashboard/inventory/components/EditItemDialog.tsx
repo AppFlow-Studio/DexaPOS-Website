@@ -97,6 +97,7 @@ const globalFormSchema = z.object({
   stock_mode: z.enum(["in_stock", "stock_tracking", "out_of_stock"]),
   current_stock: z.coerce.number().min(0, "Stock must be 0 or greater"),
   reorder_point: z.coerce.number().min(0, "Reorder point must be 0 or greater"),
+  par_level: z.coerce.number().min(0, "Par level must be 0 or greater"),
   cost_per_unit: z.coerce.number().min(0, "Cost must be 0 or greater"),
   vendor_id: z.string().optional(),
 });
@@ -150,6 +151,7 @@ export function EditItemDialog({
       stock_mode: "in_stock",
       current_stock: 0,
       reorder_point: 0,
+      par_level: 0,
       cost_per_unit: 0,
       vendor_id: "",
     },
@@ -178,6 +180,7 @@ export function EditItemDialog({
         stock_mode: item.stock_mode,
         current_stock: item.current_stock,
         reorder_point: item.reorder_point,
+        par_level: item.par_level ?? 0,
         cost_per_unit: item.cost_per_unit,
         vendor_id: item.vendor_id || "",
       });
@@ -236,6 +239,7 @@ export function EditItemDialog({
           stock_mode: values.stock_mode,
           current_stock: values.current_stock,
           reorder_point: values.reorder_point,
+          par_level: values.par_level,
           cost_per_unit: values.cost_per_unit,
           vendor_id:
             values.vendor_id === "none" ? null : values.vendor_id || null,
@@ -705,6 +709,20 @@ export function EditItemDialog({
                         />
                         <p className="text-xs text-muted-foreground">
                           Alert when stock falls below
+                        </p>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="par_level">Par Level</Label>
+                        <Input
+                          id="par_level"
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          placeholder="0"
+                          {...globalForm.register("par_level")}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Target stock level for auto-reorder
                         </p>
                       </div>
                     </>
