@@ -41,6 +41,7 @@ export function CartRecovery({
           id: item.id,
           name: item.name,
           price: item.price || item.totalPrice || 0,
+          cash_price: item.price || item.totalPrice || 0,
           delivery_price: item.price || item.totalPrice || 0,
           description: null,
           image: null,

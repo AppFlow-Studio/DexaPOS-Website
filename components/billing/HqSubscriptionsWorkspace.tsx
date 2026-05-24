@@ -86,7 +86,7 @@ import {
   type SubscriptionInvoiceDocumentData,
 } from '@/lib/subscription-billing/invoice-template'
 import { downloadSubscriptionInvoicePdf } from '@/lib/subscription-billing/invoice-pdf'
-import { Area, AreaChart, Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts'
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, XAxis, YAxis } from 'recharts'
 
 type SubscriptionStatus = 'trial' | 'active' | 'past_due' | 'suspended' | 'canceled'
 type ServiceFormState = Record<string, { enabled: boolean; quantity: string }>
@@ -275,11 +275,30 @@ const transactionTrendChartConfig = {
 } satisfies ChartConfig
 
 const transactionStatusChartConfig = {
-  total: {
-    label: 'Amount',
+  count: {
+    label: 'Invoices',
     color: 'hsl(var(--chart-2))',
   },
 } satisfies ChartConfig
+
+const transactionStatusVisuals: Record<string, { label: string; color: string }> = {
+  open: {
+    label: 'Open',
+    color: '#F59E0B',
+  },
+  processing: {
+    label: 'Processing',
+    color: '#3B82F6',
+  },
+  paid: {
+    label: 'Paid',
+    color: '#10B981',
+  },
+  failed: {
+    label: 'Failed',
+    color: '#EF4444',
+  },
+}
 
 interface HqSubscriptionsWorkspaceProps {
   merchant: MerchantDetails
@@ -392,14 +411,24 @@ export function HqSubscriptionsWorkspace({
       .reduce((sum, invoice) => sum + Number(invoice.total_amount || 0), 0)
 
     const pending = filteredInvoices
-      .filter((invoice) => ['open', 'processing', 'failed'].includes(invoice.status))
+      .filter((invoice) => ['open', 'processing'].includes(invoice.status))
       .reduce((sum, invoice) => sum + Number(invoice.total_amount || 0), 0)
+
+    const pendingSubtotal = filteredInvoices
+      .filter((invoice) => ['open', 'processing'].includes(invoice.status))
+      .reduce((sum, invoice) => sum + Number(invoice.subtotal || 0), 0)
+
+    const pendingSurcharge = filteredInvoices
+      .filter((invoice) => ['open', 'processing'].includes(invoice.status))
+      .reduce((sum, invoice) => sum + Number(invoice.card_surcharge || 0), 0)
 
     const failedCount = filteredInvoices.filter((invoice) => invoice.status === 'failed').length
 
     return {
       paid,
       pending,
+      pendingSubtotal,
+      pendingSurcharge,
       failedCount,
     }
   }, [filteredInvoices])
@@ -434,16 +463,33 @@ export function HqSubscriptionsWorkspace({
   }, [filteredInvoices])
 
   const transactionStatusData = useMemo(() => {
-    const buckets = new Map<string, number>()
+    const bucketOrder = ['open', 'processing', 'paid', 'failed']
+    const buckets = new Map<string, { count: number; total: number }>()
 
     for (const invoice of filteredInvoices) {
-      buckets.set(invoice.status, (buckets.get(invoice.status) ?? 0) + Number(invoice.total_amount || 0))
+      const current = buckets.get(invoice.status) ?? { count: 0, total: 0 }
+      current.count += 1
+      current.total += Number(invoice.total_amount || 0)
+      buckets.set(invoice.status, current)
     }
 
-    return Array.from(buckets.entries()).map(([statusKey, total]) => ({
-      status: statusKey.replace('_', ' '),
-      total,
-    }))
+    return bucketOrder
+      .filter((statusKey) => buckets.has(statusKey))
+      .map((statusKey) => {
+        const bucket = buckets.get(statusKey)!
+        const visuals = transactionStatusVisuals[statusKey] ?? {
+          label: statusKey.replace('_', ' '),
+          color: 'hsl(var(--chart-2))',
+        }
+
+        return {
+          status: statusKey,
+          label: visuals.label,
+          color: visuals.color,
+          count: bucket.count,
+          total: bucket.total,
+        }
+      })
   }, [filteredInvoices])
 
   const selectedServiceRows = useMemo(
@@ -776,7 +822,15 @@ export function HqSubscriptionsWorkspace({
         return
       }
 
-      toast.success('Merchant tier updated.')
+      if (result.anchorLocationId) {
+        setSelectedLocationId(result.anchorLocationId)
+      }
+
+      toast.success(
+        result.invoiceId
+          ? 'Merchant tier updated and invoice generated.'
+          : 'Merchant tier updated.',
+      )
       refresh()
     })
   }
@@ -921,14 +975,14 @@ export function HqSubscriptionsWorkspace({
                             : 'border-slate-200 bg-white hover:border-primary/40'
                         }`}
                       >
-                        <div className="text-2xl font-semibold tracking-tight">
-                          {formatTierPrice(plan.monthly_price_cents)}
-                        </div>
-                        <div className="mt-3 flex items-center justify-between gap-2">
+                        <div className="mt-1 flex items-center justify-between gap-2">
                           <div className="text-lg font-semibold">{plan.display_name}</div>
                           {isSelected ? <Badge>Selected</Badge> : null}
                         </div>
-                        <div className="mt-2 text-sm text-muted-foreground">
+                        <div className="mt-2 text-2xl font-semibold tracking-tight">
+                          {formatTierPrice(plan.monthly_price_cents)}
+                        </div>
+                        <div className="mt-3 text-sm text-muted-foreground">
                           {plan.description || formatMerchantTierCapacity(plan)}
                         </div>
                         <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-700">
@@ -1281,6 +1335,11 @@ export function HqSubscriptionsWorkspace({
                     </div>
                     <span className="font-medium">{formatMoney(transactionSummary.pending)}</span>
                   </div>
+                  {transactionSummary.pending > 0 ? (
+                    <div className="pl-6 text-xs text-muted-foreground">
+                      Base {formatMoney(transactionSummary.pendingSubtotal)} + surcharge {formatMoney(transactionSummary.pendingSurcharge)}
+                    </div>
+                  ) : null}
                   <div className="flex items-center justify-between text-sm">
                     <div className="flex items-center gap-2 text-muted-foreground">
                       <ArrowDownRight className="h-4 w-4 text-rose-500" />
@@ -1346,16 +1405,26 @@ export function HqSubscriptionsWorkspace({
                   <ChartContainer config={transactionStatusChartConfig} className="h-[220px] w-full">
                     <BarChart data={transactionStatusData} margin={{ left: 12, right: 12 }}>
                       <CartesianGrid vertical={false} />
-                      <XAxis dataKey="status" tickLine={false} axisLine={false} />
-                      <YAxis tickLine={false} axisLine={false} tickFormatter={(value) => `$${Number(value).toFixed(0)}`} />
+                      <XAxis dataKey="label" tickLine={false} axisLine={false} />
+                      <YAxis tickLine={false} axisLine={false} allowDecimals={false} />
                       <ChartTooltip
                         content={
                           <ChartTooltipContent
-                            formatter={(value) => [formatMoney(Number(value) || 0), 'Amount']}
+                            formatter={(_, __, item) => {
+                              const payload = item?.payload as { count?: number; total?: number } | undefined
+                              return [
+                                `${payload?.count ?? 0} invoice${(payload?.count ?? 0) === 1 ? '' : 's'} • ${formatMoney(Number(payload?.total) || 0)}`,
+                                'Status',
+                              ]
+                            }}
                           />
                         }
                       />
-                      <Bar dataKey="total" fill="var(--color-total)" radius={[8, 8, 0, 0]} />
+                      <Bar dataKey="count" radius={[8, 8, 0, 0]}>
+                        {transactionStatusData.map((entry) => (
+                          <Cell key={`status-cell-${entry.status}`} fill={entry.color} />
+                        ))}
+                      </Bar>
                     </BarChart>
                   </ChartContainer>
                 )}
@@ -1403,7 +1472,14 @@ export function HqSubscriptionsWorkspace({
                           <Badge variant={statusVariant(invoice.status)}>{invoice.status}</Badge>
                         </TableCell>
                         <TableCell className="font-medium">{invoice.invoice_number}</TableCell>
-                        <TableCell className="text-right font-medium">{formatMoney(invoice.total_amount)}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="font-medium">{formatMoney(invoice.total_amount)}</div>
+                          {Number(invoice.card_surcharge || 0) > 0 ? (
+                            <div className="text-xs text-muted-foreground">
+                              {formatMoney(invoice.subtotal)} + {formatMoney(invoice.card_surcharge)}
+                            </div>
+                          ) : null}
+                        </TableCell>
                       </TableRow>
                     )
                   })}
@@ -1460,7 +1536,14 @@ export function HqSubscriptionsWorkspace({
                         </div>
                       </td>
                       <td className="py-3 pr-4 uppercase">{invoice.billing_method}</td>
-                      <td className="py-3 pr-4">{formatMoney(invoice.total_amount)}</td>
+                      <td className="py-3 pr-4">
+                        <div>{formatMoney(invoice.total_amount)}</div>
+                        {Number(invoice.card_surcharge || 0) > 0 ? (
+                          <div className="text-xs text-muted-foreground">
+                            {formatMoney(invoice.subtotal)} + {formatMoney(invoice.card_surcharge)}
+                          </div>
+                        ) : null}
+                      </td>
                       <td className="py-3 pr-4">
                         <Badge variant={statusVariant(invoice.status)}>{invoice.status}</Badge>
                       </td>
