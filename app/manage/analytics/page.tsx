@@ -203,7 +203,7 @@ export default function AnalyticsPage() {
     }
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 min-w-0 overflow-x-hidden">
             <style>{`
         @media print {
           /* Hide navigation, sidebar, header, and action buttons */
@@ -596,7 +596,7 @@ export default function AnalyticsPage() {
                                         ))}
                                     </div>
                                 ) : sortedWhaleList.length > 0 ? (
-                                    <div className="max-h-96 overflow-auto">
+                                    <div className="max-h-96 overflow-auto overflow-x-auto">
                                         <Table>
                                             <TableHeader>
                                                 <TableRow>
@@ -782,7 +782,7 @@ export default function AnalyticsPage() {
                                 </div>
                             </CardHeader>
                             <CardContent>
-                                <div className="grid grid-cols-3 gap-4 mb-6">
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
                                     {[
                                         { label: 'Critical (>80% drop)', count: churnData.criticalCount, color: 'red', icon: AlertTriangle, bg: 'bg-red-100', border: 'border-red-100', text: 'text-red-600' },
                                         { label: 'High (50-80% drop)', count: churnData.highCount, color: 'orange', icon: TrendingDown, bg: 'bg-orange-100', border: 'border-orange-100', text: 'text-orange-600' },

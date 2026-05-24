@@ -21,7 +21,7 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState('dashboard')
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-white to-blue-50/30 p-6 space-y-8">
+    <div className="min-h-screen bg-gradient-to-b from-white to-blue-50/30 p-6 space-y-8 min-w-0 overflow-x-hidden">
       {/* Header with action button */}
       <div className="flex items-center justify-between">
         <div className="space-y-1">

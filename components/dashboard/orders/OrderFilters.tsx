@@ -303,8 +303,8 @@ export function OrderFilters({ className }: OrderFiltersProps) {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Staff</SelectItem>
-            {staffMembers.map((member) => (
-              <SelectItem key={member.member_id} value={member.member_id}>
+            {staffMembers.map((member, i) => (
+              <SelectItem key={member.member_id ?? `staff-${i}`} value={member.member_id ?? ""}>
                 {member.display_name}
               </SelectItem>
             ))}

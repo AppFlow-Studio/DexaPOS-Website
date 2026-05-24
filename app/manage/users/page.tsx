@@ -334,7 +334,7 @@ export default function UsersPage() {
     }
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 min-w-0 overflow-x-hidden">
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
@@ -358,7 +358,7 @@ export default function UsersPage() {
                     <DialogTrigger asChild>
                         <Button className="hidden">Add User</Button>
                     </DialogTrigger>
-                    <DialogContent className="sm:max-w-106.25">
+                    <DialogContent className="max-w-[95vw] sm:max-w-106.25">
                         <DialogHeader>
                             <DialogTitle>Add New User</DialogTitle>
                             <DialogDescription>
@@ -537,7 +537,7 @@ export default function UsersPage() {
 
                     {/* Users Table */}
                     <Card>
-                        <CardContent className="p-0">
+                        <CardContent className="p-0 overflow-x-auto">
                             <Table>
                                 <TableHeader>
                                     <TableRow>
@@ -825,7 +825,7 @@ export default function UsersPage() {
             <Dialog open={isEditRoleDialogOpen} onOpenChange={setIsEditRoleDialogOpen}>
                 <DialogContent
                     onClick={(event) => event.stopPropagation()}
-                    className="sm:max-w-115"
+                    className="max-w-[95vw] sm:max-w-115"
                 >
                     <DialogHeader>
                         <div className="flex items-center gap-3 mb-1">

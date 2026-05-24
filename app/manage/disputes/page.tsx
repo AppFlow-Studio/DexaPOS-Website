@@ -36,7 +36,7 @@ export default function HQDisputesPage() {
     : 0
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
+    <div className="space-y-6 animate-in fade-in duration-500 min-w-0 overflow-x-hidden">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">TSYS Disputes</h1>
         <p className="text-muted-foreground">

@@ -90,7 +90,7 @@ export default function MerchantsPage() {
     }
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 min-w-0 overflow-x-hidden">
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
@@ -410,6 +410,7 @@ function MerchantListView({
     }
 
     return (
+        <div className="overflow-x-auto">
         <Table>
             <TableHeader>
                 <TableRow>
@@ -491,5 +492,6 @@ function MerchantListView({
                 })}
             </TableBody>
         </Table>
+        </div>
     )
 }

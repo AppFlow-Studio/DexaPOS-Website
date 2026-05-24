@@ -2,6 +2,7 @@
 
 import * as React from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { useOrganization } from '@clerk/nextjs'
 import { TableWithSession } from '@/types/floor-plan'
 import { OrderResponse } from '@/types/order-management'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -33,6 +34,7 @@ function formatCurrency(amount: number): string {
 
 export function SeatedCard({ table, onViewOrder, onTransfer, onClose }: SeatedCardProps) {
     const session = table.session
+    const { organization } = useOrganization()
     if (!session) return null
 
     const minutesSeated = session.minutes_seated || 0
@@ -41,18 +43,18 @@ export function SeatedCard({ table, onViewOrder, onTransfer, onClose }: SeatedCa
 
     // Fetch order details if order_id exists
     const { data: orderDetails, isLoading: isLoadingOrder } = useQuery<OrderResponse | null>({
-        queryKey: ['order-details', session.order_id],
+        queryKey: ['order-details', session.order_id, organization?.id],
         queryFn: async () => {
             if (!session.order_id) return null
             try {
-                const details = await GetOrderDetails(session.order_id)
+                const details = await GetOrderDetails(session.order_id, organization?.id)
                 return details
             } catch (error) {
                 console.error('Error fetching order details:', error)
                 return null
             }
         },
-        enabled: hasOrder,
+        enabled: hasOrder && !!organization?.id,
     })
 
     return (
