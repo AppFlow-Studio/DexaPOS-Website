@@ -2173,11 +2173,16 @@ CREATE TABLE public.online_order_sessions (
   session_token text DEFAULT encode(gen_random_bytes(32), 'hex'::text) UNIQUE,
   customer_email_opt_in boolean NOT NULL DEFAULT true,
   customer_sms_opt_in boolean NOT NULL DEFAULT true,
+  floor_plan_object_id uuid,
+  table_label text,
+  table_qr_code_id uuid,
   CONSTRAINT online_order_sessions_pkey PRIMARY KEY (id),
   CONSTRAINT online_order_sessions_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.customers(id),
   CONSTRAINT online_order_sessions_delivery_zone_id_fkey FOREIGN KEY (delivery_zone_id) REFERENCES public.delivery_zones(id),
   CONSTRAINT online_order_sessions_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id),
-  CONSTRAINT online_order_sessions_store_config_id_fkey FOREIGN KEY (store_config_id) REFERENCES public.online_store_config(id)
+  CONSTRAINT online_order_sessions_store_config_id_fkey FOREIGN KEY (store_config_id) REFERENCES public.online_store_config(id),
+  CONSTRAINT online_order_sessions_floor_plan_object_id_fkey FOREIGN KEY (floor_plan_object_id) REFERENCES public.floor_plan_objects(id),
+  CONSTRAINT online_order_sessions_table_qr_code_id_fkey FOREIGN KEY (table_qr_code_id) REFERENCES public.table_qr_codes(id)
 );
 CREATE TABLE public.online_orders (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -2213,7 +2218,7 @@ CREATE TABLE public.online_store_config (
   custom_domain text UNIQUE,
   store_name text NOT NULL,
   template_id text NOT NULL DEFAULT 'classic'::text CHECK (template_id = ANY (ARRAY['classic'::text, 'hero'::text, 'market'::text, 'boutique'::text])),
-  primary_color text NOT NULL DEFAULT '#2DD4BF'::text,
+  primary_color text NOT NULL DEFAULT '#0C4FD1'::text,
   secondary_color text,
   accent_color text,
   background_color text NOT NULL DEFAULT '#FFFFFF'::text,
@@ -2271,6 +2276,11 @@ CREATE TABLE public.online_store_config (
   min_order numeric,
   notification_prefs jsonb NOT NULL DEFAULT jsonb_build_object('email_on_order_placed', true, 'sms_on_order_placed', true, 'email_on_status', jsonb_build_array('ready', 'cancelled'), 'sms_on_status', jsonb_build_array('accepted', 'ready', 'cancelled'), 'admin_test_email', NULL::unknown, 'admin_test_phone', NULL::unknown),
   delivery_pricing_enabled boolean NOT NULL DEFAULT true,
+  accepts_dine_in boolean NOT NULL DEFAULT false,
+  qr_fulfillment_mode text NOT NULL DEFAULT 'runner'::text CHECK (qr_fulfillment_mode = ANY (ARRAY['runner'::text, 'counter'::text])),
+  qr_geofence_enabled boolean NOT NULL DEFAULT false,
+  qr_service_fee_pct numeric NOT NULL DEFAULT 0,
+  qr_kill_switch boolean NOT NULL DEFAULT false,
   CONSTRAINT online_store_config_pkey PRIMARY KEY (id),
   CONSTRAINT online_store_config_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
   CONSTRAINT online_store_config_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id)
@@ -3281,6 +3291,49 @@ CREATE TABLE public.purchase_orders (
   CONSTRAINT purchase_orders_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
   CONSTRAINT purchase_orders_vendor_id_fkey FOREIGN KEY (vendor_id) REFERENCES public.vendors(id)
 );
+CREATE TABLE public.qr_guest_alert_rate_limit (
+  id bigint NOT NULL DEFAULT nextval('qr_guest_alert_rate_limit_id_seq'::regclass),
+  online_order_session_id uuid NOT NULL,
+  raised_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT qr_guest_alert_rate_limit_pkey PRIMARY KEY (id),
+  CONSTRAINT qr_guest_alert_rate_limit_online_order_session_id_fkey FOREIGN KEY (online_order_session_id) REFERENCES public.online_order_sessions(id)
+);
+CREATE TABLE public.qr_guest_alerts (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  merchant_id uuid NOT NULL,
+  location_id uuid NOT NULL,
+  floor_plan_object_id uuid,
+  table_label text NOT NULL,
+  online_order_session_id uuid,
+  order_id uuid,
+  alert_type text NOT NULL,
+  message text,
+  alert_key text NOT NULL,
+  status text NOT NULL DEFAULT 'open'::text CHECK (status = ANY (ARRAY['open'::text, 'resolved'::text])),
+  acknowledged_at timestamp with time zone,
+  acknowledged_by text,
+  resolved_at timestamp with time zone,
+  resolved_by text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT qr_guest_alerts_pkey PRIMARY KEY (id),
+  CONSTRAINT qr_guest_alerts_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
+  CONSTRAINT qr_guest_alerts_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
+  CONSTRAINT qr_guest_alerts_floor_plan_object_id_fkey FOREIGN KEY (floor_plan_object_id) REFERENCES public.floor_plan_objects(id)
+);
+CREATE TABLE public.qr_scan_events (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  merchant_id uuid NOT NULL,
+  location_id uuid NOT NULL,
+  floor_plan_object_id uuid,
+  table_qr_code_id uuid,
+  online_order_session_id uuid,
+  order_id uuid,
+  stage text NOT NULL,
+  user_agent text,
+  ip_hash text,
+  occurred_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT qr_scan_events_pkey PRIMARY KEY (id)
+);
 CREATE TABLE public.receipt_sends (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   order_id uuid NOT NULL,
@@ -3984,6 +4037,25 @@ CREATE TABLE public.table_metrics (
   CONSTRAINT table_metrics_pkey PRIMARY KEY (id),
   CONSTRAINT table_metrics_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
   CONSTRAINT table_metrics_table_id_fkey FOREIGN KEY (table_id) REFERENCES public.floor_plan_objects(id)
+);
+CREATE TABLE public.table_qr_codes (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  merchant_id uuid NOT NULL,
+  location_id uuid NOT NULL,
+  floor_plan_object_id uuid NOT NULL,
+  table_label text NOT NULL,
+  token text NOT NULL UNIQUE,
+  token_version integer NOT NULL DEFAULT 1,
+  is_active boolean NOT NULL DEFAULT true,
+  scan_count bigint NOT NULL DEFAULT 0,
+  last_scanned_at timestamp with time zone,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  rotated_at timestamp with time zone,
+  created_by text,
+  CONSTRAINT table_qr_codes_pkey PRIMARY KEY (id),
+  CONSTRAINT table_qr_codes_floor_plan_object_id_fkey FOREIGN KEY (floor_plan_object_id) REFERENCES public.floor_plan_objects(id),
+  CONSTRAINT table_qr_codes_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
+  CONSTRAINT table_qr_codes_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id)
 );
 CREATE TABLE public.table_session_events (
   id uuid NOT NULL DEFAULT gen_random_uuid(),

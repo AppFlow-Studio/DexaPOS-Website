@@ -12,6 +12,28 @@ This is a **local mirror** of the allow-list that ops keeps in the NMI / Dejavoo
 - A merchant adds or changes a `custom_domain`
 - The storefront returns a Collect.js error like `Invalid origin` / `Tokenization failed` on launch
 - Periodic audit: rows where `whitelist_synced_at IS NOT NULL` but the operator never confirmed registration in the NMI portal
+- **Before any QR dine-in launch (QR-32).** The QR scan route `/s/{slug}/t/{token}` is path-based on the same storefront origin, so it inherits coverage automatically — but you still need to (a) confirm every active location's local mirror is current and (b) confirm those origins are registered in the NMI portal.
+
+## Audit + backfill scripts (QR-32)
+
+Two scripts wrap the same sync code path the HQ save/toggle action uses, so you don't need to click through HQ admin for each location. Both read the service-role key from `.env`.
+
+```bash
+# Read-only audit — prints every location whose computed origins are NOT
+# fully present in `whitelist_origins`. Use this to know which origins
+# still need to be registered in the NMI portal.
+npx tsx scripts/audit-storefront-whitelist.ts
+npx tsx scripts/audit-storefront-whitelist.ts --merchant <merchantId>
+npx tsx scripts/audit-storefront-whitelist.ts --json
+
+# Idempotent bulk sync — merges the computed origin set into every active
+# online-ordering location's `whitelist_origins`. Safe to re-run.
+npx tsx scripts/backfill-storefront-whitelist.ts --dry-run
+npx tsx scripts/backfill-storefront-whitelist.ts
+npx tsx scripts/backfill-storefront-whitelist.ts --merchant <merchantId>
+```
+
+The shared module is [`lib/payments/storefront-whitelist.ts`](../lib/payments/storefront-whitelist.ts) — `computeStorefrontOrigins`, `syncStorefrontWhitelistForLocation`, `bulkSyncStorefrontWhitelist`, `auditStorefrontWhitelist`. The HQ admin action imports from there too, so behaviour is guaranteed identical.
 
 ## Where the local list comes from
 
