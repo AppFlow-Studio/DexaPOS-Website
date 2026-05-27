@@ -113,4 +113,8 @@ export interface CommitResponse {
   joined_menu_categories: number;
   joined_category_items: number;
   joined_item_modifier_groups: number;
+  // Items whose Clover record carried no resolvable category — auto-attached
+  // to the merchant's "Unsorted (Clover)" category instead of being orphaned.
+  orphan_items_attached?: number;
+  unsorted_category_id?: string | null;
 }

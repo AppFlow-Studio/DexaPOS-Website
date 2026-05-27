@@ -15,6 +15,8 @@ import {
   ShoppingCart,
   AlertTriangle,
   TrendingDown,
+  TrendingUp,
+  LayoutDashboard,
   ArrowUpRight,
   MoreHorizontal,
   Filter,
@@ -30,6 +32,9 @@ import {
   ChevronDown,
   ChevronsUpDown,
   X,
+  Trash2,
+  ClipboardList,
+  ArrowRightLeft,
 } from "lucide-react";
 import {
   Popover,
@@ -63,6 +68,11 @@ import { PurchaseOrderDetailSheet } from "./components/PurchaseOrderDetailSheet"
 import { ActivityLogSheet } from "./components/ActivityLogSheet";
 import { StockUpdateDialog } from "./components/StockUpdateDialog";
 import { CreateExpenseDialog } from "./components/CreateExpenseDialog";
+import { WasteTab } from "./components/WasteTab";
+import { CountsTab } from "./components/CountsTab";
+import { TransfersTab } from "./components/TransfersTab";
+import { InventoryDashboardTab } from "./components/InventoryDashboardTab";
+import { InventoryReportsTab } from "./components/InventoryReportsTab";
 import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
 import {
   DropdownMenu,
@@ -679,13 +689,19 @@ export default function InventoryPage() {
             <Download className="h-4 w-4" />
             Export
           </Button>
-          <Button
-            className="gap-2 shadow-lg shadow-primary/25"
-            onClick={getAddButtonAction()}
-          >
-            <Plus className="h-4 w-4" />
-            {getAddButtonLabel()}
-          </Button>
+          {activeTab !== "waste" &&
+            activeTab !== "counts" &&
+            activeTab !== "transfers" &&
+            activeTab !== "dashboard" &&
+            activeTab !== "reports" && (
+            <Button
+              className="gap-2 shadow-lg shadow-primary/25"
+              onClick={getAddButtonAction()}
+            >
+              <Plus className="h-4 w-4" />
+              {getAddButtonLabel()}
+            </Button>
+          )}
         </div>
       </div>
 
@@ -751,8 +767,8 @@ export default function InventoryPage() {
       <Card className="border-0 shadow-xl">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <CardHeader className="pb-0 border-b">
-            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-              <TabsList className="bg-muted/50 p-1 h-auto">
+            <div className="flex flex-col gap-4 md:flex-row md:flex-wrap md:items-center md:justify-between min-w-0">
+              <TabsList className="bg-muted/50 p-1 h-auto max-w-full flex-nowrap justify-start overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 <TabsTrigger
                   value="catalog"
                   className="gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm px-4 py-2"
@@ -792,8 +808,46 @@ export default function InventoryPage() {
                     {purchaseOrders.length}
                   </Badge>
                 </TabsTrigger>
+                <TabsTrigger
+                  value="waste"
+                  className="gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm px-4 py-2"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Waste
+                </TabsTrigger>
+                <TabsTrigger
+                  value="counts"
+                  className="gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm px-4 py-2"
+                >
+                  <ClipboardList className="h-4 w-4" />
+                  Counts
+                </TabsTrigger>
+                <TabsTrigger
+                  value="transfers"
+                  className="gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm px-4 py-2"
+                >
+                  <ArrowRightLeft className="h-4 w-4" />
+                  Transfers
+                </TabsTrigger>
+                <TabsTrigger
+                  value="dashboard"
+                  className="gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm px-4 py-2"
+                >
+                  <LayoutDashboard className="h-4 w-4" />
+                  Dashboard
+                </TabsTrigger>
+                <TabsTrigger
+                  value="reports"
+                  className="gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm px-4 py-2"
+                >
+                  <TrendingUp className="h-4 w-4" />
+                  Reports
+                </TabsTrigger>
               </TabsList>
 
+              {(activeTab === "catalog" ||
+                activeTab === "vendors" ||
+                activeTab === "purchase-orders") && (
               <div className="flex items-center gap-2">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -920,6 +974,7 @@ export default function InventoryPage() {
                   </PopoverContent>
                 </Popover>
               </div>
+              )}
             </div>
           </CardHeader>
 
@@ -1457,6 +1512,31 @@ export default function InventoryPage() {
                   </div>
                 </div>
               )}
+            </TabsContent>
+
+            {/* Waste Tab */}
+            <TabsContent value="waste" className="m-0">
+              <WasteTab items={items} isAllLocations={isAllLocations} />
+            </TabsContent>
+
+            {/* Counts Tab */}
+            <TabsContent value="counts" className="m-0">
+              <CountsTab items={items} isAllLocations={isAllLocations} />
+            </TabsContent>
+
+            {/* Transfers Tab */}
+            <TabsContent value="transfers" className="m-0">
+              <TransfersTab items={items} isAllLocations={isAllLocations} />
+            </TabsContent>
+
+            {/* Dashboard Tab */}
+            <TabsContent value="dashboard" className="m-0">
+              <InventoryDashboardTab isAllLocations={isAllLocations} />
+            </TabsContent>
+
+            {/* Reports Tab */}
+            <TabsContent value="reports" className="m-0">
+              <InventoryReportsTab isAllLocations={isAllLocations} />
             </TabsContent>
           </CardContent>
         </Tabs>
