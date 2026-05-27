@@ -48,6 +48,55 @@ export interface OnlineStoreRequestRequirementsResult {
   error?: string;
 }
 
+export type QrTableManagerStatus = "not_generated" | "active" | "revoked";
+
+export interface QrTableManagerRow {
+  floorPlanObjectId: string;
+  tableLabel: string;
+  tableName: string;
+  zoneName: string | null;
+  sectionId: string | null;
+  capacity: number | null;
+  qrStatus: QrTableManagerStatus;
+  qrCodeId: string | null;
+  tokenVersion: number | null;
+  scanCountLifetime: number;
+  scanCount7d: number;
+  lastScannedAt: string | null;
+  generatedAt: string | null;
+}
+
+export interface QrTableManagerSnapshot {
+  success: boolean;
+  storeName: string | null;
+  storeSlug: string | null;
+  customDomain: string | null;
+  acceptsDineIn: boolean;
+  qrKillSwitch: boolean;
+  tables: QrTableManagerRow[];
+  generatedCount: number;
+  activeCount: number;
+  error?: string;
+}
+
+interface QrCodeRow {
+  id: string;
+  floor_plan_object_id: string;
+  table_label: string;
+  token: string;
+  token_version: number;
+  is_active: boolean;
+  scan_count: number;
+  last_scanned_at: string | null;
+  created_at: string;
+  rotated_at: string | null;
+}
+
+interface QrScanEventRow {
+  table_qr_code_id: string | null;
+  occurred_at: string;
+}
+
 function emptyMissing(): RequestPacketMissing {
   return {
     legalBusinessName: false,
@@ -507,7 +556,7 @@ function mapConfigToSettings(
       : "",
 
     templateId: (["hero", "market", "boutique"].includes(config.template_id ?? "") ? config.template_id : "classic") as "classic" | "hero" | "market" | "boutique",
-    primaryColor: config.primary_color ?? "#2DD4BF",
+    primaryColor: config.primary_color ?? "#0C4FD1",
     secondaryColor: config.secondary_color ?? "#10b981",
     accentColor: config.accent_color ?? null,
     backgroundColor: config.background_color ?? "#FFFFFF",
@@ -528,6 +577,12 @@ function mapConfigToSettings(
     minimumOrderAmount: Number(config.min_order ?? 0),
     preparationLeadTime: config.estimated_prep_minutes ?? 20,
     futureOrderMaxDays: config.max_future_order_days ?? 0,
+    acceptsDineIn: config.accepts_dine_in ?? false,
+    qrFulfillmentMode:
+      config.qr_fulfillment_mode === "counter" ? "counter" : "runner",
+    qrGeofenceEnabled: config.qr_geofence_enabled ?? false,
+    qrServiceFeePct: Number(config.qr_service_fee_pct ?? 0),
+    qrKillSwitch: config.qr_kill_switch ?? false,
 
     baseDeliveryFee: Number(config.delivery_fee ?? 0),
     freeDeliveryThreshold: Number(config.free_delivery_threshold ?? 0),
@@ -825,6 +880,16 @@ export async function saveOnlineOrderingSettings(
   if (settings.autoAcceptOrders !== undefined) configData.auto_accept_orders = Boolean(settings.autoAcceptOrders);
   if (settings.preparationLeadTime !== undefined) configData.estimated_prep_minutes = Number(settings.preparationLeadTime) || 0;
   if (settings.futureOrderMaxDays !== undefined) configData.max_future_order_days = Number(settings.futureOrderMaxDays) || 0;
+  if (settings.acceptsDineIn !== undefined) configData.accepts_dine_in = Boolean(settings.acceptsDineIn);
+  if (settings.qrFulfillmentMode !== undefined) {
+    configData.qr_fulfillment_mode = settings.qrFulfillmentMode === "counter" ? "counter" : "runner";
+  }
+  if (settings.qrGeofenceEnabled !== undefined) configData.qr_geofence_enabled = Boolean(settings.qrGeofenceEnabled);
+  if (settings.qrServiceFeePct !== undefined) {
+    const v = Number(settings.qrServiceFeePct || 0);
+    configData.qr_service_fee_pct = Number.isFinite(v) ? Math.max(0, Number(v.toFixed(2))) : 0;
+  }
+  if (settings.qrKillSwitch !== undefined) configData.qr_kill_switch = Boolean(settings.qrKillSwitch);
   if (settings.minimumOrderAmount !== undefined) {
     const v = Number(settings.minimumOrderAmount || 0);
     configData.min_order_cents = Math.round(v * 100);
@@ -964,6 +1029,395 @@ export async function getOrderNotificationAuditLog(
       sentAt: r.sent_at as string,
     })),
   };
+}
+
+function compareQrManagerRows(a: QrTableManagerRow, b: QrTableManagerRow) {
+  const zoneA = (a.zoneName || "zzz").toLowerCase();
+  const zoneB = (b.zoneName || "zzz").toLowerCase();
+  if (zoneA !== zoneB) return zoneA.localeCompare(zoneB);
+  return a.tableLabel.localeCompare(b.tableLabel, undefined, {
+    numeric: true,
+    sensitivity: "base",
+  });
+}
+
+export async function getQrTableManagerSnapshot(
+  locationId: string
+): Promise<QrTableManagerSnapshot> {
+  if (!locationId) {
+    return {
+      success: false,
+      storeName: null,
+      storeSlug: null,
+      customDomain: null,
+      acceptsDineIn: false,
+      qrKillSwitch: false,
+      tables: [],
+      generatedCount: 0,
+      activeCount: 0,
+      error: "Missing location",
+    };
+  }
+
+  const supabase = createServerSupabaseClient();
+  const db = supabase as any;
+
+  const { data: config, error: configError } = await supabase
+    .from("online_store_config")
+    .select(
+      "id, store_name, slug, custom_domain, setup_request_status, accepts_dine_in, qr_kill_switch"
+    )
+    .eq("location_id", locationId)
+    .maybeSingle();
+
+  if (configError) {
+    return {
+      success: false,
+      storeName: null,
+      storeSlug: null,
+      customDomain: null,
+      acceptsDineIn: false,
+      qrKillSwitch: false,
+      tables: [],
+      generatedCount: 0,
+      activeCount: 0,
+      error: configError.message,
+    };
+  }
+
+  if (!config) {
+    return {
+      success: false,
+      storeName: null,
+      storeSlug: null,
+      customDomain: null,
+      acceptsDineIn: false,
+      qrKillSwitch: false,
+      tables: [],
+      generatedCount: 0,
+      activeCount: 0,
+      error: "Online ordering is not configured for this location yet.",
+    };
+  }
+
+  const { data: tables, error: tablesError } = await supabase
+    .from("floor_plan_objects")
+    .select(
+      "id, name, label_override, zone_name, section_id, capacity, is_active, category"
+    )
+    .eq("location_id", locationId)
+    .eq("is_active", true)
+    .in("category", ["table", "booth"]);
+
+  if (tablesError) {
+    return {
+      success: false,
+      storeName: (config.store_name as string | null) ?? null,
+      storeSlug: (config.slug as string | null) ?? null,
+      customDomain: (config.custom_domain as string | null) ?? null,
+      acceptsDineIn: Boolean(config.accepts_dine_in),
+      qrKillSwitch: Boolean(config.qr_kill_switch),
+      tables: [],
+      generatedCount: 0,
+      activeCount: 0,
+      error: tablesError.message,
+    };
+  }
+
+  const floorPlanObjectIds = (tables ?? []).map((row) => row.id as string);
+  if (floorPlanObjectIds.length === 0) {
+    return {
+      success: true,
+      storeName: (config.store_name as string | null) ?? null,
+      storeSlug: (config.slug as string | null) ?? null,
+      customDomain: (config.custom_domain as string | null) ?? null,
+      acceptsDineIn: Boolean(config.accepts_dine_in),
+      qrKillSwitch: Boolean(config.qr_kill_switch),
+      tables: [],
+      generatedCount: 0,
+      activeCount: 0,
+    };
+  }
+
+  const [{ data: qrCodes, error: qrCodesError }, { data: scanEvents, error: scanEventsError }] =
+    await Promise.all([
+      db
+        .from("table_qr_codes")
+        .select(
+          "id, floor_plan_object_id, table_label, token, token_version, is_active, scan_count, last_scanned_at, created_at, rotated_at"
+        )
+        .in("floor_plan_object_id", floorPlanObjectIds)
+        .order("created_at", { ascending: false }),
+      db
+        .from("qr_scan_events")
+        .select("table_qr_code_id, occurred_at")
+        .eq("location_id", locationId)
+        .gte(
+          "occurred_at",
+          new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+        ),
+    ]);
+
+  if (qrCodesError) {
+    return {
+      success: false,
+      storeName: (config.store_name as string | null) ?? null,
+      storeSlug: (config.slug as string | null) ?? null,
+      customDomain: (config.custom_domain as string | null) ?? null,
+      acceptsDineIn: Boolean(config.accepts_dine_in),
+      qrKillSwitch: Boolean(config.qr_kill_switch),
+      tables: [],
+      generatedCount: 0,
+      activeCount: 0,
+      error: qrCodesError.message,
+    };
+  }
+
+  if (scanEventsError) {
+    return {
+      success: false,
+      storeName: (config.store_name as string | null) ?? null,
+      storeSlug: (config.slug as string | null) ?? null,
+      customDomain: (config.custom_domain as string | null) ?? null,
+      acceptsDineIn: Boolean(config.accepts_dine_in),
+      qrKillSwitch: Boolean(config.qr_kill_switch),
+      tables: [],
+      generatedCount: 0,
+      activeCount: 0,
+      error: scanEventsError.message,
+    };
+  }
+
+  const activeQrByTable = new Map<string, QrCodeRow>();
+  const latestQrByTable = new Map<string, QrCodeRow>();
+  for (const qrCode of ((qrCodes ?? []) as QrCodeRow[])) {
+    if (!latestQrByTable.has(qrCode.floor_plan_object_id)) {
+      latestQrByTable.set(qrCode.floor_plan_object_id, qrCode);
+    }
+    if (qrCode.is_active && !activeQrByTable.has(qrCode.floor_plan_object_id)) {
+      activeQrByTable.set(qrCode.floor_plan_object_id, qrCode);
+    }
+  }
+
+  const scanCountByQrId = new Map<string, number>();
+  for (const scanEvent of ((scanEvents ?? []) as QrScanEventRow[])) {
+    if (!scanEvent.table_qr_code_id) continue;
+    scanCountByQrId.set(
+      scanEvent.table_qr_code_id,
+      (scanCountByQrId.get(scanEvent.table_qr_code_id) ?? 0) + 1
+    );
+  }
+
+  const rows: QrTableManagerRow[] = (tables ?? []).map((table) => {
+    const floorPlanObjectId = table.id as string;
+    const activeQr = activeQrByTable.get(floorPlanObjectId) ?? null;
+    const latestQr = latestQrByTable.get(floorPlanObjectId) ?? null;
+    const qrSource = activeQr ?? latestQr;
+    const tableLabel =
+      readString(table.label_override) ??
+      readString(table.name) ??
+      "Unnamed table";
+
+    let qrStatus: QrTableManagerStatus = "not_generated";
+    if (activeQr) {
+      qrStatus = "active";
+    } else if (latestQr) {
+      qrStatus = "revoked";
+    }
+
+    return {
+      floorPlanObjectId,
+      tableLabel,
+      tableName: (table.name as string) ?? tableLabel,
+      zoneName: readString(table.zone_name),
+      sectionId: (table.section_id as string | null) ?? null,
+      capacity: (table.capacity as number | null) ?? null,
+      qrStatus,
+      qrCodeId: qrSource?.id ?? null,
+      tokenVersion: qrSource?.token_version ?? null,
+      scanCountLifetime: qrSource?.scan_count ?? 0,
+      scanCount7d:
+        activeQr && activeQr.id ? scanCountByQrId.get(activeQr.id) ?? 0 : 0,
+      lastScannedAt: qrSource?.last_scanned_at ?? null,
+      generatedAt: qrSource?.created_at ?? null,
+    };
+  });
+
+  rows.sort(compareQrManagerRows);
+
+  return {
+    success: true,
+    storeName: (config.store_name as string | null) ?? null,
+    storeSlug: (config.slug as string | null) ?? null,
+    customDomain: (config.custom_domain as string | null) ?? null,
+    acceptsDineIn: Boolean(config.accepts_dine_in),
+    qrKillSwitch: Boolean(config.qr_kill_switch),
+    generatedCount: rows.filter((row) => row.qrStatus !== "not_generated").length,
+    activeCount: rows.filter((row) => row.qrStatus === "active").length,
+    tables: rows,
+  };
+}
+
+export async function generateQrCodeForTable(
+  floorPlanObjectId: string,
+  options?: { regenerate?: boolean }
+): Promise<{ success: boolean; error?: string; action?: string }> {
+  if (!floorPlanObjectId) {
+    return { success: false, error: "Missing table" };
+  }
+
+  const supabase = createServerSupabaseClient();
+  const db = supabase as any;
+
+  const { data: table, error: tableError } = await supabase
+    .from("floor_plan_objects")
+    .select("id, name, label_override, location_id, merchant_id")
+    .eq("id", floorPlanObjectId)
+    .single();
+
+  if (tableError || !table) {
+    return { success: false, error: tableError?.message || "Table not found" };
+  }
+
+  const { data, error } = await db.rpc("generate_table_qr_code", {
+    p_floor_plan_object_id: floorPlanObjectId,
+    p_regenerate: Boolean(options?.regenerate),
+  });
+
+  if (error) {
+    return { success: false, error: error.message };
+  }
+
+  const result = data as { success?: boolean; error?: string; action?: string };
+  if (!result?.success) {
+    return {
+      success: false,
+      error: result?.error || "QR generation failed",
+    };
+  }
+
+  const tableLabel =
+    readString(table.label_override) ?? readString(table.name) ?? "Table";
+
+  await LogAuditEvent({
+    merchantId: table.merchant_id as string,
+    action:
+      options?.regenerate === true
+        ? "Regenerated Table QR Code"
+        : result.action === "reprint_existing"
+          ? "Reprinted Table QR Code"
+          : "Generated Table QR Code",
+    actionCategory: "settings",
+    resourceType: "table_qr_code",
+    resourceId: floorPlanObjectId,
+    resourceName: tableLabel,
+    locationId: table.location_id as string,
+    changes: {
+      after: {
+        table_label: tableLabel,
+        qr_action: result.action ?? (options?.regenerate ? "regenerated" : "generated"),
+      },
+    },
+  });
+
+  revalidatePath("/dashboard/online-ordering");
+  return { success: true, action: result.action };
+}
+
+export async function revokeTableQrCode(
+  floorPlanObjectId: string
+): Promise<{ success: boolean; error?: string }> {
+  if (!floorPlanObjectId) {
+    return { success: false, error: "Missing table" };
+  }
+
+  const supabase = createServerSupabaseClient();
+  const db = supabase as any;
+
+  const { data: table, error: tableError } = await supabase
+    .from("floor_plan_objects")
+    .select("id, name, label_override, location_id, merchant_id")
+    .eq("id", floorPlanObjectId)
+    .single();
+
+  if (tableError || !table) {
+    return { success: false, error: tableError?.message || "Table not found" };
+  }
+
+  const { data: activeCode, error: activeCodeError } = await db
+    .from("table_qr_codes")
+    .select("id")
+    .eq("floor_plan_object_id", floorPlanObjectId)
+    .eq("is_active", true)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (activeCodeError) {
+    return { success: false, error: activeCodeError.message };
+  }
+
+  if (!activeCode?.id) {
+    return { success: false, error: "No active QR code to revoke" };
+  }
+
+  const { error: updateError } = await db
+    .from("table_qr_codes")
+    .update({
+      is_active: false,
+      rotated_at: new Date().toISOString(),
+    })
+    .eq("id", activeCode.id);
+
+  if (updateError) {
+    return { success: false, error: updateError.message };
+  }
+
+  const tableLabel =
+    readString(table.label_override) ?? readString(table.name) ?? "Table";
+
+  await LogAuditEvent({
+    merchantId: table.merchant_id as string,
+    action: "Revoked Table QR Code",
+    actionCategory: "settings",
+    resourceType: "table_qr_code",
+    resourceId: activeCode.id as string,
+    resourceName: tableLabel,
+    locationId: table.location_id as string,
+    changes: {
+      before: { is_active: true },
+      after: { is_active: false },
+    },
+  });
+
+  revalidatePath("/dashboard/online-ordering");
+  return { success: true };
+}
+
+export async function generateMissingQrCodesForLocation(
+  locationId: string
+): Promise<{ success: boolean; generated: number; error?: string }> {
+  const snapshot = await getQrTableManagerSnapshot(locationId);
+  if (!snapshot.success) {
+    return { success: false, generated: 0, error: snapshot.error };
+  }
+
+  let generated = 0;
+  for (const row of snapshot.tables) {
+    if (row.qrStatus !== "not_generated") continue;
+    const result = await generateQrCodeForTable(row.floorPlanObjectId);
+    if (!result.success) {
+      return {
+        success: false,
+        generated,
+        error: result.error || `Failed on ${row.tableLabel}`,
+      };
+    }
+    generated += 1;
+  }
+
+  revalidatePath("/dashboard/online-ordering");
+  return { success: true, generated };
 }
 
 

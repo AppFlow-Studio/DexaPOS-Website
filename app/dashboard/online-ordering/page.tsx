@@ -18,6 +18,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -31,6 +38,7 @@ import { useAuth } from "@clerk/nextjs";
 import { cn } from "@/lib/utils";
 import { OrderOutTab } from "@/components/dashboard/orderout/OrderOutTab";
 import { NotificationsTab } from "./components/NotificationsTab";
+import { QrTableManager } from "./components/QrTableManager";
 import { useOrderOutStatus, useOnboardOrderOut } from "./hooks/useOrderOutStatus";
 import { FONT_GOOGLE_URLS } from "@/app/sites/lib/theme-utils";
 import {
@@ -982,6 +990,106 @@ function CompletedSetupPanel({
                   />
                 </div>
               </div>
+
+              <div className="rounded-xl border border-[#0C4FD1]/20 bg-[#0C4FD1]/5 p-4">
+                <div className="flex flex-col gap-4">
+                  <div>
+                    <h3 className="text-sm font-semibold text-[#0C4FD1]">QR Table Ordering</h3>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Scan-to-order settings for dine-in QR. These controls stay on the existing online-ordering surface; QR codes, analytics, and deeper billing gates remain separate work.
+                    </p>
+                  </div>
+
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="flex items-center justify-between rounded-lg border bg-background p-4">
+                      <div>
+                        <p className="font-medium">Enable QR Table Ordering</p>
+                        <p className="text-sm text-muted-foreground">
+                          Allow guests to scan a table QR and place pay-before-kitchen dine-in orders.
+                        </p>
+                      </div>
+                      <Switch
+                        checked={settings.acceptsDineIn}
+                        onCheckedChange={(checked) => onUpdate({ acceptsDineIn: checked })}
+                        disabled={isSaving}
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between rounded-lg border bg-background p-4">
+                      <div>
+                        <p className="font-medium">QR Kill Switch</p>
+                        <p className="text-sm text-muted-foreground">
+                          Stop new QR scans immediately without turning off the rest of online ordering.
+                        </p>
+                      </div>
+                      <Switch
+                        checked={settings.qrKillSwitch}
+                        onCheckedChange={(checked) => onUpdate({ qrKillSwitch: checked })}
+                        disabled={isSaving}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 sm:grid-cols-3">
+                    <div className="space-y-2">
+                      <Label>Fulfillment Mode</Label>
+                      <Select
+                        value={settings.qrFulfillmentMode}
+                        onValueChange={(value) =>
+                          onUpdate({
+                            qrFulfillmentMode: value === "counter" ? "counter" : "runner",
+                          })
+                        }
+                        disabled={isSaving}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select mode" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="runner">Runner delivery</SelectItem>
+                          <SelectItem value="counter">Counter pickup</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>QR Service Fee (%)</Label>
+                      <Input
+                        type="number"
+                        value={settings.qrServiceFeePct}
+                        min={0}
+                        step="0.01"
+                        onChange={(e) => onUpdate({ qrServiceFeePct: Number(e.target.value) })}
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between rounded-lg border bg-background p-4">
+                      <div>
+                        <p className="font-medium">Geofence Check</p>
+                        <p className="text-sm text-muted-foreground">
+                          Reserve geofence enforcement for QR scans when you want tighter on-premise validation later.
+                        </p>
+                      </div>
+                      <Switch
+                        checked={settings.qrGeofenceEnabled}
+                        onCheckedChange={(checked) => onUpdate({ qrGeofenceEnabled: checked })}
+                        disabled={isSaving}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="rounded-lg border bg-background p-3 text-xs text-muted-foreground">
+                    QR billing/tier gating is tracked separately. These settings persist now, but availability enforcement should still follow the QR subscription gate once that service-catalog rule is finalized.
+                  </div>
+                </div>
+              </div>
+
+              <QrTableManager
+                locationId={selectedLocationId}
+                locationName={locationName}
+                acceptsDineIn={settings.acceptsDineIn}
+                qrKillSwitch={settings.qrKillSwitch}
+              />
             </CardContent>
           </Card>
         </TabsContent>

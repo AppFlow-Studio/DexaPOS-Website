@@ -79,6 +79,11 @@ export interface OnlineOrderingSettings {
   preparationLeadTime: number;
   futureOrderMaxDays: number;
   minimumOrderAmount: number;
+  acceptsDineIn: boolean;
+  qrFulfillmentMode: "runner" | "counter";
+  qrGeofenceEnabled: boolean;
+  qrServiceFeePct: number;
+  qrKillSwitch: boolean;
 
   // Delivery
   baseDeliveryFee: number;
@@ -183,7 +188,7 @@ const createDefaultSettings = (
   address: "",
 
   templateId: "classic",
-  primaryColor: "#2DD4BF",
+  primaryColor: "#0C4FD1",
   secondaryColor: "#10b981",
   accentColor: null,
   backgroundColor: "#FFFFFF",
@@ -204,6 +209,11 @@ const createDefaultSettings = (
   preparationLeadTime: 20,
   futureOrderMaxDays: 0,
   minimumOrderAmount: 0,
+  acceptsDineIn: false,
+  qrFulfillmentMode: "runner",
+  qrGeofenceEnabled: false,
+  qrServiceFeePct: 0,
+  qrKillSwitch: false,
 
   baseDeliveryFee: 0,
   freeDeliveryThreshold: 0,
@@ -361,6 +371,11 @@ export const useOnlineOrderingSettings = create<OnlineOrderingStore>(
           preparationLeadTime: currentSettings.preparationLeadTime,
           futureOrderMaxDays: currentSettings.futureOrderMaxDays,
           minimumOrderAmount: currentSettings.minimumOrderAmount,
+          acceptsDineIn: currentSettings.acceptsDineIn,
+          qrFulfillmentMode: currentSettings.qrFulfillmentMode,
+          qrGeofenceEnabled: currentSettings.qrGeofenceEnabled,
+          qrServiceFeePct: currentSettings.qrServiceFeePct,
+          qrKillSwitch: currentSettings.qrKillSwitch,
           baseDeliveryFee: currentSettings.baseDeliveryFee,
           freeDeliveryThreshold: currentSettings.freeDeliveryThreshold,
           deliveryRadiusMiles: currentSettings.deliveryRadiusMiles,
