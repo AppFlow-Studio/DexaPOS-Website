@@ -48,7 +48,10 @@ export function useSessionInit(
       const currentToken = useSession.getState().sessionToken;
       if (currentToken) {
         const result = await getSession(currentToken);
-        if (result.data) return; // Valid session, done
+        if (result.data) {
+          await useSession.getState().refreshSession();
+          return; // Valid session, done
+        }
         // Expired or invalid — clear and fall through
         useSession.getState().logout();
       }

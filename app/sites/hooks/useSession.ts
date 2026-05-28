@@ -90,6 +90,7 @@ export const useSession = create<SessionStore>()(
           storeConfigId: configId,
           isAuthenticated: false,
           customer: null,
+          activeOrderId: null,
           floorPlanObjectId: null,
           qrTableLabel: null,
           tableQrCodeId: null,
@@ -102,6 +103,7 @@ export const useSession = create<SessionStore>()(
           storeConfigId: configId,
           isAuthenticated: false,
           customer: null,
+          activeOrderId: null,
           floorPlanObjectId: qrContext.floorPlanObjectId ?? null,
           qrTableLabel: qrContext.tableLabel ?? null,
           tableQrCodeId: qrContext.tableQrCodeId ?? null,
@@ -144,6 +146,7 @@ export const useSession = create<SessionStore>()(
                   email: s.customerEmail,
                 }
               : get().customer,
+            activeOrderId: s.orderId ?? null,
             floorPlanObjectId: s.floorPlanObjectId,
             qrTableLabel: s.tableLabel,
             tableQrCodeId: s.tableQrCodeId,

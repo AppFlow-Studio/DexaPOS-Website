@@ -518,3 +518,5 @@ If you need to literally cross out ticket checkboxes in Notion today, be strict:
 
 - [x] QR analytics now resolves paid QR orders through QR-linked online sessions (online_order_sessions.table_qr_code_id + order_id) instead of relying only on orders.order_type = 'qr_dine_in', which fixes zero-revenue/zero-paid analytics when the funnel shows paid scans.
 
+- [x] QR storefront session hydration now rehydrates ctiveOrderId from online_order_sessions.order_id and clears stale order state when a new QR session is bound, which improves revisit/recovery behavior for live status and table re-entry.
+
