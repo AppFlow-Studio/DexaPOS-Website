@@ -835,6 +835,7 @@ export default function MerchantDashboardPage() {
                       const percentage = total > 0 ? (count / total) * 100 : 0;
                       const typeLabels: Record<string, string> = {
                         dine_in: "Dine In",
+                        qr_dine_in: "QR Table",
                         takeout: "Takeout",
                         delivery: "Delivery",
                         online: "Online",

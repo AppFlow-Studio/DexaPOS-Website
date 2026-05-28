@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import jsPDF from "jspdf";
+import QRCode from "qrcode";
 import {
   generateMissingQrCodesForLocation,
   generateQrCodeForTable,
@@ -12,8 +14,27 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import { Ban, Loader2, QrCode, RefreshCw, RotateCcw, ScanLine, ShieldAlert } from "lucide-react";
+import { buildQrTableUrl } from "@/app/sites/lib/store-url";
+import {
+  Ban,
+  Download,
+  FileImage,
+  FileText,
+  Loader2,
+  Printer,
+  QrCode,
+  RefreshCw,
+  RotateCcw,
+  ScanLine,
+  ShieldAlert,
+} from "lucide-react";
 import { toast } from "sonner";
 
 interface QrTableManagerProps {
@@ -21,6 +42,8 @@ interface QrTableManagerProps {
   locationName: string;
   acceptsDineIn: boolean;
   qrKillSwitch: boolean;
+  qrEntitled: boolean;
+  qrGateMessage?: string | null;
 }
 
 function getStatusBadge(status: QrTableManagerRow["qrStatus"]) {
@@ -39,15 +62,39 @@ function formatDateTime(value: string | null) {
   return new Date(value).toLocaleString();
 }
 
+type QrBrandMode = "merchant" | "dexa";
+
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+function slugifyFileName(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .replace(/-{2,}/g, "-");
+}
+
 export function QrTableManager({
   locationId,
   locationName,
   acceptsDineIn,
   qrKillSwitch,
+  qrEntitled,
+  qrGateMessage,
 }: QrTableManagerProps) {
   const [snapshot, setSnapshot] = useState<QrTableManagerSnapshot | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [busyKey, setBusyKey] = useState<string | null>(null);
+  const [brandMode, setBrandMode] = useState<QrBrandMode>("merchant");
 
   const loadSnapshot = useCallback(async () => {
     setIsLoading(true);
@@ -137,6 +184,200 @@ export function QrTableManager({
     });
   }
 
+  function getRowQrUrl(row: QrTableManagerRow) {
+    return (
+      row.qrUrl ||
+      buildQrTableUrl({
+        slug: snapshot?.storeSlug,
+        customDomain: snapshot?.customDomain,
+        token: row.tableToken,
+      })
+    );
+  }
+
+  function getRowFileBaseName(row: QrTableManagerRow) {
+    const storeName = snapshot?.storeName || locationName || "store";
+    return `${slugifyFileName(storeName)}-${slugifyFileName(row.tableLabel || "table")}`;
+  }
+
+  function getBrandTitle() {
+    if (brandMode === "dexa") return "DEXA";
+    return snapshot?.storeName || locationName || "Store";
+  }
+
+  function getBrandSubtitle() {
+    return brandMode === "dexa" ? "Scan to order" : "Table ordering";
+  }
+
+  async function handleDownloadSvg(row: QrTableManagerRow) {
+    const qrUrl = getRowQrUrl(row);
+    if (!qrUrl) {
+      toast.error("QR URL is not ready for this table yet.");
+      return;
+    }
+
+    try {
+      const svg = await QRCode.toString(qrUrl, {
+        type: "svg",
+        errorCorrectionLevel: "Q",
+        margin: 4,
+        color: {
+          dark: "#111827",
+          light: "#FFFFFF",
+        },
+      });
+      downloadBlob(
+        new Blob([svg], { type: "image/svg+xml;charset=utf-8" }),
+        `${getRowFileBaseName(row)}.svg`
+      );
+      toast.success(`SVG downloaded for ${row.tableLabel}`);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to export SVG"
+      );
+    }
+  }
+
+  async function handleDownloadPng(row: QrTableManagerRow) {
+    const qrUrl = getRowQrUrl(row);
+    if (!qrUrl) {
+      toast.error("QR URL is not ready for this table yet.");
+      return;
+    }
+
+    try {
+      const pngUrl = await QRCode.toDataURL(qrUrl, {
+        errorCorrectionLevel: "Q",
+        margin: 4,
+        width: 1200,
+        color: {
+          dark: "#111827",
+          light: "#FFFFFF",
+        },
+      });
+      const response = await fetch(pngUrl);
+      const blob = await response.blob();
+      downloadBlob(blob, `${getRowFileBaseName(row)}.png`);
+      toast.success(`PNG downloaded for ${row.tableLabel}`);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to export PNG"
+      );
+    }
+  }
+
+  async function buildPdfBlob(row: QrTableManagerRow) {
+    const qrUrl = getRowQrUrl(row);
+    if (!qrUrl) {
+      throw new Error("QR URL is not ready for this table yet.");
+    }
+
+    const qrImage = await QRCode.toDataURL(qrUrl, {
+      errorCorrectionLevel: "Q",
+      margin: 2,
+      width: 1400,
+      color: {
+        dark: "#111827",
+        light: "#FFFFFF",
+      },
+    });
+
+    const doc = new jsPDF({
+      orientation: "landscape",
+      unit: "mm",
+      format: "letter",
+    });
+
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const panelWidth = pageWidth / 2;
+    const brandTitle = getBrandTitle();
+    const brandSubtitle = getBrandSubtitle();
+    const title = row.tableLabel;
+
+    const renderPanel = (originX: number) => {
+      doc.setDrawColor(12, 79, 209);
+      doc.setLineWidth(0.5);
+      doc.roundedRect(originX + 8, 10, panelWidth - 16, pageHeight - 20, 4, 4);
+      doc.setFillColor(12, 79, 209);
+      doc.roundedRect(originX + 8, 10, panelWidth - 16, 16, 4, 4, "F");
+
+      doc.setTextColor(255, 255, 255);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(17);
+      doc.text(brandTitle, originX + 14, 20);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      doc.text(brandSubtitle, originX + 14, 24);
+
+      doc.setTextColor(17, 24, 39);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(22);
+      doc.text(title, originX + panelWidth / 2, 41, { align: "center" });
+
+      doc.addImage(qrImage, "PNG", originX + panelWidth / 2 - 28, 47, 56, 56);
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(12);
+      doc.text("Scan to order", originX + panelWidth / 2, 111, {
+        align: "center",
+      });
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8.5);
+      doc.text("Pay on your phone. Your order will be run to this table.", originX + panelWidth / 2, 117, {
+        align: "center",
+      });
+      doc.setTextColor(100, 116, 139);
+      doc.setFontSize(7.5);
+      doc.text(qrUrl, originX + panelWidth / 2, 123, {
+        align: "center",
+        maxWidth: panelWidth - 24,
+      });
+    };
+
+    renderPanel(0);
+    renderPanel(panelWidth);
+
+    doc.setDrawColor(148, 163, 184);
+    doc.setLineWidth(0.2);
+    for (let y = 6; y < pageHeight - 6; y += 4) {
+      doc.line(panelWidth, y, panelWidth, y + 2);
+    }
+
+    return doc.output("blob");
+  }
+
+  async function handleDownloadPdf(row: QrTableManagerRow) {
+    try {
+      const blob = await buildPdfBlob(row);
+      downloadBlob(blob, `${getRowFileBaseName(row)}-table-tent.pdf`);
+      toast.success(`PDF downloaded for ${row.tableLabel}`);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to export PDF"
+      );
+    }
+  }
+
+  async function handlePrintPdf(row: QrTableManagerRow) {
+    try {
+      const blob = await buildPdfBlob(row);
+      const url = URL.createObjectURL(blob);
+      const printWindow = window.open(url, "_blank", "noopener,noreferrer");
+      if (!printWindow) {
+        URL.revokeObjectURL(url);
+        toast.error("Pop-up blocked while opening the print preview.");
+        return;
+      }
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      toast.success(`Print preview opened for ${row.tableLabel}`);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to prepare print preview"
+      );
+    }
+  }
+
   return (
     <Card className="border-[#0C4FD1]/15">
       <CardHeader className="space-y-4">
@@ -151,6 +392,32 @@ export function QrTableManager({
             </CardDescription>
           </div>
           <div className="flex flex-wrap gap-2">
+            <div className="inline-flex items-center rounded-md border border-border bg-background p-1 text-xs">
+              <button
+                type="button"
+                onClick={() => setBrandMode("merchant")}
+                className={cn(
+                  "rounded px-2 py-1 transition-colors",
+                  brandMode === "merchant"
+                    ? "bg-[#0C4FD1] text-white"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                Merchant
+              </button>
+              <button
+                type="button"
+                onClick={() => setBrandMode("dexa")}
+                className={cn(
+                  "rounded px-2 py-1 transition-colors",
+                  brandMode === "dexa"
+                    ? "bg-[#0C4FD1] text-white"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                DEXA
+              </button>
+            </div>
             <Button
               variant="outline"
               size="sm"
@@ -167,7 +434,7 @@ export function QrTableManager({
             <Button
               size="sm"
               onClick={() => void handleGenerateMissing()}
-              disabled={isLoading || busyKey !== null}
+              disabled={isLoading || busyKey !== null || !qrEntitled}
             >
               {busyKey === "bulk-generate" ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -209,6 +476,13 @@ export function QrTableManager({
         {!acceptsDineIn ? (
           <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
             QR scan handling is currently disabled for this store. You can still prepare codes here, but guests will not be allowed to order from scans until <span className="font-medium">Enable QR Table Ordering</span> is turned on above.
+          </div>
+        ) : null}
+
+        {!qrEntitled ? (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            {qrGateMessage ||
+              "QR Table Ordering is not available for the current subscription tier."}
           </div>
         ) : null}
 
@@ -289,7 +563,7 @@ export function QrTableManager({
                           <Button
                             size="sm"
                             onClick={() => void handleGenerate(row, false)}
-                            disabled={busyKey !== null}
+                            disabled={busyKey !== null || !qrEntitled}
                           >
                             {isBusy ? (
                               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -304,7 +578,7 @@ export function QrTableManager({
                               size="sm"
                               variant="outline"
                               onClick={() => void handleGenerate(row, false)}
-                              disabled={busyKey !== null}
+                              disabled={busyKey !== null || !qrEntitled}
                             >
                               {isBusy && busyKey?.startsWith("gen-") ? (
                                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -317,7 +591,7 @@ export function QrTableManager({
                               size="sm"
                               variant="outline"
                               onClick={() => void handleGenerate(row, true)}
-                              disabled={busyKey !== null}
+                              disabled={busyKey !== null || !qrEntitled}
                             >
                               {isBusy && busyKey?.startsWith("regen-") ? (
                                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -343,6 +617,46 @@ export function QrTableManager({
                             ) : null}
                           </>
                         )}
+                        {row.qrStatus !== "not_generated" ? (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={!row.tableToken}
+                              >
+                                <Download className="mr-2 h-4 w-4" />
+                                Assets
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-52">
+                              <DropdownMenuItem
+                                onClick={() => void handleDownloadSvg(row)}
+                              >
+                                <FileImage className="mr-2 h-4 w-4" />
+                                Download SVG
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => void handleDownloadPng(row)}
+                              >
+                                <FileImage className="mr-2 h-4 w-4" />
+                                Download PNG
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => void handleDownloadPdf(row)}
+                              >
+                                <FileText className="mr-2 h-4 w-4" />
+                                Download PDF Tent
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => void handlePrintPdf(row)}
+                              >
+                                <Printer className="mr-2 h-4 w-4" />
+                                Print PDF Tent
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        ) : null}
                       </div>
                     </div>
                   );
@@ -360,7 +674,7 @@ export function QrTableManager({
           <div className="flex items-start gap-2">
             <ShieldAlert className="mt-0.5 h-4 w-4 text-[#0C4FD1]" />
             <p>
-              This manager is intentionally limited to generation state, rotation, and revoke. Exact guest preview and printable templates stay separate until the QR storefront route and export surfaces are wired end-to-end.
+              Export assets now use the shared store host contract and current table token. Exact guest preview still waits on the live QR storefront route, so these downloads should be treated as implementation-ready assets pending end-to-end scan validation.
             </p>
           </div>
         </div>

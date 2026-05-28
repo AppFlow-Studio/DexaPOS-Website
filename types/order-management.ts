@@ -12,6 +12,7 @@ export type OrderStatus =
 
 export type OrderType =
   | "dine_in"
+  | "qr_dine_in"
   | "takeout"
   | "delivery"
   | "online"

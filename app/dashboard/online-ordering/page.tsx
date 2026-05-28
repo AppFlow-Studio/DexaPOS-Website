@@ -41,19 +41,11 @@ import { NotificationsTab } from "./components/NotificationsTab";
 import { QrTableManager } from "./components/QrTableManager";
 import { useOrderOutStatus, useOnboardOrderOut } from "./hooks/useOrderOutStatus";
 import { FONT_GOOGLE_URLS } from "@/app/sites/lib/theme-utils";
+import { buildStoreUrl } from "@/app/sites/lib/store-url";
 import {
   getOnlineStoreRequestRequirements,
   saveOnlineStoreRequestRequirements,
 } from "./actions";
-
-const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "localhost:3000";
-
-function getStoreUrl(slug: string): string {
-  if (!slug) return "";
-  const isDev = ROOT_DOMAIN.includes("localhost");
-  if (isDev) return `http://${slug}.localhost:3000`;
-  return `https://${slug}.${ROOT_DOMAIN}`;
-}
 
 function getStatusTone(status: OnlineStoreSetupStatus) {
   switch (status) {
@@ -224,7 +216,14 @@ function CompletedSetupPanel({
   onSave: () => void;
   onUpdate: (updates: Partial<OnlineOrderingSettings>) => void;
 }) {
-  const storeUrl = getStoreUrl(settings.storeSlug);
+  const storeUrl = buildStoreUrl({
+    slug: settings.storeSlug,
+    customDomain: settings.customDomain,
+  });
+  const qrGate = settings.qrBillingGate;
+  const qrControlsLocked = isSaving || !qrGate.entitled;
+  const qrEnableSwitchDisabled =
+    isSaving || (!qrGate.entitled && !settings.acceptsDineIn);
   const { orgId, orgSlug } = useAuth();
   const { data: orderOutStatusResult } = useOrderOutStatus(orgId || "", selectedLocationId);
   const onboardMutation = useOnboardOrderOut(orgId || "");
@@ -1000,6 +999,20 @@ function CompletedSetupPanel({
                     </p>
                   </div>
 
+                  {!qrGate.entitled ? (
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                      <p className="font-medium">QR Table Ordering is locked for this branch</p>
+                      <p className="mt-1">
+                        {qrGate.reason ??
+                          "QR Table Ordering requires an eligible merchant tier or an HQ override."}
+                      </p>
+                    </div>
+                  ) : qrGate.hasServiceOverride ? (
+                    <div className="rounded-lg border border-[#0C4FD1]/20 bg-background px-4 py-3 text-sm text-muted-foreground">
+                      HQ override is active for this location through the QR Table Ordering service assignment.
+                    </div>
+                  ) : null}
+
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="flex items-center justify-between rounded-lg border bg-background p-4">
                       <div>
@@ -1011,7 +1024,7 @@ function CompletedSetupPanel({
                       <Switch
                         checked={settings.acceptsDineIn}
                         onCheckedChange={(checked) => onUpdate({ acceptsDineIn: checked })}
-                        disabled={isSaving}
+                        disabled={qrEnableSwitchDisabled}
                       />
                     </div>
 
@@ -1025,7 +1038,7 @@ function CompletedSetupPanel({
                       <Switch
                         checked={settings.qrKillSwitch}
                         onCheckedChange={(checked) => onUpdate({ qrKillSwitch: checked })}
-                        disabled={isSaving}
+                        disabled={qrControlsLocked}
                       />
                     </div>
                   </div>
@@ -1040,7 +1053,7 @@ function CompletedSetupPanel({
                             qrFulfillmentMode: value === "counter" ? "counter" : "runner",
                           })
                         }
-                        disabled={isSaving}
+                        disabled={qrControlsLocked}
                       >
                         <SelectTrigger>
                           <SelectValue placeholder="Select mode" />
@@ -1060,6 +1073,7 @@ function CompletedSetupPanel({
                         min={0}
                         step="0.01"
                         onChange={(e) => onUpdate({ qrServiceFeePct: Number(e.target.value) })}
+                        disabled={qrControlsLocked}
                       />
                     </div>
 
@@ -1073,13 +1087,18 @@ function CompletedSetupPanel({
                       <Switch
                         checked={settings.qrGeofenceEnabled}
                         onCheckedChange={(checked) => onUpdate({ qrGeofenceEnabled: checked })}
-                        disabled={isSaving}
+                        disabled={qrControlsLocked}
                       />
                     </div>
                   </div>
 
                   <div className="rounded-lg border bg-background p-3 text-xs text-muted-foreground">
-                    QR billing/tier gating is tracked separately. These settings persist now, but availability enforcement should still follow the QR subscription gate once that service-catalog rule is finalized.
+                    Required tier: <span className="font-medium text-foreground">{qrGate.requiredPlanName ?? qrGate.requiredPlanCode ?? "Not configured"}</span>
+                    {qrGate.currentPlanName ? (
+                      <>
+                        {" "}· Current tier: <span className="font-medium text-foreground">{qrGate.currentPlanName}</span>
+                      </>
+                    ) : null}
                   </div>
                 </div>
               </div>
@@ -1089,6 +1108,8 @@ function CompletedSetupPanel({
                 locationName={locationName}
                 acceptsDineIn={settings.acceptsDineIn}
                 qrKillSwitch={settings.qrKillSwitch}
+                qrEntitled={qrGate.entitled}
+                qrGateMessage={qrGate.reason}
               />
             </CardContent>
           </Card>

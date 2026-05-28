@@ -174,6 +174,7 @@ interface OnlineOrderingSettings {
   storeName: string
   storeSlug: string
   storeUrl?: string
+  customDomain?: string | null
   description?: string
   phone: string
   email: string
@@ -655,13 +656,14 @@ export async function getAdminOnlineOrderingSettings(
       settings.enabled = config.is_active ?? false
       settings.storeName = config.store_name || settings.storeName
       settings.storeSlug = config.slug ?? ''
+      settings.customDomain = config.custom_domain ?? null
       settings.description = config.description ?? ''
       settings.logoUrl = config.logo_url
       settings.heroImageUrl = config.hero_image_url
       settings.faviconUrl = config.favicon_url
       settings.ogImageUrl = config.og_image_url
       settings.templateId = (config.template_id ?? 'classic') as OnlineOrderingSettings['templateId']
-      settings.primaryColor = config.primary_color ?? '#2DD4BF'
+      settings.primaryColor = config.primary_color ?? '#0C4FD1'
       settings.secondaryColor = config.secondary_color ?? '#10b981'
       settings.accentColor = config.accent_color ?? null
       settings.backgroundColor = config.background_color ?? '#FFFFFF'

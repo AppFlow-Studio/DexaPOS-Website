@@ -58,6 +58,11 @@ function formatCurrency(amount: number): string {
     }).format(amount)
 }
 
+function formatOrderTypeLabel(type: OrderType | string): string {
+    if (type === 'qr_dine_in') return 'QR Table'
+    return type.replace(/_/g, ' ')
+}
+
 function downloadCSV(orders: OrderResponse[], locationsMap: Map<string, string>) {
     const headers = [
         'Order #',
@@ -74,7 +79,7 @@ function downloadCSV(orders: OrderResponse[], locationsMap: Map<string, string>)
     const rows = orders.map((o) => [
         o.display_number || o.order_number,
         new Date(o.created_at).toLocaleString(),
-        o.order_type.replace('_', ' '),
+        formatOrderTypeLabel(o.order_type),
         o.status,
         o.payment_status,
         (o.order_items || []).reduce(

@@ -63,18 +63,9 @@ import { extractConnectedPlatforms } from '@/lib/orderout/helpers'
 import { MissingDataForm } from '@/components/online-store/MissingDataForm'
 import { HoursConfigModal } from '@/app/dashboard/online-ordering/components/HoursConfigModal'
 import { FONT_GOOGLE_URLS } from '@/app/sites/lib/theme-utils'
+import { buildStoreUrl } from '@/app/sites/lib/store-url'
 import { useAdminNmiMerchantStatus } from '@/lib/queries/use-admin-online-ordering'
 import { NmiCreateMerchantDialog } from './NmiCreateMerchantDialog'
-
-const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'localhost:3000'
-
-function getStoreUrl(slug: string): string {
-    if (!slug) return ''
-
-    const isDev = ROOT_DOMAIN.includes('localhost')
-    if (isDev) return `http://${slug}.localhost:3000`
-    return `https://${slug}.dexaposai.com`
-}
 
 function getRequestStatusLabel(status: LocationOnlineStoreOverview['setupRequestStatus']) {
     switch (status) {
@@ -470,7 +461,10 @@ export function OnlineStoreTab({
 
     // Find location name
     const selectedLocation = locations.find((l) => l.id === selectedLocationId)
-    const storeUrl = localSettings?.storeSlug ? getStoreUrl(localSettings.storeSlug) : ''
+    const storeUrl = buildStoreUrl({
+        slug: localSettings?.storeSlug,
+        customDomain: localSettings?.customDomain,
+    })
     const requestStatus = localSettings?.setupRequestStatus ?? 'not_requested'
     const canEditStoreSetup =
         requestStatus === 'approved' || requestStatus === 'setup_completed'

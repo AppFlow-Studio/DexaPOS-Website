@@ -48,6 +48,7 @@ export interface OnlineOrderingSettings {
   enabled: boolean;
   storeName: string;
   storeSlug: string;
+  customDomain: string | null;
   description: string;
   phone: string;
   email: string;
@@ -80,6 +81,17 @@ export interface OnlineOrderingSettings {
   futureOrderMaxDays: number;
   minimumOrderAmount: number;
   acceptsDineIn: boolean;
+  qrBillingGate: {
+    entitled: boolean;
+    requiredPlanCode: string | null;
+    requiredPlanName: string | null;
+    currentPlanCode: string | null;
+    currentPlanName: string | null;
+    subscriptionStatus: string | null;
+    hasServiceOverride: boolean;
+    serviceCode: string;
+    reason: string | null;
+  };
   qrFulfillmentMode: "runner" | "counter";
   qrGeofenceEnabled: boolean;
   qrServiceFeePct: number;
@@ -182,6 +194,7 @@ const createDefaultSettings = (
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, ""),
+  customDomain: null,
   description: "",
   phone: "",
   email: "",
@@ -210,6 +223,18 @@ const createDefaultSettings = (
   futureOrderMaxDays: 0,
   minimumOrderAmount: 0,
   acceptsDineIn: false,
+  qrBillingGate: {
+    entitled: false,
+    requiredPlanCode: "multi_location",
+    requiredPlanName: "Multi-Location",
+    currentPlanCode: null,
+    currentPlanName: null,
+    subscriptionStatus: null,
+    hasServiceOverride: false,
+    serviceCode: "qr_table_ordering",
+    reason:
+      "QR Table Ordering requires the Multi-Location tier or an HQ override.",
+  },
   qrFulfillmentMode: "runner",
   qrGeofenceEnabled: false,
   qrServiceFeePct: 0,
