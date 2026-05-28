@@ -18,6 +18,7 @@ import { useStorefrontPath } from "../lib/use-storefront-path";
 import { getOrderTracking, cancelOnlineOrder, type OrderTrackingData } from "../order-actions";
 import { useSession } from "../hooks/useSession";
 import { OrderStatusWatcher } from "./OrderStatusWatcher";
+import { CallServerCard } from "./CallServerCard";
 import { formatScheduledTime } from "../lib/format-scheduled-time";
 
 interface OrderTrackingPageProps {
@@ -542,6 +543,9 @@ export function OrderTrackingPage({
               />
             </div>
           )}
+
+          <CallServerCard />
+
 
           {/* ── Order details — collapsible ── */}
           <div className="rounded-xl overflow-hidden" style={{ border: "1px solid #e5e7eb" }}>

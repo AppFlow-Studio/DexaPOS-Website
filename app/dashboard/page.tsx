@@ -22,6 +22,7 @@ import {
   CheckCircle,
   AlertCircle,
   Lock,
+  QrCode,
   X,
 } from "lucide-react";
 import {
@@ -264,6 +265,15 @@ export default function MerchantDashboardPage() {
       style: "currency",
       currency: "USD",
     }).format(amount);
+  };
+
+  const orderTypeLabels: Record<string, string> = {
+    dine_in: "Dine In",
+    qr_dine_in: "QR Table",
+    takeout: "Takeout",
+    delivery: "Delivery",
+    online: "Online",
+    catering: "Catering",
   };
 
   return (
@@ -993,6 +1003,15 @@ export default function MerchantDashboardPage() {
                       <Badge variant="outline" className="text-xs capitalize">
                         {order.status}
                       </Badge>
+                      {order.order_type === "qr_dine_in" && (
+                        <Badge
+                          className="text-xs"
+                          style={{ backgroundColor: "#0C4FD1", color: "#FFFFFF" }}
+                        >
+                          <QrCode className="mr-1 h-3 w-3" />
+                          QR Table
+                        </Badge>
+                      )}
                     </div>
                     <p className="text-xs text-muted-foreground mt-1">
                       {new Date(order.created_at).toLocaleString("en-US", {
@@ -1002,13 +1021,30 @@ export default function MerchantDashboardPage() {
                         minute: "2-digit",
                       })}
                     </p>
+                    {order.order_type === "qr_dine_in" && order.table_number ? (
+                      <div className="mt-2 flex items-center gap-2">
+                        <Badge
+                          variant="outline"
+                          className="border-blue-200 bg-blue-50 text-blue-700"
+                        >
+                          Table {order.table_number}
+                        </Badge>
+                        <Link
+                          href="/dashboard/tables"
+                          className="text-xs font-medium"
+                          style={{ color: "#0C4FD1" }}
+                        >
+                          View on floor plan
+                        </Link>
+                      </div>
+                    ) : null}
                   </div>
                   <div className="text-right">
                     <p className="font-semibold">
                       {formatCurrency(order.total_amount)}
                     </p>
                     <p className="text-xs text-muted-foreground capitalize">
-                      {order.order_type.replace("_", " ")}
+                      {orderTypeLabels[order.order_type] || order.order_type.replace("_", " ")}
                     </p>
                   </div>
                 </div>

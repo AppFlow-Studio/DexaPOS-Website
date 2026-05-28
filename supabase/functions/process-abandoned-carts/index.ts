@@ -25,6 +25,80 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
+async function recordQrAbandonedSessions(
+  supabase: ReturnType<typeof createClient>,
+): Promise<number> {
+  const { data: qrSessions, error: qrSessionError } = await supabase
+    .from('online_order_sessions')
+    .select(`
+      id,
+      floor_plan_object_id,
+      table_qr_code_id,
+      table_label,
+      online_store_config!inner(
+        merchant_id,
+        location_id
+      )
+    `)
+    .is('order_id', null)
+    .not('cart_data', 'eq', '[]')
+    .not('cart_data', 'is', null)
+    .lte('expires_at', new Date().toISOString())
+
+  if (qrSessionError || !qrSessions?.length) {
+    if (qrSessionError) {
+      console.error('[QR_ABANDONED] Failed to fetch expired QR sessions:', qrSessionError)
+    }
+    return 0
+  }
+
+  const eligibleSessions = qrSessions.filter((session: any) =>
+    Boolean(session.table_qr_code_id || session.floor_plan_object_id || session.table_label)
+  )
+
+  if (!eligibleSessions.length) return 0
+
+  const sessionIds = eligibleSessions.map((session: any) => session.id)
+  const { data: existingEvents, error: existingEventsError } = await supabase
+    .from('qr_scan_events')
+    .select('online_order_session_id')
+    .in('online_order_session_id', sessionIds)
+    .eq('stage', 'abandoned')
+
+  if (existingEventsError) {
+    console.error('[QR_ABANDONED] Failed to fetch existing abandoned events:', existingEventsError)
+    return 0
+  }
+
+  const existingSessionIds = new Set(
+    (existingEvents ?? []).map((event: any) => event.online_order_session_id)
+  )
+
+  const inserts = eligibleSessions
+    .filter((session: any) => !existingSessionIds.has(session.id))
+    .map((session: any) => ({
+      merchant_id: session.online_store_config.merchant_id,
+      location_id: session.online_store_config.location_id,
+      floor_plan_object_id: session.floor_plan_object_id ?? null,
+      table_qr_code_id: session.table_qr_code_id ?? null,
+      online_order_session_id: session.id,
+      stage: 'abandoned',
+    }))
+
+  if (!inserts.length) return 0
+
+  const { error: insertError } = await supabase
+    .from('qr_scan_events')
+    .insert(inserts)
+
+  if (insertError) {
+    console.error('[QR_ABANDONED] Failed to insert abandoned QR events:', insertError)
+    return 0
+  }
+
+  return inserts.length
+}
+
 Deno.serve(async (req: Request): Promise<Response> => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -39,6 +113,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
   const resend = new Resend(RESEND_API_KEY)
+  const qrAbandonedLogged = await recordQrAbandonedSessions(supabase)
 
   const thresholdTime = new Date(Date.now() - ABANDONMENT_THRESHOLD_MINUTES * 60 * 1000).toISOString()
 
@@ -189,6 +264,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       total: toProcess.length,
       sent,
       failed,
+      qr_abandoned_logged: qrAbandonedLogged,
     }),
     { status: 200, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
   )

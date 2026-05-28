@@ -23,6 +23,7 @@ import {
   type OnlineStoreReviewChecklist,
 } from '@/lib/online-store/setup-flow'
 import { uploadMerchantDocument, uploadOrganizationDocument } from '@/lib/cdn/server'
+import { syncStorefrontPaymentDomainWhitelist } from '@/lib/online-store/payment-domain-whitelist'
 
 type MissingRequestFieldKey =
   | 'legalBusinessName'
@@ -1332,14 +1333,29 @@ export async function adminSaveOnlineOrderingSettings(
       },
     })
 
+    const effectiveSlug =
+      (typeof configData.slug === 'string' && configData.slug.trim().length > 0
+        ? configData.slug
+        : existingConfig.slug) ?? null
+    const effectiveCustomDomain =
+      Object.prototype.hasOwnProperty.call(configData, 'custom_domain')
+        ? (configData.custom_domain as string | null)
+        : ((existingConfig.custom_domain as string | null) ?? null)
+
+    const domainWhitelistResult = await syncStorefrontPaymentDomainWhitelist({
+      locationId,
+      slug: effectiveSlug,
+      customDomain: effectiveCustomDomain,
+    })
+
     revalidateOnlineStorePaths(merchantId)
 
     return {
       success: true,
       error: null,
-      domainWhitelisted: false,
-      domainWhitelistError: undefined,
-      domainWhitelistSkipped: true,
+      domainWhitelisted: domainWhitelistResult.domainWhitelisted,
+      domainWhitelistError: domainWhitelistResult.domainWhitelistError,
+      domainWhitelistSkipped: domainWhitelistResult.domainWhitelistSkipped,
     }
   } catch (error) {
     console.error('[adminSaveOnlineOrderingSettings] Exception:', error)
@@ -1362,7 +1378,7 @@ export async function adminToggleOnlineStore(
 
     const { data: existingConfig } = await supabase
       .from('online_store_config')
-      .select('id, slug, setup_request_status, accepts_online_payments')
+      .select('id, slug, custom_domain, setup_request_status, accepts_online_payments')
       .eq('location_id', locationId)
       .single()
 
@@ -1424,12 +1440,25 @@ export async function adminToggleOnlineStore(
       },
     })
 
+    const domainWhitelistResult = enabled
+      ? await syncStorefrontPaymentDomainWhitelist({
+        locationId,
+        slug: (existingConfig.slug as string | null) ?? null,
+        customDomain: (existingConfig.custom_domain as string | null) ?? null,
+      })
+      : {
+        domainWhitelisted: false,
+        domainWhitelistError: undefined,
+        domainWhitelistSkipped: true,
+      }
+
     revalidateOnlineStorePaths(merchantId)
     return {
       success: true,
       error: null,
-      domainWhitelistError: undefined,
-      domainWhitelistSkipped: true,
+      domainWhitelisted: domainWhitelistResult.domainWhitelisted,
+      domainWhitelistError: domainWhitelistResult.domainWhitelistError,
+      domainWhitelistSkipped: domainWhitelistResult.domainWhitelistSkipped,
     }
   } catch (error) {
     console.error('[adminToggleOnlineStore] Exception:', error)
@@ -1473,7 +1502,7 @@ export async function adminCreateOnlineStore(
         store_name: locationName,
         slug: defaultSlug,
         is_active: false,
-        primary_color: '#2DD4BF',
+        primary_color: '#0C4FD1',
         accepts_pickup: true,
         accepts_delivery: false,
         estimated_prep_minutes: 15,

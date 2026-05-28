@@ -25,6 +25,7 @@ import { buildQrTableUrl } from "@/app/sites/lib/store-url";
 import {
   Ban,
   Download,
+  ExternalLink,
   FileImage,
   FileText,
   Loader2,
@@ -378,6 +379,22 @@ export function QrTableManager({
     }
   }
 
+  function handlePreview(row: QrTableManagerRow) {
+    const qrUrl = getRowQrUrl(row);
+    if (!qrUrl) {
+      toast.error("QR preview URL is not ready for this table yet.");
+      return;
+    }
+
+    const previewWindow = window.open(qrUrl, "_blank", "noopener,noreferrer");
+    if (!previewWindow) {
+      toast.error("Pop-up blocked while opening the guest preview.");
+      return;
+    }
+
+    toast.success(`Guest preview opened for ${row.tableLabel}`);
+  }
+
   return (
     <Card className="border-[#0C4FD1]/15">
       <CardHeader className="space-y-4">
@@ -388,7 +405,7 @@ export function QrTableManager({
               QR Code Manager
             </CardTitle>
             <CardDescription>
-              Manage table QR generation state for {locationName}. This dashboard slice handles generation, regeneration, revoke, and scan visibility. Printable templates and exact guest preview stay separate until the QR storefront route is fully wired.
+              Manage table QR generation state for {locationName}. This dashboard slice handles generation, regeneration, revoke, preview, and scan visibility.
             </CardDescription>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -631,6 +648,12 @@ export function QrTableManager({
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-52">
                               <DropdownMenuItem
+                                onClick={() => handlePreview(row)}
+                              >
+                                <ExternalLink className="mr-2 h-4 w-4" />
+                                Preview guest view
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
                                 onClick={() => void handleDownloadSvg(row)}
                               >
                                 <FileImage className="mr-2 h-4 w-4" />
@@ -674,7 +697,7 @@ export function QrTableManager({
           <div className="flex items-start gap-2">
             <ShieldAlert className="mt-0.5 h-4 w-4 text-[#0C4FD1]" />
             <p>
-              Export assets now use the shared store host contract and current table token. Exact guest preview still waits on the live QR storefront route, so these downloads should be treated as implementation-ready assets pending end-to-end scan validation.
+              Preview and export actions now use the shared store host contract and current table token. They still need end-to-end staging scan validation before the related ticket items are safe to close.
             </p>
           </div>
         </div>

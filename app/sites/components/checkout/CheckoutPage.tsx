@@ -8,6 +8,7 @@ import { useCart, resolveCartUnitPrice } from "../../hooks/useCart";
 import { useSession } from "../../hooks/useSession";
 import { useSessionInit } from "../../hooks/useSessionInit";
 import { useCartSync } from "../../hooks/useCartSync";
+import { useQrFunnelTracking } from "../../hooks/useQrFunnelTracking";
 import { useStorefrontPath } from "../../lib/use-storefront-path";
 import { AuthDialog } from "../AuthDialog";
 import { CheckoutHeader } from "./CheckoutHeader";
@@ -17,6 +18,7 @@ import { OrderDetailsSection } from "./OrderDetailsSection";
 import { TipSection } from "./TipSection";
 import { OrderSummarySection } from "./OrderSummarySection";
 import { PromoCodeSection } from "./PromoCodeSection";
+import { QrTableBanner } from "../QrTableBanner";
 import { isValidPhone, normalizePhone } from "@/lib/phone";
 import { PlaceOrderButton } from "./PlaceOrderButton";
 import { OrderConfirmation } from "./OrderConfirmation";
@@ -90,10 +92,12 @@ export function CheckoutPage({
 }: CheckoutPageProps) {
   useSessionInit(storeConfigId);
   useCartSync();
+  useQrFunnelTracking({ trackCheckout: true });
 
   const { items, clearCart, updateQuantity, removeItem, getSubtotal } = useCart();
-  const { isAuthenticated, customer } = useSession();
+  const { isAuthenticated, customer, qrTableLabel } = useSession();
   const storePath = useStorefrontPath(slug);
+  const isQrTableMode = Boolean(qrTableLabel);
 
   // Hydration guard — cart is in localStorage
   const [hydrated, setHydrated] = useState(false);
@@ -182,6 +186,12 @@ export function CheckoutPage({
   const [tokenizationKey, setTokenizationKey] = useState<string | null>(null);
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [payCashInStore, setPayCashInStore] = useState(false);
+
+  useEffect(() => {
+    if (!isQrTableMode) return;
+    setOrderType("pickup");
+    setPayCashInStore(false);
+  }, [isQrTableMode]);
 
   // Calculated values.
   // Subtotal must use the SAME pricing rule the server charges (order type +
@@ -540,10 +550,6 @@ export function CheckoutPage({
         });
         if (result.order_id) {
           useSession.getState().setActiveOrderId(result.order_id);
-          // Fire transactional receipt email + confirmation SMS.
-          import("@/app/sites/notification-actions")
-            .then(({ notifyOrderPlaced }) => notifyOrderPlaced(result.order_id))
-            .catch((err) => console.error("[checkout] notifyOrderPlaced:", err));
         }
         // Save delivery address if requested
         if (saveNewAddress && isAuthenticated && orderType === "delivery" && selectedAddressId === "new" && newAddress.street) {
@@ -696,14 +702,16 @@ export function CheckoutPage({
     items.length > 0;
 
   const prepTimeMins = config?.preparationLeadTime ?? 20;
-  const summaryLine = formatCheckoutSummaryLine(
-    orderType,
-    pickupTime,
-    scheduledDate,
-    scheduledTime,
-    prepTimeMins,
-    storeAddress
-  );
+  const summaryLine = isQrTableMode
+    ? `Runner delivery · Table ${qrTableLabel}`
+    : formatCheckoutSummaryLine(
+        orderType,
+        pickupTime,
+        scheduledDate,
+        scheduledTime,
+        prepTimeMins,
+        storeAddress
+      );
   const displayStoreName = site?.title || location.name;
 
   return (
@@ -746,6 +754,12 @@ export function CheckoutPage({
         <div className="mt-6 flex flex-col lg:grid lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:gap-8 lg:items-start">
           {/* Left: express → contact → order type → payment → notes */}
           <div className="min-w-0 space-y-6 lg:pr-8 lg:border-r lg:border-[var(--border)] order-1">
+            {isQrTableMode && (
+              <>
+                <QrTableBanner tableLabel={qrTableLabel} />
+                <div style={{ borderTop: "1px solid var(--border)" }} />
+              </>
+            )}
             <ContactSection
               isAuthenticated={isAuthenticated}
               customerPhone={customer?.phone}
@@ -767,42 +781,66 @@ export function CheckoutPage({
 
             <div style={{ borderTop: "1px solid var(--border)" }} />
 
-            <OrderTypeSection
-              orderType={orderType}
-              onOrderTypeChange={(type) => { setOrderType(type); if (type === "delivery") setPayCashInStore(false); }}
-              pickupEnabled={pickupEnabled}
-              deliveryEnabled={deliveryEnabled}
-              pickupTime={pickupTime}
-              onPickupTimeChange={setPickupTime}
-              scheduledDate={scheduledDate}
-              onScheduledDateChange={setScheduledDate}
-              scheduledTime={scheduledTime}
-              onScheduledTimeChange={setScheduledTime}
-              maxFutureDays={config?.futureOrderMaxDays || 30}
-              prepTime={prepTimeMins}
-              operatingHours={config?.operatingHours}
-              curbside={curbside}
-              onCurbsideChange={setCurbside}
-              storeAddress={storeAddress}
-              storeLat={storeLat}
-              storeLng={storeLng}
-              savedAddresses={savedAddresses}
-              selectedAddressId={selectedAddressId}
-              onSelectedAddressChange={setSelectedAddressId}
-              newAddress={newAddress}
-              onNewAddressChange={setNewAddress}
-              isAuthenticated={isAuthenticated}
-              saveNewAddress={saveNewAddress}
-              onSaveNewAddressChange={setSaveNewAddress}
-              zoneCheckState={zoneCheckState}
-              zoneCheckMessage={zoneCheckMessage}
-            />
+            {isQrTableMode ? (
+              <div
+                className="rounded-lg border px-4 py-3"
+                style={{
+                  borderColor: "var(--border)",
+                  backgroundColor: "var(--card)",
+                  borderRadius: "var(--radius)",
+                }}
+              >
+                <p
+                  className="text-sm font-semibold"
+                  style={{ color: "var(--text)" }}
+                >
+                  Fulfillment
+                </p>
+                <p
+                  className="mt-1 text-sm"
+                  style={{ color: "var(--text-secondary)" }}
+                >
+                  This order is runner-delivered to Table {qrTableLabel} after payment.
+                </p>
+              </div>
+            ) : (
+              <OrderTypeSection
+                orderType={orderType}
+                onOrderTypeChange={(type) => { setOrderType(type); if (type === "delivery") setPayCashInStore(false); }}
+                pickupEnabled={pickupEnabled}
+                deliveryEnabled={deliveryEnabled}
+                pickupTime={pickupTime}
+                onPickupTimeChange={setPickupTime}
+                scheduledDate={scheduledDate}
+                onScheduledDateChange={setScheduledDate}
+                scheduledTime={scheduledTime}
+                onScheduledTimeChange={setScheduledTime}
+                maxFutureDays={config?.futureOrderMaxDays || 30}
+                prepTime={prepTimeMins}
+                operatingHours={config?.operatingHours}
+                curbside={curbside}
+                onCurbsideChange={setCurbside}
+                storeAddress={storeAddress}
+                storeLat={storeLat}
+                storeLng={storeLng}
+                savedAddresses={savedAddresses}
+                selectedAddressId={selectedAddressId}
+                onSelectedAddressChange={setSelectedAddressId}
+                newAddress={newAddress}
+                onNewAddressChange={setNewAddress}
+                isAuthenticated={isAuthenticated}
+                saveNewAddress={saveNewAddress}
+                onSaveNewAddressChange={setSaveNewAddress}
+                zoneCheckState={zoneCheckState}
+                zoneCheckMessage={zoneCheckMessage}
+              />
+            )}
 
             <div style={{ borderTop: "1px solid var(--border)" }} />
 
             {config?.acceptOnlinePayments && (
               <>
-                {orderType === "pickup" && (
+                {orderType === "pickup" && !isQrTableMode && (
                   <div
                     className="flex items-center justify-between px-4 py-3 rounded-lg"
                     style={{

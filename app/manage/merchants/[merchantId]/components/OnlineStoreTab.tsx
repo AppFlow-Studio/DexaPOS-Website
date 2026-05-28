@@ -221,7 +221,13 @@ export function OnlineStoreTab({
             })
 
             if (result.success) {
-                toast.success('Settings saved successfully')
+                if (result.domainWhitelistError) {
+                    toast.warning(`Settings saved, but payment-domain sync needs attention: ${result.domainWhitelistError}`)
+                } else if (result.domainWhitelistSkipped) {
+                    toast.warning('Settings saved. Payment-domain sync was skipped because no active online-ordering payment device is ready yet.')
+                } else {
+                    toast.success('Settings saved successfully')
+                }
                 setIsDirty(false)
                 refetchSettings()
             } else {

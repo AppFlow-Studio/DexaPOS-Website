@@ -23,6 +23,7 @@ import { createClerkClient } from "@clerk/backend";
 import { uploadMerchantDocument, uploadOrganizationDocument } from "@/lib/cdn/server";
 import { getCurrentUserMerchantRole } from "@/app/dashboard/actions/role-check";
 import { buildQrTableUrl } from "@/app/sites/lib/store-url";
+import { syncStorefrontPaymentDomainWhitelist } from "@/lib/online-store/payment-domain-whitelist";
 
 type MissingRequestFieldKey =
   | "legalBusinessName"
@@ -83,6 +84,44 @@ export interface QrTableManagerSnapshot {
   error?: string;
 }
 
+export interface QrAnalyticsSnapshot {
+  success: boolean;
+  rangeDays: 7 | 30;
+  stages: {
+    scanned: number;
+    menuViewed: number;
+    cartStarted: number;
+    checkout: number;
+    paid: number;
+    abandoned: number;
+  };
+  conversionRate: number;
+  abandonmentRate: number;
+  qrOrderCount: number;
+  qrRevenue: number;
+  qrAov: number;
+  serverAov: number;
+  repeatPhoneRate: number;
+  byHour: Array<{
+    hour: number;
+    label: string;
+    scans: number;
+    paid: number;
+  }>;
+  topTables: Array<{
+    tableLabel: string;
+    scans: number;
+    paidOrders: number;
+    revenue: number;
+  }>;
+  topItems: Array<{
+    itemName: string;
+    quantity: number;
+    revenue: number;
+  }>;
+  error?: string;
+}
+
 export interface QrBillingGateStatus {
   entitled: boolean;
   requiredPlanCode: string | null;
@@ -111,6 +150,27 @@ interface QrCodeRow {
 interface QrScanEventRow {
   table_qr_code_id: string | null;
   occurred_at: string;
+}
+
+interface QrAnalyticsEventRow {
+  stage: string;
+  table_label: string | null;
+  occurred_at: string;
+}
+
+interface QrAnalyticsOrderItemRow {
+  item_name: string | null;
+  quantity: number | null;
+  subtotal: number | string | null;
+}
+
+interface QrAnalyticsOrderRow {
+  id: string;
+  total_amount: number | string | null;
+  customer_phone: string | null;
+  table_number: string | null;
+  created_at: string;
+  order_items?: QrAnalyticsOrderItemRow[] | null;
 }
 
 const QR_BILLING_SERVICE_CODE = "qr_table_ordering";
@@ -147,6 +207,23 @@ function readString(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
+}
+
+function toMoneyNumber(value: unknown): number {
+  const parsed =
+    typeof value === "number"
+      ? value
+      : typeof value === "string"
+        ? Number.parseFloat(value)
+        : Number.NaN;
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function formatHourLabel(hour: number): string {
+  const normalized = ((hour % 24) + 24) % 24;
+  const suffix = normalized >= 12 ? "PM" : "AM";
+  const displayHour = normalized % 12 === 0 ? 12 : normalized % 12;
+  return `${displayHour}${suffix}`;
 }
 
 function readFormText(formData: FormData, key: string): string | null {
@@ -1178,8 +1255,25 @@ export async function saveOnlineOrderingSettings(
     });
   }
 
+  const domainWhitelistResult = await syncStorefrontPaymentDomainWhitelist({
+    locationId,
+    slug:
+      (typeof configData.slug === "string" && configData.slug.trim().length > 0
+        ? configData.slug
+        : (existingConfig.slug as string | null)) ?? null,
+    customDomain:
+      Object.prototype.hasOwnProperty.call(configData, "custom_domain")
+        ? ((configData.custom_domain as string | null) ?? null)
+        : ((existingConfig.custom_domain as string | null) ?? null),
+  });
+
   revalidatePath("/dashboard/online-ordering");
-  return { success: true };
+  return {
+    success: true,
+    domainWhitelisted: domainWhitelistResult.domainWhitelisted,
+    domainWhitelistError: domainWhitelistResult.domainWhitelistError,
+    domainWhitelistSkipped: domainWhitelistResult.domainWhitelistSkipped,
+  };
 }
 
 export async function sendTestOrderNotification(
@@ -1487,6 +1581,246 @@ export async function getQrTableManagerSnapshot(
     generatedCount: rows.filter((row) => row.qrStatus !== "not_generated").length,
     activeCount: rows.filter((row) => row.qrStatus === "active").length,
     tables: rows,
+  };
+}
+
+export async function getQrAnalyticsSnapshot(
+  locationId: string,
+  requestedRangeDays: number = 30
+): Promise<QrAnalyticsSnapshot> {
+  const rangeDays: 7 | 30 = requestedRangeDays === 7 ? 7 : 30;
+  const empty: QrAnalyticsSnapshot = {
+    success: false,
+    rangeDays,
+    stages: {
+      scanned: 0,
+      menuViewed: 0,
+      cartStarted: 0,
+      checkout: 0,
+      paid: 0,
+      abandoned: 0,
+    },
+    conversionRate: 0,
+    abandonmentRate: 0,
+    qrOrderCount: 0,
+    qrRevenue: 0,
+    qrAov: 0,
+    serverAov: 0,
+    repeatPhoneRate: 0,
+    byHour: Array.from({ length: 24 }, (_, hour) => ({
+      hour,
+      label: formatHourLabel(hour),
+      scans: 0,
+      paid: 0,
+    })),
+    topTables: [],
+    topItems: [],
+  };
+
+  if (!locationId) {
+    return {
+      ...empty,
+      error: "Missing location",
+    };
+  }
+
+  const supabase = createServerSupabaseClient();
+  const db = supabase as any;
+  const sinceIso = new Date(
+    Date.now() - rangeDays * 24 * 60 * 60 * 1000
+  ).toISOString();
+
+  const [eventsResult, qrOrdersResult, dineInOrdersResult] = await Promise.all([
+    db
+      .from("qr_scan_events")
+      .select("stage, table_label, occurred_at")
+      .eq("location_id", locationId)
+      .gte("occurred_at", sinceIso),
+    db
+      .from("orders")
+      .select(
+        "id, total_amount, customer_phone, table_number, created_at, order_items(item_name, quantity, subtotal)"
+      )
+      .eq("location_id", locationId)
+      .eq("order_type", "qr_dine_in")
+      .not("status", "in", "(draft,cancelled,void)")
+      .gte("created_at", sinceIso),
+    db
+      .from("orders")
+      .select("id, total_amount")
+      .eq("location_id", locationId)
+      .eq("order_type", "dine_in")
+      .not("status", "in", "(draft,cancelled,void)")
+      .gte("created_at", sinceIso),
+  ]);
+
+  if (eventsResult.error) {
+    return {
+      ...empty,
+      error: eventsResult.error.message,
+    };
+  }
+
+  if (qrOrdersResult.error) {
+    return {
+      ...empty,
+      error: qrOrdersResult.error.message,
+    };
+  }
+
+  if (dineInOrdersResult.error) {
+    return {
+      ...empty,
+      error: dineInOrdersResult.error.message,
+    };
+  }
+
+  const events = (eventsResult.data ?? []) as QrAnalyticsEventRow[];
+  const qrOrders = (qrOrdersResult.data ?? []) as QrAnalyticsOrderRow[];
+  const dineInOrders = (dineInOrdersResult.data ?? []) as QrAnalyticsOrderRow[];
+
+  const stages = {
+    scanned: 0,
+    menuViewed: 0,
+    cartStarted: 0,
+    checkout: 0,
+    paid: 0,
+    abandoned: 0,
+  };
+  const byHour = Array.from({ length: 24 }, (_, hour) => ({
+    hour,
+    label: formatHourLabel(hour),
+    scans: 0,
+    paid: 0,
+  }));
+  const tableScanMap = new Map<string, number>();
+
+  for (const event of events) {
+    const stage = readString(event.stage);
+    const hour = new Date(event.occurred_at).getHours();
+    if (stage === "scanned") {
+      stages.scanned += 1;
+      byHour[hour].scans += 1;
+      const tableLabel = readString(event.table_label) ?? "Unknown table";
+      tableScanMap.set(tableLabel, (tableScanMap.get(tableLabel) ?? 0) + 1);
+      continue;
+    }
+    if (stage === "menu_viewed") {
+      stages.menuViewed += 1;
+      continue;
+    }
+    if (stage === "cart_started") {
+      stages.cartStarted += 1;
+      continue;
+    }
+    if (stage === "checkout") {
+      stages.checkout += 1;
+      continue;
+    }
+    if (stage === "paid") {
+      stages.paid += 1;
+      byHour[hour].paid += 1;
+      continue;
+    }
+    if (stage === "abandoned") {
+      stages.abandoned += 1;
+    }
+  }
+
+  const tablePaidMap = new Map<string, { paidOrders: number; revenue: number }>();
+  const itemMap = new Map<string, { quantity: number; revenue: number }>();
+  const phoneCounts = new Map<string, number>();
+
+  let qrRevenue = 0;
+  for (const order of qrOrders) {
+    const amount = toMoneyNumber(order.total_amount);
+    qrRevenue += amount;
+
+    const tableLabel = readString(order.table_number) ?? "Unknown table";
+    const existingTable = tablePaidMap.get(tableLabel) ?? {
+      paidOrders: 0,
+      revenue: 0,
+    };
+    existingTable.paidOrders += 1;
+    existingTable.revenue += amount;
+    tablePaidMap.set(tableLabel, existingTable);
+
+    const phone = readString(order.customer_phone);
+    if (phone) {
+      phoneCounts.set(phone, (phoneCounts.get(phone) ?? 0) + 1);
+    }
+
+    for (const item of order.order_items ?? []) {
+      const itemName = readString(item.item_name) ?? "Unnamed item";
+      const quantity = Number(item.quantity ?? 0);
+      const revenue = toMoneyNumber(item.subtotal);
+      const existingItem = itemMap.get(itemName) ?? { quantity: 0, revenue: 0 };
+      existingItem.quantity += quantity;
+      existingItem.revenue += revenue;
+      itemMap.set(itemName, existingItem);
+    }
+  }
+
+  const qrOrderCount = qrOrders.length;
+  const qrAov = qrOrderCount > 0 ? qrRevenue / qrOrderCount : 0;
+  const serverRevenue = dineInOrders.reduce(
+    (sum, order) => sum + toMoneyNumber(order.total_amount),
+    0
+  );
+  const serverAov =
+    dineInOrders.length > 0 ? serverRevenue / dineInOrders.length : 0;
+
+  const uniquePhones = phoneCounts.size;
+  const repeatPhones = Array.from(phoneCounts.values()).filter(
+    (count) => count > 1
+  ).length;
+  const repeatPhoneRate =
+    uniquePhones > 0 ? (repeatPhones / uniquePhones) * 100 : 0;
+
+  const topTables = Array.from(
+    new Set([...tableScanMap.keys(), ...tablePaidMap.keys()])
+  )
+    .map((tableLabel) => ({
+      tableLabel,
+      scans: tableScanMap.get(tableLabel) ?? 0,
+      paidOrders: tablePaidMap.get(tableLabel)?.paidOrders ?? 0,
+      revenue: tablePaidMap.get(tableLabel)?.revenue ?? 0,
+    }))
+    .sort((a, b) => {
+      if (b.scans !== a.scans) return b.scans - a.scans;
+      if (b.paidOrders !== a.paidOrders) return b.paidOrders - a.paidOrders;
+      return b.revenue - a.revenue;
+    })
+    .slice(0, 5);
+
+  const topItems = Array.from(itemMap.entries())
+    .map(([itemName, values]) => ({
+      itemName,
+      quantity: values.quantity,
+      revenue: values.revenue,
+    }))
+    .sort((a, b) => {
+      if (b.quantity !== a.quantity) return b.quantity - a.quantity;
+      return b.revenue - a.revenue;
+    })
+    .slice(0, 5);
+
+  return {
+    success: true,
+    rangeDays,
+    stages,
+    conversionRate:
+      stages.scanned > 0 ? (stages.paid / stages.scanned) * 100 : 0,
+    abandonmentRate:
+      stages.scanned > 0 ? (stages.abandoned / stages.scanned) * 100 : 0,
+    qrOrderCount,
+    qrRevenue,
+    qrAov,
+    serverAov,
+    repeatPhoneRate,
+    byHour,
+    topTables,
+    topItems,
   };
 }
 

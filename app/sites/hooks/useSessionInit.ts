@@ -4,7 +4,17 @@ import { useEffect, useRef } from "react";
 import { useSession } from "./useSession";
 import { getSession, initSession } from "../session-actions";
 
-export function useSessionInit(storeConfigId: string | undefined) {
+interface SeedQrSession {
+  sessionToken: string;
+  floorPlanObjectId?: string | null;
+  tableLabel?: string | null;
+  tableQrCodeId?: string | null;
+}
+
+export function useSessionInit(
+  storeConfigId: string | undefined,
+  seedQrSession?: SeedQrSession | null
+) {
   const initRef = useRef(false);
 
   useEffect(() => {
@@ -21,6 +31,18 @@ export function useSessionInit(storeConfigId: string | undefined) {
 
       // Sync storeConfigId
       useSession.getState().setStoreConfigId(storeConfigId);
+
+      if (seedQrSession?.sessionToken) {
+        const currentToken = useSession.getState().sessionToken;
+        if (currentToken !== seedQrSession.sessionToken) {
+          useSession.getState().bindQrSession(seedQrSession.sessionToken, storeConfigId, {
+            floorPlanObjectId: seedQrSession.floorPlanObjectId ?? null,
+            tableLabel: seedQrSession.tableLabel ?? null,
+            tableQrCodeId: seedQrSession.tableQrCodeId ?? null,
+          });
+        }
+        return;
+      }
 
       // If we already have a token, validate it
       const currentToken = useSession.getState().sessionToken;
@@ -39,5 +61,5 @@ export function useSessionInit(storeConfigId: string | undefined) {
     };
 
     run();
-  }, [storeConfigId]);
+  }, [storeConfigId, seedQrSession]);
 }

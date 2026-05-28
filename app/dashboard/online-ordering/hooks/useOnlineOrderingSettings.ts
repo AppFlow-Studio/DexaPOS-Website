@@ -366,7 +366,7 @@ export const useOnlineOrderingSettings = create<OnlineOrderingStore>(
       try {
         // Merchant dashboard is intentionally restricted: no payment/tip changes.
         // It can maintain non-payment storefront settings only after HQ completes setup.
-        await saveOnlineOrderingSettings(locationId, {
+        const saveResult = await saveOnlineOrderingSettings(locationId, {
           enabled: currentSettings.enabled,
           storeName: currentSettings.storeName,
           description: currentSettings.description,
@@ -406,7 +406,17 @@ export const useOnlineOrderingSettings = create<OnlineOrderingStore>(
           deliveryRadiusMiles: currentSettings.deliveryRadiusMiles,
         });
         await get().loadSettings(locationId);
-        toast.success("Settings saved");
+        if (saveResult.domainWhitelistError) {
+          toast.warning(
+            `Settings saved, but payment-domain sync needs attention: ${saveResult.domainWhitelistError}`,
+          );
+        } else if (saveResult.domainWhitelistSkipped) {
+          toast.warning(
+            "Settings saved. Payment-domain sync was skipped because no active online-ordering payment device is ready yet.",
+          );
+        } else {
+          toast.success("Settings saved");
+        }
       } catch (error) {
         console.error("Failed to save settings:", error);
         toast.error(

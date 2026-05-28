@@ -39,6 +39,7 @@ import { cn } from "@/lib/utils";
 import { OrderOutTab } from "@/components/dashboard/orderout/OrderOutTab";
 import { NotificationsTab } from "./components/NotificationsTab";
 import { QrTableManager } from "./components/QrTableManager";
+import { QrAnalyticsPanel } from "./components/QrAnalyticsPanel";
 import { useOrderOutStatus, useOnboardOrderOut } from "./hooks/useOrderOutStatus";
 import { FONT_GOOGLE_URLS } from "@/app/sites/lib/theme-utils";
 import { buildStoreUrl } from "@/app/sites/lib/store-url";
@@ -1110,6 +1111,11 @@ function CompletedSetupPanel({
                 qrKillSwitch={settings.qrKillSwitch}
                 qrEntitled={qrGate.entitled}
                 qrGateMessage={qrGate.reason}
+              />
+
+              <QrAnalyticsPanel
+                locationId={selectedLocationId}
+                qrEnabled={settings.acceptsDineIn}
               />
             </CardContent>
           </Card>

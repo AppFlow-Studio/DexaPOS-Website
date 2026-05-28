@@ -15,12 +15,25 @@ interface SessionStore {
   isAuthenticated: boolean;
   storeConfigId: string | null;
   activeOrderId: string | null;
+  floorPlanObjectId: string | null;
+  qrTableLabel: string | null;
+  tableQrCodeId: string | null;
 
   login: (token: string, customer: SessionCustomer) => void;
   logout: () => void;
   setCustomer: (customer: Partial<SessionCustomer>) => void;
   setStoreConfigId: (id: string) => void;
   initSessionToken: (token: string, configId: string) => void;
+  bindQrSession: (
+    token: string,
+    configId: string,
+    qrContext: {
+      floorPlanObjectId?: string | null;
+      tableLabel?: string | null;
+      tableQrCodeId?: string | null;
+    }
+  ) => void;
+  clearQrContext: () => void;
   refreshSession: () => Promise<boolean>;
   setActiveOrderId: (id: string | null) => void;
 }
@@ -33,6 +46,9 @@ export const useSession = create<SessionStore>()(
       isAuthenticated: false,
       storeConfigId: null,
       activeOrderId: null,
+      floorPlanObjectId: null,
+      qrTableLabel: null,
+      tableQrCodeId: null,
 
       login: (token, customer) => {
         set({
@@ -48,6 +64,9 @@ export const useSession = create<SessionStore>()(
           customer: null,
           isAuthenticated: false,
           activeOrderId: null,
+          floorPlanObjectId: null,
+          qrTableLabel: null,
+          tableQrCodeId: null,
         });
       },
 
@@ -71,8 +90,30 @@ export const useSession = create<SessionStore>()(
           storeConfigId: configId,
           isAuthenticated: false,
           customer: null,
+          floorPlanObjectId: null,
+          qrTableLabel: null,
+          tableQrCodeId: null,
         });
       },
+
+      bindQrSession: (token, configId, qrContext) => {
+        set({
+          sessionToken: token,
+          storeConfigId: configId,
+          isAuthenticated: false,
+          customer: null,
+          floorPlanObjectId: qrContext.floorPlanObjectId ?? null,
+          qrTableLabel: qrContext.tableLabel ?? null,
+          tableQrCodeId: qrContext.tableQrCodeId ?? null,
+        });
+      },
+
+      clearQrContext: () =>
+        set({
+          floorPlanObjectId: null,
+          qrTableLabel: null,
+          tableQrCodeId: null,
+        }),
 
       refreshSession: async () => {
         const token = get().sessionToken;
@@ -85,6 +126,9 @@ export const useSession = create<SessionStore>()(
               sessionToken: null,
               customer: null,
               isAuthenticated: false,
+              floorPlanObjectId: null,
+              qrTableLabel: null,
+              tableQrCodeId: null,
             });
             return false;
           }
@@ -100,6 +144,9 @@ export const useSession = create<SessionStore>()(
                   email: s.customerEmail,
                 }
               : get().customer,
+            floorPlanObjectId: s.floorPlanObjectId,
+            qrTableLabel: s.tableLabel,
+            tableQrCodeId: s.tableQrCodeId,
           });
           return true;
         } catch {
@@ -115,6 +162,9 @@ export const useSession = create<SessionStore>()(
         isAuthenticated: state.isAuthenticated,
         storeConfigId: state.storeConfigId,
         activeOrderId: state.activeOrderId,
+        floorPlanObjectId: state.floorPlanObjectId,
+        qrTableLabel: state.qrTableLabel,
+        tableQrCodeId: state.tableQrCodeId,
       }),
     }
   )
