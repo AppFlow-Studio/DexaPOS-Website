@@ -30,6 +30,24 @@ export interface ResolvedQrStorefrontSession {
   nextOpen?: string | null;
 }
 
+export interface QrOrderStatusResult {
+  success: boolean;
+  hasOrder?: boolean;
+  orderId?: string | null;
+  orderNumber?: string | null;
+  displayNumber?: string | null;
+  rawStatus?: string | null;
+  stage?: string | null;
+  statusLabel?: string | null;
+  tableLabel?: string | null;
+  estimatedReadyAt?: string | null;
+  etaMinutes?: number | null;
+  lastUpdatedAt?: string | null;
+  sessionExpiresAt?: string | null;
+  pollIntervalSeconds?: number | null;
+  error?: string;
+}
+
 function mapResolvedQrPayload(data: any): ResolvedQrStorefrontSession {
   return {
     success: data.success === true,
@@ -156,5 +174,55 @@ export async function raiseQrGuestAlert(
     tableLabel: data.table_label ?? null,
     error: data.error ?? undefined,
     reason: data.reason ?? null,
+  };
+}
+
+export async function getQrOrderStatus(
+  sessionToken: string
+): Promise<QrOrderStatusResult> {
+  if (!sessionToken) {
+    return { success: false, error: "Session token is required" };
+  }
+
+  const supabase = createServiceRoleClient();
+  const { data, error } = await supabase.rpc("get_qr_order_status", {
+    p_session_token: sessionToken,
+  });
+
+  if (error) {
+    return {
+      success: false,
+      error: "Failed to load QR order status",
+    };
+  }
+
+  if (!data || typeof data !== "object") {
+    return {
+      success: false,
+      error: "Failed to load QR order status",
+    };
+  }
+
+  return {
+    success: data.success === true,
+    hasOrder:
+      data.has_order != null ? Boolean(data.has_order) : undefined,
+    orderId: data.order_id ?? null,
+    orderNumber: data.order_number ?? null,
+    displayNumber: data.display_number ?? null,
+    rawStatus: data.raw_status ?? null,
+    stage: data.stage ?? null,
+    statusLabel: data.status_label ?? null,
+    tableLabel: data.table_label ?? null,
+    estimatedReadyAt: data.estimated_ready_at ?? null,
+    etaMinutes:
+      data.eta_minutes != null ? Number(data.eta_minutes) : null,
+    lastUpdatedAt: data.last_updated_at ?? null,
+    sessionExpiresAt: data.session_expires_at ?? null,
+    pollIntervalSeconds:
+      data.poll_interval_seconds != null
+        ? Number(data.poll_interval_seconds)
+        : null,
+    error: data.error ?? undefined,
   };
 }

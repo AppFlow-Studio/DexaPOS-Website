@@ -122,6 +122,24 @@ export interface QrAnalyticsSnapshot {
   error?: string;
 }
 
+export interface QrGuestAlertRow {
+  id: string;
+  tableLabel: string;
+  alertType: string;
+  message: string | null;
+  status: string;
+  createdAt: string;
+  orderId: string | null;
+  onlineOrderSessionId: string | null;
+}
+
+export interface QrGuestAlertsSnapshot {
+  success: boolean;
+  openCount: number;
+  alerts: QrGuestAlertRow[];
+  error?: string;
+}
+
 export interface QrBillingGateStatus {
   entitled: boolean;
   requiredPlanCode: string | null;
@@ -1937,6 +1955,79 @@ export async function getQrAnalyticsSnapshot(
     topTables,
     topItems,
   };
+}
+
+export async function getQrGuestAlertsSnapshot(
+  locationId: string
+): Promise<QrGuestAlertsSnapshot> {
+  if (!locationId) {
+    return {
+      success: false,
+      openCount: 0,
+      alerts: [],
+      error: "Missing location",
+    };
+  }
+
+  const supabase = createServerSupabaseClient();
+  const db = supabase as any;
+
+  const { data, error } = await db
+    .from("qr_guest_alerts")
+    .select(
+      "id, table_label, alert_type, message, status, created_at, order_id, online_order_session_id"
+    )
+    .eq("location_id", locationId)
+    .neq("status", "resolved")
+    .order("created_at", { ascending: false })
+    .limit(25);
+
+  if (error) {
+    return {
+      success: false,
+      openCount: 0,
+      alerts: [],
+      error: error.message,
+    };
+  }
+
+  const alerts = ((data ?? []) as Array<Record<string, unknown>>).map((row) => ({
+    id: String(row.id),
+    tableLabel: readString(row.table_label) ?? "Unknown table",
+    alertType: readString(row.alert_type) ?? "call_server",
+    message: readString(row.message),
+    status: readString(row.status) ?? "open",
+    createdAt: String(row.created_at),
+    orderId: readString(row.order_id),
+    onlineOrderSessionId: readString(row.online_order_session_id),
+  }));
+
+  return {
+    success: true,
+    openCount: alerts.length,
+    alerts,
+  };
+}
+
+export async function resolveQrGuestAlertAction(alertId: string) {
+  if (!alertId) {
+    return { success: false, error: "Missing alert" };
+  }
+
+  const supabase = createServerSupabaseClient();
+  const { error } = await supabase.rpc("resolve_qr_guest_alert", {
+    p_alert_id: alertId,
+  });
+
+  if (error) {
+    return {
+      success: false,
+      error: error.message,
+    };
+  }
+
+  revalidatePath("/dashboard/online-ordering");
+  return { success: true };
 }
 
 export async function generateQrCodeForTable(

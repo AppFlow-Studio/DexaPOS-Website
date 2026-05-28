@@ -20,6 +20,7 @@ import { useSession } from "../hooks/useSession";
 import { OrderStatusWatcher } from "./OrderStatusWatcher";
 import { CallServerCard } from "./CallServerCard";
 import { formatScheduledTime } from "../lib/format-scheduled-time";
+import { getQrOrderStatus } from "../qr-actions";
 
 interface OrderTrackingPageProps {
   initialOrder: OrderTrackingData;
@@ -161,7 +162,7 @@ export function OrderTrackingPage({
   storeTimezone,
   taxRate = 0,
 }: OrderTrackingPageProps) {
-  const { sessionToken } = useSession();
+  const { sessionToken, qrTableLabel } = useSession();
   const [order, setOrder] = useState<OrderTrackingData>(initialOrder);
   const [isFetching, setIsFetching] = useState(false);
   const [showCancelForm, setShowCancelForm] = useState(false);
@@ -224,6 +225,52 @@ export function OrderTrackingPage({
 
     return () => clearInterval(interval);
   }, [orderId, order.status]);
+
+  // QR-specific fallback polling: keep guest tracking fresher even if realtime
+  // delivery is delayed or blocked on the current network.
+  useEffect(() => {
+    if (!sessionToken || !qrTableLabel || TERMINAL_STATUSES.includes(order.status)) {
+      return;
+    }
+
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let lastSeenUpdatedAt: string | null = null;
+
+    const poll = async () => {
+      const result = await getQrOrderStatus(sessionToken);
+      if (cancelled || !result.success) {
+        scheduleNext(5000);
+        return;
+      }
+
+      if (result.orderId && result.orderId !== orderId) {
+        await refreshOrder();
+        scheduleNext(result.pollIntervalSeconds ? result.pollIntervalSeconds * 1000 : 5000);
+        return;
+      }
+
+      const nextUpdatedAt = result.lastUpdatedAt ?? null;
+      if (nextUpdatedAt && nextUpdatedAt !== lastSeenUpdatedAt) {
+        lastSeenUpdatedAt = nextUpdatedAt;
+        await refreshOrder();
+      }
+
+      scheduleNext(result.pollIntervalSeconds ? result.pollIntervalSeconds * 1000 : 5000);
+    };
+
+    const scheduleNext = (delayMs: number) => {
+      if (cancelled) return;
+      timer = setTimeout(poll, delayMs);
+    };
+
+    scheduleNext(5000);
+
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [sessionToken, qrTableLabel, order.status, orderId, refreshOrder]);
 
   const refreshOrder = useCallback(async () => {
     const { data } = await getOrderTracking(orderId);

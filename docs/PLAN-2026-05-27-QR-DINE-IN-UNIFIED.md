@@ -25,6 +25,7 @@ These are the parts that are genuinely implemented in repo or already reported a
 - [x] Wave 2 token/signing + shared-generate + scan-bootstrap migration authored locally: `supabase/migrations/20260527160000_qr_w2_token_helpers_generate_and_resolve.sql`
 - [x] QR billing-gate service-catalog seed migration authored locally: `supabase/migrations/20260528103000_qr_service_catalog_gate.sql`
 - [x] QR token base64url normalization + token re-sign migration authored locally: `supabase/migrations/20260528153000_qr_token_base64url_fix.sql`
+- [x] QR guest-alert realtime broadcast + open-count fallback migration authored locally: `supabase/migrations/20260528170000_qr_guest_alert_broadcast.sql`
 - [x] `create-online-order` was extended locally for QR-aware checkout / order binding in `supabase/functions/create-online-order/index.ts`
 - [x] Merchant dashboard online-ordering settings now include QR fields locally in:
   - `app/dashboard/online-ordering/actions.ts`
@@ -93,11 +94,17 @@ These are the parts that are genuinely implemented in repo or already reported a
   - `app/sites/components/checkout/OrderConfirmation.tsx`
   - `app/sites/components/OrderTrackingPage.tsx`
   - `app/sites/qr-actions.ts`
+- [x] QR guest-alert backend contract now broadcasts alert raises/resolutions on the shared location orders topic and exposes a staff-context open-count fallback reader through:
+  - `supabase/migrations/20260528170000_qr_guest_alert_broadcast.sql`
 - [x] Merchant dashboard recent-orders summary now shows QR/table identity locally in:
   - `app/dashboard/page.tsx`
 - [x] Merchant dashboard QR analytics panel is now authored locally in:
   - `app/dashboard/online-ordering/actions.ts`
   - `app/dashboard/online-ordering/components/QrAnalyticsPanel.tsx`
+  - `app/dashboard/online-ordering/page.tsx`
+- [x] Merchant dashboard now has a staff-side QR guest-alert review surface authored locally in:
+  - `app/dashboard/online-ordering/actions.ts`
+  - `app/dashboard/online-ordering/components/QrGuestAlertsPanel.tsx`
   - `app/dashboard/online-ordering/page.tsx`
 
 ## What Is Not Safe To Fully Check Off Yet
@@ -133,7 +140,7 @@ These are the places where work exists, but the ticket item is not yet defensibl
 | QR-7 | Edge | `implemented_local_not_deployed` | Auto-accept wiring is patched locally | Deploy edge function + stage test |
 | QR-9 | Edge / Analytics | `in_progress` | Local funnel recorder now exists for `menu_viewed`, `cart_started`, `checkout`, and `paid`; still needs app + edge deploy and staging verification | Deploy app/edge changes and verify one full QR session populates the funnel |
 | QR-25 | Edge / Receipt | `in_progress` | `create-online-order` now triggers internal order-placed notifications server-side and no longer relies on the checkout client to fire receipts; still needs edge + app deploy and staging verification | Deploy app/edge changes and verify one paid QR order sends the receipt exactly once |
-| QR-9c | Edge / Broadcast | `blocked` | Depends on QR-2b live on staging | Wire live alert emit + count fallback |
+| QR-9c | Edge / Broadcast | `implemented_local_not_applied` | Guest-alert emit + count fallback migration is authored locally, but not yet applied and smoke tested against realtime consumers | Apply `20260528170000_qr_guest_alert_broadcast.sql` on staging and verify live increment/decrement on consuming surfaces |
 | QR-8 | Edge / Analytics | `in_progress` | Expired QR session abandonment tagging now exists locally in `process-abandoned-carts`; still needs edge deploy and staging verification | Deploy the abandoned-cart worker and verify `abandoned` is inserted once per expired QR session |
 | QR-32 | Payments | `in_progress` | Shared storefront-origin builder + local device whitelist sync path now exist for HQ and merchant saves; real deployed validation still remains open | Deploy `storefront-payment-domain-whitelist`, then verify QR/custom-domain checkout origins are persisted and accepted in staging |
 | QR-26 | Storefront | `in_progress` | Shared URL builder now supports custom domains across merchant/HQ surfaces, the storefront path helper no longer hardcodes `dexaposai.com`, and the dynamic `/sites/[slug]/t/[token]` route now exists locally; still needs staging verification against real QR tokens and rewritten hosts | Deploy app changes and smoke test QR scans on slug, subdomain, and custom-domain storefronts |
@@ -201,6 +208,16 @@ These are the dashboard-side changes now in repo locally.
 - fleet/HQ QR analytics roll-up
 - guest scan flow itself
 - guest preview route itself
+
+### Merchant QR guest alerts panel
+- Merchant online-ordering now includes a simple open-alerts panel for QR guest help requests
+- It currently supports:
+  - open-alert count
+  - manual refresh
+  - visible table label / optional guest note / relative age
+  - one-tap resolve through `resolve_qr_guest_alert(...)`
+- This is intended as a merchant dashboard validation surface for `Call your server` while POS/KDS-specific consumers are still being smoke tested
+- This is still not safe to check off until the guest-alert RPC migration is applied and one alert is raised + resolved end to end in staging
 
 ### Payment-domain sync
 - Shared storefront-origin computation now exists for:
@@ -519,4 +536,6 @@ If you need to literally cross out ticket checkboxes in Notion today, be strict:
 - [x] QR analytics now resolves paid QR orders through QR-linked online sessions (online_order_sessions.table_qr_code_id + order_id) instead of relying only on orders.order_type = 'qr_dine_in', which fixes zero-revenue/zero-paid analytics when the funnel shows paid scans.
 
 - [x] QR storefront session hydration now rehydrates ctiveOrderId from online_order_sessions.order_id and clears stale order state when a new QR session is bound, which improves revisit/recovery behavior for live status and table re-entry.
+
+- [x] QR tracking now has a session-based poll fallback through get_qr_order_status, and the storefront tracking page will refresh from QR session status every few seconds when realtime delivery is absent or delayed.
 

@@ -40,6 +40,7 @@ import { OrderOutTab } from "@/components/dashboard/orderout/OrderOutTab";
 import { NotificationsTab } from "./components/NotificationsTab";
 import { QrTableManager } from "./components/QrTableManager";
 import { QrAnalyticsPanel } from "./components/QrAnalyticsPanel";
+import { QrGuestAlertsPanel } from "./components/QrGuestAlertsPanel";
 import { useOrderOutStatus, useOnboardOrderOut } from "./hooks/useOrderOutStatus";
 import { FONT_GOOGLE_URLS } from "@/app/sites/lib/theme-utils";
 import { buildStoreUrl } from "@/app/sites/lib/store-url";
@@ -1118,6 +1119,8 @@ function CompletedSetupPanel({
                 locationId={selectedLocationId}
                 qrEnabled={settings.acceptsDineIn}
               />
+
+              <QrGuestAlertsPanel locationId={selectedLocationId} />
             </CardContent>
           </Card>
         </TabsContent>
