@@ -515,3 +515,6 @@ If you need to literally cross out ticket checkboxes in Notion today, be strict:
 - do not fully close ticket items just because code exists locally
 - only close an item when its acceptance criteria are actually satisfied on staging
 - for now, most items should stay open with status notes, not fake-complete
+
+- [x] QR analytics now resolves paid QR orders through QR-linked online sessions (online_order_sessions.table_qr_code_id + order_id) instead of relying only on orders.order_type = 'qr_dine_in', which fixes zero-revenue/zero-paid analytics when the funnel shows paid scans.
+

@@ -173,6 +173,13 @@ interface QrAnalyticsOrderRow {
   order_items?: QrAnalyticsOrderItemRow[] | null;
 }
 
+interface QrAnalyticsSessionOrderRow {
+  order_id: string | null;
+  customer_phone: string | null;
+  table_label: string | null;
+  created_at: string;
+}
+
 const QR_BILLING_SERVICE_CODE = "qr_table_ordering";
 const QR_DEFAULT_REQUIRED_PLAN_CODE = "multi_location";
 
@@ -1630,21 +1637,16 @@ export async function getQrAnalyticsSnapshot(
     Date.now() - rangeDays * 24 * 60 * 60 * 1000
   ).toISOString();
 
-  const [eventsResult, qrOrdersResult, dineInOrdersResult] = await Promise.all([
+  const [eventsResult, storeConfigsResult, dineInOrdersResult] = await Promise.all([
     db
       .from("qr_scan_events")
       .select("stage, table_qr_code_id, occurred_at")
       .eq("location_id", locationId)
       .gte("occurred_at", sinceIso),
     db
-      .from("orders")
-      .select(
-        "id, total_amount, customer_phone, table_number, created_at, order_items(item_name, quantity, subtotal)"
-      )
-      .eq("location_id", locationId)
-      .eq("order_type", "qr_dine_in")
-      .not("status", "in", "(draft,cancelled,void)")
-      .gte("created_at", sinceIso),
+      .from("online_store_config")
+      .select("id")
+      .eq("location_id", locationId),
     db
       .from("orders")
       .select("id, total_amount")
@@ -1661,10 +1663,10 @@ export async function getQrAnalyticsSnapshot(
     };
   }
 
-  if (qrOrdersResult.error) {
+  if (storeConfigsResult.error) {
     return {
       ...empty,
-      error: qrOrdersResult.error.message,
+      error: storeConfigsResult.error.message,
     };
   }
 
@@ -1672,6 +1674,57 @@ export async function getQrAnalyticsSnapshot(
     return {
       ...empty,
       error: dineInOrdersResult.error.message,
+    };
+  }
+
+  const storeConfigIds = ((storeConfigsResult.data ?? []) as Array<{ id: string }>)
+    .map((row) => row.id)
+    .filter((value): value is string => Boolean(readString(value)));
+
+  const qrSessionOrdersResult =
+    storeConfigIds.length > 0
+      ? await db
+          .from("online_order_sessions")
+          .select("order_id, customer_phone, table_label, created_at")
+          .in("store_config_id", storeConfigIds)
+          .not("table_qr_code_id", "is", null)
+          .not("order_id", "is", null)
+          .gte("created_at", sinceIso)
+      : { data: [], error: null };
+
+  if (qrSessionOrdersResult.error) {
+    return {
+      ...empty,
+      error: qrSessionOrdersResult.error.message,
+    };
+  }
+
+  const qrSessionOrders = (qrSessionOrdersResult.data ??
+    []) as QrAnalyticsSessionOrderRow[];
+  const qrOrderIds = Array.from(
+    new Set(
+      qrSessionOrders
+        .map((row) => readString(row.order_id))
+        .filter((value): value is string => Boolean(value))
+    )
+  );
+
+  const qrOrdersResult =
+    qrOrderIds.length > 0
+      ? await db
+          .from("orders")
+          .select(
+            "id, total_amount, customer_phone, table_number, created_at, order_items(item_name, quantity, subtotal)"
+          )
+          .in("id", qrOrderIds)
+          .eq("location_id", locationId)
+          .not("status", "in", "(draft,cancelled,void)")
+      : { data: [], error: null };
+
+  if (qrOrdersResult.error) {
+    return {
+      ...empty,
+      error: qrOrdersResult.error.message,
     };
   }
 
@@ -1711,6 +1764,28 @@ export async function getQrAnalyticsSnapshot(
   const events = (eventsResult.data ?? []) as QrAnalyticsEventRow[];
   const qrOrders = (qrOrdersResult.data ?? []) as QrAnalyticsOrderRow[];
   const dineInOrders = (dineInOrdersResult.data ?? []) as QrAnalyticsOrderRow[];
+  const qrSessionMetaByOrderId = new Map(
+    qrSessionOrders
+      .map((row) => {
+        const orderId = readString(row.order_id);
+        if (!orderId) return null;
+        return [
+          orderId,
+          {
+            customerPhone: readString(row.customer_phone),
+            tableLabel: readString(row.table_label),
+          },
+        ] as const;
+      })
+      .filter(
+        (
+          value
+        ): value is readonly [
+          string,
+          { customerPhone: string | null; tableLabel: string | null }
+        ] => value !== null
+      )
+  );
 
   const stages = {
     scanned: 0,
@@ -1772,7 +1847,11 @@ export async function getQrAnalyticsSnapshot(
     const amount = toMoneyNumber(order.total_amount);
     qrRevenue += amount;
 
-    const tableLabel = readString(order.table_number) ?? "Unknown table";
+    const sessionMeta = qrSessionMetaByOrderId.get(order.id);
+    const tableLabel =
+      readString(order.table_number) ??
+      sessionMeta?.tableLabel ??
+      "Unknown table";
     const existingTable = tablePaidMap.get(tableLabel) ?? {
       paidOrders: 0,
       revenue: 0,
@@ -1781,7 +1860,7 @@ export async function getQrAnalyticsSnapshot(
     existingTable.revenue += amount;
     tablePaidMap.set(tableLabel, existingTable);
 
-    const phone = readString(order.customer_phone);
+    const phone = readString(order.customer_phone) ?? sessionMeta?.customerPhone;
     if (phone) {
       phoneCounts.set(phone, (phoneCounts.get(phone) ?? 0) + 1);
     }
