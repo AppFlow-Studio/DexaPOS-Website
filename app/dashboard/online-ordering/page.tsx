@@ -1107,6 +1107,7 @@ function CompletedSetupPanel({
               <QrTableManager
                 locationId={selectedLocationId}
                 locationName={locationName}
+                storefrontEnabled={settings.enabled}
                 acceptsDineIn={settings.acceptsDineIn}
                 qrKillSwitch={settings.qrKillSwitch}
                 qrEntitled={qrGate.entitled}

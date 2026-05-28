@@ -41,6 +41,7 @@ import { toast } from "sonner";
 interface QrTableManagerProps {
   locationId: string;
   locationName: string;
+  storefrontEnabled: boolean;
   acceptsDineIn: boolean;
   qrKillSwitch: boolean;
   qrEntitled: boolean;
@@ -87,6 +88,7 @@ function slugifyFileName(value: string) {
 export function QrTableManager({
   locationId,
   locationName,
+  storefrontEnabled,
   acceptsDineIn,
   qrKillSwitch,
   qrEntitled,
@@ -380,6 +382,13 @@ export function QrTableManager({
   }
 
   function handlePreview(row: QrTableManagerRow) {
+    if (!storefrontEnabled) {
+      toast.error(
+        "Online Ordering must be enabled before guest preview or QR scans can work for this store."
+      );
+      return;
+    }
+
     const qrUrl = getRowQrUrl(row);
     if (!qrUrl) {
       toast.error("QR preview URL is not ready for this table yet.");
@@ -493,6 +502,12 @@ export function QrTableManager({
         {!acceptsDineIn ? (
           <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
             QR scan handling is currently disabled for this store. You can still prepare codes here, but guests will not be allowed to order from scans until <span className="font-medium">Enable QR Table Ordering</span> is turned on above.
+          </div>
+        ) : null}
+
+        {!storefrontEnabled ? (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            The main online store is currently disabled. QR preview and real guest scans will fail closed until <span className="font-medium">Enable Online Ordering</span> is turned on for this location.
           </div>
         ) : null}
 
@@ -648,6 +663,7 @@ export function QrTableManager({
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-52">
                               <DropdownMenuItem
+                                disabled={!storefrontEnabled}
                                 onClick={() => handlePreview(row)}
                               >
                                 <ExternalLink className="mr-2 h-4 w-4" />

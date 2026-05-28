@@ -192,6 +192,7 @@ These are the dashboard-side changes now in repo locally.
 - Generate/reprint/regenerate actions now also respect the same QR billing gate server-side
 - Guest preview now opens locally from the manager using the same shared QR URL contract as the exported assets. It still is not safe to claim done until the final guest QR route is smoke tested end to end on staging.
 - The QR analytics period toggle and the QR manager merchant/DEXA switch now use the app primary color token instead of a separate hardcoded blue.
+- The QR manager now also warns when the main online store is disabled, because QR preview/guest scans require both `is_active = true` and `accepts_dine_in = true`.
 
 ### What this dashboard slice does not solve yet
 - live-orders QR badge
