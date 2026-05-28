@@ -1,4 +1,9 @@
-const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "localhost:3000";
+const ROOT_DOMAIN = (process.env.NEXT_PUBLIC_ROOT_DOMAIN || "").trim();
+const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || "").trim();
+
+function normalizeBaseUrl(input: string): string {
+  return input.replace(/\/+$/, "");
+}
 
 export function buildStoreUrl(input: {
   slug?: string | null;
@@ -15,9 +20,21 @@ export function buildStoreUrl(input: {
   const slug = (input.slug || "").trim();
   if (!slug) return "";
 
-  const isDev = ROOT_DOMAIN.includes("localhost");
-  if (isDev) return `http://${slug}.localhost:3000`;
-  return `https://${slug}.${ROOT_DOMAIN}`;
+  if (ROOT_DOMAIN) {
+    const isDev = ROOT_DOMAIN.includes("localhost");
+    if (isDev) return `http://${slug}.localhost:3000`;
+    return `https://${slug}.${ROOT_DOMAIN}`;
+  }
+
+  if (APP_URL) {
+    return `${normalizeBaseUrl(APP_URL)}/sites/${slug}`;
+  }
+
+  if (typeof window !== "undefined" && window.location?.origin) {
+    return `${normalizeBaseUrl(window.location.origin)}/sites/${slug}`;
+  }
+
+  return `http://${slug}.localhost:3000`;
 }
 
 export function buildQrTableUrl(input: {

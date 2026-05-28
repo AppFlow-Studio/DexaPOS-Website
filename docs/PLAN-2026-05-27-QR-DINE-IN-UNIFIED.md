@@ -24,6 +24,7 @@ These are the parts that are genuinely implemented in repo or already reported a
 - [x] Wave 2 status + guest-alert RPC migration authored locally: `supabase/migrations/20260522133000_qr_w2_status_and_guest_alert_rpcs.sql`
 - [x] Wave 2 token/signing + shared-generate + scan-bootstrap migration authored locally: `supabase/migrations/20260527160000_qr_w2_token_helpers_generate_and_resolve.sql`
 - [x] QR billing-gate service-catalog seed migration authored locally: `supabase/migrations/20260528103000_qr_service_catalog_gate.sql`
+- [x] QR token base64url normalization + token re-sign migration authored locally: `supabase/migrations/20260528153000_qr_token_base64url_fix.sql`
 - [x] `create-online-order` was extended locally for QR-aware checkout / order binding in `supabase/functions/create-online-order/index.ts`
 - [x] Merchant dashboard online-ordering settings now include QR fields locally in:
   - `app/dashboard/online-ordering/actions.ts`
@@ -52,6 +53,7 @@ These are the parts that are genuinely implemented in repo or already reported a
   - `components/dashboard/orders/OrderDetailFullPage.tsx`
   - `components/dashboard/orders/analytics/OrderTypeFilter.tsx`
 - [x] Merchant and HQ online-store tabs now share the same storefront URL builder, including custom-domain support
+- [x] Shared QR/storefront URL building now falls back to `NEXT_PUBLIC_APP_URL` path routing before `localhost`, so deployed QR preview/export no longer depends on `NEXT_PUBLIC_ROOT_DOMAIN` being present
 - [x] Merchant and HQ analytics breakdowns now treat `qr_dine_in` as a first-class order type instead of dropping it into generic labels or `Other`
 - [x] Merchant dashboard fallback branding now uses brand blue `#0C4FD1` instead of the retired teal fallback in the online-ordering surface
 - [x] Local payment-domain whitelist sync path is now authored in:
