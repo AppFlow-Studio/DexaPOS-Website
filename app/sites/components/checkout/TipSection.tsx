@@ -32,10 +32,40 @@ export function TipSection({
         <span className="text-xs" style={{ color: "var(--text-secondary)" }}>on subtotal</span>
       </div>
 
-      <div className="flex flex-wrap gap-2">
+      {/* Percentage presets — equal columns, just the % pills so each has room */}
+      <div
+        className="grid gap-2"
+        style={{ gridTemplateColumns: `repeat(${Math.max(1, tipPresets.length)}, minmax(0,1fr))` }}
+      >
+        {tipPresets.map((pct, i) => {
+          const amount = Math.round(subtotal * (pct / 100) * 100) / 100;
+          const isSelected = selectedTipIndex === i;
+          return (
+            <button
+              key={`${pct}-${i}`}
+              onClick={() => onSelectPreset(i)}
+              className="py-2.5 px-1 text-center rounded-lg border transition-colors min-w-0"
+              style={{
+                backgroundColor: isSelected ? "var(--primary)" : "transparent",
+                color: isSelected ? "#fff" : "var(--text)",
+                borderColor: isSelected ? "var(--primary)" : "var(--border)",
+                borderRadius: "var(--radius)",
+              }}
+            >
+              <span className="text-sm font-semibold block leading-tight">{pct}%</span>
+              <span className="text-[11px] block mt-0.5 truncate" style={{ opacity: 0.75 }}>
+                ${amount.toFixed(2)}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* No Tip / Custom — own row so the word labels never clip */}
+      <div className="grid grid-cols-2 gap-2">
         <button
           onClick={onSelectNoTip}
-          className="flex-1 min-w-[70px] py-2.5 text-sm font-medium rounded-lg border transition-colors"
+          className="py-2.5 px-2 text-sm font-semibold rounded-lg border transition-colors"
           style={{
             backgroundColor: selectedTipIndex === -1 ? "var(--primary)" : "transparent",
             color: selectedTipIndex === -1 ? "#fff" : "var(--text)",
@@ -45,28 +75,9 @@ export function TipSection({
         >
           No Tip
         </button>
-        {tipPresets.map((pct, i) => {
-          const amount = Math.round(subtotal * (pct / 100) * 100) / 100;
-          return (
-            <button
-              key={`${pct}-${i}`}
-              onClick={() => onSelectPreset(i)}
-              className="flex-1 min-w-[70px] py-2.5 text-center rounded-lg border transition-colors"
-              style={{
-                backgroundColor: selectedTipIndex === i ? "var(--primary)" : "transparent",
-                color: selectedTipIndex === i ? "#fff" : "var(--text)",
-                borderColor: selectedTipIndex === i ? "var(--primary)" : "var(--border)",
-                borderRadius: "var(--radius)",
-              }}
-            >
-              <span className="text-sm font-medium block">{pct}%</span>
-              <span className="text-xs opacity-75 block">${amount.toFixed(2)}</span>
-            </button>
-          );
-        })}
         <button
           onClick={onSelectCustom}
-          className="flex-1 min-w-[70px] py-2.5 text-sm font-medium rounded-lg border transition-colors"
+          className="py-2.5 px-2 text-sm font-semibold rounded-lg border transition-colors"
           style={{
             backgroundColor: selectedTipIndex === null ? "var(--primary)" : "transparent",
             color: selectedTipIndex === null ? "#fff" : "var(--text)",

@@ -7,11 +7,6 @@
 -- wrote a real value). Cash and other non-card methods are intentionally untouched.
 -- =====================================================================
 
--- Column was added manually on staging; ensure it exists on every environment
--- before the trigger / functions / backfill that reference it run.
-ALTER TABLE public.order_payments
-  ADD COLUMN IF NOT EXISTS processor_fee_percentage_snapshot numeric(5,2);
-
 CREATE OR REPLACE FUNCTION public._stamp_pricing_snapshot()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -41,27 +36,19 @@ BEGIN
   END IF;
 
   NEW.processor_fee_percentage_snapshot := v_pct;
-  -- Fee base = full charge amount sent to the bank (total_amount =
-  -- subtotal + tax + tip). The bank withholds pct% of whatever we
-  -- authorized, so the reported fee must match. tip_fee is intentionally
-  -- 0 because tip is already included in total_amount — splitting the
-  -- two would double-count.
   IF COALESCE(NEW.dual_pricing_fee, 0) = 0 THEN
-    NEW.dual_pricing_fee := ROUND(COALESCE(NEW.total_amount, NEW.amount, 0) * v_pct / 100, 2);
+    NEW.dual_pricing_fee := ROUND(COALESCE(NEW.subtotal_portion, 0) * v_pct / 100, 2);
   END IF;
   IF COALESCE(NEW.tip_fee, 0) = 0 THEN
-    NEW.tip_fee := 0;
+    NEW.tip_fee := ROUND(COALESCE(NEW.tip_amount, 0) * v_pct / 100, 2);
   END IF;
 
   RETURN NEW;
 END;
 $$;
-
 DROP TRIGGER IF EXISTS trg_order_payments_stamp_pricing_snapshot ON public.order_payments;
-
 CREATE TRIGGER trg_order_payments_stamp_pricing_snapshot
   BEFORE INSERT ON public.order_payments
   FOR EACH ROW EXECUTE FUNCTION public._stamp_pricing_snapshot();
-
 COMMENT ON FUNCTION public._stamp_pricing_snapshot IS
   'BEFORE INSERT backstop: stamps processor_fee_percentage_snapshot, dual_pricing_fee, tip_fee on card captures when caller left them at 0. No-op for cash/non-card methods, locations with pct=0, or rows already stamped by process_payment_v10. Pure reporting — never modifies amount/charge.';

@@ -52,7 +52,6 @@ CREATE TABLE IF NOT EXISTS public.luqra_transactions (
 
   CONSTRAINT luqra_txn_unique UNIQUE (mid, batch_id, authorization_number, original_transaction_date)
 );
-
 CREATE INDEX IF NOT EXISTS luqra_txn_merchant_date_idx
   ON public.luqra_transactions (merchant_id, original_transaction_date DESC);
 CREATE INDEX IF NOT EXISTS luqra_txn_location_date_idx
@@ -61,25 +60,20 @@ CREATE INDEX IF NOT EXISTS luqra_txn_location_date_idx
 CREATE INDEX IF NOT EXISTS luqra_txn_unreconciled_idx
   ON public.luqra_transactions (merchant_id, original_transaction_date DESC)
   WHERE reconciled_payment_id IS NULL;
-
 DROP TRIGGER IF EXISTS update_luqra_transactions_updated_at ON public.luqra_transactions;
 CREATE TRIGGER update_luqra_transactions_updated_at
   BEFORE UPDATE ON public.luqra_transactions
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
-
 ALTER TABLE public.luqra_transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.luqra_transactions FORCE ROW LEVEL SECURITY;
-
 DROP POLICY IF EXISTS luqra_txn_admin_select ON public.luqra_transactions;
 CREATE POLICY luqra_txn_admin_select ON public.luqra_transactions
   FOR SELECT
   USING (public.is_dexapos_admin());
-
 DROP POLICY IF EXISTS luqra_txn_merchant_admin_select ON public.luqra_transactions;
 CREATE POLICY luqra_txn_merchant_admin_select ON public.luqra_transactions
   FOR SELECT
   USING (public.is_merchant_admin(merchant_id));
-
 -- Writes are server-only via service-role.
 
 -- ---------------------------------------------------------------------------
@@ -132,30 +126,24 @@ CREATE TABLE IF NOT EXISTS public.luqra_chargebacks (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-
 CREATE INDEX IF NOT EXISTS luqra_cb_merchant_date_idx
   ON public.luqra_chargebacks (merchant_id, date_loaded DESC);
 CREATE INDEX IF NOT EXISTS luqra_cb_status_idx
   ON public.luqra_chargebacks (merchant_id, current_status);
-
 DROP TRIGGER IF EXISTS update_luqra_chargebacks_updated_at ON public.luqra_chargebacks;
 CREATE TRIGGER update_luqra_chargebacks_updated_at
   BEFORE UPDATE ON public.luqra_chargebacks
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
-
 ALTER TABLE public.luqra_chargebacks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.luqra_chargebacks FORCE ROW LEVEL SECURITY;
-
 DROP POLICY IF EXISTS luqra_cb_admin_select ON public.luqra_chargebacks;
 CREATE POLICY luqra_cb_admin_select ON public.luqra_chargebacks
   FOR SELECT
   USING (public.is_dexapos_admin());
-
 DROP POLICY IF EXISTS luqra_cb_merchant_admin_select ON public.luqra_chargebacks;
 CREATE POLICY luqra_cb_merchant_admin_select ON public.luqra_chargebacks
   FOR SELECT
   USING (public.is_merchant_admin(merchant_id));
-
 -- ---------------------------------------------------------------------------
 -- Sync run log — observability for which date ranges have been ingested
 -- ---------------------------------------------------------------------------
@@ -177,6 +165,5 @@ CREATE TABLE IF NOT EXISTS public.luqra_sync_runs (
   started_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   finished_at TIMESTAMPTZ
 );
-
 CREATE INDEX IF NOT EXISTS luqra_sync_merchant_idx
   ON public.luqra_sync_runs (merchant_id, started_at DESC);

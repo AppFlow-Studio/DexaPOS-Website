@@ -6,6 +6,7 @@ import { AlertCircle, Copy, Loader2, RotateCcw, ShieldCheck, XCircle } from 'luc
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { InfoIcon } from '@/components/ui/info-icon'
 import { usePlatformTransactionDetails } from '@/lib/queries/use-platform-analytics'
 
 interface TransactionDetailInlinePanelProps {
@@ -125,37 +126,47 @@ function PlatformFeeBreakdownSection({
   return (
     <section className="rounded-md border bg-emerald-50/30 dark:bg-emerald-950/10 p-3">
       <div className="mb-3 flex items-center justify-between">
-        <h4 className="text-sm font-semibold">Fees & Surcharges</h4>
+        <h4 className="flex items-center gap-1 text-sm font-semibold">
+          Fees &amp; Surcharges
+          <InfoIcon tip="Platform fees collected on this transaction. Net fee applies to the subtotal; Net fee on tip applies to the gratuity. Both reconcile line-for-line with Lucra. Net deposit = gross amount minus these fees." />
+        </h4>
         {netTotal > 0 && (
           <Badge variant="outline" className="text-xs border-emerald-300 text-emerald-800 dark:text-emerald-300">
-            Net platform fee {formatCurrency(netTotal)}
+            Net deposit {formatCurrency(netTotal)}
           </Badge>
         )}
       </div>
       <div className="grid gap-1 text-xs md:grid-cols-2">
         {subtotalPortion !== undefined && (
           <div className="flex justify-between">
-            <span className="text-muted-foreground">Subtotal Portion</span>
+            <span className="text-muted-foreground flex items-center gap-1">
+              Subtotal Portion
+              <InfoIcon tip="The portion of the order subtotal that the net fee is calculated on." side="right" />
+            </span>
             <span className="font-mono">{formatCurrency(Number(subtotalPortion))}</span>
           </div>
         )}
         {taxPortion !== undefined && (
           <div className="flex justify-between">
-            <span className="text-muted-foreground">Tax Portion</span>
+            <span className="text-muted-foreground flex items-center gap-1">
+              Tax Portion
+              <InfoIcon tip="The portion of tax included in the fee base. Some fee structures include tax in the calculation." side="right" />
+            </span>
             <span className="font-mono">{formatCurrency(Number(taxPortion))}</span>
           </div>
         )}
         {(dualFee > 0 || dualPct > 0) && (
           <div className="flex justify-between">
-            <span className="text-muted-foreground">
-              Card Surcharge{dualPct > 0 ? ` (${dualPct}%)` : ''}
+            <span className="text-muted-foreground flex items-center gap-1">
+              Net fee{dualPct > 0 ? ` (${dualPct}%)` : ''}
+              <InfoIcon tip="The platform fee applied to the order subtotal (excluding tip). Calculated as a percentage of the subtotal portion and reconciled with Lucra." side="right" />
             </span>
             <span className="font-mono">{formatCurrency(dualFee)}</span>
           </div>
         )}
         {refundedDualFee > 0 && (
           <div className="flex justify-between">
-            <span className="text-muted-foreground pl-3">↳ Refunded</span>
+            <span className="text-muted-foreground pl-3">↳ Refunded Portion</span>
             <span className="font-mono text-rose-600 dark:text-rose-400">
               -{formatCurrency(refundedDualFee)}
             </span>
@@ -163,8 +174,9 @@ function PlatformFeeBreakdownSection({
         )}
         {(tipFee > 0 || tipPct > 0) && (
           <div className="flex justify-between">
-            <span className="text-muted-foreground">
-              Tip Surcharge{tipPct > 0 ? ` (${tipPct}%)` : ''}
+            <span className="text-muted-foreground flex items-center gap-1">
+              Net fee on tip{tipPct > 0 ? ` (${tipPct}%)` : ''}
+              <InfoIcon tip="The platform fee applied to the tip amount. Calculated as a percentage of the gratuity and reconciled separately with Lucra." side="right" />
             </span>
             <span className="font-mono">{formatCurrency(tipFee)}</span>
           </div>
@@ -179,10 +191,19 @@ function PlatformFeeBreakdownSection({
         )}
         {refundedTipFee > 0 && (
           <div className="flex justify-between">
-            <span className="text-muted-foreground pl-3">↳ Refunded</span>
+            <span className="text-muted-foreground pl-3">↳ Refunded Portion</span>
             <span className="font-mono text-rose-600 dark:text-rose-400">
               -{formatCurrency(refundedTipFee)}
             </span>
+          </div>
+        )}
+        {netTotal > 0 && (
+          <div className="col-span-full flex justify-between border-t pt-1 font-medium">
+            <span className="flex items-center gap-1">
+              Net fee after refund
+              <InfoIcon tip="Total fees collected after subtracting any refunded fee portions. This is the amount Lucra will debit from the merchant's net deposit." side="right" />
+            </span>
+            <span className="font-mono">{formatCurrency(netTotal)}</span>
           </div>
         )}
       </div>
@@ -260,11 +281,19 @@ export function TransactionDetailInlinePanel({ transactionId }: TransactionDetai
         <Badge variant="outline">Order: {data.order_number || data.display_number || data.order_id}</Badge>
         <Badge variant="outline">Payment: {toLabel(data.status)}</Badge>
         <Badge variant="outline">Method: {toLabel(data.payment_method)}</Badge>
-        {data.is_split_payment && <Badge variant="secondary">Split #{data.split_sequence ?? '?'}</Badge>}
+        {data.is_split_payment && (
+          <span className="inline-flex items-center gap-1">
+            <Badge variant="secondary">Split #{data.split_sequence ?? '?'}</Badge>
+            <InfoIcon tip="This order was paid using multiple payment methods or cards. Each split shows the portion charged to that card/method." side="right" />
+          </span>
+        )}
       </div>
 
       <section className="rounded-md border p-3">
-        <h4 className="mb-3 text-sm font-semibold">Payment Segments</h4>
+        <h4 className="mb-3 flex items-center gap-1 text-sm font-semibold">
+          Payment Segments
+          <InfoIcon tip="A payment segment is one leg of a split payment. If a customer paid with two cards, there will be two segments. Each segment is authorized and captured independently." />
+        </h4>
         {paymentSegments.length === 0 ? (
           <div className="text-xs text-muted-foreground">No payment segments found for this order.</div>
         ) : (
@@ -458,7 +487,10 @@ export function TransactionDetailInlinePanel({ transactionId }: TransactionDetai
         </section>
 
         <section className="rounded-md border p-3">
-          <h4 className="mb-2 text-sm font-semibold">EMV Data</h4>
+          <h4 className="mb-2 flex items-center gap-1 text-sm font-semibold">
+            EMV Data
+            <InfoIcon tip="Chip card cryptographic data from the card network. AID identifies the card application (e.g. Visa Credit). TVR/TSI are the terminal and transaction status indicators. TC is the transaction certificate proving the chip authorized this payment." />
+          </h4>
           {!emv ? (
             <div className="text-xs text-muted-foreground">No EMV payload for this payment.</div>
           ) : (
@@ -645,7 +677,10 @@ export function TransactionDetailInlinePanel({ transactionId }: TransactionDetai
       </section>
 
       <section className="rounded-md border p-3">
-        <h4 className="mb-3 text-sm font-semibold">Payment Timeline</h4>
+        <h4 className="mb-3 flex items-center gap-1 text-sm font-semibold">
+          Payment Timeline
+          <InfoIcon tip="Chronological log of every status change on this payment — from initiation through authorization, capture, and any reversals. Each entry shows the event type, result code, and terminal that processed it." />
+        </h4>
         {paymentEvents.length === 0 ? (
           <div className="text-xs text-muted-foreground">No payment events found for this transaction.</div>
         ) : (

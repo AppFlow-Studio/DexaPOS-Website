@@ -91,8 +91,6 @@ BEGIN
   );
 END;
 $function$;
-
 GRANT EXECUTE ON FUNCTION public.claim_order_v1(uuid, uuid, uuid) TO authenticated;
-
 COMMENT ON FUNCTION public.claim_order_v1(uuid, uuid, uuid) IS
-'Lever 2 — atomic optimistic-concurrency transfer of orders.station_id. Returns typed errors (ORDER_NOT_FOUND, ORDER_FINALIZED, CONCURRENT_CLAIM). Used by the cross-station Take Over UX. Payment-lock guard temporarily disabled — re-add when orders.payment_lock_* columns land.';;
+'Lever 2 — atomic optimistic-concurrency transfer of orders.station_id. Returns typed errors (ORDER_NOT_FOUND, ORDER_FINALIZED, CONCURRENT_CLAIM). Used by the cross-station Take Over UX. Payment-lock guard temporarily disabled — re-add when orders.payment_lock_* columns land.';

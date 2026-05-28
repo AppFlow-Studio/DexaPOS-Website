@@ -57,5 +57,4 @@ BEGIN
   WHERE id = p_order_id;
 END;
 $$;
-
-GRANT EXECUTE ON FUNCTION update_order_payment_status_after_refund(uuid) TO authenticated;;
+GRANT EXECUTE ON FUNCTION update_order_payment_status_after_refund(uuid) TO authenticated;

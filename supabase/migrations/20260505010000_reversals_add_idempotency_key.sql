@@ -30,7 +30,6 @@
 -- 1. Add column (no-op on re-run because of IF NOT EXISTS)
 ALTER TABLE public.reversals
   ADD COLUMN IF NOT EXISTS idempotency_key uuid DEFAULT NULL;
-
 -- 2. Partial unique index — prevents double-insert on RPC retry
 --    Cannot be wrapped in a transaction; see header note above.
 -- CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS
@@ -119,9 +118,7 @@ BEGIN
   RETURN v_reversal;
 END;
 $function$;
-
 GRANT EXECUTE ON FUNCTION public.create_reversal_v2(uuid, text, text, reversal_type, numeric, refund_reason_type, text, uuid, uuid, uuid) TO authenticated;
-
 COMMENT ON FUNCTION public.create_reversal_v2 IS
   'Creates a reversal row for refunds/voids. v2 adds optional p_idempotency_key. '
   'Updated by reversals_add_idempotency_key.sql to also write idempotency_key into '

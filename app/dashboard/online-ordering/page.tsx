@@ -886,6 +886,22 @@ function CompletedSetupPanel({
 
               <div className="flex items-center justify-between rounded-lg border p-4">
                 <div>
+                  <p className="font-medium">Separate Online / Delivery Pricing</p>
+                  <p className="text-sm text-muted-foreground">
+                    When on, online orders use each item&apos;s delivery price (lets you
+                    charge more online to cover fees). When off, online orders use the
+                    regular menu price — no online upcharge.
+                  </p>
+                </div>
+                <Switch
+                  checked={settings.deliveryPricingEnabled !== false}
+                  onCheckedChange={(checked) => onUpdate({ deliveryPricingEnabled: checked })}
+                  disabled={isSaving}
+                />
+              </div>
+
+              <div className="flex items-center justify-between rounded-lg border p-4">
+                <div>
                   <p className="font-medium">Auto-Accept Orders</p>
                   <p className="text-sm text-muted-foreground">
                     Automatically accept incoming online orders and send them straight to the kitchen.

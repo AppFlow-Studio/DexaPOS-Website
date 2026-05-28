@@ -1,18 +1,3 @@
--- =====================================================================
--- Wave H.6 — Live batch totals include partially-refunded payments
--- =====================================================================
--- Why: get_batches_with_live_totals_v1 aggregated only rows with
--- status='captured'. A partial refund flips order_payments.status to
--- 'partially_refunded', which made the payment disappear from the
--- BatchoutPanel header entirely (txn count -1, gross and tip dropped to
--- zero). The drilldown still showed it because that uses a different
--- RPC. Operator-visible recap drifted from reality.
---
--- Fix: include partially_refunded alongside captured. Sale (amount) and
--- tip continue to count fully; the refunded portion is netted against
--- net_deposit only. Fully voided rows and failed/pending stay excluded.
--- =====================================================================
-
 CREATE OR REPLACE FUNCTION public.get_batches_with_live_totals_v1(
     p_location_id uuid,
     p_business_day date
@@ -75,4 +60,4 @@ BEGIN
 
     RETURN v_result;
 END;
-$function$;
+$function$;;

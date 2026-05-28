@@ -1,6 +1,5 @@
 -- Migration: manage_order_discount_v2 — Wave 2.1 station-ownership guard
 DROP FUNCTION IF EXISTS public.manage_order_discount_v2(text, uuid, uuid, uuid, text, text, numeric, text, text, uuid[], uuid, uuid, text, uuid);
-
 CREATE OR REPLACE FUNCTION public.manage_order_discount_v2(
   p_action text,
   p_order_id uuid,
@@ -451,5 +450,4 @@ BEGIN
   RETURN v_result;
 END;
 $function$;
-
-GRANT EXECUTE ON FUNCTION public.manage_order_discount_v2(text, uuid, uuid, uuid, text, text, numeric, text, text, uuid[], uuid, uuid, text, uuid, uuid) TO authenticated;;
+GRANT EXECUTE ON FUNCTION public.manage_order_discount_v2(text, uuid, uuid, uuid, text, text, numeric, text, text, uuid[], uuid, uuid, text, uuid, uuid) TO authenticated;

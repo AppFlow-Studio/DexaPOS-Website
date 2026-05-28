@@ -77,6 +77,7 @@ import Papa from 'papaparse'
 import * as XLSX from 'xlsx'
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart'
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from 'recharts'
+import { InfoIcon } from '@/components/ui/info-icon'
 
 // â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -686,6 +687,7 @@ function TransactionsPageInner() {
         {
             id: 'total_transactions' as const,
             title: 'Total Transactions',
+            tip: 'Total number of payment transactions processed across all merchants in the selected date range, including captured, authorized, refunded, and voided payments.',
             value: currentSummary ? currentSummary.totalTransactions.toLocaleString() : '-',
             icon: CreditCard,
             color: 'text-muted-foreground',
@@ -697,6 +699,7 @@ function TransactionsPageInner() {
         {
             id: 'card_revenue' as const,
             title: 'Card Revenue',
+            tip: 'Total dollar amount collected from card payments (credit and debit) in the selected period. Excludes cash transactions. The average ticket is the mean card transaction value.',
             value: currentSummary ? formatCurrencyValue(currentSummary.cardRevenue) : '-',
             icon: CreditCard,
             color: 'text-blue-600',
@@ -708,6 +711,7 @@ function TransactionsPageInner() {
         {
             id: 'cash_revenue' as const,
             title: 'Cash Revenue',
+            tip: 'Total dollar amount recorded from cash payments in the selected period. Cash transactions are entered manually by staff and are not processed through the card network.',
             value: currentSummary ? formatCurrencyValue(currentSummary.cashRevenue) : '-',
             icon: Banknote,
             color: 'text-emerald-600',
@@ -719,6 +723,7 @@ function TransactionsPageInner() {
         {
             id: 'total_revenue' as const,
             title: 'Total Revenue',
+            tip: 'Combined card and cash revenue for the selected period. The split shows what percentage of revenue came from each payment method.',
             value: currentSummary ? formatCurrencyValue(currentSummary.totalRevenue) : '-',
             icon: DollarSign,
             color: 'text-indigo-600',
@@ -730,6 +735,7 @@ function TransactionsPageInner() {
         {
             id: 'avg_tip' as const,
             title: 'Avg Tip',
+            tip: 'Average tip amount across all tipped transactions in the selected period. The percentage shown is the average tip as a share of the pre-tip order amount.',
             value: currentSummary ? formatCurrencyValue(currentSummary.avgTip) : '-',
             icon: CheckCircle,
             color: 'text-amber-600',
@@ -741,6 +747,7 @@ function TransactionsPageInner() {
         {
             id: 'voided_returned' as const,
             title: 'Voids & Refunds',
+            tip: 'Total count and dollar value of voided and refunded transactions. Voids cancel a transaction before settlement; refunds return money after capture. The void rate is the percentage of total transactions that were voided.',
             value: currentSummary
                 ? `${currentSummary.voidReturnCount.toLocaleString()} • ${formatCurrencyValue(currentSummary.voidReturnAmount)}`
                 : '-',
@@ -894,7 +901,10 @@ function TransactionsPageInner() {
                         onClick={summaryUnavailable ? undefined : () => handleSummaryCardClick(stat.id)}
                     >
                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                            <CardTitle className="text-sm font-medium">{stat.title}</CardTitle>
+                            <CardTitle className="flex items-center gap-1 text-sm font-medium">
+                                {stat.title}
+                                <InfoIcon tip={stat.tip} side="top" />
+                            </CardTitle>
                             <stat.icon className={`h-4 w-4 ${stat.color}`} />
                         </CardHeader>
                         <CardContent>
@@ -917,7 +927,10 @@ function TransactionsPageInner() {
             <Card>
                 <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                        <CardTitle>Transactions Trend</CardTitle>
+                        <CardTitle className="flex items-center gap-1">
+                            Transactions Trend
+                            <InfoIcon tip="Daily revenue chart for the last 30 days. Each point is the total amount collected across all payment methods that day. Use this to spot seasonal patterns, busy days, or sudden drops in activity." />
+                        </CardTitle>
                         <CardDescription>
                             Experimental: live 30-day revenue trend from analytics feed
                         </CardDescription>
@@ -986,7 +999,10 @@ function TransactionsPageInner() {
                 <CardHeader>
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <div>
-                            <CardTitle>All Transactions</CardTitle>
+                            <CardTitle className="flex items-center gap-1">
+                                All Transactions
+                                <InfoIcon tip="Every payment record across all merchants and locations. Click any row to expand full transaction details. Use the column picker to show or hide fields." />
+                            </CardTitle>
                             <CardDescription>Platform-wide payment activity across all merchants</CardDescription>
                         </div>
                     </div>
@@ -1039,15 +1055,51 @@ function TransactionsPageInner() {
                                             </Button>
                                         </TableHead>
                                     )}
-                                    {columnVisibility.merchant && <TableHead className={stickyHeadClass}>Merchant</TableHead>}
-                                    {columnVisibility.customer && <TableHead className={stickyHeadClass}>Customer</TableHead>}
-                                    {columnVisibility.method && <TableHead className={stickyHeadClass}>Method</TableHead>}
-                                    {columnVisibility.card && <TableHead className={stickyHeadClass}>Card</TableHead>}
-                                    {columnVisibility.entry && <TableHead className={stickyHeadClass}>Entry</TableHead>}
-                                    {columnVisibility.subtotal && <TableHead className={stickyHeadClass}>Subtotal</TableHead>}
-                                    {columnVisibility.tax && <TableHead className={stickyHeadClass}>Tax</TableHead>}
-                                    {columnVisibility.tip && <TableHead className={stickyHeadClass}>Tip</TableHead>}
-                                    {columnVisibility.discount && <TableHead className={stickyHeadClass}>Discount</TableHead>}
+                                    {columnVisibility.merchant && (
+                                        <TableHead className={stickyHeadClass}>
+                                            <span className="inline-flex items-center gap-1">Merchant <InfoIcon tip="The business that processed this payment." side="bottom" /></span>
+                                        </TableHead>
+                                    )}
+                                    {columnVisibility.customer && (
+                                        <TableHead className={stickyHeadClass}>
+                                            <span className="inline-flex items-center gap-1">Customer <InfoIcon tip="Name on the card or entered at checkout. May be blank for anonymous orders." side="bottom" /></span>
+                                        </TableHead>
+                                    )}
+                                    {columnVisibility.method && (
+                                        <TableHead className={stickyHeadClass}>
+                                            <span className="inline-flex items-center gap-1">Method <InfoIcon tip="How the customer paid — card (credit/debit) or cash." side="bottom" /></span>
+                                        </TableHead>
+                                    )}
+                                    {columnVisibility.card && (
+                                        <TableHead className={stickyHeadClass}>
+                                            <span className="inline-flex items-center gap-1">Card <InfoIcon tip="Card brand (Visa, Mastercard, Amex…) and last 4 digits of the card used." side="bottom" /></span>
+                                        </TableHead>
+                                    )}
+                                    {columnVisibility.entry && (
+                                        <TableHead className={stickyHeadClass}>
+                                            <span className="inline-flex items-center gap-1">Entry <InfoIcon tip="How the card was read: Chip (EMV insert), Contactless (tap), Swipe, or Manual (keyed in). Chip and Contactless are the most secure entry methods." side="bottom" /></span>
+                                        </TableHead>
+                                    )}
+                                    {columnVisibility.subtotal && (
+                                        <TableHead className={stickyHeadClass}>
+                                            <span className="inline-flex items-center gap-1">Subtotal <InfoIcon tip="Order total before tax, tip, and discounts are applied." side="bottom" /></span>
+                                        </TableHead>
+                                    )}
+                                    {columnVisibility.tax && (
+                                        <TableHead className={stickyHeadClass}>
+                                            <span className="inline-flex items-center gap-1">Tax <InfoIcon tip="Sales tax collected on this order, calculated at the rate configured for the location." side="bottom" /></span>
+                                        </TableHead>
+                                    )}
+                                    {columnVisibility.tip && (
+                                        <TableHead className={stickyHeadClass}>
+                                            <span className="inline-flex items-center gap-1">Tip <InfoIcon tip="Gratuity added by the customer. Tips can be adjusted after the initial authorization and before batch settlement." side="bottom" /></span>
+                                        </TableHead>
+                                    )}
+                                    {columnVisibility.discount && (
+                                        <TableHead className={stickyHeadClass}>
+                                            <span className="inline-flex items-center gap-1">Discount <InfoIcon tip="Any promotional discount, coupon, or comp applied to this order before the final total was charged." side="bottom" /></span>
+                                        </TableHead>
+                                    )}
                                     {columnVisibility.total && (
                                         <TableHead className={stickyHeadClass}>
                                             <Button
@@ -1060,8 +1112,16 @@ function TransactionsPageInner() {
                                             </Button>
                                         </TableHead>
                                     )}
-                                    {columnVisibility.payStatus && <TableHead className={stickyHeadClass}>Status</TableHead>}
-                                    {columnVisibility.staff && <TableHead className={stickyHeadClass}>Staff</TableHead>}
+                                    {columnVisibility.payStatus && (
+                                        <TableHead className={stickyHeadClass}>
+                                            <span className="inline-flex items-center gap-1">Status <InfoIcon tip="Current payment status. Captured = funds collected. Authorized = card approved but not yet settled. Refunded = money returned. Void = cancelled before settlement." side="bottom" /></span>
+                                        </TableHead>
+                                    )}
+                                    {columnVisibility.staff && (
+                                        <TableHead className={stickyHeadClass}>
+                                            <span className="inline-flex items-center gap-1">Staff <InfoIcon tip="The staff member who processed or took this order on the POS terminal." side="bottom" /></span>
+                                        </TableHead>
+                                    )}
                                     {columnVisibility.date && (
                                         <TableHead className={stickyHeadClass}>
                                             <Button

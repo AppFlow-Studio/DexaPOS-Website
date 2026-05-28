@@ -124,4 +124,4 @@ GRANT EXECUTE ON FUNCTION public.apply_refund_to_payment_v3(
 ) TO authenticated;
 
 COMMENT ON FUNCTION public.apply_refund_to_payment_v3 IS
-  'Refund / void RPC with platform-fee tracking. Forks v2 with p_tip_refund_amount param and proportional refunded_dual_pricing_fee / refunded_tip_fee writes (LEAST clamp + final-refund snap to gross). Idempotency op namespace: apply_refund_to_payment_v3.';
+  'Refund / void RPC with platform-fee tracking. Forks v2 with p_tip_refund_amount param and proportional refunded_dual_pricing_fee / refunded_tip_fee writes (LEAST clamp + final-refund snap to gross). Idempotency op namespace: apply_refund_to_payment_v3.';;

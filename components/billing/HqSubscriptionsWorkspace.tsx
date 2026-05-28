@@ -52,6 +52,9 @@ import {
   type ChartConfig,
 } from '@/components/ui/chart'
 import {
+  getMerchantTierPlans,
+  getMerchantTierStatus,
+  getMerchantTierSubscription,
   chargeSubscriptionInvoiceManually,
   generateSubscriptionInvoiceManually,
   getBillableServices,
@@ -61,9 +64,13 @@ import {
   getSubscriptionServiceAssignments,
   replaceSubscriptionServiceAssignments,
   type BillableServiceRecord,
+  type MerchantTierPlanRecord,
+  type MerchantTierStatusRecord,
+  type MerchantTierSubscriptionRecord,
   type MerchantSubscriptionRecord,
   type SubscriptionInvoiceRecord,
   type SubscriptionServiceAssignmentRecord,
+  upsertMerchantTierSubscription,
   upsertMerchantSubscription,
 } from '@/app/manage/actions/subscription-billing'
 import {
@@ -79,7 +86,7 @@ import {
   type SubscriptionInvoiceDocumentData,
 } from '@/lib/subscription-billing/invoice-template'
 import { downloadSubscriptionInvoicePdf } from '@/lib/subscription-billing/invoice-pdf'
-import { Area, AreaChart, Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts'
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, XAxis, YAxis } from 'recharts'
 
 type SubscriptionStatus = 'trial' | 'active' | 'past_due' | 'suspended' | 'canceled'
 type ServiceFormState = Record<string, { enabled: boolean; quantity: string }>
@@ -129,6 +136,23 @@ function statusVariant(status: string): 'default' | 'secondary' | 'outline' | 'd
     case 'failed':
     case 'suspended':
       return 'destructive'
+    default:
+      return 'secondary'
+  }
+}
+
+function merchantTierStatusVariant(
+  status: MerchantTierStatusRecord['subscription_status'],
+): 'default' | 'secondary' | 'outline' | 'destructive' {
+  switch (status) {
+    case 'active':
+      return 'default'
+    case 'past_due':
+      return 'outline'
+    case 'suspended':
+      return 'destructive'
+    case 'cancelled':
+      return 'secondary'
     default:
       return 'secondary'
   }
@@ -208,6 +232,37 @@ function buildPaymentMethodLabel(profile: MerchantBillingProfileRecord | null): 
   return 'No billing profile'
 }
 
+function formatTierPrice(monthlyPriceCents: number | null | undefined): string {
+  const cents = Number(monthlyPriceCents || 0)
+  if (!cents) return 'Contact for pricing'
+  return formatMoney(cents / 100)
+}
+
+function formatMerchantTierCapacity(plan: MerchantTierPlanRecord): string {
+  if (plan.max_locations === null) {
+    return `${plan.min_locations ?? 0}+ locations`
+  }
+
+  if (plan.min_locations === plan.max_locations) {
+    return `${plan.max_locations} location`
+  }
+
+  return `${plan.min_locations ?? 0}-${plan.max_locations} locations`
+}
+
+function merchantTierHighlights(plan: MerchantTierPlanRecord): string[] {
+  switch (plan.plan_code) {
+    case 'basic':
+      return ['Single-location coverage', 'Flat monthly tier', 'Good starting point']
+    case 'multi_location':
+      return ['Covers 2 to 5 locations', 'Flat monthly tier', 'For growing operators']
+    case 'franchise':
+      return ['Supports 6+ locations', 'Unlimited cap in V1', 'For large merchant groups']
+    default:
+      return ['Merchant-wide plan', 'Flat monthly tier', 'Contact sales for setup']
+  }
+}
+
 const transactionTrendChartConfig = {
   paid: {
     label: 'Collected',
@@ -220,11 +275,30 @@ const transactionTrendChartConfig = {
 } satisfies ChartConfig
 
 const transactionStatusChartConfig = {
-  total: {
-    label: 'Amount',
+  count: {
+    label: 'Invoices',
     color: 'hsl(var(--chart-2))',
   },
 } satisfies ChartConfig
+
+const transactionStatusVisuals: Record<string, { label: string; color: string }> = {
+  open: {
+    label: 'Open',
+    color: '#F59E0B',
+  },
+  processing: {
+    label: 'Processing',
+    color: '#3B82F6',
+  },
+  paid: {
+    label: 'Paid',
+    color: '#10B981',
+  },
+  failed: {
+    label: 'Failed',
+    color: '#EF4444',
+  },
+}
 
 interface HqSubscriptionsWorkspaceProps {
   merchant: MerchantDetails
@@ -254,6 +328,20 @@ export function HqSubscriptionsWorkspace({
   const [isInvoicePreviewOpen, setIsInvoicePreviewOpen] = useState(false)
   const [isInvoicePreviewLoading, setIsInvoicePreviewLoading] = useState(false)
   const [invoiceActionId, setInvoiceActionId] = useState<string | null>(null)
+  const [merchantTierPlans, setMerchantTierPlans] = useState<MerchantTierPlanRecord[]>([])
+  const [merchantTierStatus, setMerchantTierStatus] = useState<MerchantTierStatusRecord>({
+    plan: null,
+    active_location_count: 0,
+    is_over_limit: false,
+    required_plan_code: null,
+    subscription_status: null,
+    current_period_end: null,
+  })
+  const [merchantTierSubscription, setMerchantTierSubscription] = useState<MerchantTierSubscriptionRecord | null>(null)
+  const [selectedMerchantTierPlanId, setSelectedMerchantTierPlanId] = useState('')
+  const [merchantTierSubscriptionStatus, setMerchantTierSubscriptionStatus] = useState<'active' | 'past_due' | 'suspended' | 'cancelled'>('active')
+  const [merchantTierPeriodStart, setMerchantTierPeriodStart] = useState(startOfMonthIso())
+  const [merchantTierPeriodEnd, setMerchantTierPeriodEnd] = useState(endOfMonthIso())
 
   const sortedLocations = useMemo(
     () => [...merchant.locations].sort((a, b) => a.name.localeCompare(b.name)),
@@ -309,20 +397,38 @@ export function HqSubscriptionsWorkspace({
     [invoices, selectedLocation]
   )
 
+  const recommendedMerchantTier = useMemo(
+    () =>
+      merchantTierStatus.required_plan_code
+        ? merchantTierPlans.find((plan) => plan.plan_code === merchantTierStatus.required_plan_code) ?? null
+        : null,
+    [merchantTierPlans, merchantTierStatus.required_plan_code],
+  )
+
   const transactionSummary = useMemo(() => {
     const paid = filteredInvoices
       .filter((invoice) => invoice.status === 'paid')
       .reduce((sum, invoice) => sum + Number(invoice.total_amount || 0), 0)
 
     const pending = filteredInvoices
-      .filter((invoice) => ['open', 'processing', 'failed'].includes(invoice.status))
+      .filter((invoice) => ['open', 'processing'].includes(invoice.status))
       .reduce((sum, invoice) => sum + Number(invoice.total_amount || 0), 0)
+
+    const pendingSubtotal = filteredInvoices
+      .filter((invoice) => ['open', 'processing'].includes(invoice.status))
+      .reduce((sum, invoice) => sum + Number(invoice.subtotal || 0), 0)
+
+    const pendingSurcharge = filteredInvoices
+      .filter((invoice) => ['open', 'processing'].includes(invoice.status))
+      .reduce((sum, invoice) => sum + Number(invoice.card_surcharge || 0), 0)
 
     const failedCount = filteredInvoices.filter((invoice) => invoice.status === 'failed').length
 
     return {
       paid,
       pending,
+      pendingSubtotal,
+      pendingSurcharge,
       failedCount,
     }
   }, [filteredInvoices])
@@ -357,16 +463,33 @@ export function HqSubscriptionsWorkspace({
   }, [filteredInvoices])
 
   const transactionStatusData = useMemo(() => {
-    const buckets = new Map<string, number>()
+    const bucketOrder = ['open', 'processing', 'paid', 'failed']
+    const buckets = new Map<string, { count: number; total: number }>()
 
     for (const invoice of filteredInvoices) {
-      buckets.set(invoice.status, (buckets.get(invoice.status) ?? 0) + Number(invoice.total_amount || 0))
+      const current = buckets.get(invoice.status) ?? { count: 0, total: 0 }
+      current.count += 1
+      current.total += Number(invoice.total_amount || 0)
+      buckets.set(invoice.status, current)
     }
 
-    return Array.from(buckets.entries()).map(([statusKey, total]) => ({
-      status: statusKey.replace('_', ' '),
-      total,
-    }))
+    return bucketOrder
+      .filter((statusKey) => buckets.has(statusKey))
+      .map((statusKey) => {
+        const bucket = buckets.get(statusKey)!
+        const visuals = transactionStatusVisuals[statusKey] ?? {
+          label: statusKey.replace('_', ' '),
+          color: 'hsl(var(--chart-2))',
+        }
+
+        return {
+          status: statusKey,
+          label: visuals.label,
+          color: visuals.color,
+          count: bucket.count,
+          total: bucket.total,
+        }
+      })
   }, [filteredInvoices])
 
   const selectedServiceRows = useMemo(
@@ -390,12 +513,24 @@ export function HqSubscriptionsWorkspace({
   const refresh = () => {
     startTransition(async () => {
       try {
-        const [nextServices, nextSubscriptions, nextInvoices, nmiSummary, billingProfiles] = await Promise.all([
+        const [
+          nextServices,
+          nextSubscriptions,
+          nextInvoices,
+          nmiSummary,
+          billingProfiles,
+          nextMerchantTierPlans,
+          nextMerchantTierStatus,
+          nextMerchantTierSubscription,
+        ] = await Promise.all([
           getBillableServices(),
           getMerchantSubscriptions(merchant.id),
           getSubscriptionInvoices(merchant.id, null, 100),
           getMerchantNmiAccountsSummary(merchant.id),
           getMerchantBillingProfiles(merchant.id),
+          getMerchantTierPlans(),
+          getMerchantTierStatus(merchant.id),
+          getMerchantTierSubscription(merchant.id),
         ])
 
         const assignmentEntries = await Promise.all(
@@ -422,6 +557,9 @@ export function HqSubscriptionsWorkspace({
         setSubscriptionServiceMap(nextAssignmentMap)
         setLocationEligibilityMap(nextEligibilityMap)
         setBillingProfilesByLocation(nextBillingProfilesByLocation)
+        setMerchantTierPlans(nextMerchantTierPlans)
+        setMerchantTierStatus(nextMerchantTierStatus)
+        setMerchantTierSubscription(nextMerchantTierSubscription)
 
         const defaultLocationId =
           selectedLocationId && sortedLocations.some((location) => location.id === selectedLocationId)
@@ -450,6 +588,23 @@ export function HqSubscriptionsWorkspace({
             setTrialEndsAt('')
             setServiceFormState(buildInitialServiceFormState(nextServices))
           }
+        }
+
+        if (nextMerchantTierSubscription) {
+          setSelectedMerchantTierPlanId(nextMerchantTierSubscription.plan_id)
+          setMerchantTierSubscriptionStatus(nextMerchantTierSubscription.status)
+          setMerchantTierPeriodStart(nextMerchantTierSubscription.current_period_start.slice(0, 10))
+          setMerchantTierPeriodEnd(nextMerchantTierSubscription.current_period_end.slice(0, 10))
+        } else {
+          const suggestedPlan =
+            nextMerchantTierPlans.find((plan) => plan.plan_code === nextMerchantTierStatus.required_plan_code) ??
+            nextMerchantTierPlans[0] ??
+            null
+
+          setSelectedMerchantTierPlanId(suggestedPlan?.id || '')
+          setMerchantTierSubscriptionStatus('active')
+          setMerchantTierPeriodStart(startOfMonthIso())
+          setMerchantTierPeriodEnd(endOfMonthIso())
         }
       } catch (error: any) {
         toast.error(error?.message || 'Failed to load subscription workspace.')
@@ -646,6 +801,40 @@ export function HqSubscriptionsWorkspace({
     }
   }
 
+  const handleSaveMerchantTier = () => {
+    if (!selectedMerchantTierPlanId) {
+      toast.error('Select a merchant tier first.')
+      return
+    }
+
+    startTransition(async () => {
+      const result = await upsertMerchantTierSubscription({
+        merchantId: merchant.id,
+        planId: selectedMerchantTierPlanId,
+        status: merchantTierSubscriptionStatus,
+        currentPeriodStart: merchantTierPeriodStart,
+        currentPeriodEnd: merchantTierPeriodEnd,
+        trialEndsAt: null,
+      })
+
+      if (!result.success) {
+        toast.error(result.error || 'Failed to save merchant tier.')
+        return
+      }
+
+      if (result.anchorLocationId) {
+        setSelectedLocationId(result.anchorLocationId)
+      }
+
+      toast.success(
+        result.invoiceId
+          ? 'Merchant tier updated and invoice generated.'
+          : 'Merchant tier updated.',
+      )
+      refresh()
+    })
+  }
+
   if (!canManageBilling) {
     return (
       <Card className="border-destructive/30">
@@ -701,6 +890,182 @@ export function HqSubscriptionsWorkspace({
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Merchant Tier</CardTitle>
+          <CardDescription>
+            Merchant-wide plan visibility sits here. Location-level service billing below stays separate.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="grid gap-4">
+            <div className="space-y-4 rounded-xl border bg-muted/20 p-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="text-lg font-semibold">
+                  {merchantTierStatus.plan?.name || 'No active plan'}
+                </div>
+                <Badge variant={merchantTierStatusVariant(merchantTierStatus.subscription_status)}>
+                  {merchantTierStatus.subscription_status || 'unassigned'}
+                </Badge>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 text-sm">
+                <Badge variant="outline">{merchantTierStatus.active_location_count} active locations</Badge>
+                {merchantTierStatus.plan?.max_locations !== null && merchantTierStatus.plan ? (
+                  <Badge
+                    variant="outline"
+                    className={
+                      merchantTierStatus.is_over_limit
+                        ? 'border-red-200 bg-red-50 text-red-700'
+                        : merchantTierStatus.active_location_count === merchantTierStatus.plan.max_locations
+                          ? 'border-amber-200 bg-amber-50 text-amber-700'
+                          : 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                    }
+                  >
+                    {merchantTierStatus.active_location_count} of {merchantTierStatus.plan.max_locations} used
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="border-blue-200 bg-blue-50 text-blue-700">
+                    Unlimited location cap
+                  </Badge>
+                )}
+              </div>
+              <div className="grid gap-3 text-sm sm:grid-cols-2">
+                <div>
+                  <div className="text-xs uppercase tracking-[0.08em] text-muted-foreground">Price</div>
+                  <div className="mt-1 font-medium">
+                    {merchantTierStatus.plan
+                      ? formatTierPrice(merchantTierStatus.plan.monthly_price_cents)
+                      : 'Contact for pricing'}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs uppercase tracking-[0.08em] text-muted-foreground">Current Period End</div>
+                  <div className="mt-1 font-medium">{formatDate(merchantTierStatus.current_period_end)}</div>
+                </div>
+              </div>
+              {merchantTierStatus.is_over_limit ? (
+                <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+                  Over plan limit. Merchant has {merchantTierStatus.active_location_count} active locations.
+                  {recommendedMerchantTier ? ` Move them to ${recommendedMerchantTier.display_name}.` : ''}
+                </div>
+              ) : null}
+              {!merchantTierStatus.plan ? (
+                <div className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
+                  No merchant-wide tier is assigned yet. Pick one on the right so merchant-side plan visibility has real data.
+                </div>
+              ) : null}
+            </div>
+
+            <div className="space-y-4 rounded-xl border p-4">
+              <div className="space-y-3">
+                <Label>Assign Tier</Label>
+                <div className="grid gap-4 xl:grid-cols-3">
+                  {merchantTierPlans.map((plan) => {
+                    const isSelected = selectedMerchantTierPlanId === plan.id
+
+                    return (
+                      <button
+                        key={plan.id}
+                        type="button"
+                        onClick={() => setSelectedMerchantTierPlanId(plan.id)}
+                        className={`flex min-h-[250px] flex-col rounded-2xl border p-5 text-left transition-colors ${
+                          isSelected
+                            ? 'border-primary bg-primary/5 ring-1 ring-primary/20'
+                            : 'border-slate-200 bg-white hover:border-primary/40'
+                        }`}
+                      >
+                        <div className="mt-1 flex items-center justify-between gap-2">
+                          <div className="text-lg font-semibold">{plan.display_name}</div>
+                          {isSelected ? <Badge>Selected</Badge> : null}
+                        </div>
+                        <div className="mt-2 text-2xl font-semibold tracking-tight">
+                          {formatTierPrice(plan.monthly_price_cents)}
+                        </div>
+                        <div className="mt-3 text-sm text-muted-foreground">
+                          {plan.description || formatMerchantTierCapacity(plan)}
+                        </div>
+                        <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-700">
+                          {formatMerchantTierCapacity(plan)}
+                        </div>
+                        <div className="mt-4 space-y-2 text-sm text-muted-foreground">
+                          {merchantTierHighlights(plan).map((line) => (
+                            <div key={`${plan.id}-${line}`} className="flex items-start gap-2">
+                              <div className="mt-1 h-1.5 w-1.5 rounded-full bg-primary" />
+                              <span>{line}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Status</Label>
+                  <Select
+                    value={merchantTierSubscriptionStatus}
+                    onValueChange={(value) =>
+                      setMerchantTierSubscriptionStatus(
+                        value as 'active' | 'past_due' | 'suspended' | 'cancelled',
+                      )
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="active">Active</SelectItem>
+                      <SelectItem value="past_due">Past Due</SelectItem>
+                      <SelectItem value="suspended">Suspended</SelectItem>
+                      <SelectItem value="cancelled">Cancelled</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Current Period Start</Label>
+                  <Input
+                    type="date"
+                    value={merchantTierPeriodStart}
+                    onChange={(event) => setMerchantTierPeriodStart(event.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Current Period End</Label>
+                  <Input
+                    type="date"
+                    value={merchantTierPeriodEnd}
+                    onChange={(event) => setMerchantTierPeriodEnd(event.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                {merchantTierSubscription ? (
+                  <span>Last updated {formatDate(merchantTierSubscription.updated_at)}</span>
+                ) : null}
+                {recommendedMerchantTier ? (
+                  <span>Recommended tier by active location count: {recommendedMerchantTier.display_name}</span>
+                ) : (
+                  <span>Recommended tier will appear once locations exist.</span>
+                )}
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <Button onClick={handleSaveMerchantTier} disabled={isPending || !selectedMerchantTierPlanId}>
+                  {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Save Merchant Tier
+                </Button>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader className="gap-4">
@@ -970,6 +1335,11 @@ export function HqSubscriptionsWorkspace({
                     </div>
                     <span className="font-medium">{formatMoney(transactionSummary.pending)}</span>
                   </div>
+                  {transactionSummary.pending > 0 ? (
+                    <div className="pl-6 text-xs text-muted-foreground">
+                      Base {formatMoney(transactionSummary.pendingSubtotal)} + surcharge {formatMoney(transactionSummary.pendingSurcharge)}
+                    </div>
+                  ) : null}
                   <div className="flex items-center justify-between text-sm">
                     <div className="flex items-center gap-2 text-muted-foreground">
                       <ArrowDownRight className="h-4 w-4 text-rose-500" />
@@ -1035,16 +1405,26 @@ export function HqSubscriptionsWorkspace({
                   <ChartContainer config={transactionStatusChartConfig} className="h-[220px] w-full">
                     <BarChart data={transactionStatusData} margin={{ left: 12, right: 12 }}>
                       <CartesianGrid vertical={false} />
-                      <XAxis dataKey="status" tickLine={false} axisLine={false} />
-                      <YAxis tickLine={false} axisLine={false} tickFormatter={(value) => `$${Number(value).toFixed(0)}`} />
+                      <XAxis dataKey="label" tickLine={false} axisLine={false} />
+                      <YAxis tickLine={false} axisLine={false} allowDecimals={false} />
                       <ChartTooltip
                         content={
                           <ChartTooltipContent
-                            formatter={(value) => [formatMoney(Number(value) || 0), 'Amount']}
+                            formatter={(_, __, item) => {
+                              const payload = item?.payload as { count?: number; total?: number } | undefined
+                              return [
+                                `${payload?.count ?? 0} invoice${(payload?.count ?? 0) === 1 ? '' : 's'} • ${formatMoney(Number(payload?.total) || 0)}`,
+                                'Status',
+                              ]
+                            }}
                           />
                         }
                       />
-                      <Bar dataKey="total" fill="var(--color-total)" radius={[8, 8, 0, 0]} />
+                      <Bar dataKey="count" radius={[8, 8, 0, 0]}>
+                        {transactionStatusData.map((entry) => (
+                          <Cell key={`status-cell-${entry.status}`} fill={entry.color} />
+                        ))}
+                      </Bar>
                     </BarChart>
                   </ChartContainer>
                 )}
@@ -1092,7 +1472,14 @@ export function HqSubscriptionsWorkspace({
                           <Badge variant={statusVariant(invoice.status)}>{invoice.status}</Badge>
                         </TableCell>
                         <TableCell className="font-medium">{invoice.invoice_number}</TableCell>
-                        <TableCell className="text-right font-medium">{formatMoney(invoice.total_amount)}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="font-medium">{formatMoney(invoice.total_amount)}</div>
+                          {Number(invoice.card_surcharge || 0) > 0 ? (
+                            <div className="text-xs text-muted-foreground">
+                              {formatMoney(invoice.subtotal)} + {formatMoney(invoice.card_surcharge)}
+                            </div>
+                          ) : null}
+                        </TableCell>
                       </TableRow>
                     )
                   })}
@@ -1149,7 +1536,14 @@ export function HqSubscriptionsWorkspace({
                         </div>
                       </td>
                       <td className="py-3 pr-4 uppercase">{invoice.billing_method}</td>
-                      <td className="py-3 pr-4">{formatMoney(invoice.total_amount)}</td>
+                      <td className="py-3 pr-4">
+                        <div>{formatMoney(invoice.total_amount)}</div>
+                        {Number(invoice.card_surcharge || 0) > 0 ? (
+                          <div className="text-xs text-muted-foreground">
+                            {formatMoney(invoice.subtotal)} + {formatMoney(invoice.card_surcharge)}
+                          </div>
+                        ) : null}
+                      </td>
                       <td className="py-3 pr-4">
                         <Badge variant={statusVariant(invoice.status)}>{invoice.status}</Badge>
                       </td>

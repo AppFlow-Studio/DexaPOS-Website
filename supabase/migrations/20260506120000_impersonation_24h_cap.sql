@@ -59,14 +59,10 @@ BEGIN
     RETURN true;
 END;
 $$;
-
 COMMENT ON FUNCTION public.touch_impersonation_session(uuid) IS
     'Re-validates an impersonation session and slides its 24-hour TTL. Returns true if still valid; ends the session and returns false otherwise. Called on every request that resolves merchant context.';
-
 COMMENT ON COLUMN public.impersonation_sessions.last_validated_at IS
     'Updated on every touch_impersonation_session call. Sliding 24-hour TTL is enforced against this column.';
-
-
 CREATE OR REPLACE FUNCTION public.is_merchant_admin_or_impersonating(
     p_merchant_id uuid
 )
@@ -90,6 +86,5 @@ AS $$
             )
         );
 $$;
-
 COMMENT ON FUNCTION public.is_merchant_admin_or_impersonating(uuid) IS
     'Returns true if current user is a merchant admin for the given merchant OR is an HQ admin with an active, fresh (<24h) impersonation session targeting it. Drop-in replacement for is_merchant_admin in policies that should allow impersonation.';

@@ -1,5 +1,3 @@
--- Pulled from Supabase staging branch (project dfwqakoyittmrwbqvxgw) on 2026-05-03 to reconcile local migration history.
-
 CREATE OR REPLACE FUNCTION public.process_payment_v9(
     p_order_id uuid,
     p_payment_method text,
@@ -796,4 +794,4 @@ $$;
 GRANT EXECUTE ON FUNCTION public.process_payment_v9(
   uuid, text, numeric, numeric, numeric, jsonb, uuid, jsonb,
   integer, integer, boolean, uuid, uuid, uuid
-) TO authenticated;
+) TO authenticated;;

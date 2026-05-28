@@ -43,4 +43,4 @@ BEGIN
            AND ama.is_active     = true
     );
 END;
-$$;
+$$;;

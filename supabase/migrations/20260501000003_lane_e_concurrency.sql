@@ -80,7 +80,6 @@ BEGIN
   RETURN v_result;
 END;
 $function$;
-
 -- ============================================================================
 -- E2. bulk_update_order_item_status_v2 — optional optimistic concurrency
 -- New optional last parameter `p_expected_sync_version`. If non-null, every
@@ -249,18 +248,14 @@ BEGIN
   RETURN v_result;
 END;
 $function$;
-
 -- Re-grant on the new signature. The previous 4-arg overload is automatically
 -- replaced by the 5-arg version (CREATE OR REPLACE only matches identical
 -- arg lists), so we DROP it explicitly.
 DROP FUNCTION IF EXISTS public.bulk_update_order_item_status_v2(uuid[], text, uuid, uuid);
-
 GRANT EXECUTE ON FUNCTION public.bulk_update_order_item_status_v2(uuid[], text, uuid, uuid, integer)
   TO authenticated;
-
 COMMENT ON FUNCTION public.bulk_update_order_item_status_v2(uuid[], text, uuid, uuid, integer) IS
   'Bulk-update kitchen_status on order_items + cascade to kds_item_status / orders. v2 adds optional p_idempotency_key for at-most-once execution and optional p_expected_sync_version for optimistic concurrency. When p_expected_sync_version is set, every affected order must currently match or the function raises P0004.';
-
 -- ============================================================================
 -- E3. menu_items.version — concurrency-control column
 -- App-code (Temur) does the expected-version check on UPDATE; this migration
@@ -268,6 +263,5 @@ COMMENT ON FUNCTION public.bulk_update_order_item_status_v2(uuid[], text, uuid, 
 -- ============================================================================
 ALTER TABLE public.menu_items
   ADD COLUMN IF NOT EXISTS version bigint NOT NULL DEFAULT 0;
-
 COMMENT ON COLUMN public.menu_items.version IS
   'Optimistic-concurrency token. App-code increments on UPDATE and uses WHERE version = expected_version to detect conflicting writers.';

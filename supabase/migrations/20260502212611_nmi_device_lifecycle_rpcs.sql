@@ -1,5 +1,3 @@
--- Pulled from Supabase staging branch (project dfwqakoyittmrwbqvxgw) on 2026-05-03 to reconcile local migration history.
-
 
 -- Stage 1: Create an NMI device row at status='pending_creation'
 -- Called by Carrier dashboard at start of onboarding
@@ -236,3 +234,4 @@ AS $$
     AND lpd.use_for_online_ordering = true
   LIMIT 1;
 $$;
+;

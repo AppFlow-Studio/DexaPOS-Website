@@ -69,4 +69,4 @@ BEGIN
     NEW.settlement_batch_id := v_existing_id;
     RETURN NEW;
 END;
-$$;
+$$;;

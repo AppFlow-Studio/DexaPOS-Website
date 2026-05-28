@@ -129,6 +129,239 @@ export interface SubscriptionInvoiceRecord {
   updated_at: string
 }
 
+export interface MerchantTierPlanRecord {
+  id: string
+  plan_code: string
+  display_name: string
+  min_locations: number | null
+  max_locations: number | null
+  monthly_price_cents: number
+  description: string | null
+  display_order: number
+  is_active: boolean
+}
+
+export interface MerchantTierSubscriptionRecord {
+  id: string
+  merchant_id: string
+  plan_id: string
+  plan_code: string
+  display_name: string
+  min_locations: number | null
+  max_locations: number | null
+  monthly_price_cents: number
+  description: string | null
+  status: 'active' | 'past_due' | 'suspended' | 'cancelled'
+  current_period_start: string
+  current_period_end: string
+  trial_ends_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface MerchantTierStatusRecord {
+  plan: {
+    code: string
+    name: string
+    min_locations: number | null
+    max_locations: number | null
+    monthly_price_cents: number
+    description: string | null
+  } | null
+  active_location_count: number
+  is_over_limit: boolean
+  required_plan_code: string | null
+  subscription_status: 'active' | 'past_due' | 'suspended' | 'cancelled' | null
+  current_period_end: string | null
+}
+
+export interface UpsertMerchantTierSubscriptionParams {
+  merchantId: string
+  planId: string
+  status: 'active' | 'past_due' | 'suspended' | 'cancelled'
+  currentPeriodStart: string
+  currentPeriodEnd: string
+  trialEndsAt?: string | null
+}
+
+function addOneMonthPeriod(startDate: string, endDate: string): {
+  nextPeriodStart: string
+  nextPeriodEnd: string
+} {
+  const end = new Date(`${endDate}T00:00:00.000Z`)
+  const nextStart = new Date(end)
+  nextStart.setUTCDate(nextStart.getUTCDate() + 1)
+
+  const nextEnd = new Date(nextStart)
+  nextEnd.setUTCMonth(nextEnd.getUTCMonth() + 1)
+  nextEnd.setUTCDate(nextEnd.getUTCDate() - 1)
+
+  return {
+    nextPeriodStart: nextStart.toISOString().slice(0, 10),
+    nextPeriodEnd: nextEnd.toISOString().slice(0, 10),
+  }
+}
+
+async function syncMerchantTierBillingArtifacts(params: {
+  merchantId: string
+  merchantTierSubscriptionId: string
+  planId: string
+  status: 'active' | 'past_due' | 'suspended' | 'cancelled'
+  currentPeriodStart: string
+  currentPeriodEnd: string
+}) {
+  const serviceRole = createServiceRoleClient()
+
+  const { data: anchorProfile, error: anchorProfileError } = await serviceRole
+    .from('merchant_billing_profiles')
+    .select('id, location_id, created_at')
+    .eq('merchant_id', params.merchantId)
+    .eq('is_active', true)
+    .eq('is_primary', true)
+    .not('location_id', 'is', null)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle()
+
+  if (anchorProfileError) {
+    console.error('[syncMerchantTierBillingArtifacts] anchor profile lookup error:', anchorProfileError)
+    return { success: false as const, error: 'Failed to resolve billing anchor location.' }
+  }
+
+  if (!anchorProfile?.location_id) {
+    return { success: false as const, error: 'No location billing profile is available to anchor merchant tier billing.' }
+  }
+
+  const { data: existingAnchorSubscription, error: existingAnchorSubscriptionError } = await serviceRole
+    .from('merchant_subscriptions')
+    .select('id, metadata')
+    .eq('merchant_id', params.merchantId)
+    .eq('location_id', anchorProfile.location_id)
+    .maybeSingle()
+
+  if (existingAnchorSubscriptionError) {
+    console.error(
+      '[syncMerchantTierBillingArtifacts] existing anchor subscription lookup error:',
+      existingAnchorSubscriptionError,
+    )
+    return { success: false as const, error: 'Failed to resolve location anchor subscription.' }
+  }
+
+  const anchorMetadata = {
+    billing_scope: 'merchant_tier',
+    merchant_tier_subscription_id: params.merchantTierSubscriptionId,
+    merchant_tier_plan_id: params.planId,
+  }
+
+  const { data: anchorSubscriptionId, error: anchorSubscriptionError } = await serviceRole.rpc(
+    'upsert_merchant_subscription',
+    {
+      p_subscription_id: existingAnchorSubscription?.id ?? null,
+      p_merchant_id: params.merchantId,
+      p_location_id: anchorProfile.location_id,
+      p_plan_id: params.planId,
+      p_current_period_start: params.currentPeriodStart,
+      p_current_period_end: params.currentPeriodEnd,
+      p_next_billing_date: params.currentPeriodEnd,
+      p_status: params.status === 'cancelled' ? 'canceled' : params.status,
+      p_trial_ends_at: null,
+      p_billing_profile_id: anchorProfile.id,
+      p_metadata: anchorMetadata,
+    },
+  )
+
+  if (anchorSubscriptionError || !anchorSubscriptionId) {
+    console.error('[syncMerchantTierBillingArtifacts] anchor subscription upsert error:', anchorSubscriptionError)
+    return { success: false as const, error: anchorSubscriptionError?.message || 'Failed to create anchor subscription.' }
+  }
+
+  if (params.status === 'cancelled') {
+    return {
+      success: true as const,
+      anchorLocationId: anchorProfile.location_id as string,
+      anchorSubscriptionId: anchorSubscriptionId as string,
+      invoiceId: null,
+    }
+  }
+
+  const { data: existingInvoice, error: existingInvoiceError } = await serviceRole
+    .from('subscription_invoices')
+    .select('id, created_at')
+    .eq('subscription_id', anchorSubscriptionId as string)
+    .eq('billing_period_start', params.currentPeriodStart)
+    .eq('location_id', anchorProfile.location_id)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (existingInvoiceError) {
+    console.error('[syncMerchantTierBillingArtifacts] existing invoice lookup error:', existingInvoiceError)
+    return { success: false as const, error: 'Failed to check existing merchant tier invoice.' }
+  }
+
+  let invoiceId: string | null = existingInvoice?.id ?? null
+
+  if (!invoiceId) {
+    const { data: generatedInvoiceId, error: generatedInvoiceError } = await serviceRole.rpc(
+      'generate_subscription_invoice',
+      {
+        p_subscription_id: anchorSubscriptionId as string,
+        p_due_date: params.currentPeriodEnd,
+      },
+    )
+
+    if (generatedInvoiceError || !generatedInvoiceId) {
+      console.error('[syncMerchantTierBillingArtifacts] invoice generation error:', generatedInvoiceError)
+      return { success: false as const, error: generatedInvoiceError?.message || 'Failed to generate merchant tier invoice.' }
+    }
+
+    invoiceId = generatedInvoiceId as string
+
+    const { nextPeriodStart, nextPeriodEnd } = addOneMonthPeriod(
+      params.currentPeriodStart,
+      params.currentPeriodEnd,
+    )
+
+    const { error: mirrorAdvanceError } = await serviceRole
+      .from('merchant_plan_subscriptions')
+      .update({
+        current_period_start: nextPeriodStart,
+        current_period_end: nextPeriodEnd,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', params.merchantTierSubscriptionId)
+
+    if (mirrorAdvanceError) {
+      console.error('[syncMerchantTierBillingArtifacts] merchant tier period advance error:', mirrorAdvanceError)
+    }
+  } else {
+    const { data: duplicateInvoiceId, error: duplicateInvoiceError } = await serviceRole.rpc(
+      'generate_subscription_invoice_snapshot',
+      {
+        p_subscription_id: anchorSubscriptionId as string,
+        p_due_date: params.currentPeriodEnd,
+      },
+    )
+
+    if (duplicateInvoiceError || !duplicateInvoiceId) {
+      console.error('[syncMerchantTierBillingArtifacts] duplicate tier invoice generation error:', duplicateInvoiceError)
+      return {
+        success: false as const,
+        error: duplicateInvoiceError?.message || 'Failed to generate updated merchant tier invoice.',
+      }
+    }
+
+    invoiceId = duplicateInvoiceId as string
+  }
+
+  return {
+    success: true as const,
+    anchorLocationId: anchorProfile.location_id as string,
+    anchorSubscriptionId: anchorSubscriptionId as string,
+    invoiceId,
+  }
+}
+
 export interface UpsertMerchantSubscriptionParams {
   subscriptionId?: string
   merchantId: string
@@ -344,6 +577,221 @@ export async function getSubscriptionPlans(): Promise<SubscriptionPlanRecord[]> 
   }
 
   return (data ?? []) as SubscriptionPlanRecord[]
+}
+
+export async function getMerchantTierPlans(): Promise<MerchantTierPlanRecord[]> {
+  await assertHQPermission('system.billing.manage')
+
+  const supabase = createServerSupabaseClient()
+  const { data, error } = await supabase
+    .from('subscription_plans')
+    .select('id, plan_code, display_name, min_locations, max_locations, monthly_price_cents, description, display_order, is_active')
+    .eq('plan_scope', 'merchant_tier')
+    .eq('is_active', true)
+    .order('display_order', { ascending: true })
+    .order('display_name', { ascending: true })
+
+  if (error) {
+    console.error('[getMerchantTierPlans] Error:', error)
+    throw new Error('Failed to load merchant tier plans.')
+  }
+
+  return ((data ?? []) as MerchantTierPlanRecord[]).map((row) => ({
+    ...row,
+    min_locations: row.min_locations === null ? null : Number(row.min_locations || 0),
+    max_locations: row.max_locations === null ? null : Number(row.max_locations || 0),
+    monthly_price_cents: Number(row.monthly_price_cents || 0),
+    display_order: Number(row.display_order || 0),
+  }))
+}
+
+export async function getMerchantTierStatus(
+  merchantId: string,
+): Promise<MerchantTierStatusRecord> {
+  await assertHQPermission('system.billing.manage')
+
+  const supabase = createServerSupabaseClient()
+  const { data, error } = await supabase.rpc('get_merchant_subscription_status', {
+    p_merchant_id: merchantId,
+  })
+
+  if (error) {
+    console.error('[getMerchantTierStatus] Error:', error)
+    throw new Error('Failed to load merchant plan status.')
+  }
+
+  const raw = (data ?? {}) as Record<string, any>
+
+  return {
+    plan: raw.plan
+      ? {
+          code: String(raw.plan.code),
+          name: String(raw.plan.name),
+          min_locations: raw.plan.min_locations === null ? null : Number(raw.plan.min_locations || 0),
+          max_locations: raw.plan.max_locations === null ? null : Number(raw.plan.max_locations || 0),
+          monthly_price_cents: Number(raw.plan.monthly_price_cents || 0),
+          description: typeof raw.plan.description === 'string' ? raw.plan.description : null,
+        }
+      : null,
+    active_location_count: Number(raw.active_location_count || 0),
+    is_over_limit: Boolean(raw.is_over_limit),
+    required_plan_code: typeof raw.required_plan_code === 'string' ? raw.required_plan_code : null,
+    subscription_status:
+      typeof raw.subscription_status === 'string'
+        ? (raw.subscription_status as MerchantTierStatusRecord['subscription_status'])
+        : null,
+    current_period_end: typeof raw.current_period_end === 'string' ? raw.current_period_end : null,
+  }
+}
+
+export async function getMerchantTierSubscription(
+  merchantId: string,
+): Promise<MerchantTierSubscriptionRecord | null> {
+  await assertHQPermission('system.billing.manage')
+
+  const serviceRole = createServiceRoleClient()
+  const { data, error } = await serviceRole
+    .from('merchant_plan_subscriptions')
+    .select(`
+      id,
+      merchant_id,
+      plan_id,
+      status,
+      current_period_start,
+      current_period_end,
+      trial_ends_at,
+      created_at,
+      updated_at,
+      subscription_plans!inner(
+        plan_code,
+        display_name,
+        min_locations,
+        max_locations,
+        monthly_price_cents,
+        description
+      )
+    `)
+    .eq('merchant_id', merchantId)
+    .eq('subscription_plans.plan_scope', 'merchant_tier')
+    .order('updated_at', { ascending: false })
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (error) {
+    console.error('[getMerchantTierSubscription] Error:', error)
+    throw new Error('Failed to load merchant plan subscription.')
+  }
+
+  if (!data) {
+    return null
+  }
+
+  const plan = Array.isArray((data as any).subscription_plans)
+    ? (data as any).subscription_plans[0]
+    : (data as any).subscription_plans
+
+  return {
+    id: data.id as string,
+    merchant_id: data.merchant_id as string,
+    plan_id: data.plan_id as string,
+    plan_code: String(plan?.plan_code || ''),
+    display_name: String(plan?.display_name || ''),
+    min_locations: plan?.min_locations === null ? null : Number(plan?.min_locations || 0),
+    max_locations: plan?.max_locations === null ? null : Number(plan?.max_locations || 0),
+    monthly_price_cents: Number(plan?.monthly_price_cents || 0),
+    description: typeof plan?.description === 'string' ? plan.description : null,
+    status: data.status as MerchantTierSubscriptionRecord['status'],
+    current_period_start: data.current_period_start as string,
+    current_period_end: data.current_period_end as string,
+    trial_ends_at: (data.trial_ends_at as string | null) ?? null,
+    created_at: data.created_at as string,
+    updated_at: data.updated_at as string,
+  }
+}
+
+export async function upsertMerchantTierSubscription(
+  params: UpsertMerchantTierSubscriptionParams,
+): Promise<{
+  success: boolean
+  subscriptionId?: string
+  invoiceId?: string | null
+  anchorLocationId?: string
+  error?: string
+}> {
+  await assertHQPermission('system.billing.manage')
+
+  if (!params.merchantId || !params.planId) {
+    return { success: false, error: 'merchantId and planId are required.' }
+  }
+
+  const serviceRole = createServiceRoleClient()
+  const { data: existing, error: existingError } = await serviceRole
+    .from('merchant_plan_subscriptions')
+    .select('id, status')
+    .eq('merchant_id', params.merchantId)
+    .order('updated_at', { ascending: false })
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (existingError) {
+    console.error('[upsertMerchantTierSubscription] Existing lookup error:', existingError)
+    return { success: false, error: 'Failed to load existing merchant plan.' }
+  }
+
+  const payload = {
+    merchant_id: params.merchantId,
+    plan_id: params.planId,
+    status: params.status,
+    current_period_start: params.currentPeriodStart,
+    current_period_end: params.currentPeriodEnd,
+    trial_ends_at: params.trialEndsAt ?? null,
+  }
+
+  const result = existing?.id
+    ? await serviceRole
+        .from('merchant_plan_subscriptions')
+        .update(payload)
+        .eq('id', existing.id)
+        .select('id')
+        .single()
+    : await serviceRole
+        .from('merchant_plan_subscriptions')
+        .insert(payload)
+        .select('id')
+        .single()
+
+  if (result.error || !result.data) {
+    console.error('[upsertMerchantTierSubscription] Upsert error:', result.error)
+    return { success: false, error: result.error?.message || 'Failed to save merchant plan.' }
+  }
+
+  const synced = await syncMerchantTierBillingArtifacts({
+    merchantId: params.merchantId,
+    merchantTierSubscriptionId: result.data.id as string,
+    planId: params.planId,
+    status: params.status,
+    currentPeriodStart: params.currentPeriodStart,
+    currentPeriodEnd: params.currentPeriodEnd,
+  })
+
+  if (!synced.success) {
+    return { success: false, error: synced.error }
+  }
+
+  revalidatePath('/manage/subscriptions')
+  revalidatePath(`/manage/subscriptions/${params.merchantId}`)
+  revalidatePath('/dashboard/subscriptions')
+  revalidatePath(`/manage/merchants/${params.merchantId}`)
+  revalidatePath(`/manage/merchants/${params.merchantId}/billing`)
+
+  return {
+    success: true,
+    subscriptionId: result.data.id as string,
+    invoiceId: synced.invoiceId,
+    anchorLocationId: synced.anchorLocationId,
+  }
 }
 
 export async function getBillableServices(): Promise<BillableServiceRecord[]> {
@@ -670,8 +1118,44 @@ export async function generateSubscriptionInvoiceManually(
   })
 
   if (error) {
-    console.error('[generateSubscriptionInvoiceManually] Error:', error)
-    return { success: false, error: error.message }
+    const isDuplicatePeriodError = /invoice already exists for subscription/i.test(error.message || '')
+
+    if (!isDuplicatePeriodError) {
+      console.error('[generateSubscriptionInvoiceManually] Error:', error)
+      return { success: false, error: error.message }
+    }
+
+    const serviceRole = createServiceRoleClient()
+    const { data: duplicateInvoiceId, error: duplicateInvoiceError } = await serviceRole.rpc(
+      'generate_subscription_invoice_snapshot',
+      {
+        p_subscription_id: subscriptionId,
+        p_due_date: dueDate ?? null,
+      },
+    )
+
+    if (duplicateInvoiceError || !duplicateInvoiceId) {
+      console.error('[generateSubscriptionInvoiceManually] Duplicate fallback snapshot error:', duplicateInvoiceError)
+      return { success: false, error: 'Failed to create a duplicate test invoice.' }
+    }
+
+    const { data: duplicateInvoice, error: duplicateInvoiceLookupError } = await serviceRole
+      .from('subscription_invoices')
+      .select('id, merchant_id')
+      .eq('id', duplicateInvoiceId as string)
+      .maybeSingle()
+
+    if (duplicateInvoiceLookupError || !duplicateInvoice) {
+      console.error('[generateSubscriptionInvoiceManually] Duplicate fallback invoice lookup error:', duplicateInvoiceLookupError)
+      return { success: false, error: 'Failed to load the duplicate test invoice.' }
+    }
+
+    revalidatePath('/manage/billing')
+    revalidatePath(`/manage/merchants/${duplicateInvoice.merchant_id}`)
+    revalidatePath(`/manage/merchants/${duplicateInvoice.merchant_id}/billing`)
+    revalidatePath('/manage/subscriptions')
+
+    return { success: true, invoiceId: duplicateInvoice.id as string }
   }
 
   revalidatePath('/manage/billing')

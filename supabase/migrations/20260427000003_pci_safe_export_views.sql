@@ -42,7 +42,6 @@ COMMENT ON COLUMN public.order_payments.terminal_request IS
   '@pci-sensitive Raw terminal request payload. May contain PAN/track data.';
 COMMENT ON COLUMN public.order_payments.emv_data IS
   '@pci-sensitive Raw EMV chip data. PCI scope by definition.';
-
 -- ---------------------------------------------------------------------------
 -- 2) The PCI-safe export view for order_payments.
 --
@@ -140,14 +139,10 @@ SELECT
     NULLIF(op.terminal_response->>'entryMode', '')
   ) AS entry_mode
 FROM public.order_payments op;
-
 ALTER VIEW public.pci_safe_order_payments OWNER TO postgres;
-
 COMMENT ON VIEW public.pci_safe_order_payments IS
   'PCI-safe projection of order_payments. Export RPCs MUST SELECT FROM this view, never the base table. See migration 20260427000003 for the exclusion list.';
-
 GRANT SELECT ON public.pci_safe_order_payments TO authenticated, service_role;
-
 -- ---------------------------------------------------------------------------
 -- 3) Refactor get_admin_transactions_export to use the view.
 -- ---------------------------------------------------------------------------
@@ -408,7 +403,6 @@ BEGIN
   LIMIT v_export_limit;
 END;
 $$;
-
 -- ---------------------------------------------------------------------------
 -- 4) Registry of export functions. The regression test iterates this.
 --    Adding a new export RPC means adding it here AND making sure its source
@@ -419,10 +413,8 @@ CREATE TABLE IF NOT EXISTS public.pci_export_function_registry (
   registered_at timestamptz NOT NULL DEFAULT now(),
   notes text
 );
-
 INSERT INTO public.pci_export_function_registry (function_name, notes)
 VALUES ('get_admin_transactions_export', 'HQ admin transactions export — A13 PCI-safe.')
 ON CONFLICT (function_name) DO NOTHING;
-
 COMMENT ON TABLE public.pci_export_function_registry IS
   'Registry of every RPC that produces user-downloadable exports of payment data. Regression test in 20260427000004 verifies each one references only pci_safe_* views.';

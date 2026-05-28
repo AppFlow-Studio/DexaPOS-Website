@@ -69,7 +69,6 @@ BEGIN
   RETURN jsonb_build_object('success', true, 'name', v_location_name);
 END;
 $$;
-
 -- ============================================================
 -- restore_location
 -- ============================================================

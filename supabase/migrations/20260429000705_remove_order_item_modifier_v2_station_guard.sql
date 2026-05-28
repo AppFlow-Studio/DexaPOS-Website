@@ -1,6 +1,5 @@
 -- Migration: remove_order_item_modifier_v2 — Wave 1.4 station-ownership guard
 DROP FUNCTION IF EXISTS public.remove_order_item_modifier_v2(uuid, uuid);
-
 CREATE OR REPLACE FUNCTION public.remove_order_item_modifier_v2(
   p_modifier_id uuid,
   p_idempotency_key UUID DEFAULT NULL,
@@ -73,8 +72,6 @@ BEGIN
   RETURN v_result;
 END;
 $function$;
-
 GRANT EXECUTE ON FUNCTION public.remove_order_item_modifier_v2(uuid, uuid, uuid) TO authenticated;
-
 COMMENT ON FUNCTION public.remove_order_item_modifier_v2 IS
-  'Removes a modifier from an order item. v2 adds optional p_idempotency_key. Wave 1.4 adds optional p_station_id (NULL = bypass) for cross-station ownership enforcement.';;
+  'Removes a modifier from an order item. v2 adds optional p_idempotency_key. Wave 1.4 adds optional p_station_id (NULL = bypass) for cross-station ownership enforcement.';

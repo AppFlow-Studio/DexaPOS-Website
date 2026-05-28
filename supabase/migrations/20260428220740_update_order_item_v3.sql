@@ -104,8 +104,6 @@ BEGIN
     RETURN v_result;
 END;
 $function$;
-
 GRANT EXECUTE ON FUNCTION public.update_order_item_v3(uuid, integer, numeric, text, integer, uuid) TO authenticated;
-
 COMMENT ON FUNCTION public.update_order_item_v3 IS
-  'Wave 3.0a: idempotent UPDATE with optional p_idempotency_key. Forks from v2 (5-param signature); accepts q/price/instructions/seat with same NULL-defaulting semantics. Same-intent retries dedupe via _idempotency_claim cache.';;
+  'Wave 3.0a: idempotent UPDATE with optional p_idempotency_key. Forks from v2 (5-param signature); accepts q/price/instructions/seat with same NULL-defaulting semantics. Same-intent retries dedupe via _idempotency_claim cache.';

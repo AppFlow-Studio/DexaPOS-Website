@@ -5,11 +5,9 @@
 
 ALTER TABLE public.menu_items
   ADD COLUMN IF NOT EXISTS dietary_flags text[] NOT NULL DEFAULT '{}';
-
 -- GIN index so the storefront can server-side filter without full scans
 CREATE INDEX IF NOT EXISTS menu_items_dietary_flags_gin
   ON public.menu_items USING GIN (dietary_flags);
-
 -- Expose in get_menu_with_categories RPC so the storefront mapper can read it
 CREATE OR REPLACE FUNCTION "public"."get_menu_with_categories"("p_menu_id" "uuid", "p_location_id" "uuid" DEFAULT NULL::"uuid") RETURNS json
     LANGUAGE "plpgsql" SECURITY DEFINER

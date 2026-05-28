@@ -1,16 +1,3 @@
--- Fix: 42P01 "relation cash_drawer_sessions does not exist" raised from
--- public.record_cash_operation() because it has SET search_path = ''
--- but its body references cash_drawer_sessions / cash_drawer_operations
--- / audit_logs without `public.` qualification.
---
--- Same regression class as 20260430160000_qualify_empty_search_path_rpc_bodies.sql
--- (process_payment_v8, apply_refund_to_payment, remove_order_item, void_payment).
---
--- This migration only handles record_cash_operation — the table audit
--- (find functions with empty search_path + at least one unqualified public
---  table ref) lists 8 more candidates. Decide per-function whether to
--- do a body rewrite (durable) or a metadata-only ALTER (quick).
-
 CREATE OR REPLACE FUNCTION public.record_cash_operation(
   p_cash_drawer_id uuid,
   p_session_id uuid,
@@ -110,4 +97,4 @@ BEGIN
 END;
 $function$;
 
-NOTIFY pgrst, 'reload schema';
+NOTIFY pgrst, 'reload schema';;

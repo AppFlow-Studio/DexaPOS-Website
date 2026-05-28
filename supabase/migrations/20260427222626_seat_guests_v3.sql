@@ -112,5 +112,4 @@ BEGIN
   RETURN v_result;
 END;
 $function$;
-
-GRANT EXECUTE ON FUNCTION public.seat_guests_v3(uuid[], integer, text, text, text, uuid, uuid, boolean, uuid, text, uuid, uuid) TO authenticated;;
+GRANT EXECUTE ON FUNCTION public.seat_guests_v3(uuid[], integer, text, text, text, uuid, uuid, boolean, uuid, text, uuid, uuid) TO authenticated;

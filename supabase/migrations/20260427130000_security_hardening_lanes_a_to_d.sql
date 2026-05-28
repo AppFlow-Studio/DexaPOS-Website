@@ -15,7 +15,6 @@
 -- =============================================================================
 
 begin;
-
 -- =============================================================================
 -- Shared helper for tenant-scoped RLS
 -- =============================================================================
@@ -72,11 +71,9 @@ as $function$
       )
     );
 $function$;
-
 revoke all on function public.user_belongs_to_merchant(uuid) from public;
 grant execute on function public.user_belongs_to_merchant(uuid) to authenticated;
 grant execute on function public.user_belongs_to_merchant(uuid) to service_role;
-
 -- =============================================================================
 -- Lane A - RLS lockdown
 -- =============================================================================
@@ -84,7 +81,6 @@ grant execute on function public.user_belongs_to_merchant(uuid) to service_role;
 -- A1. merchants must have enabled + forced RLS
 alter table public.merchants enable row level security;
 alter table only public.merchants force row level security;
-
 -- A2. Replace always-true tenant-scoped SELECT policies
 
 drop policy if exists "location_select" on public.locations;
@@ -96,14 +92,12 @@ using (
   public.user_belongs_to_merchant(merchant_id)
   or public.is_location_member(id)
 );
-
 drop policy if exists "locations_insert" on public.locations;
 create policy "locations_insert"
 on public.locations
 for insert
 to authenticated
 with check (public.user_belongs_to_merchant(merchant_id));
-
 drop policy if exists "locations_update" on public.locations;
 create policy "locations_update"
 on public.locations
@@ -114,7 +108,6 @@ using (
   or public.user_has_location_permission(id, 'location.manage')
 )
 with check (public.user_belongs_to_merchant(merchant_id));
-
 drop policy if exists "Enable read access for all users" on public.categories;
 drop policy if exists "categories_tenant_select" on public.categories;
 create policy "categories_tenant_select"
@@ -122,7 +115,6 @@ on public.categories
 for select
 to authenticated
 using (public.user_belongs_to_merchant(merchant_id));
-
 drop policy if exists "Enable read access for all users" on public.category_items;
 drop policy if exists "category_items_tenant_select" on public.category_items;
 create policy "category_items_tenant_select"
@@ -130,7 +122,6 @@ on public.category_items
 for select
 to authenticated
 using (public.user_belongs_to_merchant(merchant_id));
-
 drop policy if exists "Enable read access for all users" on public.category_schedules;
 drop policy if exists "category_schedules_tenant_select" on public.category_schedules;
 create policy "category_schedules_tenant_select"
@@ -138,7 +129,6 @@ on public.category_schedules
 for select
 to authenticated
 using (public.user_belongs_to_merchant(merchant_id));
-
 drop policy if exists "Enable read access for all users" on public.menu_item_menus;
 drop policy if exists "menu_item_menus_tenant_select" on public.menu_item_menus;
 create policy "menu_item_menus_tenant_select"
@@ -146,7 +136,6 @@ on public.menu_item_menus
 for select
 to authenticated
 using (public.user_belongs_to_merchant(merchant_id));
-
 drop policy if exists "Enable read access for all users" on public.menu_item_modifier_groups;
 drop policy if exists "menu_item_modifier_groups_tenant_select" on public.menu_item_modifier_groups;
 create policy "menu_item_modifier_groups_tenant_select"
@@ -154,7 +143,6 @@ on public.menu_item_modifier_groups
 for select
 to authenticated
 using (public.user_belongs_to_merchant(merchant_id));
-
 drop policy if exists "Enable read access for all users" on public.modifier_group_items;
 drop policy if exists "modifier_group_items_tenant_select" on public.modifier_group_items;
 create policy "modifier_group_items_tenant_select"
@@ -162,7 +150,6 @@ on public.modifier_group_items
 for select
 to authenticated
 using (public.user_belongs_to_merchant(merchant_id));
-
 drop policy if exists "Enable read access for all users" on public.order_payment_items;
 drop policy if exists "order_payment_items_tenant_select" on public.order_payment_items;
 create policy "order_payment_items_tenant_select"
@@ -179,7 +166,6 @@ using (
       and public.user_belongs_to_merchant(o.merchant_id)
   )
 );
-
 drop policy if exists "Enable read access for all users" on public.members;
 drop policy if exists "members_tenant_select" on public.members;
 create policy "members_tenant_select"
@@ -195,7 +181,6 @@ using (
       and public.user_belongs_to_merchant(mer.id)
   )
 );
-
 drop policy if exists "Enable read access for all users" on public.organizations;
 drop policy if exists "organizations_tenant_select" on public.organizations;
 create policy "organizations_tenant_select"
@@ -211,7 +196,6 @@ using (
       and public.user_belongs_to_merchant(mer.id)
   )
 );
-
 drop policy if exists "Enable read access for all users" on public.users;
 drop policy if exists "users_tenant_select" on public.users;
 create policy "users_tenant_select"
@@ -235,7 +219,6 @@ using (
       and public.user_belongs_to_merchant(mer.id)
   )
 );
-
 -- Tables added after the main remote dump still shipped with SELECT USING (true)
 drop policy if exists "Enable read access for all users" on public.category_modifier_groups;
 drop policy if exists "category_modifier_groups_tenant_select" on public.category_modifier_groups;
@@ -244,7 +227,6 @@ on public.category_modifier_groups
 for select
 to authenticated
 using (public.user_belongs_to_merchant(merchant_id));
-
 drop policy if exists "Enable read access for all users" on public.location_item_modifier_groups;
 drop policy if exists "location_item_modifier_groups_tenant_select" on public.location_item_modifier_groups;
 create policy "location_item_modifier_groups_tenant_select"
@@ -252,11 +234,9 @@ on public.location_item_modifier_groups
 for select
 to authenticated
 using (public.user_belongs_to_merchant(merchant_id));
-
 -- A3. Lock down audit_logs
 drop policy if exists "audit_logs_insert" on public.audit_logs;
 drop policy if exists "audit_logs_read" on public.audit_logs;
-
 create policy "audit_logs_read"
 on public.audit_logs
 for select
@@ -265,7 +245,6 @@ using (
   merchant_id is not null
   and public.user_belongs_to_merchant(merchant_id)
 );
-
 create policy "audit_logs_insert"
 on public.audit_logs
 for insert
@@ -277,7 +256,6 @@ with check (
     or public.user_belongs_to_merchant(merchant_id)
   )
 );
-
 -- A4 + A6. Rebuild CFD policies explicitly
 do $$
 declare
@@ -297,13 +275,11 @@ begin
     );
   end loop;
 end $$;
-
 create policy "cfd_carousel_images_public_read"
 on public.cfd_carousel_images
 for select
 to anon, authenticated
 using (true);
-
 create policy "cfd_carousel_images_location_write"
 on public.cfd_carousel_images
 to authenticated
@@ -313,13 +289,11 @@ using (
 with check (
   location_id = any (public.user_location_ids())
 );
-
 create policy "cfd_ordering_panel_images_public_read"
 on public.cfd_ordering_panel_images
 for select
 to anon, authenticated
 using (true);
-
 create policy "cfd_ordering_panel_images_location_write"
 on public.cfd_ordering_panel_images
 to authenticated
@@ -329,11 +303,9 @@ using (
 with check (
   location_id = any (public.user_location_ids())
 );
-
 -- A5. waitlist needs forced RLS and tenant-scoped access
 alter table public.waitlist enable row level security;
 alter table only public.waitlist force row level security;
-
 drop policy if exists "waitlist_tenant_scope" on public.waitlist;
 create policy "waitlist_tenant_scope"
 on public.waitlist
@@ -347,7 +319,6 @@ with check (
   public.user_belongs_to_merchant(merchant_id)
   or public.is_location_member(location_id)
 );
-
 -- A7. session_kick_notifications must not be globally readable/writable
 drop policy if exists "session_kick_notifications_location_scope" on public.session_kick_notifications;
 drop policy if exists "session_kick_notifications_tenant_scope" on public.session_kick_notifications;
@@ -377,7 +348,6 @@ with check (
       )
   )
 );
-
 -- =============================================================================
 -- Lane B - Cascade FK hardening
 -- =============================================================================
@@ -389,7 +359,6 @@ alter table public.audit_logs
   foreign key (merchant_id)
   references public.merchants(id)
   on delete set null;
-
 alter table public.audit_logs
   drop constraint if exists audit_logs_actor_user_id_fkey;
 alter table public.audit_logs
@@ -398,7 +367,6 @@ alter table public.audit_logs
   references public.users(id)
   on update cascade
   on delete set null;
-
 alter table public.order_payments
   drop constraint if exists order_payments_order_id_fkey;
 alter table public.order_payments
@@ -406,7 +374,6 @@ alter table public.order_payments
   foreign key (order_id)
   references public.orders(id)
   on delete restrict;
-
 -- B4 follow-up only:
 -- - merchant_billing_profiles.merchant_id_fkey
 -- - customers.merchant_id_fkey
@@ -421,7 +388,6 @@ update public.location_members
 set pin_hashed = extensions.crypt(pin_plain, extensions.gen_salt('bf', 10))
 where pin_plain is not null
   and pin_hashed is null;
-
 do $$
 begin
   if exists (
@@ -433,7 +399,6 @@ begin
     raise exception 'PIN hash backfill incomplete: location_members rows still have pin_plain without pin_hashed';
   end if;
 end $$;
-
 -- =============================================================================
 -- Lane D - SECURITY DEFINER privilege hardening
 -- =============================================================================
@@ -472,7 +437,6 @@ begin
     execute format('alter function %s set search_path = ''''', r.regproc);
   end loop;
 end $$;
-
 do $$
 declare
   r record;
@@ -506,5 +470,4 @@ begin
     execute format('revoke execute on function %s from public, anon', r.regproc);
   end loop;
 end $$;
-
 commit;
