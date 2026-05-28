@@ -154,7 +154,7 @@ interface QrScanEventRow {
 
 interface QrAnalyticsEventRow {
   stage: string;
-  table_label: string | null;
+  table_qr_code_id: string | null;
   occurred_at: string;
 }
 
@@ -1633,7 +1633,7 @@ export async function getQrAnalyticsSnapshot(
   const [eventsResult, qrOrdersResult, dineInOrdersResult] = await Promise.all([
     db
       .from("qr_scan_events")
-      .select("stage, table_label, occurred_at")
+      .select("stage, table_qr_code_id, occurred_at")
       .eq("location_id", locationId)
       .gte("occurred_at", sinceIso),
     db
@@ -1675,6 +1675,39 @@ export async function getQrAnalyticsSnapshot(
     };
   }
 
+  const tableQrCodeIds = Array.from(
+    new Set(
+      ((eventsResult.data ?? []) as QrAnalyticsEventRow[])
+        .map((event) => readString(event.table_qr_code_id))
+        .filter((value): value is string => Boolean(value))
+    )
+  );
+
+  const qrCodeLabelMap = new Map<string, string>();
+  if (tableQrCodeIds.length > 0) {
+    const qrCodesResult = await db
+      .from("table_qr_codes")
+      .select("id, table_label")
+      .in("id", tableQrCodeIds);
+
+    if (qrCodesResult.error) {
+      return {
+        ...empty,
+        error: qrCodesResult.error.message,
+      };
+    }
+
+    for (const row of (qrCodesResult.data ?? []) as Array<{
+      id: string;
+      table_label: string | null;
+    }>) {
+      qrCodeLabelMap.set(
+        row.id,
+        readString(row.table_label) ?? "Unknown table"
+      );
+    }
+  }
+
   const events = (eventsResult.data ?? []) as QrAnalyticsEventRow[];
   const qrOrders = (qrOrdersResult.data ?? []) as QrAnalyticsOrderRow[];
   const dineInOrders = (dineInOrdersResult.data ?? []) as QrAnalyticsOrderRow[];
@@ -1701,7 +1734,10 @@ export async function getQrAnalyticsSnapshot(
     if (stage === "scanned") {
       stages.scanned += 1;
       byHour[hour].scans += 1;
-      const tableLabel = readString(event.table_label) ?? "Unknown table";
+      const tableLabel =
+        (event.table_qr_code_id
+          ? qrCodeLabelMap.get(event.table_qr_code_id)
+          : null) ?? "Unknown table";
       tableScanMap.set(tableLabel, (tableScanMap.get(tableLabel) ?? 0) + 1);
       continue;
     }

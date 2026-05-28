@@ -416,7 +416,7 @@ export function QrTableManager({
                 className={cn(
                   "rounded px-2 py-1 transition-colors",
                   brandMode === "merchant"
-                    ? "bg-[#0C4FD1] text-white"
+                    ? "bg-primary text-primary-foreground"
                     : "text-muted-foreground hover:text-foreground"
                 )}
               >
@@ -428,7 +428,7 @@ export function QrTableManager({
                 className={cn(
                   "rounded px-2 py-1 transition-colors",
                   brandMode === "dexa"
-                    ? "bg-[#0C4FD1] text-white"
+                    ? "bg-primary text-primary-foreground"
                     : "text-muted-foreground hover:text-foreground"
                 )}
               >

@@ -191,6 +191,7 @@ These are the dashboard-side changes now in repo locally.
   - DEXA vs merchant text-branding mode for exported assets
 - Generate/reprint/regenerate actions now also respect the same QR billing gate server-side
 - Guest preview now opens locally from the manager using the same shared QR URL contract as the exported assets. It still is not safe to claim done until the final guest QR route is smoke tested end to end on staging.
+- The QR analytics period toggle and the QR manager merchant/DEXA switch now use the app primary color token instead of a separate hardcoded blue.
 
 ### What this dashboard slice does not solve yet
 - live-orders QR badge
@@ -241,6 +242,7 @@ These are the dashboard-side changes now in repo locally.
   - `qr_scan_events`
   - `orders` where `order_type = 'qr_dine_in'`
   - `orders` where `order_type = 'dine_in'` for the server comparison baseline
+- Scan table labels are resolved through `table_qr_codes`, not from a nonexistent `qr_scan_events.table_label` column.
 - This is still not safe to check off until the app and edge changes are deployed and the panel is verified against real staging QR data
 
 ### QR abandoned-cart analytics

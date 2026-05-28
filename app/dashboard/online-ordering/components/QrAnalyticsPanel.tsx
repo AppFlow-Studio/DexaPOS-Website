@@ -115,7 +115,11 @@ export function QrAnalyticsPanel({
                 size="sm"
                 variant={rangeDays === days ? "default" : "outline"}
                 onClick={() => setRangeDays(days as 7 | 30)}
-                className={rangeDays === days ? "bg-[#0C4FD1] hover:bg-[#0A43B0]" : ""}
+                className={
+                  rangeDays === days
+                    ? "border-primary bg-primary text-primary-foreground hover:bg-primary/90"
+                    : ""
+                }
               >
                 Last {days}d
               </Button>
