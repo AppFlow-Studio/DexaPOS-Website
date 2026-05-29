@@ -984,7 +984,7 @@ CREATE TABLE public.kds_displays (
 );
 CREATE TABLE public.kds_item_status (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
-  kds_display_id uuid NOT NULL,
+  kds_display_id uuid,
   order_id uuid NOT NULL,
   order_item_id uuid NOT NULL,
   status text NOT NULL DEFAULT 'new'::text,
@@ -993,11 +993,14 @@ CREATE TABLE public.kds_item_status (
   bumped_at timestamp with time zone,
   bumped_by uuid,
   created_at timestamp with time zone DEFAULT now(),
+  acknowledged_at timestamp with time zone,
+  acknowledged_by uuid,
   CONSTRAINT kds_item_status_pkey PRIMARY KEY (id),
   CONSTRAINT kds_item_status_bumped_by_fkey FOREIGN KEY (bumped_by) REFERENCES public.location_members(id),
   CONSTRAINT kds_item_status_kds_display_id_fkey FOREIGN KEY (kds_display_id) REFERENCES public.kds_displays(id),
   CONSTRAINT kds_item_status_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id),
-  CONSTRAINT kds_item_status_order_item_id_fkey FOREIGN KEY (order_item_id) REFERENCES public.order_items(id)
+  CONSTRAINT kds_item_status_order_item_id_fkey FOREIGN KEY (order_item_id) REFERENCES public.order_items(id),
+  CONSTRAINT kds_item_status_acknowledged_by_fkey FOREIGN KEY (acknowledged_by) REFERENCES public.staff_profiles(id)
 );
 CREATE TABLE public.kds_routing_rules (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -1007,6 +1010,55 @@ CREATE TABLE public.kds_routing_rules (
   created_at timestamp with time zone DEFAULT now(),
   CONSTRAINT kds_routing_rules_pkey PRIMARY KEY (id),
   CONSTRAINT kds_routing_rules_kds_display_id_fkey FOREIGN KEY (kds_display_id) REFERENCES public.kds_displays(id)
+);
+CREATE TABLE public.kiosk_pickup_sequences (
+  location_id uuid NOT NULL,
+  business_date date NOT NULL,
+  current_value integer NOT NULL DEFAULT 0,
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT kiosk_pickup_sequences_pkey PRIMARY KEY (location_id, business_date),
+  CONSTRAINT kiosk_pickup_sequences_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id)
+);
+CREATE TABLE public.kiosk_profiles (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  merchant_id uuid NOT NULL,
+  location_id uuid NOT NULL,
+  profile_name text NOT NULL DEFAULT 'Default Kiosk'::text,
+  template_id text NOT NULL DEFAULT 'template_a'::text CHECK (template_id = ANY (ARRAY['template_a'::text, 'template_b'::text, 'template_c'::text])),
+  primary_color text NOT NULL DEFAULT '#0C4FD1'::text,
+  secondary_color text,
+  accent_color text,
+  background_color text NOT NULL DEFAULT '#FFFFFF'::text,
+  text_color text NOT NULL DEFAULT '#0A0A0A'::text,
+  header_text_color text,
+  font_family text DEFAULT 'Inter'::text,
+  logo_url text,
+  hero_image_url text,
+  attract_video_url text,
+  attract_image_urls jsonb NOT NULL DEFAULT '[]'::jsonb,
+  orientation text NOT NULL DEFAULT 'vertical'::text CHECK (orientation = ANY (ARRAY['vertical'::text, 'horizontal'::text])),
+  idle_timeout_seconds integer NOT NULL DEFAULT 60 CHECK (idle_timeout_seconds >= 15 AND idle_timeout_seconds <= 600),
+  cart_reset_timeout_seconds integer NOT NULL DEFAULT 30 CHECK (cart_reset_timeout_seconds >= 10 AND cart_reset_timeout_seconds <= 300),
+  welcome_message text DEFAULT 'Tap to order'::text,
+  pickup_number_prefix text DEFAULT ''::text,
+  auto_print_receipt boolean NOT NULL DEFAULT false,
+  receipt_email_prompt boolean NOT NULL DEFAULT true,
+  receipt_sms_prompt boolean NOT NULL DEFAULT true,
+  show_calorie_info boolean NOT NULL DEFAULT false,
+  show_allergens boolean NOT NULL DEFAULT true,
+  loyalty_enrollment_enabled boolean NOT NULL DEFAULT true,
+  tip_screen_enabled boolean NOT NULL DEFAULT true,
+  tip_presets jsonb NOT NULL DEFAULT '[15, 18, 20, 25]'::jsonb,
+  is_active boolean NOT NULL DEFAULT false,
+  payment_terminal_id uuid,
+  admin_pin_hash text,
+  published_at timestamp with time zone,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT kiosk_profiles_pkey PRIMARY KEY (id),
+  CONSTRAINT kiosk_profiles_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
+  CONSTRAINT kiosk_profiles_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
+  CONSTRAINT kiosk_profiles_payment_terminal_id_fkey FOREIGN KEY (payment_terminal_id) REFERENCES public.payment_terminals(id)
 );
 CREATE TABLE public.location_banking_profiles (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -1411,6 +1463,7 @@ CREATE TABLE public.locations (
   luqra_mid_descriptor text,
   luqra_mid_status text NOT NULL DEFAULT 'pending'::text CHECK (luqra_mid_status = ANY (ARRAY['pending'::text, 'review'::text, 'live'::text, 'offline'::text])),
   luqra_mid_assigned_at timestamp with time zone,
+  cfd_pricing_display_mode text NOT NULL DEFAULT 'dual'::text CHECK (cfd_pricing_display_mode = ANY (ARRAY['dual'::text, 'card_only'::text, 'cash_only'::text])),
   CONSTRAINT locations_pkey PRIMARY KEY (id),
   CONSTRAINT locations_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id)
 );
@@ -2851,6 +2904,11 @@ CREATE TABLE public.orders (
   declined_reason text,
   cancelled_by text CHECK (cancelled_by = ANY (ARRAY['customer'::text, 'merchant'::text, 'system'::text])),
   inventory_deducted boolean NOT NULL DEFAULT false,
+  service_charge_name text,
+  service_charge_rate numeric,
+  service_charge_rule_id uuid,
+  service_charge_is_manual boolean NOT NULL DEFAULT false,
+  service_charge_applies_on text CHECK (service_charge_applies_on IS NULL OR (service_charge_applies_on = ANY (ARRAY['pre_discount'::text, 'post_discount'::text]))),
   CONSTRAINT orders_pkey PRIMARY KEY (id),
   CONSTRAINT orders_assigned_server_id_fkey FOREIGN KEY (assigned_server_id) REFERENCES public.staff_profiles(id),
   CONSTRAINT orders_created_by_staff_id_fkey FOREIGN KEY (created_by_staff_id) REFERENCES public.staff_profiles(id),
@@ -2860,7 +2918,8 @@ CREATE TABLE public.orders (
   CONSTRAINT orders_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
   CONSTRAINT orders_session_id_fkey FOREIGN KEY (session_id) REFERENCES public.table_sessions(id),
   CONSTRAINT orders_station_id_fkey FOREIGN KEY (station_id) REFERENCES public.stations(id),
-  CONSTRAINT orders_voided_by_fkey FOREIGN KEY (voided_by) REFERENCES public.staff_profiles(id)
+  CONSTRAINT orders_voided_by_fkey FOREIGN KEY (voided_by) REFERENCES public.staff_profiles(id),
+  CONSTRAINT orders_service_charge_rule_id_fkey FOREIGN KEY (service_charge_rule_id) REFERENCES public.service_charge_rules(id)
 );
 CREATE TABLE public.organizations (
   name text,
@@ -3334,6 +3393,18 @@ CREATE TABLE public.qr_scan_events (
   occurred_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT qr_scan_events_pkey PRIMARY KEY (id)
 );
+CREATE TABLE public.qr_scan_rate_limit (
+  id bigint NOT NULL DEFAULT nextval('qr_scan_rate_limit_id_seq'::regclass),
+  merchant_id uuid NOT NULL,
+  location_id uuid NOT NULL,
+  table_qr_code_id uuid NOT NULL,
+  ip_hash text,
+  scanned_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT qr_scan_rate_limit_pkey PRIMARY KEY (id),
+  CONSTRAINT qr_scan_rate_limit_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
+  CONSTRAINT qr_scan_rate_limit_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
+  CONSTRAINT qr_scan_rate_limit_table_qr_code_id_fkey FOREIGN KEY (table_qr_code_id) REFERENCES public.table_qr_codes(id)
+);
 CREATE TABLE public.receipt_sends (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   order_id uuid NOT NULL,
@@ -3567,6 +3638,24 @@ CREATE TABLE public.server_sections (
   CONSTRAINT server_sections_assigned_staff_id_fkey FOREIGN KEY (assigned_staff_id) REFERENCES public.staff_profiles(id),
   CONSTRAINT server_sections_floor_plan_id_fkey FOREIGN KEY (floor_plan_id) REFERENCES public.floor_plans(id),
   CONSTRAINT server_sections_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id)
+);
+CREATE TABLE public.service_charge_rules (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  merchant_id uuid NOT NULL,
+  location_id uuid,
+  name text NOT NULL DEFAULT 'Service Charge'::text,
+  rate_percent numeric NOT NULL CHECK (rate_percent >= 0::numeric AND rate_percent <= 100::numeric),
+  min_party_size integer NOT NULL DEFAULT 6 CHECK (min_party_size >= 1),
+  applies_to_order_types ARRAY NOT NULL DEFAULT ARRAY['dine_in'::text],
+  is_taxable boolean NOT NULL DEFAULT false,
+  auto_apply boolean NOT NULL DEFAULT true,
+  is_active boolean NOT NULL DEFAULT true,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  applies_on text NOT NULL DEFAULT 'pre_discount'::text CHECK (applies_on = ANY (ARRAY['pre_discount'::text, 'post_discount'::text])),
+  CONSTRAINT service_charge_rules_pkey PRIMARY KEY (id),
+  CONSTRAINT service_charge_rules_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
+  CONSTRAINT service_charge_rules_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id)
 );
 CREATE TABLE public.session_kick_notifications (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -3839,10 +3928,12 @@ CREATE TABLE public.stations (
   network_type text,
   network_ssid text,
   local_ip_address inet,
+  kiosk_profile_id uuid,
   CONSTRAINT stations_pkey PRIMARY KEY (id),
   CONSTRAINT stations_deactivated_by_fkey FOREIGN KEY (deactivated_by) REFERENCES public.staff_profiles(id),
   CONSTRAINT stations_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
-  CONSTRAINT stations_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id)
+  CONSTRAINT stations_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
+  CONSTRAINT stations_kiosk_profile_id_fkey FOREIGN KEY (kiosk_profile_id) REFERENCES public.kiosk_profiles(id)
 );
 CREATE TABLE public.stock_update_log (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
