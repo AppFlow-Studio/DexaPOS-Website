@@ -40,6 +40,8 @@ import {
   MapPin,
   Plus,
   Trash2,
+  ArrowUp,
+  ArrowDown,
   DollarSign,
   ChevronRight,
   Settings2,
@@ -167,6 +169,12 @@ export function ModifierFormSheet({
 
   const { isSubmitting } = form.formState
 
+  const normalizeDisplayOrder = (items: TempOption[]) =>
+    items.map((option, index) => ({
+      ...option,
+      display_order: index,
+    }))
+
   // Reset form when group changes or sheet opens
   useEffect(() => {
     if (open) {
@@ -183,7 +191,9 @@ export function ModifierFormSheet({
         
         if (groupDetails?.items) {
           setOptions(
-            groupDetails.items.map((item) => ({
+            [...groupDetails.items]
+              .sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0))
+              .map((item) => ({
               id: item.id,
               name: item.name,
               description: item.description,
@@ -218,33 +228,41 @@ export function ModifierFormSheet({
 
     if (editingOption) {
       setOptions((prev) =>
-        prev.map((opt) =>
-          opt.id === editingOption.id
-            ? {
-                ...opt,
-                name: values.name,
-                description: values.description,
-                price_modifier: values.price_modifier,
-                display_order: values.display_order ?? 0,
-                is_active: values.is_active,
-                is_default: values.is_default,
-              }
-            : opt
+        normalizeDisplayOrder(
+          prev
+            .map((opt) =>
+              opt.id === editingOption.id
+                ? {
+                    ...opt,
+                    name: values.name,
+                    description: values.description,
+                    price_modifier: values.price_modifier,
+                    display_order: values.display_order ?? opt.display_order ?? 0,
+                    is_active: values.is_active,
+                    is_default: values.is_default,
+                  }
+                : opt
+            )
+            .sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0))
         )
       )
       setEditingOption(null)
     } else {
-      const newOption: TempOption = {
-        id: `temp-${Date.now()}`,
-        name: values.name,
-        description: values.description,
-        price_modifier: values.price_modifier,
-        display_order: values.display_order ?? options.length,
-        is_active: values.is_active,
-        is_default: values.is_default,
-        isNew: true,
-      }
-      setOptions((prev) => [...prev, newOption])
+      setOptions((prev) =>
+        normalizeDisplayOrder([
+          ...prev,
+          {
+            id: `temp-${Date.now()}`,
+            name: values.name,
+            description: values.description,
+            price_modifier: values.price_modifier,
+            display_order: values.display_order ?? prev.length,
+            is_active: values.is_active,
+            is_default: values.is_default,
+            isNew: true,
+          },
+        ])
+      )
     }
     optionForm.reset()
     setIsAddOptionSheetOpen(false)
@@ -263,15 +281,48 @@ export function ModifierFormSheet({
     setIsAddOptionSheetOpen(true)
   }
 
-  const handleDeleteOption = (index: number) => {
-    const item = options[index]
+  const handleDeleteOption = (optionId: string) => {
+    const item = options.find((opt) => opt.id === optionId)
+    if (!item) return
     if (item.isNew) {
       // New items that haven't been saved - just remove from list
-      setOptions(prev => prev.filter((_, i) => i !== index))
+      setOptions((prev) => normalizeDisplayOrder(prev.filter((opt) => opt.id !== optionId)))
     } else {
       // Existing items - mark as deleted
-      setOptions(prev => prev.map((opt, i) => i === index ? { ...opt, isDeleted: true } : opt))
+      setOptions((prev) =>
+        normalizeDisplayOrder(
+          prev.map((opt) => (opt.id === optionId ? { ...opt, isDeleted: true } : opt))
+        )
+      )
     }
+  }
+
+  const handleMoveOption = (optionId: string, direction: 'up' | 'down') => {
+    setOptions((prev) => {
+      const visible = prev
+        .filter((item) => !item.isDeleted)
+        .sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0))
+      const currentIndex = visible.findIndex((item) => item.id === optionId)
+      if (currentIndex < 0) return prev
+
+      const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1
+      if (targetIndex < 0 || targetIndex >= visible.length) return prev
+
+      const reordered = [...visible]
+      const [moved] = reordered.splice(currentIndex, 1)
+      reordered.splice(targetIndex, 0, moved)
+
+      const orderMap = new Map(reordered.map((item, index) => [item.id, index]))
+
+      return prev.map((item) =>
+        item.isDeleted
+          ? item
+          : {
+              ...item,
+              display_order: orderMap.get(item.id) ?? item.display_order ?? 0,
+            }
+      )
+    })
   }
 
   const onSubmit = async (values: ModifierGroupFormValues) => {
@@ -317,6 +368,15 @@ export function ModifierFormSheet({
         toast.success('Modifier group created')
       }
 
+      const orderedVisibleItems = normalizeDisplayOrder(
+        [...options]
+          .filter((item) => !item.isDeleted)
+          .sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0))
+      )
+      const orderedVisibleMap = new Map(
+        orderedVisibleItems.map((item, index) => [item.id, index])
+      )
+
       // Handle modifier items
       for (const item of options) {
         if (item.isDeleted && !item.isNew) {
@@ -330,7 +390,7 @@ export function ModifierFormSheet({
             price_modifier: item.price_modifier,
             is_default: item.is_default,
             is_active: item.is_active,
-            display_order: item.display_order ?? 0,
+            display_order: orderedVisibleMap.get(item.id) ?? 0,
           })
         } else if (!item.isNew && !item.isDeleted) {
           // Update existing item
@@ -340,7 +400,7 @@ export function ModifierFormSheet({
             price_modifier: item.price_modifier,
             is_default: item.is_default,
             is_active: item.is_active,
-            display_order: item.display_order ?? 0,
+            display_order: orderedVisibleMap.get(item.id) ?? 0,
           })
         }
       }
@@ -358,7 +418,9 @@ export function ModifierFormSheet({
     }
   }
 
-  const visibleItems = options.filter(item => !item.isDeleted)
+  const visibleItems = [...options]
+    .filter(item => !item.isDeleted)
+    .sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0))
 
   return (
     <>
@@ -544,7 +606,7 @@ export function ModifierFormSheet({
                         </div>
                       ) : (
                         <div className="space-y-2">
-                          {options.map((item, index) => {
+                          {visibleItems.map((item, index) => {
                             if (item.isDeleted) return null
 
                             return (
@@ -585,6 +647,24 @@ export function ModifierFormSheet({
                                     type="button"
                                     variant="ghost"
                                     size="sm"
+                                    disabled={index === 0}
+                                    onClick={() => handleMoveOption(item.id, 'up')}
+                                  >
+                                    <ArrowUp className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    disabled={index === visibleItems.length - 1}
+                                    onClick={() => handleMoveOption(item.id, 'down')}
+                                  >
+                                    <ArrowDown className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
                                     onClick={() => handleEditOption(item)}
                                   >
                                     <Edit3 className="h-4 w-4" />
@@ -593,7 +673,7 @@ export function ModifierFormSheet({
                                     type="button"
                                     variant="ghost"
                                     size="sm"
-                                    onClick={() => handleDeleteOption(index)}
+                                    onClick={() => handleDeleteOption(item.id)}
                                     className="text-destructive hover:text-destructive"
                                   >
                                     <Trash2 className="h-4 w-4" />
