@@ -5,6 +5,7 @@ import {
   usePrepStations,
   useUpdatePrepStation,
   useDeletePrepStation,
+  useCategoryPrepDefaults,
   type PrepStationWithCount,
 } from "@/app/dashboard/hooks/usePrepStations";
 import { AddEditPrepStationDialog } from "./components/AddEditPrepStationDialog";
@@ -46,6 +47,18 @@ export default function PrepStationsPage() {
     isError,
     error,
   } = usePrepStations(selectedLocationId);
+
+  const { data: categoryDefaults = [] } =
+    useCategoryPrepDefaults(selectedLocationId);
+
+  const categoriesByStationId = categoryDefaults.reduce<Record<string, string[]>>(
+    (acc, def) => {
+      if (!def.category_name) return acc;
+      (acc[def.prep_station_id] ||= []).push(def.category_name);
+      return acc;
+    },
+    {},
+  );
 
   const updateMutation = useUpdatePrepStation();
   const deleteMutation = useDeletePrepStation();
@@ -222,6 +235,7 @@ export default function PrepStationsPage() {
             <PrepStationCard
               key={station.id}
               station={station}
+              assignedCategories={categoriesByStationId[station.id] || []}
               onEdit={handleEdit}
               onDelete={handleDeleteClick}
               onToggleActive={handleToggleActive}

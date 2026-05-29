@@ -43,7 +43,18 @@ export default function MarketingNav({
           DEXA POS
         </a>
         <MobileNavToggle items={items} />
-        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+        <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
+          <a
+            href="/sign-in"
+            style={{
+              fontSize: 14.5,
+              fontWeight: 500,
+              color: "var(--slate-600)",
+              transition: "color 0.2s",
+            }}
+          >
+            Sign In
+          </a>
           <a
             href="/contact"
             className="nav-cta"

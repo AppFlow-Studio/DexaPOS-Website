@@ -12,8 +12,11 @@ import {
   useKdsDisplay,
   useKdsRoutingRules,
   useSetKdsRoutingRules,
+  useUpdateKdsDisplay,
+  KdsRoutingMode,
 } from "../../hooks/useStations";
 import { usePrepStations } from "@/app/dashboard/hooks/usePrepStations";
+import { useLocationScopedCategories } from "@/app/dashboard/hooks/useLocationScoped";
 import { useStationDevices } from "../../hooks/useStationDevices";
 import { useStationTerminal } from "../../hooks/usePaymentTerminals";
 import {
@@ -274,37 +277,91 @@ export function StationOverviewTab({ station, timeFilter }: StationOverviewTabPr
   const { data: kdsDisplay } = useKdsDisplay(isKds ? station.id : undefined);
   const { data: routingRules } = useKdsRoutingRules(kdsDisplay?.id);
   const setRoutingRulesMutation = useSetKdsRoutingRules();
+  const updateKdsDisplayMutation = useUpdateKdsDisplay();
   const { data: prepStations } = usePrepStations(isKds ? station.location_id : undefined);
+  const { data: categories } = useLocationScopedCategories();
   const activePrepStations = prepStations?.filter((ps) => ps.is_active) || [];
   const [addingPrepStation, setAddingPrepStation] = useState(false);
+  const [addingCategory, setAddingCategory] = useState(false);
+  const [addingOrderType, setAddingOrderType] = useState(false);
+
+  const ORDER_TYPE_OPTIONS: { value: string; label: string }[] = [
+    { value: "dine_in", label: "Dine In" },
+    { value: "takeout", label: "Takeout" },
+    { value: "delivery", label: "Delivery" },
+    { value: "online", label: "Online" },
+    { value: "catering", label: "Catering" },
+  ];
 
   const prepStationRules = routingRules?.filter((r) => r.rule_type === "prep_station") || [];
+  const categoryRules = routingRules?.filter((r) => r.rule_type === "category") || [];
+  const orderTypeRules = routingRules?.filter((r) => r.rule_type === "order_type") || [];
+
   const assignedPrepNames = prepStationRules.map((r) => r.rule_value);
   const availablePrepStations = activePrepStations.filter(
     (ps) => !assignedPrepNames.includes(ps.name)
   );
 
-  const handleAddPrepStation = async (name: string) => {
+  const assignedCategoryNames = categoryRules.map((r) => r.rule_value);
+  const availableCategories = (categories || []).filter(
+    (c) => !assignedCategoryNames.includes(c.name)
+  );
+
+  const assignedOrderTypes = orderTypeRules.map((r) => r.rule_value);
+  const availableOrderTypes = ORDER_TYPE_OPTIONS.filter(
+    (ot) => !assignedOrderTypes.includes(ot.value)
+  );
+
+  const handleAddRule = async (rule_type: string, rule_value: string) => {
     if (!kdsDisplay?.id) return;
-    const newRules = [
-      ...prepStationRules.map((r) => ({ rule_type: r.rule_type, rule_value: r.rule_value })),
-      { rule_type: "prep_station", rule_value: name },
-    ];
+    const existing = (routingRules || []).map((r) => ({
+      rule_type: r.rule_type,
+      rule_value: r.rule_value,
+    }));
     await setRoutingRulesMutation.mutateAsync({
       kdsDisplayId: kdsDisplay.id,
-      rules: newRules,
+      rules: [...existing, { rule_type, rule_value }],
     });
-    setAddingPrepStation(false);
   };
 
-  const handleRemovePrepStation = async (name: string) => {
+  const handleRemoveRule = async (rule_type: string, rule_value: string) => {
     if (!kdsDisplay?.id) return;
-    const newRules = prepStationRules
-      .filter((r) => r.rule_value !== name)
+    const newRules = (routingRules || [])
+      .filter((r) => !(r.rule_type === rule_type && r.rule_value === rule_value))
       .map((r) => ({ rule_type: r.rule_type, rule_value: r.rule_value }));
     await setRoutingRulesMutation.mutateAsync({
       kdsDisplayId: kdsDisplay.id,
       rules: newRules,
+    });
+  };
+
+  const handleAddPrepStation = async (name: string) => {
+    await handleAddRule("prep_station", name);
+    setAddingPrepStation(false);
+  };
+  const handleRemovePrepStation = (name: string) =>
+    handleRemoveRule("prep_station", name);
+
+  const handleAddCategory = async (name: string) => {
+    await handleAddRule("category", name);
+    setAddingCategory(false);
+  };
+  const handleRemoveCategory = (name: string) =>
+    handleRemoveRule("category", name);
+
+  const handleAddOrderType = async (value: string) => {
+    await handleAddRule("order_type", value);
+    setAddingOrderType(false);
+  };
+  const handleRemoveOrderType = (value: string) =>
+    handleRemoveRule("order_type", value);
+
+  const handleChangeRoutingMode = async (mode: KdsRoutingMode) => {
+    if (!kdsDisplay?.id || mode === kdsDisplay.routing_mode) return;
+    // Server clears existing routing rules when routing_mode changes.
+    await updateKdsDisplayMutation.mutateAsync({
+      kdsDisplayId: kdsDisplay.id,
+      input: { routing_mode: mode },
     });
   };
 
@@ -606,20 +663,29 @@ export function StationOverviewTab({ station, timeFilter }: StationOverviewTabPr
       {isKds && kdsDisplay && (
         <Card>
           <CardHeader>
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <CardTitle className="text-lg flex items-center gap-2">
                 <Router className="h-5 w-5" />
                 KDS Routing
               </CardTitle>
-              <Badge variant="outline">
-                {kdsDisplay.routing_mode === "all"
-                  ? "All Items"
-                  : kdsDisplay.routing_mode === "prep_station"
-                    ? "By Prep Station"
-                    : kdsDisplay.routing_mode === "category"
-                      ? "By Category"
-                      : "By Order Type"}
-              </Badge>
+              <Select
+                value={kdsDisplay.routing_mode}
+                onValueChange={(v) => handleChangeRoutingMode(v as KdsRoutingMode)}
+                disabled={
+                  updateKdsDisplayMutation.isPending ||
+                  setRoutingRulesMutation.isPending
+                }
+              >
+                <SelectTrigger className="w-full sm:w-[200px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Items</SelectItem>
+                  <SelectItem value="prep_station">By Prep Station</SelectItem>
+                  <SelectItem value="category">By Category</SelectItem>
+                  <SelectItem value="order_type">By Order Type</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </CardHeader>
           <CardContent>
@@ -729,15 +795,182 @@ export function StationOverviewTab({ station, timeFilter }: StationOverviewTabPr
             )}
 
             {kdsDisplay.routing_mode === "category" && (
-              <p className="text-sm text-muted-foreground">
-                This display receives items from specific categories. Configure category routing rules in the display settings.
-              </p>
+              <div className="space-y-3">
+                {categoryRules.length === 0 && !addingCategory ? (
+                  <div className="flex flex-col items-center justify-center py-6 text-center">
+                    <ChefHat className="h-8 w-8 text-muted-foreground mb-2" />
+                    <p className="text-sm font-medium">No categories assigned</p>
+                    <p className="text-xs text-muted-foreground mb-3">
+                      Assign menu categories to route items to this display.
+                    </p>
+                    {availableCategories.length > 0 && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setAddingCategory(true)}
+                      >
+                        <Plus className="h-4 w-4 mr-1" />
+                        Add Category
+                      </Button>
+                    )}
+                    {(categories?.length || 0) === 0 && (
+                      <p className="text-xs text-muted-foreground mt-2">
+                        No categories exist yet. Create them in Menu Management.
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <>
+                    <div className="space-y-2">
+                      {categoryRules.map((rule) => (
+                        <div
+                          key={rule.id}
+                          className="flex items-center gap-3 p-3 rounded-lg border bg-card"
+                        >
+                          <ChefHat className="h-4 w-4 text-muted-foreground shrink-0" />
+                          <span className="text-sm font-medium flex-1">
+                            {rule.rule_value}
+                          </span>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            disabled={setRoutingRulesMutation.isPending}
+                            onClick={() => handleRemoveCategory(rule.rule_value)}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+
+                    {addingCategory ? (
+                      <div className="flex items-center gap-2">
+                        <Select onValueChange={(v) => handleAddCategory(v)}>
+                          <SelectTrigger className="flex-1">
+                            <SelectValue placeholder="Select a category..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {availableCategories.map((c) => (
+                              <SelectItem key={c.id} value={c.name}>
+                                {c.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setAddingCategory(false)}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    ) : (
+                      availableCategories.length > 0 && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setAddingCategory(true)}
+                        >
+                          <Plus className="h-4 w-4 mr-1" />
+                          Add Category
+                        </Button>
+                      )
+                    )}
+                  </>
+                )}
+              </div>
             )}
 
             {kdsDisplay.routing_mode === "order_type" && (
-              <p className="text-sm text-muted-foreground">
-                This display receives items from specific order types. Configure order type routing rules in the display settings.
-              </p>
+              <div className="space-y-3">
+                {orderTypeRules.length === 0 && !addingOrderType ? (
+                  <div className="flex flex-col items-center justify-center py-6 text-center">
+                    <ShoppingCart className="h-8 w-8 text-muted-foreground mb-2" />
+                    <p className="text-sm font-medium">No order types assigned</p>
+                    <p className="text-xs text-muted-foreground mb-3">
+                      Assign order types to route items to this display.
+                    </p>
+                    {availableOrderTypes.length > 0 && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setAddingOrderType(true)}
+                      >
+                        <Plus className="h-4 w-4 mr-1" />
+                        Add Order Type
+                      </Button>
+                    )}
+                  </div>
+                ) : (
+                  <>
+                    <div className="space-y-2">
+                      {orderTypeRules.map((rule) => {
+                        const label =
+                          ORDER_TYPE_OPTIONS.find(
+                            (ot) => ot.value === rule.rule_value
+                          )?.label || rule.rule_value;
+                        return (
+                          <div
+                            key={rule.id}
+                            className="flex items-center gap-3 p-3 rounded-lg border bg-card"
+                          >
+                            <ShoppingCart className="h-4 w-4 text-muted-foreground shrink-0" />
+                            <span className="text-sm font-medium flex-1">
+                              {label}
+                            </span>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              disabled={setRoutingRulesMutation.isPending}
+                              onClick={() => handleRemoveOrderType(rule.rule_value)}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {addingOrderType ? (
+                      <div className="flex items-center gap-2">
+                        <Select onValueChange={(v) => handleAddOrderType(v)}>
+                          <SelectTrigger className="flex-1">
+                            <SelectValue placeholder="Select an order type..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {availableOrderTypes.map((ot) => (
+                              <SelectItem key={ot.value} value={ot.value}>
+                                {ot.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setAddingOrderType(false)}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    ) : (
+                      availableOrderTypes.length > 0 && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setAddingOrderType(true)}
+                        >
+                          <Plus className="h-4 w-4 mr-1" />
+                          Add Order Type
+                        </Button>
+                      )
+                    )}
+                  </>
+                )}
+              </div>
             )}
           </CardContent>
         </Card>
