@@ -69,6 +69,7 @@ export function useCreateInventoryItem() {
       stock_mode?: StockMode;
       current_stock?: number;
       reorder_point?: number;
+      par_level?: number;
       cost_per_unit?: number;
       vendor_id?: string;
       location_id?: string | null;
@@ -105,6 +106,7 @@ export function useUpdateInventoryItem() {
         stock_mode?: StockMode;
         current_stock?: number;
         reorder_point?: number;
+        par_level?: number | null;
         cost_per_unit?: number;
         vendor_id?: string | null;
       };

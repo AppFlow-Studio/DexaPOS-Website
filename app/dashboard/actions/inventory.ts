@@ -298,6 +298,7 @@ export async function CreateInventoryItem(
     stock_mode?: StockMode;
     current_stock?: number;
     reorder_point?: number;
+    par_level?: number;
     cost_per_unit?: number;
     vendor_id?: string;
     location_id?: string | null;
@@ -334,6 +335,7 @@ export async function CreateInventoryItem(
       stock_mode: data.stock_mode || "in_stock",
       current_stock: data.current_stock || 0,
       reorder_point: data.reorder_point || 0,
+      par_level: data.par_level ?? null,
       cost_per_unit: data.cost_per_unit || 0,
       vendor_id: data.vendor_id || null,
     })
@@ -385,6 +387,7 @@ export async function UpdateInventoryItem(
     stock_mode?: StockMode;
     current_stock?: number;
     reorder_point?: number;
+    par_level?: number | null;
     cost_per_unit?: number;
     vendor_id?: string | null;
   },
@@ -405,6 +408,7 @@ export async function UpdateInventoryItem(
     updateData.current_stock = data.current_stock;
   if (data.reorder_point !== undefined)
     updateData.reorder_point = data.reorder_point;
+  if (data.par_level !== undefined) updateData.par_level = data.par_level;
   if (data.cost_per_unit !== undefined)
     updateData.cost_per_unit = data.cost_per_unit;
   if (data.vendor_id !== undefined) updateData.vendor_id = data.vendor_id;
