@@ -337,7 +337,7 @@ export default async function ReceiptPage({ params }: PageProps) {
                 {/* Item row — quantity badge + name + price */}
                 <div className="flex justify-between items-start gap-3">
                   <span className="text-sm text-slate-800 leading-snug flex-1 min-w-0 wrap-break-word">
-                    {item.quantity && item.quantity > 1 ? (
+                    {item.quantity != null ? (
                       <span className="inline-flex items-center justify-center text-[10px] font-bold bg-slate-100 text-slate-500 rounded-md px-1.5 py-0.5 mr-1.5 align-middle leading-none">
                         {item.quantity}×
                       </span>
