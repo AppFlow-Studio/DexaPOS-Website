@@ -5,6 +5,11 @@ This change hard-cuts online-ordering payments from Dejavoo/iPOS to NMI for stor
 
 In-store POS payment flows are intentionally untouched.
 
+Operational note as of 2026-05-28:
+- the active storefront whitelist helper/function is now named `storefront-payment-domain-whitelist`
+- storefront/QR checkout should be treated as NMI-only
+- any remaining Dejavoo mentions in this file are historical context about what was replaced, not current deploy guidance
+
 Key decisions:
 - rollout is a hard cut, not dual-run
 - credentials are location-device-scoped for online ordering
@@ -25,7 +30,7 @@ New online-ordering payment path:
 - active location-scoped NMI payment device
 - NMI browser tokenization key for checkout
 - NMI private API key for server-side sale/void/refund
-- no whitelist step
+- generic storefront-origin whitelist sync through `storefront-payment-domain-whitelist`
 - storefront checkout resolves the selected active NMI device for the location
 
 ## What Was Implemented
@@ -242,6 +247,9 @@ Dejavoo terminal/in-store code outside online ordering was not changed.
 - `supabase/functions/create-online-order/ipospays.ts`
 - `supabase/functions/dejavoo-whitelist-domain/index.ts`
 - `supabase/functions/dejavoo-whitelist-domain/deno.json`
+
+### Renamed Later
+- `supabase/functions/storefront-payment-domain-whitelist/index.ts`
 
 ## Validation Performed
 - senior NMI location-device schema and RPCs were verified as already present on staging

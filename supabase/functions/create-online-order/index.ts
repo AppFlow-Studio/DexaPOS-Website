@@ -33,6 +33,7 @@ import { sendOnlineOrderPaymentEmail } from '../_shared/payment-emails.ts'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+const INTERNAL_NOTIFICATION_SECRET = Deno.env.get('INTERNAL_NOTIFICATION_SECRET')
 // ============================================================================
 // REQUEST TYPES
 // ============================================================================
@@ -185,6 +186,20 @@ function logError(tag: string, message: string, error: unknown): void {
   console.error(`[${new Date().toISOString()}] [${tag}] ERROR: ${message}`, error)
 }
 
+function getAppBaseUrl(): string | null {
+  const explicitUrl = Deno.env.get('NEXT_PUBLIC_APP_URL')?.trim()
+  if (explicitUrl) {
+    return explicitUrl.replace(/\/+$/, '')
+  }
+
+  const vercelUrl = Deno.env.get('VERCEL_URL')?.trim()
+  if (vercelUrl) {
+    return `https://${vercelUrl.replace(/^https?:\/\//, '').replace(/\/+$/, '')}`
+  }
+
+  return null
+}
+
 // ============================================================================
 // HELPERS
 // ============================================================================
@@ -332,6 +347,92 @@ async function broadcastOrderStatus(orderId: string, status: string): Promise<vo
   }
 }
 
+async function insertQrScanEvent(
+  supabase: ReturnType<typeof createClient>,
+  {
+    merchantId,
+    locationId,
+    floorPlanObjectId,
+    tableQrCodeId,
+    onlineOrderSessionId,
+    orderId,
+    stage,
+    userAgent,
+  }: {
+    merchantId: string
+    locationId: string
+    floorPlanObjectId?: string | null
+    tableQrCodeId?: string | null
+    onlineOrderSessionId: string
+    orderId?: string | null
+    stage: 'paid'
+    userAgent?: string | null
+  },
+): Promise<void> {
+  const { data: existingEvent } = await supabase
+    .from('qr_scan_events')
+    .select('id')
+    .eq('online_order_session_id', onlineOrderSessionId)
+    .eq('stage', stage)
+    .limit(1)
+    .maybeSingle()
+
+  if (existingEvent?.id) return
+
+  const { error } = await supabase
+    .from('qr_scan_events')
+    .insert({
+      merchant_id: merchantId,
+      location_id: locationId,
+      floor_plan_object_id: floorPlanObjectId ?? null,
+      table_qr_code_id: tableQrCodeId ?? null,
+      online_order_session_id: onlineOrderSessionId,
+      order_id: orderId ?? null,
+      stage,
+      user_agent: userAgent?.slice(0, 512) ?? null,
+    })
+
+  if (error) {
+    logError('QR_FUNNEL', `Failed to insert ${stage} event`, error)
+  }
+}
+
+async function triggerOrderPlacedNotifications(orderId: string): Promise<void> {
+  if (!orderId) return
+
+  const appBaseUrl = getAppBaseUrl()
+  if (!appBaseUrl || !INTERNAL_NOTIFICATION_SECRET) {
+    logEvent('NOTIFY', 'Skipping order-placed notification trigger because internal notification env is missing', {
+      hasAppBaseUrl: Boolean(appBaseUrl),
+      hasSecret: Boolean(INTERNAL_NOTIFICATION_SECRET),
+      orderId,
+    })
+    return
+  }
+
+  try {
+    const response = await fetch(`${appBaseUrl}/api/internal/order-placed-notify`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-internal-secret': INTERNAL_NOTIFICATION_SECRET,
+      },
+      body: JSON.stringify({ order_id: orderId }),
+    })
+
+    if (!response.ok) {
+      const text = await response.text().catch(() => '')
+      logError('NOTIFY', 'Order-placed notification trigger returned non-OK response', {
+        status: response.status,
+        body: text,
+        orderId,
+      })
+    }
+  } catch (error) {
+    logError('NOTIFY', 'Failed to trigger order-placed notifications', error)
+  }
+}
+
 // ============================================================================
 // MAIN HANDLER
 // ============================================================================
@@ -373,6 +474,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
   })
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+  const requestUserAgent = req.headers.get('user-agent')
 
   // ---- Step 1.5: Idempotency short-circuit ----
   // If the client supplied a key (header preferred, body field as fallback) and we already
@@ -1307,6 +1409,21 @@ Deno.serve(async (req: Request): Promise<Response> => {
         logError('EMAIL', 'Failed to send online-order payment email', emailError)
       }
     }
+  }
+
+  await triggerOrderPlacedNotifications(orderResult.order_id!)
+
+  if (isQrDineIn && session?.id) {
+    await insertQrScanEvent(supabase, {
+      merchantId,
+      locationId,
+      floorPlanObjectId: session.floor_plan_object_id ?? null,
+      tableQrCodeId: session.table_qr_code_id ?? null,
+      onlineOrderSessionId: session.id,
+      orderId: orderResult.order_id ?? null,
+      stage: 'paid',
+      userAgent: requestUserAgent,
+    })
   }
 
   let autoAccepted = false

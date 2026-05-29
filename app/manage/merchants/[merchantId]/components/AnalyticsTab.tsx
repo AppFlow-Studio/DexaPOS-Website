@@ -169,6 +169,7 @@ export function AnalyticsTab({ merchantInfo }: AnalyticsTabProps) {
 
     const orderTypeConfig = {
         dine_in: { label: 'Dine In', color: 'var(--chart-1)' },
+        qr_dine_in: { label: 'QR Table', color: '#0C4FD1' },
         takeout: { label: 'Takeout', color: 'var(--chart-2)' },
         delivery: { label: 'Delivery', color: 'var(--chart-3)' },
         online: { label: 'Online', color: 'var(--chart-4)' },
@@ -184,12 +185,14 @@ export function AnalyticsTab({ merchantInfo }: AnalyticsTabProps) {
     // Order type breakdown for pie chart
     const orderTypeData = useMemo(() => {
         if (!orderAnalytics?.orderTypeBreakdown) return []
-        const colors = ['var(--chart-1)', 'var(--chart-2)', 'var(--chart-3)', 'var(--chart-4)', 'var(--chart-5)']
+        const colors = ['var(--chart-1)', '#0C4FD1', 'var(--chart-2)', 'var(--chart-3)', 'var(--chart-4)', 'var(--chart-5)']
         return Object.entries(orderAnalytics.orderTypeBreakdown)
             .map(([type, count], index) => ({
-                type: type.replace('_', ' '),
+                type: orderTypeConfig[type as keyof typeof orderTypeConfig]?.label ?? type.replace(/_/g, ' '),
                 count,
-                fill: colors[index % colors.length],
+                fill:
+                    orderTypeConfig[type as keyof typeof orderTypeConfig]?.color ??
+                    colors[index % colors.length],
             }))
             .filter(item => item.count > 0)
     }, [orderAnalytics])
