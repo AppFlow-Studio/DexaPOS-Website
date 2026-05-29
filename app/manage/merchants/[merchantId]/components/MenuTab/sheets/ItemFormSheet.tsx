@@ -398,6 +398,7 @@ export function ItemFormSheet({
         const result = await createAdminMenuItem(merchantId, {
           name: values.name,
           description: values.description || null,
+          location_id: isLocationView ? locationId : null,
           image: resolvedImage.value,
           price: values.price,
           cash_price: values.cash_price,
@@ -1383,6 +1384,7 @@ function ModifierGroupManager({
             {showQuickCreate && (
                 <QuickCreateModifierDialog
                     merchantId={merchantId}
+                    locationId={locationId}
                     onClose={() => setShowQuickCreate(false)}
                     onCreated={(groupId) => {
                         setShowQuickCreate(false)
@@ -1401,10 +1403,12 @@ function ModifierGroupManager({
 
 function QuickCreateModifierDialog({
     merchantId,
+    locationId,
     onClose,
     onCreated,
 }: {
     merchantId: string
+    locationId?: string | null
     onClose: () => void
     onCreated: (groupId: string) => void
 }) {
@@ -1441,6 +1445,7 @@ function QuickCreateModifierDialog({
                 is_required: isRequired,
                 min_selections: minSelections,
                 max_selections: maxSelections,
+                location_id: locationId || null,
                 is_active: true,
             })
             if (result.error || !result.data) {

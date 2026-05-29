@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react'
 import { format, parseISO } from 'date-fns'
 import { ArrowDown, ArrowUp, ArrowUpDown, Building2, ChevronDown, ChevronUp } from 'lucide-react'
+import { InfoIcon } from '@/components/ui/info-icon'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -184,6 +185,7 @@ export function MerchantBreakdownSection({ filters }: MerchantBreakdownSectionPr
               <CardTitle className="flex items-center gap-2">
                 <Building2 className="h-4 w-4" />
                 Merchant Breakdown
+                <InfoIcon tip="Side-by-side performance comparison across all merchants for the selected date range. Click any column header to sort. Use this to spot top performers, high void rates, or merchants with unusual tip patterns." />
               </CardTitle>
               <CardDescription>
                 Compare merchant volume and revenue for {rangeLabel}
@@ -264,30 +266,47 @@ export function MerchantBreakdownSection({ filters }: MerchantBreakdownSectionPr
                     </Button>
                   </TableHead>
                   <TableHead className="text-right">
-                    <Button variant="ghost" className="h-8 px-2" onClick={() => toggleSort('avg_ticket')}>
-                      Avg Ticket
-                      {getSortIndicator(sortBy === 'avg_ticket', sortDirection)}
-                    </Button>
+                    <span className="inline-flex items-center justify-end gap-1">
+                      <Button variant="ghost" className="h-8 px-2" onClick={() => toggleSort('avg_ticket')}>
+                        Avg Ticket
+                        {getSortIndicator(sortBy === 'avg_ticket', sortDirection)}
+                      </Button>
+                      <InfoIcon tip="Mean transaction value (total revenue ÷ transaction count) for this merchant. A useful proxy for order size." side="bottom" />
+                    </span>
                   </TableHead>
                   <TableHead className="text-right">
-                    <Button variant="ghost" className="h-8 px-2" onClick={() => toggleSort('tip_total')}>
-                      Tip Total
-                      {getSortIndicator(sortBy === 'tip_total', sortDirection)}
-                    </Button>
+                    <span className="inline-flex items-center justify-end gap-1">
+                      <Button variant="ghost" className="h-8 px-2" onClick={() => toggleSort('tip_total')}>
+                        Tip Total
+                        {getSortIndicator(sortBy === 'tip_total', sortDirection)}
+                      </Button>
+                      <InfoIcon tip="Sum of all tips collected by this merchant in the selected period." side="bottom" />
+                    </span>
                   </TableHead>
                   <TableHead className="text-right">
-                    <Button variant="ghost" className="h-8 px-2" onClick={() => toggleSort('void_count')}>
-                      Void Count
-                      {getSortIndicator(sortBy === 'void_count', sortDirection)}
-                    </Button>
+                    <span className="inline-flex items-center justify-end gap-1">
+                      <Button variant="ghost" className="h-8 px-2" onClick={() => toggleSort('void_count')}>
+                        Void Count
+                        {getSortIndicator(sortBy === 'void_count', sortDirection)}
+                      </Button>
+                      <InfoIcon tip="Number of transactions cancelled before settlement. A high void count may indicate staff errors or system issues." side="bottom" />
+                    </span>
                   </TableHead>
                   <TableHead className="text-right">
-                    <Button variant="ghost" className="h-8 px-2" onClick={() => toggleSort('void_rate_pct')}>
-                      Void Rate %
-                      {getSortIndicator(sortBy === 'void_rate_pct', sortDirection)}
-                    </Button>
+                    <span className="inline-flex items-center justify-end gap-1">
+                      <Button variant="ghost" className="h-8 px-2" onClick={() => toggleSort('void_rate_pct')}>
+                        Void Rate %
+                        {getSortIndicator(sortBy === 'void_rate_pct', sortDirection)}
+                      </Button>
+                      <InfoIcon tip="Voids as a percentage of total transactions. Industry average is under 2%. Consistently above 5% warrants investigation." side="bottom" />
+                    </span>
                   </TableHead>
-                  <TableHead>Trend</TableHead>
+                  <TableHead>
+                    <span className="inline-flex items-center gap-1">
+                      Trend
+                      <InfoIcon tip="Daily revenue sparkline for the selected period. Rising line = growing revenue, flat = stable, falling = declining." side="bottom" />
+                    </span>
+                  </TableHead>
                 </TableRow>
               </TableHeader>
 

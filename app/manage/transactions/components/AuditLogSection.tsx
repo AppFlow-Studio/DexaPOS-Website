@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { format } from 'date-fns'
 import { ChevronDown, ChevronUp, RefreshCcwDot, ShieldCheck } from 'lucide-react'
+import { InfoIcon } from '@/components/ui/info-icon'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -150,13 +151,17 @@ export function AuditLogSection() {
               <CardTitle className="flex items-center gap-2">
                 <ShieldCheck className="h-4 w-4" />
                 Payment Audit Log
+                <InfoIcon tip="Immutable record of every time an admin accessed, searched, exported, or viewed payment data. Used to demonstrate compliance with data privacy requirements and to investigate unauthorized access." />
               </CardTitle>
               <CardDescription>
                 Track admin access to sensitive payment data (list, detail, export, and card-last-four search).
               </CardDescription>
             </div>
             <div className="flex items-center gap-2">
-              <Badge variant="outline">{total.toLocaleString()} events</Badge>
+              <span className="inline-flex items-center gap-1">
+                <Badge variant="outline">{total.toLocaleString()} events</Badge>
+                <InfoIcon tip="Total number of admin audit events logged matching current filters." side="left" />
+              </span>
               <CollapsibleTrigger asChild>
                 <Button variant="outline" size="sm">
                   {open ? (
@@ -278,16 +283,28 @@ export function AuditLogSection() {
             <Table containerClassName="max-h-[44vh] overflow-auto rounded-md border">
               <TableHeader className="sticky top-0 z-20 bg-card">
                 <TableRow>
-                  <TableHead>Timestamp</TableHead>
-                  <TableHead>User Email</TableHead>
-                  <TableHead>User Role</TableHead>
-                  <TableHead>Action</TableHead>
+                  <TableHead>
+                    <span className="inline-flex items-center gap-1">Timestamp <InfoIcon tip="Exact UTC date and time the admin action was performed." side="bottom" /></span>
+                  </TableHead>
+                  <TableHead>
+                    <span className="inline-flex items-center gap-1">User <InfoIcon tip="The admin's email address. Each access is attributed to a specific user for accountability." side="bottom" /></span>
+                  </TableHead>
+                  <TableHead>
+                    <span className="inline-flex items-center gap-1">Role <InfoIcon tip="The user's permission level at the time of the action (e.g. admin, viewer, owner)." side="bottom" /></span>
+                  </TableHead>
+                  <TableHead>
+                    <span className="inline-flex items-center gap-1">Action <InfoIcon tip="What the user did — list (viewed a list), detail (opened a specific record), export (downloaded data), or search (queried by card number or ID)." side="bottom" /></span>
+                  </TableHead>
                   <TableHead>Resource Type</TableHead>
                   <TableHead>Resource ID</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead>
+                    <span className="inline-flex items-center gap-1">Outcome <InfoIcon tip="Whether the action completed successfully. Failed actions may indicate permission errors or system issues." side="bottom" /></span>
+                  </TableHead>
                   <TableHead>IP Address</TableHead>
                   <TableHead>Merchant</TableHead>
-                  <TableHead>Fields Accessed</TableHead>
+                  <TableHead>
+                    <span className="inline-flex items-center gap-1">Fields Accessed <InfoIcon tip="Specific data fields the user viewed or exported. Used to demonstrate the minimum necessary data access for compliance audits." side="bottom" /></span>
+                  </TableHead>
                 </TableRow>
               </TableHeader>
 

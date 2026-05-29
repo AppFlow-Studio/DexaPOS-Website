@@ -79,12 +79,18 @@ interface CategoryIndex {
   list: CloverCategoryIR[];
   byName: Map<string, string>; // lower(name) → clover_id
   byClover: Map<string, CloverCategoryIR>;
+  // Items linked to categories via Categories-sheet membership rows
+  // (fill-down: a row with Item Name but no Category ID belongs to the most
+  // recently seen Category ID). This is the canonical mechanism in some Clover
+  // exports — without it items get inserted with no category and disappear.
+  itemMembership: Map<string, Set<string>>; // lower(itemName) → Set<categoryCloverId>
 }
 
 function parseCategories(rows: Row[]): CategoryIndex {
   const list: CloverCategoryIR[] = [];
   const byName = new Map<string, string>();
   const byClover = new Map<string, CloverCategoryIR>();
+  const itemMembership = new Map<string, Set<string>>();
 
   let currentId: string | null = null;
   let order = 0;
@@ -94,18 +100,32 @@ function parseCategories(rows: Row[]): CategoryIndex {
     const name = cell(row, "Name", "Category Name");
     if (id && name) {
       currentId = id;
-      const cat: CloverCategoryIR = { clover_id: id, name, display_order: order++ };
-      list.push(cat);
-      byName.set(name.toLowerCase(), id);
-      byClover.set(id, cat);
+      if (!byClover.has(id)) {
+        const cat: CloverCategoryIR = { clover_id: id, name, display_order: order++ };
+        list.push(cat);
+        byName.set(name.toLowerCase(), id);
+        byClover.set(id, cat);
+      }
     }
-    // Membership rows ("Item Sort Order" present) are consumed during item
-    // parsing — items resolve their categories via the Items sheet's
-    // "Categories" column, so the fill-down here doesn't need to record links.
-    void currentId;
+
+    if (currentId) {
+      const itemName = cell(row, "Item Name", "Item");
+      // Skip the header row itself (Item Name === category Name on header rows
+      // is rare, but guard anyway). Only record when this row is *not* the
+      // category-defining row.
+      if (itemName && !(id && name)) {
+        const key = itemName.toLowerCase();
+        let set = itemMembership.get(key);
+        if (!set) {
+          set = new Set();
+          itemMembership.set(key, set);
+        }
+        set.add(currentId);
+      }
+    }
   }
 
-  return { list, byName, byClover };
+  return { list, byName, byClover, itemMembership };
 }
 
 interface ModifierGroupIndex {
@@ -229,11 +249,14 @@ function parseItems(
 
     if (!current) continue;
 
-    // Categories column on item row — comma-or-pipe-separated names.
+    // Categories column on item row — comma-or-pipe-separated names *or* IDs.
+    // Some Clover exports emit IDs here, others emit names; accept both.
     const catRaw = cell(row, "Categories", "Category");
     if (catRaw) {
-      for (const catName of splitList(catRaw)) {
-        const cId = categories.byName.get(catName.toLowerCase());
+      for (const token of splitList(catRaw)) {
+        const cId =
+          categories.byName.get(token.toLowerCase()) ??
+          (categories.byClover.has(token) ? token : undefined);
         if (cId) {
           if (!current.category_clover_ids.includes(cId)) {
             current.category_clover_ids.push(cId);
@@ -244,7 +267,7 @@ function parseItems(
             entity_type: "item",
             clover_id: current.clover_id,
             name: current.name,
-            message: `Item "${current.name}" references unknown category "${catName}".`,
+            message: `Item "${current.name}" references unknown category "${token}".`,
           });
         }
       }
@@ -272,20 +295,48 @@ function parseItems(
     }
   }
 
-  // FLAG-B: items with no category.
+  // Union with category membership rows from the Categories sheet. In real
+  // Clover exports this is often the *only* link source — the Items sheet may
+  // omit the Categories column, or operators may rely on the per-category
+  // membership rows alone.
+  if (categories.itemMembership.size > 0) {
+    for (const item of items) {
+      const memberOf = categories.itemMembership.get(item.name.toLowerCase());
+      if (!memberOf) continue;
+      for (const cId of memberOf) {
+        if (!item.category_clover_ids.includes(cId)) {
+          item.category_clover_ids.push(cId);
+        }
+      }
+    }
+  }
+
+  // Drop any FLAG-E rows that the membership union now resolves — the link
+  // recovered, so it's no longer a flag.
+  const resolvedKeys = new Set(
+    items
+      .filter((i) => i.category_clover_ids.length > 0)
+      .map((i) => `${i.clover_id}::${i.name.toLowerCase()}`),
+  );
+  const filteredFlags = flags.filter((f) => {
+    if (f.code !== "E") return true;
+    return !resolvedKeys.has(`${f.clover_id ?? ""}::${(f.name ?? "").toLowerCase()}`);
+  });
+
+  // FLAG-B: items still missing a category after both sources are unioned.
   for (const item of items) {
     if (item.category_clover_ids.length === 0) {
-      flags.push({
+      filteredFlags.push({
         code: "B",
         entity_type: "item",
         clover_id: item.clover_id,
         name: item.name,
-        message: `Item "${item.name}" has no category in Clover.`,
+        message: `Item "${item.name}" has no category. It will be attached to the auto-created "Unsorted (Clover)" category so it remains visible.`,
       });
     }
   }
 
-  return { items, itemFlags: flags };
+  return { items, itemFlags: filteredFlags };
 }
 
 function splitList(s: string): string[] {
