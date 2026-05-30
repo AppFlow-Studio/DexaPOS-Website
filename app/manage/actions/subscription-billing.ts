@@ -569,6 +569,7 @@ export async function getSubscriptionPlans(): Promise<SubscriptionPlanRecord[]> 
   const { data, error } = await supabase
     .from('subscription_plans')
     .select('*')
+    .eq('plan_scope', 'service_billing')
     .order('display_name', { ascending: true })
 
   if (error) {
