@@ -4,9 +4,28 @@ import MarketingFooter from "../_components/MarketingFooter";
 import ContactForm from "../_components/ContactForm";
 
 export const metadata: Metadata = {
-  title: "Request a Demo — DEXA POS",
+  title: "Request a Demo",
   description:
     "Schedule a 30-minute walkthrough of DEXA, configured for your restaurant.",
+  alternates: { canonical: "/contact" },
+  openGraph: {
+    type: "website",
+    siteName: "DEXA POS",
+    url: "/contact",
+    title: "Request a Demo — DEXA POS",
+    description:
+      "Schedule a 30-minute walkthrough of DEXA, configured for your restaurant.",
+    images: [
+      { url: "/dexalogolight.png", width: 1200, height: 630, alt: "DEXA POS" },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Request a Demo — DEXA POS",
+    description:
+      "Schedule a 30-minute walkthrough of DEXA, configured for your restaurant.",
+    images: ["/dexalogolight.png"],
+  },
 };
 
 export default function ContactPage() {
@@ -56,7 +75,7 @@ export default function ContactPage() {
                   <span className="side-footer-icon">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" /><path d="M22 6l-10 7L2 6" /></svg>
                   </span>
-                  <span><strong>Email:</strong> sales@dexapos.com</span>
+                  <span><strong>Email:</strong> <a href="mailto:support@dexaposai.com">support@dexaposai.com</a></span>
                 </div>
                 <div className="side-footer-item">
                   <span className="side-footer-icon">

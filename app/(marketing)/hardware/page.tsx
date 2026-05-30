@@ -3,9 +3,28 @@ import MarketingNav from "../_components/MarketingNav";
 import MarketingFooter from "../_components/MarketingFooter";
 
 export const metadata: Metadata = {
-  title: "Hardware — DEXA POS",
+  title: "Hardware",
   description:
     "Run DEXA on the gear that fits your floor. iPad, Android, Castles, Dejavoo, Star Micronics, Landi.",
+  alternates: { canonical: "/hardware" },
+  openGraph: {
+    type: "website",
+    siteName: "DEXA POS",
+    url: "/hardware",
+    title: "Hardware — DEXA POS",
+    description:
+      "Run DEXA on the gear that fits your floor. iPad, Android, Castles, Dejavoo, Star Micronics, Landi.",
+    images: [
+      { url: "/dexalogolight.png", width: 1200, height: 630, alt: "DEXA POS" },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Hardware — DEXA POS",
+    description:
+      "Run DEXA on the gear that fits your floor. iPad, Android, Castles, Dejavoo, Star Micronics, Landi.",
+    images: ["/dexalogolight.png"],
+  },
 };
 
 export default function HardwarePage() {

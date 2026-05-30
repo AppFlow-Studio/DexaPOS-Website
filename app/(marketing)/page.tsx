@@ -4,9 +4,30 @@ import MarketingFooter from "./_components/MarketingFooter";
 import CountUp from "./_components/CountUp";
 
 export const metadata: Metadata = {
-  title: "DEXA POS — Restaurant operations, simplified.",
+  title: {
+    absolute: "DEXA POS — Restaurant operations, simplified.",
+  },
   description:
     "The all-in-one point-of-sale platform built for modern restaurants. From quick-service to fine dining.",
+  alternates: { canonical: "/" },
+  openGraph: {
+    type: "website",
+    siteName: "DEXA POS",
+    url: "/",
+    title: "DEXA POS — Restaurant operations, simplified.",
+    description:
+      "The all-in-one point-of-sale platform built for modern restaurants. From quick-service to fine dining.",
+    images: [
+      { url: "/dexalogolight.png", width: 1200, height: 630, alt: "DEXA POS" },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "DEXA POS — Restaurant operations, simplified.",
+    description:
+      "The all-in-one point-of-sale platform built for modern restaurants. From quick-service to fine dining.",
+    images: ["/dexalogolight.png"],
+  },
 };
 
 export default function Home() {

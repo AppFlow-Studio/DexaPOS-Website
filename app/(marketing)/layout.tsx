@@ -11,9 +11,34 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "DEXA POS — Restaurant operations, simplified.",
+  title: {
+    default: "DEXA POS — Restaurant operations, simplified.",
+    template: "%s — DEXA POS",
+  },
   description:
     "The all-in-one point-of-sale platform built for modern restaurants. From quick-service to fine dining.",
+  openGraph: {
+    type: "website",
+    siteName: "DEXA POS",
+    title: "DEXA POS — Restaurant operations, simplified.",
+    description:
+      "The all-in-one point-of-sale platform built for modern restaurants. From quick-service to fine dining.",
+    images: [
+      {
+        url: "/dexalogolight.png",
+        width: 1200,
+        height: 630,
+        alt: "DEXA POS",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "DEXA POS — Restaurant operations, simplified.",
+    description:
+      "The all-in-one point-of-sale platform built for modern restaurants. From quick-service to fine dining.",
+    images: ["/dexalogolight.png"],
+  },
 };
 
 export default function MarketingLayout({

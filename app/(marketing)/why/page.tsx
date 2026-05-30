@@ -5,9 +5,28 @@ import CountUp from "../_components/CountUp";
 import Faq from "../_components/Faq";
 
 export const metadata: Metadata = {
-  title: "Why DEXA — DEXA POS",
+  title: "Why DEXA",
   description:
     "How DEXA compares — and the questions operators actually ask before they switch.",
+  alternates: { canonical: "/why" },
+  openGraph: {
+    type: "website",
+    siteName: "DEXA POS",
+    url: "/why",
+    title: "Why DEXA — DEXA POS",
+    description:
+      "How DEXA compares — and the questions operators actually ask before they switch.",
+    images: [
+      { url: "/dexalogolight.png", width: 1200, height: 630, alt: "DEXA POS" },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Why DEXA — DEXA POS",
+    description:
+      "How DEXA compares — and the questions operators actually ask before they switch.",
+    images: ["/dexalogolight.png"],
+  },
 };
 
 const FAQ_ITEMS = [

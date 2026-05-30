@@ -4,9 +4,28 @@ import MarketingFooter from "../_components/MarketingFooter";
 import DemoFrame from "../_components/DemoFrame";
 
 export const metadata: Metadata = {
-  title: "Live Demo — DEXA POS",
+  title: "Live Demo",
   description:
     "See DEXA running. The actual point-of-sale interface, in your browser.",
+  alternates: { canonical: "/demo" },
+  openGraph: {
+    type: "website",
+    siteName: "DEXA POS",
+    url: "/demo",
+    title: "Live Demo — DEXA POS",
+    description:
+      "See DEXA running. The actual point-of-sale interface, in your browser.",
+    images: [
+      { url: "/dexalogolight.png", width: 1200, height: 630, alt: "DEXA POS" },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Live Demo — DEXA POS",
+    description:
+      "See DEXA running. The actual point-of-sale interface, in your browser.",
+    images: ["/dexalogolight.png"],
+  },
 };
 
 export default function DemoPage() {

@@ -3,8 +3,25 @@ import MarketingNav from "../_components/MarketingNav";
 import MarketingFooter from "../_components/MarketingFooter";
 
 export const metadata: Metadata = {
-  title: "Industries — DEXA POS",
+  title: "Industries",
   description: "DEXA configures itself for eight different restaurant concepts.",
+  alternates: { canonical: "/industries" },
+  openGraph: {
+    type: "website",
+    siteName: "DEXA POS",
+    url: "/industries",
+    title: "Industries — DEXA POS",
+    description: "DEXA configures itself for eight different restaurant concepts.",
+    images: [
+      { url: "/dexalogolight.png", width: 1200, height: 630, alt: "DEXA POS" },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Industries — DEXA POS",
+    description: "DEXA configures itself for eight different restaurant concepts.",
+    images: ["/dexalogolight.png"],
+  },
 };
 
 const INDUSTRIES: { img: string; title: string; desc: string; pills: string[] }[] = [
