@@ -27,6 +27,7 @@ These are the parts that are genuinely implemented in repo or already reported a
 - [x] QR token base64url normalization + token re-sign migration authored locally: `supabase/migrations/20260528153000_qr_token_base64url_fix.sql`
 - [x] QR guest-alert realtime broadcast + open-count fallback migration authored locally: `supabase/migrations/20260528170000_qr_guest_alert_broadcast.sql`
 - [x] QR token-scoped guest order-status realtime migration authored locally: `supabase/migrations/20260530103000_qr_order_session_realtime.sql`
+- [x] QR retention / PII enforcement migration authored locally: `supabase/migrations/20260530113000_qr_pii_retention_policy.sql`
 - [x] `create-online-order` was extended locally for QR-aware checkout / order binding in `supabase/functions/create-online-order/index.ts`
 - [x] Merchant dashboard online-ordering settings now include QR fields locally in:
   - `app/dashboard/online-ordering/actions.ts`
@@ -137,7 +138,7 @@ These are the places where work exists, but the ticket item is not yet defensibl
 | QR-2b | Backend | `implemented_local_not_applied` | Wave 2 migration exists locally | Apply `20260522133000_qr_w2_status_and_guest_alert_rpcs.sql` on staging |
 | QR-19 | Backend / Billing | `implemented_local_not_applied` | QR Table Ordering service-catalog seed migration is authored locally and merchant QR settings/actions now enforce tier-or-override gating in code | Apply `20260528103000_qr_service_catalog_gate.sql` on staging, then smoke test merchant gating and HQ override |
 | QR-22 | Backend | `staging_applied_needs_validation` | Migration exists and was reportedly run; needs smoke check | Verify new rows default to `#0C4FD1` |
-| QR-28 | Backend | `not_started` | Tables exist in migration, but retention policy is not implemented | Add retention plan + enforcement |
+| QR-28 | Backend | `implemented_local_not_applied` | Daily cleanup function, cron schedule, and QR-safe export views are now authored locally; policy windows are defined in code rather than only in docs | Apply `20260530113000_qr_pii_retention_policy.sql` on staging and verify cleanup + views |
 | QR-6 | Edge | `implemented_local_not_deployed` | QR-aware order creation is patched locally | Deploy edge function + stage test |
 | QR-7 | Edge | `implemented_local_not_deployed` | Auto-accept wiring is patched locally | Deploy edge function + stage test |
 | QR-9 | Edge / Analytics | `in_progress` | Local funnel recorder now exists for `menu_viewed`, `cart_started`, `checkout`, and `paid`; still needs app + edge deploy and staging verification | Deploy app/edge changes and verify one full QR session populates the funnel |
