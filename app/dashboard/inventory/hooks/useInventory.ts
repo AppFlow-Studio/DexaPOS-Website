@@ -47,10 +47,10 @@ export function useInventory() {
         selectedLocationId === "all" ? null : selectedLocationId;
 
       const res = await getItemsForLocationFlat(merchantId, locationId);
-      if (!res.success) {
-        throw new Error(res.error || "Failed to load inventory");
+      if (res.success && res.data) {
+        return res.data;
       }
-      return res.data ?? [];
+      return [];
     },
     enabled: !!merchantId,
   });

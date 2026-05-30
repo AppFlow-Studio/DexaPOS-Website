@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { format } from "date-fns";
 import { ShoppingBag } from "lucide-react";
-import { useCart } from "../../hooks/useCart";
+import { useCart, resolveCartUnitPrice } from "../../hooks/useCart";
 import { useSession } from "../../hooks/useSession";
 import { useSessionInit } from "../../hooks/useSessionInit";
 import { useCartSync } from "../../hooks/useCartSync";
@@ -107,6 +107,18 @@ export function CheckoutPage({
     orderId?: string;
     isPending?: boolean;
     requestedTime?: string | null;
+    // Receipt snapshot (captured before cart is cleared)
+    snapshotItems?: Array<{ name: string; quantity: number; price: number; modifiers: Array<{ name: string; price: number }> }>;
+    snapshotSubtotal?: number;
+    snapshotTax?: number;
+    snapshotTip?: number;
+    snapshotDiscount?: number;
+    snapshotDeliveryFee?: number;
+    snapshotTotal?: number;
+    snapshotOrderType?: "pickup" | "delivery";
+    snapshotCardType?: string | null;
+    snapshotCardLast4?: string | null;
+    snapshotPayCash?: boolean;
   } | null>(null);
   const [loading, setLoading] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
@@ -171,8 +183,17 @@ export function CheckoutPage({
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [payCashInStore, setPayCashInStore] = useState(false);
 
-  // Calculated values
-  const subtotal = getSubtotal();
+  // Calculated values.
+  // Subtotal must use the SAME pricing rule the server charges (order type +
+  // separate-delivery-pricing flag), not the cart's add-time totalPrice, so the
+  // checkout total, confirmation receipt, server charge, and order tracking all
+  // agree. See resolveCartUnitPrice.
+  const deliveryPricingEnabled = config?.deliveryPricingEnabled ?? true;
+  const subtotal = items.reduce(
+    (sum, i) =>
+      sum + resolveCartUnitPrice(i, orderType, deliveryPricingEnabled, payCashInStore) * i.quantity,
+    0
+  );
   const tipAmount =
     selectedTipIndex === -1
       ? 0
@@ -370,7 +391,8 @@ export function CheckoutPage({
         const addr = savedAddresses.find((a) => a.id === selectedAddressId);
         if (addr) {
           deliveryAddress = {
-            street: addr.addressLine1 + (addr.addressLine2 ? ` ${addr.addressLine2}` : ""),
+            street: addr.addressLine1,
+            unit: addr.addressLine2 ?? undefined,
             city: addr.city,
             state: addr.state,
             zip: addr.postalCode,
@@ -485,12 +507,37 @@ export function CheckoutPage({
       setLoading(false);
 
       if (result.success && !result.requires_redirect) {
+        // Snapshot cart data before clearing so the confirmation receipt can
+        // display it. Price each line with the SAME rule the server charges so
+        // the confirmation matches checkout, the server, and order tracking.
+        const currentItems = useCart.getState().items;
+        const currentSubtotal = currentItems.reduce(
+          (sum, i) =>
+            sum + resolveCartUnitPrice(i, orderType, deliveryPricingEnabled, payCashInStore) * i.quantity,
+          0
+        );
         setOrderResult({
           displayNumber: result.display_number,
           estimatedTime: result.estimated_time,
           orderId: result.order_id,
           isPending: !result.auto_accepted,
           requestedTime: requestedTime,
+          snapshotItems: currentItems.map((i) => ({
+            name: i.name,
+            quantity: i.quantity,
+            price: resolveCartUnitPrice(i, orderType, deliveryPricingEnabled, payCashInStore) * i.quantity,
+            modifiers: (i.selectedModifiers ?? []).map((m) => ({ name: m.name, price: m.price })),
+          })),
+          snapshotSubtotal: currentSubtotal,
+          snapshotTax: tax,
+          snapshotTip: tipAmount,
+          snapshotDiscount: discountAmount,
+          snapshotDeliveryFee: deliveryFee,
+          snapshotTotal: total,
+          snapshotOrderType: orderType,
+          snapshotCardType: paymentCardType,
+          snapshotCardLast4: paymentCardLastFour,
+          snapshotPayCash: payCashInStore,
         });
         if (result.order_id) {
           useSession.getState().setActiveOrderId(result.order_id);
@@ -573,6 +620,17 @@ export function CheckoutPage({
           isPending={orderResult.isPending}
           requestedTime={orderResult.requestedTime}
           locationTimezone={location.timezone ?? "America/New_York"}
+          snapshotItems={orderResult.snapshotItems}
+          snapshotSubtotal={orderResult.snapshotSubtotal}
+          snapshotTax={orderResult.snapshotTax}
+          snapshotTip={orderResult.snapshotTip}
+          snapshotDiscount={orderResult.snapshotDiscount}
+          snapshotDeliveryFee={orderResult.snapshotDeliveryFee}
+          snapshotTotal={orderResult.snapshotTotal}
+          snapshotOrderType={orderResult.snapshotOrderType}
+          snapshotCardType={orderResult.snapshotCardType}
+          snapshotCardLast4={orderResult.snapshotCardLast4}
+          snapshotPayCash={orderResult.snapshotPayCash}
         />
       </>
     );
@@ -877,6 +935,9 @@ export function CheckoutPage({
               <OrderDetailsSection
                 items={items}
                 slug={slug}
+                orderType={orderType}
+                deliveryPricingEnabled={deliveryPricingEnabled}
+                useCashPrice={payCashInStore}
                 onUpdateQuantity={updateQuantity}
                 onRemoveItem={removeItem}
               />

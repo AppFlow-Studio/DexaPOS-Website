@@ -18,6 +18,10 @@ import { useSessionInit } from "../../hooks/useSessionInit";
 import { useStorefrontPath } from "../../lib/use-storefront-path";
 import { getTodayHoursString, isStoreOpenNow } from "../StoreInfoBar";
 import { MenuSearch } from "../MenuSearch";
+import {
+  getStorefrontBrowsePrice,
+  getStorefrontDeliveryPriceLabel,
+} from "../../lib/storefront-pricing";
 import { motion, AnimatePresence } from "motion/react";
 import { Plus, ChevronUp, Clock } from "lucide-react";
 
@@ -382,19 +386,24 @@ function HeroItemCard({
       {/* Content left */}
       <div className="flex-1 flex flex-col justify-between min-w-0">
         <div>
-          <div className="flex items-start justify-between gap-2 mb-1">
-            <h4 className="font-semibold text-sm leading-tight line-clamp-2 group-hover:text-[color:var(--primary)] transition-colors" style={{ color: "#1A1A1A" }}>
-              {item.name}
-            </h4>
-            <span className="text-sm font-semibold shrink-0 px-2 py-0.5 rounded-md" style={{ backgroundColor: "#F8F9FA", color: "#1A1A1A" }}>
-              ${item.delivery_price.toFixed(2)}
-            </span>
-          </div>
-          {item.description && (
-            <p className="text-xs line-clamp-2 leading-relaxed" style={{ color: "#666666" }}>
-              {item.description}
-            </p>
-          )}
+            <div className="flex items-start justify-between gap-2 mb-1">
+              <h4 className="font-semibold text-sm leading-tight line-clamp-2 group-hover:text-[color:var(--primary)] transition-colors" style={{ color: "#1A1A1A" }}>
+                {item.name}
+              </h4>
+              <span className="text-sm font-semibold shrink-0 px-2 py-0.5 rounded-md" style={{ backgroundColor: "#F8F9FA", color: "#1A1A1A" }}>
+              ${getStorefrontBrowsePrice(item).toFixed(2)}
+              </span>
+            </div>
+            {item.description && (
+              <p className="text-xs line-clamp-2 leading-relaxed" style={{ color: "#666666" }}>
+                {item.description}
+              </p>
+            )}
+            {getStorefrontDeliveryPriceLabel(item) && (
+              <p className="text-[10px] mt-1" style={{ color: "#6B7280" }}>
+                {getStorefrontDeliveryPriceLabel(item)}
+              </p>
+            )}
         </div>
         <div className="mt-3">
           {isSoldOut ? (

@@ -11,7 +11,7 @@ export default function TanstackProvider({ children }: { children: React.ReactNo
           queries: {
             staleTime: 5 * 60 * 1000, // 5 minutes - Data stays fresh for 5 minutes
             gcTime: 10 * 60 * 1000, // 10 minutes - Keep cached data for 10 minutes (formerly cacheTime)
-            refetchOnWindowFocus: true, // Refetch stale queries when the user returns to the tab
+            refetchOnWindowFocus: false, // Don't refetch on window focus (prevents unnecessary requests)
             refetchOnReconnect: true, // Refetch when network reconnects
             refetchOnMount: true, // Refetch when component mounts (if stale)
             retry: 1, // Retry failed requests once

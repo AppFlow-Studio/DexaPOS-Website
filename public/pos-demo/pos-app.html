@@ -1,0 +1,900 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DEXA POS — Live Demo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --brand-700: #4150D6; --brand-600: #4D5EE6; --brand-500: #5B6CFF; --brand-400: #7A89FF;
+    --brand-300: #A4AEFF; --brand-100: #E5E8FF; --brand-50: #F2F4FF;
+    --ink: #0F1424; --slate-700: #2D3548; --slate-600: #475569; --slate-500: #64748B;
+    --slate-400: #94A3B8; --slate-300: #CBD5E1; --slate-200: #E2E8F0; --slate-100: #F1F5F9; --slate-50: #F8FAFC;
+    --canvas: #FAFBFD; --paper: #FFFFFF;
+    --success: #1FB573; --success-soft: #DDF5E8; --warning: #E89B2D; --warning-soft: #FCEFD5;
+    --danger: #E25E5E; --danger-soft: #FBE3E3;
+    --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+  /* Dark mode — overrides surfaces, neutrals, and soft accent backgrounds */
+  body.dark {
+    --ink: #F1F5F9;
+    --slate-700: #CBD5E1; --slate-600: #94A3B8; --slate-500: #94A3B8;
+    --slate-400: #64748B; --slate-300: #475569; --slate-200: #2D3548; --slate-100: #1E2536; --slate-50: #161C2C;
+    --canvas: #0B0F1A; --paper: #161C2C;
+    --brand-50: #1A2247; --brand-100: #243066;
+    --success-soft: #0F3324; --warning-soft: #3D2B0F; --danger-soft: #3A1818;
+  }
+  body.dark .pos-bar { background: #000814; border-bottom: 1px solid #1E2536; }
+  body.dark ::-webkit-scrollbar-thumb { background: #2D3548; }
+  body.dark .menu-card-image, body.dark .mgmt-card-image { background-color: #1E2536; }
+  body.dark .modal-backdrop { background: rgba(0,0,0,0.65); }
+  body.dark .toast { background: #243066; }
+  body.dark .home-tile, body.dark .order-col, body.dark .menu-col,
+  body.dark .panel, body.dark .stat-card, body.dark .floor-grid,
+  body.dark .floor-table, body.dark .orders-list, body.dark .inv-table,
+  body.dark .sched-week, body.dark .settings-nav, body.dark .settings-content,
+  body.dark .modal, body.dark .kds-card { background: var(--paper); border-color: #2D3548; }
+  body.dark .pay-btn:not(:disabled) { background: var(--brand-500); }
+  body.dark .pay-btn:disabled { background: #1E2536; color: #475569; }
+  body.dark .form-input, body.dark .settings-row-input,
+  body.dark .menu-search-wrap, body.dark .orders-search,
+  body.dark .add-customer, body.dark .order-note,
+  body.dark .mode-toggle, body.dark .qty-control,
+  body.dark .more-btn { background: #1E2536; border-color: #2D3548; color: var(--ink); }
+  body.dark .menu-search, body.dark .orders-search input { color: var(--ink); }
+  body.dark .menu-search::placeholder, body.dark .orders-search input::placeholder,
+  body.dark .form-input::placeholder { color: #64748B; }
+  body.dark .qty-btn { background: #2D3548; color: var(--ink); }
+  body.dark .qty-btn:hover { background: var(--brand-500); color: white; }
+  body.dark .menu-card, body.dark .mgmt-card, body.dark .kitchen-tab,
+  body.dark .orders-filter, body.dark .orders-pill { background: var(--paper); border-color: #2D3548; }
+  body.dark .floor-table.occupied { background: #1A2247; border-color: var(--brand-400); }
+  body.dark .floor-table.dirty { background: #3D2B0F; border-color: var(--warning); }
+  body.dark .pay-tab { background: #1E2536; }
+  body.dark .pay-tab.active { background: #1A2247; }
+  body.dark .pay-amount-display { background: #1E2536; }
+  body.dark .sched-week-head, body.dark .sched-staff,
+  body.dark .inv-th { background: #1E2536; }
+  body.dark .skip-link { background: #5B6CFF; }
+  /* Theme toggle button */
+  .theme-toggle {
+    width: 32px; height: 32px; border-radius: 8px;
+    background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.85);
+    display: grid; place-items: center; transition: background .15s;
+    margin-left: 12px;
+  }
+  .theme-toggle:hover { background: rgba(255,255,255,0.15); }
+  .theme-toggle svg { width: 16px; height: 16px; }
+  .theme-toggle .icon-sun { display: none; }
+  .theme-toggle .icon-moon { display: block; }
+  body.dark .theme-toggle .icon-sun { display: block; }
+  body.dark .theme-toggle .icon-moon { display: none; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: var(--font); color: var(--ink); background: var(--canvas);
+    -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+    overflow-x: hidden; line-height: 1.5;
+  }
+  button { font-family: inherit; cursor: pointer; border: none; background: none; color: inherit; }
+  input, textarea, select { font-family: inherit; font-size: inherit; color: inherit; }
+  /* Focus styles for accessibility */
+  button:focus-visible, [role="button"]:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible, a:focus-visible {
+    outline: 2px solid var(--brand-500); outline-offset: 2px;
+  }
+  /* Skip link */
+  .skip-link {
+    position: absolute; left: -9999px; top: 8px; padding: 8px 16px;
+    background: var(--ink); color: var(--paper); border-radius: 7px;
+    font-size: 13px; font-weight: 600; z-index: 9999;
+  }
+  .skip-link:focus { left: 8px; }
+  /* SR only */
+  .sr-only {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+  }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: var(--slate-300); border-radius: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+
+  .pos-app { width: 100%; min-height: 100vh; background: var(--canvas); display: flex; flex-direction: column; }
+  .pos-bar {
+    background: var(--ink); color: var(--paper); padding: 10px 20px;
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 12px; flex-shrink: 0;
+  }
+  .pos-bar-left { display: flex; align-items: center; gap: 10px; font-weight: 500; }
+  .pos-bar-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); box-shadow: 0 0 0 3px rgba(31,181,115,0.20); }
+  .pos-bar-time { color: rgba(255,255,255,0.60); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+
+  .screen { display: none; padding: 24px; flex: 1; animation: fade .25s ease; }
+  .screen.active { display: block; }
+  @keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+  .screen-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; gap: 12px; flex-wrap: wrap; }
+  .back-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 14px; font-weight: 500; color: var(--slate-700);
+    transition: color .2s; padding: 6px 4px; border-radius: 7px;
+  }
+  .back-btn:hover { color: var(--ink); }
+  .back-btn svg { color: var(--brand-500); }
+  .user-pill { display: flex; align-items: center; gap: 8px; }
+  .user-avatar {
+    width: 30px; height: 30px; border-radius: 50%; background: var(--brand-500); color: var(--paper);
+    display: grid; place-items: center; font-size: 11px; font-weight: 600; letter-spacing: -0.01em;
+  }
+  .user-name { font-size: 13px; color: var(--slate-600); font-weight: 500; }
+
+  /* HOME */
+  #home { padding: 96px 32px 56px; }
+  .home-section-label {
+    text-align: center; font-size: 11px; letter-spacing: 0.20em;
+    text-transform: uppercase; color: var(--slate-500); font-weight: 600;
+    margin: 28px 0 18px;
+  }
+  .home-section-label:first-of-type { margin-top: 24px; }
+  .home-tiles {
+    display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px;
+    max-width: 900px; margin: 0 auto;
+  }
+  .home-tile {
+    background: var(--paper); border: 1px solid var(--slate-200); border-radius: 14px;
+    padding: 22px 14px 16px; text-align: center; aspect-ratio: 1.05;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+    cursor: pointer; transition: all .2s ease; position: relative;
+  }
+  .home-tile::before {
+    content: ''; position: absolute; top: 0; left: 18px; right: 18px;
+    height: 2.5px; background: var(--brand-500); border-radius: 0 0 2px 2px;
+    opacity: 0.5; transition: opacity .2s;
+  }
+  .home-tile:hover { border-color: var(--brand-300); transform: translateY(-2px); box-shadow: 0 6px 14px rgba(91,108,255,.10); }
+  .home-tile:hover::before { opacity: 1; }
+  .home-tile-icon {
+    width: 44px; height: 44px; border-radius: 10px;
+    background: var(--brand-50); color: var(--brand-500);
+    display: grid; place-items: center;
+  }
+  .home-tile-name { font-size: 12.5px; font-weight: 500; color: var(--slate-700); }
+  .home-tile-badge {
+    position: absolute; top: 8px; right: 8px;
+    background: var(--danger); color: var(--paper); font-size: 10px; font-weight: 700;
+    padding: 1px 5px; border-radius: 999px; min-width: 16px; text-align: center;
+  }
+  .home-user { position: absolute; top: 56px; right: 32px; z-index: 5; padding: 4px 10px 4px 4px; background: var(--paper); border-radius: 999px; box-shadow: 0 1px 2px rgba(15,20,36,0.04); }
+
+  /* SALES */
+  #sales { padding: 16px 24px 24px; }
+  .sales-grid { display: grid; grid-template-columns: 360px 1fr; gap: 16px; }
+  .order-col {
+    background: var(--paper); border: 1px solid var(--slate-200); border-radius: 14px;
+    padding: 16px; display: flex; flex-direction: column;
+    min-height: 600px; max-height: 85vh;
+  }
+  .order-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; gap: 8px; flex-wrap: wrap; }
+  .order-num { font-size: 17px; font-weight: 700; color: var(--ink); letter-spacing: -0.015em; white-space: nowrap; }
+  .order-actions { display: flex; gap: 6px; align-items: center; flex-shrink: 0; }
+  .send-btn {
+    background: var(--brand-50); color: var(--brand-500); padding: 6px 12px;
+    border-radius: 7px; font-size: 11.5px; font-weight: 600;
+    display: inline-flex; align-items: center; gap: 5px; transition: background .15s;
+    white-space: nowrap;
+  }
+  .send-btn:hover { background: var(--brand-100); }
+  .send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .new-order-btn {
+    background: var(--brand-500); color: var(--paper); padding: 6px 11px;
+    border-radius: 7px; font-size: 11.5px; font-weight: 600;
+    display: inline-flex; align-items: center; gap: 4px; transition: background .15s;
+    white-space: nowrap;
+  }
+  .new-order-btn:hover { background: var(--brand-600); }
+  .trash-btn {
+    width: 28px; height: 28px; border-radius: 7px; background: var(--danger-soft);
+    color: var(--danger); display: grid; place-items: center; transition: all .15s;
+  }
+  .trash-btn:hover { background: var(--danger); color: var(--paper); }
+  .add-customer {
+    border: 1px solid var(--slate-200); border-radius: 9px; padding: 10px 12px;
+    margin-bottom: 12px; display: flex; align-items: center; gap: 8px;
+    color: var(--slate-500); font-size: 13px; cursor: pointer; transition: all .15s;
+    width: 100%; text-align: left;
+  }
+  .add-customer:hover { border-color: var(--brand-300); }
+  .add-customer.has-customer { color: var(--ink); border-color: var(--brand-300); background: var(--brand-50); }
+  .add-customer-edit { margin-left: auto; color: var(--slate-400); }
+  .mode-toggle {
+    display: grid; grid-template-columns: 1fr 1fr 1fr;
+    background: var(--canvas); border-radius: 9px; padding: 3px; margin-bottom: 14px;
+  }
+  .mode-btn {
+    padding: 8px; border-radius: 6px; font-size: 13px; font-weight: 500;
+    color: var(--slate-600); text-align: center; transition: all .15s;
+  }
+  .mode-btn.active {
+    background: var(--brand-500); color: var(--paper); font-weight: 600;
+    box-shadow: 0 1px 2px rgba(91,108,255,.30);
+  }
+  .order-status-line { font-size: 12px; color: var(--slate-500); margin-bottom: 8px; }
+  .order-status-line strong { color: var(--ink); font-weight: 500; }
+  .order-list { flex: 1; overflow-y: auto; margin-bottom: 12px; padding-right: 2px; }
+  .order-empty {
+    flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    color: var(--slate-400); font-size: 14px; padding: 32px 16px; text-align: center; gap: 6px;
+  }
+  .order-line { display: flex; justify-content: space-between; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--slate-100); gap: 8px; }
+  .order-line:last-child { border-bottom: none; }
+  .order-line-info { flex: 1; min-width: 0; }
+  .order-line-name { font-size: 13px; font-weight: 600; color: var(--ink); margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .order-line-meta { font-size: 11px; color: var(--slate-500); }
+  .order-line-mods { font-size: 10.5px; color: var(--brand-500); margin-top: 1px; }
+  .qty-control { display: flex; align-items: center; gap: 4px; background: var(--canvas); border-radius: 7px; padding: 2px; }
+  .qty-btn { width: 22px; height: 22px; border-radius: 5px; background: var(--paper); color: var(--ink); font-weight: 600; font-size: 13px; display: grid; place-items: center; transition: background .15s; }
+  .qty-btn:hover { background: var(--brand-50); color: var(--brand-500); }
+  .qty-num { min-width: 18px; text-align: center; font-size: 12px; font-weight: 600; color: var(--ink); }
+  .order-totals { border-top: 2px solid var(--slate-200); padding-top: 12px; }
+  .order-note {
+    border: 1px solid var(--slate-200); border-radius: 8px; padding: 9px 11px;
+    font-size: 12px; color: var(--slate-500); margin-bottom: 10px;
+    display: flex; align-items: center; gap: 6px; cursor: pointer; transition: border-color .15s;
+    width: 100%; text-align: left;
+  }
+  .order-note:hover { border-color: var(--brand-300); }
+  .order-note.has-note { color: var(--ink); border-color: var(--brand-300); }
+  .totals-row { display: flex; justify-content: space-between; padding: 3px 0; font-size: 13px; color: var(--slate-600); }
+  .totals-row.bold { font-size: 15px; color: var(--brand-500); font-weight: 700; margin-top: 4px; padding-top: 6px; border-top: 1px solid var(--slate-100); }
+  .totals-row.cash-row { color: var(--success); font-weight: 600; }
+  .totals-row.discount-row { color: var(--warning); font-weight: 600; }
+  .pay-btn { margin-top: 12px; background: var(--ink); color: var(--paper); width: 100%; padding: 13px; border-radius: 9px; font-size: 14px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all .2s; }
+  .pay-btn:hover:not(:disabled) { background: var(--brand-500); }
+  .pay-btn:disabled { background: var(--slate-200); color: var(--slate-400); cursor: not-allowed; }
+  .more-btn { margin-top: 8px; text-align: center; font-size: 12px; color: var(--slate-500); padding: 8px; background: var(--canvas); border-radius: 7px; cursor: pointer; transition: all .15s; width: 100%; }
+  .more-btn:hover { background: var(--slate-100); color: var(--ink); }
+
+  .menu-col { background: var(--paper); border: 1px solid var(--slate-200); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; min-width: 0; }
+  .menu-search-wrap {
+    background: var(--canvas); border: 1px solid var(--slate-200); border-radius: 9px;
+    padding: 9px 13px; display: flex; align-items: center; gap: 10px;
+    margin-bottom: 14px; transition: border-color .15s;
+  }
+  .menu-search-wrap:focus-within { border-color: var(--brand-300); }
+  .menu-search-wrap svg { color: var(--slate-400); flex-shrink: 0; }
+  .menu-search { flex: 1; border: none; outline: none; background: transparent; font-size: 13.5px; color: var(--ink); }
+  .menu-search::placeholder { color: var(--slate-400); }
+  .menu-meta-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; gap: 8px; flex-wrap: wrap; }
+  .order-line-label { font-size: 16px; font-weight: 700; color: var(--ink); display: flex; align-items: center; gap: 8px; letter-spacing: -0.01em; }
+  .order-line-count { background: var(--brand-50); color: var(--brand-500); font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 999px; min-width: 22px; text-align: center; }
+  .other-orders { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .other-order-tab { display: flex; align-items: center; gap: 5px; padding: 5px 10px; background: var(--canvas); border: 1px solid var(--slate-200); border-radius: 7px; font-size: 11.5px; color: var(--slate-600); font-weight: 500; cursor: pointer; transition: all .15s; }
+  .other-order-tab:hover { border-color: var(--brand-300); }
+  .other-order-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--warning); }
+  .complete-pill { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; background: var(--success-soft); color: var(--success); border-radius: 6px; font-size: 11.5px; font-weight: 600; cursor: pointer; transition: all .15s; }
+  .complete-pill:hover { background: var(--success); color: var(--paper); }
+  .menu-tabs { display: flex; gap: 4px; overflow-x: auto; overflow-y: hidden; padding-bottom: 10px; margin-bottom: 14px; border-bottom: 1px solid var(--slate-100); -webkit-overflow-scrolling: touch; scrollbar-width: thin; }
+  .menu-tab { padding: 7px 13px; border-radius: 7px; font-size: 12.5px; font-weight: 500; color: var(--slate-600); white-space: nowrap; transition: all .15s; }
+  .menu-tab:hover { background: var(--slate-100); }
+  .menu-tab.active { background: var(--brand-50); color: var(--brand-500); font-weight: 600; }
+  .menu-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 12px; flex: 1; align-content: start; overflow-y: auto; overflow-x: hidden; max-height: 540px; padding: 2px; min-width: 0; width: 100%; }
+  .menu-grid-empty { grid-column: 1/-1; text-align: center; padding: 40px 20px; color: var(--slate-400); font-size: 13px; }
+  .menu-card { background: var(--paper); border: 1px solid var(--slate-200); border-radius: 11px; overflow: hidden; cursor: pointer; transition: all .18s; position: relative; text-align: left; padding: 0; width: 100%; }
+  .menu-card:hover { border-color: var(--brand-300); transform: translateY(-2px); box-shadow: 0 4px 10px rgba(15,20,36,.06); }
+  .menu-card:active { transform: scale(0.98); }
+  .menu-card.unavailable { opacity: 0.5; pointer-events: none; }
+  .menu-card.unavailable::after { content: 'Out of stock'; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--ink); color: var(--paper); padding: 4px 10px; border-radius: 999px; font-size: 10.5px; font-weight: 600; }
+  .menu-card-corner { position: absolute; top: 0; right: 0; width: 0; height: 0; border-style: solid; border-width: 0 22px 22px 0; border-color: transparent var(--brand-500) transparent transparent; z-index: 1; }
+  .menu-card-image { aspect-ratio: 16/10; background-size: cover; background-position: center; background-color: var(--slate-100); position: relative; }
+  .menu-card-image.placeholder { display: flex; align-items: center; justify-content: center; color: var(--slate-300); }
+  .menu-card-body { padding: 9px 11px 11px; }
+  .menu-card-name { font-size: 11.5px; font-weight: 600; color: var(--ink); margin-bottom: 5px; line-height: 1.25; text-transform: uppercase; letter-spacing: 0.01em; min-height: 28px; word-wrap: break-word; overflow-wrap: break-word; hyphens: auto; }
+  .menu-card-prices { display: flex; justify-content: space-between; align-items: baseline; gap: 4px; }
+  .menu-card-card-price { font-size: 12.5px; font-weight: 700; color: var(--ink); }
+  .menu-card-cash-price { font-size: 11px; font-weight: 600; color: var(--success); background: var(--success-soft); padding: 1px 5px; border-radius: 3px; }
+
+  /* ORDERS LIST */
+  #orders { padding: 16px 24px 24px; }
+  .orders-filters { display: flex; gap: 6px; margin-bottom: 14px; }
+  .orders-filter { padding: 7px 13px; border-radius: 7px; font-size: 12.5px; font-weight: 500; color: var(--slate-600); background: var(--paper); border: 1px solid var(--slate-200); transition: all .15s; }
+  .orders-filter:hover { border-color: var(--brand-300); }
+  .orders-filter.active { background: var(--brand-50); color: var(--brand-500); border-color: var(--brand-100); font-weight: 600; }
+  .orders-toolbar { display: flex; gap: 16px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+  .orders-search { flex: 1; background: var(--paper); border: 1px solid var(--slate-200); border-radius: 9px; padding: 9px 12px; display: flex; align-items: center; gap: 8px; min-width: 200px; transition: border-color .15s; }
+  .orders-search:focus-within { border-color: var(--brand-300); }
+  .orders-search svg { color: var(--slate-400); }
+  .orders-search input { flex: 1; border: none; outline: none; background: transparent; font-size: 13px; color: var(--ink); }
+  .orders-search input::placeholder { color: var(--slate-400); }
+  .orders-pills { display: flex; gap: 6px; flex-wrap: wrap; }
+  .orders-pill { display: inline-flex; align-items: center; gap: 6px; padding: 7px 11px; background: var(--paper); border: 1px solid var(--slate-200); border-radius: 7px; font-size: 12px; color: var(--slate-700); font-weight: 500; transition: all .15s; cursor: pointer; }
+  .orders-pill:hover { border-color: var(--brand-300); }
+  .orders-pill.active { background: var(--brand-50); border-color: var(--brand-100); color: var(--brand-500); }
+  .orders-pill svg { color: var(--brand-500); }
+  .orders-pill .num { background: var(--brand-50); color: var(--brand-500); font-weight: 700; padding: 1px 6px; border-radius: 4px; font-size: 11px; }
+  .orders-list { background: var(--paper); border: 1px solid var(--slate-200); border-radius: 14px; overflow: hidden; }
+  .order-row { display: grid; grid-template-columns: 1.4fr 1.5fr 1.2fr 1fr 90px 28px; gap: 14px; align-items: center; padding: 14px 20px; border-bottom: 1px solid var(--slate-100); font-size: 13.5px; transition: background .12s; cursor: pointer; }
+  .order-row:last-child { border-bottom: none; }
+  .order-row:hover { background: var(--canvas); }
+  .order-row-empty { padding: 60px 20px; text-align: center; color: var(--slate-400); font-size: 14px; }
+  .order-row-id { font-size: 13.5px; font-weight: 600; color: var(--ink); }
+  .order-row-id .order-time { color: var(--slate-500); font-weight: 400; font-size: 12px; margin-left: 5px; }
+  .order-row-mode { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--slate-600); }
+  .order-row-mode svg { color: var(--brand-500); }
+  .order-row-customer { color: var(--slate-700); font-size: 13px; }
+  .order-status-pill { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 600; text-align: center; min-width: 64px; }
+  .status-paid { background: var(--brand-50); color: var(--brand-500); }
+  .status-pending { background: var(--warning-soft); color: var(--warning); }
+  .status-unpaid { background: var(--danger-soft); color: var(--danger); }
+  .status-refunded { background: var(--slate-100); color: var(--slate-600); }
+  .order-row-amount { font-size: 13.5px; font-weight: 700; color: var(--ink); text-align: right; font-variant-numeric: tabular-nums; }
+  .order-row-more { color: var(--slate-400); text-align: center; font-size: 16px; line-height: 1; }
+
+  /* KITCHEN */
+  #kitchen { padding: 16px 24px 24px; }
+  .kitchen-toolbar { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
+  .kitchen-tab { padding: 7px 12px; border-radius: 7px; font-size: 12.5px; font-weight: 500; color: var(--slate-600); background: var(--paper); border: 1px solid var(--slate-200); display: inline-flex; align-items: center; gap: 7px; transition: all .15s; }
+  .kitchen-tab:hover { border-color: var(--brand-300); }
+  .kitchen-tab.active { background: var(--brand-50); color: var(--brand-500); border-color: var(--brand-100); font-weight: 600; }
+  .kitchen-tab-num { background: var(--slate-200); color: var(--slate-700); font-size: 10.5px; font-weight: 700; padding: 1px 6px; border-radius: 999px; min-width: 20px; text-align: center; }
+  .kitchen-tab.active .kitchen-tab-num { background: var(--brand-500); color: var(--paper); }
+  .kitchen-spacer { flex: 1; }
+  .kitchen-mark-all { background: var(--warning); color: var(--paper); padding: 7px 13px; border-radius: 7px; font-size: 12.5px; font-weight: 600; transition: opacity .15s; }
+  .kitchen-mark-all:hover { opacity: 0.9; }
+  .kitchen-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+  .kds-card { background: var(--paper); border: 1px solid var(--slate-200); border-radius: 11px; padding: 14px; position: relative; cursor: pointer; transition: all .15s; }
+  .kds-card:hover { border-color: var(--brand-300); transform: translateY(-2px); box-shadow: 0 4px 10px rgba(15,20,36,.06); }
+  .kds-card.bumped { opacity: 0.45; }
+  .kds-card::before { content: ''; position: absolute; top: 0; left: 14px; right: 14px; height: 2px; background: var(--brand-500); border-radius: 0 0 2px 2px; }
+  .kds-head { display: flex; justify-content: space-between; align-items: baseline; margin: 4px 0; }
+  .kds-num { font-size: 13px; font-weight: 700; color: var(--ink); }
+  .kds-time { font-size: 13px; font-weight: 700; color: var(--danger); font-variant-numeric: tabular-nums; }
+  .kds-time.warning { color: var(--warning); }
+  .kds-time.ok { color: var(--success); }
+  .kds-mode { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--slate-500); font-weight: 500; margin-bottom: 8px; }
+  .kds-mode-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--brand-500); }
+  .kds-item { display: flex; gap: 7px; align-items: flex-start; padding: 5px 0; color: var(--slate-700); font-size: 11.5px; }
+  .kds-qty { background: var(--success-soft); color: var(--success); font-size: 9.5px; font-weight: 700; padding: 1px 5px; border-radius: 3px; min-width: 16px; text-align: center; flex-shrink: 0; margin-top: 1px; }
+  .kds-name { font-weight: 500; }
+  .kds-mod { padding: 1px 0 1px 24px; font-size: 10.5px; color: var(--slate-500); }
+  .kds-mod.add { color: var(--success); }
+  .kds-mod.remove { color: var(--danger); text-decoration: line-through; opacity: 0.85; }
+  .kds-divider { height: 1px; background: var(--slate-100); margin: 4px 0; }
+  .kds-bump-btn { margin-top: 10px; width: 100%; background: var(--success); color: var(--paper); padding: 7px; border-radius: 7px; font-size: 11.5px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 5px; transition: opacity .15s; }
+  .kds-bump-btn:hover { opacity: 0.9; }
+
+  /* TABLES */
+  #tables { padding: 16px 24px 24px; }
+  .floor-toolbar { display: flex; gap: 8px; margin-bottom: 16px; align-items: center; flex-wrap: wrap; }
+  .floor-stat { background: var(--paper); border: 1px solid var(--slate-200); border-radius: 9px; padding: 10px 14px; }
+  .floor-stat-num { font-size: 18px; font-weight: 700; color: var(--ink); letter-spacing: -0.02em; }
+  .floor-stat-label { font-size: 11px; color: var(--slate-500); font-weight: 500; text-transform: uppercase; letter-spacing: 0.04em; }
+  .floor-grid { background: var(--paper); border: 1px solid var(--slate-200); border-radius: 14px; padding: 28px; display: grid; grid-template-columns: repeat(6, 1fr); gap: 16px; min-height: 380px; }
+  .floor-table { aspect-ratio: 1; border: 2px solid var(--slate-200); border-radius: 12px; background: var(--paper); display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; transition: all .15s; padding: 10px; position: relative; }
+  .floor-table:hover { border-color: var(--brand-300); transform: translateY(-2px); }
+  .floor-table.occupied { background: var(--brand-50); border-color: var(--brand-300); }
+  .floor-table.dirty { background: var(--warning-soft); border-color: var(--warning); border-style: dashed; }
+  .floor-table-num { font-size: 18px; font-weight: 700; color: var(--ink); letter-spacing: -0.02em; }
+  .floor-table-status { font-size: 10.5px; color: var(--slate-500); font-weight: 500; margin-top: 4px; }
+  .floor-table.occupied .floor-table-status { color: var(--brand-500); }
+  .floor-table.dirty .floor-table-status { color: var(--warning); }
+  .floor-table-amount { font-size: 11.5px; font-weight: 700; color: var(--ink); margin-top: 3px; font-variant-numeric: tabular-nums; }
+  .floor-table-time { position: absolute; top: 6px; right: 8px; font-size: 10px; color: var(--slate-500); font-variant-numeric: tabular-nums; }
+
+  /* LOYALTY / SHARED */
+  #loyalty, #inventory, #scheduling { padding: 16px 24px 24px; }
+  .loyalty-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
+  .stat-card { background: var(--paper); border: 1px solid var(--slate-200); border-radius: 12px; padding: 18px 20px; }
+  .stat-card-label { font-size: 11px; color: var(--slate-500); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px; }
+  .stat-card-value { font-size: 28px; font-weight: 700; color: var(--ink); letter-spacing: -0.02em; line-height: 1; }
+  .stat-card-value span { color: var(--brand-500); font-size: 18px; }
+  .stat-card-trend { display: inline-flex; align-items: center; gap: 4px; margin-top: 8px; font-size: 11px; font-weight: 600; color: var(--success); background: var(--success-soft); padding: 2px 7px; border-radius: 4px; }
+  .panel { background: var(--paper); border: 1px solid var(--slate-200); border-radius: 14px; padding: 20px; margin-bottom: 12px; }
+  .panel-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 14px; }
+  .panel-title { font-size: 15px; font-weight: 700; color: var(--ink); letter-spacing: -0.01em; }
+  .panel-link { font-size: 12px; color: var(--brand-500); font-weight: 600; cursor: pointer; }
+  .panel-link:hover { text-decoration: underline; }
+  .cust-row { display: grid; grid-template-columns: 36px 1fr auto auto; gap: 12px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--slate-100); cursor: pointer; transition: padding-left .15s; }
+  .cust-row:last-child { border: none; }
+  .cust-row:hover { padding-left: 6px; }
+  .cust-avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--brand-100); color: var(--brand-500); display: grid; place-items: center; font-size: 11px; font-weight: 700; }
+  .cust-name { font-size: 13.5px; font-weight: 600; color: var(--ink); }
+  .cust-meta { font-size: 11.5px; color: var(--slate-500); }
+  .cust-points { font-size: 13px; font-weight: 700; color: var(--brand-500); font-variant-numeric: tabular-nums; }
+  .cust-tier { background: var(--slate-100); color: var(--slate-700); font-size: 10.5px; font-weight: 600; padding: 3px 8px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .cust-tier.gold { background: #FFF4D5; color: #A87800; }
+  .cust-tier.silver { background: var(--brand-50); color: var(--brand-600); }
+
+  /* INVENTORY */
+  .inv-filters { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+  .inv-table { background: var(--paper); border: 1px solid var(--slate-200); border-radius: 14px; overflow: hidden; }
+  .inv-th { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr 1fr; gap: 14px; padding: 14px 20px; background: var(--canvas); border-bottom: 1px solid var(--slate-200); font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--slate-500); letter-spacing: 0.06em; }
+  .inv-row { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr 1fr; gap: 14px; align-items: center; padding: 14px 20px; border-bottom: 1px solid var(--slate-100); font-size: 13px; transition: background .12s; }
+  .inv-row:last-child { border-bottom: none; }
+  .inv-row:hover { background: var(--canvas); }
+  .inv-row-empty { padding: 60px 20px; text-align: center; color: var(--slate-400); font-size: 14px; }
+  .inv-name { font-weight: 600; color: var(--ink); }
+  .inv-name-sku { display: block; font-size: 11px; color: var(--slate-400); font-weight: 400; margin-top: 2px; }
+  .inv-cell { color: var(--slate-700); }
+  .inv-cell.tabular { font-variant-numeric: tabular-nums; }
+  .inv-stock-bar { display: flex; align-items: center; gap: 8px; }
+  .inv-stock-bar-track { flex: 1; height: 5px; background: var(--slate-100); border-radius: 3px; overflow: hidden; }
+  .inv-stock-bar-fill { height: 100%; border-radius: 3px; background: var(--success); transition: width .3s; }
+  .inv-stock-bar-fill.warning { background: var(--warning); }
+  .inv-stock-bar-fill.danger { background: var(--danger); }
+  .inv-stock-num { font-size: 12px; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; min-width: 32px; text-align: right; }
+  .inv-status { display: inline-block; padding: 3px 9px; border-radius: 999px; font-size: 10.5px; font-weight: 600; }
+  .inv-status.good { background: var(--success-soft); color: var(--success); }
+  .inv-status.low { background: var(--warning-soft); color: var(--warning); }
+  .inv-status.out { background: var(--danger-soft); color: var(--danger); }
+  .inv-action-btn { font-weight: 600; font-size: 12px; cursor: pointer; transition: opacity .15s; text-align: right; padding: 4px 0; }
+  .inv-action-btn:hover { opacity: 0.7; }
+
+  /* ANALYTICS */
+  #analytics { padding: 16px 24px 24px; }
+  .ana-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 12px; }
+  .ana-period { display: flex; background: var(--paper); border: 1px solid var(--slate-200); border-radius: 9px; padding: 3px; }
+  .ana-period-btn { padding: 7px 13px; border-radius: 6px; font-size: 12.5px; font-weight: 500; color: var(--slate-600); transition: all .15s; }
+  .ana-period-btn.active { background: var(--ink); color: var(--paper); font-weight: 600; }
+  .ana-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
+  .ana-row-2 { display: grid; grid-template-columns: 1.4fr 1fr; gap: 12px; margin-bottom: 12px; }
+  .chart-area { height: 220px; position: relative; margin-top: 16px; }
+  .chart-bars { display: flex; align-items: flex-end; justify-content: space-between; gap: 6px; height: 100%; padding: 0 4px; }
+  .chart-bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; height: 100%; justify-content: flex-end; }
+  .chart-bar { width: 100%; background: linear-gradient(180deg, var(--brand-500), var(--brand-400)); border-radius: 5px 5px 0 0; transition: opacity .2s, height .4s; min-height: 6px; cursor: pointer; }
+  .chart-bar:hover { opacity: 0.85; }
+  .chart-bar-label { font-size: 10.5px; color: var(--slate-500); font-weight: 500; }
+  .chart-bar-value { font-size: 10px; font-weight: 600; color: var(--ink); margin-bottom: 2px; }
+  .top-item { display: grid; grid-template-columns: 28px 1fr auto auto; gap: 12px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--slate-100); }
+  .top-item:last-child { border: none; }
+  .top-item-rank { font-size: 12px; color: var(--slate-400); font-weight: 700; text-align: center; }
+  .top-item-name { font-size: 13px; font-weight: 600; color: var(--ink); }
+  .top-item-qty { font-size: 11.5px; color: var(--slate-500); font-variant-numeric: tabular-nums; }
+  .top-item-rev { font-size: 13px; font-weight: 700; color: var(--brand-500); font-variant-numeric: tabular-nums; }
+  .breakdown { display: flex; flex-direction: column; gap: 10px; }
+  .breakdown-row { display: grid; grid-template-columns: 80px 1fr 60px; gap: 12px; align-items: center; font-size: 12.5px; }
+  .breakdown-label { color: var(--slate-700); font-weight: 500; }
+  .breakdown-track { height: 6px; background: var(--slate-100); border-radius: 3px; overflow: hidden; }
+  .breakdown-fill { height: 100%; background: var(--brand-500); border-radius: 3px; transition: width .4s; }
+  .breakdown-pct { font-size: 12.5px; font-weight: 700; color: var(--ink); text-align: right; font-variant-numeric: tabular-nums; }
+
+  /* MENU MGMT */
+  #menu-mgmt { padding: 16px 24px 24px; }
+  .mgmt-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px; }
+  .mgmt-tabs { display: flex; background: var(--paper); border: 1px solid var(--slate-200); border-radius: 9px; padding: 3px; gap: 2px; overflow-x: auto; }
+  .mgmt-tab { padding: 7px 13px; border-radius: 6px; font-size: 12.5px; font-weight: 500; color: var(--slate-600); white-space: nowrap; transition: all .15s; }
+  .mgmt-tab.active { background: var(--brand-500); color: var(--paper); font-weight: 600; }
+  .mgmt-add-btn { background: var(--ink); color: var(--paper); padding: 8px 14px; border-radius: 8px; font-size: 12.5px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; transition: opacity .15s; }
+  .mgmt-add-btn:hover { opacity: 0.85; }
+  .mgmt-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
+  .mgmt-card { background: var(--paper); border: 1px solid var(--slate-200); border-radius: 11px; overflow: hidden; transition: all .15s; }
+  .mgmt-card:hover { border-color: var(--brand-300); transform: translateY(-2px); box-shadow: 0 4px 10px rgba(15,20,36,.06); }
+  .mgmt-card.disabled { opacity: 0.55; }
+  .mgmt-card-image { aspect-ratio: 16/10; background-size: cover; background-position: center; background-color: var(--slate-100); }
+  .mgmt-card-body { padding: 12px; }
+  .mgmt-card-name { font-size: 12.5px; font-weight: 700; color: var(--ink); text-transform: uppercase; letter-spacing: 0.02em; margin-bottom: 6px; line-height: 1.3; }
+  .mgmt-card-meta { display: flex; justify-content: space-between; align-items: center; }
+  .mgmt-card-price { font-size: 13px; font-weight: 700; color: var(--brand-500); }
+  .mgmt-card-toggle { width: 32px; height: 18px; border-radius: 999px; background: var(--success); position: relative; cursor: pointer; transition: background .2s; }
+  .mgmt-card-toggle::after { content: ''; position: absolute; top: 2px; right: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--paper); transition: all .2s; }
+  .mgmt-card-toggle.off { background: var(--slate-200); }
+  .mgmt-card-toggle.off::after { right: auto; left: 2px; }
+
+  /* SCHEDULING */
+  .sched-week { background: var(--paper); border: 1px solid var(--slate-200); border-radius: 14px; overflow: hidden; }
+  .sched-week-head { display: grid; grid-template-columns: 140px repeat(7, 1fr); background: var(--canvas); border-bottom: 1px solid var(--slate-200); }
+  .sched-week-cell-h { padding: 12px 10px; font-size: 12px; font-weight: 600; color: var(--slate-700); text-align: center; border-right: 1px solid var(--slate-200); }
+  .sched-week-cell-h:last-child { border-right: none; }
+  .sched-week-cell-h.staff { text-align: left; padding-left: 16px; }
+  .sched-week-cell-h .day-num { color: var(--slate-400); font-size: 11px; font-weight: 500; margin-top: 1px; }
+  .sched-row { display: grid; grid-template-columns: 140px repeat(7, 1fr); border-bottom: 1px solid var(--slate-100); }
+  .sched-row:last-child { border-bottom: none; }
+  .sched-staff { padding: 16px; background: var(--canvas); border-right: 1px solid var(--slate-100); display: flex; align-items: center; gap: 9px; }
+  .sched-staff-avatar { width: 28px; height: 28px; border-radius: 50%; color: var(--paper); display: grid; place-items: center; font-size: 10.5px; font-weight: 700; }
+  .sched-staff-name { font-size: 12.5px; font-weight: 600; color: var(--ink); }
+  .sched-staff-role { font-size: 10.5px; color: var(--slate-500); }
+  .sched-cell { padding: 8px 6px; border-right: 1px solid var(--slate-100); min-height: 60px; cursor: pointer; transition: background .12s; }
+  .sched-cell:last-child { border-right: none; }
+  .sched-cell:hover { background: var(--brand-50); }
+  .shift { background: var(--brand-50); color: var(--brand-600); font-size: 10.5px; font-weight: 600; padding: 5px 6px; border-radius: 5px; text-align: center; line-height: 1.3; border-left: 2.5px solid var(--brand-500); }
+  .shift.warn { background: var(--warning-soft); color: var(--warning); border-left-color: var(--warning); }
+  .shift.off { background: var(--slate-100); color: var(--slate-500); border-left-color: var(--slate-300); }
+
+  /* SETTINGS */
+  #settings { padding: 16px 24px 24px; }
+  .settings-grid { display: grid; grid-template-columns: 240px 1fr; gap: 16px; }
+  .settings-nav { background: var(--paper); border: 1px solid var(--slate-200); border-radius: 12px; padding: 8px; height: fit-content; }
+  .settings-nav-item { display: flex; align-items: center; gap: 11px; padding: 10px 12px; border-radius: 8px; font-size: 13px; font-weight: 500; color: var(--slate-700); cursor: pointer; transition: background .12s; width: 100%; text-align: left; }
+  .settings-nav-item:hover { background: var(--canvas); }
+  .settings-nav-item.active { background: var(--brand-50); color: var(--brand-500); font-weight: 600; }
+  .settings-nav-item svg { color: var(--brand-500); flex-shrink: 0; }
+  .settings-content { background: var(--paper); border: 1px solid var(--slate-200); border-radius: 14px; padding: 28px; }
+  .settings-section { margin-bottom: 24px; padding-bottom: 24px; border-bottom: 1px solid var(--slate-100); }
+  .settings-section:last-child { border: none; padding-bottom: 0; margin-bottom: 0; }
+  .settings-section-title { font-size: 16px; font-weight: 700; color: var(--ink); margin-bottom: 4px; letter-spacing: -0.01em; }
+  .settings-section-desc { font-size: 13px; color: var(--slate-500); margin-bottom: 16px; }
+  .settings-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; gap: 16px; }
+  .settings-row-label { font-size: 13px; color: var(--ink); font-weight: 500; flex: 1; }
+  .settings-row-value { font-size: 13px; color: var(--slate-600); font-weight: 500; }
+  .settings-row-input { font-size: 13px; color: var(--ink); font-weight: 500; padding: 6px 10px; border: 1px solid var(--slate-200); border-radius: 6px; background: var(--paper); min-width: 200px; text-align: right; }
+  .settings-row-input:focus { outline: none; border-color: var(--brand-300); }
+  .toggle-sw { width: 36px; height: 20px; border-radius: 999px; background: var(--success); position: relative; cursor: pointer; transition: background .2s; flex-shrink: 0; }
+  .toggle-sw::after { content: ''; position: absolute; top: 2px; right: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--paper); box-shadow: 0 1px 2px rgba(0,0,0,.15); transition: all .2s; }
+  .toggle-sw.off { background: var(--slate-300); }
+  .toggle-sw.off::after { right: auto; left: 2px; }
+
+  /* TOAST */
+  .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(100px); background: var(--ink); color: var(--paper); padding: 12px 20px; border-radius: 999px; font-size: 13px; font-weight: 500; box-shadow: 0 12px 24px rgba(0,0,0,.15); transition: transform .3s ease; z-index: 1000; pointer-events: none; display: flex; align-items: center; gap: 8px; }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+  .toast svg { color: var(--success); }
+  .toast.error svg { color: var(--danger); }
+
+  /* MODAL */
+  .modal-backdrop { position: fixed; inset: 0; background: rgba(15,20,36,.50); display: none; align-items: center; justify-content: center; z-index: 999; padding: 20px; animation: fade .2s ease; }
+  .modal-backdrop.show { display: flex; }
+  .modal { background: var(--paper); border-radius: 16px; width: 100%; max-width: 460px; padding: 28px; box-shadow: 0 20px 60px rgba(0,0,0,.20); max-height: 90vh; overflow-y: auto; animation: modalIn .25s ease; }
+  @keyframes modalIn { from { transform: translateY(20px); opacity: 0; } to { transform: none; opacity: 1; } }
+  .modal-head { display: flex; justify-content: space-between; align-items: start; margin-bottom: 16px; gap: 12px; }
+  .modal-title { font-size: 18px; font-weight: 700; color: var(--ink); letter-spacing: -0.015em; }
+  .modal-sub { font-size: 13px; color: var(--slate-500); margin-top: 4px; }
+  .modal-close { width: 28px; height: 28px; border-radius: 7px; color: var(--slate-500); display: grid; place-items: center; transition: all .15s; flex-shrink: 0; }
+  .modal-close:hover { background: var(--canvas); color: var(--ink); }
+  .modal-body { display: flex; flex-direction: column; gap: 14px; }
+  .form-group { display: flex; flex-direction: column; gap: 6px; }
+  .form-label { font-size: 12px; font-weight: 600; color: var(--slate-700); }
+  .form-input { padding: 10px 12px; border: 1px solid var(--slate-200); border-radius: 8px; font-size: 14px; background: var(--paper); transition: border-color .15s; width: 100%; }
+  .form-input:focus { outline: none; border-color: var(--brand-300); }
+  textarea.form-input { resize: vertical; min-height: 80px; font-family: var(--font); }
+  .form-check { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--slate-200); border-radius: 8px; cursor: pointer; transition: all .15s; }
+  .form-check:hover { border-color: var(--brand-300); }
+  .form-check.checked { background: var(--brand-50); border-color: var(--brand-300); }
+  .form-check-label { font-size: 13px; color: var(--ink); font-weight: 500; flex: 1; }
+  .form-check-radio { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--slate-300); flex-shrink: 0; position: relative; transition: all .15s; }
+  .form-check.checked .form-check-radio { border-color: var(--brand-500); }
+  .form-check.checked .form-check-radio::after { content: ''; position: absolute; top: 2px; left: 2px; width: 8px; height: 8px; border-radius: 50%; background: var(--brand-500); }
+  .modal-actions { display: flex; gap: 8px; margin-top: 18px; }
+  .btn { padding: 10px 16px; border-radius: 8px; font-size: 13.5px; font-weight: 600; transition: all .15s; flex: 1; text-align: center; }
+  .btn-primary { background: var(--brand-500); color: var(--paper); }
+  .btn-primary:hover { background: var(--brand-600); }
+  .btn-secondary { background: var(--canvas); color: var(--slate-700); border: 1px solid var(--slate-200); }
+  .btn-secondary:hover { background: var(--slate-100); }
+  .btn-danger { background: var(--danger-soft); color: var(--danger); }
+  .btn-danger:hover { background: var(--danger); color: var(--paper); }
+
+  .pay-tabs { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-bottom: 16px; }
+  .pay-tab { padding: 12px; border-radius: 8px; font-size: 12.5px; font-weight: 600; background: var(--canvas); color: var(--slate-700); display: flex; flex-direction: column; align-items: center; gap: 6px; transition: all .15s; border: 1px solid transparent; }
+  .pay-tab:hover { background: var(--slate-100); }
+  .pay-tab.active { background: var(--brand-50); color: var(--brand-500); border-color: var(--brand-300); }
+  .pay-amount-display { background: var(--canvas); border-radius: 12px; padding: 24px; text-align: center; margin-bottom: 12px; }
+  .pay-amount-label { font-size: 12px; color: var(--slate-500); margin-bottom: 6px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
+  .pay-amount-value { font-size: 36px; font-weight: 800; color: var(--ink); letter-spacing: -0.025em; font-variant-numeric: tabular-nums; }
+
+  @media (max-width: 900px) {
+    .home-tiles { grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    .sales-grid { grid-template-columns: 1fr; }
+    .order-col { min-height: auto; max-height: none; }
+    .menu-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); max-height: none; }
+    .order-row { grid-template-columns: 1fr 1fr 80px; }
+    .order-row > :nth-child(2), .order-row > :nth-child(6) { display: none; }
+    .floor-grid { grid-template-columns: repeat(3, 1fr); }
+    .ana-grid, .loyalty-stats { grid-template-columns: 1fr 1fr; }
+    .ana-row-2 { grid-template-columns: 1fr; }
+    .settings-grid { grid-template-columns: 1fr; }
+    .inv-th, .inv-row { grid-template-columns: 1.5fr 1fr 1fr 80px; }
+    .inv-th > :nth-child(2), .inv-th > :nth-child(3),
+    .inv-row > :nth-child(2), .inv-row > :nth-child(3) { display: none; }
+    .sched-week-head, .sched-row { grid-template-columns: 100px repeat(7, 1fr); }
+    .sched-staff { padding: 10px; }
+  }
+  @media (max-width: 600px) {
+    .home-tiles { grid-template-columns: repeat(2, 1fr); }
+    .floor-grid { grid-template-columns: repeat(2, 1fr); }
+    .ana-grid, .loyalty-stats { grid-template-columns: 1fr; }
+    .screen { padding: 16px; }
+  }
+</style>
+</head>
+<body>
+
+<a href="#mainContent" class="skip-link">Skip to main content</a>
+
+<div class="pos-app" role="application" aria-label="DEXA Point of Sale">
+  <div class="pos-bar" role="banner">
+    <div class="pos-bar-left">
+      <span class="pos-bar-dot" aria-hidden="true"></span>
+      <span>Station 01 · Front Counter</span>
+    </div>
+    <div style="display: flex; align-items: center;">
+      <span class="pos-bar-time" id="liveTime" aria-live="polite">Online · Synced just now</span>
+      <button class="theme-toggle" id="themeToggle" aria-label="Toggle dark mode" aria-pressed="false">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <main id="mainContent">
+
+  <!-- HOME -->
+  <div class="screen active" id="home" role="region" aria-label="Home menu">
+    <div class="user-pill home-user">
+      <div class="user-avatar" aria-hidden="true">AR</div>
+      <span class="user-name">Avery</span>
+    </div>
+    <h2 class="home-section-label" id="opsLabel">Operations</h2>
+    <div class="home-tiles" id="opsTiles" role="list" aria-labelledby="opsLabel"></div>
+    <h2 class="home-section-label" id="mgmtLabel">Management</h2>
+    <div class="home-tiles" id="mgmtTiles" role="list" aria-labelledby="mgmtLabel"></div>
+  </div>
+
+  <!-- SALES -->
+  <div class="screen" id="sales" role="region" aria-label="Sales">
+    <div class="screen-top">
+      <button class="back-btn" data-goto="home" aria-label="Back to menu">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+        Back to Menu
+      </button>
+      <div class="user-pill"><div class="user-avatar" aria-hidden="true">AR</div><span class="user-name">Avery</span></div>
+    </div>
+
+    <div class="sales-grid">
+      <div class="order-col">
+        <div class="order-head">
+          <div class="order-num" id="orderNum">Order #S1-0007</div>
+          <div class="order-actions">
+            <button class="send-btn" id="sendBtn" aria-label="Send order to kitchen">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>Send
+            </button>
+            <button class="new-order-btn" id="newOrderBtn" aria-label="Start new order">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>New Order
+            </button>
+            <button class="trash-btn" id="trashBtn" aria-label="Clear current order">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <button class="add-customer" id="addCustomerBtn" aria-label="Add or change customer">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          <span id="addCustomerLabel">Add Customer <span style="color: var(--slate-400); font-size: 11.5px; margin-left: 3px;">Optional</span></span>
+          <span class="add-customer-edit" aria-hidden="true">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          </span>
+        </button>
+
+        <div class="mode-toggle" role="radiogroup" aria-label="Order type">
+          <button class="mode-btn" data-mode="dine-in" role="radio" aria-checked="false">Dine In</button>
+          <button class="mode-btn active" data-mode="takeout" role="radio" aria-checked="true">Takeout</button>
+          <button class="mode-btn" data-mode="delivery" role="radio" aria-checked="false">Delivery</button>
+        </div>
+
+        <div class="order-status-line">Order Status: <strong id="orderStatus">Draft</strong></div>
+
+        <div class="order-list" id="orderList" role="list" aria-label="Order items"></div>
+        <div class="order-empty" id="orderEmpty">
+          <span>Order is empty.</span>
+          <span style="font-size: 12.5px; color: var(--slate-400);">Tap any item below to add it.</span>
+        </div>
+
+        <div class="order-totals">
+          <button class="order-note" id="addNoteBtn" aria-label="Add or edit order note">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            <span id="orderNoteLabel">Add order note…</span>
+          </button>
+          <div class="totals-row"><span>Subtotal</span><span id="subtotal">$0.00</span></div>
+          <div class="totals-row discount-row" id="discountRow" style="display:none;"><span>Discount</span><span id="discountAmt">$0.00</span></div>
+          <div class="totals-row"><span>Tax (8.88%)</span><span id="tax">$0.00</span></div>
+          <div class="totals-row cash-row"><span>Cash total</span><span id="cashTotal">$0.00</span></div>
+          <div class="totals-row bold"><span>Card total</span><span id="cardTotal">$0.00</span></div>
+          <button class="pay-btn" id="payBtn" disabled aria-label="Take payment">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><rect x="2" y="6" width="20" height="13" rx="2"/><path d="M2 11h20"/></svg>Pay
+          </button>
+          <button class="more-btn" id="moreOptionsBtn" aria-label="More options">··· More options</button>
+        </div>
+      </div>
+
+      <div class="menu-col">
+        <div class="menu-search-wrap">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+          <input class="menu-search" id="menuSearch" type="search" placeholder="Search menu…" aria-label="Search menu items">
+        </div>
+
+        <div class="menu-meta-row">
+          <div class="order-line-label">Order Line <span class="order-line-count" id="orderLineCount" aria-label="items">0</span></div>
+          <div class="other-orders">
+            <button class="other-order-tab" id="otherOrderBtn"><span class="other-order-dot" aria-hidden="true"></span>#S5-0001 · preparing</button>
+            <button class="complete-pill" id="completeAllBtn">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg>
+              Complete All (<span id="completeAllNum">1</span>)
+            </button>
+          </div>
+        </div>
+
+        <div class="menu-tabs" id="menuTabs" role="tablist" aria-label="Menu categories"></div>
+        <div class="menu-grid" id="menuGrid"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TABLES -->
+  <div class="screen" id="tables" role="region" aria-label="Tables">
+    <div class="screen-top">
+      <button class="back-btn" data-goto="home" aria-label="Back to menu"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>Back to Menu</button>
+      <div class="user-pill"><div class="user-avatar" aria-hidden="true">AR</div><span class="user-name">Avery</span></div>
+    </div>
+    <div class="floor-toolbar" id="floorToolbar"></div>
+    <div class="floor-grid" id="floorGrid"></div>
+  </div>
+
+  <!-- ORDERS -->
+  <div class="screen" id="orders" role="region" aria-label="Previous orders">
+    <div class="screen-top">
+      <button class="back-btn" data-goto="home" aria-label="Back to menu"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>Back to Menu</button>
+      <div class="user-pill"><div class="user-avatar" aria-hidden="true">AR</div><span class="user-name">Avery</span></div>
+    </div>
+    <div class="orders-filters" role="tablist" aria-label="Filter by period">
+      <button class="orders-filter active" data-period="today" role="tab" aria-selected="true">Today</button>
+      <button class="orders-filter" data-period="yesterday" role="tab" aria-selected="false">Yesterday</button>
+      <button class="orders-filter" data-period="7d" role="tab" aria-selected="false">Last 7 days</button>
+    </div>
+    <div class="orders-toolbar">
+      <div class="orders-search">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+        <input id="ordersSearch" type="search" placeholder="Search order or customer…" aria-label="Search orders">
+      </div>
+      <div class="orders-pills" id="ordersPills"></div>
+    </div>
+    <div class="orders-list" id="ordersList"></div>
+  </div>
+
+  <!-- KITCHEN -->
+  <div class="screen" id="kitchen" role="region" aria-label="Kitchen display">
+    <div class="screen-top">
+      <button class="back-btn" data-goto="home" aria-label="Back to menu"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>Kitchen Display</button>
+      <div class="user-pill"><div class="user-avatar" aria-hidden="true">AR</div><span class="user-name">Avery</span></div>
+    </div>
+    <div class="kitchen-toolbar" id="kitchenToolbar"></div>
+    <div class="kitchen-grid" id="kitchenGrid"></div>
+  </div>
+
+  <!-- LOYALTY -->
+  <div class="screen" id="loyalty" role="region" aria-label="Loyalty">
+    <div class="screen-top">
+      <button class="back-btn" data-goto="home" aria-label="Back to menu"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>Back to Menu</button>
+      <div class="user-pill"><div class="user-avatar" aria-hidden="true">AR</div><span class="user-name">Avery</span></div>
+    </div>
+    <div class="loyalty-stats" id="loyaltyStats"></div>
+    <div class="panel">
+      <div class="panel-head">
+        <h3 class="panel-title">Top Customers This Month</h3>
+        <button class="panel-link">View all</button>
+      </div>
+      <div id="loyaltyCustomers"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-head">
+        <h3 class="panel-title">Active Campaigns</h3>
+        <button class="panel-link" id="newCampaignBtn">+ New campaign</button>
+      </div>
+      <div id="loyaltyCampaigns"></div>
+    </div>
+  </div>
+
+  <!-- INVENTORY -->
+  <div class="screen" id="inventory" role="region" aria-label="Inventory">
+    <div class="screen-top">
+      <button class="back-btn" data-goto="home" aria-label="Back to menu"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>Back to Menu</button>
+      <div class="user-pill"><div class="user-avatar" aria-hidden="true">AR</div><span class="user-name">Avery</span></div>
+    </div>
+    <div class="loyalty-stats" id="invStats"></div>
+    <div class="inv-filters" role="tablist" aria-label="Filter inventory">
+      <button class="orders-filter active" data-inv-filter="all" role="tab" aria-selected="true">All items</button>
+      <button class="orders-filter" data-inv-filter="low" role="tab" aria-selected="false">Low stock</button>
+      <button class="orders-filter" data-inv-filter="out" role="tab" aria-selected="false">Out of stock</button>
+      <button class="orders-filter" data-inv-filter="recipe" role="tab" aria-selected="false">Recipe-linked</button>
+    </div>
+    <div class="inv-table" role="table" aria-label="Inventory items">
+      <div class="inv-th" role="row">
+        <div role="columnheader">Item</div>
+        <div role="columnheader">Unit cost</div>
+        <div role="columnheader">On hand</div>
+        <div role="columnheader">Stock level</div>
+        <div role="columnheader">Status</div>
+        <div role="columnheader" style="text-align: right;">Action</div>
+      </div>
+      <div id="invList"></div>
+    </div>
+  </div>
+
+  <!-- ANALYTICS -->
+  <div class="screen" id="analytics" role="region" aria-label="Analytics">
+    <div class="screen-top">
+      <button class="back-btn" data-goto="home" aria-label="Back to menu"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>Back to Menu</button>
+      <div class="user-pill"><div class="user-avatar" aria-hidden="true">AR</div><span class="user-name">Avery</span></div>
+    </div>
+    <div class="ana-head">
+      <h2 class="panel-title" id="anaPeriodLabel">Last 7 days · Apr 30 – May 6</h2>
+      <div class="ana-period" role="tablist" aria-label="Time period">
+        <button class="ana-period-btn" data-ana-period="today" role="tab">Today</button>
+        <button class="ana-period-btn active" data-ana-period="7d" role="tab" aria-selected="true">7d</button>
+        <button class="ana-period-btn" data-ana-period="30d" role="tab">30d</button>
+        <button class="ana-period-btn" data-ana-period="ytd" role="tab">YTD</button>
+      </div>
+    </div>
+    <div class="ana-grid" id="anaGrid"></div>
+    <div class="panel">
+      <div class="panel-head">
+        <h3 class="panel-title">Sales by day</h3>
+        <button class="panel-link" id="exportCsvBtn">Export CSV</button>
+      </div>
+      <div class="chart-area"><div class="chart-bars" id="chartBars"></div></div>
+    </div>
+    <div class="ana-row-2">
+      <div class="panel">
+        <div class="panel-head"><h3 class="panel-title">Top items</h3><button class="panel-link">All items</button></div>
+        <div id="topItemsList"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h3 class="panel-title">Payment mix</h3></div>
+        <div class="breakdown" id="paymentMix"></div>
+        <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--slate-100);">
+          <h4 class="panel-title" style="font-size: 13px; margin-bottom: 12px;">Channel mix</h4>
+          <div class="breakdown" id="channelMix"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MENU MGMT -->
+  <div class="screen" id="menu-mgmt" role="region" aria-label="Menu management">
+    <div class="screen-top">
+      <button class="back-btn" data-goto="home" aria-label="Back to menu"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>Menu Management</button>
+      <div class="user-pill"><div class="user-avatar" aria-hidden="true">AR</div><span class="user-name">Avery</span></div>
+    </div>
+    <div class="mgmt-toolbar">
+      <div class="mgmt-tabs" id="mgmtTabs" role="tablist"></div>
+      <button class="mgmt-add-btn" id="mgmtAddBtn">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Add Item
+      </button>
+    </div>
+    <div class="mgmt-grid" id="mgmtGrid"></div>
+  </div>
+
+  <!-- SCHEDULING -->
+  <div class="screen" id="scheduling" role="region" aria-label="Scheduling">
+    <div class="screen-top">
+      <button class="back-btn" data-goto="home" aria-label="Back to menu"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>Scheduling</button>
+      <div class="user-pill"><div class="user-avatar" aria-hidden="true">AR</div><span class="user-name">Avery</span></div>
+    </div>
+    <div class="loyalty-stats" id="schedStats"></div>
+    <div class="sched-week" id="schedWeek"></div>
+  </div>
+
+  <!-- SETTINGS -->
+  <div class="screen" id="settings" role="region" aria-label="Settings">
+    <div class="screen-top">
+      <button class="back-btn" data-goto="home" aria-label="Back to menu"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>Settings</button>
+      <div class="user-pill"><div class="user-avatar" aria-hidden="true">AR</div><span class="user-name">Avery</span></div>
+    </div>
+    <div class="settings-grid">
+      <nav class="settings-nav" id="settingsNav" aria-label="Settings sections"></nav>
+      <div class="settings-content" id="settingsContent"></div>
+    </div>
+  </div>
+
+  </main>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg>
+  <span id="toastText">Item added</span>
+</div>
+
+<div class="modal-backdrop" id="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+  <div class="modal" id="modalContent"></div>
+</div>
+
+<script src="pos-app.js"></script>
+</body>
+</html>

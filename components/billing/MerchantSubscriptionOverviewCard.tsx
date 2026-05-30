@@ -477,9 +477,9 @@ export function MerchantSubscriptionOverviewCard({
                     key={plan.id}
                     className="flex min-h-[360px] flex-col rounded-2xl border border-slate-200 bg-white p-6 shadow-none"
                   >
-                    <div className="text-3xl font-semibold tracking-tight">{formatTierPrice(plan.monthly_price_cents)}</div>
-                    <div className="mt-4 text-xl font-semibold">{plan.display_name}</div>
-                    <div className="mt-2 text-sm text-muted-foreground">
+                    <div className="text-xl font-semibold">{plan.display_name}</div>
+                    <div className="mt-2 text-3xl font-semibold tracking-tight">{formatTierPrice(plan.monthly_price_cents)}</div>
+                    <div className="mt-3 text-sm text-muted-foreground">
                       {plan.description || formatTierCapacity(plan)}
                     </div>
                     <div className="mt-6 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700">

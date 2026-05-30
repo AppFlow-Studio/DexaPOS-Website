@@ -70,7 +70,7 @@ export default async function SignUpPage({
                                 <div className="text-center">
                                     <p className="text-muted-foreground text-sm">
                                         Already have an account?{' '}
-                                        <Link href="/" className="text-primary hover:text-primary/80 font-medium">
+                                        <Link href="/sign-in" className="text-primary hover:text-primary/80 font-medium">
                                             Sign in
                                         </Link>
                                     </p>
@@ -88,7 +88,7 @@ export default async function SignUpPage({
                                     DexaPOS accounts are created by your administrator. If you&apos;re expecting an invite, check your email for the link.
                                 </p>
                                 <Link
-                                    href="/"
+                                    href="/sign-in"
                                     className="inline-flex items-center justify-center px-4 py-2 bg-foreground text-background rounded-lg font-medium hover:bg-foreground/90 transition-colors"
                                 >
                                     Back to sign in
@@ -106,7 +106,7 @@ export default async function SignUpPage({
                                 Head over to your dashboard to continue.
                             </p>
                             <Link
-                                href="/"
+                                href="/sign-in"
                                 className="inline-flex items-center justify-center px-4 py-2 bg-foreground text-background rounded-lg font-medium hover:bg-foreground/90 transition-colors"
                             >
                                 Continue

@@ -70,6 +70,16 @@ const TABS = [
   { id: "activity", label: "Activity" },
 ];
 
+// KDS stations don't take payments, so hide the Payment Terminal tab
+const TABS_HIDDEN_BY_STATION_TYPE: Record<string, string[]> = {
+  kds: ["terminal"],
+};
+
+function getVisibleTabs(stationType: string | null | undefined) {
+  const hidden = TABS_HIDDEN_BY_STATION_TYPE[stationType ?? ""] ?? [];
+  return TABS.filter((tab) => !hidden.includes(tab.id));
+}
+
 export default function StationDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -356,7 +366,7 @@ export default function StationDetailPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 border-b overflow-x-auto">
-        {TABS.map((tab) => (
+        {getVisibleTabs(station.station_type).map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}

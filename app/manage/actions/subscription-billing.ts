@@ -184,6 +184,184 @@ export interface UpsertMerchantTierSubscriptionParams {
   trialEndsAt?: string | null
 }
 
+function addOneMonthPeriod(startDate: string, endDate: string): {
+  nextPeriodStart: string
+  nextPeriodEnd: string
+} {
+  const end = new Date(`${endDate}T00:00:00.000Z`)
+  const nextStart = new Date(end)
+  nextStart.setUTCDate(nextStart.getUTCDate() + 1)
+
+  const nextEnd = new Date(nextStart)
+  nextEnd.setUTCMonth(nextEnd.getUTCMonth() + 1)
+  nextEnd.setUTCDate(nextEnd.getUTCDate() - 1)
+
+  return {
+    nextPeriodStart: nextStart.toISOString().slice(0, 10),
+    nextPeriodEnd: nextEnd.toISOString().slice(0, 10),
+  }
+}
+
+async function syncMerchantTierBillingArtifacts(params: {
+  merchantId: string
+  merchantTierSubscriptionId: string
+  planId: string
+  status: 'active' | 'past_due' | 'suspended' | 'cancelled'
+  currentPeriodStart: string
+  currentPeriodEnd: string
+}) {
+  const serviceRole = createServiceRoleClient()
+
+  const { data: anchorProfile, error: anchorProfileError } = await serviceRole
+    .from('merchant_billing_profiles')
+    .select('id, location_id, created_at')
+    .eq('merchant_id', params.merchantId)
+    .eq('is_active', true)
+    .eq('is_primary', true)
+    .not('location_id', 'is', null)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle()
+
+  if (anchorProfileError) {
+    console.error('[syncMerchantTierBillingArtifacts] anchor profile lookup error:', anchorProfileError)
+    return { success: false as const, error: 'Failed to resolve billing anchor location.' }
+  }
+
+  if (!anchorProfile?.location_id) {
+    return { success: false as const, error: 'No location billing profile is available to anchor merchant tier billing.' }
+  }
+
+  const { data: existingAnchorSubscription, error: existingAnchorSubscriptionError } = await serviceRole
+    .from('merchant_subscriptions')
+    .select('id, metadata')
+    .eq('merchant_id', params.merchantId)
+    .eq('location_id', anchorProfile.location_id)
+    .maybeSingle()
+
+  if (existingAnchorSubscriptionError) {
+    console.error(
+      '[syncMerchantTierBillingArtifacts] existing anchor subscription lookup error:',
+      existingAnchorSubscriptionError,
+    )
+    return { success: false as const, error: 'Failed to resolve location anchor subscription.' }
+  }
+
+  const anchorMetadata = {
+    billing_scope: 'merchant_tier',
+    merchant_tier_subscription_id: params.merchantTierSubscriptionId,
+    merchant_tier_plan_id: params.planId,
+  }
+
+  const { data: anchorSubscriptionId, error: anchorSubscriptionError } = await serviceRole.rpc(
+    'upsert_merchant_subscription',
+    {
+      p_subscription_id: existingAnchorSubscription?.id ?? null,
+      p_merchant_id: params.merchantId,
+      p_location_id: anchorProfile.location_id,
+      p_plan_id: params.planId,
+      p_current_period_start: params.currentPeriodStart,
+      p_current_period_end: params.currentPeriodEnd,
+      p_next_billing_date: params.currentPeriodEnd,
+      p_status: params.status === 'cancelled' ? 'canceled' : params.status,
+      p_trial_ends_at: null,
+      p_billing_profile_id: anchorProfile.id,
+      p_metadata: anchorMetadata,
+    },
+  )
+
+  if (anchorSubscriptionError || !anchorSubscriptionId) {
+    console.error('[syncMerchantTierBillingArtifacts] anchor subscription upsert error:', anchorSubscriptionError)
+    return { success: false as const, error: anchorSubscriptionError?.message || 'Failed to create anchor subscription.' }
+  }
+
+  if (params.status === 'cancelled') {
+    return {
+      success: true as const,
+      anchorLocationId: anchorProfile.location_id as string,
+      anchorSubscriptionId: anchorSubscriptionId as string,
+      invoiceId: null,
+    }
+  }
+
+  const { data: existingInvoice, error: existingInvoiceError } = await serviceRole
+    .from('subscription_invoices')
+    .select('id, created_at')
+    .eq('subscription_id', anchorSubscriptionId as string)
+    .eq('billing_period_start', params.currentPeriodStart)
+    .eq('location_id', anchorProfile.location_id)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (existingInvoiceError) {
+    console.error('[syncMerchantTierBillingArtifacts] existing invoice lookup error:', existingInvoiceError)
+    return { success: false as const, error: 'Failed to check existing merchant tier invoice.' }
+  }
+
+  let invoiceId: string | null = existingInvoice?.id ?? null
+
+  if (!invoiceId) {
+    const { data: generatedInvoiceId, error: generatedInvoiceError } = await serviceRole.rpc(
+      'generate_subscription_invoice',
+      {
+        p_subscription_id: anchorSubscriptionId as string,
+        p_due_date: params.currentPeriodEnd,
+      },
+    )
+
+    if (generatedInvoiceError || !generatedInvoiceId) {
+      console.error('[syncMerchantTierBillingArtifacts] invoice generation error:', generatedInvoiceError)
+      return { success: false as const, error: generatedInvoiceError?.message || 'Failed to generate merchant tier invoice.' }
+    }
+
+    invoiceId = generatedInvoiceId as string
+
+    const { nextPeriodStart, nextPeriodEnd } = addOneMonthPeriod(
+      params.currentPeriodStart,
+      params.currentPeriodEnd,
+    )
+
+    const { error: mirrorAdvanceError } = await serviceRole
+      .from('merchant_plan_subscriptions')
+      .update({
+        current_period_start: nextPeriodStart,
+        current_period_end: nextPeriodEnd,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', params.merchantTierSubscriptionId)
+
+    if (mirrorAdvanceError) {
+      console.error('[syncMerchantTierBillingArtifacts] merchant tier period advance error:', mirrorAdvanceError)
+    }
+  } else {
+    const { data: duplicateInvoiceId, error: duplicateInvoiceError } = await serviceRole.rpc(
+      'generate_subscription_invoice_snapshot',
+      {
+        p_subscription_id: anchorSubscriptionId as string,
+        p_due_date: params.currentPeriodEnd,
+      },
+    )
+
+    if (duplicateInvoiceError || !duplicateInvoiceId) {
+      console.error('[syncMerchantTierBillingArtifacts] duplicate tier invoice generation error:', duplicateInvoiceError)
+      return {
+        success: false as const,
+        error: duplicateInvoiceError?.message || 'Failed to generate updated merchant tier invoice.',
+      }
+    }
+
+    invoiceId = duplicateInvoiceId as string
+  }
+
+  return {
+    success: true as const,
+    anchorLocationId: anchorProfile.location_id as string,
+    anchorSubscriptionId: anchorSubscriptionId as string,
+    invoiceId,
+  }
+}
+
 export interface UpsertMerchantSubscriptionParams {
   subscriptionId?: string
   merchantId: string
@@ -535,7 +713,13 @@ export async function getMerchantTierSubscription(
 
 export async function upsertMerchantTierSubscription(
   params: UpsertMerchantTierSubscriptionParams,
-): Promise<{ success: boolean; subscriptionId?: string; error?: string }> {
+): Promise<{
+  success: boolean
+  subscriptionId?: string
+  invoiceId?: string | null
+  anchorLocationId?: string
+  error?: string
+}> {
   await assertHQPermission('system.billing.manage')
 
   if (!params.merchantId || !params.planId) {
@@ -584,11 +768,31 @@ export async function upsertMerchantTierSubscription(
     return { success: false, error: result.error?.message || 'Failed to save merchant plan.' }
   }
 
+  const synced = await syncMerchantTierBillingArtifacts({
+    merchantId: params.merchantId,
+    merchantTierSubscriptionId: result.data.id as string,
+    planId: params.planId,
+    status: params.status,
+    currentPeriodStart: params.currentPeriodStart,
+    currentPeriodEnd: params.currentPeriodEnd,
+  })
+
+  if (!synced.success) {
+    return { success: false, error: synced.error }
+  }
+
   revalidatePath('/manage/subscriptions')
   revalidatePath(`/manage/subscriptions/${params.merchantId}`)
   revalidatePath('/dashboard/subscriptions')
+  revalidatePath(`/manage/merchants/${params.merchantId}`)
+  revalidatePath(`/manage/merchants/${params.merchantId}/billing`)
 
-  return { success: true, subscriptionId: result.data.id as string }
+  return {
+    success: true,
+    subscriptionId: result.data.id as string,
+    invoiceId: synced.invoiceId,
+    anchorLocationId: synced.anchorLocationId,
+  }
 }
 
 export async function getBillableServices(): Promise<BillableServiceRecord[]> {
@@ -915,8 +1119,44 @@ export async function generateSubscriptionInvoiceManually(
   })
 
   if (error) {
-    console.error('[generateSubscriptionInvoiceManually] Error:', error)
-    return { success: false, error: error.message }
+    const isDuplicatePeriodError = /invoice already exists for subscription/i.test(error.message || '')
+
+    if (!isDuplicatePeriodError) {
+      console.error('[generateSubscriptionInvoiceManually] Error:', error)
+      return { success: false, error: error.message }
+    }
+
+    const serviceRole = createServiceRoleClient()
+    const { data: duplicateInvoiceId, error: duplicateInvoiceError } = await serviceRole.rpc(
+      'generate_subscription_invoice_snapshot',
+      {
+        p_subscription_id: subscriptionId,
+        p_due_date: dueDate ?? null,
+      },
+    )
+
+    if (duplicateInvoiceError || !duplicateInvoiceId) {
+      console.error('[generateSubscriptionInvoiceManually] Duplicate fallback snapshot error:', duplicateInvoiceError)
+      return { success: false, error: 'Failed to create a duplicate test invoice.' }
+    }
+
+    const { data: duplicateInvoice, error: duplicateInvoiceLookupError } = await serviceRole
+      .from('subscription_invoices')
+      .select('id, merchant_id')
+      .eq('id', duplicateInvoiceId as string)
+      .maybeSingle()
+
+    if (duplicateInvoiceLookupError || !duplicateInvoice) {
+      console.error('[generateSubscriptionInvoiceManually] Duplicate fallback invoice lookup error:', duplicateInvoiceLookupError)
+      return { success: false, error: 'Failed to load the duplicate test invoice.' }
+    }
+
+    revalidatePath('/manage/billing')
+    revalidatePath(`/manage/merchants/${duplicateInvoice.merchant_id}`)
+    revalidatePath(`/manage/merchants/${duplicateInvoice.merchant_id}/billing`)
+    revalidatePath('/manage/subscriptions')
+
+    return { success: true, invoiceId: duplicateInvoice.id as string }
   }
 
   revalidatePath('/manage/billing')

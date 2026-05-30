@@ -77,31 +77,34 @@ function PlatformFeeBreakdownCard({
         </div>
         {netTotal > 0 && (
           <Badge variant="outline" className="text-xs border-emerald-300 text-emerald-800 dark:text-emerald-300">
-            Net platform fee {formatCurrency(netTotal)}
+            Net deposit {formatCurrency(netTotal)}
           </Badge>
         )}
       </div>
       <div className="grid gap-3 md:grid-cols-3">
         {(dualFee > 0 || dualPct > 0) && (
           <Field
-            label={`Card Surcharge${dualPct > 0 ? ` (${dualPct}%)` : ''}`}
+            label={`Net fee${dualPct > 0 ? ` (${dualPct}%)` : ''}`}
             value={formatCurrency(dualFee)}
           />
         )}
         {refundedDualFee > 0 && (
-          <Field label="Refunded Card Surcharge" value={`-${formatCurrency(refundedDualFee)}`} />
+          <Field label="Refunded net fee" value={`-${formatCurrency(refundedDualFee)}`} />
         )}
         {(tipFee > 0 || tipPct > 0) && (
           <Field
-            label={`Tip Surcharge${tipPct > 0 ? ` (${tipPct}%)` : ''}`}
+            label={`Net fee on tip${tipPct > 0 ? ` (${tipPct}%)` : ''}`}
             value={formatCurrency(tipFee)}
           />
         )}
         {tipFeeAdjusted && originalTipFee !== undefined && (
-          <Field label="Original Tip Fee" value={formatCurrency(Number(originalTipFee))} />
+          <Field label="Original tip fee" value={formatCurrency(Number(originalTipFee))} />
         )}
         {refundedTipFee > 0 && (
-          <Field label="Refunded Tip Surcharge" value={`-${formatCurrency(refundedTipFee)}`} />
+          <Field label="Refunded net fee on tip" value={`-${formatCurrency(refundedTipFee)}`} />
+        )}
+        {netTotal > 0 && (
+          <Field label="Net fee after refund" value={formatCurrency(netTotal)} />
         )}
       </div>
     </div>

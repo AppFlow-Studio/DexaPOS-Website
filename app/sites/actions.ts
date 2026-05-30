@@ -27,6 +27,31 @@ export interface StorefrontData {
   pricingDisclosureText: string | null;
 }
 
+/**
+ * When the merchant has separate online/delivery pricing turned OFF, online
+ * orders must use the regular item price everywhere. The storefront now uses
+ * the regular online/card price as its browse default and only surfaces
+ * delivery pricing as a secondary label when it actually differs, so the
+ * single safe place to collapse delivery pricing remains the data layer.
+ * When the toggle is ON (default) the menus pass through untouched.
+ */
+function applyDeliveryPricingPolicy(
+  menus: StorefrontMenu[],
+  deliveryPricingEnabled: boolean
+): StorefrontMenu[] {
+  if (deliveryPricingEnabled) return menus;
+  return menus.map((menu) => ({
+    ...menu,
+    categories: menu.categories?.map((cat) => ({
+      ...cat,
+      items: cat.items?.map((item) => ({
+        ...item,
+        delivery_price: item.price,
+      })),
+    })),
+  }));
+}
+
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -52,6 +77,7 @@ function mapStoreConfigToSite(config: any): Site {
     menuLayout: config.menu_layout || "cards",
     pickupEnabled: config.accepts_pickup,
     deliveryEnabled: config.accepts_delivery,
+    deliveryPricingEnabled: config.delivery_pricing_enabled ?? true,
     minimumOrderAmount: Number(config.min_order ?? 0),
     preparationLeadTime: config.estimated_prep_minutes,
     futureOrderMaxDays: config.max_future_order_days || undefined,
@@ -141,7 +167,11 @@ export async function getStorefrontData(
   const pricingDisclosureText = storeConfig.pricing_disclosure_text ?? null;
 
   // 3. Fetch menus + categories + items + modifiers (same logic as before)
-  const menus = await fetchMenus(supabase, merchantId, locationId);
+  const rawMenus = await fetchMenus(supabase, merchantId, locationId);
+  const menus = applyDeliveryPricingPolicy(
+    rawMenus,
+    site?.online_ordering_config?.deliveryPricingEnabled ?? true
+  );
 
   return { site, location, menus, pricingDisclosureText };
 }
@@ -182,7 +212,11 @@ async function getStorefrontDataLegacy(
     return { site: siteData, location: null, menus: [], pricingDisclosureText: null };
   }
 
-  const menus = await fetchMenus(supabase, location.merchant_id, locationId);
+  const rawMenus = await fetchMenus(supabase, location.merchant_id, locationId);
+  const menus = applyDeliveryPricingPolicy(
+    rawMenus,
+    siteData?.online_ordering_config?.deliveryPricingEnabled ?? true
+  );
 
   return { site: siteData, location, menus, pricingDisclosureText: null };
 }
@@ -233,6 +267,9 @@ function mapRpcMenuToStorefront(rpcMenu: any): StorefrontMenu | null {
         .map((ci: any) => {
           const mi = ci.menu_item;
           const cardPrice = Number(mi.effective_price) || 0;
+          const cashPrice = mi.effective_cash_price != null
+            ? Number(mi.effective_cash_price)
+            : cardPrice;
           const deliveryPrice = mi.effective_delivery_price != null
             ? Number(mi.effective_delivery_price)
             : null;
@@ -265,6 +302,7 @@ function mapRpcMenuToStorefront(rpcMenu: any): StorefrontMenu | null {
             name: mi.name,
             description: mi.description,
             price: cardPrice,
+            cash_price: cashPrice,
             delivery_price: deliveryPrice ?? cardPrice,
             image: mi.image,
             availability: mi.effective_availability !== false,
