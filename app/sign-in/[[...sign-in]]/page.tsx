@@ -6,7 +6,7 @@ import Link from 'next/link'
 
 const DEXA_HQ_ORG_ID = process.env.DEXA_POS_INTERNAL_TEAM_ID
 
-export default async function Home() {
+export default async function SignInPage() {
   const { orgId } = await auth()
   const isHQ = !!orgId && !!DEXA_HQ_ORG_ID && orgId === DEXA_HQ_ORG_ID
 
@@ -18,10 +18,9 @@ export default async function Home() {
   return (
     <div className="min-h-screen w-full flex items-center justify-center bg-gradient-to-b from-background via-background to-muted/30 px-4 py-10">
       <div className="w-full max-w-md flex flex-col items-center">
-        {/* Brand */}
         <div className="flex flex-col items-center gap-3 mb-10">
           <Image
-            src="/dexalogo.png"
+            src="/dexalogolight.png"
             alt="DexaPOS"
             width={56}
             height={56}
@@ -46,7 +45,7 @@ export default async function Home() {
 
             <div className="bg-card border border-border rounded-2xl shadow-sm p-2 sm:p-4">
               <SignIn
-                signInUrl="/"
+                signInUrl="/sign-in"
                 appearance={{
                   elements: {
                     rootBox: 'w-full',

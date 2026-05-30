@@ -360,18 +360,6 @@ export function TableNode ({
             </div>
           )}
 
-          {/* RESIZE HANDLE */}
-          {isDesignMode && (
-            <div
-              ref={resizeHandleRef}
-              data-resize-handle
-              className='absolute -bottom-3 -right-3 w-6 h-6 bg-white border-2 border-[#0d99ff] rounded-full shadow-lg cursor-se-resize z-50 touch-none hover:scale-125 transition-transform'
-              onPointerDown={e => e.stopPropagation()}
-              onClick={e => e.stopPropagation()}
-              title='Drag to resize'
-            />
-          )}
-
           {/* DELETE BUTTON */}
           {isDesignMode && onDelete && (
             <div

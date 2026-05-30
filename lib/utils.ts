@@ -9,6 +9,10 @@ export function isValidImageUrl(url: string | null | undefined): url is string {
   return !!url && (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('/'))
 }
 
+export function isTransientImageUrl(url: string | null | undefined): url is string {
+  return !!url && (url.startsWith('blob:') || url.startsWith('data:'))
+}
+
 /**
  * Detects transient/preview image URLs — local previews created before upload
  * (object URLs and data URIs). These must be rendered with a native <img>
