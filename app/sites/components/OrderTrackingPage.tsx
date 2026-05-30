@@ -334,6 +334,7 @@ export function OrderTrackingPage({
       {!isTerminal && (
         <OrderStatusWatcher
           orderId={orderId}
+          sessionToken={qrTableLabel ? sessionToken : null}
           onDecision={refreshOrder}
           silentStatuses={["cancelled"]}
         />

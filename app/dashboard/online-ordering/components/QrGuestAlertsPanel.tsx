@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BellRing, Loader2, MessageSquareText, RefreshCw, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +12,7 @@ import {
   type QrGuestAlertsSnapshot,
 } from "../actions";
 import { toast } from "sonner";
+import { supabase } from "@/lib/supabase/client";
 
 function formatRelativeAge(value: string) {
   const then = new Date(value).getTime();
@@ -41,6 +42,7 @@ export function QrGuestAlertsPanel({
 }) {
   const queryClient = useQueryClient();
   const [resolvingId, setResolvingId] = useState<string | null>(null);
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   const { data, isLoading, isFetching, refetch } = useQuery<QrGuestAlertsSnapshot>({
     queryKey: ["merchant-qr-guest-alerts", locationId],
@@ -50,6 +52,33 @@ export function QrGuestAlertsPanel({
     refetchInterval: 15 * 1000,
     refetchOnWindowFocus: true,
   });
+
+  useEffect(() => {
+    if (!locationId) return;
+
+    if (channelRef.current) {
+      void supabase.removeChannel(channelRef.current);
+      channelRef.current = null;
+    }
+
+    const channel = supabase
+      .channel(`location:${locationId}:orders`)
+      .on("broadcast", { event: "qr_guest_alert_changed" }, () => {
+        void queryClient.invalidateQueries({
+          queryKey: ["merchant-qr-guest-alerts", locationId],
+        });
+      })
+      .subscribe();
+
+    channelRef.current = channel;
+
+    return () => {
+      if (channelRef.current) {
+        void supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
+      }
+    };
+  }, [locationId, queryClient]);
 
   const resolveMutation = useMutation({
     mutationFn: async (alertId: string) => {

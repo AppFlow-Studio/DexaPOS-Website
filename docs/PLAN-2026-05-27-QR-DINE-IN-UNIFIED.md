@@ -26,6 +26,7 @@ These are the parts that are genuinely implemented in repo or already reported a
 - [x] QR billing-gate service-catalog seed migration authored locally: `supabase/migrations/20260528103000_qr_service_catalog_gate.sql`
 - [x] QR token base64url normalization + token re-sign migration authored locally: `supabase/migrations/20260528153000_qr_token_base64url_fix.sql`
 - [x] QR guest-alert realtime broadcast + open-count fallback migration authored locally: `supabase/migrations/20260528170000_qr_guest_alert_broadcast.sql`
+- [x] QR token-scoped guest order-status realtime migration authored locally: `supabase/migrations/20260530103000_qr_order_session_realtime.sql`
 - [x] `create-online-order` was extended locally for QR-aware checkout / order binding in `supabase/functions/create-online-order/index.ts`
 - [x] Merchant dashboard online-ordering settings now include QR fields locally in:
   - `app/dashboard/online-ordering/actions.ts`
@@ -106,6 +107,7 @@ These are the parts that are genuinely implemented in repo or already reported a
   - `app/dashboard/online-ordering/actions.ts`
   - `app/dashboard/online-ordering/components/QrGuestAlertsPanel.tsx`
   - `app/dashboard/online-ordering/page.tsx`
+  - the panel now also subscribes locally to the shared `location:{location_id}:orders` topic for immediate `qr_guest_alert_changed` invalidation, while still keeping its polling fallback
 
 ## What Is Not Safe To Fully Check Off Yet
 
@@ -131,7 +133,7 @@ These are the places where work exists, but the ticket item is not yet defensibl
 | QR-5 | Backend | `implemented_local_not_applied` | Vault-backed HMAC signing/verification migration is authored locally | Apply `20260527160000_qr_w2_token_helpers_generate_and_resolve.sql` on staging |
 | QR-2 | Backend | `implemented_local_not_applied` | `resolve_table_qr(...)` is authored locally in the same migration | Apply `20260527160000_qr_w2_token_helpers_generate_and_resolve.sql` on staging |
 | QR-4 | Backend | `implemented_local_not_applied` | Wave 2 migration exists locally | Apply `20260522133000_qr_w2_status_and_guest_alert_rpcs.sql` on staging |
-| QR-24 | Backend | `blocked` | Depends on scan bootstrap + channel design | Implement after QR-2 contract is live |
+| QR-24 | Backend | `implemented_local_not_applied` | Orders broadcast trigger now emits a token-scoped `qr-session:{session_token}` realtime event for `qr_dine_in` orders, and the guest watcher subscribes to it locally; staging apply + smoke test still remain | Apply `20260530103000_qr_order_session_realtime.sql` on staging and verify a QR guest receives live status changes without polling alone |
 | QR-2b | Backend | `implemented_local_not_applied` | Wave 2 migration exists locally | Apply `20260522133000_qr_w2_status_and_guest_alert_rpcs.sql` on staging |
 | QR-19 | Backend / Billing | `implemented_local_not_applied` | QR Table Ordering service-catalog seed migration is authored locally and merchant QR settings/actions now enforce tier-or-override gating in code | Apply `20260528103000_qr_service_catalog_gate.sql` on staging, then smoke test merchant gating and HQ override |
 | QR-22 | Backend | `staging_applied_needs_validation` | Migration exists and was reportedly run; needs smoke check | Verify new rows default to `#0C4FD1` |
@@ -146,7 +148,7 @@ These are the places where work exists, but the ticket item is not yet defensibl
 | QR-26 | Storefront | `in_progress` | Shared URL builder now supports custom domains across merchant/HQ surfaces, the storefront path helper no longer hardcodes `dexaposai.com`, and the dynamic `/sites/[slug]/t/[token]` route now exists locally; still needs staging verification against real QR tokens and rewritten hosts | Deploy app changes and smoke test QR scans on slug, subdomain, and custom-domain storefronts |
 | QR-10 | Storefront | `in_progress` | Table-bound scan entry now seeds a QR session, renders a locked `Ordering for Table N` banner across layouts, and suppresses non-QR entry flow locally; still needs staging verification with `resolve_table_qr` live | Deploy app changes and verify scan → locked menu flow on staging |
 | QR-11 | Storefront | `in_progress` | Checkout now detects QR table mode locally, forces the runner-delivery/pickup path, suppresses the standard order-type selector, and blocks cash-in-store; still needs edge deploy and one full QR checkout verification | Deploy app + edge changes and verify one paid QR checkout end to end |
-| QR-12 | Storefront | `blocked` | Depends on QR-4 + QR-24 | Build live status screen |
+| QR-12 | Storefront | `in_progress` | Tracking page already had QR polling fallback; it now also subscribes locally to the QR session realtime topic while the existing fallback stays in place | Apply the new QR realtime migration, deploy the app, and verify accepted/preparing/ready transitions update the guest screen live |
 | QR-13 | Storefront | `in_progress` | The QR route now has a friendly unavailable screen and surfaces `next_open` when returned by `resolve_table_qr`; broader closed/blocked polish still remains open | Deploy app changes and verify invalid, rotated, kill-switched, and outside-hours QR states |
 | QR-33 | Storefront | `not_started` | Depends on QR-10 | Do accessibility + i18n pass |
 | QR-12b | Storefront | `in_progress` | Guest `Call your server` card now exists locally on both confirmation and live order surfaces, with optional note input and client cooldown; still needs the QR guest-alert RPC migration applied and an end-to-end staging raise verification | Apply the guest-alert migration, deploy app changes, and verify one tap raises exactly one open alert |
