@@ -92,15 +92,15 @@ export function TableShapePickerDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="w-[96vw] sm:w-[96vw] sm:max-w-[1120px] max-w-[1120px] gap-0 overflow-hidden border border-border bg-background p-0 text-foreground">
-                <DialogHeader className="border-b border-border px-5 py-4">
+            <DialogContent className="w-[96vw] sm:w-[96vw] sm:max-w-[1120px] max-w-[1120px] gap-0 overflow-hidden border border-border bg-background p-0 text-foreground flex flex-col max-h-[90vh]">
+                <DialogHeader className="border-b border-border px-5 py-4 shrink-0">
                     <DialogTitle className="text-lg font-semibold text-foreground">Add New Object</DialogTitle>
                     <DialogDescription className="text-sm text-muted-foreground">
                         Pick a shape from the shared SVG library and drop a named object into the floor plan.
                     </DialogDescription>
                 </DialogHeader>
 
-                <div className="grid gap-5 px-5 py-4 lg:grid-cols-[240px_minmax(680px,1fr)]">
+                <div className="grid gap-4 px-4 sm:px-5 py-4 lg:grid-cols-[240px_minmax(680px,1fr)] overflow-y-auto flex-1">
                     <div className="space-y-3">
                         <div className="space-y-2">
                             <Label htmlFor="new-floor-object-name" className="text-sm font-medium text-foreground">
@@ -168,7 +168,7 @@ export function TableShapePickerDialog({
 
                             {CATEGORY_ORDER.map((category) => (
                                 <TabsContent key={category} value={category} className="mt-3">
-                                    <ScrollArea className="h-[420px] rounded-md border border-border bg-muted/10 p-2">
+                                    <ScrollArea className="h-[45vh] lg:h-[420px] rounded-md border border-border bg-muted/10 p-2">
                                         <div className="grid gap-3 p-2 md:grid-cols-2 xl:grid-cols-3">
                                             {shapesByCategory[category].map((shape) => {
                                                 const ShapeIcon = shape.component
@@ -219,18 +219,22 @@ export function TableShapePickerDialog({
                     </div>
                 </div>
 
-                <DialogFooter className="border-t border-border bg-muted/20 px-5 py-3">
-                    <Button
-                        variant="outline"
-                        onClick={() => onOpenChange(false)}
-                    >
-                        Cancel
-                    </Button>
-                    <Button
-                        onClick={handleSubmit}
-                    >
-                        Add Object
-                    </Button>
+                <DialogFooter className="border-t border-border bg-muted/20 px-4 sm:px-5 py-3 flex-col sm:flex-row gap-2">
+                    <div className="flex gap-2 w-full sm:w-auto sm:ml-auto">
+                        <Button
+                            variant="outline"
+                            onClick={() => onOpenChange(false)}
+                            className="flex-1 sm:flex-none"
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            onClick={handleSubmit}
+                            className="flex-1 sm:flex-none"
+                        >
+                            Add Object
+                        </Button>
+                    </div>
                 </DialogFooter>
             </DialogContent>
         </Dialog>

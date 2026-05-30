@@ -1,6 +1,7 @@
 "use server";
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { LogAuditEvent } from "./audit-logs";
 import {
   Order,
   OrderItem,
@@ -117,6 +118,35 @@ export async function GetOrders(
   return result;
 }
 
+export async function GetCustomerOrders(
+  customerId: string,
+  locationId?: string
+): Promise<OrderResponse[]> {
+  if (!customerId) return [];
+
+  const supabase = createServerSupabaseClient();
+
+  let query = supabase
+    .from("orders")
+    .select(
+      `*, order_items(*, order_item_modifiers(*)), order_payments(*)`
+    )
+    .eq("customer_id", customerId);
+
+  if (locationId && locationId !== "all") {
+    query = query.eq("location_id", locationId);
+  }
+
+  const { data, error } = await query.order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("[GetCustomerOrders] Error:", error);
+    return [];
+  }
+
+  return (data as OrderResponse[]) || [];
+}
+
 export async function GetOrderDetails(
   orderId: string,
   clerkOrgId?: string
@@ -229,4 +259,131 @@ export async function GetOrderDetails(
     console.error("[GetOrderDetails] Unexpected error:", error);
     return null;
   }
+}
+
+export async function RefundOrder(
+  clerkOrgId: string,
+  orderId: string,
+  reason: string = "Merchant Refund"
+): Promise<{ success: boolean; error?: string }> {
+  const supabase = createServerSupabaseClient();
+
+  const { data: merchant, error: merchantError } = await supabase
+    .from("merchants")
+    .select("id")
+    .eq("clerk_org_id", clerkOrgId)
+    .single();
+
+  if (merchantError || !merchant) {
+    return { success: false, error: "Merchant not found" };
+  }
+
+  const { data: order } = await supabase
+    .from("orders")
+    .select("order_number, total_amount, location_id")
+    .eq("id", orderId)
+    .eq("merchant_id", merchant.id)
+    .single();
+
+  const { error: orderError } = await supabase
+    .from("orders")
+    .update({
+      status: "refunded",
+      payment_status: "refunded",
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", orderId)
+    .eq("merchant_id", merchant.id);
+
+  if (orderError) return { success: false, error: orderError.message };
+
+  await supabase
+    .from("order_payments")
+    .update({
+      status: "refunded",
+      refunded_at: new Date().toISOString(),
+      refund_reason: reason,
+    } as any)
+    .eq("order_id", orderId)
+    .in("status", ["captured", "paid"]);
+
+  if (order) {
+    await LogAuditEvent({
+      clerkOrgId,
+      locationId: order.location_id,
+      action: `Refunded Order: ${order.order_number}`,
+      actionCategory: "order",
+      severity: "critical",
+      resourceType: "order",
+      resourceId: orderId,
+      resourceName: order.order_number,
+      metadata: { amount: order.total_amount, reason },
+    });
+  }
+
+  return { success: true };
+}
+
+export async function VoidOrder(
+  clerkOrgId: string,
+  orderId: string,
+  reason: string = "Merchant Void"
+): Promise<{ success: boolean; error?: string }> {
+  const supabase = createServerSupabaseClient();
+
+  const { data: merchant, error: merchantError } = await supabase
+    .from("merchants")
+    .select("id")
+    .eq("clerk_org_id", clerkOrgId)
+    .single();
+
+  if (merchantError || !merchant) {
+    return { success: false, error: "Merchant not found" };
+  }
+
+  const { data: order } = await supabase
+    .from("orders")
+    .select("order_number, total_amount, location_id")
+    .eq("id", orderId)
+    .eq("merchant_id", merchant.id)
+    .single();
+
+  const { error: orderError } = await supabase
+    .from("orders")
+    .update({
+      status: "voided",
+      payment_status: "unpaid",
+      voided_at: new Date().toISOString(),
+      void_reason: reason,
+      updated_at: new Date().toISOString(),
+    } as any)
+    .eq("id", orderId)
+    .eq("merchant_id", merchant.id);
+
+  if (orderError) return { success: false, error: orderError.message };
+
+  await supabase
+    .from("order_payments")
+    .update({
+      status: "voided",
+      voided_at: new Date().toISOString(),
+    } as any)
+    .eq("order_id", orderId)
+    .in("status", ["pending", "authorized", "captured", "paid"]);
+
+  if (order) {
+    await LogAuditEvent({
+      clerkOrgId,
+      locationId: order.location_id,
+      action: `Voided Order: ${order.order_number}`,
+      actionCategory: "order",
+      severity: "critical",
+      resourceType: "order",
+      resourceId: orderId,
+      resourceName: order.order_number,
+      metadata: { amount: order.total_amount, reason },
+    });
+  }
+
+  return { success: true };
 }

@@ -226,14 +226,14 @@ export default function AnalyticsPage() {
             {/* ══════════════════════════════════════════════════════════════════════
           PAGE HEADER
       ══════════════════════════════════════════════════════════════════════ */}
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                     <h1 className="text-3xl font-bold tracking-tight">Analytics</h1>
                     <p className="text-muted-foreground">
                         Platform-wide intelligence across all merchants, devices, and channels
                     </p>
                 </div>
-                <div className="flex items-center space-x-2 no-print">
+                <div className="flex items-center space-x-2 no-print flex-shrink-0">
                     <Button variant="outline" onClick={handleExportPDF}>Export Report</Button>
                 </div>
             </div>
@@ -241,7 +241,7 @@ export default function AnalyticsPage() {
             {/* ══════════════════════════════════════════════════════════════════════
           PERSISTENT KPI HEADER — always visible above tabs
       ══════════════════════════════════════════════════════════════════════ */}
-            <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-6">
+            <div className="grid gap-4 grid-cols-2 lg:grid-cols-6">
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">Total GPV (30d)</CardTitle>
@@ -388,12 +388,12 @@ export default function AnalyticsPage() {
                     {/* GPV Sales Trend */}
                     <Card>
                         <CardHeader>
-                            <div className="flex items-center justify-between">
-                                <div>
+                            <div className="flex flex-wrap items-start gap-3 justify-between">
+                                <div className="min-w-0">
                                     <CardTitle>GPV Trend (Last 30 Days)</CardTitle>
                                     <CardDescription>Daily Gross Payment Volume with prior period overlay</CardDescription>
                                 </div>
-                                <div className="flex gap-1 border rounded-md p-0.5">
+                                <div className="flex gap-1 border rounded-md p-0.5 shrink-0">
                                     <Button size="sm" variant={chartMetric === 'revenue' ? 'default' : 'ghost'} className="h-7 px-3 text-xs" onClick={() => setChartMetric('revenue')}>GPV</Button>
                                     <Button size="sm" variant={chartMetric === 'orders' ? 'default' : 'ghost'} className="h-7 px-3 text-xs" onClick={() => setChartMetric('orders')}>Order Count</Button>
                                 </div>
@@ -434,22 +434,24 @@ export default function AnalyticsPage() {
                         description="Lorenz curve analysis across all merchants — identify concentration risk and high-value accounts"
                     />
 
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                            <Crown className="h-5 w-5 text-primary" />
-                            <div>
-                                <h2 className="text-lg font-semibold">Whale Watch</h2>
+                    <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                            <Crown className="h-5 w-5 text-primary shrink-0" />
+                            <div className="min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    <h2 className="text-lg font-semibold">Whale Watch</h2>
+                                    {!gpvLoading && currentRisk && (
+                                        <Badge variant={currentRisk.variant} className="flex items-center gap-1 shrink-0">
+                                            <currentRisk.icon className="h-3 w-3" />
+                                            {currentRisk.label}
+                                        </Badge>
+                                    )}
+                                </div>
                                 <p className="text-sm text-muted-foreground">GPV concentration risk analysis</p>
                             </div>
-                            {!gpvLoading && currentRisk && (
-                                <Badge variant={currentRisk.variant} className="flex items-center gap-1 ml-2">
-                                    <currentRisk.icon className="h-3 w-3" />
-                                    {currentRisk.label}
-                                </Badge>
-                            )}
                         </div>
                         <Select value={String(whaleWatchDays)} onValueChange={v => setWhaleWatchDays(Number(v))}>
-                            <SelectTrigger className="w-32">
+                            <SelectTrigger className="w-32 shrink-0">
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -529,8 +531,8 @@ export default function AnalyticsPage() {
                     </div>
 
                     {/* Lorenz Curve + Whale List */}
-                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-                        <Card className="col-span-4">
+                    <div className="grid gap-4 lg:grid-cols-7">
+                        <Card className="lg:col-span-4 min-w-0 overflow-hidden">
                             <CardHeader>
                                 <CardTitle>GPV Distribution</CardTitle>
                                 <CardDescription>Lorenz curve — gap from diagonal indicates concentration</CardDescription>
@@ -580,7 +582,7 @@ export default function AnalyticsPage() {
                             </CardContent>
                         </Card>
 
-                        <Card className="col-span-3">
+                        <Card className="lg:col-span-3 min-w-0 overflow-hidden">
                             <CardHeader>
                                 <CardTitle className="text-sm font-medium">Whale Merchants (&gt;$100k GPV)</CardTitle>
                                 <CardDescription>Last {whaleWatchDays} days — assign dedicated Account Managers</CardDescription>
@@ -738,43 +740,45 @@ export default function AnalyticsPage() {
                     {!churnLoading && churnData && churnData.totalAtRisk > 0 && (
                         <Card className="border-red-200 bg-linear-to-r from-red-50 to-orange-50">
                             <CardHeader className="pb-4">
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-3">
-                                        <div className="p-2 rounded-lg bg-red-100">
+                                <div className="space-y-3">
+                                    {/* Title row */}
+                                    <div className="flex items-start gap-3">
+                                        <div className="p-2 rounded-lg bg-red-100 shrink-0 mt-0.5">
                                             <Siren className="h-5 w-5 text-red-600" />
                                         </div>
-                                        <div>
-                                            <CardTitle className="flex items-center gap-2">
+                                        <div className="min-w-0">
+                                            <CardTitle className="flex items-center gap-2 flex-wrap">
                                                 Churn Risk Alert
-                                                <Badge variant="destructive" className="text-xs">{churnData.totalAtRisk} At Risk</Badge>
+                                                <Badge variant="destructive" className="text-xs shrink-0">{churnData.totalAtRisk} At Risk</Badge>
                                             </CardTitle>
                                             <CardDescription className="mt-1">Merchants with significant GPV drop (Week-over-Week comparison)</CardDescription>
                                         </div>
                                     </div>
-                                    <div className="flex flex-col items-end gap-2">
-                                        {/* ── Slack Notify Button ───────────────────────────── */}
-                                        <Button
-                                            size="sm"
-                                            variant={slackAlert.status === 'sent' ? 'outline' : slackAlert.status === 'no_webhook' ? 'outline' : 'default'}
-                                            className={`h-8 text-xs gap-1.5 no-print${slackAlert.status === 'sent' ? ' border-green-400 text-green-700 hover:bg-green-50' :
-                                                    slackAlert.status === 'no_webhook' ? ' border-amber-400 text-amber-700 hover:bg-amber-50' :
-                                                        slackAlert.status === 'error' ? ' bg-destructive hover:bg-destructive/90' : ''
-                                                }`}
-                                            disabled={slackAlert.status === 'sending' || slackAlert.status === 'sent'}
-                                            onClick={handleSlackAlert}
-                                            title={slackAlert.message}
-                                        >
-                                            {slackAlert.status === 'sending' && <><Loader2 className="h-3.5 w-3.5 animate-spin" />Sending…</>}
-                                            {slackAlert.status === 'sent' && <><CheckCircle2 className="h-3.5 w-3.5" />Alert Sent</>}
-                                            {slackAlert.status === 'error' && <><XCircle className="h-3.5 w-3.5" />Retry Alert</>}
-                                            {slackAlert.status === 'no_webhook' && <><BellRing className="h-3.5 w-3.5" />No Webhook Configured</>}
-                                            {(slackAlert.status === 'idle' || slackAlert.status === 'no_critical') && <><BellRing className="h-3.5 w-3.5" />Notify #merchant-health</>}
-                                        </Button>
-                                        {slackAlert.message && slackAlert.status !== 'idle' && (
-                                            <p className="text-[10px] text-muted-foreground max-w-48 text-right leading-tight">{slackAlert.message}</p>
-                                        )}
-                                        {/* ── GPV at risk ───────────────────────────────────── */}
-                                        <div className="text-right">
+                                    {/* Actions row — button left, GPV right */}
+                                    <div className="flex items-center justify-between gap-3 flex-wrap">
+                                        <div className="flex flex-col gap-1">
+                                            <Button
+                                                size="sm"
+                                                variant={slackAlert.status === 'sent' ? 'outline' : slackAlert.status === 'no_webhook' ? 'outline' : 'default'}
+                                                className={`h-8 text-xs gap-1.5 no-print${slackAlert.status === 'sent' ? ' border-green-400 text-green-700 hover:bg-green-50' :
+                                                        slackAlert.status === 'no_webhook' ? ' border-amber-400 text-amber-700 hover:bg-amber-50' :
+                                                            slackAlert.status === 'error' ? ' bg-destructive hover:bg-destructive/90' : ''
+                                                    }`}
+                                                disabled={slackAlert.status === 'sending' || slackAlert.status === 'sent'}
+                                                onClick={handleSlackAlert}
+                                                title={slackAlert.message}
+                                            >
+                                                {slackAlert.status === 'sending' && <><Loader2 className="h-3.5 w-3.5 animate-spin" />Sending…</>}
+                                                {slackAlert.status === 'sent' && <><CheckCircle2 className="h-3.5 w-3.5" />Alert Sent</>}
+                                                {slackAlert.status === 'error' && <><XCircle className="h-3.5 w-3.5" />Retry Alert</>}
+                                                {slackAlert.status === 'no_webhook' && <><BellRing className="h-3.5 w-3.5" />No Webhook Configured</>}
+                                                {(slackAlert.status === 'idle' || slackAlert.status === 'no_critical') && <><BellRing className="h-3.5 w-3.5" />Notify #merchant-health</>}
+                                            </Button>
+                                            {slackAlert.message && slackAlert.status !== 'idle' && (
+                                                <p className="text-[10px] text-muted-foreground max-w-48 leading-tight">{slackAlert.message}</p>
+                                            )}
+                                        </div>
+                                        <div className="text-right shrink-0">
                                             <p className="text-xs text-muted-foreground">Total GPV at Risk</p>
                                             <p className="text-2xl font-bold text-red-600">${churnData.totalGPVAtRisk.toLocaleString()}</p>
                                         </div>

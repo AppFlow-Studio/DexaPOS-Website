@@ -270,21 +270,21 @@ export function BatchReconciliationSection({
               Compare settlement batches against linked order payments and flag mismatches.
             </CardDescription>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button variant="outline" onClick={() => void handleRefresh()} disabled={batchesFetching || batchPaymentsFetching}>
               <RefreshCcwDot className="mr-2 h-4 w-4" />
               Refresh
             </Button>
             <Button variant="outline" onClick={handleBatchExport} disabled={!selectedBatch}>
               <Download className="mr-2 h-4 w-4" />
-              Export Selected Batch
+              Export Selected
             </Button>
           </div>
         </div>
       </CardHeader>
 
       <CardContent className="space-y-4">
-        <div className={scopedMerchantId ? 'grid gap-3 md:grid-cols-4' : 'grid gap-3 md:grid-cols-5'}>
+        <div className={scopedMerchantId ? 'grid gap-3 grid-cols-2 lg:grid-cols-4' : 'grid gap-3 grid-cols-2 lg:grid-cols-5'}>
           {!scopedMerchantId && (
             <label className="flex flex-col gap-1 text-sm">
               <span className="text-muted-foreground">Merchant</span>

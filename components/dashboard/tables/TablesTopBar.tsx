@@ -35,25 +35,20 @@ export function TablesTopBar({
     onEditLayout,
 }: TablesTopBarProps) {
     return (
-        <div className="flex items-center justify-between gap-4 p-4 border-b bg-background">
-            <div className="flex items-center gap-4 flex-1">
-                {/* {onBack && (
-                    <Button variant="ghost" size="sm" onClick={onBack}>
-                        <ArrowLeft className="h-4 w-4 mr-2" />
-                    </Button>
-                )} */}
-                <div className="flex items-center gap-2">
+        <div className="flex items-center justify-between gap-2 p-3 border-b bg-background">
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+                <div className="flex items-center gap-1.5 min-w-0">
                     {location && (
-                        <span className="text-sm font-semibold text-foreground">{location.name}</span>
+                        <span className="text-sm font-semibold text-foreground truncate max-w-[90px] sm:max-w-none">{location.name}</span>
                     )}
                     {floorPlans && floorPlans.length > 0 && onFloorPlanChange && (
                         <>
-                            <span className="text-sm text-muted-foreground">•</span>
+                            <span className="text-sm text-muted-foreground shrink-0">•</span>
                             <Select
                                 value={activeFloorPlanId || ''}
                                 onValueChange={onFloorPlanChange}
                             >
-                                <SelectTrigger className="w-[250px]">
+                                <SelectTrigger className="w-[140px] sm:w-[220px] h-8 text-xs">
                                     <SelectValue placeholder="Select floor plan" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -75,10 +70,10 @@ export function TablesTopBar({
                 </div>
             </div>
 
-            <div className="flex items-center gap-3 flex-1 max-w-md justify-end">
-                <Button variant="default" size="sm" onClick={onEditLayout}>
-                    <Edit className="h-4 w-4 mr-2" />
-                    Edit Mode
+            <div className="flex items-center gap-2 shrink-0">
+                <Button variant="default" size="sm" onClick={onEditLayout} className="h-8 text-xs px-3">
+                    <Edit className="h-3.5 w-3.5 mr-1.5" />
+                    Edit
                 </Button>
             </div>
         </div>

@@ -195,16 +195,16 @@ export default function CreateReservationDialog ({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className='!h-[96vh] !w-[98vw] !max-w-[98vw] border-border/70 p-0 shadow-2xl sm:!max-w-[98vw] sm:overflow-hidden'>
-        <DialogHeader className='border-b border-border/70 bg-gradient-to-r from-muted/40 via-background to-muted/20 px-6 py-4'>
-          <div className='flex flex-col gap-3 text-left lg:flex-row lg:items-center lg:justify-between'>
-            <div className='space-y-2 text-left'>
-              <DialogTitle className='text-[1.65rem] font-semibold tracking-tight'>Create Reservation</DialogTitle>
-              <DialogDescription className='max-w-2xl text-sm leading-relaxed'>
-                Capture the guest, schedule, and seating details in one place without jumping through a cramped form.
+      <DialogContent className='max-h-[92vh] overflow-y-auto !w-[98vw] !max-w-[98vw] border-border/70 p-0 shadow-2xl sm:!max-w-[98vw]'>
+        <DialogHeader className='sticky top-0 z-20 border-b border-border/70 bg-background px-4 sm:px-6 py-4'>
+          <div className='flex items-center justify-between gap-3'>
+            <div className='space-y-0.5 min-w-0'>
+              <DialogTitle className='text-xl font-semibold tracking-tight'>Create Reservation</DialogTitle>
+              <DialogDescription className='text-sm text-muted-foreground hidden sm:block'>
+                Fill in guest, schedule and seating details.
               </DialogDescription>
             </div>
-            <Badge variant='secondary' className='mt-0.5 inline-flex gap-1.5 self-start rounded-full px-3 py-1.5 text-xs font-medium'>
+            <Badge variant='secondary' className='shrink-0 inline-flex gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium'>
               <CalendarDays className='h-3.5 w-3.5' />
               {defaultDate}
             </Badge>
@@ -212,9 +212,9 @@ export default function CreateReservationDialog ({
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit, onInvalidSubmit)} className='flex h-[calc(96vh-88px)] flex-col px-6 py-4 pb-6'>
-            <div className='min-h-0 flex-1 overflow-y-auto pr-1'>
-              <div className='space-y-4 pb-4'>
+          <form onSubmit={form.handleSubmit(onSubmit, onInvalidSubmit)}>
+            <div className='px-4 sm:px-6 py-4'>
+            <div className='space-y-4 pb-4'>
                 {(conflictWarning || submitError) && (
                   <Alert variant='destructive'>
                     <AlertTriangle className='h-4 w-4' />
@@ -454,15 +454,15 @@ export default function CreateReservationDialog ({
                 </div>
               </section>
                 </div>
-              </div>
+            </div>
             </div>
 
-            <div className='mt-2 flex shrink-0 items-center justify-between gap-4 rounded-2xl border border-border/70 bg-muted/20 px-5 py-3'>
+            <div className='sticky bottom-0 z-20 border-t border-border/70 bg-background px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3'>
               <div className='text-xs text-muted-foreground'>
                 Required: party name, party size, phone, date, time, and duration.
               </div>
               {conflictWarning ? (
-                <DialogFooter className='gap-2 border-0 pt-0'>
+                <DialogFooter className='gap-2 border-0 pt-0 flex-row'>
                   <Button
                     type='button'
                     variant='outline'
@@ -483,7 +483,7 @@ export default function CreateReservationDialog ({
                 </DialogFooter>
               ) : (
                 <DialogFooter className='border-0 pt-0'>
-                  <Button size='lg' className='min-w-48' type='submit' disabled={mutation.isPending}>
+                  <Button size='lg' className='w-full sm:min-w-48 sm:w-auto' type='submit' disabled={mutation.isPending}>
                     {mutation.isPending && (
                       <Loader2 className='mr-2 h-4 w-4 animate-spin' />
                     )}

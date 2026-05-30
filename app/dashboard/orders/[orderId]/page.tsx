@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
-import { GetOrderDetails } from "../../actions/order";
+import { GetOrderDetails, RefundOrder, VoidOrder } from "../../actions/order";
 import { GetOrderFullHistory } from "../../actions/order-full-history";
 import { OrderStatusBadge } from "@/components/dashboard/orders/OrderStatusBadge";
 import { PaymentStatusBadge } from "@/components/dashboard/orders/PaymentStatusBadge";
@@ -42,7 +42,20 @@ import {
   Clock,
   Hash,
   Store,
+  Loader2,
 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   Order,
   OrderItem,
@@ -203,8 +216,53 @@ export default function OrderDetailPage() {
   const params = useParams();
   const router = useRouter();
   const { organization } = useOrganization();
+  const queryClient = useQueryClient();
   const orderId = params.orderId as string;
   const clerkOrgId = organization?.id;
+  const [confirmRefundOpen, setConfirmRefundOpen] = React.useState(false);
+  const [confirmVoidOpen, setConfirmVoidOpen] = React.useState(false);
+  const [isRefunding, setIsRefunding] = React.useState(false);
+  const [isVoiding, setIsVoiding] = React.useState(false);
+
+  const handleRefund = async () => {
+    if (!clerkOrgId || !orderId) return;
+    setIsRefunding(true);
+    try {
+      const result = await RefundOrder(clerkOrgId, orderId);
+      if (result.success) {
+        toast.success("Order refunded successfully");
+        queryClient.invalidateQueries({ queryKey: ["order-details", orderId] });
+        queryClient.invalidateQueries({ queryKey: ["orders"] });
+        setConfirmRefundOpen(false);
+      } else {
+        toast.error(result.error || "Failed to refund order");
+      }
+    } catch {
+      toast.error("An unexpected error occurred");
+    } finally {
+      setIsRefunding(false);
+    }
+  };
+
+  const handleVoid = async () => {
+    if (!clerkOrgId || !orderId) return;
+    setIsVoiding(true);
+    try {
+      const result = await VoidOrder(clerkOrgId, orderId);
+      if (result.success) {
+        toast.success("Order voided successfully");
+        queryClient.invalidateQueries({ queryKey: ["order-details", orderId] });
+        queryClient.invalidateQueries({ queryKey: ["orders"] });
+        setConfirmVoidOpen(false);
+      } else {
+        toast.error(result.error || "Failed to void order");
+      }
+    } catch {
+      toast.error("An unexpected error occurred");
+    } finally {
+      setIsVoiding(false);
+    }
+  };
 
   React.useEffect(() => {
     if (orderId) {
@@ -330,45 +388,55 @@ export default function OrderDetailPage() {
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => router.back()}>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex items-start gap-3 min-w-0">
+          <Button variant="ghost" size="icon" className="shrink-0 mt-0.5" onClick={() => router.back()}>
             <ArrowLeft className="h-4 w-4" />
           </Button>
-          <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-bold tracking-tight">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-xl sm:text-2xl font-bold tracking-tight">
                 Order #{order.display_number || order.order_number}
               </h1>
               <OrderStatusBadge status={order.status} />
             </div>
-            <div className="flex items-center gap-4 text-muted-foreground mt-1">
+            <div className="flex items-center gap-3 text-muted-foreground mt-1 flex-wrap text-sm">
               <span className="flex items-center gap-1.5">
-                <Calendar className="h-4 w-4" />
+                <Calendar className="h-4 w-4 shrink-0" />
                 {formatDate(order.created_at)}
               </span>
               {order.location_id && (
                 <span className="flex items-center gap-1.5">
-                  <Store className="h-4 w-4" />
+                  <Store className="h-4 w-4 shrink-0" />
                   Location
                 </span>
               )}
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap shrink-0 pl-12 sm:pl-0">
           <Button variant="outline" size="sm">
-            <Printer className="h-4 w-4 mr-2" />
+            <Printer className="h-4 w-4 mr-1.5" />
             Print Receipt
           </Button>
-          {order.status !== "void" && order.status !== "cancelled" && (
+          {order.status !== "void" && order.status !== "voided" && order.status !== "cancelled" && order.status !== "refunded" && (
             <>
-              <Button variant="outline" size="sm">
-                <RotateCcw className="h-4 w-4 mr-2" />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setConfirmRefundOpen(true)}
+                disabled={isRefunding || isVoiding}
+              >
+                {isRefunding ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <RotateCcw className="h-4 w-4 mr-1.5" />}
                 Refund
               </Button>
-              <Button variant="destructive" size="sm">
-                <X className="h-4 w-4 mr-2" />
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => setConfirmVoidOpen(true)}
+                disabled={isRefunding || isVoiding}
+              >
+                {isVoiding ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <X className="h-4 w-4 mr-1.5" />}
                 Void
               </Button>
             </>
@@ -1196,6 +1264,48 @@ export default function OrderDetailPage() {
           </Card>
         </div>
       </div>
+
+      {/* Refund Confirmation */}
+      <AlertDialog open={confirmRefundOpen} onOpenChange={setConfirmRefundOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Refund this order?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will mark the order and all captured payments as refunded. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isRefunding}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleRefund} disabled={isRefunding}>
+              {isRefunding && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              Confirm Refund
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Void Confirmation */}
+      <AlertDialog open={confirmVoidOpen} onOpenChange={setConfirmVoidOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Void this order?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will void the order and all pending payments. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isVoiding}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleVoid}
+              disabled={isVoiding}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isVoiding && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              Confirm Void
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

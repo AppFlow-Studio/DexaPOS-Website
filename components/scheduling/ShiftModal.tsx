@@ -336,7 +336,7 @@ export function ShiftModal({
           )}
 
           {/* Time Range */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="grid gap-2">
               <Label>Start Time</Label>
               <Input
@@ -356,7 +356,7 @@ export function ShiftModal({
           </div>
 
           {/* New Fields: Break, Pace, Staffing */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="grid gap-2">
               <Label>Break (Minutes)</Label>
               <Input

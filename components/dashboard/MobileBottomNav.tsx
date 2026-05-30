@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
+import { useClerk, useUser } from "@clerk/nextjs";
+import { LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   Sheet,
@@ -10,6 +12,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { Separator } from "@/components/ui/separator";
 import type { LucideIcon } from "lucide-react";
 
 export interface BottomNavTab {
@@ -33,6 +36,11 @@ interface MobileBottomNavProps {
 export function MobileBottomNav({ tabs, moreItems }: MobileBottomNavProps) {
   const pathname = usePathname();
   const [moreOpen, setMoreOpen] = useState(false);
+  const { signOut } = useClerk();
+  const { user } = useUser();
+
+  const displayName = user?.fullName || user?.primaryEmailAddress?.emailAddress || "Account";
+  const email = user?.primaryEmailAddress?.emailAddress;
 
   return (
     <>
@@ -123,6 +131,24 @@ export function MobileBottomNav({ tabs, moreItems }: MobileBottomNavProps) {
               );
             })}
           </nav>
+
+          <Separator className="my-3" />
+
+          <div className="px-3 py-2 space-y-2">
+            <div className="min-w-0">
+              <p className="text-sm font-medium truncate">{displayName}</p>
+              {email && email !== displayName && (
+                <p className="text-xs text-muted-foreground truncate">{email}</p>
+              )}
+            </div>
+            <button
+              onClick={() => void signOut({ redirectUrl: "/" })}
+              className="flex items-center gap-3 w-full px-3 py-3 rounded-lg text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors"
+            >
+              <LogOut className="h-5 w-5 shrink-0" />
+              <span>Sign Out</span>
+            </button>
+          </div>
         </SheetContent>
       </Sheet>
     </>

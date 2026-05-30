@@ -777,7 +777,7 @@ function LocationIndicator({ userRole }: { userRole?: string }) {
     return (
       <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full text-sm bg-muted/50">
         <Skeleton className="h-3.5 w-3.5 rounded-full" />
-        <Skeleton className="h-4 w-24" />
+        <Skeleton className="h-4 w-16" />
       </div>
     );
   }
@@ -803,82 +803,147 @@ function LocationIndicator({ userRole }: { userRole?: string }) {
       "Location";
 
   // Shared location list content used in both dropdown and mobile sheet
-  const locationListContent = (onSelect?: () => void) => (
-    <>
-      {isMerchantOwner && (
-        <>
-          <DropdownMenuItem
-            onClick={() => { handleLocationChange("all"); onSelect?.(); }}
-            className={cn(
-              "cursor-pointer transition-colors",
-              selectedLocationId === "all" && "bg-accent"
-            )}
-          >
-            <Building2 className="mr-2 h-4 w-4" />
-            All Locations
-            {selectedLocationId === "all" && (
-              <Badge
-                variant="secondary"
-                className="ml-auto text-[10px] px-1.5 animate-in fade-in duration-200"
-              >
-                Active
-              </Badge>
-            )}
-          </DropdownMenuItem>
-          {locations.length > 0 && <DropdownMenuSeparator />}
-        </>
-      )}
-      {locations.length > 0 && (
+  const locationListContent = (onSelect?: () => void, variant: 'dropdown' | 'sheet' = 'dropdown') => {
+    if (variant === 'sheet') {
+      return (
         <>
           {isMerchantOwner && (
-            <DropdownMenuLabel className="text-xs text-muted-foreground">
-              Switch to
-            </DropdownMenuLabel>
-          )}
-          {locations.map((location, index) => {
-            const isPrimary = (location as any).is_primary_location === true;
-            return (
-              <DropdownMenuItem
-                key={location.id}
-                onClick={() => { handleLocationChange(location.id); onSelect?.(); }}
+            <>
+              <button
+                onClick={() => { handleLocationChange("all"); onSelect?.(); }}
                 className={cn(
-                  "cursor-pointer transition-colors animate-in fade-in slide-in-from-left-1 duration-200",
-                  selectedLocationId === location.id && "bg-accent"
+                  "flex items-center w-full text-left px-3 py-3 rounded-lg text-sm transition-colors",
+                  selectedLocationId === "all"
+                    ? "bg-accent text-accent-foreground"
+                    : "text-foreground hover:bg-accent hover:text-accent-foreground"
                 )}
-                style={{ animationDelay: `${index * 30}ms` }}
               >
-                <MapPin className="mr-2 h-4 w-4" />
-                <span className="truncate">{location.name}</span>
-                <div className="ml-auto flex items-center gap-1">
-                  {isPrimary && (
-                    <Badge
-                      variant="default"
-                      className="text-[10px] px-1.5 bg-primary text-primary-foreground"
-                    >
-                      Primary
-                    </Badge>
-                  )}
-                  {!location.is_active && (
-                    <Badge variant="outline" className="text-[10px] px-1.5">
-                      Inactive
-                    </Badge>
-                  )}
-                  {selectedLocationId === location.id && (
-                    <Badge
-                      variant="secondary"
-                      className="text-[10px] px-1.5 animate-in fade-in duration-200"
-                    >
-                      Active
-                    </Badge>
-                  )}
-                </div>
-              </DropdownMenuItem>
-            );
-          })}
+                <Building2 className="mr-2 h-4 w-4 shrink-0" />
+                <span className="flex-1">All Locations</span>
+                {selectedLocationId === "all" && (
+                  <Badge variant="secondary" className="ml-auto text-[10px] px-1.5">Active</Badge>
+                )}
+              </button>
+              {locations.length > 0 && <div className="my-1 border-t" />}
+            </>
+          )}
+          {locations.length > 0 && (
+            <>
+              {isMerchantOwner && (
+                <p className="px-3 py-1 text-xs text-muted-foreground">Switch to</p>
+              )}
+              {locations.map((location) => {
+                const isPrimary = (location as any).is_primary_location === true;
+                return (
+                  <button
+                    key={location.id}
+                    onClick={() => { handleLocationChange(location.id); onSelect?.(); }}
+                    className={cn(
+                      "flex items-center w-full text-left px-3 py-3 rounded-lg text-sm transition-colors",
+                      selectedLocationId === location.id
+                        ? "bg-accent text-accent-foreground"
+                        : "text-foreground hover:bg-accent hover:text-accent-foreground"
+                    )}
+                  >
+                    <MapPin className="mr-2 h-4 w-4 shrink-0" />
+                    <span className="truncate flex-1">{location.name}</span>
+                    <div className="ml-auto flex items-center gap-1">
+                      {isPrimary && (
+                        <Badge variant="default" className="text-[10px] px-1.5 bg-primary text-primary-foreground">Primary</Badge>
+                      )}
+                      {!location.is_active && (
+                        <Badge variant="outline" className="text-[10px] px-1.5">Inactive</Badge>
+                      )}
+                      {selectedLocationId === location.id && (
+                        <Badge variant="secondary" className="text-[10px] px-1.5">Active</Badge>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </>
+          )}
         </>
-      )}
-    </>
-  );
+      );
+    }
+
+    return (
+      <>
+        {isMerchantOwner && (
+          <>
+            <DropdownMenuItem
+              onClick={() => { handleLocationChange("all"); onSelect?.(); }}
+              className={cn(
+                "cursor-pointer transition-colors",
+                selectedLocationId === "all" && "bg-accent"
+              )}
+            >
+              <Building2 className="mr-2 h-4 w-4" />
+              All Locations
+              {selectedLocationId === "all" && (
+                <Badge
+                  variant="secondary"
+                  className="ml-auto text-[10px] px-1.5 animate-in fade-in duration-200"
+                >
+                  Active
+                </Badge>
+              )}
+            </DropdownMenuItem>
+            {locations.length > 0 && <DropdownMenuSeparator />}
+          </>
+        )}
+        {locations.length > 0 && (
+          <>
+            {isMerchantOwner && (
+              <DropdownMenuLabel className="text-xs text-muted-foreground">
+                Switch to
+              </DropdownMenuLabel>
+            )}
+            {locations.map((location, index) => {
+              const isPrimary = (location as any).is_primary_location === true;
+              return (
+                <DropdownMenuItem
+                  key={location.id}
+                  onClick={() => { handleLocationChange(location.id); onSelect?.(); }}
+                  className={cn(
+                    "cursor-pointer transition-colors animate-in fade-in slide-in-from-left-1 duration-200",
+                    selectedLocationId === location.id && "bg-accent"
+                  )}
+                  style={{ animationDelay: `${index * 30}ms` }}
+                >
+                  <MapPin className="mr-2 h-4 w-4" />
+                  <span className="truncate">{location.name}</span>
+                  <div className="ml-auto flex items-center gap-1">
+                    {isPrimary && (
+                      <Badge
+                        variant="default"
+                        className="text-[10px] px-1.5 bg-primary text-primary-foreground"
+                      >
+                        Primary
+                      </Badge>
+                    )}
+                    {!location.is_active && (
+                      <Badge variant="outline" className="text-[10px] px-1.5">
+                        Inactive
+                      </Badge>
+                    )}
+                    {selectedLocationId === location.id && (
+                      <Badge
+                        variant="secondary"
+                        className="text-[10px] px-1.5 animate-in fade-in duration-200"
+                      >
+                        Active
+                      </Badge>
+                    )}
+                  </div>
+                </DropdownMenuItem>
+              );
+            })}
+          </>
+        )}
+      </>
+    );
+  };
 
   return (
     <>
@@ -912,7 +977,7 @@ function LocationIndicator({ userRole }: { userRole?: string }) {
             </SheetTitle>
           </SheetHeader>
           <div className="flex flex-col">
-            {locationListContent(() => setMobileSheetOpen(false))}
+            {locationListContent(() => setMobileSheetOpen(false), 'sheet')}
           </div>
         </SheetContent>
       </Sheet>
@@ -935,7 +1000,7 @@ function LocationIndicator({ userRole }: { userRole?: string }) {
             )}
             <span
               className={cn(
-                "max-w-37.5 truncate transition-colors duration-200",
+                "max-w-[100px] truncate transition-colors duration-200",
                 isAllLocations ? "text-muted-foreground" : "font-medium"
               )}
             >
@@ -965,6 +1030,8 @@ export default function MerchantDashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const [isMounted, setIsMounted] = useState(false);
+  useEffect(() => { setIsMounted(true); }, []);
   const { isLoaded, isSignedIn } = useSession();
   const { data: userInfo } = useUserInfo();
   const router = useRouter();
@@ -1087,7 +1154,7 @@ export default function MerchantDashboardLayout({
     }
   }, [isLoaded, isSignedIn]);
 
-  if (!isLoaded) {
+  if (isMounted && !isLoaded) {
     return (
       <div className="flex h-screen items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
@@ -1129,9 +1196,16 @@ export default function MerchantDashboardLayout({
     { title: "Online Ordering", url: "/dashboard/online-ordering", icon: Globe },
     { title: "Customers", url: "/dashboard/customers", icon: User },
     { title: "Inventory", url: "/dashboard/inventory", icon: Package },
+    { title: "Subscriptions", url: "/dashboard/subscriptions", icon: FileText },
     { title: "Devices", url: "/dashboard/devices", icon: Monitor },
-    { title: "Transactions", url: "/dashboard/transactions", icon: Receipt },
+    { title: "Cash Drawers", url: "/dashboard/cash-drawers", icon: Banknote },
+    { title: "Audit Logs", url: "/dashboard/audit-logs", icon: GitCompare },
     { title: "Reports", url: "/dashboard/reports", icon: BarChart3 },
+    { title: "Transactions", url: "/dashboard/transactions", icon: Receipt },
+    { title: "Invoices", url: "/dashboard/invoices", icon: FileText },
+    { title: "Payments", url: "/dashboard/payments", icon: CreditCard },
+    { title: "Tips", url: "/dashboard/tips", icon: DollarSign },
+    { title: "TSYS Disputes", url: "/dashboard/payments/disputes", icon: ShieldAlert },
     { title: "Settings", url: "/dashboard/settings", icon: Settings },
     { title: "Get Help", url: "/dashboard/support", icon: MessageCircle },
   ];
@@ -1144,10 +1218,8 @@ export default function MerchantDashboardLayout({
         <ImpersonationBanner />
         <header className="flex h-16 shrink-0 items-center gap-2 border-b px-3 sm:px-4">
           <SidebarTrigger className="-ml-1 hidden sm:flex" />
-          <div className="flex items-center gap-2 min-w-0 flex-1">
-            <h1 className="text-base sm:text-lg font-semibold truncate">Merchant Dashboard</h1>
-            <LocationIndicator userRole={userRole} />
-          </div>
+          <h1 className="text-base md:text-sm lg:text-base font-semibold truncate flex-1 min-w-0">Merchant Dashboard</h1>
+          <LocationIndicator userRole={userRole} />
           <div className="ml-auto flex flex-row items-center gap-1 sm:gap-2">
             <AnimatedThemeToggler />
             <Button variant="ghost" size="icon" className="hidden sm:flex">

@@ -122,7 +122,7 @@ export function SalesHeatMap({
             value={selectedLocationId}
             onValueChange={setSelectedLocationId}
           >
-            <SelectTrigger className="w-[200px] h-9 bg-background/50 border-muted-foreground/20">
+            <SelectTrigger className="w-full sm:w-[200px] h-9 bg-background/50 border-muted-foreground/20">
               <div className="flex items-center gap-2">
                 <MapPin className="h-3.5 w-3.5 text-primary" />
                 <SelectValue placeholder="Select location" />

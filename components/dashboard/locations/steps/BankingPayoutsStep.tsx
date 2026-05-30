@@ -111,7 +111,7 @@ export function BankingPayoutsStep({
                 <RadioGroup
                     value={data.account_type}
                     onValueChange={(value: 'checking' | 'savings') => onChange({ account_type: value })}
-                    className="grid grid-cols-2 gap-3"
+                    className="grid grid-cols-1 sm:grid-cols-2 gap-3"
                 >
                     <label className="flex items-center gap-2 rounded-lg border p-3 cursor-pointer">
                         <RadioGroupItem value="checking" />

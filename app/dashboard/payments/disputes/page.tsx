@@ -372,12 +372,12 @@ export default function DisputesPage() {
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">TSYS Disputes</h1>
           <p className="text-muted-foreground">Monitor and respond to payment disputes</p>
         </div>
-        <Button variant="outline" onClick={handleRefresh} disabled={isFetching}>
+        <Button variant="outline" onClick={handleRefresh} disabled={isFetching} className="self-start sm:self-auto flex-shrink-0">
           <RefreshCcwDot className="mr-2 h-4 w-4" />
           {isFetching ? "Refreshing…" : "Refresh"}
         </Button>

@@ -102,14 +102,14 @@ export default function InvoicesPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-2xl font-bold tracking-tight">Invoices</h2>
           <p className="text-muted-foreground">
             Create and manage customer invoices
           </p>
         </div>
-        <Button asChild>
+        <Button asChild className="self-start sm:self-auto">
           <Link href="/dashboard/invoices/new">
             <Plus className="h-4 w-4 mr-2" />
             New Invoice
@@ -168,13 +168,15 @@ export default function InvoicesPage() {
             value={activeTab}
             onValueChange={(v) => setActiveTab(v as InvoiceStatus | "all")}
           >
-            <TabsList>
-              {STATUS_TABS.map((tab) => (
-                <TabsTrigger key={tab.value} value={tab.value}>
-                  {tab.label}
-                </TabsTrigger>
-              ))}
-            </TabsList>
+            <div className="overflow-x-auto">
+              <TabsList>
+                {STATUS_TABS.map((tab) => (
+                  <TabsTrigger key={tab.value} value={tab.value}>
+                    {tab.label}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </div>
           </Tabs>
         </CardHeader>
         <CardContent className="p-0">
@@ -199,7 +201,8 @@ export default function InvoicesPage() {
               </Button>
             </div>
           ) : (
-            <Table>
+            <div className="overflow-x-auto">
+            <Table className="min-w-[600px]">
               <TableHeader>
                 <TableRow>
                   <TableHead>Invoice #</TableHead>
@@ -308,6 +311,7 @@ export default function InvoicesPage() {
                 ))}
               </TableBody>
             </Table>
+            </div>
           )}
         </CardContent>
       </Card>

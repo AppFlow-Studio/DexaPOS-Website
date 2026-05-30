@@ -345,6 +345,7 @@ export function FleetHealthDashboard() {
             <CardDescription className="text-xs">Device models across fleet</CardDescription>
           </CardHeader>
           <CardContent className="p-0">
+            <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -370,6 +371,7 @@ export function FleetHealthDashboard() {
                 )}
               </TableBody>
             </Table>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -384,6 +386,7 @@ export function FleetHealthDashboard() {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
+            <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -408,6 +411,7 @@ export function FleetHealthDashboard() {
                 ))}
               </TableBody>
             </Table>
+            </div>
           </CardContent>
         </Card>
       )}
@@ -423,6 +427,7 @@ export function FleetHealthDashboard() {
           </CardDescription>
         </CardHeader>
         <CardContent className="p-0">
+          <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -449,6 +454,7 @@ export function FleetHealthDashboard() {
               )}
             </TableBody>
           </Table>
+          </div>
         </CardContent>
       </Card>
     </div>

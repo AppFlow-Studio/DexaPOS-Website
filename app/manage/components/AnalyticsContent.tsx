@@ -50,32 +50,34 @@ export function AnalyticsContent() {
 
       {/* Tabs Section */}
       <Tabs defaultValue="growth" className="space-y-4">
+        <div className="overflow-x-auto">
         <TabsList className="inline-flex h-auto p-1 bg-white/80 backdrop-blur-sm border border-blue-100/50 shadow-sm rounded-xl">
           <TabsTrigger
             value="growth"
-            className="px-5 py-2.5 rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md transition-all duration-200 text-sm font-medium"
+            className="px-3 sm:px-5 py-2.5 rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md transition-all duration-200 text-sm font-medium"
           >
             Growth
           </TabsTrigger>
           <TabsTrigger
             value="revenue"
-            className="px-5 py-2.5 rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md transition-all duration-200 text-sm font-medium"
+            className="px-3 sm:px-5 py-2.5 rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md transition-all duration-200 text-sm font-medium"
           >
             Revenue
           </TabsTrigger>
           <TabsTrigger
             value="operations"
-            className="px-5 py-2.5 rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md transition-all duration-200 text-sm font-medium"
+            className="px-3 sm:px-5 py-2.5 rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md transition-all duration-200 text-sm font-medium"
           >
             Operations
           </TabsTrigger>
           <TabsTrigger
             value="payments"
-            className="px-5 py-2.5 rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md transition-all duration-200 text-sm font-medium"
+            className="px-3 sm:px-5 py-2.5 rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md transition-all duration-200 text-sm font-medium"
           >
             Payments
           </TabsTrigger>
         </TabsList>
+        </div>
 
         <TabsContent value="growth" className="space-y-4">
           <GrowthSection from={dateRange.from} to={dateRange.to} />

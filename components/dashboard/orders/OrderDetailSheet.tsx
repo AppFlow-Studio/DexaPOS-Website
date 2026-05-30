@@ -41,14 +41,25 @@ import {
   X,
   RotateCcw,
 } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { GetOrderDetails } from "@/app/dashboard/actions/order";
+import { GetOrderDetails, RefundOrder, VoidOrder } from "@/app/dashboard/actions/order";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowRight, ChevronDown, ChevronUp } from "lucide-react";
+import { ArrowRight, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
 import { OrderStatusTimeline } from "./OrderStatusTimeline";
 import { ReceiptModal } from "./ReceiptModal";
 import { useSelectedLocation } from "@/stores/location-store";
+import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface OrderDetailSheetProps {
   order: Order | OrderResponse | null;
@@ -190,9 +201,56 @@ export function OrderDetailSheet({
   onOpenChange,
 }: OrderDetailSheetProps) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { organization } = useOrganization();
   const selectedLocation = useSelectedLocation();
   const [isReceiptOpen, setIsReceiptOpen] = React.useState(false);
+  const [confirmRefundOpen, setConfirmRefundOpen] = React.useState(false);
+  const [confirmVoidOpen, setConfirmVoidOpen] = React.useState(false);
+  const [isRefunding, setIsRefunding] = React.useState(false);
+  const [isVoiding, setIsVoiding] = React.useState(false);
+
+  const handleRefund = async () => {
+    if (!organization?.id || !order?.id) return;
+    setIsRefunding(true);
+    try {
+      const result = await RefundOrder(organization.id, order.id);
+      if (result.success) {
+        toast.success("Order refunded successfully");
+        queryClient.invalidateQueries({ queryKey: ["orders"] });
+        queryClient.invalidateQueries({ queryKey: ["order-details", order.id] });
+        onOpenChange(false);
+      } else {
+        toast.error(result.error || "Failed to refund order");
+      }
+    } catch {
+      toast.error("An unexpected error occurred");
+    } finally {
+      setIsRefunding(false);
+      setConfirmRefundOpen(false);
+    }
+  };
+
+  const handleVoid = async () => {
+    if (!organization?.id || !order?.id) return;
+    setIsVoiding(true);
+    try {
+      const result = await VoidOrder(organization.id, order.id);
+      if (result.success) {
+        toast.success("Order voided successfully");
+        queryClient.invalidateQueries({ queryKey: ["orders"] });
+        queryClient.invalidateQueries({ queryKey: ["order-details", order.id] });
+        onOpenChange(false);
+      } else {
+        toast.error(result.error || "Failed to void order");
+      }
+    } catch {
+      toast.error("An unexpected error occurred");
+    } finally {
+      setIsVoiding(false);
+      setConfirmVoidOpen(false);
+    }
+  };
 
   // Fetch full order details when sheet opens
   const { data: orderDetails, isLoading } = useQuery({
@@ -944,27 +1002,35 @@ export function OrderDetailSheet({
               <div className="flex items-center gap-2">
                 <Button
                   variant="outline"
-                  className="flex-1"
+                  className="flex-1 min-w-0"
                   size="sm"
                   onClick={() => setIsReceiptOpen(true)}
                 >
-                  <Printer className="h-4 w-4 mr-2" />
-                  Print Receipt
+                  <Printer className="h-4 w-4 shrink-0" />
+                  <span className="ml-1.5 truncate">Print Receipt</span>
                 </Button>
                 {displayOrder.status !== "void" &&
                   displayOrder.status !== "cancelled" && (
                     <>
-                      <Button variant="outline" className="flex-1" size="sm">
-                        <RotateCcw className="h-4 w-4 mr-2" />
-                        Refund
+                      <Button
+                        variant="outline"
+                        className="flex-1 min-w-0"
+                        size="sm"
+                        onClick={() => setConfirmRefundOpen(true)}
+                        disabled={isRefunding || isVoiding}
+                      >
+                        <RotateCcw className="h-4 w-4 shrink-0" />
+                        <span className="ml-1.5 truncate">Refund</span>
                       </Button>
                       <Button
                         variant="destructive"
-                        className="flex-1"
+                        className="flex-1 min-w-0"
                         size="sm"
+                        onClick={() => setConfirmVoidOpen(true)}
+                        disabled={isRefunding || isVoiding}
                       >
-                        <X className="h-4 w-4 mr-2" />
-                        Void
+                        <X className="h-4 w-4 shrink-0" />
+                        <span className="ml-1.5 truncate">Void</span>
                       </Button>
                     </>
                   )}
@@ -981,6 +1047,48 @@ export function OrderDetailSheet({
         open={isReceiptOpen}
         onOpenChange={setIsReceiptOpen}
       />
+
+      {/* Refund Confirmation */}
+      <AlertDialog open={confirmRefundOpen} onOpenChange={setConfirmRefundOpen}>
+        <AlertDialogContent style={{ zIndex: 210 }}>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Refund this order?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will mark the order and all captured payments as refunded. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isRefunding}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleRefund} disabled={isRefunding}>
+              {isRefunding ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Confirm Refund
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Void Confirmation */}
+      <AlertDialog open={confirmVoidOpen} onOpenChange={setConfirmVoidOpen}>
+        <AlertDialogContent style={{ zIndex: 210 }}>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Void this order?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will void the order and all pending payments. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isVoiding}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleVoid}
+              disabled={isVoiding}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isVoiding ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Confirm Void
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

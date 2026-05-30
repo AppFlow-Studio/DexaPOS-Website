@@ -840,15 +840,15 @@ function TransactionsPageInner() {
     return (
         <div className="space-y-6 animate-in fade-in duration-500 min-w-0 overflow-x-hidden">
             {/* Header */}
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                    <h1 className="text-3xl font-bold tracking-tight">Payments &amp; Banking</h1>
+                    <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Payments &amp; Banking</h1>
                     <p className="text-muted-foreground">Payment ledger, settlements, and disputes across all merchants</p>
                     <div className="mt-3">
                         <ConnectivityStrip merchantIds={filters.merchantIds ?? null} />
                     </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-shrink-0">
                     <Button
                         variant="outline"
                         onClick={handleRefresh}
@@ -1333,7 +1333,7 @@ function TransactionsPageInner() {
             </Card>
 
             <Tabs defaultValue="settlements" className="space-y-4">
-                <TabsList>
+                <TabsList className="h-auto flex-wrap">
                     <TabsTrigger value="payments">Payments ledger</TabsTrigger>
                     <TabsTrigger value="settlements">Settlements</TabsTrigger>
                     <TabsTrigger value="disputes">Disputes</TabsTrigger>

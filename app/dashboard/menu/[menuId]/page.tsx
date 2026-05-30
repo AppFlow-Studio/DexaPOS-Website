@@ -1137,7 +1137,8 @@ export default function MenuDetailPage() {
       />
 
       <Tabs defaultValue="overview" className="space-y-4">
-        <TabsList>
+        <div className="overflow-x-auto">
+        <TabsList className="w-max">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="categories" className="flex items-center gap-1.5">
             Categories & Items
@@ -1176,6 +1177,7 @@ export default function MenuDetailPage() {
             </TabsTrigger>
           )}
         </TabsList>
+        </div>
 
         <TabsContent value="overview" className="space-y-4">
           <MenuOverviewTab

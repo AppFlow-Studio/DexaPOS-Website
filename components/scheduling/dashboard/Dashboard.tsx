@@ -137,16 +137,15 @@ export function ScheduleDashboard() {
   return (
     <div className="space-y-8">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <h2 className="text-3xl font-bold tracking-tight">Schedule Manager</h2>
-        <div className="flex items-center gap-2">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Schedule Manager</h2>
+        <div className="flex items-center gap-2 flex-wrap">
           <Button
             variant="outline"
             onClick={() => router.push("/dashboard/schedules/templates")}
             className="gap-2"
           >
-            <Plus className="h-4 w-4" />{" "}
-            {/* Using Plus generically or could use LayoutTemplate */}
+            <Plus className="h-4 w-4" />
             Templates
           </Button>
           <Button

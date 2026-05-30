@@ -256,7 +256,7 @@ export function RuntimeTablesView ({
           <div
             className={cn(
               'shrink-0 overflow-hidden transition-[width] duration-200 ease-out',
-              isSidebarCollapsed ? 'w-0' : 'w-80'
+              isSidebarCollapsed ? 'w-0' : 'w-full sm:w-80'
             )}
           >
             {!isSidebarCollapsed && (

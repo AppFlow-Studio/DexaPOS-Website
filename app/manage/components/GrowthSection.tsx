@@ -180,8 +180,8 @@ export function GrowthSection({ from, to }: GrowthSectionProps) {
               <span className="text-sm text-green-700 font-medium">No merchants at churn risk</span>
             </div>
           ) : (
-            <div className="rounded-lg border border-blue-100 overflow-hidden">
-              <Table>
+            <div className="rounded-lg border border-blue-100 overflow-x-auto">
+              <Table className="min-w-[400px]">
                 <TableHeader>
                   <TableRow className="bg-blue-50/50 hover:bg-blue-50/50">
                     <TableHead className="text-xs font-medium text-blue-700">Merchant</TableHead>
