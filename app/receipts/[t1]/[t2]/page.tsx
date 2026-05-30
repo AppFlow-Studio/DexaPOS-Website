@@ -96,61 +96,18 @@ function fmt(amount: number | null | undefined): string {
 function fmtDatetime(iso: string | null | undefined): string {
   if (!iso) return "";
   return new Date(iso).toLocaleString("en-US", {
-    month: "short",
+    month: "numeric",
     day: "numeric",
-    year: "numeric",
+    year: "2-digit",
     hour: "numeric",
     minute: "2-digit",
   });
 }
 
-function CardIcon() {
-  return (
-    <svg
-      aria-hidden="true"
-      width="18"
-      height="14"
-      viewBox="0 0 18 14"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <rect x="0.5" y="0.5" width="17" height="13" rx="2.5" stroke="currentColor" strokeOpacity="0.4" />
-      <rect x="0" y="3" width="18" height="3" fill="currentColor" fillOpacity="0.15" />
-      <rect x="2" y="8" width="5" height="1.5" rx="0.75" fill="currentColor" fillOpacity="0.5" />
-      <rect x="8" y="8" width="3" height="1.5" rx="0.75" fill="currentColor" fillOpacity="0.5" />
-    </svg>
-  );
-}
-
-function CashIcon() {
-  return (
-    <svg
-      aria-hidden="true"
-      width="18"
-      height="14"
-      viewBox="0 0 18 14"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <rect x="0.5" y="0.5" width="17" height="13" rx="2.5" stroke="currentColor" strokeOpacity="0.4" />
-      <circle cx="9" cy="7" r="2.5" stroke="currentColor" strokeOpacity="0.5" />
-      <circle cx="2.5" cy="7" r="1" fill="currentColor" fillOpacity="0.3" />
-      <circle cx="15.5" cy="7" r="1" fill="currentColor" fillOpacity="0.3" />
-    </svg>
-  );
-}
-
-function paymentLabel(p: Payment): { icon: "card" | "cash"; text: string } {
-  if (p.payment_method === "cash") {
-    return { icon: "cash", text: "Cash" };
-  }
-  if (p.card_last_four) {
-    const brand = p.card_type
-      ? p.card_type.charAt(0).toUpperCase() + p.card_type.slice(1).toLowerCase()
-      : "Card";
-    return { icon: "card", text: `${brand} ····${p.card_last_four}` };
-  }
-  return { icon: "card", text: p.payment_method ?? "Payment" };
+function paymentBrand(p: Payment): string {
+  if (p.payment_method === "cash") return "Cash";
+  const brand = p.card_type ? p.card_type.toUpperCase() : "CARD";
+  return p.card_last_four ? `${brand} ····${p.card_last_four}` : brand;
 }
 
 function fmtTerminalType(t: string | null): string | null {
@@ -173,11 +130,11 @@ function txnType(status: string | null): string {
   return "Sale";
 }
 
-function authStatus(status: string | null): { label: string; green: boolean } {
-  if (status === "captured" || status === "paid") return { label: "Approved", green: true };
-  if (status === "refunded" || status === "partially_refunded") return { label: "Refunded", green: false };
-  if (status === "voided") return { label: "Voided", green: false };
-  return { label: status ?? "—", green: false };
+function authLabel(status: string | null): string {
+  if (status === "captured" || status === "paid") return "Approved";
+  if (status === "refunded" || status === "partially_refunded") return "Refunded";
+  if (status === "voided") return "Voided";
+  return status ?? "—";
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
@@ -235,136 +192,99 @@ export default async function ReceiptPage({ params }: PageProps) {
   return (
     <>
       <style>{`
-        * { box-sizing: border-box; }
         @media print {
           body { background: white !important; }
           .no-print { display: none !important; }
-          .powered-footer { display: none !important; }
-          .receipt-card {
+          .receipt-paper {
             box-shadow: none !important;
-            border: none !important;
-            border-radius: 0 !important;
             max-width: 100% !important;
           }
         }
       `}</style>
 
-      {/*
-        Outer shell:
-        - min-h-screen so the gradient always fills the viewport
-        - flex col so the powered footer sits below the card naturally
-        - py-4 on mobile → py-8 on sm+ to give breathing room
-        - px-3 on mobile → px-4 on sm+ (card has its own horizontal limit)
-      */}
-      <div className="min-h-screen bg-linear-to-br from-slate-100 to-slate-200 flex flex-col items-center justify-start py-4 sm:py-8 px-3 sm:px-4 gap-4">
+      <div className="min-h-screen bg-neutral-200 flex flex-col items-center justify-start py-6 sm:py-10 px-4 gap-5">
 
-        {/*
-          Card:
-          - w-full so it fills the screen on tiny phones
-          - max-w-sm caps it at ~384px on mobile, sm:max-w-md at ~448px on tablets/desktop
-          - On a 375px iPhone 14 this leaves 12px margin each side — readable, not cramped
-        */}
-        <div className="receipt-card w-full max-w-sm sm:max-w-md bg-white rounded-2xl sm:rounded-3xl shadow-xl overflow-hidden border border-slate-100">
+        {/* The "paper": flat white, square edges, fine type — like a real printed receipt. */}
+        <div className="receipt-paper w-full max-w-[360px] bg-white shadow-[0_6px_24px_rgba(0,0,0,0.10)] text-neutral-900 px-7 pt-8 pb-7">
 
-          {/* Status banner */}
+          {/* Status banner — plain, monochrome, no icons */}
           {(isVoided || isRefunded) && (
-            <div className={`flex flex-wrap items-center justify-center gap-1.5 text-xs font-bold tracking-widest uppercase py-2.5 px-4 ${
-              isVoided ? "bg-red-500 text-white" : "bg-amber-500 text-white"
-            }`}>
-              <span>{isVoided ? "⊘ Voided" : "↩ Refunded"}</span>
+            <div className="mb-5 border border-neutral-900 py-2 text-center">
+              <p className="text-sm font-bold tracking-[0.2em] uppercase">
+                {isVoided ? "Voided" : "Refunded"}
+              </p>
               {isVoided && order.void_reason ? (
-                <span className="font-normal tracking-normal normal-case opacity-90">· {order.void_reason}</span>
+                <p className="text-xs text-neutral-500 mt-0.5">{order.void_reason}</p>
               ) : null}
             </div>
           )}
 
           {/* ── Header ──────────────────────────────────────────── */}
-          <div className="flex flex-col items-center pt-6 sm:pt-8 pb-4 sm:pb-5 px-4 sm:px-6 text-center bg-linear-to-b from-white to-slate-50">
+          <div className="flex flex-col items-center text-center">
             {logo_url ? (
-              <div className="mb-3 sm:mb-4 rounded-xl sm:rounded-2xl overflow-hidden shadow-md ring-2 ring-slate-100 w-16 h-16 sm:w-20 sm:h-20 shrink-0">
-                <Image
-                  src={logo_url}
-                  alt={location.name ?? "Store logo"}
-                  width={80}
-                  height={80}
-                  className="object-cover w-full h-full"
-                  unoptimized
-                />
-              </div>
-            ) : (
-              <div className="mb-3 sm:mb-4 w-16 h-16 sm:w-20 sm:h-20 rounded-xl sm:rounded-2xl bg-slate-100 flex items-center justify-center text-xl sm:text-2xl font-bold text-slate-400 shrink-0">
-                {location.name?.charAt(0) ?? "S"}
-              </div>
-            )}
-            <h1 className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight leading-tight">
+              <Image
+                src={logo_url}
+                alt={location.name ?? "Store logo"}
+                width={72}
+                height={72}
+                className="object-contain w-16 h-16 mb-3"
+                unoptimized
+              />
+            ) : null}
+            <h1 className="text-lg font-bold uppercase tracking-wide leading-tight wrap-break-word">
               {location.name}
             </h1>
             {location.address_line1 && (
-              <p className="text-xs text-slate-500 mt-1 leading-relaxed max-w-xs">
+              <p className="text-[13px] text-neutral-600 mt-1.5 leading-relaxed">
                 {location.address_line1}
-                {location.address_line2 ? `, ${location.address_line2}` : ""}
-                {location.city ? `, ${location.city}` : ""}
-                {location.state ? `, ${location.state}` : ""}
-                {location.postal_code ? ` ${location.postal_code}` : ""}
+                {location.address_line2 ? <><br />{location.address_line2}</> : null}
+                <br />
+                {location.city ? `${location.city}, ` : ""}
+                {location.state ? `${location.state} ` : ""}
+                {location.postal_code ?? ""}
               </p>
             )}
             {location.phone && (
-              <p className="text-xs text-slate-400 mt-0.5">{location.phone}</p>
+              <p className="text-[13px] text-neutral-600 mt-1">{location.phone}</p>
             )}
           </div>
 
-          <Dash />
+          <Rule />
 
           {/* ── Order meta ──────────────────────────────────────── */}
-          <div className="flex justify-between items-start gap-4 px-4 sm:px-6 py-3 sm:py-3.5">
-            <div className="min-w-0">
-              <Label>Order</Label>
-              <p className="text-sm font-bold text-slate-800 mt-0.5 truncate">{orderNumber}</p>
-            </div>
-            <div className="text-right shrink-0">
-              <Label>Date</Label>
-              <p className="text-xs text-slate-600 mt-0.5 whitespace-nowrap">{fmtDatetime(order.created_at)}</p>
-            </div>
+          <div className="space-y-1">
+            <Line label="Order" value={orderNumber} strong />
+            <Line label="Ordered" value={fmtDatetime(order.created_at)} />
           </div>
 
-          <Dash />
+          <Rule />
 
           {/* ── Items ───────────────────────────────────────────── */}
-          <div className="px-4 sm:px-6 py-3 sm:py-4 space-y-3">
-            <Label className="block mb-2">Items</Label>
+          <div className="space-y-3">
             {activeItems.map((item) => (
               <div key={item.id}>
-                {/* Item row — quantity badge + name + price */}
                 <div className="flex justify-between items-start gap-3">
-                  <span className="text-sm text-slate-800 leading-snug flex-1 min-w-0 wrap-break-word">
-                    {item.quantity != null ? (
-                      <span className="inline-flex items-center justify-center text-[10px] font-bold bg-slate-100 text-slate-500 rounded-md px-1.5 py-0.5 mr-1.5 align-middle leading-none">
-                        {item.quantity}×
-                      </span>
-                    ) : null}
+                  <span className="text-[14px] leading-snug flex-1 min-w-0 wrap-break-word">
+                    <span className="tabular-nums">{item.quantity ?? 1}</span>
+                    {"  "}
                     {item.item_name ?? "Item"}
                   </span>
-                  <span className="text-sm text-slate-800 tabular-nums font-medium shrink-0 pt-px">
+                  <span className="text-[14px] tabular-nums shrink-0 pt-px">
                     {fmt(item.subtotal)}
                   </span>
                 </div>
 
-                {/* Modifiers */}
+                {/* Modifiers — plain indented text, no glyphs */}
                 {item.modifiers
                   .filter((m) => !m.is_no && m.modifier_name)
                   .map((m, idx) => (
                     <div
                       key={idx}
-                      className="flex justify-between items-start gap-2 text-xs text-slate-400 pl-4 mt-1"
+                      className="flex justify-between items-start gap-2 text-[12.5px] text-neutral-500 pl-5 mt-0.5"
                     >
-                      <span className="flex items-center gap-1 flex-1 min-w-0 wrap-break-word">
-                        <span className="text-slate-300 shrink-0">└</span>
-                        {m.modifier_name}
-                      </span>
+                      <span className="flex-1 min-w-0 wrap-break-word">{m.modifier_name}</span>
                       {m.price_modifier && Number(m.price_modifier) > 0 ? (
-                        <span className="tabular-nums text-slate-500 shrink-0">
-                          +{fmt(m.price_modifier)}
-                        </span>
+                        <span className="tabular-nums shrink-0">+{fmt(m.price_modifier)}</span>
                       ) : null}
                     </div>
                   ))}
@@ -372,100 +292,59 @@ export default async function ReceiptPage({ params }: PageProps) {
             ))}
           </div>
 
-          <Dash />
+          <Rule />
 
           {/* ── Totals ──────────────────────────────────────────── */}
-          <div className="px-4 sm:px-6 py-3 sm:py-4 space-y-2">
+          <div className="space-y-1.5">
             {order.subtotal != null && (
-              <Row label="Subtotal" value={fmt(order.effective_subtotal ?? order.subtotal)} />
+              <Line label="Subtotal" value={fmt(order.effective_subtotal ?? order.subtotal)} />
             )}
             {order.discount_amount != null && Number(order.discount_amount) > 0 && (
-              <Row
-                label="Discount"
-                value={`−${fmt(order.discount_amount)}`}
-                valueClassName="text-emerald-600 font-medium"
-              />
+              <Line label="Discount" value={`−${fmt(order.discount_amount)}`} />
             )}
             {order.service_charge != null && Number(order.service_charge) > 0 && (
-              <Row label="Service charge" value={fmt(order.service_charge)} />
+              <Line label="Service Charge" value={fmt(order.service_charge)} />
             )}
             {order.tax_amount != null && (
-              <Row label="Tax" value={fmt(order.effective_tax_amount ?? order.tax_amount)} />
+              <Line label="Tax" value={fmt(order.effective_tax_amount ?? order.tax_amount)} />
             )}
             {order.tip_amount != null && Number(order.tip_amount) > 0 && (
-              <Row label="Tip" value={fmt(order.tip_amount)} />
+              <Line label="Tip" value={fmt(order.tip_amount)} />
             )}
 
-            {/* Total pill */}
-            <div className="pt-2">
-              <div className="bg-slate-900 rounded-xl sm:rounded-2xl px-4 py-3 flex justify-between items-center">
-                <span className="text-white font-semibold text-sm sm:text-base">Total</span>
-                <span className="text-white font-bold text-lg sm:text-xl tabular-nums">
-                  {fmt(chargedTotal)}
-                </span>
-              </div>
+            <div className="flex justify-between items-baseline pt-2.5 mt-1.5 border-t border-neutral-300">
+              <span className="text-[15px] font-bold uppercase tracking-wide">Total</span>
+              <span className="text-[15px] font-bold tabular-nums">{fmt(chargedTotal)}</span>
             </div>
           </div>
 
           {/* ── Payments ────────────────────────────────────────── */}
           {payments.length > 0 && (
             <>
-              <Dash />
-              <div className="px-4 sm:px-6 py-3 sm:py-4 space-y-4">
-                <Label className="block">Payment</Label>
+              <Rule />
+              <div className="space-y-4">
                 {payments.map((p, idx) => {
-                  const { icon, text } = paymentLabel(p);
-                  const terminalLabel = fmtTerminalType(p.terminal_type);
-                  const { label: authLabel, green: authGreen } = authStatus(p.status);
                   const isCash = p.payment_method === "cash";
+                  const terminalLabel = fmtTerminalType(p.terminal_type);
                   return (
-                    <div key={idx} className="space-y-2.5">
-                      {/* Card/Cash header row */}
-                      <div className="flex items-center justify-between gap-3 min-w-0">
-                        <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                          <div
-                            className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl flex items-center justify-center shrink-0 ${
-                              icon === "cash"
-                                ? "bg-emerald-50 text-emerald-600"
-                                : "bg-blue-50 text-blue-600"
-                            }`}
-                          >
-                            {icon === "cash" ? <CashIcon /> : <CardIcon />}
-                          </div>
-                          <p className="text-sm font-semibold text-slate-800 truncate">{text}</p>
-                        </div>
-                        <div className="text-right shrink-0">
-                          <p className="text-sm font-semibold text-slate-800 tabular-nums">
-                            {fmt(p.total_amount ?? p.amount)}
-                          </p>
-                          {p.refunded_amount != null && Number(p.refunded_amount) > 0 && (
-                            <p className="text-xs text-amber-600 tabular-nums">
-                              −{fmt(p.refunded_amount)} back
-                            </p>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Auth detail rows — only for card payments with data */}
+                    <div key={idx} className="space-y-1.5">
+                      <Line
+                        label={paymentBrand(p)}
+                        value={fmt(p.total_amount ?? p.amount)}
+                        strong
+                      />
                       {!isCash && (
-                        <div className="bg-slate-50 rounded-xl px-3 py-2.5 space-y-1.5">
-                          {terminalLabel && (
-                            <DetailRow label="Terminal" value={terminalLabel} />
-                          )}
-                          <DetailRow label="Transaction" value={txnType(p.status)} />
-                          <DetailRow
-                            label="Authorization"
-                            value={authLabel}
-                            valueClassName={authGreen ? "text-emerald-600 font-semibold" : "text-amber-600 font-semibold"}
-                          />
+                        <>
+                          {terminalLabel && <Line label="Terminal" value={terminalLabel} />}
+                          <Line label="Transaction Type" value={txnType(p.status)} />
+                          <Line label="Authorization" value={authLabel(p.status)} />
                           {p.authorization_code && (
-                            <DetailRow
-                              label="Auth Code"
-                              value={p.authorization_code}
-                              valueClassName="font-mono font-semibold text-slate-700 tracking-wider"
-                            />
+                            <Line label="Approval Code" value={p.authorization_code} mono />
                           )}
-                        </div>
+                        </>
+                      )}
+                      {p.refunded_amount != null && Number(p.refunded_amount) > 0 && (
+                        <Line label="Refunded" value={`−${fmt(p.refunded_amount)}`} />
                       )}
                     </div>
                   );
@@ -474,20 +353,21 @@ export default async function ReceiptPage({ params }: PageProps) {
             </>
           )}
 
-          {/* ── Thank-you footer ────────────────────────────────── */}
-          <Dash />
-          <div className="text-center py-5 sm:py-6 px-4 sm:px-6">
-            <p className="text-sm font-medium text-slate-600">Thank you for your order!</p>
-            <p className="text-xs text-slate-400 mt-0.5">We appreciate your business.</p>
+          <Rule />
+
+          {/* ── Footer ──────────────────────────────────────────── */}
+          <div className="text-center">
+            <p className="text-[13px] font-medium">Thank you for your order!</p>
+            <p className="text-[12px] text-neutral-500 mt-0.5">We appreciate your business.</p>
           </div>
         </div>
 
         {/* Powered by Dexa — hidden on print */}
-        <div className="powered-footer no-print flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 py-2 px-4 rounded-full bg-white/70 backdrop-blur border border-slate-200 shadow-sm">
-          <span className="text-xs text-slate-400">Powered by</span>
-          <span className="text-xs font-bold text-slate-700 tracking-tight">Dexa POS</span>
-          <span className="w-1 h-1 rounded-full bg-slate-300" />
-          <span className="text-xs text-slate-400">Digital Receipts</span>
+        <div className="no-print flex items-center justify-center gap-2 text-[12px] text-neutral-500">
+          <span>Powered by</span>
+          <span className="font-bold text-neutral-700 tracking-tight">Dexa POS</span>
+          <span className="w-1 h-1 rounded-full bg-neutral-400" />
+          <span>Digital Receipts</span>
         </div>
       </div>
     </>
@@ -496,58 +376,37 @@ export default async function ReceiptPage({ params }: PageProps) {
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-function Dash() {
-  return (
-    <div className="px-4 sm:px-6">
-      <div className="border-t border-dashed border-slate-200" />
-    </div>
-  );
+function Rule() {
+  return <div className="border-t border-neutral-200 my-4" />;
 }
 
-function Label({
-  children,
-  className = "",
-}: {
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <p className={`text-[10px] font-semibold tracking-widest text-slate-400 uppercase ${className}`}>
-      {children}
-    </p>
-  );
-}
-
-function Row({
+function Line({
   label,
   value,
-  valueClassName = "text-slate-600",
+  strong = false,
+  mono = false,
 }: {
   label: string;
   value: string;
-  valueClassName?: string;
+  strong?: boolean;
+  mono?: boolean;
 }) {
   return (
-    <div className="flex justify-between items-center gap-4">
-      <span className="text-xs text-slate-500 min-w-0">{label}</span>
-      <span className={`tabular-nums text-sm shrink-0 ${valueClassName}`}>{value}</span>
-    </div>
-  );
-}
-
-function DetailRow({
-  label,
-  value,
-  valueClassName = "text-slate-600",
-}: {
-  label: string;
-  value: string;
-  valueClassName?: string;
-}) {
-  return (
-    <div className="flex justify-between items-center gap-3">
-      <span className="text-xs text-slate-400 shrink-0">{label}</span>
-      <span className={`text-xs ${valueClassName}`}>{value}</span>
+    <div className="flex justify-between items-baseline gap-4">
+      <span
+        className={`text-[13px] min-w-0 wrap-break-word ${
+          strong ? "font-semibold text-neutral-900" : "text-neutral-600"
+        }`}
+      >
+        {label}
+      </span>
+      <span
+        className={`text-[13px] tabular-nums shrink-0 text-right ${
+          strong ? "font-semibold text-neutral-900" : "text-neutral-700"
+        } ${mono ? "font-mono tracking-wider" : ""}`}
+      >
+        {value}
+      </span>
     </div>
   );
 }
