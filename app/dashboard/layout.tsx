@@ -127,6 +127,10 @@ const navMain = [
         title: "Tables",
         url: "/dashboard/tables",
         icon: Coffee,
+        items: [
+          { title: "Tables", url: "/dashboard/tables" },
+          { title: "Service Charge", url: "/dashboard/tables/service-charge" },
+        ],
       },
       {
         title: "Reservations",
@@ -458,6 +462,50 @@ function MerchantSidebar() {
                                 <CollapsibleTrigger asChild>
                                   <SidebarMenuButton
                                     isActive={isReportsActive}
+                                    className="w-full"
+                                  >
+                                    <menuItem.icon className="h-4 w-4" />
+                                    <span>{menuItem.title}</span>
+                                    <ChevronRight className="ml-auto h-4 w-4 transition-transform duration-200 group-data-[state=open]:rotate-90" />
+                                  </SidebarMenuButton>
+                                </CollapsibleTrigger>
+                                <CollapsibleContent>
+                                  <SidebarMenuSub>
+                                    {/* @ts-ignore */}
+                                    {menuItem.items &&
+                                      menuItem.items.map((subItem) => (
+                                        <SidebarMenuSubItem key={subItem.title}>
+                                          <SidebarMenuSubButton
+                                            asChild
+                                            isActive={pathname === subItem.url}
+                                          >
+                                            <Link href={subItem.url}>
+                                              <span>{subItem.title}</span>
+                                            </Link>
+                                          </SidebarMenuSubButton>
+                                        </SidebarMenuSubItem>
+                                      ))}
+                                  </SidebarMenuSub>
+                                </CollapsibleContent>
+                              </Collapsible>
+                            </SidebarMenuItem>
+                          );
+                        }
+
+                        // Check if this is the Tables item that needs sub-menu
+                        if (menuItem.title === "Tables") {
+                          const isTablesActive =
+                            pathname === "/dashboard/tables" ||
+                            pathname.startsWith("/dashboard/tables/");
+                          const isTablesOpen =
+                            pathname.startsWith("/dashboard/tables");
+
+                          return (
+                            <SidebarMenuItem key={menuItem.title}>
+                              <Collapsible defaultOpen={isTablesOpen} className="group">
+                                <CollapsibleTrigger asChild>
+                                  <SidebarMenuButton
+                                    isActive={isTablesActive}
                                     className="w-full"
                                   >
                                     <menuItem.icon className="h-4 w-4" />

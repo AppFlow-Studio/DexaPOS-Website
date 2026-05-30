@@ -12,6 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PhoneInput } from "@/components/ui/phone-input";
 import { Search, Loader2, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -281,11 +282,11 @@ export function AssignCustomerModal({
                   </div>
                   <div>
                     <Label htmlFor="assign-new-phone">Phone</Label>
-                    <Input
+                    <PhoneInput
                       id="assign-new-phone"
-                      placeholder="(555) 123-4567"
                       value={newPhone}
-                      onChange={(e) => setNewPhone(e.target.value)}
+                      onChange={setNewPhone}
+                      placeholder="Customer phone"
                     />
                   </div>
                   <div>

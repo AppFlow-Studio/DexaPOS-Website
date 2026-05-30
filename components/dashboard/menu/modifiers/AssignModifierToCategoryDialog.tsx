@@ -284,6 +284,7 @@ export function AssignModifierToCategoryDialog({
                 >
                   <Checkbox
                     checked={isChecked}
+                    onClick={(event) => event.stopPropagation()}
                     onCheckedChange={() => toggleCategory(category.id)}
                   />
                   <div className="flex-1 min-w-0">

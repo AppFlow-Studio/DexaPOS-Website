@@ -54,3 +54,6 @@ ADM-006-007-STATUS.md
 # Sprint planning / personal task notes
 tasks/sprint2-awdi-tickets.md
 tasks/T-21-responsive-layout.md
+
+# Test import files
+*.xlsx

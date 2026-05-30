@@ -457,7 +457,7 @@ export default function ManageLayout({
 
     useEffect(() => {
         if (isLoaded && !isSignedIn) {
-            router.replace('/')
+            router.replace('/sign-in')
         }
     }, [isLoaded, isSignedIn, router])
 

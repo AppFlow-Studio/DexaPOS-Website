@@ -60,7 +60,7 @@ function AcceptInvitationContent() {
                             <p className="text-muted-foreground mb-4">
                                 This invitation link is missing or has expired. Please ask your admin to resend the invitation.
                             </p>
-                            <Link href="/" className="text-primary hover:text-primary/80 font-medium text-sm">
+                            <Link href="/sign-in" className="text-primary hover:text-primary/80 font-medium text-sm">
                                 Back to sign in
                             </Link>
                         </div>
@@ -134,7 +134,7 @@ function AcceptInvitationContent() {
                         <div className="text-center mt-6">
                             <p className="text-muted-foreground text-sm">
                                 Wrong account?{' '}
-                                <Link href="/" className="text-primary hover:text-primary/80 font-medium">
+                                <Link href="/sign-in" className="text-primary hover:text-primary/80 font-medium">
                                     Sign in with a different account
                                 </Link>
                             </p>
@@ -307,7 +307,7 @@ function AcceptInvitationContent() {
                     <div className="text-center mt-6">
                         <p className="text-muted-foreground text-sm">
                             Already have an account?{' '}
-                            <Link href="/" className="text-primary hover:text-primary/80 font-medium">
+                            <Link href="/sign-in" className="text-primary hover:text-primary/80 font-medium">
                                 Sign in
                             </Link>
                         </p>

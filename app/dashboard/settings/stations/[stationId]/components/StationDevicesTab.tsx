@@ -42,7 +42,6 @@ import {
   StationDevice,
 } from "../../hooks/useStationDevices";
 import {
-  Plus,
   MoreHorizontal,
   Trash2,
   RefreshCw,
@@ -58,7 +57,6 @@ import {
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
-import { AddStationDeviceDialog } from "./AddStationDeviceDialog";
 
 interface StationDevicesTabProps {
   station: Station;
@@ -159,7 +157,6 @@ function DeviceActionMenu({
 }
 
 export function StationDevicesTab({ station }: StationDevicesTabProps) {
-  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [deviceToDelete, setDeviceToDelete] = useState<StationDevice | null>(null);
   const [testingDeviceId, setTestingDeviceId] = useState<string | null>(null);
   const [printingDeviceId, setPrintingDeviceId] = useState<string | null>(null);
@@ -226,17 +223,11 @@ export function StationDevicesTab({ station }: StationDevicesTabProps) {
     <>
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="text-lg">Peripheral Devices</CardTitle>
-              <CardDescription>
-                Printers, cash drawers, and other devices connected to this station
-              </CardDescription>
-            </div>
-            <Button onClick={() => setIsAddDialogOpen(true)}>
-              <Plus className="mr-2 h-4 w-4" />
-              Add Device
-            </Button>
+          <div>
+            <CardTitle className="text-lg">Peripheral Devices</CardTitle>
+            <CardDescription>
+              Printers, cash drawers, and other devices connected to this station
+            </CardDescription>
           </div>
         </CardHeader>
         <CardContent>
@@ -247,12 +238,9 @@ export function StationDevicesTab({ station }: StationDevicesTabProps) {
               </div>
               <h3 className="text-lg font-semibold">No devices connected</h3>
               <p className="text-sm text-muted-foreground max-w-sm mt-2">
-                Add printers, cash drawers, and other peripherals to this station.
+                Peripherals pair from the POS tablet and appear here once
+                connected.
               </p>
-              <Button className="mt-6" onClick={() => setIsAddDialogOpen(true)}>
-                <Plus className="mr-2 h-4 w-4" />
-                Add Your First Device
-              </Button>
             </div>
           ) : (
             <Table>
@@ -343,13 +331,6 @@ export function StationDevicesTab({ station }: StationDevicesTabProps) {
           )}
         </CardContent>
       </Card>
-
-      {/* Add Device Dialog */}
-      <AddStationDeviceDialog
-        open={isAddDialogOpen}
-        onOpenChange={setIsAddDialogOpen}
-        stationId={station.id}
-      />
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog

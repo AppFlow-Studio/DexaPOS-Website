@@ -7,6 +7,17 @@ const isMerchantRoutes = createRouteMatcher(['/dashboard(.*)'])
 const isStorefrontRoutes = createRouteMatcher(['/sites(.*)'])
 const isOrgSelectionRoute = createRouteMatcher(['/join-organization(.*)'])
 const isAcceptInvitationRoute = createRouteMatcher(['/accept-invitation(.*)'])
+const isMarketingRoute = createRouteMatcher([
+  '/',
+  '/demo',
+  '/features',
+  '/why',
+  '/hardware',
+  '/industries',
+  '/contact',
+  '/pos-demo(.*)',
+])
+const isAuthRoute = createRouteMatcher(['/sign-in(.*)', '/sign-up(.*)'])
 
 function extractStoreSlug(hostname: string): string | null {
   const hostWithoutPort = hostname.split(':')[0];
@@ -136,15 +147,29 @@ export default clerkMiddleware(async (auth, req) => {
     }
   }
 
-  // ── Standard Clerk auth flow (unchanged) ───────────────────────────
+  // ── Standard Clerk auth flow ───────────────────────────────────────
   const UserSession = await auth()
   const { userId, orgId } = await auth()
-  if (!UserSession.userId || isAcceptInvitationRoute(req)) {
+
+  // Public marketing + auth routes — never gate
+  if (isMarketingRoute(req) || isAuthRoute(req)) {
+    // Signed-in user landing on `/` → punt to dashboard/manage
+    if (req.nextUrl.pathname === '/' && userId) {
+      const dest = orgId && orgId === process.env.DEXA_POS_INTERNAL_TEAM_ID
+        ? '/manage'
+        : '/dashboard'
+      return NextResponse.redirect(new URL(dest, req.url))
+    }
     return NextResponse.next();
   }
 
-  if (!userId || isStorefrontRoutes(req)) {
+  if (isAcceptInvitationRoute(req) || isStorefrontRoutes(req)) {
     return NextResponse.next();
+  }
+
+  // Unauthed user on a protected route → send to sign-in
+  if (!UserSession.userId || !userId) {
+    return NextResponse.redirect(new URL('/sign-in', req.url));
   }
 
   if (!orgId) {
