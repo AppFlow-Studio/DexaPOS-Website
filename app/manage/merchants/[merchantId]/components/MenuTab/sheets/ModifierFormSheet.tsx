@@ -81,7 +81,14 @@ const modifierGroupFormSchema = z.object({
 const optionSchema = z.object({
   name: z.string().min(1, 'Option name is required'),
   description: z.string().optional().nullable(),
-  price_modifier: z.coerce.number().default(0),
+  price_modifier: z.preprocess(
+    (value) => {
+      if (value === '' || value === null || value === undefined) return 0
+      if (typeof value === 'string') return Number(value)
+      return value
+    },
+    z.number().finite().default(0)
+  ),
   is_default: z.boolean().default(false),
   is_active: z.boolean().default(true),
   display_order: z.coerce.number().int().min(0).default(0),
@@ -934,9 +941,15 @@ export function ModifierFormSheet({
                             className="pl-7"
                             placeholder="0.00"
                             {...field}
+                            value={field.value === '' ? '' : field.value}
                             onChange={(e) =>
-                              field.onChange(parseFloat(e.target.value) || 0)
+                              field.onChange(e.target.value === '' ? '' : e.target.value)
                             }
+                            onBlur={(e) => {
+                              const nextValue = e.target.value.trim()
+                              field.onChange(nextValue === '' ? 0 : Number(nextValue))
+                              field.onBlur()
+                            }}
                           />
                         </div>
                       </FormControl>
