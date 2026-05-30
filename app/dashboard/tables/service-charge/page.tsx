@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Info, Loader2, MapPin } from "lucide-react";
+import { Loader2, MapPin } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -24,14 +24,14 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Switch } from "@/components/ui/switch";
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 
 import { useClerkOrgId } from "@/app/dashboard/hooks/useLocationScoped";
 import {
@@ -56,7 +56,6 @@ const formSchema = z.object({
     .min(1, "Must be at least 1"),
   applies_on: z.enum(["pre_discount", "post_discount"]),
   auto_apply: z.boolean(),
-  is_active: z.boolean(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -67,7 +66,6 @@ const DEFAULTS: FormValues = {
   min_party_size: 6,
   applies_on: "pre_discount",
   auto_apply: true,
-  is_active: true,
 };
 
 // Wraps Input with a string-backed display state so the user can backspace
@@ -146,7 +144,6 @@ function ruleToFormValues(rule: ServiceChargeRule | null): FormValues {
     min_party_size: rule.min_party_size,
     applies_on: rule.applies_on ?? "pre_discount",
     auto_apply: rule.auto_apply,
-    is_active: rule.is_active,
   };
 }
 
@@ -159,16 +156,17 @@ export default function ServiceChargePage() {
   const { data: rules = [], isLoading } = useServiceChargeRules(clerkOrgId);
   const upsert = useUpsertServiceChargeRule();
 
+  // One row per scope (enforced by uq_service_charge_scope). `is_active` is a
+  // flag on that row — don't filter by it here or toggling off would orphan
+  // the row and the next save would insert a duplicate.
   const globalRule = useMemo(
-    () => rules.find((r) => r.location_id === null && r.is_active) ?? null,
+    () => rules.find((r) => r.location_id === null) ?? null,
     [rules],
   );
   const locationRule = useMemo(
     () =>
       scopeLocationId
-        ? rules.find(
-            (r) => r.location_id === scopeLocationId && r.is_active,
-          ) ?? null
+        ? rules.find((r) => r.location_id === scopeLocationId) ?? null
         : null,
     [rules, scopeLocationId],
   );
@@ -216,7 +214,8 @@ export default function ServiceChargePage() {
         applies_to_order_types: ["dine_in"],
         applies_on: values.applies_on,
         auto_apply: values.auto_apply,
-        is_active: values.is_active,
+        // Preserve current activation state — the header pill+button owns this toggle.
+        is_active: targetRule?.is_active ?? true,
       },
     });
     setOverrideMode(false);
@@ -260,30 +259,22 @@ export default function ServiceChargePage() {
           </p>
         </div>
         {canQuickToggle && (
-          <div className="flex items-center gap-2">
+          <label className="flex items-center gap-2 text-sm font-medium select-none">
             <span
-              className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+              className={
                 toggleableRule?.is_active
-                  ? "bg-emerald-100 text-emerald-700"
-                  : "bg-muted text-muted-foreground"
-              }`}
+                  ? "text-emerald-600"
+                  : "text-muted-foreground"
+              }
             >
-              {toggleableRule?.is_active ? "Active" : "Inactive"}
+              {toggleableRule?.is_active ? "On" : "Off"}
             </span>
-            <Button
-              type="button"
-              variant={toggleableRule?.is_active ? "outline" : "default"}
-              onClick={handleQuickToggle}
+            <Switch
+              checked={!!toggleableRule?.is_active}
+              onCheckedChange={handleQuickToggle}
               disabled={upsert.isPending}
-            >
-              {upsert.isPending && (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              )}
-              {toggleableRule?.is_active
-                ? "Disable rule"
-                : "Enable rule"}
-            </Button>
-          </div>
+            />
+          </label>
         )}
       </header>
 
@@ -433,89 +424,48 @@ export default function ServiceChargePage() {
                       />
                     </div>
 
-                    <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
-                      Applies to: <strong>Dine-in</strong> only in v1.
-                    </div>
-
                     <FormField
                       control={form.control}
                       name="applies_on"
                       render={({ field }) => (
-                        <FormItem className="space-y-2">
+                        <FormItem>
                           <FormLabel>Calculation base</FormLabel>
+                          <Select
+                            value={field.value}
+                            onValueChange={field.onChange}
+                          >
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="pre_discount">
+                                Pre-discount (default)
+                              </SelectItem>
+                              <SelectItem value="post_discount">
+                                Post-discount
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
                           <FormDescription>
-                            Which subtotal the charge is computed on. Toast
-                            and Square default to pre-discount.
+                            Toast and Square default to pre-discount.
                           </FormDescription>
-                          <FormControl>
-                            <RadioGroup
-                              value={field.value}
-                              onValueChange={field.onChange}
-                              className="grid gap-2 sm:grid-cols-2"
-                            >
-                              <Label
-                                htmlFor="applies_on_pre"
-                                className="flex items-start gap-3 rounded-md border p-3 cursor-pointer hover:bg-muted/40 has-[[data-state=checked]]:border-primary has-[[data-state=checked]]:bg-primary/5"
-                              >
-                                <RadioGroupItem
-                                  id="applies_on_pre"
-                                  value="pre_discount"
-                                  className="mt-0.5"
-                                />
-                                <span className="space-y-1">
-                                  <span className="block font-medium">
-                                    Pre-discount{" "}
-                                    <span className="text-muted-foreground font-normal">
-                                      (default)
-                                    </span>
-                                  </span>
-                                  <span className="block text-xs text-muted-foreground">
-                                    Compute on subtotal before item-level
-                                    discounts. Matches Toast / Square.
-                                  </span>
-                                </span>
-                              </Label>
-                              <Label
-                                htmlFor="applies_on_post"
-                                className="flex items-start gap-3 rounded-md border p-3 cursor-pointer hover:bg-muted/40 has-[[data-state=checked]]:border-primary has-[[data-state=checked]]:bg-primary/5"
-                              >
-                                <RadioGroupItem
-                                  id="applies_on_post"
-                                  value="post_discount"
-                                  className="mt-0.5"
-                                />
-                                <span className="space-y-1">
-                                  <span className="block font-medium">
-                                    Post-discount
-                                  </span>
-                                  <span className="block text-xs text-muted-foreground">
-                                    Compute after discounts are applied —
-                                    smaller charge when discounts are in play.
-                                  </span>
-                                </span>
-                              </Label>
-                            </RadioGroup>
-                          </FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
-                  </CardContent>
-                </Card>
 
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-base">Behavior</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
                     <FormField
                       control={form.control}
                       name="auto_apply"
                       render={({ field }) => (
-                        <FormItem className="flex items-center justify-between gap-4">
+                        <FormItem className="flex items-center justify-between gap-4 rounded-md border p-3">
                           <div className="space-y-0.5">
-                            <FormLabel>Auto-apply on POS</FormLabel>
-                            <FormDescription>
+                            <FormLabel className="text-sm">
+                              Auto-apply on POS
+                            </FormLabel>
+                            <FormDescription className="text-xs">
                               Adds the charge automatically when the party
                               hits the threshold. Staff can still remove it.
                             </FormDescription>
@@ -530,49 +480,9 @@ export default function ServiceChargePage() {
                       )}
                     />
 
-                    <FormField
-                      control={form.control}
-                      name="is_active"
-                      render={({ field }) => (
-                        <FormItem className="flex items-center justify-between gap-4">
-                          <div className="space-y-0.5">
-                            <FormLabel>Active</FormLabel>
-                            <FormDescription>
-                              Turn off to stop applying this rule without
-                              deleting it.
-                            </FormDescription>
-                          </div>
-                          <FormControl>
-                            <Switch
-                              checked={field.value}
-                              onCheckedChange={field.onChange}
-                            />
-                          </FormControl>
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormItem className="flex items-center justify-between gap-4 opacity-70">
-                      <div className="space-y-0.5">
-                        <FormLabel className="flex items-center gap-1.5">
-                          Taxable
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              Service charges are non-taxable in v1. Tax
-                              treatment will be configurable in a later
-                              release.
-                            </TooltipContent>
-                          </Tooltip>
-                        </FormLabel>
-                        <FormDescription>
-                          Locked off — computed on subtotal, after tax.
-                        </FormDescription>
-                      </div>
-                      <Switch checked={false} disabled />
-                    </FormItem>
+                    <p className="text-xs text-muted-foreground">
+                      Dine-in only · non-taxable · computed on subtotal.
+                    </p>
                   </CardContent>
                 </Card>
 

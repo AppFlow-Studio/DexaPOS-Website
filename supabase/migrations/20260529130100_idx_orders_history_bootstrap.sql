@@ -12,4 +12,4 @@
 
 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_orders_history_bootstrap
   ON public.orders (location_id, created_at DESC)
-  WHERE status IN ('completed', 'closed', 'void');
+  WHERE status IN ('completed', 'cancelled', 'void');
