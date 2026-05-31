@@ -1,4 +1,19 @@
-CREATE OR REPLACE FUNCTION public.process_payment_v13(
+-- =====================================================================
+-- Back-port v14's SC snap + bake-in fixes into v12 and v13
+-- =====================================================================
+-- Wave D follow-up. The client app was observed calling
+-- process_payment_v12 (idempotency_keys.op = 'process_payment_v12') —
+-- the orderService.ts change to route to v14 hasn't been picked up by
+-- the running build. Because this is money correctness (cashier was
+-- collecting items+tax cash only, leaving SC uncollected), we replace
+-- the v12 and v13 function bodies in-place with the v14 logic. Cache
+-- namespace strings stay as their original ('process_payment_v12' /
+-- 'process_payment_v13') so existing idempotent retries still hit the
+-- right cache rows.
+-- =====================================================================
+
+-- v12: same logic as v14, with op string 'process_payment_v12'
+CREATE OR REPLACE FUNCTION public.process_payment_v12(
     p_order_id uuid,
     p_payment_method text,
     p_amount numeric DEFAULT NULL,
@@ -86,9 +101,13 @@ DECLARE
     v_prior_sc_snapshot numeric := 0;
     v_remaining_sc numeric := 0;
     v_service_charge_share numeric := 0;
+    v_payment_card_equiv numeric := 0;
+    v_remaining_after_payment numeric := 0;
+    v_unpaid_items_after_payment integer := 0;
+    v_closes_with_items boolean := false;
 BEGIN
     IF p_idempotency_key IS NOT NULL THEN
-        v_cached := public._idempotency_claim(p_idempotency_key, 'process_payment_v13');
+        v_cached := public._idempotency_claim(p_idempotency_key, 'process_payment_v12');
         IF v_cached IS NOT NULL THEN
             RETURN v_cached;
         END IF;
@@ -361,10 +380,6 @@ BEGIN
         END IF;
     END IF;
 
-    IF v_is_cash THEN
-        v_change_given := GREATEST(COALESCE(p_amount_tendered, v_payment_total) - (v_payment_total + COALESCE(p_tip_amount, 0)), 0);
-    END IF;
-
     IF p_terminal_response ? 'dejavoo_transaction' THEN
         v_has_dejavoo_transaction := true;
         v_dejavoo_reference_id := p_terminal_response->'dejavoo_transaction'->>'referenceId';
@@ -424,9 +439,30 @@ BEGIN
 
     v_remaining_sc := GREATEST(COALESCE(v_order.service_charge, 0) - v_prior_sc_snapshot, 0);
 
+    IF v_use_cash_pricing AND COALESCE(v_order.cash_total, 0) > 0 THEN
+        v_payment_card_equiv := ROUND(v_payment_total * v_order.card_total / v_order.cash_total, 2);
+    ELSE
+        v_payment_card_equiv := v_payment_total;
+    END IF;
+
+    v_remaining_after_payment := GREATEST(v_payment_based_due - v_payment_card_equiv, 0);
+
+    IF v_is_item_payment THEN
+        SELECT COUNT(*)
+        INTO v_unpaid_items_after_payment
+        FROM public.order_items oi
+        WHERE oi.order_id = p_order_id
+          AND oi.is_voided = false
+          AND (oi.quantity - COALESCE(oi.paid_quantity, 0) + COALESCE(oi.refunded_quantity, 0)) > 0;
+        v_closes_with_items := (v_unpaid_items_after_payment = 0);
+    END IF;
+
     IF v_remaining_sc <= 0 THEN
         v_service_charge_share := 0;
-    ELSIF (v_is_split_payment AND v_is_last_portion) OR v_is_full_remaining THEN
+    ELSIF (v_is_split_payment AND v_is_last_portion)
+       OR v_is_full_remaining
+       OR v_remaining_after_payment <= 0.05
+       OR v_closes_with_items THEN
         v_service_charge_share := v_remaining_sc;
     ELSIF v_use_cash_pricing AND COALESCE(v_order.cash_total, 0) > 0 THEN
         v_service_charge_share := LEAST(
@@ -440,6 +476,19 @@ BEGIN
         );
     ELSE
         v_service_charge_share := 0;
+    END IF;
+
+    IF v_is_item_payment AND v_service_charge_share > 0 THEN
+        v_payment_total := v_payment_total + v_service_charge_share;
+        v_tax_portion := v_tax_portion + v_service_charge_share;
+    END IF;
+
+    IF v_is_cash THEN
+        v_change_given := GREATEST(
+            COALESCE(p_amount_tendered, v_payment_total)
+            - (v_payment_total + COALESCE(p_tip_amount, 0)),
+            0
+        );
     END IF;
 
     INSERT INTO public.order_payments (
@@ -667,16 +716,12 @@ BEGIN
            AND jsonb_array_length(v_result->'items_covered') > 100 THEN
             v_cached_result := v_cached_result - 'items_covered' - 'items_paid';
         END IF;
-        PERFORM public._idempotency_complete(p_idempotency_key, 'process_payment_v13', v_cached_result);
+        PERFORM public._idempotency_complete(p_idempotency_key, 'process_payment_v12', v_cached_result);
     END IF;
 
     RETURN v_result;
 END;
 $function$;
 
-GRANT EXECUTE ON FUNCTION public.process_payment_v13(
-    uuid, text, numeric, numeric, numeric, jsonb, uuid, jsonb, integer, integer, boolean, uuid, uuid, uuid
-) TO authenticated;
-
-COMMENT ON FUNCTION public.process_payment_v13 IS
-  'Wave D fork of process_payment_v12. Adds per-payment service_charge snapshot: proportional to v_payment_total / (cash_total or card_total per pricing mode), LEAST-clamped to remaining SC, snapped to remaining on last split portion / full-remaining payment. SUM(service_charge) across all payments equals orders.service_charge. Basis for proportional SC reversal in apply_refund_to_payment_v4. Idempotency op: ''process_payment_v13''.';;
+COMMENT ON FUNCTION public.process_payment_v12 IS
+  'Wave D follow-up: v12 body replaced in-place with v14 logic (SC residual snap + bake-in into v_payment_total for item payments). Server-side back-port so cash payments correctly collect SC even when older client builds still route to v12. Cache namespace remains process_payment_v12 to preserve idempotent-retry behavior.';;

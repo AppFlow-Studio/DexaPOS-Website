@@ -19,23 +19,18 @@
 ALTER TABLE public.menus
     ADD COLUMN IF NOT EXISTS source_external_id text,
     ADD COLUMN IF NOT EXISTS source_system      text;
-
 ALTER TABLE public.menu_items
     ADD COLUMN IF NOT EXISTS source_external_id text,
     ADD COLUMN IF NOT EXISTS source_system      text;
-
 ALTER TABLE public.categories
     ADD COLUMN IF NOT EXISTS source_external_id text,
     ADD COLUMN IF NOT EXISTS source_system      text;
-
 ALTER TABLE public.modifier_groups
     ADD COLUMN IF NOT EXISTS source_external_id text,
     ADD COLUMN IF NOT EXISTS source_system      text;
-
 ALTER TABLE public.modifier_group_items
     ADD COLUMN IF NOT EXISTS source_external_id text,
     ADD COLUMN IF NOT EXISTS source_system      text;
-
 COMMENT ON COLUMN public.menu_items.source_external_id IS
     'External ID from a foreign POS (e.g. Clover item ID). Paired with source_system. NULL for rows created natively in Dexa.';
 COMMENT ON COLUMN public.menu_items.source_system IS

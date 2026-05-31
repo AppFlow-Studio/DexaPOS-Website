@@ -552,8 +552,6 @@ BEGIN
     );
 END;
 $$;
-
-
 -- Helper: per-row "is overwriting safe right now" check. The merchant-level
 -- last_clover_commit_at is the threshold: a row updated *after* that timestamp
 -- has been manually edited since the previous import, so overwrite_safe leaves
@@ -580,15 +578,10 @@ AS $$
         ELSE false
     END;
 $$;
-
-
 REVOKE ALL    ON FUNCTION public.import_clover_menu(uuid, jsonb, text, jsonb) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.import_clover_menu(uuid, jsonb, text, jsonb) TO authenticated;
-
 COMMENT ON FUNCTION public.import_clover_menu(uuid, jsonb, text, jsonb) IS
     'Commit step of the Clover Menu Importer. Consumes a clover_import_dry_runs row and writes the parsed IR to the merchant menu domain atomically. Idempotent by (merchant_id, source_external_id) on the five R-IMP-0 tables.';
-
-
 -- Standalone fingerprint helper. Same shape as the inline computation inside
 -- import_clover_menu; called from the preview server action to snapshot the
 -- merchant menu state at preview time.
@@ -609,6 +602,5 @@ AS $$
           SELECT id::text, COALESCE(updated_at::text, '') FROM public.modifier_groups WHERE merchant_id = p_merchant_id
       ) t;
 $$;
-
 REVOKE ALL    ON FUNCTION public.compute_merchant_menu_fingerprint(uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.compute_merchant_menu_fingerprint(uuid) TO authenticated, service_role;

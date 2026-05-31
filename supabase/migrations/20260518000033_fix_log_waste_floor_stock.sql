@@ -128,7 +128,6 @@ BEGIN
     );
 END;
 $$;
-
 COMMENT ON FUNCTION public.log_waste IS
     'Records a waste event. Rejects (success=false) when the quantity exceeds '
     'stock on hand; otherwise subtracts stock and appends to stock_update_log. '

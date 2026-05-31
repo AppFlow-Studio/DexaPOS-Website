@@ -42,5 +42,4 @@ BEGIN
       VALIDATE CONSTRAINT settlement_batches_payment_terminal_id_fkey;
   END IF;
 END $$;
-
 NOTIFY pgrst, 'reload schema';

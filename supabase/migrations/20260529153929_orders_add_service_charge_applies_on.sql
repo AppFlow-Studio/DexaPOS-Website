@@ -15,4 +15,4 @@ ALTER TABLE public.orders
          OR service_charge_applies_on IN ('pre_discount', 'post_discount'));
 
 COMMENT ON COLUMN public.orders.service_charge_applies_on IS
-  'Snapshotted applies_on basis for the order''s service charge (pre_discount | post_discount). NULL means no SC has been applied to this order yet. Pinned by apply_service_charge on first apply, re-pinned only when service_charge_rule_id changes.';
+  'Snapshotted applies_on basis for the order''s service charge (pre_discount | post_discount). NULL means no SC has been applied to this order yet. Pinned by apply_service_charge on first apply, re-pinned only when service_charge_rule_id changes.';;
