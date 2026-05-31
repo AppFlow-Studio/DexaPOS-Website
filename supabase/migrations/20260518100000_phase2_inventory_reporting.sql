@@ -17,7 +17,6 @@
 DROP FUNCTION IF EXISTS public._inventory_value_at(UUID, UUID, TIMESTAMPTZ);
 DROP FUNCTION IF EXISTS public.get_cogs_report(UUID, UUID, DATE, DATE);
 DROP FUNCTION IF EXISTS public.get_food_cost_analysis(UUID, UUID, DATE, DATE);
-
 -- ----------------------------------------------------------------------------
 -- Helper: inventory value (at cost) as of a timestamp.
 -- value = Σ (current_stock − Σ change_amount on/after p_at) × effective cost
@@ -66,7 +65,6 @@ AS $$
     ) ovr ON TRUE
     WHERE ii.merchant_id = p_merchant_id;
 $$;
-
 -- ----------------------------------------------------------------------------
 -- T2.1 — get_cogs_report()
 -- COGS = beginning inventory + purchases (received POs) − ending inventory.
@@ -247,7 +245,6 @@ BEGIN
     RETURN v_result;
 END;
 $$;
-
 -- ----------------------------------------------------------------------------
 -- T2.2 — get_food_cost_analysis()
 -- Theoretical cost = recipes × sales. Actual cost = beginning + purchases
@@ -526,7 +523,6 @@ BEGIN
     RETURN v_result;
 END;
 $$;
-
 -- ----------------------------------------------------------------------------
 -- Grants — match Phase 1 inventory RPC exposure.
 -- ----------------------------------------------------------------------------

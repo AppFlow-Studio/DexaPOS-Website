@@ -23,6 +23,10 @@ import {
   type OnlineStoreReviewChecklist,
 } from '@/lib/online-store/setup-flow'
 import { uploadMerchantDocument, uploadOrganizationDocument } from '@/lib/cdn/server'
+import {
+  syncStorefrontWhitelistForLocation,
+  type WhitelistSyncResult,
+} from '@/lib/payments/storefront-whitelist'
 
 type MissingRequestFieldKey =
   | 'legalBusinessName'
@@ -269,6 +273,25 @@ async function buildRequestedStoreSlug(
   }
 
   return `${baseSlug}-${Date.now().toString().slice(-6)}`
+}
+
+// ============================================================================
+// Storefront whitelist sync (QR-32)
+//
+// The actual sync logic lives in lib/payments/storefront-whitelist.ts so the
+// same code path is reused by the standalone backfill/audit scripts under
+// scripts/. Kept the type alias here for backward compatibility with anything
+// that imports `StorefrontWhitelistSyncResult` from this module.
+// See docs/RUNBOOK-PAYMENT-WHITELIST-SYNC.md.
+// ============================================================================
+
+export type StorefrontWhitelistSyncResult = WhitelistSyncResult
+
+async function syncStorefrontWhitelist(
+  supabase: ReturnType<typeof createServerSupabaseClient>,
+  locationId: string
+): Promise<StorefrontWhitelistSyncResult> {
+  return syncStorefrontWhitelistForLocation(supabase as any, locationId)
 }
 
 async function getReviewContext(
@@ -1330,14 +1353,24 @@ export async function adminSaveOnlineOrderingSettings(
       },
     })
 
+    const whitelist = await syncStorefrontWhitelist(supabase, locationId)
+    if (whitelist.error) {
+      console.error(
+        '[adminSaveOnlineOrderingSettings] Whitelist sync error:',
+        whitelist.error
+      )
+    }
+
     revalidateOnlineStorePaths(merchantId)
 
     return {
       success: true,
       error: null,
-      domainWhitelisted: false,
-      domainWhitelistError: undefined,
-      domainWhitelistSkipped: true,
+      domainWhitelisted: whitelist.synced && !whitelist.skipped,
+      domainWhitelistError: whitelist.error,
+      domainWhitelistSkipped: whitelist.skipped ?? false,
+      whitelistOrigins: whitelist.origins,
+      whitelistSyncedAt: whitelist.syncedAt,
     }
   } catch (error) {
     console.error('[adminSaveOnlineOrderingSettings] Exception:', error)
@@ -1422,12 +1455,25 @@ export async function adminToggleOnlineStore(
       },
     })
 
+    const whitelist = enabled
+      ? await syncStorefrontWhitelist(supabase, locationId)
+      : null
+
+    if (whitelist?.error) {
+      console.error(
+        '[adminToggleOnlineStore] Whitelist sync error:',
+        whitelist.error
+      )
+    }
+
     revalidateOnlineStorePaths(merchantId)
     return {
       success: true,
       error: null,
-      domainWhitelistError: undefined,
-      domainWhitelistSkipped: true,
+      domainWhitelistError: whitelist?.error,
+      domainWhitelistSkipped: whitelist ? (whitelist.skipped ?? false) : true,
+      whitelistOrigins: whitelist?.origins ?? [],
+      whitelistSyncedAt: whitelist?.syncedAt ?? null,
     }
   } catch (error) {
     console.error('[adminToggleOnlineStore] Exception:', error)

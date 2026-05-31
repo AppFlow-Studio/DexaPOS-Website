@@ -18,9 +18,7 @@ WITH ranked AS (
 )
 DELETE FROM public.service_charge_rules
 WHERE id IN (SELECT id FROM ranked WHERE rn > 1);
-
 DROP INDEX IF EXISTS public.uq_service_charge_active_scope;
-
 CREATE UNIQUE INDEX IF NOT EXISTS uq_service_charge_scope
   ON public.service_charge_rules
     (merchant_id, COALESCE(location_id, '00000000-0000-0000-0000-000000000000'::uuid));

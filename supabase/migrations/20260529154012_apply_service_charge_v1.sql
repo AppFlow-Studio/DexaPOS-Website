@@ -192,4 +192,4 @@ GRANT EXECUTE ON FUNCTION public.apply_service_charge_v1(uuid, integer, uuid, uu
   TO authenticated;
 
 COMMENT ON FUNCTION public.apply_service_charge_v1 IS
-  'Server-authoritative service charge RPC (Wave C). Re-resolves the merchant''s service_charge_rule, recomputes SC from order_items, and persists onto orders (service_charge + snapshot fields + card_total/cash_total). Snapshot freeze: rate/applies_on/name pinned on first apply, re-pinned only when service_charge_rule_id changes. Manual override (service_charge_is_manual=true) short-circuits. Idempotency op namespace: ''apply_service_charge_v1''.';
+  'Server-authoritative service charge RPC (Wave C). Re-resolves the merchant''s service_charge_rule, recomputes SC from order_items, and persists onto orders (service_charge + snapshot fields + card_total/cash_total). Snapshot freeze: rate/applies_on/name pinned on first apply, re-pinned only when service_charge_rule_id changes. Manual override (service_charge_is_manual=true) short-circuits. Idempotency op namespace: ''apply_service_charge_v1''.';;

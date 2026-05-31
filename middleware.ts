@@ -5,6 +5,7 @@ import { createClient } from '@supabase/supabase-js'
 const isInternalTeamRoutes = createRouteMatcher(['/manage(.*)'])
 const isMerchantRoutes = createRouteMatcher(['/dashboard(.*)'])
 const isStorefrontRoutes = createRouteMatcher(['/sites(.*)'])
+const isReceiptRoutes = createRouteMatcher(['/receipts(.*)'])
 const isOrgSelectionRoute = createRouteMatcher(['/join-organization(.*)'])
 const isAcceptInvitationRoute = createRouteMatcher(['/accept-invitation(.*)'])
 const isMarketingRoute = createRouteMatcher([

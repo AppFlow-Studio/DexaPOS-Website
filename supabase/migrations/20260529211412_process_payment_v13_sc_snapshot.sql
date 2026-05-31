@@ -1,42 +1,3 @@
--- =====================================================================
--- Migration: process_payment_v13 — per-payment SC snapshot
--- =====================================================================
--- Wave D fork of v12 (v12 stays deployed; client switches the call site
--- via services/orderService.ts). One surgical addition: compute and
--- write order_payments.service_charge — this payment's share of
--- orders.service_charge at insert time. Basis for proportional SC
--- reversal in apply_refund_to_payment_v4.
---
--- Apportionment rules (mirror v12's v_payment_total / split-portion
--- conventions):
---
---   • Last split portion OR full-remaining (non-split) payment:
---     snap to v_remaining_sc so SUM(service_charge) across all payments
---     equals orders.service_charge exactly. Matches how v_payment_total
---     itself absorbs the rounding residual on the last portion.
---
---   • All other paths (item payment, mid-split portion, partial):
---     proportional to v_payment_total / total. Denominator is
---     orders.cash_total for cash-priced payments, orders.card_total
---     otherwise — orders.service_charge is folded into both totals, so
---     the share computed against the relevant pricing-mode total is the
---     payment's "owned" piece.
---
---   • Both proportional and snap branches LEAST-cap at v_remaining_sc.
---     A cap is a no-op for clean orders; guards against drift in
---     pathological cases (e.g. SC manually edited mid-payment-sequence).
---
--- Idempotency op string: 'process_payment_v13' (separate namespace from
--- v12, per the v9 → v10 precedent).
---
--- Apply AFTER:
---   - order_payments_add_service_charge_columns.sql
---   - process_payment_v12_sc_residual_guard.sql
---
--- Rollback: process_payment_v13_sc_snapshot_rollback.sql (drops v13;
--- client wrappers point back at v12).
--- =====================================================================
-
 CREATE OR REPLACE FUNCTION public.process_payment_v13(
     p_order_id uuid,
     p_payment_method text,
@@ -122,7 +83,6 @@ DECLARE
     v_acquirer text;
     v_batch_number text;
     v_sc_result jsonb;
-    -- v13 additions: per-payment SC snapshot.
     v_prior_sc_snapshot numeric := 0;
     v_remaining_sc numeric := 0;
     v_service_charge_share numeric := 0;
@@ -455,14 +415,6 @@ BEGIN
         v_tip_fee := ROUND(p_tip_amount * v_tsp / (100 + v_tsp), 2);
     END IF;
 
-    -- ====== v13: per-payment SC snapshot ======
-    -- Remaining SC = order SC minus what prior captured payments already
-    -- claimed. Snap to remaining on the last split portion or on a
-    -- full-remaining payment so SUM(service_charge) over all payments
-    -- equals orders.service_charge exactly. Otherwise apportion the
-    -- payment's share against the relevant pricing-mode total
-    -- (cash_total or card_total — SC is folded into both). LEAST-cap
-    -- against v_remaining_sc in every branch as drift insurance.
     SELECT COALESCE(SUM(COALESCE(service_charge, 0)), 0)
     INTO v_prior_sc_snapshot
     FROM public.order_payments
@@ -605,7 +557,6 @@ BEGIN
         v_unpaid_card_total := v_payment_based_due;
     END IF;
 
-    -- ====== SC RESIDUAL GUARD — fully-paid determination (verbatim from v12) ======
     IF v_is_item_payment THEN
         IF v_unpaid_items_count > 0 THEN
             v_order_fully_paid := false;
@@ -652,7 +603,6 @@ BEGIN
         END IF;
     END IF;
 
-    -- ====== SC RESIDUAL GUARD — amount_due computation (verbatim from v12) ======
     IF v_order_fully_paid THEN
         v_new_amount_due := 0; v_new_cash_amount_due := 0;
         v_unpaid_card_total := 0; v_unpaid_cash_total := 0;
@@ -729,4 +679,4 @@ GRANT EXECUTE ON FUNCTION public.process_payment_v13(
 ) TO authenticated;
 
 COMMENT ON FUNCTION public.process_payment_v13 IS
-  'Wave D fork of process_payment_v12. Adds per-payment service_charge snapshot: proportional to v_payment_total / (cash_total or card_total per pricing mode), LEAST-clamped to remaining SC, snapped to remaining on last split portion / full-remaining payment. SUM(service_charge) across all payments equals orders.service_charge. Basis for proportional SC reversal in apply_refund_to_payment_v4. Idempotency op: ''process_payment_v13''.';
+  'Wave D fork of process_payment_v12. Adds per-payment service_charge snapshot: proportional to v_payment_total / (cash_total or card_total per pricing mode), LEAST-clamped to remaining SC, snapped to remaining on last split portion / full-remaining payment. SUM(service_charge) across all payments equals orders.service_charge. Basis for proportional SC reversal in apply_refund_to_payment_v4. Idempotency op: ''process_payment_v13''.';;
