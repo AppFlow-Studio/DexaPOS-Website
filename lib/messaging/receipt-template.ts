@@ -344,34 +344,25 @@ export function renderReceiptHtml(
 }
 
 /**
- * SMS receipt — ASCII-safe (GSM-7) so a typical 3-item order stays within
- * 1–2 SMS segments (160 chars each). Long itemized orders may span 3+
- * segments; that's accepted as the cost of including line items.
+ * SMS receipt — single branded line with a hosted receipt link.
+ * Short enough to reliably fit in 1 SMS segment and avoid carrier spam flags.
  */
 export function renderReceiptText(
   order: ReceiptOrder,
-  location: ReceiptLocation | null
+  location: ReceiptLocation | null,
+  receiptUrl: string
 ): string {
-  const orderNumber = order.display_number || order.order_number || "-";
+  // display_number already contains the leading '#' (e.g. "#S1-0003").
+  // order_number is the raw internal ref — prefix '#' only in that fallback.
+  const rawNumber = order.display_number || order.order_number;
+  const orderNumber = rawNumber
+    ? order.display_number
+      ? rawNumber
+      : `#${rawNumber}`
+    : "-";
+
   const businessName = location?.name || "Receipt";
   const total = fmtMoney(order.total_amount);
-  const { date } = fmtDate(order.created_at);
-  const shortDate = date.replace(/, \d{4}$/, "");
-
-  const SMS_MAX_ITEMS = 5;
-  const items = (order.order_items ?? []).filter((i) => !i.is_voided);
-  const shown = items.slice(0, SMS_MAX_ITEMS);
-  const remaining = items.length - shown.length;
-  const itemLines = shown.map((i) => {
-    const qty = i.quantity ?? 1;
-    const name = (i.item_name ?? "Item").trim();
-    const price = fmtMoney(i.subtotal);
-    const qtyPrefix = qty > 1 ? `${qty}x ` : "";
-    return `- ${qtyPrefix}${name} ${price}`;
-  });
-  if (remaining > 0) {
-    itemLines.push(`...and ${remaining} more`);
-  }
 
   const payments = (order.order_payments ?? []).filter((p) => {
     const s = (p.status ?? "").toLowerCase();
@@ -380,14 +371,6 @@ export function renderReceiptText(
   const primary = payments[0];
   const paidLine = primary ? paymentDisplay(primary, { dotChar: "****" }) : "";
 
-  const lines = [
-    businessName,
-    `Order #${orderNumber} - ${shortDate}`,
-    ...itemLines,
-    `Total: ${total}`,
-    paidLine ? `Paid: ${paidLine}` : "",
-    "Thank you!",
-  ].filter(Boolean);
-
-  return lines.join("\n");
+  const summary = paidLine ? `${total}, ${paidLine}` : total;
+  return `${businessName} — Order ${orderNumber} (${summary}). View receipt: ${receiptUrl}`;
 }

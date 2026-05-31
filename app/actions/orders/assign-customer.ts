@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { GetOrderDetails } from "@/app/dashboard/actions/order";
 import type { OrderResponse } from "@/types/order-management";
+import { normalizePhone } from "@/lib/phone";
 
 export interface CustomerSearchHit {
   id: string;
@@ -100,6 +101,9 @@ export async function assignCustomerToOrder(
 
   if (params.newCustomer) {
     const name = params.newCustomer.name?.trim();
+    const normalizedPhone = params.newCustomer.phone
+      ? normalizePhone(params.newCustomer.phone) ?? params.newCustomer.phone.trim()
+      : null;
     if (!name) {
       return { success: false, error: "Customer name is required" };
     }
@@ -108,7 +112,7 @@ export async function assignCustomerToOrder(
       .insert({
         merchant_id: merchantId,
         name: name,
-        phone: params.newCustomer.phone?.trim() || null,
+        phone: normalizedPhone,
         email: params.newCustomer.email?.trim() || null,
       })
       .select("id, name, phone, email")

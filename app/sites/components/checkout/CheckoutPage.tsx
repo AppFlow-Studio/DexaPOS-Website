@@ -401,7 +401,8 @@ export function CheckoutPage({
         const addr = savedAddresses.find((a) => a.id === selectedAddressId);
         if (addr) {
           deliveryAddress = {
-            street: addr.addressLine1 + (addr.addressLine2 ? ` ${addr.addressLine2}` : ""),
+            street: addr.addressLine1,
+            unit: addr.addressLine2 ?? undefined,
             city: addr.city,
             state: addr.state,
             zip: addr.postalCode,

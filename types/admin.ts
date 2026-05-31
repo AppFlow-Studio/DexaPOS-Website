@@ -23,6 +23,7 @@ export type HQPermission =
   | 'hq.merchant.analytics'
   | 'hq.merchant.transactions'
   | 'hq.merchant.manage_team'
+  | 'hq.merchant.menu.import'
   // Support permissions
   | 'hq.support.view'
   | 'hq.support.manage'
