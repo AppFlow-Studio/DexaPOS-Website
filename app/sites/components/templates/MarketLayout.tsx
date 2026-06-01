@@ -9,12 +9,14 @@ import { StorefrontHeader } from "../StorefrontHeader";
 import { AccountDrawer } from "../AccountDrawer";
 import { OrdersSheet } from "../OrdersSheet";
 import { OrderStatusWatcher } from "../OrderStatusWatcher";
+import { QrTableBanner } from "../QrTableBanner";
 import { MobileBottomTabs, TabType } from "../MobileBottomTabs";
 import { OrdersPanel } from "../OrdersPanel";
 import { ItemDetailsModal } from "../ItemDetailsModal";
 import { useCart } from "../../hooks/useCart";
 import { useSession } from "../../hooks/useSession";
 import { useSessionInit } from "../../hooks/useSessionInit";
+import { useQrFunnelTracking } from "../../hooks/useQrFunnelTracking";
 import { useStorefrontPath } from "../../lib/use-storefront-path";
 import { MenuSearch } from "../MenuSearch";
 import {
@@ -41,6 +43,12 @@ interface MarketLayoutProps {
   };
   menus: StorefrontMenu[];
   slug: string;
+  seedQrSession?: {
+    sessionToken: string;
+    floorPlanObjectId?: string | null;
+    tableLabel?: string | null;
+    tableQrCodeId?: string | null;
+  } | null;
 }
 
 type SortOption = "default" | "price_asc" | "price_desc" | "name";
@@ -52,10 +60,17 @@ function isValidImageSrc(src?: string | null): boolean {
 
 const POPULAR_TAGS = ["Popular", "New", "Vegan", "Gluten-Free", "Spicy"];
 
-export function MarketLayout({ site, location, menus, slug }: MarketLayoutProps) {
-  useSessionInit(site?.id);
+export function MarketLayout({
+  site,
+  location,
+  menus,
+  slug,
+  seedQrSession,
+}: MarketLayoutProps) {
+  useSessionInit(site?.id, seedQrSession);
   const router = useRouter();
   const activeOrderId = useSession((s) => s.activeOrderId);
+  const qrTableLabel = useSession((s) => s.qrTableLabel);
   const storefrontPath = useStorefrontPath(slug);
 
   const [activeTab, setActiveTab] = useState<TabType>("menu");
@@ -64,6 +79,11 @@ export function MarketLayout({ site, location, menus, slug }: MarketLayoutProps)
   const [showWelcomeDrawer, setShowWelcomeDrawer] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [headerHeight, setHeaderHeight] = useState(56);
+
+  useQrFunnelTracking({
+    trackMenuViewed: activeTab === "menu",
+    trackCartStarted: true,
+  });
 
   const [activeMenuId, setActiveMenuId] = useState<string>(() => menus[0]?.id ?? "");
   const [activeCategory, setActiveCategory] = useState<string>("__all__");
@@ -289,6 +309,7 @@ export function MarketLayout({ site, location, menus, slug }: MarketLayoutProps)
 
             {/* Main content */}
             <div className="flex-1 min-w-0">
+              <QrTableBanner tableLabel={qrTableLabel} className="mb-4" />
               {/* Mobile search */}
               <div className="lg:hidden mb-3">
                 <MenuSearch

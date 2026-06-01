@@ -32,6 +32,7 @@ import {
   ShoppingBag,
   Truck,
   Globe,
+  QrCode,
   ChefHat,
   DollarSign,
   RotateCcw,
@@ -66,7 +67,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ArrowRight, ChevronDown, ChevronUp } from "lucide-react";
 import { OrderFullTimeline } from "./OrderFullTimeline";
-import { useSelectedLocation } from "@/stores/location-store";
+import { useLocationStore, useSelectedLocation } from "@/stores/location-store";
 import type { OrderFullHistory } from "@/types/order-full-history";
 import {
   EnhancedPaymentsList,
@@ -111,6 +112,7 @@ function formatDate(dateString: string): string {
 function getOrderTypeIcon(type: string) {
   const icons: Record<string, React.ReactNode> = {
     dine_in: <Utensils className="h-3.5 w-3.5" />,
+    qr_dine_in: <QrCode className="h-3.5 w-3.5" />,
     takeout: <ShoppingBag className="h-3.5 w-3.5" />,
     delivery: <Truck className="h-3.5 w-3.5" />,
     online: <Globe className="h-3.5 w-3.5" />,
@@ -137,6 +139,7 @@ function formatDateShort(dateString: string) {
 function formatOrderType(type: string) {
   const labels: Record<string, string> = {
     dine_in: "Dine-In",
+    qr_dine_in: "QR Dine-In",
     takeout: "Takeout",
     delivery: "Delivery",
     online: "Online",
@@ -148,6 +151,7 @@ function formatOrderType(type: string) {
 function getChannelLabel(orderType: string) {
   const channels: Record<string, string> = {
     dine_in: "In-Store",
+    qr_dine_in: "QR Table",
     takeout: "Pickup",
     delivery: "Delivery",
     online: "Online",
@@ -858,6 +862,7 @@ export function OrderDetailSheet({
 }: OrderDetailSheetProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { setSelectedLocation } = useLocationStore();
   const selectedLocation = useSelectedLocation();
   const [isSendReceiptOpen, setIsSendReceiptOpen] = React.useState(false);
   const [isAdjustTipOpen, setIsAdjustTipOpen] = React.useState(false);
@@ -943,6 +948,14 @@ export function OrderDetailSheet({
     router.push(url);
   };
 
+  const handleViewOnFloorPlan = () => {
+    if (displayOrder.location_id) {
+      setSelectedLocation(displayOrder.location_id);
+    }
+    onOpenChange(false);
+    router.push("/dashboard/tables");
+  };
+
   // Derived metadata
   const { date, time } = formatDateShort(displayOrder.created_at);
   const isMetadataLoading = isLoading || isHistoryLoading;
@@ -974,7 +987,9 @@ export function OrderDetailSheet({
     fullHistory?.order?.station_name ??
     displayOrder.station?.station_name ??
     null;
+  const isQrDineIn = displayOrder.order_type === "qr_dine_in";
   const isDineIn = displayOrder.order_type === "dine_in";
+  const isTableLabeledOrder = isDineIn || isQrDineIn;
 
   // Use displayOrder only so all customer fields update together (same query)
   const customerName = displayOrder.customer_name ?? null;
@@ -993,14 +1008,15 @@ export function OrderDetailSheet({
   const paymentCount = payments.length;
   const totalAmount = Number(displayOrder.total_amount) || 0;
   const amountDue = Number(displayOrder.amount_due) || 0;
-  const fulfillmentValue = isDineIn
+  const fulfillmentValue = isTableLabeledOrder
     ? tableName ?? "Dining Room"
     : formatOrderType(displayOrder.order_type);
-  const fulfillmentDescription = isDineIn
+  const fulfillmentDescription = isTableLabeledOrder
     ? [
         locationName,
-        partySize != null ? `${partySize} guests` : null,
-        serverName ? `Server: ${serverName}` : null,
+        isDineIn && partySize != null ? `${partySize} guests` : null,
+        isDineIn && serverName ? `Server: ${serverName}` : null,
+        isQrDineIn ? "Pay-before-kitchen QR order" : null,
       ]
         .filter(Boolean)
         .join(" • ")
@@ -1035,10 +1051,10 @@ export function OrderDetailSheet({
       value: createdByName,
     });
   }
-  if (isDineIn && tableName) {
+  if (isTableLabeledOrder && tableName) {
     metaChips.push({
-      icon: <Utensils className="h-3.5 w-3.5" />,
-      label: "Table",
+      icon: isQrDineIn ? <QrCode className="h-3.5 w-3.5" /> : <Utensils className="h-3.5 w-3.5" />,
+      label: isQrDineIn ? "QR Table" : "Table",
       value: tableName,
     });
   }
@@ -1125,6 +1141,17 @@ export function OrderDetailSheet({
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2 pr-8 xl:max-w-[360px] xl:justify-end">
+                  {isQrDineIn && tableName ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="rounded-xl border-[#0C4FD1]/20 bg-[#0C4FD1]/5 text-[#0C4FD1] hover:bg-[#0C4FD1]/10"
+                      onClick={handleViewOnFloorPlan}
+                    >
+                      <MapPin className="mr-1.5 h-4 w-4" />
+                      View on Floor Plan
+                    </Button>
+                  ) : null}
                   <Button
                     variant="outline"
                     size="sm"
@@ -1146,17 +1173,17 @@ export function OrderDetailSheet({
                   tone={amountDue > 0 ? "warning" : "success"}
                 />
                 <HeroStatCard
-                  label={isDineIn ? "Table" : "Fulfillment"}
+                  label={isTableLabeledOrder ? (isQrDineIn ? "QR Table" : "Table") : "Fulfillment"}
                   value={fulfillmentValue}
                   description={
                     fulfillmentDescription ||
-                    (isDineIn
+                    (isTableLabeledOrder
                       ? "Dining room service details"
                       : "Order channel details")
                   }
                   icon={
-                    isDineIn ? (
-                      <Utensils className="h-5 w-5" />
+                    isTableLabeledOrder ? (
+                      isQrDineIn ? <QrCode className="h-5 w-5" /> : <Utensils className="h-5 w-5" />
                     ) : (
                       <span className="flex h-5 w-5 items-center justify-center">
                         {getOrderTypeIcon(displayOrder.order_type)}

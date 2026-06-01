@@ -9,12 +9,14 @@ import { StorefrontHeader } from "../StorefrontHeader";
 import { AccountDrawer } from "../AccountDrawer";
 import { OrdersSheet } from "../OrdersSheet";
 import { OrderStatusWatcher } from "../OrderStatusWatcher";
+import { QrTableBanner } from "../QrTableBanner";
 import { MobileBottomTabs, TabType } from "../MobileBottomTabs";
 import { OrdersPanel } from "../OrdersPanel";
 import { ItemDetailsModal } from "../ItemDetailsModal";
 import { useCart } from "../../hooks/useCart";
 import { useSession } from "../../hooks/useSession";
 import { useSessionInit } from "../../hooks/useSessionInit";
+import { useQrFunnelTracking } from "../../hooks/useQrFunnelTracking";
 import { useStorefrontPath } from "../../lib/use-storefront-path";
 import { MenuSearch } from "../MenuSearch";
 import {
@@ -43,16 +45,29 @@ interface BoutiqueLayoutProps {
   };
   menus: StorefrontMenu[];
   slug: string;
+  seedQrSession?: {
+    sessionToken: string;
+    floorPlanObjectId?: string | null;
+    tableLabel?: string | null;
+    tableQrCodeId?: string | null;
+  } | null;
 }
 
 function isValidImageSrc(src?: string | null): boolean {
   return !!src && (src.startsWith("http://") || src.startsWith("https://") || src.startsWith("/"));
 }
 
-export function BoutiqueLayout({ site, location, menus, slug }: BoutiqueLayoutProps) {
-  useSessionInit(site?.id);
+export function BoutiqueLayout({
+  site,
+  location,
+  menus,
+  slug,
+  seedQrSession,
+}: BoutiqueLayoutProps) {
+  useSessionInit(site?.id, seedQrSession);
   const router = useRouter();
   const activeOrderId = useSession((s) => s.activeOrderId);
+  const qrTableLabel = useSession((s) => s.qrTableLabel);
   const storefrontPath = useStorefrontPath(slug);
 
   const [activeTab, setActiveTab] = useState<TabType>("menu");
@@ -61,6 +76,11 @@ export function BoutiqueLayout({ site, location, menus, slug }: BoutiqueLayoutPr
   const [showWelcomeDrawer, setShowWelcomeDrawer] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [headerHeight, setHeaderHeight] = useState(56);
+
+  useQrFunnelTracking({
+    trackMenuViewed: activeTab === "menu",
+    trackCartStarted: true,
+  });
 
   const [activeMenuId, setActiveMenuId] = useState<string>(() => menus[0]?.id ?? "");
   const [activeCategory, setActiveCategory] = useState<string>("");
@@ -348,6 +368,9 @@ export function BoutiqueLayout({ site, location, menus, slug }: BoutiqueLayoutPr
 
           {/* Main content */}
           <div className="flex-1 min-w-0">
+            <div className="px-6 lg:px-10 pt-6">
+              <QrTableBanner tableLabel={qrTableLabel} />
+            </div>
             {/* 400px hero banner */}
             <div
               className="relative"
