@@ -98,6 +98,7 @@ export default function ReportsPage() {
 
   const topOrderTypeLabel = topOrderTypeEntry
     ? topOrderTypeEntry[0]
+        .replace(/^qr_dine_in$/, "QR Table")
         .replace(/_/g, " ")
         .replace(/\b\w/g, (c) => c.toUpperCase())
     : "—";
@@ -224,6 +225,7 @@ export default function ReportsPage() {
           data={
             analytics?.orderTypeBreakdown ?? {
               dine_in: 0,
+              qr_dine_in: 0,
               takeout: 0,
               delivery: 0,
               online: 0,

@@ -14,6 +14,7 @@ export interface OrderAnalytics {
   }>;
   orderTypeBreakdown: {
     dine_in: number;
+    qr_dine_in: number;
     takeout: number;
     delivery: number;
     online: number;
@@ -37,6 +38,7 @@ export interface BestSellingItem {
 
 export interface OrderTypeBreakdown {
   dine_in: number;
+  qr_dine_in: number;
   takeout: number;
   delivery: number;
   online: number;
@@ -169,6 +171,7 @@ export async function GetOrderAnalytics(
   // Order type breakdown
   const orderTypeBreakdown = {
     dine_in: 0,
+    qr_dine_in: 0,
     takeout: 0,
     delivery: 0,
     online: 0,
@@ -385,6 +388,7 @@ export async function GetOrderTypeBreakdown(
   if (!merchantId) {
     return {
       dine_in: 0,
+      qr_dine_in: 0,
       takeout: 0,
       delivery: 0,
       online: 0,
@@ -412,6 +416,7 @@ export async function GetOrderTypeBreakdown(
     console.error("[GetOrderTypeBreakdown] Error:", error);
     return {
       dine_in: 0,
+      qr_dine_in: 0,
       takeout: 0,
       delivery: 0,
       online: 0,
@@ -421,6 +426,7 @@ export async function GetOrderTypeBreakdown(
 
   const breakdown: OrderTypeBreakdown = {
     dine_in: 0,
+    qr_dine_in: 0,
     takeout: 0,
     delivery: 0,
     online: 0,
@@ -511,6 +517,7 @@ function getEmptyAnalytics(): OrderAnalytics {
     bestSellingItems: [],
     orderTypeBreakdown: {
       dine_in: 0,
+      qr_dine_in: 0,
       takeout: 0,
       delivery: 0,
       online: 0,
@@ -1217,6 +1224,7 @@ export async function GetNetCollectedBySourceReport(
   const sourceMap: Record<string, string> = {
     dine_in: "POS",
     takeout: "POS",
+    qr_dine_in: "QR Table",
     online: "Online",
     delivery: "Third-Party",
     catering: "Catering",

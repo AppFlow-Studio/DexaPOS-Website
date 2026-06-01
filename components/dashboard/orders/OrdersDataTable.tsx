@@ -44,7 +44,9 @@ import {
     ShoppingBag,
     Truck,
     Globe,
+    QrCode,
     ChefHat,
+    MapPin,
     ChevronLeft,
     ChevronsLeft,
     ChevronRight,
@@ -108,6 +110,10 @@ function getOrderTypeConfig(type: OrderType) {
             icon: <Utensils className="h-3 w-3 text-muted-foreground" />,
             label: 'Dine In',
         },
+        qr_dine_in: {
+            icon: <QrCode className="h-3 w-3 text-[#0C4FD1]" />,
+            label: 'QR Dine-In',
+        },
         takeout: {
             icon: <ShoppingBag className="h-3 w-3 text-muted-foreground" />,
             label: 'Takeout',
@@ -137,7 +143,7 @@ export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showL
     const [globalFilter, setGlobalFilter] = React.useState('')
     const router = useRouter()
     const isAllLocations = useIsAllLocations()
-    const { locations } = useLocationStore()
+    const { locations, setSelectedLocation } = useLocationStore()
     const shouldShowLocation = showLocationColumn ?? isAllLocations
 
     const handleRowClick = (order: OrderResponse) => {
@@ -146,6 +152,13 @@ export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showL
         } else {
             router.push(`/dashboard/orders/${order.id}`)
         }
+    }
+
+    const handleViewOnFloorPlan = (order: OrderResponse) => {
+        if (order.location_id) {
+            setSelectedLocation(order.location_id)
+        }
+        router.push('/dashboard/tables')
     }
 
     const getCreatedByName = (order: OrderResponse): string => {
@@ -214,10 +227,18 @@ export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showL
             cell: ({ row }) => {
                 const typeConfig = getOrderTypeConfig(row.original.order_type)
                 return (
-                    <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-                        {typeConfig.icon}
-                        <span className="font-medium text-foreground/80">{typeConfig.label}</span>
-                    </span>
+                    <div className="flex flex-col gap-1">
+                        <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                            {typeConfig.icon}
+                            <span className="font-medium text-foreground/80">{typeConfig.label}</span>
+                        </span>
+                        {row.original.order_type === 'qr_dine_in' && row.original.table_number ? (
+                            <span className="inline-flex items-center gap-1.5 text-xs text-[#0C4FD1]">
+                                <MapPin className="h-3 w-3" />
+                                Table {row.original.table_number}
+                            </span>
+                        ) : null}
+                    </div>
                 )
             },
         },
@@ -345,6 +366,12 @@ export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showL
                                 <Eye className="mr-2 h-4 w-4" />
                                 View Details
                             </DropdownMenuItem>
+                            {order.order_type === 'qr_dine_in' && order.table_number ? (
+                                <DropdownMenuItem onClick={() => handleViewOnFloorPlan(order)}>
+                                    <MapPin className="mr-2 h-4 w-4" />
+                                    View on Floor Plan
+                                </DropdownMenuItem>
+                            ) : null}
                             {!readOnly && (
                                 <>
                                     <DropdownMenuSeparator />

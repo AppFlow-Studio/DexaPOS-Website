@@ -1,272 +1,142 @@
-# Feature: Online Ordering + Payments
+# Feature: Online Ordering Payments
 
 ## Status
 
-- feature status: `demo_mode`
-- tokenization path: `working on legacy branch / secure branch path aligned`
-- secure credential model: `implemented`
-- live processor capture: `still deferred`
+- payment rail: `nmi_only`
+- storefront tokenization: `active`
+- online-order charge path: `active`
+- legacy Dejavoo storefront path: `removed`
+
+## Scope
+
+This document describes the active storefront and QR payment path only.
+
+It does not describe in-store terminal processing. Dejavoo references that still exist elsewhere in the repo are POS or historical artifacts, not the live online-ordering payment rail.
+
+## Active Payment Architecture
+
+Storefront and QR checkout now use NMI only.
+
+Active flow:
+- bootstrap payment config through `supabase/functions/process-online-payment/index.ts`
+- tokenize browser card details through NMI Collect.js
+- create and charge the order through `supabase/functions/create-online-order/index.ts`
+- cancel / void / refund through `supabase/functions/cancel-online-order/index.ts`
+
+Active source of truth:
+- `public.location_payment_devices`
+- `provider = 'nmi'`
+- NMI public key in `provider_public_key`
+- NMI private key in Vault via `provider_secret_id`
 
 ## What Is Working
 
-### Embedded checkout bootstrap
+### Storefront bootstrap
 
-The storefront initializes Dejavoo checkout through:
+The storefront requests payment bootstrap from:
 
 - `supabase/functions/process-online-payment/index.ts`
 
-Current behavior:
+Expected response contract:
+- `success`
+- `provider: 'nmi'`
+- `tokenization_key`
+- `payment_device_id`
 
-- resolves the branch from `store_config_id`
-- resolves the selected online-ordering payment device for that location
-- decrypts the FTD key from Supabase Vault
-- returns:
-  - `security_key`
-  - `payment_device_id`
-  - `tpn`
+### Browser tokenization
 
-Current interpretation:
+Checkout uses NMI Collect.js in:
 
-- `payment_device_id = null` means the branch is still using the temporary legacy fallback key
-- non-null `payment_device_id` means the branch is using the secure selected-device flow
-
-### Checkout validation
-
-The checkout page blocks empty or incomplete card submits before tokenization.
-
-Main file:
-
+- `app/sites/components/checkout/PaymentCardForm.tsx`
 - `app/sites/components/checkout/CheckoutPage.tsx`
 
-### Tokenization metadata
+Browser output:
+- `payment_token`
+- card brand metadata
+- last four when available
 
-Checkout sends:
+### Order charge path
 
-- `payment_token_id`
-- `payment_device_id`
-- `payment_card_type`
-- `payment_card_last_four`
+The online-order edge function:
 
-That lets backend keep the selected device and card-display metadata aligned.
-
-### Order creation path
-
-`create-online-order` currently remains in demo/fake-success sale mode, but it now:
-
-- resolves the same payment device used during checkout
-- validates that the device belongs to the same location
-- stores payment-device metadata with the order payment record
+- validates the selected location device
+- charges NMI before the order reaches kitchen-bound state
+- stores the selected `payment_device_id`
+- persists NMI results into `order_payments`
 
 Main file:
-
 - `supabase/functions/create-online-order/index.ts`
 
-### Cancellation behavior
+### Domain whitelist sync
 
-Current expected behavior:
+Storefront origin syncing now uses the generic/NMI-safe path:
 
-- demo card order cancellation -> `void`
-- cash order cancellation -> `cancelled`
+- `lib/online-store/payment-domain-whitelist.ts`
+- `supabase/functions/storefront-payment-domain-whitelist/index.ts`
 
-## What Is Not Live Yet
+This path:
+- computes storefront origins from slug and custom domain
+- merges them with existing stored origins
+- persists them into `location_payment_devices.whitelist_origins`
 
-Live Dejavoo sale capture is still not the active path.
+Supported env inputs for default allow-list origins:
+- `STOREFRONT_PAYMENT_DEFAULT_ALLOWED_ORIGINS`
+- `PAYMENT_DEFAULT_ALLOWED_ORIGINS`
+- `NMI_DEFAULT_ALLOWED_ORIGINS`
 
-Reason:
+There is no active Dejavoo env fallback in this path anymore.
 
-- sandbox processor sale attempts previously returned `91 / HOST NO RESPONSE`
+## What Was Removed From The Active Storefront Path
 
-So the current objective is:
-
-- keep the flow realistic
-- keep tokenization/device pairing correct
-- keep order/payment metadata correct
-- keep cancellation behavior correct
-
-## Storefront Access Control
-
-Disabled storefronts are now blocked at the request layer.
-
-Current behavior:
-
-- if `online_store_config.is_active = false`, middleware returns `404`
-- this applies to:
-  - subdomain storefront access
-  - custom-domain storefront access
-  - direct `/sites/[slug]` access
-- `app/sites/actions.ts` also treats inactive stores as not found as a server-side fallback
-
-## Secure Credential Model
-
-Payment secrets are no longer meant to live on `online_store_config`.
-
-The secure source of truth is now:
-
-- `public.location_payment_devices`
-
-The FTD key is stored in:
-
-- Supabase Vault
-
-The UI only stores it through:
-
-- `public.upsert_location_payment_device(...)`
-
-The UI does not read the secret back.
-
-Detailed architecture:
-
-- `docs/FEATURE-ONLINE-ORDERING-DEJAVOO-DEVICE-MODEL.md`
+- Dejavoo/iPOS storefront bootstrap
+- Dejavoo FTD tokenization
+- Dejavoo-specific whitelist function path
+- Dejavoo merchant/device bootstrap assumptions for online ordering
 
 ## Main Files
 
 Storefront:
-
 - `app/sites/components/checkout/CheckoutPage.tsx`
 - `app/sites/components/checkout/PaymentCardForm.tsx`
+- `app/sites/components/checkout/PlaceOrderButton.tsx`
 
 Edge functions:
-
 - `supabase/functions/process-online-payment/index.ts`
 - `supabase/functions/create-online-order/index.ts`
-- `supabase/functions/create-online-order/ipospays.ts`
 - `supabase/functions/cancel-online-order/index.ts`
+- `supabase/functions/storefront-payment-domain-whitelist/index.ts`
 
-Merchant dashboard:
-
-- `app/dashboard/online-ordering/actions.ts`
-- `app/dashboard/online-ordering/page.tsx`
-- `app/dashboard/online-ordering/hooks/useOnlineOrderingSettings.ts`
-
-HQ admin:
-
+Admin / merchant save flows:
 - `app/manage/actions/admin-merchant/online-ordering.ts`
 - `app/manage/merchants/[merchantId]/components/OnlineStoreTab.tsx`
+- `app/dashboard/online-ordering/actions.ts`
+- `app/dashboard/online-ordering/page.tsx`
 
-Database:
+Helpers:
+- `lib/online-store/payment-domain-whitelist.ts`
 
-- `supabase/migrations/20260409170000_secure_online_ordering_payment_devices.sql`
+## Deploy / Runtime Notes
 
-## Deploy / Migration Steps
-
-### Database
-
-Run:
-
-- `supabase/migrations/20260409170000_secure_online_ordering_payment_devices.sql`
-
-This creates:
-
-- `location_payment_devices`
-- `payment_credential_access_log`
-- secure RPCs
-- Vault-backed migration of any existing plaintext FTD keys
-
-### Edge functions
-
-Redeploy:
+Deploy these storefront-payment functions when promoting active payment changes:
 
 - `process-online-payment`
 - `create-online-order`
+- `cancel-online-order`
+- `storefront-payment-domain-whitelist`
 
-### Required secrets
+Relevant env:
+- `NMI_API_BASE_URL`
+- `NMI_DEFAULT_ALLOWED_ORIGINS` if you want shared defaults
+- `STOREFRONT_PAYMENT_DEFAULT_ALLOWED_ORIGINS` if you want an app-specific shared default list
 
-Still required in Supabase:
+## What Is Not In Scope Here
 
-- `SUPABASE_SERVICE_ROLE_KEY`
-- `DEJAVOO_IPOS_API_KEY`
-- `DEJAVOO_IPOS_SECRET_KEY`
+- in-store terminal processing
+- POS Dejavoo hardware flows
+- historical Dejavoo transaction columns in reporting tables
 
-Legacy fallback still supported:
-
-- `DEJAVOO_FTD_ECOM_KEY`
-
-Whitelist automation:
-
-- uses `DEJAVOO_IPOS_API_KEY`
-- optional URL override:
-  - `DEJAVOO_EXTERNAL_API_URL`
-- optional allow-list extension:
-  - `DEJAVOO_DEFAULT_ALLOWED_DOMAINS`
-
-## How To Test
-
-### Merchant/HQ config test
-
-1. Open the branch online-ordering settings.
-2. Enter:
-   - `TPN`
-   - matching `FTD Ecom/TOP key`
-3. Save.
-4. Confirm the page reloads and the FTD field no longer shows the saved key.
-5. Confirm the whitelist action uses the selected device TPN.
-
-### Checkout test
-
-1. Open the storefront checkout page.
-2. Confirm `process-online-payment` returns `200`.
-3. Confirm response includes:
-   - `security_key`
-   - `payment_device_id`
-4. Enter demo card details.
-5. Confirm tokenization succeeds.
-6. Place order.
-7. Confirm order is created and payment metadata includes:
-   - card type
-   - last 4
-   - payment device id / TPN in metadata
-
-### Disabled-store middleware test
-
-1. Turn a branch store off in admin.
-2. Open the storefront by:
-   - branch subdomain / `slug.localhost`
-   - direct `/sites/[slug]`
-   - custom domain if configured
-3. Confirm request returns `404`.
-4. Turn the branch back on.
-5. Confirm storefront loads again.
-
-### Tokenization troubleshooting note
-
-If secure branch tokenization still fails with `FTD_013` after `process-online-payment` returns the correct:
-
-- `payment_device_id`
-- `tpn`
-- `security_key`
-
-then the remaining issue is consistent with Dejavoo-side origin/device/key registration, not a missing Dexa DB migration or missing `create-online-order` update.
-
-### Whitelist synchronization note
-
-Automatic whitelist sync now needs to preserve the existing/default allowed origins instead of replacing them with only the current store origin.
-
-Current expected behavior:
-
-- normalize the storefront URL to its browser origin
-- merge that origin with:
-  - any previously-synced device whitelist origins
-  - default Dejavoo payment origins
-  - any optional `DEJAVOO_DEFAULT_ALLOWED_DOMAINS`
-- persist the merged list back into `location_payment_devices.whitelist_origins`
-- update `location_payment_devices.whitelist_synced_at`
-
-### Cancellation test
-
-1. Place demo card order.
-2. Let it cancel or cancel manually.
-3. Confirm status becomes `void`.
-
-## Known Limits
-
-- live capture is still not the active path
-- real refund flow is still deferred
-
-## Related Docs
-
-- `docs/FEATURE-ONLINE-ORDERING-DEJAVOO-DEVICE-MODEL.md`
-- `docs/SPRINT-2026-04-08-ONLINE-ORDERING-PAYMENTS-HANDOFF.md`
+Those may still exist elsewhere in the repo and schema. They do not mean storefront/QR checkout still depends on Dejavoo.
 
 ## Last Updated
 
-- 2026-04-11
+- 2026-05-28

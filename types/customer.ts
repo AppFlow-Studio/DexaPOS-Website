@@ -195,6 +195,7 @@ export interface ChannelDisplayConfig {
 export const CHANNEL_DISPLAY_MAP: Record<string, ChannelDisplayConfig> = {
   takeout: { name: "Pickup", color: "#3b82f6" }, // blue
   dine_in: { name: "Dine-in", color: "#eab308" }, // yellow
+  qr_dine_in: { name: "QR Table", color: "#0C4FD1" }, // brand blue
   delivery: { name: "Delivery", color: "#ec4899" }, // pink
   online: { name: "Online", color: "#10b981" }, // green
   catering: { name: "Catering", color: "#8b5cf6" }, // purple
