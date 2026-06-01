@@ -40,7 +40,6 @@ import {
     CreditCard,
     TrendingUp,
     Package,
-    Bell,
     User,
     SquareStack,
     Layers,
@@ -69,6 +68,8 @@ import Image from 'next/image'
 import type { PermissionCode } from '@/lib/admin/permission-codes'
 import { toast } from 'sonner'
 import { DeviceRegistryCommandPaletteProvider } from '@/app/manage/devices/components/DeviceRegistryCommandPalette'
+import { NotificationBell } from '@/components/notifications/NotificationBell'
+import { GetUnreadTicketCounts } from '@/app/manage/actions/support'
 
 // Navigation item type with optional permission requirement
 interface NavItem {
@@ -481,9 +482,11 @@ export default function ManageLayout({
                             <Button variant="ghost" size="icon">
                                 <Search className="h-4 w-4" />
                             </Button>
-                            <Button variant="ghost" size="icon">
-                                <Bell className="h-4 w-4" />
-                            </Button>
+                            <NotificationBell
+                                fetchCounts={GetUnreadTicketCounts}
+                                href="/manage/support"
+                                queryKey="hq-unread-ticket-counts"
+                            />
                         </div>
                     </header>
                     <div id="main-content" className="flex-1 overflow-y-auto overflow-x-hidden p-6 min-w-0">
