@@ -83,7 +83,7 @@ function MidCard({
             </div>
 
             <div className="grid grid-cols-2 gap-px bg-border lg:grid-cols-4">
-                <Cell label="Processor" value="Luqra" />
+                <Cell label="Processor" value="TSYS" />
                 <Cell label="Assigned" value={formatDate(row.luqra_mid_assigned_at)} />
                 <Cell label="Descriptor" value={row.luqra_mid_descriptor ?? '—'} />
                 <Cell

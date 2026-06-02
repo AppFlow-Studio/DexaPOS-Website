@@ -66,6 +66,20 @@ function formatDateTime(dateString: string): string {
   return `${formatDate(dateString)} ${displayHours}:${displayMinutes} ${ampm}`;
 }
 
+// Prefer the host batch_number with the acquirer prefix (e.g. "TSYS-009").
+// Fall back to the legacy batch_id text label only for rows where
+// batch_number was never populated.
+function formatBatchLabel(
+  batch: Pick<SettlementBatchRecord, "batch_number" | "acquirer" | "batch_id">
+): string {
+  if (batch.batch_number) {
+    return batch.acquirer
+      ? `${batch.acquirer}-${batch.batch_number}`
+      : batch.batch_number;
+  }
+  return batch.batch_id;
+}
+
 function getStatusBadge(status: string) {
   const normalized = status.toLowerCase();
   if (normalized === "open") {
@@ -219,11 +233,41 @@ function BatchSummaryStats({
 function DbBatchCard({ batch }: { batch: SettlementBatchRecord }) {
   const [isOpen, setIsOpen] = useState(false);
   const { data: batchPayments, isLoading: paymentsLoading } = useBatchPayments(
-    batch.batch_id,
+    batch.id,
     isOpen
   );
 
   const totalFees = batch.interchange_fees + batch.assessment_fees + batch.processor_fees;
+
+  // Prefer counts/tips computed from the actual loaded payments — the batch
+  // row's *_count and tip_amount columns are often 0 when the close-webhook
+  // didn't populate them. Fall back to the row values until payments load.
+  const derivedCounts = useMemo(() => {
+    if (!batchPayments || batchPayments.length === 0) {
+      return {
+        salesCount: batch.sales_count,
+        refundCount: batch.refund_count,
+        voidCount: batch.void_count,
+        tipAmount: batch.tip_amount,
+      };
+    }
+    let salesCount = 0;
+    let refundCount = 0;
+    let voidCount = 0;
+    let tipAmount = 0;
+    for (const p of batchPayments) {
+      const tip = Number(p.tip_amount) || 0;
+      tipAmount += tip;
+      if (p.status === "void") {
+        voidCount++;
+      } else if (p.status === "refunded" || p.status === "partially_refunded") {
+        refundCount++;
+      } else {
+        salesCount++;
+      }
+    }
+    return { salesCount, refundCount, voidCount, tipAmount };
+  }, [batchPayments, batch.sales_count, batch.refund_count, batch.void_count, batch.tip_amount]);
 
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
@@ -242,13 +286,29 @@ function DbBatchCard({ batch }: { batch: SettlementBatchRecord }) {
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="font-mono font-semibold text-sm">
-                        Batch {batch.batch_id}
+                        Batch {formatBatchLabel(batch)}
                       </span>
                       {getStatusBadge(batch.status)}
                     </div>
                     <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
                       <span>{formatDate(batch.business_date)}</span>
-                      {batch.terminal_id && <span>Terminal: {batch.terminal_id}</span>}
+                      {(batch.payment_terminals?.terminal_name ||
+                        batch.payment_terminals?.serial_number ||
+                        batch.terminal_id) && (
+                        <span>
+                          Terminal:{" "}
+                          {batch.payment_terminals?.terminal_name ?? "—"}
+                          {(batch.payment_terminals?.serial_number ||
+                            batch.terminal_id) && (
+                            <span className="font-mono ml-1">
+                              (S/N{" "}
+                              {batch.payment_terminals?.serial_number ??
+                                batch.terminal_id}
+                              )
+                            </span>
+                          )}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -281,12 +341,12 @@ function DbBatchCard({ batch }: { batch: SettlementBatchRecord }) {
                 <div>
                   <p className="text-muted-foreground">Transactions</p>
                   <p className="font-medium">
-                    {batch.sales_count} sales, {batch.refund_count} refunds, {batch.void_count} voids
+                    {derivedCounts.salesCount} sales, {derivedCounts.refundCount} refunds, {derivedCounts.voidCount} voids
                   </p>
                 </div>
                 <div>
                   <p className="text-muted-foreground">Tips</p>
-                  <p className="font-medium">{formatCurrency(batch.tip_amount)}</p>
+                  <p className="font-medium">{formatCurrency(derivedCounts.tipAmount)}</p>
                 </div>
                 {totalFees > 0 && (
                   <div>

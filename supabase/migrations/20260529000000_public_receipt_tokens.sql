@@ -1,32 +1,47 @@
   -- Public receipt tokens: two-segment opaque URL (t1 = per-order, t2 = per-send).
   -- No order UUID is ever exposed in receipt URLs.
-  --
-  -- Postgres does not allow ALTER TABLE in the same transaction as UPDATE on a
-  -- table that has row-level triggers (pending trigger events error). Each step
-  -- runs in its own transaction to avoid that.
 
-  -- ─── Step 1: add nullable column (no triggers fire, safe in one txn) ─────────
+  -- pgcrypto lives in the `extensions` schema on fresh Supabase projects and is
+  -- not on search_path for plain SQL or for SECURITY DEFINER fns that pin
+  -- search_path to public — so qualify every gen_random_bytes call.
+  CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA extensions;
+
+  -- ─── Steps 1–3: receipt_token column ─────────────────────────────────────────
+  -- One DDL with NOT NULL + volatile DEFAULT. Postgres evaluates the default per
+  -- existing row during ADD COLUMN, so no separate UPDATE is needed — which
+  -- avoids the "pending trigger events" error that would otherwise block a
+  -- follow-up ALTER on `orders` inside a single transaction (supabase CLI
+  -- wraps the whole migration in one txn).
+  --
+  -- If a previous partial run already added the column as nullable, the IF NOT
+  -- EXISTS skips this block; the DO below tightens the constraint+default.
 
   ALTER TABLE public.orders
-    ADD COLUMN IF NOT EXISTS receipt_token text;
+    ADD COLUMN IF NOT EXISTS receipt_token text NOT NULL DEFAULT
+      replace(replace(replace(
+        encode(extensions.gen_random_bytes(16), 'base64'),
+        '+', '-'), '/', '_'), '=', '');
 
-  -- ─── Step 2: backfill existing rows ──────────────────────────────────────────
-  -- Separate implicit transaction — no ALTER TABLE follows in this block.
-
-  UPDATE public.orders
-    SET receipt_token = replace(replace(replace(
-          encode(gen_random_bytes(16), 'base64'),
-          '+', '-'), '/', '_'), '=', '')
-  WHERE receipt_token IS NULL;
-
-  -- ─── Step 3: add NOT NULL + DEFAULT + unique index ────────────────────────────
-  -- Fresh transaction — no DML on orders in this block.
+  DO $$
+  BEGIN
+    IF EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema='public' AND table_name='orders'
+        AND column_name='receipt_token' AND is_nullable='YES'
+    ) THEN
+      UPDATE public.orders
+        SET receipt_token = replace(replace(replace(
+              encode(extensions.gen_random_bytes(16), 'base64'),
+              '+', '-'), '/', '_'), '=', '')
+      WHERE receipt_token IS NULL;
+    END IF;
+  END $$;
 
   ALTER TABLE public.orders
     ALTER COLUMN receipt_token SET NOT NULL,
     ALTER COLUMN receipt_token SET DEFAULT
       replace(replace(replace(
-        encode(gen_random_bytes(16), 'base64'),
+        encode(extensions.gen_random_bytes(16), 'base64'),
         '+', '-'), '/', '_'), '=', '');
 
   CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_receipt_token
@@ -39,12 +54,12 @@
   ALTER TABLE public.receipt_sends
     ADD COLUMN IF NOT EXISTS send_token text
       DEFAULT replace(replace(replace(
-        encode(gen_random_bytes(16), 'base64'),
+        encode(extensions.gen_random_bytes(16), 'base64'),
         '+', '-'), '/', '_'), '=', '');
 
   UPDATE public.receipt_sends
     SET send_token = replace(replace(replace(
-          encode(gen_random_bytes(16), 'base64'),
+          encode(extensions.gen_random_bytes(16), 'base64'),
           '+', '-'), '/', '_'), '=', '')
   WHERE send_token IS NULL;
 
@@ -73,7 +88,7 @@
   BEGIN
     IF NEW.receipt_token IS NULL THEN
       NEW.receipt_token := replace(replace(replace(
-        encode(gen_random_bytes(16), 'base64'),
+        encode(extensions.gen_random_bytes(16), 'base64'),
         '+', '-'), '/', '_'), '=', '');
     END IF;
     RETURN NEW;

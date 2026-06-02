@@ -26,23 +26,18 @@
 CREATE UNIQUE INDEX IF NOT EXISTS ux_menus_clover_source
     ON public.menus (merchant_id, source_external_id)
     WHERE source_system = 'clover' AND source_external_id IS NOT NULL;
-
 CREATE UNIQUE INDEX IF NOT EXISTS ux_menu_items_clover_source
     ON public.menu_items (merchant_id, source_external_id)
     WHERE source_system = 'clover' AND source_external_id IS NOT NULL;
-
 CREATE UNIQUE INDEX IF NOT EXISTS ux_categories_clover_source
     ON public.categories (merchant_id, source_external_id)
     WHERE source_system = 'clover' AND source_external_id IS NOT NULL;
-
 CREATE UNIQUE INDEX IF NOT EXISTS ux_modifier_groups_clover_source
     ON public.modifier_groups (merchant_id, source_external_id)
     WHERE source_system = 'clover' AND source_external_id IS NOT NULL;
-
 CREATE UNIQUE INDEX IF NOT EXISTS ux_modifier_group_items_clover_source
     ON public.modifier_group_items (merchant_id, source_external_id)
     WHERE source_system = 'clover' AND source_external_id IS NOT NULL;
-
 -- category_items: dual-row pattern for (item × menu × category). Partial so
 -- legacy rows with NULL menu_id remain valid; new importer-written rows always
 -- supply menu_id, so this index is the real upsert key for the importer path.

@@ -256,7 +256,7 @@ export default function CreateReservationDialog ({
                             <Input
                               type='number'
                               min={1}
-                              max={20}
+                              max={500}
                               value={field.value ?? ''}
                               onChange={e =>
                                 field.onChange(e.target.value === '' ? '' : parseInt(e.target.value, 10))

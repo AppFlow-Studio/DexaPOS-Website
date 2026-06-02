@@ -118,4 +118,4 @@ BEGIN
   GET DIAGNOSTICS v_rows = ROW_COUNT;
   RETURN v_rows;
 END;
-$$;
+$$;;

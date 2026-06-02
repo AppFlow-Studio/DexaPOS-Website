@@ -1,32 +1,3 @@
--- =====================================================================
--- Migration: apply_refund_to_payment_v4 — proportional SC reversal
--- =====================================================================
--- Wave D fork of v3. One addition: proportional refunded_service_charge
--- delta, matching the v3 dual_pricing_fee / tip_fee pattern verbatim:
---
---   v_delta_sc := ROUND(COALESCE(v_payment.service_charge, 0)
---                       * v_amount_ratio, 2);
---
--- LEAST-clamps cumulative refunded_service_charge against the snapshot
--- on partial refunds so single-step drift stays under a cent. Snaps to
--- gross on void / final-refund branch (v_is_full_refund) so multi-step
--- partial drift always closes to exactly service_charge by the time the
--- payment is fully reversed.
---
--- Legacy payments (pre-v13) have service_charge = 0 from the column
--- DEFAULT; the multiplication yields 0 and the branch is a no-op for
--- those rows.
---
--- Idempotency op string: 'apply_refund_to_payment_v4' (separate namespace
--- from v3, per the v9 → v10 / v12 → v13 precedent).
---
--- Apply AFTER:
---   - order_payments_add_service_charge_columns.sql
---   - apply_refund_to_payment_v3_platform_fees.sql
---
--- Rollback: apply_refund_to_payment_v4_sc_reversal_rollback.sql
--- =====================================================================
-
 CREATE OR REPLACE FUNCTION public.apply_refund_to_payment_v4(
   p_payment_id uuid,
   p_refund_amount numeric,
@@ -53,15 +24,11 @@ DECLARE
   v_new_refunded numeric;
   v_new_status payment_status;
   v_ci record;
-
-  -- v3 carryovers: proportional fee refund.
   v_amount_ratio numeric;
   v_tip_ratio numeric;
   v_delta_dpf numeric;
   v_delta_tipf numeric;
   v_is_full_refund boolean;
-
-  -- v4 addition: proportional SC reversal.
   v_delta_sc numeric;
 BEGIN
   IF p_idempotency_key IS NOT NULL THEN
@@ -128,9 +95,6 @@ BEGIN
         THEN tip_fee
         ELSE LEAST(tip_fee, COALESCE(refunded_tip_fee, 0) + v_delta_tipf)
       END,
-      -- v4 delta: same shape as v3's fee branches — snap to gross on full
-      -- refund/void; LEAST-clamp on partial. Drift invariant:
-      -- refunded_service_charge ≤ service_charge.
       service_charge_refunded = CASE WHEN v_is_full_refund
         THEN service_charge
         ELSE LEAST(service_charge, COALESCE(service_charge_refunded, 0) + v_delta_sc)
@@ -166,4 +130,4 @@ GRANT EXECUTE ON FUNCTION public.apply_refund_to_payment_v4(
 ) TO authenticated;
 
 COMMENT ON FUNCTION public.apply_refund_to_payment_v4 IS
-  'Wave D fork of apply_refund_to_payment_v3. Adds proportional refunded_service_charge delta (same LEAST clamp + full-refund snap pattern as refunded_dual_pricing_fee / refunded_tip_fee). Reverses the per-payment service_charge snapshot written by process_payment_v13. Drift invariant: refunded_service_charge ≤ service_charge. Idempotency op: ''apply_refund_to_payment_v4''.';
+  'Wave D fork of apply_refund_to_payment_v3. Adds proportional refunded_service_charge delta (same LEAST clamp + full-refund snap pattern as refunded_dual_pricing_fee / refunded_tip_fee). Reverses the per-payment service_charge snapshot written by process_payment_v13. Drift invariant: refunded_service_charge ≤ service_charge. Idempotency op: ''apply_refund_to_payment_v4''.';;

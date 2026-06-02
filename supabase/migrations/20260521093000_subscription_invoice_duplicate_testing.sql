@@ -3,6 +3,5 @@
 -- a new invoice row only when testing requires it.
 
 drop index if exists public.uq_subscription_invoices_period;
-
 create index if not exists idx_subscription_invoices_subscription_period
   on public.subscription_invoices(subscription_id, billing_period_start);

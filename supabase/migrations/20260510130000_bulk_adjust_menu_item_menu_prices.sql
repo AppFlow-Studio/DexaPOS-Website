@@ -231,16 +231,12 @@ BEGIN
   );
 END;
 $$;
-
 REVOKE ALL ON FUNCTION public.bulk_adjust_menu_item_menu_prices(
   uuid, uuid, uuid, uuid[], text, numeric, text, text
 ) FROM public;
-
 GRANT EXECUTE ON FUNCTION public.bulk_adjust_menu_item_menu_prices(
   uuid, uuid, uuid, uuid[], text, numeric, text, text
 ) TO authenticated, service_role;
-
-
 -- ─────────────────────────────────────────────────────────────────────────────
 -- RPC 2: bulk_adjust_menu_item_menu_delivery_prices  (delivery price, L5)
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -444,11 +440,9 @@ BEGIN
   );
 END;
 $$;
-
 REVOKE ALL ON FUNCTION public.bulk_adjust_menu_item_menu_delivery_prices(
   uuid, uuid, uuid, uuid[], text, numeric, text, text
 ) FROM public;
-
 GRANT EXECUTE ON FUNCTION public.bulk_adjust_menu_item_menu_delivery_prices(
   uuid, uuid, uuid, uuid[], text, numeric, text, text
 ) TO authenticated, service_role;

@@ -22,11 +22,9 @@
 
 ALTER TABLE public.inventory_items
     ADD COLUMN IF NOT EXISTS par_level NUMERIC;
-
 COMMENT ON COLUMN public.inventory_items.par_level IS
     'Target on-hand quantity. Auto-PO generation orders up to this level. '
     'Distinct from reorder_point (the low-stock alert threshold).';
-
 -- ============================================================================
 -- PART 2 — T3.3: unit_conversions
 -- Conversion rules between units (e.g. 1 case = 24 each). A NULL
@@ -47,22 +45,18 @@ CREATE TABLE IF NOT EXISTS public.unit_conversions (
     CONSTRAINT unit_conversions_no_self   CHECK (from_unit <> to_unit),
     CONSTRAINT unit_conversions_unique    UNIQUE (merchant_id, inventory_item_id, from_unit, to_unit)
 );
-
 COMMENT ON TABLE public.unit_conversions IS
     'Unit conversion factors. inventory_item_id NULL = merchant-wide default '
     'rule for the from_unit→to_unit pair.';
-
 CREATE INDEX IF NOT EXISTS idx_unit_conversions_merchant
     ON public.unit_conversions(merchant_id);
 CREATE INDEX IF NOT EXISTS idx_unit_conversions_item
     ON public.unit_conversions(inventory_item_id);
-
 DROP TRIGGER IF EXISTS set_unit_conversions_updated_at ON public.unit_conversions;
 CREATE TRIGGER set_unit_conversions_updated_at
     BEFORE UPDATE ON public.unit_conversions
     FOR EACH ROW
     EXECUTE FUNCTION public.update_updated_at_column();
-
 -- ============================================================================
 -- PART 3 — T3.1: inventory_transfers + inventory_transfer_items
 -- ============================================================================
@@ -94,11 +88,9 @@ CREATE TABLE IF NOT EXISTS public.inventory_transfers (
     CONSTRAINT inventory_transfers_distinct_locs   CHECK (from_location_id <> to_location_id),
     CONSTRAINT inventory_transfers_number_unique   UNIQUE (merchant_id, transfer_number)
 );
-
 COMMENT ON TABLE public.inventory_transfers IS
     'Inter-location stock transfers. Source stock is decremented on initiate, '
     'destination stock incremented on receive (supports partial receives).';
-
 CREATE TABLE IF NOT EXISTS public.inventory_transfer_items (
     id                  UUID        NOT NULL DEFAULT gen_random_uuid(),
     transfer_id         UUID        NOT NULL REFERENCES public.inventory_transfers(id) ON DELETE CASCADE,
@@ -111,11 +103,9 @@ CREATE TABLE IF NOT EXISTS public.inventory_transfer_items (
     CONSTRAINT inventory_transfer_items_pkey         PRIMARY KEY (id),
     CONSTRAINT inventory_transfer_items_unique_item  UNIQUE (transfer_id, inventory_item_id)
 );
-
 COMMENT ON TABLE public.inventory_transfer_items IS
     'Line items for an inventory transfer. quantity_received is NULL until the '
     'transfer is received; a value <> quantity_sent is a receiving discrepancy.';
-
 CREATE INDEX IF NOT EXISTS idx_inventory_transfers_merchant
     ON public.inventory_transfers(merchant_id);
 CREATE INDEX IF NOT EXISTS idx_inventory_transfers_from
@@ -129,19 +119,16 @@ CREATE INDEX IF NOT EXISTS idx_inventory_transfer_items_transfer
     ON public.inventory_transfer_items(transfer_id);
 CREATE INDEX IF NOT EXISTS idx_inventory_transfer_items_item
     ON public.inventory_transfer_items(inventory_item_id);
-
 DROP TRIGGER IF EXISTS set_inventory_transfers_updated_at ON public.inventory_transfers;
 CREATE TRIGGER set_inventory_transfers_updated_at
     BEFORE UPDATE ON public.inventory_transfers
     FOR EACH ROW
     EXECUTE FUNCTION public.update_updated_at_column();
-
 DROP TRIGGER IF EXISTS set_inventory_transfer_items_updated_at ON public.inventory_transfer_items;
 CREATE TRIGGER set_inventory_transfer_items_updated_at
     BEFORE UPDATE ON public.inventory_transfer_items
     FOR EACH ROW
     EXECUTE FUNCTION public.update_updated_at_column();
-
 -- ============================================================================
 -- PART 4 — T3.2: Transfer RPCs
 -- ============================================================================
@@ -149,7 +136,6 @@ CREATE TRIGGER set_inventory_transfer_items_updated_at
 DROP FUNCTION IF EXISTS public.initiate_transfer(UUID, UUID, UUID, JSONB, TEXT, TEXT, TEXT);
 DROP FUNCTION IF EXISTS public.receive_transfer(UUID, JSONB, TEXT, TEXT);
 DROP FUNCTION IF EXISTS public.cancel_transfer(UUID, TEXT, TEXT);
-
 -- ----------------------------------------------------------------------------
 -- 4a. initiate_transfer()
 -- Creates an in_transit transfer and decrements source-location stock for each
@@ -262,7 +248,6 @@ BEGIN
     );
 END;
 $$;
-
 -- ----------------------------------------------------------------------------
 -- 4b. receive_transfer()
 -- Records received quantities, increments destination stock, marks the
@@ -387,7 +372,6 @@ BEGIN
     );
 END;
 $$;
-
 -- ----------------------------------------------------------------------------
 -- 4c. cancel_transfer()
 -- Cancels an in_transit transfer and returns every sent quantity to the source
@@ -476,7 +460,6 @@ BEGIN
     );
 END;
 $$;
-
 -- ============================================================================
 -- PART 5 — Row-Level Security
 -- Mirrors the Phase 1 inventory pattern: admin for writes, location member for
@@ -485,12 +468,10 @@ $$;
 
 -- ---- unit_conversions -------------------------------------------------------
 ALTER TABLE public.unit_conversions ENABLE ROW LEVEL SECURITY;
-
 DROP POLICY IF EXISTS unit_conversions_select ON public.unit_conversions;
 DROP POLICY IF EXISTS unit_conversions_insert ON public.unit_conversions;
 DROP POLICY IF EXISTS unit_conversions_update ON public.unit_conversions;
 DROP POLICY IF EXISTS unit_conversions_delete ON public.unit_conversions;
-
 CREATE POLICY unit_conversions_select ON public.unit_conversions
     FOR SELECT USING (is_merchant_admin(merchant_id));
 CREATE POLICY unit_conversions_insert ON public.unit_conversions
@@ -499,15 +480,12 @@ CREATE POLICY unit_conversions_update ON public.unit_conversions
     FOR UPDATE USING (is_merchant_admin(merchant_id));
 CREATE POLICY unit_conversions_delete ON public.unit_conversions
     FOR DELETE USING (is_merchant_owner(merchant_id));
-
 -- ---- inventory_transfers ----------------------------------------------------
 ALTER TABLE public.inventory_transfers ENABLE ROW LEVEL SECURITY;
-
 DROP POLICY IF EXISTS inventory_transfers_select ON public.inventory_transfers;
 DROP POLICY IF EXISTS inventory_transfers_insert ON public.inventory_transfers;
 DROP POLICY IF EXISTS inventory_transfers_update ON public.inventory_transfers;
 DROP POLICY IF EXISTS inventory_transfers_delete ON public.inventory_transfers;
-
 CREATE POLICY inventory_transfers_select ON public.inventory_transfers
     FOR SELECT USING (
         is_merchant_admin(merchant_id)
@@ -520,15 +498,12 @@ CREATE POLICY inventory_transfers_update ON public.inventory_transfers
     FOR UPDATE USING (is_merchant_admin(merchant_id));
 CREATE POLICY inventory_transfers_delete ON public.inventory_transfers
     FOR DELETE USING (is_merchant_owner(merchant_id));
-
 -- ---- inventory_transfer_items ----------------------------------------------
 ALTER TABLE public.inventory_transfer_items ENABLE ROW LEVEL SECURITY;
-
 DROP POLICY IF EXISTS inventory_transfer_items_select ON public.inventory_transfer_items;
 DROP POLICY IF EXISTS inventory_transfer_items_insert ON public.inventory_transfer_items;
 DROP POLICY IF EXISTS inventory_transfer_items_update ON public.inventory_transfer_items;
 DROP POLICY IF EXISTS inventory_transfer_items_delete ON public.inventory_transfer_items;
-
 CREATE POLICY inventory_transfer_items_select ON public.inventory_transfer_items
     FOR SELECT USING (
         EXISTS (
@@ -565,7 +540,6 @@ CREATE POLICY inventory_transfer_items_delete ON public.inventory_transfer_items
               AND is_merchant_owner(it.merchant_id)
         )
     );
-
 -- ============================================================================
 -- PART 6 — Grants (match Phase 1/2 inventory RPC exposure)
 -- ============================================================================

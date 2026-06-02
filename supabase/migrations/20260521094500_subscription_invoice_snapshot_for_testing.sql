@@ -278,6 +278,5 @@ begin
   return v_invoice_id;
 end;
 $function$;
-
 revoke all on function public.generate_subscription_invoice_snapshot(uuid, date) from public;
 grant execute on function public.generate_subscription_invoice_snapshot(uuid, date) to authenticated, service_role;
