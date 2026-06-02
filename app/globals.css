@@ -219,6 +219,28 @@
   --spacing: 0.25rem;
 }
 
+.dashboard-sidebar-theme {
+  --sidebar: #f8fafc;
+  --sidebar-foreground: #475569;
+  --sidebar-primary: #0c4fd1;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #eef3fe;
+  --sidebar-accent-foreground: #0c4fd1;
+  --sidebar-border: #e2e8f0;
+  --sidebar-ring: #0c4fd1;
+}
+
+.dark .dashboard-sidebar-theme {
+  --sidebar: oklch(0.2471 0.0265 259.8847);
+  --sidebar-foreground: oklch(0.8864 0.0103 257.1169);
+  --sidebar-primary: #0c4fd1;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: oklch(0.3204 0.0284 260.1138);
+  --sidebar-accent-foreground: oklch(0.9521 0.0058 264.5313);
+  --sidebar-border: oklch(0.3729 0.0306 259.7328);
+  --sidebar-ring: #0c4fd1;
+}
+
 .dark {
   --background: oklch(0.2077 0.0398 265.7549);
   --foreground: oklch(0.9288 0.0126 255.5078);
