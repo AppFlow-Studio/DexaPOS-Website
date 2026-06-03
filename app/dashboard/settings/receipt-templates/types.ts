@@ -1,3 +1,13 @@
+export interface LocationIdentity {
+  name: string;
+  address_line1: string;
+  address_line2: string | null;
+  city: string;
+  state: string;
+  postal_code: string;
+  phone: string | null;
+}
+
 export type TemplateType =
   | "sale"
   | "kitchen"

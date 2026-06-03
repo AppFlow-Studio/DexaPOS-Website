@@ -31,6 +31,8 @@ import { useAuth } from "@clerk/nextjs";
 import { cn } from "@/lib/utils";
 import { OrderOutTab } from "@/components/dashboard/orderout/OrderOutTab";
 import { NotificationsTab } from "./components/NotificationsTab";
+import { HoursConfigModal } from "./components/HoursConfigModal";
+import { WeeklySchedule } from "./hooks/useOnlineOrderingSettings";
 import { useOrderOutStatus, useOnboardOrderOut } from "./hooks/useOrderOutStatus";
 import { FONT_GOOGLE_URLS } from "@/app/sites/lib/theme-utils";
 import {
@@ -222,6 +224,7 @@ function CompletedSetupPanel({
   const onboardMutation = useOnboardOrderOut(orgId || "");
   const [showOrderOutForm, setShowOrderOutForm] = useState(false);
   const [uploading, setUploading] = useState<Record<string, boolean>>({});
+  const [hoursModalOpen, setHoursModalOpen] = useState(false);
 
   const locationDefaults = useMemo(() => {
     return {
@@ -987,6 +990,35 @@ function CompletedSetupPanel({
               </div>
             </CardContent>
           </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Store Hours</CardTitle>
+              <CardDescription>Set the days and times your store accepts online orders.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button
+                variant="outline"
+                className="gap-2"
+                onClick={() => setHoursModalOpen(true)}
+              >
+                <Clock3 className="h-4 w-4" />
+                Edit Operating Hours
+              </Button>
+            </CardContent>
+          </Card>
+
+          <HoursConfigModal
+            open={hoursModalOpen}
+            onOpenChange={setHoursModalOpen}
+            title="Operating Hours"
+            description="Set the days and times your store accepts online orders."
+            schedule={settings.operatingHours}
+            onSave={(schedule: WeeklySchedule) => {
+              onUpdate({ operatingHours: schedule });
+              setHoursModalOpen(false);
+            }}
+          />
         </TabsContent>
 
         <TabsContent value="orderout" className="space-y-6">

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { ShoppingBag } from "lucide-react";
 import { useCart, resolveCartUnitPrice } from "../../hooks/useCart";
@@ -94,6 +95,20 @@ export function CheckoutPage({
   const { items, clearCart, updateQuantity, removeItem, getSubtotal } = useCart();
   const { isAuthenticated, customer } = useSession();
   const storePath = useStorefrontPath(slug);
+  const router = useRouter();
+
+  // Compute store-open status early so we can gate entry before rendering the form.
+  const _storeOpenEarly = isStoreOpenNow(
+    config?.operatingHours ?? (location as any).business_hours,
+    location.timezone ?? null,
+  );
+  // Redirect to menu immediately if the store is confirmed closed.
+  // null means "no hours configured" → allow through.
+  useEffect(() => {
+    if (_storeOpenEarly === false) {
+      router.replace(storePath());
+    }
+  }, [_storeOpenEarly, router, storePath]);
 
   // Hydration guard — cart is in localStorage
   const [hydrated, setHydrated] = useState(false);
@@ -679,9 +694,8 @@ export function CheckoutPage({
       : newAddress.street.trim().length > 0 && newAddress.city.trim().length > 0);
   const minOrder = config?.minimumOrderAmount ?? 0;
   const meetsMinOrder = subtotal >= minOrder;
-  // null = no hours configured → allow ordering; false = closed; true = open
-  const storeOpen = isStoreOpenNow(config?.operatingHours ?? (location as any).business_hours);
-  const storeIsClosed = storeOpen === false;
+  // Reuse the early-computed value (same inputs, avoids double call).
+  const storeIsClosed = _storeOpenEarly === false;
   const zoneBlocked = orderType === "delivery" && selectedAddressId === "new" && zoneCheckState === "invalid";
   const paymentMethodReady =
     !config?.acceptOnlinePayments || payCashInStore || Boolean(tokenizationKey);
