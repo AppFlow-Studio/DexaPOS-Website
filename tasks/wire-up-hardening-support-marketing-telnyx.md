@@ -146,6 +146,17 @@ There is no persistent record of any message sent or received. Outbound state to
 - **Idempotency:** Telnyx can deliver the same event more than once — dedupe on `data.id` (event id) and/or `payload.id`.
 - **URL hierarchy:** per-message `webhook_url` → messaging-profile URL. Set the inbound/status URL on the **messaging profile** so all numbers route to one endpoint; optionally set a `webhook_failover_url`.
 
+### Build status (2026-06-03 — Ali)
+
+> **Code complete; awaiting manual migration apply + edge-function deploy + Telnyx ops creds (Temur) before live verification.**
+>
+> - Migration written: [`20260603000000_message_log_ledger_and_telnyx_rpcs.sql`](../supabase/migrations/20260603000000_message_log_ledger_and_telnyx_rpcs.sql) — `message_log` table (+ RLS, indexes, `updated_at` trigger), `record_telnyx_message(jsonb)` webhook writer (idempotent on `telnyx_message_id`, recipient rollup, STOP/START), `log_outbound_message(...)` send-time writer, `phone_last10()` helper. **Not yet applied** — Supabase MCP is read-only; apply via SQL editor paste → `supabase migration repair --status applied 20260603000000` (per the chain convention, not `db push`).
+> - Webhook endpoint: [`supabase/functions/telnyx-webhook/index.ts`](../supabase/functions/telnyx-webhook/index.ts) (+ `deno.json`, `config.toml` entry). Ed25519 verify (`telnyx-signature-ed25519` + `telnyx-timestamp`, 300s tolerance) **before** parse; verifies → service-role `record_telnyx_message` → fast 2xx; bad/missing/stale sig → 401, writes nothing.
+> - Outbound wiring (SMS) at send time via `logOutboundMessage` ([`lib/messaging/message-log.ts`](../lib/messaging/message-log.ts)): marketing campaigns (both send paths) + quick message ([`marketing.ts`](../app/dashboard/actions/marketing.ts)), waitlist ([`waitlist.ts`](../app/actions/notifications/waitlist.ts)), reservation confirm/cancel ([`reservation.ts`](../app/actions/notifications/reservation.ts)). Campaign/quick-message rows carry `recipient_id` so `message.finalized` rolls up into `marketing_recipients`/`marketing_campaigns` (closes the Part B 8/16 gap).
+> - jsonb extraction + STOP/phone-match/status-mapping logic verified read-only against staging.
+> - **Surprise (flag for Part B):** email sends route through **Resend**, not Telnyx — so the Telnyx ledger/webhook is SMS-only; email engagement is a separate provider path. Telnyx is **platform-shared** (no per-merchant config): outbound carries `merchant_id` at send time; inbound resolves merchant via customer phone.
+> - **Blocked on Temur:** `TELNYX_PUBLIC_KEY` env (Mission Control → Keys & Credentials), messaging-profile webhook URL → `…/functions/v1/telnyx-webhook` (+ optional failover), email sender SPF/DKIM.
+
 ### Scope
 
 - [ ]

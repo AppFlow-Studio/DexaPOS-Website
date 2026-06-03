@@ -4,6 +4,7 @@ import { auth } from "@clerk/nextjs/server";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { sendSMS, isValidPhoneNumber } from "@/lib/messaging/telnyx";
 import { sendEmail, buildEmailTemplate, isValidEmail } from "@/lib/messaging/resend";
+import { logOutboundMessage } from "@/lib/messaging/message-log";
 import type { Database } from "@/database.types";
 
 type MarketingCampaign = Database["public"]["Tables"]["marketing_campaigns"]["Row"];
@@ -357,6 +358,22 @@ export async function CreateAndSendCampaign({
         sendResult = { error: err.message };
       }
 
+      // SMS outbound ledger row (Part C). Telnyx webhooks advance this row's
+      // status by telnyx_message_id; email goes through Resend (no Telnyx ledger).
+      if (channel === "sms") {
+        await logOutboundMessage(supabase, {
+          merchantId,
+          toNumber: destination,
+          body,
+          telnyxMessageId: sendResult.id || null,
+          customerId: cid,
+          campaignId: campaign.id,
+          recipientId: recipient_id,
+          status: sendResult.error ? "failed" : "sent",
+          errorCode: sendResult.error || null,
+        });
+      }
+
       await (supabase as any).rpc("record_marketing_result", {
         p_recipient_id: recipient_id,
         p_status: sendResult.error ? "failed" : "delivered",
@@ -460,6 +477,20 @@ export async function SendCampaignNow(campaignId: string) {
           }
         } catch (err: any) {
           sendResult = { error: err.message };
+        }
+
+        if (channel === "sms") {
+          await logOutboundMessage(supabase, {
+            merchantId: campaign.merchant_id,
+            toNumber: destination,
+            body: campaign.body,
+            telnyxMessageId: sendResult.id || null,
+            customerId: cid,
+            campaignId,
+            recipientId: recipient_id,
+            status: sendResult.error ? "failed" : "sent",
+            errorCode: sendResult.error || null,
+          });
         }
 
         await (supabase as any).rpc("record_marketing_result", {
@@ -597,6 +628,21 @@ export async function SendQuickMessage({
   if (recipientError) {
     console.error("[SendQuickMessage] Recipient error:", recipientError);
     return { error: "Failed to create recipient record" };
+  }
+
+  // SMS outbound ledger row (Part C). Telnyx webhooks reconcile delivery status.
+  if (channel === "sms") {
+    await logOutboundMessage(supabase, {
+      merchantId,
+      toNumber: destination,
+      body: message,
+      telnyxMessageId: sendResult.id || null,
+      customerId,
+      campaignId: campaign.id,
+      recipientId: recipient?.id ?? null,
+      status: sendResult.error ? "failed" : "sent",
+      errorCode: sendResult.error || null,
+    });
   }
 
   await supabase

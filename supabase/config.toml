@@ -395,6 +395,13 @@ enabled = true
 verify_jwt = false
 entrypoint = "./functions/notify-waitlist-guest/index.ts"
 
+[functions.telnyx-webhook]
+enabled = true
+# Telnyx authenticates via Ed25519 signature, not a Supabase JWT.
+verify_jwt = false
+import_map = "./functions/telnyx-webhook/deno.json"
+entrypoint = "./functions/telnyx-webhook/index.ts"
+
 [functions.cancel-online-order]
 enabled = true
 verify_jwt = false
