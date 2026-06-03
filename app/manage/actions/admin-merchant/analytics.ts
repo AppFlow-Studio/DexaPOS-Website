@@ -23,6 +23,7 @@ export interface AdminOrderAnalytics {
   }>
   orderTypeBreakdown: {
     dine_in: number
+    qr_dine_in: number
     takeout: number
     delivery: number
     online: number
@@ -182,6 +183,7 @@ export async function getAdminOrderAnalytics(
   // Order type breakdown
   const orderTypeBreakdown = {
     dine_in: 0,
+    qr_dine_in: 0,
     takeout: 0,
     delivery: 0,
     online: 0,
@@ -566,6 +568,7 @@ function getEmptyAnalytics(): AdminOrderAnalytics {
     bestSellingItems: [],
     orderTypeBreakdown: {
       dine_in: 0,
+      qr_dine_in: 0,
       takeout: 0,
       delivery: 0,
       online: 0,

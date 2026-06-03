@@ -22,4 +22,4 @@ ALTER TABLE public.service_charge_rules
   CHECK (applies_on IN ('pre_discount', 'post_discount'));
 
 COMMENT ON COLUMN public.service_charge_rules.applies_on IS
-  'Base for the SC calculation: pre_discount (% of gross subtotal) or post_discount (% of net subtotal-after-discount). Default pre_discount matches the calculator fallback for legacy rules.';
+  'Base for the SC calculation: pre_discount (% of gross subtotal) or post_discount (% of net subtotal-after-discount). Default pre_discount matches the calculator fallback for legacy rules.';;

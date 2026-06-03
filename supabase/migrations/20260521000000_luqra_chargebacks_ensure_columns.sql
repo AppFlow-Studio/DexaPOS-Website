@@ -26,13 +26,11 @@ ALTER TABLE public.luqra_chargebacks
   ADD COLUMN IF NOT EXISTS is_reversal       text,
   ADD COLUMN IF NOT EXISTS first_seen_at     timestamptz NOT NULL DEFAULT now(),
   ADD COLUMN IF NOT EXISTS last_seen_at      timestamptz NOT NULL DEFAULT now();
-
 -- 2) Drop GENERATED ALWAYS AS IDENTITY on id so the sync can supply Luqra's
 --    case-version id. Existing rows keep their values; only the auto-generator
 --    is removed. No-op if the identity is already absent.
 ALTER TABLE public.luqra_chargebacks
   ALTER COLUMN id DROP IDENTITY IF EXISTS;
-
 -- 3) Drop the May 9 UNIQUE(case_number) constraint. Luqra case numbers are not
 --    globally unique across merchants/MIDs, only within a merchant — the May 5
 --    schema correctly enforces uniqueness via the id PRIMARY KEY and indexes
@@ -54,7 +52,6 @@ BEGIN
     EXECUTE format('ALTER TABLE public.luqra_chargebacks DROP CONSTRAINT %I', con_name);
   END IF;
 END $$;
-
 -- 4) Correct column types that May 9 declared wrongly. Each ALTER is guarded
 --    by a current-type check so the migration is a no-op (no table rewrite,
 --    no AccessExclusive lock) on databases where May 5 already won.
@@ -128,7 +125,6 @@ BEGIN
       ALTER COLUMN card_brand TYPE integer USING NULLIF(card_brand, '')::integer;
   END IF;
 END $$;
-
 -- 5) Force PostgREST to refresh its schema cache so changes are visible to the
 --    API immediately without a process restart.
 NOTIFY pgrst, 'reload schema';

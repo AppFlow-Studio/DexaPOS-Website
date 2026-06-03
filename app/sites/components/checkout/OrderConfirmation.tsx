@@ -4,6 +4,7 @@ import { CheckCircle2, Clock, CalendarClock } from "lucide-react";
 import Link from "next/link";
 import { useStorefrontPath } from "../../lib/use-storefront-path";
 import { formatScheduledTime } from "../../lib/format-scheduled-time";
+import { CallServerCard } from "../CallServerCard";
 
 interface SnapshotItem {
   name: string;
@@ -287,6 +288,9 @@ export function OrderConfirmation({
             )}
           </div>
         )}
+
+        <CallServerCard />
+
 
         {/* ── Footer CTAs ── */}
         <div className="flex flex-col gap-3 pt-1">

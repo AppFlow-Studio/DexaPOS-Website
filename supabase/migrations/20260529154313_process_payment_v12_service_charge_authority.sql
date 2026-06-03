@@ -631,4 +631,4 @@ GRANT EXECUTE ON FUNCTION public.process_payment_v12(
 ) TO authenticated;
 
 COMMENT ON FUNCTION public.process_payment_v12 IS
-  'Idempotent payment-processing RPC. Forks v11 with a single delta: a defensive PERFORM apply_service_charge_v1 (refresh mode) after the orders FOR UPDATE so the persisted SC matches current items before payment math runs. Closes the multi-station SC race called out in the senior backend review. Idempotency op namespace: ''process_payment_v12''.';
+  'Idempotent payment-processing RPC. Forks v11 with a single delta: a defensive PERFORM apply_service_charge_v1 (refresh mode) after the orders FOR UPDATE so the persisted SC matches current items before payment math runs. Closes the multi-station SC race called out in the senior backend review. Idempotency op namespace: ''process_payment_v12''.';;

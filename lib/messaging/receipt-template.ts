@@ -34,6 +34,7 @@ type ReceiptPayment = {
   payment_method?: string | null;
   status?: string | null;
   total_amount?: number | string | null;
+  refunded_amount?: number | string | null;
   card_last_four?: string | null;
   card_type?: string | null;
 };
@@ -346,6 +347,13 @@ export function renderReceiptHtml(
 /**
  * SMS receipt — single branded line with a hosted receipt link.
  * Short enough to reliably fit in 1 SMS segment and avoid carrier spam flags.
+ *
+ * Amount shown = sum of payment net amounts (total_amount − refunded_amount)
+ * across captured/paid/(partially_)refunded rows. order.total_amount is the
+ * bill, which can diverge from collected when there are discounts, comps,
+ * cash-priced surcharges, or partial payments. Primary tender = the row with
+ * the largest net amount, so the dominant tender wins when a card pre-auth
+ * and a cash settlement both sit on the same order.
  */
 export function renderReceiptText(
   order: ReceiptOrder,
@@ -362,13 +370,24 @@ export function renderReceiptText(
     : "-";
 
   const businessName = location?.name || "Receipt";
-  const total = fmtMoney(order.total_amount);
 
-  const payments = (order.order_payments ?? []).filter((p) => {
-    const s = (p.status ?? "").toLowerCase();
-    return s === "captured" || s === "paid";
-  });
-  const primary = payments[0];
+  const settled = (order.order_payments ?? [])
+    .filter((p) => {
+      const s = (p.status ?? "").toLowerCase();
+      return (
+        s === "captured" ||
+        s === "paid" ||
+        s === "refunded" ||
+        s === "partially_refunded"
+      );
+    })
+    .map((p) => ({ p, net: num(p.total_amount) - num(p.refunded_amount) }))
+    .filter((x) => x.net > 0);
+
+  const collected = settled.reduce((s, x) => s + x.net, 0);
+  const total = fmtMoney(collected > 0 ? collected : order.total_amount);
+
+  const primary = settled.slice().sort((a, b) => b.net - a.net)[0]?.p;
   const paidLine = primary ? paymentDisplay(primary, { dotChar: "****" }) : "";
 
   const summary = paidLine ? `${total}, ${paidLine}` : total;

@@ -156,9 +156,17 @@ export type BatchStatus = "open" | "closed" | "submitted" | "settled" | "funded"
 export interface SettlementBatchRecord {
   id: string;
   batch_id: string;
+  batch_number?: string;
+  acquirer?: string;
   merchant_id: string;
   location_id: string;
   terminal_id?: string;
+  payment_terminal_id?: string;
+  payment_terminals?: {
+    terminal_name: string | null;
+    serial_number: string | null;
+    terminal_model: string | null;
+  } | null;
   business_date: string;
   opened_at: string;
   closed_at?: string;

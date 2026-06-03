@@ -23,7 +23,6 @@ VALUES (
     'hq'
 )
 ON CONFLICT (code) DO NOTHING;
-
 -- Step 2: grant to hq.super_admin.
 INSERT INTO public.role_permissions (role_code, permission_code)
 SELECT 'hq.super_admin', 'hq.merchant.menu.import'
@@ -33,7 +32,6 @@ WHERE NOT EXISTS (
      WHERE role_code       = 'hq.super_admin'
        AND permission_code = 'hq.merchant.menu.import'
 );
-
 -- Step 3: also grant to hq.platform_admin. Remove this block for prod-only
 -- environments if onboarding ops should NOT have menu-import access without
 -- explicit promotion.

@@ -12,14 +12,11 @@
 
 CREATE INDEX IF NOT EXISTS idx_orders_location_created_at
   ON public.orders (location_id, created_at DESC);
-
 CREATE INDEX IF NOT EXISTS idx_order_items_order_active
   ON public.order_items (order_id)
   WHERE is_voided = false;
-
 CREATE INDEX IF NOT EXISTS idx_order_payments_order_id
   ON public.order_payments (order_id);
-
 -- Note: useOrderStore.syncOrderFromDatabase queries a non-existent
 -- table "order_item_payments" by order_id (pre-existing bug, fails
--- silently as non-fatal). No index added; fix the client code instead.
+-- silently as non-fatal). No index added; fix the client code instead.;

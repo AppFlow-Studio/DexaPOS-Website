@@ -2,6 +2,7 @@
 
 import { auth } from "@clerk/nextjs/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import {
   OnlineOrderingSettings,
   WeeklySchedule,
@@ -21,6 +22,8 @@ import {
 import { createClerkClient } from "@clerk/backend";
 import { uploadMerchantDocument, uploadOrganizationDocument } from "@/lib/cdn/server";
 import { getCurrentUserMerchantRole } from "@/app/dashboard/actions/role-check";
+import { buildQrTableUrl } from "@/app/sites/lib/store-url";
+import { syncStorefrontPaymentDomainWhitelist } from "@/lib/online-store/payment-domain-whitelist";
 
 type MissingRequestFieldKey =
   | "legalBusinessName"
@@ -47,6 +50,156 @@ export interface OnlineStoreRequestRequirementsResult {
   values: Partial<Record<MissingRequestFieldKey, string>>;
   error?: string;
 }
+
+export type QrTableManagerStatus = "not_generated" | "active" | "revoked";
+
+export interface QrTableManagerRow {
+  floorPlanObjectId: string;
+  tableLabel: string;
+  tableName: string;
+  zoneName: string | null;
+  sectionId: string | null;
+  capacity: number | null;
+  qrStatus: QrTableManagerStatus;
+  qrCodeId: string | null;
+  tableToken: string | null;
+  qrUrl: string | null;
+  tokenVersion: number | null;
+  scanCountLifetime: number;
+  scanCount7d: number;
+  lastScannedAt: string | null;
+  generatedAt: string | null;
+}
+
+export interface QrTableManagerSnapshot {
+  success: boolean;
+  storeName: string | null;
+  storeSlug: string | null;
+  customDomain: string | null;
+  acceptsDineIn: boolean;
+  qrKillSwitch: boolean;
+  tables: QrTableManagerRow[];
+  generatedCount: number;
+  activeCount: number;
+  error?: string;
+}
+
+export interface QrAnalyticsSnapshot {
+  success: boolean;
+  rangeDays: 7 | 30;
+  stages: {
+    scanned: number;
+    menuViewed: number;
+    cartStarted: number;
+    checkout: number;
+    paid: number;
+    abandoned: number;
+  };
+  conversionRate: number;
+  abandonmentRate: number;
+  qrOrderCount: number;
+  qrRevenue: number;
+  qrAov: number;
+  serverAov: number;
+  repeatPhoneRate: number;
+  byHour: Array<{
+    hour: number;
+    label: string;
+    scans: number;
+    paid: number;
+  }>;
+  topTables: Array<{
+    tableLabel: string;
+    scans: number;
+    paidOrders: number;
+    revenue: number;
+  }>;
+  topItems: Array<{
+    itemName: string;
+    quantity: number;
+    revenue: number;
+  }>;
+  error?: string;
+}
+
+export interface QrGuestAlertRow {
+  id: string;
+  tableLabel: string;
+  alertType: string;
+  message: string | null;
+  status: string;
+  createdAt: string;
+  orderId: string | null;
+  onlineOrderSessionId: string | null;
+}
+
+export interface QrGuestAlertsSnapshot {
+  success: boolean;
+  openCount: number;
+  alerts: QrGuestAlertRow[];
+  error?: string;
+}
+
+export interface QrBillingGateStatus {
+  entitled: boolean;
+  requiredPlanCode: string | null;
+  requiredPlanName: string | null;
+  currentPlanCode: string | null;
+  currentPlanName: string | null;
+  subscriptionStatus: string | null;
+  hasServiceOverride: boolean;
+  serviceCode: string;
+  reason: string | null;
+}
+
+interface QrCodeRow {
+  id: string;
+  floor_plan_object_id: string;
+  table_label: string;
+  token: string;
+  token_version: number;
+  is_active: boolean;
+  scan_count: number;
+  last_scanned_at: string | null;
+  created_at: string;
+  rotated_at: string | null;
+}
+
+interface QrScanEventRow {
+  table_qr_code_id: string | null;
+  occurred_at: string;
+}
+
+interface QrAnalyticsEventRow {
+  stage: string;
+  table_qr_code_id: string | null;
+  occurred_at: string;
+}
+
+interface QrAnalyticsOrderItemRow {
+  item_name: string | null;
+  quantity: number | null;
+  subtotal: number | string | null;
+}
+
+interface QrAnalyticsOrderRow {
+  id: string;
+  total_amount: number | string | null;
+  customer_phone: string | null;
+  table_number: string | null;
+  created_at: string;
+  order_items?: QrAnalyticsOrderItemRow[] | null;
+}
+
+interface QrAnalyticsSessionOrderRow {
+  order_id: string | null;
+  customer_phone: string | null;
+  table_label: string | null;
+  created_at: string;
+}
+
+const QR_BILLING_SERVICE_CODE = "qr_table_ordering";
+const QR_DEFAULT_REQUIRED_PLAN_CODE = "multi_location";
 
 function emptyMissing(): RequestPacketMissing {
   return {
@@ -79,6 +232,23 @@ function readString(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
+}
+
+function toMoneyNumber(value: unknown): number {
+  const parsed =
+    typeof value === "number"
+      ? value
+      : typeof value === "string"
+        ? Number.parseFloat(value)
+        : Number.NaN;
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function formatHourLabel(hour: number): string {
+  const normalized = ((hour % 24) + 24) % 24;
+  const suffix = normalized >= 12 ? "PM" : "AM";
+  const displayHour = normalized % 12 === 0 ? 12 : normalized % 12;
+  return `${displayHour}${suffix}`;
 }
 
 function readFormText(formData: FormData, key: string): string | null {
@@ -136,6 +306,151 @@ async function buildRequestedStoreSlug(
   }
 
   return `${baseSlug}-${Date.now().toString().slice(-6)}`;
+}
+
+async function getQrBillingGateStatus(
+  locationId: string,
+  merchantId: string
+): Promise<QrBillingGateStatus> {
+  const serviceRole = createServiceRoleClient();
+
+  const [
+    serviceResult,
+    merchantPlanStatusResult,
+    merchantPlansResult,
+    locationSubscriptionResult,
+  ] = await Promise.all([
+    serviceRole
+      .from("billable_services")
+      .select("id, service_code, display_name, metadata, is_active")
+      .eq("service_code", QR_BILLING_SERVICE_CODE)
+      .maybeSingle(),
+    serviceRole.rpc("get_merchant_subscription_status", {
+      p_merchant_id: merchantId,
+    }),
+    serviceRole
+      .from("subscription_plans")
+      .select("plan_code, display_name, display_order")
+      .eq("plan_scope", "merchant_tier")
+      .eq("is_active", true)
+      .order("display_order", { ascending: true }),
+    serviceRole
+      .from("merchant_subscriptions")
+      .select("id")
+      .eq("merchant_id", merchantId)
+      .eq("location_id", locationId)
+      .maybeSingle(),
+  ]);
+
+  const service = serviceResult.data as
+    | {
+        id: string;
+        service_code: string;
+        display_name: string;
+        metadata: Record<string, unknown> | null;
+        is_active: boolean;
+      }
+    | null;
+  const serviceMetadata =
+    (service?.metadata as Record<string, unknown> | null) ?? null;
+  const requiredPlanCode =
+    readString(serviceMetadata?.required_plan_code) ??
+    QR_DEFAULT_REQUIRED_PLAN_CODE;
+
+  const planRows =
+    (merchantPlansResult.data as
+      | Array<{
+          plan_code: string;
+          display_name: string;
+          display_order: number | null;
+        }>
+      | null) ?? [];
+  const planOrderMap = new Map(
+    planRows.map((plan) => [plan.plan_code, Number(plan.display_order ?? 0)])
+  );
+  const planLabelMap = new Map(
+    planRows.map((plan) => [plan.plan_code, plan.display_name])
+  );
+
+  const merchantPlanStatus =
+    (merchantPlanStatusResult.data as
+      | {
+          plan?: { code?: string | null; name?: string | null } | null;
+          subscription_status?: string | null;
+        }
+      | null) ?? null;
+
+  let hasServiceOverride = false;
+  if (locationSubscriptionResult.data?.id) {
+    const assignmentResult = await serviceRole.rpc(
+      "list_subscription_service_assignments",
+      {
+        p_subscription_id: locationSubscriptionResult.data.id,
+      }
+    );
+
+    const assignments =
+      (assignmentResult.data as
+        | Array<{
+            service_code: string;
+            is_enabled: boolean;
+          }>
+        | null) ?? [];
+    hasServiceOverride = assignments.some(
+      (assignment) =>
+        assignment.service_code === QR_BILLING_SERVICE_CODE &&
+        assignment.is_enabled
+    );
+  }
+
+  const currentPlanCode = readString(merchantPlanStatus?.plan?.code) ?? null;
+  const currentPlanName = readString(merchantPlanStatus?.plan?.name) ?? null;
+  const subscriptionStatus =
+    readString(merchantPlanStatus?.subscription_status) ?? null;
+  const requiredPlanName =
+    planLabelMap.get(requiredPlanCode) ??
+    (requiredPlanCode === QR_DEFAULT_REQUIRED_PLAN_CODE
+      ? "Multi-Location"
+      : null);
+
+  const currentPlanOrder =
+    currentPlanCode !== null ? planOrderMap.get(currentPlanCode) ?? -1 : -1;
+  const requiredPlanOrder = planOrderMap.get(requiredPlanCode) ?? 9999;
+  const planStatusAllowsAccess =
+    subscriptionStatus === "active" || subscriptionStatus === "past_due";
+  const entitledByPlan =
+    service?.is_active !== false &&
+    planStatusAllowsAccess &&
+    currentPlanOrder >= requiredPlanOrder;
+
+  let reason: string | null = null;
+  if (!service) {
+    reason =
+      "QR billing gate is not configured yet. Ask Dexa HQ to seed QR Table Ordering in the service catalog.";
+  } else if (hasServiceOverride) {
+    reason =
+      "HQ override is active for this location through the QR Table Ordering service assignment.";
+  } else if (entitledByPlan) {
+    reason = null;
+  } else if (!currentPlanCode) {
+    reason = `QR Table Ordering requires the ${requiredPlanName ?? requiredPlanCode} tier or an HQ override.`;
+  } else if (!planStatusAllowsAccess) {
+    reason = `QR Table Ordering is unavailable while the merchant subscription is ${subscriptionStatus ?? "inactive"}.`;
+  } else {
+    reason = `QR Table Ordering requires the ${requiredPlanName ?? requiredPlanCode} tier or an HQ override. Current tier: ${currentPlanName ?? currentPlanCode}.`;
+  }
+
+  return {
+    entitled: Boolean(hasServiceOverride || entitledByPlan),
+    requiredPlanCode,
+    requiredPlanName,
+    currentPlanCode,
+    currentPlanName,
+    subscriptionStatus,
+    hasServiceOverride,
+    serviceCode: QR_BILLING_SERVICE_CODE,
+    reason,
+  };
 }
 
 async function computeOnlineStoreRequestRequirements(
@@ -479,7 +794,8 @@ export async function saveOnlineStoreRequestRequirements(formData: FormData) {
 
 function mapConfigToSettings(
   config: any,
-  location: any
+  location: any,
+  qrBillingGate?: QrBillingGateStatus
 ): Partial<OnlineOrderingSettings> {
   const setupRequestStatus = normalizeOnlineStoreRequestStatus(
     config.setup_request_status
@@ -499,6 +815,7 @@ function mapConfigToSettings(
     enabled: config.is_active ?? false,
     storeName: config.store_name ?? location.name,
     storeSlug: config.slug ?? "",
+    customDomain: config.custom_domain ?? null,
     description: config.description ?? "",
     phone: config.phone ?? location.phone ?? "",
     email: config.email ?? location.email ?? "",
@@ -507,7 +824,7 @@ function mapConfigToSettings(
       : "",
 
     templateId: (["hero", "market", "boutique"].includes(config.template_id ?? "") ? config.template_id : "classic") as "classic" | "hero" | "market" | "boutique",
-    primaryColor: config.primary_color ?? "#2DD4BF",
+    primaryColor: config.primary_color ?? "#0C4FD1",
     secondaryColor: config.secondary_color ?? "#10b981",
     accentColor: config.accent_color ?? null,
     backgroundColor: config.background_color ?? "#FFFFFF",
@@ -528,6 +845,25 @@ function mapConfigToSettings(
     minimumOrderAmount: Number(config.min_order ?? 0),
     preparationLeadTime: config.estimated_prep_minutes ?? 20,
     futureOrderMaxDays: config.max_future_order_days ?? 0,
+    acceptsDineIn: config.accepts_dine_in ?? false,
+    qrFulfillmentMode:
+      config.qr_fulfillment_mode === "counter" ? "counter" : "runner",
+    qrGeofenceEnabled: config.qr_geofence_enabled ?? false,
+    qrServiceFeePct: Number(config.qr_service_fee_pct ?? 0),
+    qrKillSwitch: config.qr_kill_switch ?? false,
+    qrBillingGate:
+      qrBillingGate ?? {
+        entitled: false,
+        requiredPlanCode: QR_DEFAULT_REQUIRED_PLAN_CODE,
+        requiredPlanName: "Multi-Location",
+        currentPlanCode: null,
+        currentPlanName: null,
+        subscriptionStatus: null,
+        hasServiceOverride: false,
+        serviceCode: QR_BILLING_SERVICE_CODE,
+        reason:
+          "QR billing gate is not configured yet. Ask Dexa HQ to seed QR Table Ordering in the service catalog.",
+      },
 
     baseDeliveryFee: Number(config.delivery_fee ?? 0),
     freeDeliveryThreshold: Number(config.free_delivery_threshold ?? 0),
@@ -572,7 +908,7 @@ export async function getOnlineOrderingSettings(
   const { data: location, error: locError } = await supabase
     .from("locations")
     .select(
-      "name, phone, email, address_line1, city, state, postal_code, business_hours"
+      "merchant_id, name, phone, email, address_line1, city, state, postal_code, business_hours"
     )
     .eq("id", locationId)
     .single();
@@ -581,6 +917,11 @@ export async function getOnlineOrderingSettings(
     console.error("Error fetching location:", locError);
     return null;
   }
+
+  const qrBillingGate = await getQrBillingGateStatus(
+    locationId,
+    location.merchant_id as string
+  );
 
   const { data: config, error: configError } = await supabase
     .from("online_store_config")
@@ -593,7 +934,7 @@ export async function getOnlineOrderingSettings(
   }
 
   if (config) {
-    return mapConfigToSettings(config, location);
+    return mapConfigToSettings(config, location, qrBillingGate);
   }
 
   return {
@@ -607,6 +948,7 @@ export async function getOnlineOrderingSettings(
     setupCompletedAt: null,
     setupRejectionReason: null,
     storeName: location.name,
+    qrBillingGate,
     phone: location.phone ?? "",
     email: location.email ?? "",
     address: `${location.address_line1}, ${location.city}, ${location.state} ${location.postal_code}`,
@@ -769,6 +1111,47 @@ export async function saveOnlineOrderingSettings(
     );
   }
 
+  const qrBillingGate = await getQrBillingGateStatus(locationId, merchantId);
+  const qrKeys = [
+    "acceptsDineIn",
+    "qrFulfillmentMode",
+    "qrGeofenceEnabled",
+    "qrServiceFeePct",
+    "qrKillSwitch",
+  ] as const;
+  const touchedQrKeys = qrKeys.filter((key) => {
+    if (!Object.prototype.hasOwnProperty.call(settings, key)) return false;
+
+    switch (key) {
+      case "acceptsDineIn":
+        return Boolean(settings.acceptsDineIn) !== Boolean(existingConfig.accepts_dine_in);
+      case "qrFulfillmentMode":
+        return (
+          (settings.qrFulfillmentMode === "counter" ? "counter" : "runner") !==
+          (existingConfig.qr_fulfillment_mode === "counter" ? "counter" : "runner")
+        );
+      case "qrGeofenceEnabled":
+        return Boolean(settings.qrGeofenceEnabled) !== Boolean(existingConfig.qr_geofence_enabled);
+      case "qrServiceFeePct":
+        return Number(settings.qrServiceFeePct ?? 0) !== Number(existingConfig.qr_service_fee_pct ?? 0);
+      case "qrKillSwitch":
+        return Boolean(settings.qrKillSwitch) !== Boolean(existingConfig.qr_kill_switch);
+      default:
+        return false;
+    }
+  });
+
+  if (touchedQrKeys.length > 0 && !qrBillingGate.entitled) {
+    const onlyTurningOffQr =
+      touchedQrKeys.length === 1 && settings.acceptsDineIn === false;
+    if (!onlyTurningOffQr) {
+      throw new Error(
+        qrBillingGate.reason ||
+          "QR Table Ordering is not available for the current subscription tier."
+      );
+    }
+  }
+
   // Payment + tipping are HQ-only, enforced server-side to prevent UI bypass.
   const forbiddenKeys = [
     "nmiTokenizationKey",
@@ -825,6 +1208,16 @@ export async function saveOnlineOrderingSettings(
   if (settings.autoAcceptOrders !== undefined) configData.auto_accept_orders = Boolean(settings.autoAcceptOrders);
   if (settings.preparationLeadTime !== undefined) configData.estimated_prep_minutes = Number(settings.preparationLeadTime) || 0;
   if (settings.futureOrderMaxDays !== undefined) configData.max_future_order_days = Number(settings.futureOrderMaxDays) || 0;
+  if (settings.acceptsDineIn !== undefined) configData.accepts_dine_in = Boolean(settings.acceptsDineIn);
+  if (settings.qrFulfillmentMode !== undefined) {
+    configData.qr_fulfillment_mode = settings.qrFulfillmentMode === "counter" ? "counter" : "runner";
+  }
+  if (settings.qrGeofenceEnabled !== undefined) configData.qr_geofence_enabled = Boolean(settings.qrGeofenceEnabled);
+  if (settings.qrServiceFeePct !== undefined) {
+    const v = Number(settings.qrServiceFeePct || 0);
+    configData.qr_service_fee_pct = Number.isFinite(v) ? Math.max(0, Number(v.toFixed(2))) : 0;
+  }
+  if (settings.qrKillSwitch !== undefined) configData.qr_kill_switch = Boolean(settings.qrKillSwitch);
   if (settings.minimumOrderAmount !== undefined) {
     const v = Number(settings.minimumOrderAmount || 0);
     configData.min_order_cents = Math.round(v * 100);
@@ -887,8 +1280,25 @@ export async function saveOnlineOrderingSettings(
     });
   }
 
+  const domainWhitelistResult = await syncStorefrontPaymentDomainWhitelist({
+    locationId,
+    slug:
+      (typeof configData.slug === "string" && configData.slug.trim().length > 0
+        ? configData.slug
+        : (existingConfig.slug as string | null)) ?? null,
+    customDomain:
+      Object.prototype.hasOwnProperty.call(configData, "custom_domain")
+        ? ((configData.custom_domain as string | null) ?? null)
+        : ((existingConfig.custom_domain as string | null) ?? null),
+  });
+
   revalidatePath("/dashboard/online-ordering");
-  return { success: true };
+  return {
+    success: true,
+    domainWhitelisted: domainWhitelistResult.domainWhitelisted,
+    domainWhitelistError: domainWhitelistResult.domainWhitelistError,
+    domainWhitelistSkipped: domainWhitelistResult.domainWhitelistSkipped,
+  };
 }
 
 export async function sendTestOrderNotification(
@@ -964,6 +1374,864 @@ export async function getOrderNotificationAuditLog(
       sentAt: r.sent_at as string,
     })),
   };
+}
+
+function compareQrManagerRows(a: QrTableManagerRow, b: QrTableManagerRow) {
+  const zoneA = (a.zoneName || "zzz").toLowerCase();
+  const zoneB = (b.zoneName || "zzz").toLowerCase();
+  if (zoneA !== zoneB) return zoneA.localeCompare(zoneB);
+  return a.tableLabel.localeCompare(b.tableLabel, undefined, {
+    numeric: true,
+    sensitivity: "base",
+  });
+}
+
+export async function getQrTableManagerSnapshot(
+  locationId: string
+): Promise<QrTableManagerSnapshot> {
+  if (!locationId) {
+    return {
+      success: false,
+      storeName: null,
+      storeSlug: null,
+      customDomain: null,
+      acceptsDineIn: false,
+      qrKillSwitch: false,
+      tables: [],
+      generatedCount: 0,
+      activeCount: 0,
+      error: "Missing location",
+    };
+  }
+
+  const supabase = createServerSupabaseClient();
+  const db = supabase as any;
+
+  const { data: config, error: configError } = await supabase
+    .from("online_store_config")
+    .select(
+      "id, store_name, slug, custom_domain, setup_request_status, accepts_dine_in, qr_kill_switch"
+    )
+    .eq("location_id", locationId)
+    .maybeSingle();
+
+  if (configError) {
+    return {
+      success: false,
+      storeName: null,
+      storeSlug: null,
+      customDomain: null,
+      acceptsDineIn: false,
+      qrKillSwitch: false,
+      tables: [],
+      generatedCount: 0,
+      activeCount: 0,
+      error: configError.message,
+    };
+  }
+
+  if (!config) {
+    return {
+      success: false,
+      storeName: null,
+      storeSlug: null,
+      customDomain: null,
+      acceptsDineIn: false,
+      qrKillSwitch: false,
+      tables: [],
+      generatedCount: 0,
+      activeCount: 0,
+      error: "Online ordering is not configured for this location yet.",
+    };
+  }
+
+  const { data: tables, error: tablesError } = await supabase
+    .from("floor_plan_objects")
+    .select(
+      "id, name, label_override, zone_name, section_id, capacity, is_active, category"
+    )
+    .eq("location_id", locationId)
+    .eq("is_active", true)
+    .in("category", ["table", "booth"]);
+
+  if (tablesError) {
+    return {
+      success: false,
+      storeName: (config.store_name as string | null) ?? null,
+      storeSlug: (config.slug as string | null) ?? null,
+      customDomain: (config.custom_domain as string | null) ?? null,
+      acceptsDineIn: Boolean(config.accepts_dine_in),
+      qrKillSwitch: Boolean(config.qr_kill_switch),
+      tables: [],
+      generatedCount: 0,
+      activeCount: 0,
+      error: tablesError.message,
+    };
+  }
+
+  const floorPlanObjectIds = (tables ?? []).map((row) => row.id as string);
+  if (floorPlanObjectIds.length === 0) {
+    return {
+      success: true,
+      storeName: (config.store_name as string | null) ?? null,
+      storeSlug: (config.slug as string | null) ?? null,
+      customDomain: (config.custom_domain as string | null) ?? null,
+      acceptsDineIn: Boolean(config.accepts_dine_in),
+      qrKillSwitch: Boolean(config.qr_kill_switch),
+      tables: [],
+      generatedCount: 0,
+      activeCount: 0,
+    };
+  }
+
+  const [{ data: qrCodes, error: qrCodesError }, { data: scanEvents, error: scanEventsError }] =
+    await Promise.all([
+      db
+        .from("table_qr_codes")
+        .select(
+          "id, floor_plan_object_id, table_label, token, token_version, is_active, scan_count, last_scanned_at, created_at, rotated_at"
+        )
+        .in("floor_plan_object_id", floorPlanObjectIds)
+        .order("created_at", { ascending: false }),
+      db
+        .from("qr_scan_events")
+        .select("table_qr_code_id, occurred_at")
+        .eq("location_id", locationId)
+        .gte(
+          "occurred_at",
+          new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+        ),
+    ]);
+
+  if (qrCodesError) {
+    return {
+      success: false,
+      storeName: (config.store_name as string | null) ?? null,
+      storeSlug: (config.slug as string | null) ?? null,
+      customDomain: (config.custom_domain as string | null) ?? null,
+      acceptsDineIn: Boolean(config.accepts_dine_in),
+      qrKillSwitch: Boolean(config.qr_kill_switch),
+      tables: [],
+      generatedCount: 0,
+      activeCount: 0,
+      error: qrCodesError.message,
+    };
+  }
+
+  if (scanEventsError) {
+    return {
+      success: false,
+      storeName: (config.store_name as string | null) ?? null,
+      storeSlug: (config.slug as string | null) ?? null,
+      customDomain: (config.custom_domain as string | null) ?? null,
+      acceptsDineIn: Boolean(config.accepts_dine_in),
+      qrKillSwitch: Boolean(config.qr_kill_switch),
+      tables: [],
+      generatedCount: 0,
+      activeCount: 0,
+      error: scanEventsError.message,
+    };
+  }
+
+  const activeQrByTable = new Map<string, QrCodeRow>();
+  const latestQrByTable = new Map<string, QrCodeRow>();
+  for (const qrCode of ((qrCodes ?? []) as QrCodeRow[])) {
+    if (!latestQrByTable.has(qrCode.floor_plan_object_id)) {
+      latestQrByTable.set(qrCode.floor_plan_object_id, qrCode);
+    }
+    if (qrCode.is_active && !activeQrByTable.has(qrCode.floor_plan_object_id)) {
+      activeQrByTable.set(qrCode.floor_plan_object_id, qrCode);
+    }
+  }
+
+  const scanCountByQrId = new Map<string, number>();
+  for (const scanEvent of ((scanEvents ?? []) as QrScanEventRow[])) {
+    if (!scanEvent.table_qr_code_id) continue;
+    scanCountByQrId.set(
+      scanEvent.table_qr_code_id,
+      (scanCountByQrId.get(scanEvent.table_qr_code_id) ?? 0) + 1
+    );
+  }
+
+  const rows: QrTableManagerRow[] = (tables ?? []).map((table) => {
+    const floorPlanObjectId = table.id as string;
+    const activeQr = activeQrByTable.get(floorPlanObjectId) ?? null;
+    const latestQr = latestQrByTable.get(floorPlanObjectId) ?? null;
+    const qrSource = activeQr ?? latestQr;
+    const tableLabel =
+      readString(table.label_override) ??
+      readString(table.name) ??
+      "Unnamed table";
+
+    let qrStatus: QrTableManagerStatus = "not_generated";
+    if (activeQr) {
+      qrStatus = "active";
+    } else if (latestQr) {
+      qrStatus = "revoked";
+    }
+
+    return {
+      floorPlanObjectId,
+      tableLabel,
+      tableName: (table.name as string) ?? tableLabel,
+      zoneName: readString(table.zone_name),
+      sectionId: (table.section_id as string | null) ?? null,
+      capacity: (table.capacity as number | null) ?? null,
+      qrStatus,
+      qrCodeId: qrSource?.id ?? null,
+      tableToken: qrSource?.token ?? null,
+      qrUrl: buildQrTableUrl({
+        slug: (config.slug as string | null) ?? null,
+        customDomain: (config.custom_domain as string | null) ?? null,
+        token: qrSource?.token ?? null,
+      }) || null,
+      tokenVersion: qrSource?.token_version ?? null,
+      scanCountLifetime: qrSource?.scan_count ?? 0,
+      scanCount7d:
+        activeQr && activeQr.id ? scanCountByQrId.get(activeQr.id) ?? 0 : 0,
+      lastScannedAt: qrSource?.last_scanned_at ?? null,
+      generatedAt: qrSource?.created_at ?? null,
+    };
+  });
+
+  rows.sort(compareQrManagerRows);
+
+  return {
+    success: true,
+    storeName: (config.store_name as string | null) ?? null,
+    storeSlug: (config.slug as string | null) ?? null,
+    customDomain: (config.custom_domain as string | null) ?? null,
+    acceptsDineIn: Boolean(config.accepts_dine_in),
+    qrKillSwitch: Boolean(config.qr_kill_switch),
+    generatedCount: rows.filter((row) => row.qrStatus !== "not_generated").length,
+    activeCount: rows.filter((row) => row.qrStatus === "active").length,
+    tables: rows,
+  };
+}
+
+export async function getQrAnalyticsSnapshot(
+  locationId: string,
+  requestedRangeDays: number = 30
+): Promise<QrAnalyticsSnapshot> {
+  const rangeDays: 7 | 30 = requestedRangeDays === 7 ? 7 : 30;
+  const empty: QrAnalyticsSnapshot = {
+    success: false,
+    rangeDays,
+    stages: {
+      scanned: 0,
+      menuViewed: 0,
+      cartStarted: 0,
+      checkout: 0,
+      paid: 0,
+      abandoned: 0,
+    },
+    conversionRate: 0,
+    abandonmentRate: 0,
+    qrOrderCount: 0,
+    qrRevenue: 0,
+    qrAov: 0,
+    serverAov: 0,
+    repeatPhoneRate: 0,
+    byHour: Array.from({ length: 24 }, (_, hour) => ({
+      hour,
+      label: formatHourLabel(hour),
+      scans: 0,
+      paid: 0,
+    })),
+    topTables: [],
+    topItems: [],
+  };
+
+  if (!locationId) {
+    return {
+      ...empty,
+      error: "Missing location",
+    };
+  }
+
+  const supabase = createServerSupabaseClient();
+  const db = supabase as any;
+  const sinceIso = new Date(
+    Date.now() - rangeDays * 24 * 60 * 60 * 1000
+  ).toISOString();
+
+  const [eventsResult, storeConfigsResult, dineInOrdersResult] = await Promise.all([
+    db
+      .from("qr_scan_events")
+      .select("stage, table_qr_code_id, occurred_at")
+      .eq("location_id", locationId)
+      .gte("occurred_at", sinceIso),
+    db
+      .from("online_store_config")
+      .select("id")
+      .eq("location_id", locationId),
+    db
+      .from("orders")
+      .select("id, total_amount")
+      .eq("location_id", locationId)
+      .eq("order_type", "dine_in")
+      .not("status", "in", "(draft,cancelled,void)")
+      .gte("created_at", sinceIso),
+  ]);
+
+  if (eventsResult.error) {
+    return {
+      ...empty,
+      error: eventsResult.error.message,
+    };
+  }
+
+  if (storeConfigsResult.error) {
+    return {
+      ...empty,
+      error: storeConfigsResult.error.message,
+    };
+  }
+
+  if (dineInOrdersResult.error) {
+    return {
+      ...empty,
+      error: dineInOrdersResult.error.message,
+    };
+  }
+
+  const storeConfigIds = ((storeConfigsResult.data ?? []) as Array<{ id: string }>)
+    .map((row) => row.id)
+    .filter((value): value is string => Boolean(readString(value)));
+
+  const qrSessionOrdersResult =
+    storeConfigIds.length > 0
+      ? await db
+          .from("online_order_sessions")
+          .select("order_id, customer_phone, table_label, created_at")
+          .in("store_config_id", storeConfigIds)
+          .not("table_qr_code_id", "is", null)
+          .not("order_id", "is", null)
+          .gte("created_at", sinceIso)
+      : { data: [], error: null };
+
+  if (qrSessionOrdersResult.error) {
+    return {
+      ...empty,
+      error: qrSessionOrdersResult.error.message,
+    };
+  }
+
+  const qrSessionOrders = (qrSessionOrdersResult.data ??
+    []) as QrAnalyticsSessionOrderRow[];
+  const qrOrderIds = Array.from(
+    new Set(
+      qrSessionOrders
+        .map((row) => readString(row.order_id))
+        .filter((value): value is string => Boolean(value))
+    )
+  );
+
+  const qrOrdersResult =
+    qrOrderIds.length > 0
+      ? await db
+          .from("orders")
+          .select(
+            "id, total_amount, customer_phone, table_number, created_at, order_items(item_name, quantity, subtotal)"
+          )
+          .in("id", qrOrderIds)
+          .eq("location_id", locationId)
+          .not("status", "in", "(draft,cancelled,void)")
+      : { data: [], error: null };
+
+  if (qrOrdersResult.error) {
+    return {
+      ...empty,
+      error: qrOrdersResult.error.message,
+    };
+  }
+
+  const tableQrCodeIds = Array.from(
+    new Set(
+      ((eventsResult.data ?? []) as QrAnalyticsEventRow[])
+        .map((event) => readString(event.table_qr_code_id))
+        .filter((value): value is string => Boolean(value))
+    )
+  );
+
+  const qrCodeLabelMap = new Map<string, string>();
+  if (tableQrCodeIds.length > 0) {
+    const qrCodesResult = await db
+      .from("table_qr_codes")
+      .select("id, table_label")
+      .in("id", tableQrCodeIds);
+
+    if (qrCodesResult.error) {
+      return {
+        ...empty,
+        error: qrCodesResult.error.message,
+      };
+    }
+
+    for (const row of (qrCodesResult.data ?? []) as Array<{
+      id: string;
+      table_label: string | null;
+    }>) {
+      qrCodeLabelMap.set(
+        row.id,
+        readString(row.table_label) ?? "Unknown table"
+      );
+    }
+  }
+
+  const events = (eventsResult.data ?? []) as QrAnalyticsEventRow[];
+  const qrOrders = (qrOrdersResult.data ?? []) as QrAnalyticsOrderRow[];
+  const dineInOrders = (dineInOrdersResult.data ?? []) as QrAnalyticsOrderRow[];
+  const qrSessionMetaByOrderId = new Map(
+    qrSessionOrders
+      .map((row) => {
+        const orderId = readString(row.order_id);
+        if (!orderId) return null;
+        return [
+          orderId,
+          {
+            customerPhone: readString(row.customer_phone),
+            tableLabel: readString(row.table_label),
+          },
+        ] as const;
+      })
+      .filter(
+        (
+          value
+        ): value is readonly [
+          string,
+          { customerPhone: string | null; tableLabel: string | null }
+        ] => value !== null
+      )
+  );
+
+  const stages = {
+    scanned: 0,
+    menuViewed: 0,
+    cartStarted: 0,
+    checkout: 0,
+    paid: 0,
+    abandoned: 0,
+  };
+  const byHour = Array.from({ length: 24 }, (_, hour) => ({
+    hour,
+    label: formatHourLabel(hour),
+    scans: 0,
+    paid: 0,
+  }));
+  const tableScanMap = new Map<string, number>();
+
+  for (const event of events) {
+    const stage = readString(event.stage);
+    const hour = new Date(event.occurred_at).getHours();
+    if (stage === "scanned") {
+      stages.scanned += 1;
+      byHour[hour].scans += 1;
+      const tableLabel =
+        (event.table_qr_code_id
+          ? qrCodeLabelMap.get(event.table_qr_code_id)
+          : null) ?? "Unknown table";
+      tableScanMap.set(tableLabel, (tableScanMap.get(tableLabel) ?? 0) + 1);
+      continue;
+    }
+    if (stage === "menu_viewed") {
+      stages.menuViewed += 1;
+      continue;
+    }
+    if (stage === "cart_started") {
+      stages.cartStarted += 1;
+      continue;
+    }
+    if (stage === "checkout") {
+      stages.checkout += 1;
+      continue;
+    }
+    if (stage === "paid") {
+      stages.paid += 1;
+      byHour[hour].paid += 1;
+      continue;
+    }
+    if (stage === "abandoned") {
+      stages.abandoned += 1;
+    }
+  }
+
+  const tablePaidMap = new Map<string, { paidOrders: number; revenue: number }>();
+  const itemMap = new Map<string, { quantity: number; revenue: number }>();
+  const phoneCounts = new Map<string, number>();
+
+  let qrRevenue = 0;
+  for (const order of qrOrders) {
+    const amount = toMoneyNumber(order.total_amount);
+    qrRevenue += amount;
+
+    const sessionMeta = qrSessionMetaByOrderId.get(order.id);
+    const tableLabel =
+      readString(order.table_number) ??
+      sessionMeta?.tableLabel ??
+      "Unknown table";
+    const existingTable = tablePaidMap.get(tableLabel) ?? {
+      paidOrders: 0,
+      revenue: 0,
+    };
+    existingTable.paidOrders += 1;
+    existingTable.revenue += amount;
+    tablePaidMap.set(tableLabel, existingTable);
+
+    const phone = readString(order.customer_phone) ?? sessionMeta?.customerPhone;
+    if (phone) {
+      phoneCounts.set(phone, (phoneCounts.get(phone) ?? 0) + 1);
+    }
+
+    for (const item of order.order_items ?? []) {
+      const itemName = readString(item.item_name) ?? "Unnamed item";
+      const quantity = Number(item.quantity ?? 0);
+      const revenue = toMoneyNumber(item.subtotal);
+      const existingItem = itemMap.get(itemName) ?? { quantity: 0, revenue: 0 };
+      existingItem.quantity += quantity;
+      existingItem.revenue += revenue;
+      itemMap.set(itemName, existingItem);
+    }
+  }
+
+  const qrOrderCount = qrOrders.length;
+  const qrAov = qrOrderCount > 0 ? qrRevenue / qrOrderCount : 0;
+  const serverRevenue = dineInOrders.reduce(
+    (sum, order) => sum + toMoneyNumber(order.total_amount),
+    0
+  );
+  const serverAov =
+    dineInOrders.length > 0 ? serverRevenue / dineInOrders.length : 0;
+
+  const uniquePhones = phoneCounts.size;
+  const repeatPhones = Array.from(phoneCounts.values()).filter(
+    (count) => count > 1
+  ).length;
+  const repeatPhoneRate =
+    uniquePhones > 0 ? (repeatPhones / uniquePhones) * 100 : 0;
+
+  const topTables = Array.from(
+    new Set([...tableScanMap.keys(), ...tablePaidMap.keys()])
+  )
+    .map((tableLabel) => ({
+      tableLabel,
+      scans: tableScanMap.get(tableLabel) ?? 0,
+      paidOrders: tablePaidMap.get(tableLabel)?.paidOrders ?? 0,
+      revenue: tablePaidMap.get(tableLabel)?.revenue ?? 0,
+    }))
+    .sort((a, b) => {
+      if (b.scans !== a.scans) return b.scans - a.scans;
+      if (b.paidOrders !== a.paidOrders) return b.paidOrders - a.paidOrders;
+      return b.revenue - a.revenue;
+    })
+    .slice(0, 5);
+
+  const topItems = Array.from(itemMap.entries())
+    .map(([itemName, values]) => ({
+      itemName,
+      quantity: values.quantity,
+      revenue: values.revenue,
+    }))
+    .sort((a, b) => {
+      if (b.quantity !== a.quantity) return b.quantity - a.quantity;
+      return b.revenue - a.revenue;
+    })
+    .slice(0, 5);
+
+  return {
+    success: true,
+    rangeDays,
+    stages,
+    conversionRate:
+      stages.scanned > 0 ? (stages.paid / stages.scanned) * 100 : 0,
+    abandonmentRate:
+      stages.scanned > 0 ? (stages.abandoned / stages.scanned) * 100 : 0,
+    qrOrderCount,
+    qrRevenue,
+    qrAov,
+    serverAov,
+    repeatPhoneRate,
+    byHour,
+    topTables,
+    topItems,
+  };
+}
+
+export async function getQrGuestAlertsSnapshot(
+  locationId: string
+): Promise<QrGuestAlertsSnapshot> {
+  if (!locationId) {
+    return {
+      success: false,
+      openCount: 0,
+      alerts: [],
+      error: "Missing location",
+    };
+  }
+
+  const supabase = createServerSupabaseClient();
+  const db = supabase as any;
+
+  const { data, error } = await db
+    .from("qr_guest_alerts")
+    .select(
+      "id, table_label, alert_type, message, status, created_at, order_id, online_order_session_id"
+    )
+    .eq("location_id", locationId)
+    .neq("status", "resolved")
+    .order("created_at", { ascending: false })
+    .limit(25);
+
+  if (error) {
+    return {
+      success: false,
+      openCount: 0,
+      alerts: [],
+      error: error.message,
+    };
+  }
+
+  const alerts = ((data ?? []) as Array<Record<string, unknown>>).map((row) => ({
+    id: String(row.id),
+    tableLabel: readString(row.table_label) ?? "Unknown table",
+    alertType: readString(row.alert_type) ?? "call_server",
+    message: readString(row.message),
+    status: readString(row.status) ?? "open",
+    createdAt: String(row.created_at),
+    orderId: readString(row.order_id),
+    onlineOrderSessionId: readString(row.online_order_session_id),
+  }));
+
+  return {
+    success: true,
+    openCount: alerts.length,
+    alerts,
+  };
+}
+
+export async function resolveQrGuestAlertAction(alertId: string) {
+  if (!alertId) {
+    return { success: false, error: "Missing alert" };
+  }
+
+  const supabase = createServerSupabaseClient();
+  const { error } = await supabase.rpc("resolve_qr_guest_alert", {
+    p_alert_id: alertId,
+  });
+
+  if (error) {
+    return {
+      success: false,
+      error: error.message,
+    };
+  }
+
+  revalidatePath("/dashboard/online-ordering");
+  return { success: true };
+}
+
+export async function generateQrCodeForTable(
+  floorPlanObjectId: string,
+  options?: { regenerate?: boolean }
+): Promise<{ success: boolean; error?: string; action?: string }> {
+  if (!floorPlanObjectId) {
+    return { success: false, error: "Missing table" };
+  }
+
+  const supabase = createServerSupabaseClient();
+  const db = supabase as any;
+
+  const { data: table, error: tableError } = await supabase
+    .from("floor_plan_objects")
+    .select("id, name, label_override, location_id, merchant_id")
+    .eq("id", floorPlanObjectId)
+    .single();
+
+  if (tableError || !table) {
+    return { success: false, error: tableError?.message || "Table not found" };
+  }
+
+  const qrBillingGate = await getQrBillingGateStatus(
+    table.location_id as string,
+    table.merchant_id as string
+  );
+  if (!qrBillingGate.entitled) {
+    return {
+      success: false,
+      error:
+        qrBillingGate.reason ||
+        "QR Table Ordering is not available for the current subscription tier.",
+    };
+  }
+
+  const { data, error } = await db.rpc("generate_table_qr_code", {
+    p_floor_plan_object_id: floorPlanObjectId,
+    p_regenerate: Boolean(options?.regenerate),
+  });
+
+  if (error) {
+    return { success: false, error: error.message };
+  }
+
+  const result = data as { success?: boolean; error?: string; action?: string };
+  if (!result?.success) {
+    return {
+      success: false,
+      error: result?.error || "QR generation failed",
+    };
+  }
+
+  const tableLabel =
+    readString(table.label_override) ?? readString(table.name) ?? "Table";
+
+  await LogAuditEvent({
+    merchantId: table.merchant_id as string,
+    action:
+      options?.regenerate === true
+        ? "Regenerated Table QR Code"
+        : result.action === "reprint_existing"
+          ? "Reprinted Table QR Code"
+          : "Generated Table QR Code",
+    actionCategory: "settings",
+    resourceType: "table_qr_code",
+    resourceId: floorPlanObjectId,
+    resourceName: tableLabel,
+    locationId: table.location_id as string,
+    changes: {
+      after: {
+        table_label: tableLabel,
+        qr_action: result.action ?? (options?.regenerate ? "regenerated" : "generated"),
+      },
+    },
+  });
+
+  revalidatePath("/dashboard/online-ordering");
+  return { success: true, action: result.action };
+}
+
+export async function revokeTableQrCode(
+  floorPlanObjectId: string
+): Promise<{ success: boolean; error?: string }> {
+  if (!floorPlanObjectId) {
+    return { success: false, error: "Missing table" };
+  }
+
+  const supabase = createServerSupabaseClient();
+  const db = supabase as any;
+
+  const { data: table, error: tableError } = await supabase
+    .from("floor_plan_objects")
+    .select("id, name, label_override, location_id, merchant_id")
+    .eq("id", floorPlanObjectId)
+    .single();
+
+  if (tableError || !table) {
+    return { success: false, error: tableError?.message || "Table not found" };
+  }
+
+  const { data: activeCode, error: activeCodeError } = await db
+    .from("table_qr_codes")
+    .select("id")
+    .eq("floor_plan_object_id", floorPlanObjectId)
+    .eq("is_active", true)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (activeCodeError) {
+    return { success: false, error: activeCodeError.message };
+  }
+
+  if (!activeCode?.id) {
+    return { success: false, error: "No active QR code to revoke" };
+  }
+
+  const { error: updateError } = await db
+    .from("table_qr_codes")
+    .update({
+      is_active: false,
+      rotated_at: new Date().toISOString(),
+    })
+    .eq("id", activeCode.id);
+
+  if (updateError) {
+    return { success: false, error: updateError.message };
+  }
+
+  const tableLabel =
+    readString(table.label_override) ?? readString(table.name) ?? "Table";
+
+  await LogAuditEvent({
+    merchantId: table.merchant_id as string,
+    action: "Revoked Table QR Code",
+    actionCategory: "settings",
+    resourceType: "table_qr_code",
+    resourceId: activeCode.id as string,
+    resourceName: tableLabel,
+    locationId: table.location_id as string,
+    changes: {
+      before: { is_active: true },
+      after: { is_active: false },
+    },
+  });
+
+  revalidatePath("/dashboard/online-ordering");
+  return { success: true };
+}
+
+export async function generateMissingQrCodesForLocation(
+  locationId: string
+): Promise<{ success: boolean; generated: number; error?: string }> {
+  const supabase = createServerSupabaseClient();
+  const { data: location, error: locationError } = await supabase
+    .from("locations")
+    .select("merchant_id")
+    .eq("id", locationId)
+    .single();
+
+  if (locationError || !location) {
+    return {
+      success: false,
+      generated: 0,
+      error: locationError?.message || "Location not found",
+    };
+  }
+
+  const qrBillingGate = await getQrBillingGateStatus(
+    locationId,
+    location.merchant_id as string
+  );
+  if (!qrBillingGate.entitled) {
+    return {
+      success: false,
+      generated: 0,
+      error:
+        qrBillingGate.reason ||
+        "QR Table Ordering is not available for the current subscription tier.",
+    };
+  }
+
+  const snapshot = await getQrTableManagerSnapshot(locationId);
+  if (!snapshot.success) {
+    return { success: false, generated: 0, error: snapshot.error };
+  }
+
+  let generated = 0;
+  for (const row of snapshot.tables) {
+    if (row.qrStatus !== "not_generated") continue;
+    const result = await generateQrCodeForTable(row.floorPlanObjectId);
+    if (!result.success) {
+      return {
+        success: false,
+        generated,
+        error: result.error || `Failed on ${row.tableLabel}`,
+      };
+    }
+    generated += 1;
+  }
+
+  revalidatePath("/dashboard/online-ordering");
+  return { success: true, generated };
 }
 
 

@@ -18,6 +18,7 @@ import {
   Clock,
   CheckCircle,
   DollarSign,
+  QrCode,
   MapPin,
   Globe,
   RefreshCcwDot,
@@ -166,12 +167,28 @@ export default function OrdersPage() {
         (o) => o.payment_status === "captured" || o.payment_status === "paid"
       )
       .reduce((sum, o) => sum + o.total_amount, 0);
+    const qrTableOrders = rangeOrders.filter(
+      (o) => o.order_type === "qr_dine_in"
+    );
+    const topQrTableCounts = new Map<string, number>();
+    for (const order of qrTableOrders) {
+      const tableLabel = order.table_number?.trim() || "Unknown table";
+      topQrTableCounts.set(
+        tableLabel,
+        (topQrTableCounts.get(tableLabel) ?? 0) + 1
+      );
+    }
+    const topQrTable =
+      Array.from(topQrTableCounts.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] ??
+      null;
 
     return {
       total: totalInRange,
       pending: pendingInRange,
       completed: completedInRange,
       revenue: revenueInRange,
+      qrTableOrders: qrTableOrders.length,
+      topQrTable,
     };
   }, [ordersList, statsRange]);
 
@@ -204,6 +221,7 @@ export default function OrdersPage() {
           .reduce((sum, o) => sum + o.total_amount, 0),
         completed: dayOrders.filter((o) => o.status === "completed").length,
         pending: dayOrders.filter((o) => o.status === "pending" || o.status === "preparing").length,
+        qrTableOrders: dayOrders.filter((o) => o.order_type === "qr_dine_in").length,
       });
     }
     return days;
@@ -260,7 +278,7 @@ export default function OrdersPage() {
           </div>
         </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         {/* Total Orders */}
         <Card className="border-border/60 shadow-none overflow-hidden">
           <CardContent className="p-5">
@@ -427,6 +445,57 @@ export default function OrdersPage() {
                         stroke="#0d9488"
                         strokeWidth={2}
                         fill="url(#revenueGrad)"
+                        dot={false}
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* QR Table Orders */}
+        <Card className="border-border/60 shadow-none overflow-hidden">
+          <CardContent className="p-5">
+            {isLoading ? (
+              <div className="space-y-3">
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-8 w-16" />
+                <Skeleton className="h-12 w-full" />
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-sm font-medium text-muted-foreground">QR Table</span>
+                  <QrCode className="h-4 w-4 text-[#0C4FD1]" />
+                </div>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-3xl font-semibold tracking-tight text-[#0C4FD1]">
+                    {stats.qrTableOrders}
+                  </span>
+                  <span className="text-xs text-muted-foreground/60">{rangeLabel}</span>
+                </div>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  {stats.topQrTable
+                    ? `Most active table: ${stats.topQrTable}`
+                    : "No QR table orders in this range."}
+                </p>
+                <div className="mt-3 h-12">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={dailyData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="qrOrdersGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#0C4FD1" stopOpacity={0.22} />
+                          <stop offset="100%" stopColor="#0C4FD1" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <Area
+                        type="monotone"
+                        dataKey="qrTableOrders"
+                        stroke="#0C4FD1"
+                        strokeWidth={2}
+                        fill="url(#qrOrdersGrad)"
                         dot={false}
                       />
                     </AreaChart>

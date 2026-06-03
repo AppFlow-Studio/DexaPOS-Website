@@ -82,10 +82,10 @@ export function OverviewTab({ merchantInfo }: OverviewTabProps) {
     // Order Types for Pie Chart (Revenue by Category proxy)
     const orderTypeData = useMemo(() => {
         if (!orderAnalytics?.orderTypeBreakdown) return []
-        const colors = ['hsl(var(--chart-1))', 'hsl(var(--chart-2))', 'hsl(var(--chart-3))', 'hsl(var(--chart-4))']
+        const colors = ['hsl(var(--chart-1))', '#0C4FD1', 'hsl(var(--chart-2))', 'hsl(var(--chart-3))', 'hsl(var(--chart-4))']
         return Object.entries(orderAnalytics.orderTypeBreakdown)
             .map(([type, value], index) => ({
-                name: type.replace('_', ' '),
+                name: type === 'qr_dine_in' ? 'QR Table' : type.replace(/_/g, ' '),
                 value,
                 color: colors[index % colors.length]
             }))

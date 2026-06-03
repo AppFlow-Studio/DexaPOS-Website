@@ -20,6 +20,9 @@ export interface SessionData {
   orderId: string | null;
   requestedTime: string | null;
   expiresAt: string | null;
+  floorPlanObjectId: string | null;
+  tableLabel: string | null;
+  tableQrCodeId: string | null;
 }
 
 function mapSession(row: any): SessionData {
@@ -41,6 +44,9 @@ function mapSession(row: any): SessionData {
     orderId: row.order_id,
     requestedTime: row.requested_time,
     expiresAt: row.expires_at,
+    floorPlanObjectId: row.floor_plan_object_id ?? null,
+    tableLabel: row.table_label ?? null,
+    tableQrCodeId: row.table_qr_code_id ?? null,
   };
 }
 

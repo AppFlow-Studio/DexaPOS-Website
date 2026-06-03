@@ -35,7 +35,7 @@ import type { Reservation } from '@/types/floor-plan'
 
 const schema = z.object({
   partyName: z.string().min(1, 'Name required'),
-  partySize: z.coerce.number().int().min(1, 'Min 1').max(20, 'Max 20'),
+  partySize: z.coerce.number().int().min(1, 'Min 1').max(500, 'Max 500'),
   phone: z
     .string()
     .min(1, 'Phone required')
@@ -232,7 +232,7 @@ export default function EditReservationDialog ({
                                 <Input
                                   type='number'
                                   min={1}
-                                  max={20}
+                                  max={500}
                                   value={field.value ?? ''}
                                   onChange={e =>
                                     field.onChange(e.target.value === '' ? '' : parseInt(e.target.value, 10))

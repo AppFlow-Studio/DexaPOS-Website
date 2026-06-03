@@ -164,7 +164,7 @@ export default clerkMiddleware(async (auth, req) => {
     return NextResponse.next();
   }
 
-  if (isAcceptInvitationRoute(req) || isStorefrontRoutes(req)) {
+  if (isAcceptInvitationRoute(req) || isStorefrontRoutes(req) || isReceiptRoutes(req)) {
     return NextResponse.next();
   }
 

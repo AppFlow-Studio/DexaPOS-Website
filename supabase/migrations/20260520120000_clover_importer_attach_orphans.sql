@@ -591,6 +591,5 @@ BEGIN
     );
 END;
 $$;
-
 COMMENT ON FUNCTION public.import_clover_menu(uuid, jsonb, text, jsonb) IS
     'Commit step of the Clover Menu Importer. Consumes a clover_import_dry_runs row and writes the parsed IR to the merchant menu domain atomically. Idempotent by (merchant_id, source_external_id) on the five R-IMP-0 tables. Items missing a category are auto-attached to an "Unsorted (Clover)" category so they remain visible to operators (see orphan_items_attached/unsorted_category_id in the return jsonb).';
