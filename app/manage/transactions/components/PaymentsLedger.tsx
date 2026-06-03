@@ -133,7 +133,7 @@ export function PaymentsLedger({
                 <div className="space-y-1">
                     <span className="flex items-center gap-1 text-[10.5px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
                         Unmatched Only
-                        <InfoIcon tip="Show only Lucra payments with no corresponding POS order record. Use this to investigate sync gaps." side="top" />
+                        <InfoIcon tip="Show only TSYS payments with no corresponding POS order record. Use this to investigate sync gaps." side="top" />
                     </span>
                     <div className="flex h-9 items-center">
                         <Switch
@@ -172,7 +172,7 @@ export function PaymentsLedger({
                     <Tile
                         icon={Link2Off}
                         label="Unmatched"
-                        tip="Payments from Lucra that have no matching order in the POS system. An unmatched payment may indicate a sync gap or a payment processed directly on the terminal outside the POS."
+                        tip="Payments from TSYS that have no matching order in the POS system. An unmatched payment may indicate a sync gap or a payment processed directly on the terminal outside the POS."
                         value={totals.unmatchedCount.toLocaleString()}
                         tone={totals.unmatchedCount > 0 ? 'warn' : 'good'}
                     />
@@ -200,10 +200,10 @@ export function PaymentsLedger({
                             <span className="inline-flex items-center justify-end gap-1">Total <InfoIcon tip="Full payment amount including tip. This is the gross amount charged to the cardholder." side="bottom" /></span>
                         </TableHead>
                         <TableHead className="text-right">
-                            <span className="inline-flex items-center justify-end gap-1">Net fee <InfoIcon tip="Platform fee deducted from this payment. Equals the dual-pricing fee plus tip fee, minus any refunded fee portions. Reconciles with Lucra line-for-line." side="bottom" /></span>
+                            <span className="inline-flex items-center justify-end gap-1">Net fee <InfoIcon tip="Platform fee deducted from this payment. Equals the dual-pricing fee plus tip fee, minus any refunded fee portions. Reconciles with TSYS line-for-line." side="bottom" /></span>
                         </TableHead>
                         <TableHead className="text-right">
-                            <span className="inline-flex items-center justify-end gap-1">Net deposit <InfoIcon tip="Amount deposited to the merchant after deducting the net fee. Formula: Gross − Net fee. Matches the Lucra statement exactly." side="bottom" /></span>
+                            <span className="inline-flex items-center justify-end gap-1">Net deposit <InfoIcon tip="Amount deposited to the merchant after deducting the net fee. Formula: Gross − Net fee. Matches the TSYS statement exactly." side="bottom" /></span>
                         </TableHead>
                         <TableHead>
                             <span className="inline-flex items-center gap-1">Status <InfoIcon tip="Processor status. Captured = funds collected. Authorized = approved pending capture. Refunded = reversed. Failed/Voided = cancelled." side="bottom" /></span>
@@ -212,7 +212,7 @@ export function PaymentsLedger({
                             <span className="inline-flex items-center gap-1">Settled <InfoIcon tip="Whether this payment has been confirmed settled by the processor and included in a net deposit to the merchant's bank." side="bottom" /></span>
                         </TableHead>
                         <TableHead>
-                            <span className="inline-flex items-center gap-1">Luqra <InfoIcon tip="Whether this payment has a matching Lucra transaction ID. Matched = Lucra confirmed receipt. Unmatched = payment not yet reconciled with Lucra." side="bottom" /></span>
+                            <span className="inline-flex items-center gap-1">Luqra <InfoIcon tip="Whether this payment has a matching TSYS transaction ID. Matched = TSYS confirmed receipt. Unmatched = payment not yet reconciled with TSYS." side="bottom" /></span>
                         </TableHead>
                     </TableRow>
                 </TableHeader>
