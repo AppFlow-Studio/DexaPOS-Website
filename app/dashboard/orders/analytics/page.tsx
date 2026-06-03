@@ -174,6 +174,7 @@ export default function AnalyticsPage() {
     const b = analytics.orderTypeBreakdown
     return [
       { name: 'Dine In', value: b.dine_in },
+      { name: 'QR Table', value: b.qr_dine_in },
       { name: 'Takeout', value: b.takeout },
       { name: 'Delivery', value: b.delivery },
       { name: 'Online', value: b.online },

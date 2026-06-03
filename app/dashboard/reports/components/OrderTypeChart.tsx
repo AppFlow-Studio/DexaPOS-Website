@@ -17,6 +17,7 @@ import { OrderTypeBreakdown } from "@/app/dashboard/actions/order-analytics";
 // Explicit colors — CSS variables don't resolve in SVG fill / inline style
 const ORDER_TYPE_CONFIG: Record<string, { label: string; color: string }> = {
   dine_in:  { label: "Dine In",  color: "#6366f1" }, // indigo
+  qr_dine_in: { label: "QR Table", color: "#0C4FD1" }, // brand blue
   takeout:  { label: "Takeout",  color: "#f59e0b" }, // amber
   delivery: { label: "Delivery", color: "#10b981" }, // emerald
   online:   { label: "Online",   color: "#3b82f6" }, // blue

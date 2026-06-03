@@ -23,6 +23,10 @@ import {
   type OnlineStoreReviewChecklist,
 } from '@/lib/online-store/setup-flow'
 import { uploadMerchantDocument, uploadOrganizationDocument } from '@/lib/cdn/server'
+import {
+  syncStorefrontWhitelistForLocation,
+  type WhitelistSyncResult,
+} from '@/lib/payments/storefront-whitelist'
 
 type MissingRequestFieldKey =
   | 'legalBusinessName'
@@ -174,6 +178,7 @@ interface OnlineOrderingSettings {
   storeName: string
   storeSlug: string
   storeUrl?: string
+  customDomain?: string | null
   description?: string
   phone: string
   email: string
@@ -269,6 +274,25 @@ async function buildRequestedStoreSlug(
   }
 
   return `${baseSlug}-${Date.now().toString().slice(-6)}`
+}
+
+// ============================================================================
+// Storefront whitelist sync (QR-32)
+//
+// The actual sync logic lives in lib/payments/storefront-whitelist.ts so the
+// same code path is reused by the standalone backfill/audit scripts under
+// scripts/. Kept the type alias here for backward compatibility with anything
+// that imports `StorefrontWhitelistSyncResult` from this module.
+// See docs/RUNBOOK-PAYMENT-WHITELIST-SYNC.md.
+// ============================================================================
+
+export type StorefrontWhitelistSyncResult = WhitelistSyncResult
+
+async function syncStorefrontWhitelist(
+  supabase: ReturnType<typeof createServerSupabaseClient>,
+  locationId: string
+): Promise<StorefrontWhitelistSyncResult> {
+  return syncStorefrontWhitelistForLocation(supabase as any, locationId)
 }
 
 async function getReviewContext(
@@ -655,13 +679,14 @@ export async function getAdminOnlineOrderingSettings(
       settings.enabled = config.is_active ?? false
       settings.storeName = config.store_name || settings.storeName
       settings.storeSlug = config.slug ?? ''
+      settings.customDomain = config.custom_domain ?? null
       settings.description = config.description ?? ''
       settings.logoUrl = config.logo_url
       settings.heroImageUrl = config.hero_image_url
       settings.faviconUrl = config.favicon_url
       settings.ogImageUrl = config.og_image_url
       settings.templateId = (config.template_id ?? 'classic') as OnlineOrderingSettings['templateId']
-      settings.primaryColor = config.primary_color ?? '#2DD4BF'
+      settings.primaryColor = config.primary_color ?? '#0C4FD1'
       settings.secondaryColor = config.secondary_color ?? '#10b981'
       settings.accentColor = config.accent_color ?? null
       settings.backgroundColor = config.background_color ?? '#FFFFFF'
@@ -1330,14 +1355,24 @@ export async function adminSaveOnlineOrderingSettings(
       },
     })
 
+    const whitelist = await syncStorefrontWhitelist(supabase, locationId)
+    if (whitelist.error) {
+      console.error(
+        '[adminSaveOnlineOrderingSettings] Whitelist sync error:',
+        whitelist.error
+      )
+    }
+
     revalidateOnlineStorePaths(merchantId)
 
     return {
       success: true,
       error: null,
-      domainWhitelisted: false,
-      domainWhitelistError: undefined,
-      domainWhitelistSkipped: true,
+      domainWhitelisted: whitelist.synced && !whitelist.skipped,
+      domainWhitelistError: whitelist.error,
+      domainWhitelistSkipped: whitelist.skipped ?? false,
+      whitelistOrigins: whitelist.origins,
+      whitelistSyncedAt: whitelist.syncedAt,
     }
   } catch (error) {
     console.error('[adminSaveOnlineOrderingSettings] Exception:', error)
@@ -1360,7 +1395,7 @@ export async function adminToggleOnlineStore(
 
     const { data: existingConfig } = await supabase
       .from('online_store_config')
-      .select('id, slug, setup_request_status, accepts_online_payments')
+      .select('id, slug, custom_domain, setup_request_status, accepts_online_payments')
       .eq('location_id', locationId)
       .single()
 
@@ -1422,12 +1457,26 @@ export async function adminToggleOnlineStore(
       },
     })
 
+    const whitelist = enabled
+      ? await syncStorefrontWhitelist(supabase, locationId)
+      : null
+
+    if (whitelist?.error) {
+      console.error(
+        '[adminToggleOnlineStore] Whitelist sync error:',
+        whitelist.error
+      )
+    }
+
     revalidateOnlineStorePaths(merchantId)
     return {
       success: true,
       error: null,
-      domainWhitelistError: undefined,
-      domainWhitelistSkipped: true,
+      domainWhitelisted: Boolean(whitelist?.synced && !whitelist?.skipped),
+      domainWhitelistError: whitelist?.error,
+      domainWhitelistSkipped: whitelist ? (whitelist.skipped ?? false) : true,
+      whitelistOrigins: whitelist?.origins ?? [],
+      whitelistSyncedAt: whitelist?.syncedAt ?? null,
     }
   } catch (error) {
     console.error('[adminToggleOnlineStore] Exception:', error)
@@ -1471,7 +1520,7 @@ export async function adminCreateOnlineStore(
         store_name: locationName,
         slug: defaultSlug,
         is_active: false,
-        primary_color: '#2DD4BF',
+        primary_color: '#0C4FD1',
         accepts_pickup: true,
         accepts_delivery: false,
         estimated_prep_minutes: 15,

@@ -13,8 +13,10 @@ import { HeroBanner } from "./HeroBanner";
 import { BranchStorySection } from "./BranchStorySection";
 import { StoreInfoBar, getTodayHoursString, isStoreOpenNow } from "./StoreInfoBar";
 import { AccountDrawer } from "./AccountDrawer";
+import { QrTableBanner } from "./QrTableBanner";
 import { useCart } from "../hooks/useCart";
 import { useSessionInit } from "../hooks/useSessionInit";
+import { useQrFunnelTracking } from "../hooks/useQrFunnelTracking";
 import { useSession } from "../hooks/useSession";
 import { useStorefrontPath } from "../lib/use-storefront-path";
 import { OrderStatusWatcher } from "./OrderStatusWatcher";
@@ -43,6 +45,12 @@ interface StorefrontLayoutProps {
   };
   menus: StorefrontMenu[];
   slug: string;
+  seedQrSession?: {
+    sessionToken: string;
+    floorPlanObjectId?: string | null;
+    tableLabel?: string | null;
+    tableQrCodeId?: string | null;
+  } | null;
 }
 
 export function StorefrontLayout({
@@ -50,29 +58,69 @@ export function StorefrontLayout({
   location,
   menus,
   slug,
+  seedQrSession,
 }: StorefrontLayoutProps) {
   const templateId: SiteThemeConfig["templateId"] =
     site?.theme_config?.templateId || "classic";
 
   // Delegate to dedicated layout components for new templates
   if (templateId === "hero") {
-    return <HeroLayout site={site} location={location} menus={menus} slug={slug} />;
+    return (
+      <HeroLayout
+        site={site}
+        location={location}
+        menus={menus}
+        slug={slug}
+        seedQrSession={seedQrSession}
+      />
+    );
   }
   if (templateId === "market") {
-    return <MarketLayout site={site} location={location} menus={menus} slug={slug} />;
+    return (
+      <MarketLayout
+        site={site}
+        location={location}
+        menus={menus}
+        slug={slug}
+        seedQrSession={seedQrSession}
+      />
+    );
   }
   if (templateId === "boutique") {
-    return <BoutiqueLayout site={site} location={location} menus={menus} slug={slug} />;
+    return (
+      <BoutiqueLayout
+        site={site}
+        location={location}
+        menus={menus}
+        slug={slug}
+        seedQrSession={seedQrSession}
+      />
+    );
   }
 
   // Classic (and legacy minimal/bold) layout
-  return <ClassicLayout site={site} location={location} menus={menus} slug={slug} />;
+  return (
+    <ClassicLayout
+      site={site}
+      location={location}
+      menus={menus}
+      slug={slug}
+      seedQrSession={seedQrSession}
+    />
+  );
 }
 
-function ClassicLayout({ site, location, menus, slug }: StorefrontLayoutProps) {
-  useSessionInit(site?.id);
+function ClassicLayout({
+  site,
+  location,
+  menus,
+  slug,
+  seedQrSession,
+}: StorefrontLayoutProps) {
+  useSessionInit(site?.id, seedQrSession);
   const router = useRouter();
   const activeOrderId = useSession((s) => s.activeOrderId);
+  const qrTableLabel = useSession((s) => s.qrTableLabel);
   const storefrontPath = useStorefrontPath(slug);
 
   const [activeTab, setActiveTab] = useState<TabType>("menu");
@@ -80,6 +128,11 @@ function ClassicLayout({ site, location, menus, slug }: StorefrontLayoutProps) {
   const [isAccountOpen, setIsAccountOpen] = useState(false);
   const [showWelcomeDrawer, setShowWelcomeDrawer] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
+
+  useQrFunnelTracking({
+    trackMenuViewed: activeTab === "menu",
+    trackCartStarted: true,
+  });
 
   useEffect(() => {
     const onScroll = () => setShowScrollTop(window.scrollY > 400);
@@ -180,6 +233,7 @@ function ClassicLayout({ site, location, menus, slug }: StorefrontLayoutProps) {
               ? "max-w-3xl mx-auto px-4 mt-4"
               : "container mx-auto px-4 mt-4"
           }>
+            <QrTableBanner tableLabel={qrTableLabel} className="mb-4" />
             <BranchStorySection site={site} />
           </div>
         </div>

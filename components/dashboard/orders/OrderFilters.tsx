@@ -223,7 +223,7 @@ export function OrderFilters({ className }: OrderFiltersProps) {
           <DropdownMenuContent align="start" className="w-[200px]">
             <DropdownMenuLabel>Filter by Type</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            {["dine_in", "takeout", "delivery", "pickup", "online"].map(
+            {["dine_in", "qr_dine_in", "takeout", "delivery", "online", "catering"].map(
               (type) => {
                 const isSelected = searchParams
                   .get("type")
@@ -236,7 +236,7 @@ export function OrderFilters({ className }: OrderFiltersProps) {
                     onCheckedChange={() => handleTypeToggle(type as OrderType)}
                     className="capitalize"
                   >
-                    {type.replace("_", " ")}
+                    {type === "qr_dine_in" ? "qr dine in" : type.replace("_", " ")}
                   </DropdownMenuCheckboxItem>
                 );
               }

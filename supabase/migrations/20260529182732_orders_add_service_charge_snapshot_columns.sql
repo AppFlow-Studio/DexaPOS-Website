@@ -21,4 +21,4 @@ COMMENT ON COLUMN public.orders.service_charge_rule_id IS
   'FK to the service_charge_rules row that was active when this order first qualified. NULL means no SC has been applied to this order.';
 
 COMMENT ON COLUMN public.orders.service_charge_is_manual IS
-  'TRUE when a manager has overridden the auto-applied service charge. apply_service_charge_v1 short-circuits when this is true so the override is preserved across recalculates. Wave D introduces the manager-PIN flow that flips this; until then it stays false.';
+  'TRUE when a manager has overridden the auto-applied service charge. apply_service_charge_v1 short-circuits when this is true so the override is preserved across recalculates. Wave D introduces the manager-PIN flow that flips this; until then it stays false.';;

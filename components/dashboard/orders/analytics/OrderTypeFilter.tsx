@@ -5,6 +5,7 @@ import type { OrderType } from '@/types/order-management'
 
 const ORDER_TYPE_LABELS: Record<OrderType, string> = {
   dine_in: 'Dine In',
+  qr_dine_in: 'QR Dine-In',
   takeout: 'Takeout',
   delivery: 'Delivery',
   online: 'Online',
@@ -13,6 +14,7 @@ const ORDER_TYPE_LABELS: Record<OrderType, string> = {
 
 const ALL_ORDER_TYPES: OrderType[] = [
   'dine_in',
+  'qr_dine_in',
   'takeout',
   'delivery',
   'online',

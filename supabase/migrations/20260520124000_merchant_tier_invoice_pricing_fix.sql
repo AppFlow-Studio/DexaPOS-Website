@@ -4,7 +4,6 @@
 update public.subscription_plans
 set base_price_monthly = round((coalesce(monthly_price_cents, 0)::numeric / 100.0), 2)
 where coalesce(plan_scope, 'service_billing') = 'merchant_tier';
-
 create or replace function public.calculate_subscription_amounts(
   p_plan_id uuid,
   p_station_count integer,
@@ -71,10 +70,8 @@ begin
     round(v_subtotal + v_surcharge, 2);
 end;
 $function$;
-
 revoke all on function public.calculate_subscription_amounts(uuid, integer, text) from public;
 grant execute on function public.calculate_subscription_amounts(uuid, integer, text) to authenticated, service_role;
-
 create or replace function public.generate_subscription_invoice(
   p_subscription_id uuid,
   p_due_date date default null
@@ -330,6 +327,5 @@ begin
   return v_invoice_id;
 end;
 $function$;
-
 revoke all on function public.generate_subscription_invoice(uuid, date) from public;
 grant execute on function public.generate_subscription_invoice(uuid, date) to authenticated, service_role;

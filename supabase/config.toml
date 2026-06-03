@@ -405,10 +405,10 @@ enabled = true
 verify_jwt = false
 entrypoint = "./functions/create-online-order/index.ts"
 
-[functions.dejavoo-whitelist-domain]
+[functions.storefront-payment-domain-whitelist]
 enabled = true
 verify_jwt = false
-entrypoint = "./functions/dejavoo-whitelist-domain/index.ts"
+entrypoint = "./functions/storefront-payment-domain-whitelist/index.ts"
 
 [functions.orderout-onboard]
 enabled = true

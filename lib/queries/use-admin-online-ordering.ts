@@ -99,6 +99,7 @@ export interface OnlineOrderingSettings {
   storeSlug: string
   description?: string
   storeUrl?: string
+  customDomain?: string | null
   phone: string
   email: string
   address: string

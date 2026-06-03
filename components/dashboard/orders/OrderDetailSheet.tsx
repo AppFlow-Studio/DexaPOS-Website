@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import { useOrganization } from "@clerk/nextjs";
 import {
   BottomSheet,
   BottomSheetContent,
@@ -13,7 +12,6 @@ import {
 } from "@/components/ui/bottom-sheet";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
 import {
   Order,
   OrderItem,
@@ -21,7 +19,6 @@ import {
   OrderPaymentItem,
   OrderItemModifier,
   OrderResponse,
-  OrderStatusHistory,
   TableSessionWithEvents,
 } from "@/types/order-management";
 import { OrderStatusBadge } from "./OrderStatusBadge";
@@ -35,39 +32,65 @@ import {
   ShoppingBag,
   Truck,
   Globe,
+  QrCode,
   ChefHat,
   DollarSign,
-  Printer,
-  X,
   RotateCcw,
+  MapPin,
+  Store,
+  Users,
+  CreditCard,
+  Mail,
+  Clock,
+  Receipt,
+  MessageSquare,
+  CheckCircle2,
+  Flame,
+  Ban,
+  Tag,
+  ShieldOff,
+  RefreshCw,
 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { GetOrderDetails, RefundOrder, VoidOrder } from "@/app/dashboard/actions/order";
-import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowRight, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
-import { OrderStatusTimeline } from "./OrderStatusTimeline";
-import { ReceiptModal } from "./ReceiptModal";
-import { useSelectedLocation } from "@/stores/location-store";
-import { toast } from "sonner";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+  GetOrderDetails,
+  GetOrderFullHistory,
+} from "@/app/dashboard/actions/order";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { ArrowRight, ChevronDown, ChevronUp } from "lucide-react";
+import { OrderFullTimeline } from "./OrderFullTimeline";
+import { useLocationStore, useSelectedLocation } from "@/stores/location-store";
+import type { OrderFullHistory } from "@/types/order-full-history";
+import {
+  EnhancedPaymentsList,
+  type RichPayment,
+} from "./EnhancedPayments";
+import { ReversalsList } from "./ReversalsSection";
+import { KitchenSection, hasKitchenData } from "./KitchenSection";
+import { SendReceiptModal } from "./SendReceiptModal";
+import { AssignCustomerModal } from "./AssignCustomerModal";
+import { AdjustTipModal } from "./AdjustTipModal";
+import { assignCustomerToOrder } from "@/app/actions/orders/assign-customer";
+import { toast } from "sonner";
 
 interface OrderDetailSheetProps {
   order: Order | OrderResponse | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Override the full-details page URL. Defaults to `/dashboard/orders/{id}` */
+  fullPageUrlPattern?: (orderId: string) => string;
+  /** When true (e.g. HQ/Carrier admin view), hide merchant-only actions */
+  readOnly?: boolean;
 }
 
-// Format currency
 function formatCurrency(amount: number): string {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
@@ -75,7 +98,6 @@ function formatCurrency(amount: number): string {
   }).format(amount);
 }
 
-// Format date
 function formatDate(dateString: string): string {
   const date = new Date(dateString);
   return date.toLocaleString("en-US", {
@@ -87,504 +109,1240 @@ function formatDate(dateString: string): string {
   });
 }
 
-// Get order type icon
 function getOrderTypeIcon(type: string) {
   const icons: Record<string, React.ReactNode> = {
-    dine_in: <Utensils className="h-4 w-4" />,
-    takeout: <ShoppingBag className="h-4 w-4" />,
-    delivery: <Truck className="h-4 w-4" />,
-    online: <Globe className="h-4 w-4" />,
-    catering: <ChefHat className="h-4 w-4" />,
+    dine_in: <Utensils className="h-3.5 w-3.5" />,
+    qr_dine_in: <QrCode className="h-3.5 w-3.5" />,
+    takeout: <ShoppingBag className="h-3.5 w-3.5" />,
+    delivery: <Truck className="h-3.5 w-3.5" />,
+    online: <Globe className="h-3.5 w-3.5" />,
+    catering: <ChefHat className="h-3.5 w-3.5" />,
   };
-  return icons[type] || <ShoppingBag className="h-4 w-4" />;
+  return icons[type] || <ShoppingBag className="h-3.5 w-3.5" />;
 }
 
-// Payment Card with collapsible item attribution
-function PaymentCard({ payment }: { payment: OrderPayment }) {
-  const [isExpanded, setIsExpanded] = React.useState(false);
-  const paymentItems = payment.order_payment_items || [];
-  const hasItems = paymentItems.length > 0;
+function formatDateShort(dateString: string) {
+  const d = new Date(dateString);
+  return {
+    date: d.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    }),
+    time: d.toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+    }),
+  };
+}
 
-  // Safe access to payment fields
-  const paymentMethod = payment.payment_method?.replace("_", " ") || "Unknown";
-  const paymentDate = payment.initiated_at
-    ? formatDate(payment.initiated_at)
-    : "Date not available";
-  const paymentAmount = Number(payment.total_amount) || 0;
+function formatOrderType(type: string) {
+  const labels: Record<string, string> = {
+    dine_in: "Dine-In",
+    qr_dine_in: "QR Dine-In",
+    takeout: "Takeout",
+    delivery: "Delivery",
+    online: "Online",
+    catering: "Catering",
+  };
+  return labels[type] || type.replace("_", " ");
+}
+
+function getChannelLabel(orderType: string) {
+  const channels: Record<string, string> = {
+    dine_in: "In-Store",
+    qr_dine_in: "QR Table",
+    takeout: "Pickup",
+    delivery: "Delivery",
+    online: "Online",
+    catering: "Catering",
+  };
+  return channels[orderType] || "In-Store";
+}
+
+function formatStaffName(
+  profile?: {
+    first_name?: string;
+    last_name?: string;
+    display_name?: string;
+  } | null
+): string | null {
+  if (!profile) return null;
+  if (profile.display_name) return profile.display_name;
+  const full = `${profile.first_name ?? ""} ${profile.last_name ?? ""}`.trim();
+  return full || null;
+}
+
+function getPricingModeLabel(
+  mode?: string | null,
+  cashDiscount?: boolean
+): string {
+  if (!mode) return "Standard";
+  if (mode === "card") return "Card Only";
+  if (mode === "cash") return "Cash Only";
+  if (mode === "mixed" && cashDiscount) return "Dual (Cash Discount)";
+  if (mode === "mixed") return "Dual";
+  return "Standard";
+}
+
+function looksLikeUuid(s: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+    s
+  );
+}
+
+// --- Sub-components ---
+
+// ─── Enhanced Payments Section (wraps shared EnhancedPaymentsList in SectionCard) ───
+
+function EnhancedPaymentsSection({
+  basicPayments,
+  richPayments,
+  isLoading,
+  cashDiscountApplied,
+  totalDue,
+  orderVoidedAt = null,
+  orderVoidedByName = null,
+  orderVoidedBy = null,
+  orderVoidReason = null,
+  onAdjustTip,
+  showAdjustTip,
+}: {
+  basicPayments: OrderPayment[];
+  richPayments: RichPayment[] | null;
+  isLoading: boolean;
+  cashDiscountApplied: boolean;
+  totalDue: number;
+  orderVoidedAt?: string | null;
+  orderVoidedByName?: string | null;
+  orderVoidedBy?: string | null;
+  orderVoidReason?: string | null;
+  onAdjustTip?: () => void;
+  showAdjustTip?: boolean;
+}) {
+  const useRich = richPayments && richPayments.length > 0;
+  const paymentCount = useRich ? richPayments.length : basicPayments.length;
 
   return (
-    <div className="rounded-lg border overflow-hidden">
-      {/* Payment Header */}
-      <div
-        className={cn(
-          "flex items-center justify-between p-3",
-          hasItems && "cursor-pointer hover:bg-muted/50 transition-colors"
-        )}
-        onClick={() => hasItems && setIsExpanded(!isExpanded)}
-      >
-        <div className="flex items-center gap-2">
-          {hasItems && (
-            <span className="text-muted-foreground">
-              {isExpanded ? (
-                <ChevronUp className="h-4 w-4" />
-              ) : (
-                <ChevronDown className="h-4 w-4" />
-              )}
+    <SectionCard
+      title={`Payments${paymentCount > 0 ? ` (${paymentCount})` : ""}`}
+      icon={<CreditCard className="h-4 w-4" />}
+      action={
+        showAdjustTip && onAdjustTip ? (
+          <Button
+            variant="outline"
+            size="sm"
+            className="rounded-xl border-border/60 bg-background/80 hover:bg-background"
+            onClick={onAdjustTip}
+          >
+            <DollarSign className="h-3.5 w-3.5 mr-1.5" />
+            Adjust Tip
+          </Button>
+        ) : undefined
+      }
+    >
+      <EnhancedPaymentsList
+        basicPayments={basicPayments}
+        richPayments={richPayments}
+        isLoading={isLoading}
+        cashDiscountApplied={cashDiscountApplied}
+        totalDue={totalDue}
+        orderVoidedAt={orderVoidedAt}
+        orderVoidedByName={orderVoidedByName}
+        orderVoidedBy={orderVoidedBy}
+        orderVoidReason={orderVoidReason}
+      />
+    </SectionCard>
+  );
+}
+
+function SectionCard({
+  title,
+  icon,
+  children,
+  className,
+  action,
+}: {
+  title: string;
+  icon?: React.ReactNode;
+  children: React.ReactNode;
+  className?: string;
+  action?: React.ReactNode;
+}) {
+  return (
+    <div
+      className={cn(
+        "overflow-hidden rounded-2xl border border-border/60 bg-card/95 shadow-[0_16px_40px_-24px_rgba(15,23,42,0.35)] backdrop-blur-sm",
+        className
+      )}
+    >
+      <div className="flex items-center justify-between gap-3 border-b border-border/60 bg-gradient-to-r from-muted/70 via-background to-background px-5 py-4">
+        <div className="flex min-w-0 items-center gap-3">
+          {icon && (
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border/60 bg-background/80 text-muted-foreground shadow-sm">
+              {icon}
             </span>
           )}
-          <div>
-            <p className="text-sm font-medium capitalize">{paymentMethod}</p>
-            <p className="text-xs text-muted-foreground">{paymentDate}</p>
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+              Section
+            </p>
+            <h3 className="truncate text-sm font-semibold text-foreground">{title}</h3>
           </div>
         </div>
-        <div className="text-right">
-          {payment.status && <PaymentStatusBadge status={payment.status} />}
-          <p className="text-sm font-medium mt-1">
-            {formatCurrency(paymentAmount)}
-          </p>
-        </div>
+        {action && <div className="shrink-0">{action}</div>}
       </div>
-
-      {/* Collapsible Item Attribution */}
-      {isExpanded && (
-        <div className="border-t bg-muted/30 px-3 py-2">
-          <p className="text-xs font-medium text-muted-foreground mb-2">
-            This payment covered:
-          </p>
-          {hasItems ? (
-            <div className="space-y-1.5">
-              {paymentItems.map((item) => (
-                <div
-                  key={item.id}
-                  className="flex items-center justify-between text-xs"
-                >
-                  <span className="text-foreground">
-                    {item.order_items?.item_name || "Unknown Item"}{" "}
-                    <span className="text-muted-foreground">
-                      ({item.quantity_paid}×)
-                    </span>
-                  </span>
-                  <span className="font-medium">
-                    {formatCurrency(Number(item.subtotal_paid) || 0)}
-                  </span>
-                </div>
-              ))}
-              {/* Show tax if any payment item has tax */}
-              {paymentItems.some((item) => Number(item.tax_paid) > 0) && (
-                <div className="flex items-center justify-between text-xs border-t pt-1.5 mt-1.5">
-                  <span className="text-muted-foreground">Tax</span>
-                  <span className="font-medium">
-                    {formatCurrency(
-                      paymentItems.reduce(
-                        (sum, item) => sum + (Number(item.tax_paid) || 0),
-                        0
-                      )
-                    )}
-                  </span>
-                </div>
-              )}
-            </div>
-          ) : (
-            <p className="text-xs text-muted-foreground italic">
-              No item-level attribution available
-            </p>
-          )}
-        </div>
-      )}
+      <div className="p-5">{children}</div>
     </div>
   );
 }
+
+function MetaChip({
+  icon,
+  label,
+  value,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string | React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center gap-3 rounded-2xl border border-border/60 bg-background/80 px-4 py-3 text-sm shadow-sm backdrop-blur-sm">
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-muted/70 text-muted-foreground">
+        {icon}
+      </span>
+      <div className="min-w-0">
+        <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground leading-none">
+          {label}
+        </p>
+        <div className="truncate font-medium leading-tight text-foreground">{value}</div>
+      </div>
+    </div>
+  );
+}
+
+function HeroStatCard({
+  label,
+  value,
+  description,
+  icon,
+  tone = "neutral",
+}: {
+  label: string;
+  value: React.ReactNode;
+  description?: React.ReactNode;
+  icon: React.ReactNode;
+  tone?: "neutral" | "primary" | "success" | "warning";
+}) {
+  const toneStyles = {
+    neutral:
+      "border-border/60 bg-background/85 text-foreground",
+    primary:
+      "border-primary/15 bg-primary/5 text-foreground",
+    success:
+      "border-emerald-200/70 bg-emerald-50/80 text-foreground dark:border-emerald-900/40 dark:bg-emerald-950/20",
+    warning:
+      "border-amber-200/70 bg-amber-50/80 text-foreground dark:border-amber-900/40 dark:bg-amber-950/20",
+  };
+
+  const iconStyles = {
+    neutral: "border-border/60 bg-muted/70 text-muted-foreground",
+    primary: "border-primary/15 bg-primary/10 text-primary",
+    success: "border-emerald-200/70 bg-emerald-100 text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-900/30 dark:text-emerald-400",
+    warning: "border-amber-200/70 bg-amber-100 text-amber-700 dark:border-amber-900/40 dark:bg-amber-900/30 dark:text-amber-400",
+  };
+
+  return (
+    <div
+      className={cn(
+        "rounded-2xl border px-4 py-4 shadow-sm backdrop-blur-sm",
+        toneStyles[tone]
+      )}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+            {label}
+          </p>
+          <div className="mt-2 text-lg font-semibold tracking-tight text-foreground">
+            {value}
+          </div>
+          {description && (
+            <div className="mt-1 text-xs text-muted-foreground">
+              {description}
+            </div>
+          )}
+        </div>
+        <span
+          className={cn(
+            "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border",
+            iconStyles[tone]
+          )}
+        >
+          {icon}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// --- Pricing rows ---
+function PriceRow({
+  label,
+  value,
+  className,
+  valueClassName,
+  bold,
+}: {
+  label: string;
+  value: string;
+  className?: string;
+  valueClassName?: string;
+  bold?: boolean;
+}) {
+  return (
+    <div
+      className={cn("flex items-center justify-between gap-4 py-1", className)}
+    >
+      <span
+        className={cn(
+          "text-sm text-muted-foreground",
+          bold && "text-foreground font-semibold"
+        )}
+      >
+        {label}
+      </span>
+      <span className={cn("text-sm", bold && "font-semibold", valueClassName)}>
+        {value}
+      </span>
+    </div>
+  );
+}
+
+// ─── Kitchen status helpers ───
+
+type KitchenStatus = "new" | "preparing" | "ready" | "completed" | string;
+
+function kitchenStatusConfig(status: KitchenStatus | null | undefined) {
+  if (!status) return null;
+  const map: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
+    new: {
+      label: "New",
+      icon: <Clock className="h-3 w-3" />,
+      color: "text-muted-foreground",
+    },
+    preparing: {
+      label: "Preparing",
+      icon: <Flame className="h-3 w-3" />,
+      color: "text-blue-600 dark:text-blue-400",
+    },
+    ready: {
+      label: "Ready",
+      icon: <CheckCircle2 className="h-3 w-3" />,
+      color: "text-emerald-600 dark:text-emerald-400",
+    },
+    completed: {
+      label: "Completed",
+      icon: <CheckCircle2 className="h-3 w-3" />,
+      color: "text-emerald-600 dark:text-emerald-400",
+    },
+  };
+  return map[status] ?? { label: status, icon: <Clock className="h-3 w-3" />, color: "text-muted-foreground" };
+}
+
+function formatShortTime(dateString: string | null | undefined): string | null {
+  if (!dateString) return null;
+  const d = new Date(dateString);
+  if (isNaN(d.getTime())) return null;
+  return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+}
+
+// ─── Enhanced Items Section ───
+
+type RichItem = NonNullable<OrderFullHistory["items"]>[number];
+type Reversal = NonNullable<OrderFullHistory["reversals"]>[number];
+
+function EnhancedItemsSection({
+  items,
+  richItems,
+  reversals,
+  isLoading,
+  itemCount,
+  voidedCount,
+}: {
+  items: (OrderItem & { order_item_modifiers?: OrderItemModifier[] })[];
+  richItems: RichItem[] | null;
+  reversals: Reversal[] | null;
+  isLoading: boolean;
+  itemCount: number;
+  voidedCount: number;
+}) {
+  const useRich = richItems && richItems.length > 0;
+  const displayItems: RichItem[] = useRich
+    ? richItems
+    : items.map((item) => ({
+        id: item.id,
+        item_name: item.item_name,
+        quantity: Number(item.quantity) || 1,
+        unit_price: Number(item.unit_price) || 0,
+        subtotal: Number(item.subtotal) || 0,
+        cash_unit_price: null,
+        category_name: item.category_name ?? null,
+        course_number: null,
+        is_voided: item.is_voided,
+        void_reason: item.void_reason ?? null,
+        voided_at: item.voided_at ?? null,
+        voided_by_name: null,
+        is_open_item: false,
+        is_tax_exempt: false,
+        special_instructions: item.special_instructions ?? null,
+        kitchen_status: null,
+        kitchen_notes: null,
+        fire_time: null,
+        preparing_at: null,
+        ready_at: null,
+        completed_at: null,
+        item_status: item.item_status,
+        created_at: item.created_at,
+        discount_name: item.discount_name ?? null,
+        discount_amount: Number(item.discount_amount) || null,
+        discount_type: item.discount_type ?? null,
+        modifiers: (item.order_item_modifiers || []).map((m) => ({
+          modifier_group_name: m.modifier_group_name,
+          modifier_name: m.modifier_name,
+          price_modifier: m.price_modifier,
+          quantity: m.quantity,
+        })),
+      }));
+
+  // Group by course_number
+  const courseGroups = React.useMemo(() => {
+    const groups = new Map<number | null, { label: string; items: RichItem[] }>();
+
+    for (const item of displayItems) {
+      const course = item.course_number;
+      if (!groups.has(course)) {
+        groups.set(course, {
+          label:
+            course != null
+              ? `Course ${course}${item.category_name ? ` — ${item.category_name}` : ""}`
+              : item.category_name
+                ? item.category_name
+                : "No Course",
+          items: [],
+        });
+      }
+      groups.get(course)!.items.push(item);
+    }
+
+    // Sort: numbered courses first (ascending), then null
+    return [...groups.entries()].sort(([a], [b]) => {
+      if (a === null && b === null) return 0;
+      if (a === null) return 1;
+      if (b === null) return -1;
+      return a - b;
+    });
+  }, [displayItems]);
+
+  const hasCourses = courseGroups.some(([key]) => key !== null);
+
+  const titleSuffix = [
+    !isLoading && displayItems.length > 0 ? `${itemCount}` : "",
+    voidedCount > 0 ? `${voidedCount} voided` : "",
+  ]
+    .filter(Boolean)
+    .join(", ");
+
+  return (
+    <SectionCard
+      title={`Items${titleSuffix ? ` (${titleSuffix})` : ""}`}
+      icon={<ShoppingBag className="h-4 w-4" />}
+    >
+      {isLoading ? (
+        <div className="space-y-3">
+          <Skeleton className="h-14 w-full rounded-lg" />
+          <Skeleton className="h-14 w-full rounded-lg" />
+          <Skeleton className="h-10 w-3/4 rounded-lg" />
+        </div>
+      ) : displayItems.length === 0 ? (
+        <p className="text-sm text-muted-foreground py-2">No items found</p>
+      ) : (
+        <div className="space-y-4">
+          {courseGroups.map(([courseKey, group]) => (
+            <div key={courseKey ?? "none"}>
+              {/* Course header */}
+              {(hasCourses || group.label !== "No Course") && (
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    {group.label}
+                  </span>
+                  <div className="flex-1 h-px bg-border" />
+                </div>
+              )}
+
+              {/* Items in this group */}
+              <div className="space-y-0 divide-y">
+                {group.items.map((item) => (
+                  <EnhancedItemRow
+                    key={item.id}
+                    item={item}
+                    reversals={reversals}
+                  />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </SectionCard>
+  );
+}
+
+function EnhancedItemRow({
+  item,
+  reversals,
+}: {
+  item: RichItem;
+  reversals: Reversal[] | null;
+}) {
+  const isVoided = item.is_voided;
+  const qty = item.quantity;
+  const discountAmount = Number(item.discount_amount) || 0;
+  const hasDiscount = discountAmount > 0;
+  const kitchenCfg = kitchenStatusConfig(item.kitchen_status);
+  const fireTimeStr = formatShortTime(item.fire_time);
+  const completedTimeStr = formatShortTime(item.completed_at);
+
+  const itemReversals = reversals?.filter(
+    (r) =>
+      (r.status === "completed" || r.status === "processed") &&
+      r.refund_items?.some((ri) => ri.order_item_id === item.id)
+  ) ?? [];
+
+  return (
+    <div
+      className={cn(
+        "py-3 first:pt-0 last:pb-0",
+        isVoided && "bg-red-50/50 dark:bg-red-950/10 -mx-4 px-4 border-red-100 dark:border-red-900/30"
+      )}
+    >
+      <div className="flex items-start gap-3">
+        {/* Quantity badge */}
+        <div
+          className={cn(
+            "flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-xs font-semibold mt-0.5",
+            isVoided
+              ? "bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400"
+              : "bg-muted text-foreground"
+          )}
+        >
+          {isVoided ? <Ban className="h-3.5 w-3.5" /> : qty}
+        </div>
+
+        {/* Details */}
+        <div className="flex-1 min-w-0">
+          {/* Name row with badges */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span
+              className={cn(
+                "text-sm font-medium",
+                isVoided && "line-through text-muted-foreground"
+              )}
+            >
+              {item.item_name}
+            </span>
+            {isVoided && (
+              <Badge
+                variant="destructive"
+                className="text-[10px] px-1.5 py-0 h-4"
+              >
+                VOIDED
+              </Badge>
+            )}
+            {item.is_open_item && (
+              <Badge
+                variant="outline"
+                className="text-[10px] px-1.5 py-0 h-4 border-amber-300 text-amber-700 dark:text-amber-400"
+              >
+                Open Item
+              </Badge>
+            )}
+            {item.is_tax_exempt && (
+              <Badge
+                variant="outline"
+                className="text-[10px] px-1.5 py-0 h-4 border-purple-300 text-purple-700 dark:text-purple-400"
+              >
+                <ShieldOff className="h-2.5 w-2.5 mr-0.5" />
+                Tax Exempt
+              </Badge>
+            )}
+          </div>
+
+          {/* Modifiers inline */}
+          {item.modifiers.length > 0 && (
+            <div className="mt-1 space-y-0.5">
+              {item.modifiers.map((mod, i) => (
+                <p
+                  key={i}
+                  className={cn(
+                    "text-xs text-muted-foreground",
+                    isVoided && "line-through"
+                  )}
+                >
+                  <span className="text-muted-foreground/50">+ </span>
+                  {mod.modifier_name}
+                  {mod.quantity > 1 && ` (x${mod.quantity})`}
+                  {mod.price_modifier > 0 && (
+                    <span className="ml-1 text-muted-foreground/80">
+                      (+{formatCurrency(mod.price_modifier)})
+                    </span>
+                  )}
+                </p>
+              ))}
+            </div>
+          )}
+
+          {/* Qty x Price line */}
+          <p
+            className={cn(
+              "text-xs text-muted-foreground mt-1",
+              isVoided && "line-through"
+            )}
+          >
+            Qty: {qty} &times; {formatCurrency(item.unit_price)}
+          </p>
+
+          {/* Special instructions */}
+          {item.special_instructions && (
+            <p
+              className={cn(
+                "text-xs italic text-muted-foreground mt-1",
+                isVoided && "line-through"
+              )}
+            >
+              &ldquo;{item.special_instructions}&rdquo;
+            </p>
+          )}
+
+          {/* Kitchen status row */}
+          {kitchenCfg ? (
+            <div className={cn("flex items-center gap-1.5 mt-1.5 text-xs", kitchenCfg.color)}>
+              {kitchenCfg.icon}
+              <span className="font-medium">Kitchen: {kitchenCfg.label}</span>
+              {completedTimeStr && (
+                <span className="text-muted-foreground">at {completedTimeStr}</span>
+              )}
+            </div>
+          ) : !isVoided && (
+            <div className="flex items-center gap-1.5 mt-1.5 text-xs text-muted-foreground">
+              <Clock className="h-3 w-3" />
+              <span>Kitchen: N/A</span>
+            </div>
+          )}
+
+          {/* Fire time */}
+          {fireTimeStr && !kitchenCfg && (
+            <div className="flex items-center gap-1.5 mt-1.5 text-xs text-orange-600 dark:text-orange-400">
+              <Flame className="h-3 w-3" />
+              <span>Fired at {fireTimeStr}</span>
+            </div>
+          )}
+          {fireTimeStr && kitchenCfg && item.kitchen_status !== "completed" && item.kitchen_status !== "ready" && (
+            <div className="flex items-center gap-1.5 mt-0.5 text-xs text-muted-foreground">
+              <Flame className="h-3 w-3" />
+              <span>Fired at {fireTimeStr}</span>
+            </div>
+          )}
+
+          {/* Discount */}
+          {hasDiscount && !isVoided && (
+            <div className="flex items-center gap-1.5 mt-1.5">
+              <Badge
+                variant="secondary"
+                className="text-[10px] px-1.5 py-0 h-4 text-green-700 dark:text-green-400 bg-green-100 dark:bg-green-900/30 border-0"
+              >
+                <Tag className="h-2.5 w-2.5 mr-0.5" />
+                -{formatCurrency(discountAmount)}
+                {item.discount_type === "percentage"
+                  ? ""
+                  : ""}
+              </Badge>
+              {item.discount_name && (
+                <span className="text-[10px] text-muted-foreground">
+                  {item.discount_name}
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Void details */}
+          {isVoided && (
+            <div className="mt-2 pt-2 border-t border-dashed border-red-200 dark:border-red-800/50 space-y-1">
+              <div className="flex items-center gap-1.5 text-xs text-red-600 dark:text-red-400">
+                <Ban className="h-3 w-3" />
+                <span className="font-medium">
+                  Voided{item.voided_at ? `: ${formatDate(item.voided_at)}` : ""}
+                  {item.voided_by_name ? ` by ${item.voided_by_name}` : ""}
+                </span>
+              </div>
+              {item.void_reason && (
+                <p className="text-xs text-red-600/80 dark:text-red-400/80 pl-[18px]">
+                  Reason: {item.void_reason}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Refund annotation (matched by order_item_id) */}
+          {itemReversals.length > 0 && (
+            <div className="mt-1.5 space-y-1">
+              {itemReversals.map((rev) => {
+                const matchedRefundItem = rev.refund_items?.find(
+                  (ri) => ri.order_item_id === item.id
+                );
+                const refundAmount = matchedRefundItem?.amount ?? rev.amount;
+
+                return (
+                  <div key={rev.id} className="space-y-0.5">
+                    <div className="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400">
+                      <RefreshCw className="h-3 w-3" />
+                      <span>
+                        Refunded: {formatCurrency(refundAmount)}
+                        {rev.original_card_last_four
+                          ? ` → ****${rev.original_card_last_four}`
+                          : rev.original_payment_method
+                            ? ` → ${rev.original_payment_method}`
+                            : ""}
+                        {rev.completed_at
+                          ? ` on ${formatDate(rev.completed_at)}`
+                          : ""}
+                      </span>
+                    </div>
+                    {(rev.reason_description || rev.reason_code) && (
+                      <p className="text-xs text-amber-600/80 dark:text-amber-400/80 pl-[18px]">
+                        Reason: {rev.reason_description || rev.reason_code}
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Price */}
+        <div className="text-right shrink-0">
+          <p
+            className={cn(
+              "text-sm font-semibold",
+              isVoided && "text-muted-foreground line-through"
+            )}
+          >
+            {formatCurrency(item.subtotal)}
+          </p>
+          {isVoided && (
+            <p className="text-[10px] text-muted-foreground italic">
+              excluded
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ======== Main Component ========
 
 export function OrderDetailSheet({
   order,
   open,
   onOpenChange,
+  fullPageUrlPattern,
+  readOnly = false,
 }: OrderDetailSheetProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { organization } = useOrganization();
+  const { setSelectedLocation } = useLocationStore();
   const selectedLocation = useSelectedLocation();
-  const [isReceiptOpen, setIsReceiptOpen] = React.useState(false);
-  const [confirmRefundOpen, setConfirmRefundOpen] = React.useState(false);
-  const [confirmVoidOpen, setConfirmVoidOpen] = React.useState(false);
-  const [isRefunding, setIsRefunding] = React.useState(false);
-  const [isVoiding, setIsVoiding] = React.useState(false);
+  const [isSendReceiptOpen, setIsSendReceiptOpen] = React.useState(false);
+  const [isAdjustTipOpen, setIsAdjustTipOpen] = React.useState(false);
+  const [assignCustomerOpen, setAssignCustomerOpen] = React.useState(false);
+  const [removingCustomer, setRemovingCustomer] = React.useState(false);
 
-  const handleRefund = async () => {
-    if (!organization?.id || !order?.id) return;
-    setIsRefunding(true);
-    try {
-      const result = await RefundOrder(organization.id, order.id);
-      if (result.success) {
-        toast.success("Order refunded successfully");
-        queryClient.invalidateQueries({ queryKey: ["orders"] });
-        queryClient.invalidateQueries({ queryKey: ["order-details", order.id] });
-        onOpenChange(false);
-      } else {
-        toast.error(result.error || "Failed to refund order");
-      }
-    } catch {
-      toast.error("An unexpected error occurred");
-    } finally {
-      setIsRefunding(false);
-      setConfirmRefundOpen(false);
-    }
-  };
-
-  const handleVoid = async () => {
-    if (!organization?.id || !order?.id) return;
-    setIsVoiding(true);
-    try {
-      const result = await VoidOrder(organization.id, order.id);
-      if (result.success) {
-        toast.success("Order voided successfully");
-        queryClient.invalidateQueries({ queryKey: ["orders"] });
-        queryClient.invalidateQueries({ queryKey: ["order-details", order.id] });
-        onOpenChange(false);
-      } else {
-        toast.error(result.error || "Failed to void order");
-      }
-    } catch {
-      toast.error("An unexpected error occurred");
-    } finally {
-      setIsVoiding(false);
-      setConfirmVoidOpen(false);
-    }
-  };
-
-  // Fetch full order details when sheet opens
   const { data: orderDetails, isLoading } = useQuery({
-    queryKey: ["order-details", order?.id, organization?.id],
+    queryKey: ["order-details", order?.id],
     queryFn: async () => {
       if (!order) return null;
       try {
-        const details = await GetOrderDetails(order.id, organization?.id);
-        return details;
+        return await GetOrderDetails(order.id);
       } catch (error) {
         console.error("Error fetching order details:", error);
         return null;
       }
     },
-    enabled: !!order && open && !!organization?.id,
+    enabled: !!order && open,
   });
+
+  const { data: fullHistory, isLoading: isHistoryLoading } = useQuery({
+    queryKey: ["order-full-history", order?.id],
+    queryFn: async (): Promise<OrderFullHistory | null> => {
+      if (!order) return null;
+      try {
+        return await GetOrderFullHistory(order.id);
+      } catch (error) {
+        console.error("Error fetching full history:", error);
+        return null;
+      }
+    },
+    enabled: !!order && open,
+  });
+
+  const handleAssignCustomerSuccess = React.useCallback(() => {
+    const orderId = order?.id;
+    if (!orderId) return;
+    queryClient.invalidateQueries({ queryKey: ["order-details", orderId] });
+    queryClient.invalidateQueries({ queryKey: ["order-full-history", orderId] });
+  }, [queryClient, order?.id]);
+
+  const handleAdjustTipSuccess = React.useCallback(() => {
+    const orderId = order?.id;
+    if (!orderId) return;
+    queryClient.invalidateQueries({ queryKey: ["order-details", orderId] });
+    queryClient.invalidateQueries({ queryKey: ["order-full-history", orderId] });
+  }, [queryClient, order?.id]);
+
+  // Derive payments before early return so useMemo runs unconditionally (Rules of Hooks)
+  const payments = ((orderDetails || order) as OrderResponse | null)?.order_payments ?? [];
+  const eligibleTipPayments = React.useMemo(() => {
+    const ELIGIBLE_STATUSES = ["captured", "paid"] as const;
+    return (payments as OrderPayment[]).filter((p) => {
+      const method = String(p.payment_method ?? "").toLowerCase();
+      const isCard =
+        method.startsWith("card_") ||
+        ["card_spinapi", "card_dvpaylite", "card_manual"].includes(method);
+      if (!isCard) return false;
+      const status = String(p.status ?? "").toLowerCase().replace(/-/g, "_");
+      if (!ELIGIBLE_STATUSES.includes(status)) return false;
+      if (status === "void") return false;
+      const pm = p as { is_voided?: boolean; is_settled?: boolean };
+      if (pm.is_voided) return false;
+      if (pm.is_settled) return false;
+      return true;
+    });
+  }, [payments]);
 
   if (!order) return null;
 
-  // Use fetched details if available, otherwise use the passed order
-  // If order is OrderResponse, use it directly; if Order, we need to fetch details
   const displayOrder = (orderDetails || order) as OrderResponse;
   const items = (displayOrder.order_items || []) as (OrderItem & {
     order_item_modifiers?: OrderItemModifier[];
   })[];
-  const payments = (displayOrder.order_payments || []) as OrderPayment[];
-  const statusHistory = (displayOrder.order_status_history ||
-    []) as OrderStatusHistory[];
   const tableSessions = (displayOrder.table_sessions ||
     []) as TableSessionWithEvents[];
 
   const handleViewMoreDetails = () => {
     onOpenChange(false);
-    router.push(`/dashboard/orders/${displayOrder.id}`);
+    const url = fullPageUrlPattern
+      ? fullPageUrlPattern(displayOrder.id)
+      : `/dashboard/orders/${displayOrder.id}`;
+    router.push(url);
   };
+
+  const handleViewOnFloorPlan = () => {
+    if (displayOrder.location_id) {
+      setSelectedLocation(displayOrder.location_id);
+    }
+    onOpenChange(false);
+    router.push("/dashboard/tables");
+  };
+
+  // Derived metadata
+  const { date, time } = formatDateShort(displayOrder.created_at);
+  const isMetadataLoading = isLoading || isHistoryLoading;
+  const locationName =
+    fullHistory?.order?.location_name ??
+    displayOrder.location?.name ??
+    displayOrder.locations?.name ??
+    selectedLocation?.name ??
+    null;
+  const createdByName =
+    fullHistory?.order?.created_by_staff_name ??
+    fullHistory?.order?.created_by_user_name ??
+    formatStaffName(displayOrder.created_by_staff);
+  const serverName =
+    fullHistory?.order?.server_name ??
+    formatStaffName(tableSessions[0]?.server) ??
+    formatStaffName(displayOrder.assigned_server);
+  const tableName =
+    fullHistory?.order?.table_name ?? displayOrder.table_number ?? null;
+  const partySize =
+    fullHistory?.order?.party_size ?? tableSessions[0]?.party_size;
+  const pricingMode =
+    fullHistory?.order?.pricing_mode ?? displayOrder.payment_pricing_mode;
+  const pricingLabel = getPricingModeLabel(
+    pricingMode,
+    displayOrder.cash_discount_applied
+  );
+  const stationName =
+    fullHistory?.order?.station_name ??
+    displayOrder.station?.station_name ??
+    null;
+  const isQrDineIn = displayOrder.order_type === "qr_dine_in";
+  const isDineIn = displayOrder.order_type === "dine_in";
+  const isTableLabeledOrder = isDineIn || isQrDineIn;
+
+  // Use displayOrder only so all customer fields update together (same query)
+  const customerName = displayOrder.customer_name ?? null;
+  const customerPhone = displayOrder.customer_phone ?? null;
+  const customerEmail = displayOrder.customer_email ?? null;
+  const hasCustomer = !!(customerName || customerPhone || customerEmail);
+
+  const notes =
+    fullHistory?.order?.internal_notes ?? displayOrder.internal_notes ?? null;
+
+  const itemCount = items.reduce(
+    (sum, i) => sum + (i.is_voided ? 0 : Number(i.quantity) || 1),
+    0
+  );
+  const voidedCount = items.filter((i) => i.is_voided).length;
+  const paymentCount = payments.length;
+  const totalAmount = Number(displayOrder.total_amount) || 0;
+  const amountDue = Number(displayOrder.amount_due) || 0;
+  const fulfillmentValue = isTableLabeledOrder
+    ? tableName ?? "Dining Room"
+    : formatOrderType(displayOrder.order_type);
+  const fulfillmentDescription = isTableLabeledOrder
+    ? [
+        locationName,
+        isDineIn && partySize != null ? `${partySize} guests` : null,
+        isDineIn && serverName ? `Server: ${serverName}` : null,
+        isQrDineIn ? "Pay-before-kitchen QR order" : null,
+      ]
+        .filter(Boolean)
+        .join(" • ")
+    : [locationName, getChannelLabel(displayOrder.order_type), stationName]
+        .filter(Boolean)
+        .join(" • ");
+  const customerSummary = customerName ?? "Walk-in / Unassigned";
+  const customerDescription =
+    customerEmail ??
+    customerPhone ??
+    (hasCustomer
+      ? "Customer attached to this order"
+      : "No customer profile attached");
+  const totalDescription =
+    amountDue > 0
+      ? `${formatCurrency(amountDue)} still due`
+      : paymentCount > 0
+        ? `${paymentCount} payment${paymentCount === 1 ? "" : "s"} recorded`
+        : "Paid in full";
+  const locationOrChannel =
+    locationName ?? getChannelLabel(displayOrder.order_type);
+
+  const metaChips: {
+    icon: React.ReactNode;
+    label: string;
+    value: string | React.ReactNode;
+  }[] = [];
+  if (createdByName) {
+    metaChips.push({
+      icon: <User className="h-3.5 w-3.5" />,
+      label: "Created by",
+      value: createdByName,
+    });
+  }
+  if (isTableLabeledOrder && tableName) {
+    metaChips.push({
+      icon: isQrDineIn ? <QrCode className="h-3.5 w-3.5" /> : <Utensils className="h-3.5 w-3.5" />,
+      label: isQrDineIn ? "QR Table" : "Table",
+      value: tableName,
+    });
+  }
+  if (isDineIn && serverName) {
+    metaChips.push({
+      icon: <User className="h-3.5 w-3.5" />,
+      label: "Server",
+      value: serverName,
+    });
+  }
+  if (isDineIn && partySize != null) {
+    metaChips.push({
+      icon: <Users className="h-3.5 w-3.5" />,
+      label: "Party",
+      value: `${partySize} guests`,
+    });
+  }
+  if (stationName) {
+    metaChips.push({
+      icon: <Store className="h-3.5 w-3.5" />,
+      label: "Station",
+      value: stationName,
+    });
+  }
+  if (pricingMode && pricingMode !== "card") {
+    metaChips.push({
+      icon: <CreditCard className="h-3.5 w-3.5" />,
+      label: "Pricing",
+      value: pricingLabel,
+    });
+  }
+
+  const canShowAdjustTip =
+    !readOnly &&
+    eligibleTipPayments.length > 0 &&
+    displayOrder.status !== "void" &&
+    displayOrder.status !== "cancelled";
 
   return (
     <>
       <BottomSheet open={open} onOpenChange={onOpenChange}>
-        <BottomSheetContent height="95">
-          <BottomSheetHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <BottomSheetTitle>
-                  Order #
-                  {displayOrder.display_number || displayOrder.order_number}
-                </BottomSheetTitle>
-                <BottomSheetDescription>
-                  {formatDate(displayOrder.created_at)}
-                </BottomSheetDescription>
+        <BottomSheetContent
+          height="95"
+          className="border-x-0 border-t border-border/60 bg-gradient-to-b from-background via-background to-muted/20 sm:inset-x-4 sm:bottom-4 sm:mx-auto sm:h-[calc(100vh-2rem)] sm:max-w-6xl sm:rounded-[28px] sm:border"
+        >
+          {/* ─── Header ─── */}
+          <BottomSheetHeader className="shrink-0 border-b border-border/60 bg-gradient-to-b from-muted/60 via-background to-background px-6 pb-6 pt-2 sm:px-8">
+            <div className="space-y-6">
+              <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+                <div className="min-w-0 space-y-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge className="rounded-full border border-border/60 bg-background/90 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground shadow-sm hover:bg-background">
+                      Order Details
+                    </Badge>
+                    <OrderStatusBadge status={displayOrder.status} />
+                    <PaymentStatusBadge status={displayOrder.payment_status} />
+                  </div>
+
+                  <div className="space-y-2">
+                    <BottomSheetTitle className="text-2xl font-semibold tracking-tight sm:text-3xl">
+                      Order #{displayOrder.display_number || displayOrder.order_number}
+                    </BottomSheetTitle>
+                    <BottomSheetDescription className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
+                      <span className="flex items-center gap-1.5">
+                        <Calendar className="h-3.5 w-3.5" />
+                        {date}
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        <Clock className="h-3.5 w-3.5" />
+                        {time}
+                      </span>
+                      <span className="flex items-center gap-1.5 rounded-full border border-border/60 bg-background/80 px-3 py-1 text-xs font-medium text-foreground shadow-sm">
+                        {getOrderTypeIcon(displayOrder.order_type)}
+                        {formatOrderType(displayOrder.order_type)}
+                      </span>
+                      {locationOrChannel && (
+                        <span className="flex items-center gap-1.5">
+                          <MapPin className="h-3.5 w-3.5" />
+                          {locationOrChannel}
+                        </span>
+                      )}
+                    </BottomSheetDescription>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 pr-8 xl:max-w-[360px] xl:justify-end">
+                  {isQrDineIn && tableName ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="rounded-xl border-[#0C4FD1]/20 bg-[#0C4FD1]/5 text-[#0C4FD1] hover:bg-[#0C4FD1]/10"
+                      onClick={handleViewOnFloorPlan}
+                    >
+                      <MapPin className="mr-1.5 h-4 w-4" />
+                      View on Floor Plan
+                    </Button>
+                  ) : null}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="rounded-xl border-border/60 bg-background/80 hover:bg-background"
+                    onClick={() => setIsSendReceiptOpen(true)}
+                  >
+                    <Mail className="mr-1.5 h-4 w-4" />
+                    Send Receipt
+                  </Button>
+                </div>
               </div>
-              <OrderStatusBadge status={displayOrder.status} />
+
+              <div className="grid gap-3 md:grid-cols-3">
+                <HeroStatCard
+                  label="Order Total"
+                  value={formatCurrency(totalAmount)}
+                  description={totalDescription}
+                  icon={<Receipt className="h-5 w-5" />}
+                  tone={amountDue > 0 ? "warning" : "success"}
+                />
+                <HeroStatCard
+                  label={isTableLabeledOrder ? (isQrDineIn ? "QR Table" : "Table") : "Fulfillment"}
+                  value={fulfillmentValue}
+                  description={
+                    fulfillmentDescription ||
+                    (isTableLabeledOrder
+                      ? "Dining room service details"
+                      : "Order channel details")
+                  }
+                  icon={
+                    isTableLabeledOrder ? (
+                      isQrDineIn ? <QrCode className="h-5 w-5" /> : <Utensils className="h-5 w-5" />
+                    ) : (
+                      <span className="flex h-5 w-5 items-center justify-center">
+                        {getOrderTypeIcon(displayOrder.order_type)}
+                      </span>
+                    )
+                  }
+                  tone="primary"
+                />
+                <HeroStatCard
+                  label="Customer"
+                  value={customerSummary}
+                  description={customerDescription}
+                  icon={<User className="h-5 w-5" />}
+                />
+              </div>
             </div>
           </BottomSheetHeader>
 
-          <BottomSheetBody>
+          {/* ─── Body ─── */}
+          <BottomSheetBody className="bg-transparent px-6 py-6 sm:px-8">
             <div className="space-y-6">
-              {/* Order Info */}
-              <div className="space-y-4">
-                <div className="flex items-center gap-2">
-                  {getOrderTypeIcon(displayOrder.order_type)}
-                  <span className="text-sm font-medium capitalize">
-                    {displayOrder.order_type.replace("_", " ")}
-                  </span>
+              {metaChips.length === 0 && isMetadataLoading ? (
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                  <Skeleton className="h-16 rounded-2xl" />
+                  <Skeleton className="h-16 rounded-2xl" />
+                  <Skeleton className="h-16 rounded-2xl" />
                 </div>
+              ) : metaChips.length > 0 ? (
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                  {metaChips.map((chip, i) => (
+                    <MetaChip key={i} {...chip} />
+                  ))}
+                </div>
+              ) : null}
 
-                {/* Customer Info */}
-                {(displayOrder.customer_name ||
-                  displayOrder.customer_phone ||
-                  displayOrder.table_number) && (
-                  <div className="space-y-2 rounded-lg border p-4">
-                    <h3 className="text-sm font-semibold">
-                      Customer Information
-                    </h3>
-                    <div className="space-y-1.5 text-sm">
-                      {displayOrder.customer_name && (
-                        <div className="flex items-center gap-2">
-                          <User className="h-4 w-4 text-muted-foreground" />
-                          <span>{displayOrder.customer_name}</span>
-                        </div>
-                      )}
-                      {displayOrder.customer_phone && (
-                        <div className="flex items-center gap-2">
-                          <Phone className="h-4 w-4 text-muted-foreground" />
-                          <span>{displayOrder.customer_phone}</span>
-                        </div>
-                      )}
-                      {displayOrder.table_number && (
-                        <div className="flex items-center gap-2">
-                          <Utensils className="h-4 w-4 text-muted-foreground" />
-                          <span>Table {displayOrder.table_number}</span>
-                        </div>
-                      )}
+              {notes && (
+                <div className="flex items-start gap-3 rounded-2xl border border-amber-200/80 bg-amber-50/80 px-4 py-4 shadow-sm dark:border-amber-800 dark:bg-amber-950/20">
+                  <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                    <MessageSquare className="h-4 w-4" />
+                  </span>
+                  <div>
+                    <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-700 dark:text-amber-400">
+                      Internal Note
+                    </p>
+                    <p className="text-sm text-foreground">&ldquo;{notes}&rdquo;</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Customer card */}
+              <SectionCard
+                title="Customer"
+                icon={<User className="h-4 w-4" />}
+              >
+                {hasCustomer ? (
+                  <div className="space-y-2">
+                    {customerName && (
+                      <div className="flex items-center gap-2 text-sm">
+                        <User className="h-3.5 w-3.5 text-muted-foreground" />
+                        <span className="font-medium">{customerName}</span>
+                      </div>
+                    )}
+                    {customerEmail && (
+                      <div className="flex items-center gap-2 text-sm">
+                        <Mail className="h-3.5 w-3.5 text-muted-foreground" />
+                        <span>{customerEmail}</span>
+                      </div>
+                    )}
+                    {customerPhone && (
+                      <div className="flex items-center gap-2 text-sm">
+                        <Phone className="h-3.5 w-3.5 text-muted-foreground" />
+                        <span>{customerPhone}</span>
+                      </div>
+                    )}
+                    <div className="flex flex-wrap gap-2 pt-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setAssignCustomerOpen(true)}
+                      >
+                        Change
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="text-destructive hover:text-destructive"
+                        disabled={removingCustomer}
+                        onClick={async () => {
+                          if (!displayOrder?.id) return;
+                          setRemovingCustomer(true);
+                          try {
+                            const res = await assignCustomerToOrder({
+                              orderId: displayOrder.id,
+                              remove: true,
+                            });
+                            if (res.success) {
+                              toast.success("Customer removed from order.");
+                              handleAssignCustomerSuccess();
+                            } else {
+                              toast.error(res.error ?? "Failed to remove customer");
+                            }
+                          } finally {
+                            setRemovingCustomer(false);
+                          }
+                        }}
+                      >
+                        {removingCustomer ? "Removing..." : "Remove"}
+                      </Button>
                     </div>
                   </div>
-                )}
-
-                {/* Payment Status */}
-                <div className="flex items-center justify-between rounded-lg border p-4">
-                  <div>
-                    <p className="text-sm text-muted-foreground">
-                      Payment Status
-                    </p>
-                    <PaymentStatusBadge
-                      status={displayOrder.payment_status}
-                      className="mt-1"
-                    />
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm text-muted-foreground">Total</p>
-                    <p className="text-lg font-bold">
-                      {formatCurrency(displayOrder.total_amount)}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <Separator />
-
-              {/* Order Items */}
-              <div className="space-y-4">
-                <h3 className="text-sm font-semibold">Order Items</h3>
-                {isLoading ? (
-                  <div className="space-y-2">
-                    <Skeleton className="h-16 w-full" />
-                    <Skeleton className="h-16 w-full" />
-                  </div>
-                ) : items.length > 0 ? (
-                  <div className="space-y-3">
-                    {items.map((item) => {
-                      const discountAmount = Number(item.discount_amount) || 0;
-                      const hasDiscount = discountAmount > 0;
-                      const isVoided = item.is_voided;
-
-                      // Safe number conversions for price fields
-                      const safeQuantity = Number(item.quantity) || 1;
-                      const safeUnitPrice = Number(item.unit_price) || 0;
-                      const safeSubtotal = Number(item.subtotal) || 0;
-                      const safePreDiscountSubtotal =
-                        Number(item.pre_discount_subtotal) || 0;
-
-                      return (
-                        <div
-                          key={item.id}
-                          className={cn(
-                            "flex items-start justify-between rounded-lg border p-3",
-                            isVoided && "bg-muted/50 border-muted"
-                          )}
-                        >
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2">
-                              <span
-                                className={cn(
-                                  "font-medium",
-                                  isVoided &&
-                                    "text-muted-foreground line-through"
-                                )}
-                              >
-                                {item.item_name}
-                              </span>
-                              {isVoided && (
-                                <Badge
-                                  variant="destructive"
-                                  className="text-xs"
-                                >
-                                  Voided
-                                </Badge>
-                              )}
-                            </div>
-                            {item.item_description && (
-                              <p
-                                className={cn(
-                                  "text-xs text-muted-foreground mt-1",
-                                  isVoided && "line-through"
-                                )}
-                              >
-                                {item.item_description}
-                              </p>
-                            )}
-                            {item.selected_size_name && (
-                              <p
-                                className={cn(
-                                  "text-xs text-muted-foreground",
-                                  isVoided && "line-through"
-                                )}
-                              >
-                                Size: {item.selected_size_name}
-                              </p>
-                            )}
-                            {/* Modifiers */}
-                            {item.order_item_modifiers &&
-                              item.order_item_modifiers.length > 0 && (
-                                <div className="mt-2 space-y-1">
-                                  {item.order_item_modifiers.map((modifier) => (
-                                    <div
-                                      key={modifier.id}
-                                      className={cn(
-                                        "text-xs text-muted-foreground pl-3 border-l-2 border-muted",
-                                        isVoided && "line-through"
-                                      )}
-                                    >
-                                      {modifier.modifier_group_name}:{" "}
-                                      {modifier.modifier_name}
-                                      {modifier.quantity > 1 &&
-                                        ` (×${modifier.quantity})`}
-                                      {modifier.price_modifier > 0 && (
-                                        <span className="ml-1">
-                                          +
-                                          {formatCurrency(
-                                            modifier.price_modifier
-                                          )}
-                                        </span>
-                                      )}
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                            {item.special_instructions && (
-                              <p
-                                className={cn(
-                                  "text-xs text-muted-foreground italic mt-1",
-                                  isVoided && "line-through"
-                                )}
-                              >
-                                Note: {item.special_instructions}
-                              </p>
-                            )}
-
-                            {/* Price and Quantity */}
-                            <p
-                              className={cn(
-                                "text-xs text-muted-foreground mt-1",
-                                isVoided && "line-through"
-                              )}
-                            >
-                              Qty: {safeQuantity} ×{" "}
-                              {hasDiscount && safePreDiscountSubtotal > 0 ? (
-                                <>
-                                  <span className="line-through mr-1">
-                                    {formatCurrency(
-                                      safePreDiscountSubtotal / safeQuantity
-                                    )}
-                                  </span>
-                                  {formatCurrency(safeSubtotal / safeQuantity)}
-                                </>
-                              ) : (
-                                formatCurrency(safeUnitPrice)
-                              )}
-                            </p>
-
-                            {/* Discount Info */}
-                            {hasDiscount && !isVoided && (
-                              <div className="flex items-center gap-1.5 mt-1.5">
-                                <span className="inline-flex items-center text-xs font-medium text-green-600 dark:text-green-400">
-                                  <DollarSign className="h-3 w-3 mr-0.5" />-
-                                  {formatCurrency(discountAmount)}
-                                </span>
-                                <span className="text-xs text-muted-foreground">
-                                  {item.discount_type === "percentage" &&
-                                  item.discount_value
-                                    ? `${item.discount_value}%`
-                                    : "Fixed"}
-                                </span>
-                                {item.discount_source && (
-                                  <Badge
-                                    variant="secondary"
-                                    className="text-[10px] px-1.5 py-0 h-4 capitalize"
-                                  >
-                                    {item.discount_source.replace("_", " ")}
-                                  </Badge>
-                                )}
-                                {item.discount_name && (
-                                  <span className="text-xs text-muted-foreground">
-                                    • {item.discount_name}
-                                  </span>
-                                )}
-                              </div>
-                            )}
-
-                            {/* Voided item exclusion note */}
-                            {isVoided && (
-                              <p className="text-xs text-muted-foreground italic mt-1">
-                                Excluded from total
-                              </p>
-                            )}
-                          </div>
-
-                          {/* Item Total */}
-                          <div className="text-right ml-4">
-                            {hasDiscount &&
-                            !isVoided &&
-                            safePreDiscountSubtotal > 0 ? (
-                              <div>
-                                <p className="text-xs text-muted-foreground line-through">
-                                  {formatCurrency(safePreDiscountSubtotal)}
-                                </p>
-                                <p className="font-medium text-green-600 dark:text-green-400">
-                                  {formatCurrency(safeSubtotal)}
-                                </p>
-                              </div>
-                            ) : (
-                              <p
-                                className={cn(
-                                  "font-medium",
-                                  isVoided &&
-                                    "text-muted-foreground line-through"
-                                )}
-                              >
-                                {formatCurrency(safeSubtotal)}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
                 ) : (
-                  <p className="text-sm text-muted-foreground">
-                    No items found
-                  </p>
+                  <div className="space-y-2">
+                    <p className="text-sm text-muted-foreground">No customer assigned</p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setAssignCustomerOpen(true)}
+                    >
+                      Assign Customer
+                    </Button>
+                  </div>
                 )}
-              </div>
+              </SectionCard>
 
-              <Separator />
+              {/* ─── Order Items (Enhanced) ─── */}
+              <EnhancedItemsSection
+                items={items}
+                richItems={fullHistory?.items ?? null}
+                reversals={fullHistory?.reversals ?? null}
+                isLoading={isLoading || isHistoryLoading}
+                itemCount={itemCount}
+                voidedCount={voidedCount}
+              />
 
-              {/* Pricing Breakdown */}
-              <div className="space-y-2">
-                <h3 className="text-sm font-semibold">Pricing Breakdown</h3>
+              {/* ─── Kitchen ─── */}
+              {fullHistory?.items && hasKitchenData(fullHistory.items) && (
+                <SectionCard
+                  title="Kitchen"
+                  icon={<ChefHat className="h-4 w-4" />}
+                >
+                  <KitchenSection items={fullHistory.items} />
+                </SectionCard>
+              )}
+
+              {/* ─── Pricing Breakdown ─── */}
+              <SectionCard
+                title="Summary"
+                icon={<DollarSign className="h-4 w-4" />}
+              >
                 {(() => {
-                  // Get pricing values
                   const cardSubtotal =
-                    Number(displayOrder.card_subtotal) || displayOrder.subtotal;
+                    Number(displayOrder.card_subtotal) ||
+                    displayOrder.subtotal;
                   const cashSubtotal =
-                    Number(displayOrder.cash_subtotal) || displayOrder.subtotal;
+                    Number(displayOrder.cash_subtotal) ||
+                    displayOrder.subtotal;
                   const cardTax =
                     Number(displayOrder.card_tax_amount) ||
                     Number(displayOrder.tax_amount) ||
@@ -607,91 +1365,84 @@ export function OrderDetailSheet({
                   const isMixedPayment =
                     displayOrder.payment_pricing_mode === "mixed";
 
-                  // Calculate actual payments by method
                   const paidPayments = payments.filter(
                     (p) => p.status === "paid" || p.status === "captured"
                   );
                   const cashPayments = paidPayments
                     .filter((p) => p.payment_method === "cash")
-                    .reduce((sum, p) => sum + Number(p.total_amount), 0);
+                    .reduce(
+                      (sum, p) => sum + Number(p.total_amount),
+                      0
+                    );
                   const cardPayments = paidPayments
                     .filter((p) => p.payment_method !== "cash")
-                    .reduce((sum, p) => sum + Number(p.total_amount), 0);
+                    .reduce(
+                      (sum, p) => sum + Number(p.total_amount),
+                      0
+                    );
                   const totalPaid = cashPayments + cardPayments;
 
                   return (
-                    <div className="space-y-3 text-sm">
-                      {/* Mixed Payment Mode - Show Payment Breakdown */}
+                    <div className="space-y-2 text-sm">
                       {isMixedPayment ? (
                         <>
-                          {/* Explanation Badge */}
-                          <div className="flex items-center gap-2 p-2 bg-amber-50 dark:bg-amber-950/30 rounded-md border border-amber-200 dark:border-amber-800">
-                            <DollarSign className="h-4 w-4 text-amber-600" />
+                          <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-800 mb-3">
+                            <DollarSign className="h-3.5 w-3.5 text-amber-600" />
                             <span className="text-xs text-amber-700 dark:text-amber-400">
                               Mixed Payment: Paid with both cash and card
                             </span>
                           </div>
 
-                          {/* Side by Side Comparison - only if prices differ */}
                           {hasDualPricing && (
-                            <div className="grid grid-cols-2 gap-3">
-                              {/* Card Pricing Column */}
-                              <div className="p-2 rounded-md bg-muted/50 border">
-                                <p className="text-xs font-medium text-muted-foreground mb-2">
+                            <div className="grid grid-cols-2 gap-2 mb-3">
+                              <div className="p-3 rounded-lg bg-muted/50 border space-y-1.5">
+                                <p className="text-xs font-medium text-muted-foreground">
                                   If All Card
                                 </p>
-                                <div className="space-y-1">
-                                  <div className="flex justify-between text-xs">
-                                    <span className="text-muted-foreground">
-                                      Subtotal
-                                    </span>
-                                    <span>{formatCurrency(cardSubtotal)}</span>
-                                  </div>
-                                  <div className="flex justify-between text-xs">
-                                    <span className="text-muted-foreground">
-                                      Tax
-                                    </span>
-                                    <span>{formatCurrency(cardTax)}</span>
-                                  </div>
-                                  <div className="flex justify-between text-xs font-medium border-t pt-1 mt-1">
-                                    <span>Total</span>
-                                    <span>{formatCurrency(cardTotal)}</span>
-                                  </div>
+                                <PriceRow
+                                  label="Subtotal"
+                                  value={formatCurrency(cardSubtotal)}
+                                />
+                                <PriceRow
+                                  label="Tax"
+                                  value={formatCurrency(cardTax)}
+                                />
+                                <div className="border-t pt-1.5 mt-1.5">
+                                  <PriceRow
+                                    label="Total"
+                                    value={formatCurrency(cardTotal)}
+                                    bold
+                                  />
                                 </div>
                               </div>
-
-                              {/* Cash Pricing Column */}
-                              <div className="p-2 rounded-md bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800">
-                                <p className="text-xs font-medium text-green-700 dark:text-green-400 mb-2">
+                              <div className="p-3 rounded-lg bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 space-y-1.5">
+                                <p className="text-xs font-medium text-green-700 dark:text-green-400">
                                   If All Cash
                                 </p>
-                                <div className="space-y-1">
-                                  <div className="flex justify-between text-xs">
-                                    <span className="text-muted-foreground">
-                                      Subtotal
-                                    </span>
-                                    <span>{formatCurrency(cashSubtotal)}</span>
-                                  </div>
-                                  <div className="flex justify-between text-xs">
-                                    <span className="text-muted-foreground">
-                                      Tax
-                                    </span>
-                                    <span>{formatCurrency(cashTax)}</span>
-                                  </div>
-                                  <div className="flex justify-between text-xs font-medium text-green-700 dark:text-green-400 border-t pt-1 mt-1">
-                                    <span>Total</span>
-                                    <span>{formatCurrency(cashTotal)}</span>
-                                  </div>
+                                <PriceRow
+                                  label="Subtotal"
+                                  value={formatCurrency(cashSubtotal)}
+                                />
+                                <PriceRow
+                                  label="Tax"
+                                  value={formatCurrency(cashTax)}
+                                />
+                                <div className="border-t border-green-200 dark:border-green-800 pt-1.5 mt-1.5">
+                                  <PriceRow
+                                    label="Total"
+                                    value={formatCurrency(cashTotal)}
+                                    bold
+                                    valueClassName="text-green-700 dark:text-green-400"
+                                  />
                                 </div>
                               </div>
                             </div>
                           )}
 
-                          {/* Savings Highlight - only if prices differ */}
                           {totalSavings > 0 && (
-                            <div className="flex justify-between items-center p-2 bg-green-100 dark:bg-green-900/30 rounded-md">
+                            <div className="flex justify-between items-center p-3 bg-green-100 dark:bg-green-900/30 rounded-lg mb-3">
                               <span className="text-xs font-medium text-green-700 dark:text-green-400">
-                                💰 Cash Discount Available
+                                Cash Discount Available
                               </span>
                               <span className="text-sm font-bold text-green-700 dark:text-green-400">
                                 -{formatCurrency(totalSavings)}
@@ -699,396 +1450,314 @@ export function OrderDetailSheet({
                             </div>
                           )}
 
-                          {/* Standard pricing info when no dual pricing */}
                           {!hasDualPricing && (
                             <>
-                              <div className="flex justify-between">
-                                <span className="text-muted-foreground">
-                                  Subtotal
-                                </span>
-                                <span>
-                                  {formatCurrency(displayOrder.subtotal)}
-                                </span>
-                              </div>
+                              <PriceRow
+                                label="Subtotal"
+                                value={formatCurrency(displayOrder.subtotal)}
+                              />
                               {Number(displayOrder.tax_amount) > 0 && (
-                                <div className="flex justify-between">
-                                  <span className="text-muted-foreground">
-                                    Tax
-                                  </span>
-                                  <span>
-                                    {formatCurrency(
-                                      Number(displayOrder.tax_amount)
-                                    )}
-                                  </span>
-                                </div>
+                                <PriceRow
+                                  label="Tax"
+                                  value={formatCurrency(
+                                    Number(displayOrder.tax_amount)
+                                  )}
+                                />
                               )}
                             </>
                           )}
 
-                          <Separator />
-
-                          {/* Actual Payments Made */}
-                          <div className="space-y-1.5">
-                            <p className="text-xs font-medium text-muted-foreground">
-                              Actual Payments
+                          <div className="border-t pt-3 mt-3 space-y-1.5">
+                            <p className="text-xs font-medium text-muted-foreground mb-1">
+                              Payments
                             </p>
                             {cashPayments > 0 && (
-                              <div className="flex justify-between">
-                                <span className="text-muted-foreground">
-                                  Cash
-                                  {hasDualPricing ? " (discounted rate)" : ""}
-                                </span>
-                                <span
-                                  className={
-                                    hasDualPricing
-                                      ? "text-green-600 dark:text-green-400 font-medium"
-                                      : ""
-                                  }
-                                >
-                                  {formatCurrency(cashPayments)}
-                                </span>
-                              </div>
+                              <PriceRow
+                                label={`Cash${hasDualPricing ? " (discounted)" : ""}`}
+                                value={formatCurrency(cashPayments)}
+                                valueClassName={
+                                  hasDualPricing
+                                    ? "text-green-600 dark:text-green-400 font-medium"
+                                    : ""
+                                }
+                              />
                             )}
                             {cardPayments > 0 && (
-                              <div className="flex justify-between">
-                                <span className="text-muted-foreground">
-                                  Card{hasDualPricing ? " (full rate)" : ""}
-                                </span>
-                                <span>{formatCurrency(cardPayments)}</span>
-                              </div>
+                              <PriceRow
+                                label={`Card${hasDualPricing ? " (full rate)" : ""}`}
+                                value={formatCurrency(cardPayments)}
+                              />
                             )}
                           </div>
 
-                          <Separator />
-
-                          {/* Final Total */}
-                          <div className="flex justify-between font-semibold text-base">
-                            <span>Total Paid</span>
-                            <span>{formatCurrency(totalPaid)}</span>
+                          <div className="border-t pt-3 mt-2">
+                            <PriceRow
+                              label="Total Paid"
+                              value={formatCurrency(totalPaid)}
+                              bold
+                              className="text-base"
+                            />
                           </div>
                         </>
                       ) : hasDualPricing ? (
-                        /* Single Payment Method with Dual Pricing Available */
                         <>
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">
-                              Card Subtotal
-                            </span>
-                            <span className="text-muted-foreground ">
-                              {formatCurrency(cardSubtotal)}
-                            </span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">
-                              Cash Subtotal
-                            </span>
-                            <span>{formatCurrency(cashSubtotal)}</span>
-                          </div>
+                          <PriceRow
+                            label="Card Subtotal"
+                            value={formatCurrency(cardSubtotal)}
+                            valueClassName="text-muted-foreground"
+                          />
+                          <PriceRow
+                            label="Cash Subtotal"
+                            value={formatCurrency(cashSubtotal)}
+                          />
                           {totalSavings > 0 && (
-                            <div className="flex justify-between">
-                              <span className="text-green-600 dark:text-green-400 font-medium">
-                                Cash Savings
-                              </span>
-                              <span className="text-green-600 dark:text-green-400 font-medium">
-                                -{formatCurrency(totalSavings)}
-                              </span>
-                            </div>
+                            <PriceRow
+                              label="Cash Savings"
+                              value={`-${formatCurrency(totalSavings)}`}
+                              valueClassName="text-green-600 dark:text-green-400 font-medium"
+                              className="text-green-600 dark:text-green-400"
+                            />
                           )}
                           {Number(displayOrder.tax_amount) > 0 && (
-                            <div className="flex justify-between">
-                              <span className="text-muted-foreground">Tax</span>
-                              <span>
-                                {formatCurrency(
-                                  Number(displayOrder.tax_amount)
-                                )}
-                              </span>
-                            </div>
+                            <PriceRow
+                              label="Tax"
+                              value={formatCurrency(
+                                Number(displayOrder.tax_amount)
+                              )}
+                            />
                           )}
                           {Number(displayOrder.tip_amount) > 0 && (
-                            <div className="flex justify-between">
-                              <span className="text-muted-foreground">Tip</span>
-                              <span>
-                                {formatCurrency(
-                                  Number(displayOrder.tip_amount)
-                                )}
-                              </span>
-                            </div>
+                            <PriceRow
+                              label="Tip"
+                              value={formatCurrency(
+                                Number(displayOrder.tip_amount)
+                              )}
+                            />
                           )}
                           {Number(displayOrder.discount_amount) > 0 && (
-                            <div className="flex justify-between">
-                              <span className="text-muted-foreground">
-                                Discount
-                              </span>
-                              <span className="text-green-600">
-                                -
-                                {formatCurrency(
-                                  Number(displayOrder.discount_amount)
-                                )}
-                              </span>
-                            </div>
+                            <PriceRow
+                              label="Discount"
+                              value={`-${formatCurrency(Number(displayOrder.discount_amount))}`}
+                              valueClassName="text-green-600"
+                            />
                           )}
-                          <Separator />
-                          <div className="flex justify-between text-sm">
-                            <span className="text-muted-foreground">
-                              Total (Card)
-                            </span>
-                            <span className="text-muted-foreground line-through">
-                              {formatCurrency(cardTotal)}
-                            </span>
-                          </div>
-                          <div className="flex justify-between font-semibold text-base">
-                            <span>Total (Cash)</span>
-                            <span>{formatCurrency(cashTotal)}</span>
+                          <div className="border-t pt-3 mt-2 space-y-1">
+                            <PriceRow
+                              label="Total (Card)"
+                              value={formatCurrency(cardTotal)}
+                              valueClassName="text-muted-foreground line-through"
+                            />
+                            <PriceRow
+                              label="Total (Cash)"
+                              value={formatCurrency(cashTotal)}
+                              bold
+                              className="text-base"
+                            />
                           </div>
                           {totalPaid > 0 && (
-                            <div className="flex justify-between text-sm">
-                              <span className="text-muted-foreground">
-                                Amount Paid
-                              </span>
-                              <span className="text-green-600">
-                                {formatCurrency(totalPaid)}
-                              </span>
-                            </div>
+                            <PriceRow
+                              label="Amount Paid"
+                              value={formatCurrency(totalPaid)}
+                              valueClassName="text-green-600"
+                            />
                           )}
                         </>
                       ) : (
-                        /* Standard Pricing (No Dual Pricing) */
                         <>
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">
-                              Subtotal
-                            </span>
-                            <span>{formatCurrency(displayOrder.subtotal)}</span>
-                          </div>
+                          <PriceRow
+                            label="Subtotal"
+                            value={formatCurrency(displayOrder.subtotal)}
+                          />
                           {Number(displayOrder.tax_amount) > 0 && (
-                            <div className="flex justify-between">
-                              <span className="text-muted-foreground">Tax</span>
-                              <span>
-                                {formatCurrency(
-                                  Number(displayOrder.tax_amount)
-                                )}
-                              </span>
-                            </div>
+                            <PriceRow
+                              label="Tax"
+                              value={formatCurrency(
+                                Number(displayOrder.tax_amount)
+                              )}
+                            />
                           )}
                           {Number(displayOrder.tip_amount) > 0 && (
-                            <div className="flex justify-between">
-                              <span className="text-muted-foreground">Tip</span>
-                              <span>
-                                {formatCurrency(
-                                  Number(displayOrder.tip_amount)
-                                )}
-                              </span>
-                            </div>
+                            <PriceRow
+                              label="Tip"
+                              value={formatCurrency(
+                                Number(displayOrder.tip_amount)
+                              )}
+                            />
                           )}
                           {Number(displayOrder.discount_amount) > 0 && (
-                            <div className="flex justify-between">
-                              <span className="text-muted-foreground">
-                                Discount
-                              </span>
-                              <span className="text-green-600">
-                                -
-                                {formatCurrency(
-                                  Number(displayOrder.discount_amount)
-                                )}
-                              </span>
-                            </div>
+                            <PriceRow
+                              label="Discount"
+                              value={`-${formatCurrency(Number(displayOrder.discount_amount))}`}
+                              valueClassName="text-green-600"
+                            />
                           )}
                           {Number(displayOrder.service_charge) > 0 && (
-                            <div className="flex justify-between">
-                              <span className="text-muted-foreground">
-                                Service Charge
-                              </span>
-                              <span>
-                                {formatCurrency(
-                                  Number(displayOrder.service_charge)
-                                )}
-                              </span>
-                            </div>
+                            <PriceRow
+                              label="Service Charge"
+                              value={formatCurrency(
+                                Number(displayOrder.service_charge)
+                              )}
+                            />
                           )}
-                          <Separator />
-                          <div className="flex justify-between font-semibold text-base">
-                            <span>Total</span>
-                            <span>
-                              {formatCurrency(displayOrder.total_amount)}
-                            </span>
+                          <div className="border-t pt-3 mt-2">
+                            <PriceRow
+                              label="Total"
+                              value={formatCurrency(
+                                displayOrder.total_amount
+                              )}
+                              bold
+                              className="text-base"
+                            />
                           </div>
                           {totalPaid > 0 && (
-                            <div className="flex justify-between text-sm">
-                              <span className="text-muted-foreground">
-                                Amount Paid
-                              </span>
-                              <span className="text-green-600">
-                                {formatCurrency(totalPaid)}
-                              </span>
-                            </div>
+                            <PriceRow
+                              label="Amount Paid"
+                              value={formatCurrency(totalPaid)}
+                              valueClassName="text-green-600"
+                            />
                           )}
                           {Number(displayOrder.amount_due) > 0 && (
-                            <div className="flex justify-between text-sm">
-                              <span className="text-muted-foreground">
-                                Amount Due
-                              </span>
-                              <span className="text-amber-600">
-                                {formatCurrency(
-                                  Number(displayOrder.amount_due)
-                                )}
-                              </span>
-                            </div>
+                            <PriceRow
+                              label="Amount Due"
+                              value={formatCurrency(
+                                Number(displayOrder.amount_due)
+                              )}
+                              valueClassName="text-amber-600"
+                            />
                           )}
                         </>
                       )}
                     </div>
                   );
                 })()}
-              </div>
+              </SectionCard>
 
-              {/* Payment History */}
-              {payments.length > 0 && (
-                <>
-                  <Separator />
-                  <div className="space-y-2">
-                    <h3 className="text-sm font-semibold">Payment History</h3>
-                    <div className="space-y-2">
-                      {payments.map((payment: OrderPayment) => (
-                        <PaymentCard key={payment.id} payment={payment} />
-                      ))}
-                    </div>
-                  </div>
-                </>
+              {/* ─── Payments (Enhanced) ─── */}
+              <EnhancedPaymentsSection
+                basicPayments={payments}
+                richPayments={fullHistory?.payments ?? null}
+                isLoading={isLoading || isHistoryLoading}
+                cashDiscountApplied={!!displayOrder.cash_discount_applied}
+                totalDue={displayOrder.total_amount}
+                orderVoidedAt={fullHistory?.order?.voided_at ?? null}
+                orderVoidedByName={fullHistory?.order?.voided_by_name ?? null}
+                orderVoidedBy={fullHistory?.order?.voided_by ?? null}
+                orderVoidReason={fullHistory?.order?.void_reason ?? null}
+                onAdjustTip={canShowAdjustTip ? () => setIsAdjustTipOpen(true) : undefined}
+                showAdjustTip={canShowAdjustTip}
+              />
+
+              {/* ─── Refunds & Reversals ─── */}
+              {((fullHistory?.reversals?.length ?? 0) > 0 ||
+                (fullHistory?.chargebacks?.length ?? 0) > 0 ||
+                isHistoryLoading) && (
+                <SectionCard
+                  title={`Refunds & Reversals${
+                    !isHistoryLoading
+                      ? ` (${(fullHistory?.reversals?.length ?? 0) + (fullHistory?.chargebacks?.length ?? 0)})`
+                      : ""
+                  }`}
+                  icon={<RotateCcw className="h-4 w-4" />}
+                >
+                  <ReversalsList
+                    reversals={fullHistory?.reversals ?? null}
+                    chargebacks={fullHistory?.chargebacks ?? null}
+                    isLoading={isHistoryLoading}
+                  />
+                </SectionCard>
               )}
 
               {/* Special Instructions */}
               {displayOrder.special_instructions && (
-                <>
-                  <Separator />
-                  <div className="space-y-2">
-                    <h3 className="text-sm font-semibold">
-                      Special Instructions
-                    </h3>
-                    <p className="text-sm text-muted-foreground">
-                      {displayOrder.special_instructions}
-                    </p>
-                  </div>
-                </>
+                <SectionCard
+                  title="Special Instructions"
+                  icon={<MessageSquare className="h-4 w-4" />}
+                >
+                  <p className="text-sm text-muted-foreground">
+                    {displayOrder.special_instructions}
+                  </p>
+                </SectionCard>
               )}
 
-              {/* Order Status Timeline */}
-              {(statusHistory.length > 0 ||
-                tableSessions.length > 0 ||
-                displayOrder.created_at) && (
-                <>
-                  <Separator />
-                  <OrderStatusTimeline
-                    statusHistory={statusHistory}
-                    currentStatus={displayOrder.status}
-                    createdAt={displayOrder.created_at}
-                    tableSessions={tableSessions}
-                  />
-                </>
-              )}
+              {/* ─── Complete Timeline ─── */}
+              <SectionCard
+                title="Complete Timeline"
+                icon={<Clock className="h-4 w-4" />}
+              >
+                <OrderFullTimeline
+                  fullHistory={fullHistory ?? null}
+                  isLoading={isHistoryLoading}
+                />
+              </SectionCard>
             </div>
           </BottomSheetBody>
 
-          <BottomSheetFooter>
-            <div className="flex flex-col gap-2 w-full">
+          {/* ─── Footer ─── */}
+          <BottomSheetFooter className="border-t border-border/60 bg-background/90 px-6 py-5 backdrop-blur-sm sm:px-8">
+            <div className="flex w-full flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <Button
-                variant="default"
-                className="w-full"
-                size="sm"
+                className="w-full rounded-xl lg:w-auto"
+                size="default"
                 onClick={handleViewMoreDetails}
               >
-                View More Details
-                <ArrowRight className="h-4 w-4 ml-2" />
+                View Full Details
+                <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2 lg:justify-end">
                 <Button
                   variant="outline"
-                  className="flex-1 min-w-0"
+                  className="rounded-xl border-border/60 bg-background/80 hover:bg-background"
                   size="sm"
-                  onClick={() => setIsReceiptOpen(true)}
+                  onClick={() => setIsSendReceiptOpen(true)}
                 >
-                  <Printer className="h-4 w-4 shrink-0" />
-                  <span className="ml-1.5 truncate">Print Receipt</span>
+                  <Mail className="mr-1.5 h-4 w-4" />
+                  Send Receipt
                 </Button>
-                {displayOrder.status !== "void" &&
-                  displayOrder.status !== "cancelled" && (
-                    <>
-                      <Button
-                        variant="outline"
-                        className="flex-1 min-w-0"
-                        size="sm"
-                        onClick={() => setConfirmRefundOpen(true)}
-                        disabled={isRefunding || isVoiding}
-                      >
-                        <RotateCcw className="h-4 w-4 shrink-0" />
-                        <span className="ml-1.5 truncate">Refund</span>
-                      </Button>
-                      <Button
-                        variant="destructive"
-                        className="flex-1 min-w-0"
-                        size="sm"
-                        onClick={() => setConfirmVoidOpen(true)}
-                        disabled={isRefunding || isVoiding}
-                      >
-                        <X className="h-4 w-4 shrink-0" />
-                        <span className="ml-1.5 truncate">Void</span>
-                      </Button>
-                    </>
-                  )}
+                {!readOnly && canShowAdjustTip && (
+                  <Button
+                    variant="outline"
+                    className="rounded-xl border-border/60 bg-background/80 hover:bg-background"
+                    size="sm"
+                    onClick={() => setIsAdjustTipOpen(true)}
+                  >
+                    <DollarSign className="mr-1.5 h-4 w-4" />
+                    Adjust Tip
+                  </Button>
+                )}
               </div>
             </div>
           </BottomSheetFooter>
         </BottomSheetContent>
       </BottomSheet>
 
-      {/* Receipt Modal */}
-      <ReceiptModal
+      <SendReceiptModal
         order={displayOrder}
-        location={selectedLocation}
-        open={isReceiptOpen}
-        onOpenChange={setIsReceiptOpen}
+        open={isSendReceiptOpen}
+        onOpenChange={setIsSendReceiptOpen}
       />
-
-      {/* Refund Confirmation */}
-      <AlertDialog open={confirmRefundOpen} onOpenChange={setConfirmRefundOpen}>
-        <AlertDialogContent style={{ zIndex: 210 }}>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Refund this order?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will mark the order and all captured payments as refunded. This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isRefunding}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleRefund} disabled={isRefunding}>
-              {isRefunding ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-              Confirm Refund
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* Void Confirmation */}
-      <AlertDialog open={confirmVoidOpen} onOpenChange={setConfirmVoidOpen}>
-        <AlertDialogContent style={{ zIndex: 210 }}>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Void this order?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will void the order and all pending payments. This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isVoiding}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleVoid}
-              disabled={isVoiding}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {isVoiding ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-              Confirm Void
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <AssignCustomerModal
+        order={displayOrder as OrderResponse & { merchant_id?: string }}
+        open={assignCustomerOpen}
+        onOpenChange={setAssignCustomerOpen}
+        onSuccess={handleAssignCustomerSuccess}
+      />
+      <AdjustTipModal
+        orderId={displayOrder.id}
+        displayNumber={displayOrder.display_number ?? displayOrder.order_number}
+        eligiblePayments={eligibleTipPayments.map((p) => ({
+          id: p.id,
+          amount: Number(p.amount) || 0,
+          tip_amount: Number(p.tip_amount) || 0,
+          total_amount: Number(p.total_amount) || 0,
+          payment_method: p.payment_method,
+          status: p.status,
+          card_type: (p as { card_type?: string }).card_type,
+          card_last_four: (p as { card_last_four?: string }).card_last_four,
+        }))}
+        open={isAdjustTipOpen}
+        onOpenChange={setIsAdjustTipOpen}
+        onSuccess={handleAdjustTipSuccess}
+      />
     </>
   );
 }

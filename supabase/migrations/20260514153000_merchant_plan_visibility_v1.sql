@@ -4,29 +4,21 @@
 
 alter table public.subscription_plans
   add column if not exists plan_scope text not null default 'service_billing';
-
 alter table public.subscription_plans
   drop constraint if exists subscription_plans_plan_scope_check;
-
 alter table public.subscription_plans
   add constraint subscription_plans_plan_scope_check
   check (plan_scope in ('service_billing', 'merchant_tier'));
-
 alter table public.subscription_plans
   add column if not exists min_locations int;
-
 alter table public.subscription_plans
   add column if not exists max_locations int;
-
 alter table public.subscription_plans
   add column if not exists monthly_price_cents int not null default 0;
-
 alter table public.subscription_plans
   add column if not exists description text;
-
 alter table public.subscription_plans
   add column if not exists display_order int not null default 0;
-
 update public.subscription_plans
 set
   description = coalesce(description, display_name),
@@ -34,10 +26,8 @@ set
   monthly_price_cents = coalesce(monthly_price_cents, 0),
   plan_scope = coalesce(plan_scope, 'service_billing')
 where true;
-
 create index if not exists idx_subscription_plans_scope_display_order
   on public.subscription_plans(plan_scope, display_order, display_name);
-
 insert into public.subscription_plans (
   plan_code,
   display_name,
@@ -68,7 +58,6 @@ set
   description = excluded.description,
   display_order = excluded.display_order,
   is_active = true;
-
 create table if not exists public.merchant_plan_subscriptions (
   id uuid primary key default gen_random_uuid(),
   merchant_id uuid not null references public.merchants(id) on delete cascade,
@@ -84,25 +73,19 @@ create table if not exists public.merchant_plan_subscriptions (
   constraint merchant_plan_subscriptions_period_order_check
     check (current_period_end >= current_period_start)
 );
-
 create unique index if not exists idx_merchant_plan_subscriptions_one_active
   on public.merchant_plan_subscriptions(merchant_id)
   where status in ('active', 'past_due', 'suspended');
-
 create index if not exists idx_merchant_plan_subscriptions_plan_id
   on public.merchant_plan_subscriptions(plan_id);
-
 create index if not exists idx_merchant_plan_subscriptions_status_period_end
   on public.merchant_plan_subscriptions(status, current_period_end);
-
 drop trigger if exists update_merchant_plan_subscriptions_updated_at on public.merchant_plan_subscriptions;
 create trigger update_merchant_plan_subscriptions_updated_at
 before update on public.merchant_plan_subscriptions
 for each row execute function public.update_updated_at_column();
-
 alter table public.merchant_plan_subscriptions enable row level security;
 alter table public.merchant_plan_subscriptions force row level security;
-
 drop policy if exists merchant_plan_subscriptions_select_scope on public.merchant_plan_subscriptions;
 create policy merchant_plan_subscriptions_select_scope
 on public.merchant_plan_subscriptions
@@ -112,17 +95,14 @@ using (
   or merchant_id = public.user_merchant_id()
   or public.is_merchant_admin(merchant_id)
 );
-
 drop policy if exists merchant_plan_subscriptions_manage_hq on public.merchant_plan_subscriptions;
 create policy merchant_plan_subscriptions_manage_hq
 on public.merchant_plan_subscriptions
 for all
 using (public.is_dexapos_admin())
 with check (public.is_dexapos_admin());
-
 grant select on public.merchant_plan_subscriptions to authenticated, service_role;
 grant all on public.merchant_plan_subscriptions to service_role;
-
 insert into public.permissions (code, name, description, category, scope)
 values
   ('merchant.billing.view', 'View Billing', 'View subscription plan, invoices, payment history', 'merchant', 'merchant'),
@@ -133,7 +113,6 @@ set
   description = excluded.description,
   category = excluded.category,
   scope = excluded.scope;
-
 insert into public.role_permissions (role_code, permission_code)
 values
   ('merchant.owner', 'merchant.billing.view'),
@@ -145,7 +124,6 @@ values
   ('hq.finance_manager', 'merchant.billing.view'),
   ('hq.platform_admin', 'merchant.billing.view')
 on conflict (role_code, permission_code) do nothing;
-
 create or replace function public.get_merchant_subscription_status(p_merchant_id uuid)
 returns jsonb
 language plpgsql
@@ -230,10 +208,8 @@ begin
   );
 end;
 $$;
-
 revoke all on function public.get_merchant_subscription_status(uuid) from public;
 grant execute on function public.get_merchant_subscription_status(uuid) to authenticated, service_role;
-
 create or replace function public.list_subscription_plans()
 returns setof public.subscription_plans
 language sql
@@ -246,6 +222,5 @@ as $$
     and coalesce(sp.plan_scope, 'service_billing') = 'service_billing'
   order by coalesce(sp.display_order, 0), sp.display_name;
 $$;
-
 revoke all on function public.list_subscription_plans() from public;
 grant execute on function public.list_subscription_plans() to authenticated, service_role;

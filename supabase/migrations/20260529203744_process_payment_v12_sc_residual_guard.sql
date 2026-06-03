@@ -1,12 +1,3 @@
--- Wave C residual guard. Pulled from remote schema_migrations
--- (version 20260529203744) since no authored source file shipped with
--- the original apply_migration. Adds the v_order_fully_paid item-payment
--- guard so that partial item payments don't prematurely flip the order
--- to paid while there's still unpaid SC residual on card/cash totals.
---
--- Forks 20260529154313_process_payment_v12_service_charge_authority.
--- CREATE OR REPLACE — safe to re-apply.
-
 CREATE OR REPLACE FUNCTION public.process_payment_v12(
     p_order_id uuid,
     p_payment_method text,
@@ -281,4 +272,4 @@ BEGIN
     END IF;
     RETURN v_result;
 END;
-$function$;
+$function$;;

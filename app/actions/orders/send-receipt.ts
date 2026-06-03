@@ -80,6 +80,29 @@ async function fetchMerchantLogoUrl(
   return record?.imageURL ?? null;
 }
 
+/** Ensures the order has a receipt_token; lazy-backfills if missing. */
+async function ensureReceiptToken(
+  supabase: ReturnType<typeof createServiceRoleClient>,
+  orderId: string
+): Promise<string | null> {
+  const { data } = await supabase
+    .from("orders")
+    .select("receipt_token")
+    .eq("id", orderId)
+    .single();
+  const existing = (data as { receipt_token?: string | null } | null)?.receipt_token;
+  if (existing) return existing;
+
+  // Lazy backfill for any pre-migration order that slipped through.
+  const { data: updated } = await supabase
+    .from("orders")
+    .update({ receipt_token: null }) // triggers DB default expression
+    .eq("id", orderId)
+    .select("receipt_token")
+    .single();
+  return (updated as { receipt_token?: string | null } | null)?.receipt_token ?? null;
+}
+
 export async function sendReceipt(
   params: SendReceiptParams
 ): Promise<SendReceiptResult> {
@@ -130,10 +153,12 @@ export async function sendReceipt(
 
   const businessName =
     (location as { name?: string } | null)?.name || "Receipt";
-  const orderNumber =
-    (order as { display_number?: string; order_number?: string }).display_number ||
-    (order as { display_number?: string; order_number?: string }).order_number ||
-    "—";
+  // display_number already has a leading '#'; only prefix for raw order_number fallback.
+  const displayNum =
+    (order as { display_number?: string; order_number?: string }).display_number;
+  const fallbackNum =
+    (order as { display_number?: string; order_number?: string }).order_number;
+  const orderNumber = displayNum || (fallbackNum ? `#${fallbackNum}` : "—");
 
   try {
     if (params.deliveryMethod === "email") {
@@ -159,12 +184,13 @@ export async function sendReceipt(
       const { error: emailError } = await resend.emails.send({
         from: fromEmail,
         to: params.recipient,
-        subject: `Your receipt from ${businessName} · Order #${orderNumber}`,
+        subject: `Your receipt from ${businessName} · Order ${orderNumber}`,
         html,
       });
       if (emailError) {
         await supabase.from("receipt_sends").insert({
           order_id: params.orderId,
+          merchant_id: (order as { merchant_id?: string }).merchant_id,
           delivery_method: "email",
           recipient: params.recipient,
           receipt_template_id: params.receiptTemplateId || null,
@@ -174,6 +200,16 @@ export async function sendReceipt(
         });
         return { success: false, message: emailError.message };
       }
+
+      await supabase.from("receipt_sends").insert({
+        order_id: params.orderId,
+        merchant_id: (order as { merchant_id?: string }).merchant_id,
+        delivery_method: "email",
+        recipient: params.recipient,
+        receipt_template_id: params.receiptTemplateId || null,
+        status: "sent",
+        created_by: userId,
+      });
     } else {
       if (
         !process.env.TELNYX_API_KEY ||
@@ -185,33 +221,53 @@ export async function sendReceipt(
             "SMS service not configured. Set TELNYX_API_KEY and either TELNYX_FROM_NUMBER or TELNYX_MESSAGING_PROFILE_ID.",
         };
       }
-      const text = renderReceiptText(
-        order as Parameters<typeof renderReceiptText>[0],
-        location as Parameters<typeof renderReceiptText>[1]
-      );
-      const smsResult = await sendSMS(params.recipient, text);
-      if ("error" in smsResult) {
-        await supabase.from("receipt_sends").insert({
+
+      // Insert pending row first so we have a send_token for the URL.
+      const { data: pendingRow, error: pendingErr } = await supabase
+        .from("receipt_sends")
+        .insert({
           order_id: params.orderId,
+          merchant_id: (order as { merchant_id?: string }).merchant_id,
           delivery_method: "sms",
           recipient: params.recipient,
           receipt_template_id: params.receiptTemplateId || null,
-          status: "failed",
-          error_message: smsResult.error,
+          status: "pending",
           created_by: userId,
-        });
+        })
+        .select("id, send_token")
+        .single();
+
+      if (pendingErr || !pendingRow) {
+        return { success: false, message: "Failed to initialise receipt send record." };
+      }
+
+      const receiptToken = await ensureReceiptToken(supabase, params.orderId);
+      const sendToken = (pendingRow as { send_token?: string }).send_token;
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? "";
+      const receiptUrl = receiptToken && sendToken
+        ? `${appUrl}/receipts/${receiptToken}/${sendToken}`
+        : appUrl;
+
+      const text = renderReceiptText(
+        order as Parameters<typeof renderReceiptText>[0],
+        location as Parameters<typeof renderReceiptText>[1],
+        receiptUrl
+      );
+      const smsResult = await sendSMS(params.recipient, text);
+
+      const newStatus = "error" in smsResult ? "failed" : "sent";
+      await supabase
+        .from("receipt_sends")
+        .update({
+          status: newStatus,
+          error_message: "error" in smsResult ? smsResult.error : null,
+        })
+        .eq("id", (pendingRow as { id: string }).id);
+
+      if ("error" in smsResult) {
         return { success: false, message: smsResult.error };
       }
     }
-
-    await supabase.from("receipt_sends").insert({
-      order_id: params.orderId,
-      delivery_method: params.deliveryMethod,
-      recipient: params.recipient,
-      receipt_template_id: params.receiptTemplateId || null,
-      status: "sent",
-      created_by: userId,
-    });
 
     return {
       success: true,

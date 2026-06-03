@@ -3,6 +3,8 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { SettlementBatchRecord, BatchFilters, PaymentRecord } from "@/types/payment";
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export async function GetSettlementBatches(
   clerkOrgId: string,
   locationId?: string | null,
@@ -25,7 +27,16 @@ export async function GetSettlementBatches(
 
   let query = supabase
     .from("settlement_batches")
-    .select("*")
+    .select(
+      `
+      *,
+      payment_terminals (
+        terminal_name,
+        serial_number,
+        terminal_model
+      )
+    `
+    )
     .eq("merchant_id", merchant.id);
 
   if (locationId && locationId !== "all") {
@@ -88,36 +99,116 @@ export async function GetBatchPayments(
     return [];
   }
 
-  let query = supabase
-    .from("order_payments")
-    .select(
-      `
-      *,
-      orders!inner(
-        order_number,
-        display_number,
-        location_id,
-        status,
-        order_type,
-        customer_name,
-        created_at,
-        merchant_id
-      )
-    `
+  // Resolve `batchId` against settlement_batches so we can prefer the FK
+  // (order_payments.settlement_batch_id) over the text host-batch-number
+  // columns. Accepts a UUID, a `batch_id` text label, or a raw host number.
+  let batchUuid: string | null = null;
+  let hostBatchNumber: string | null = null;
+  let terminalId: string | null = null;
+  let businessDate: string | null = null;
+
+  if (UUID_RE.test(batchId)) {
+    const { data: sb } = await supabase
+      .from("settlement_batches")
+      .select("id, batch_number, terminal_id, business_date")
+      .eq("id", batchId)
+      .eq("merchant_id", merchant.id)
+      .maybeSingle();
+    batchUuid = sb?.id ?? null;
+    hostBatchNumber = sb?.batch_number ?? null;
+    terminalId = sb?.terminal_id ?? null;
+    businessDate = sb?.business_date ?? null;
+  } else {
+    const { data: sb } = await supabase
+      .from("settlement_batches")
+      .select("id, batch_number, terminal_id, business_date")
+      .eq("batch_id", batchId)
+      .eq("merchant_id", merchant.id)
+      .maybeSingle();
+    batchUuid = sb?.id ?? null;
+    hostBatchNumber = sb?.batch_number ?? null;
+    terminalId = sb?.terminal_id ?? null;
+    businessDate = sb?.business_date ?? null;
+    if (!batchUuid && !hostBatchNumber) {
+      hostBatchNumber = batchId;
+    }
+  }
+
+  if (!batchUuid && !hostBatchNumber) return [];
+
+  const baseSelect = `
+    *,
+    orders!inner(
+      order_number,
+      display_number,
+      location_id,
+      status,
+      order_type,
+      customer_name,
+      created_at,
+      merchant_id
     )
-    .eq("orders.merchant_id", merchant.id)
-    .or(`batch_number.eq.${batchId},dejavoo_batch_number.eq.${batchId}`);
+  `;
 
-  if (locationId && locationId !== "all") {
-    query = query.eq("orders.location_id", locationId);
+  // Preferred: FK match.
+  let data: PaymentRecord[] | null = null;
+  if (batchUuid) {
+    let q = supabase
+      .from("order_payments")
+      .select(baseSelect)
+      .eq("orders.merchant_id", merchant.id)
+      .eq("settlement_batch_id", batchUuid);
+
+    if (locationId && locationId !== "all") {
+      q = q.eq("orders.location_id", locationId);
+    }
+
+    const { data: fkRows, error: fkErr } = await q.order("initiated_at", {
+      ascending: false,
+    });
+    if (fkErr) {
+      console.error("[GetBatchPayments] FK lookup error:", fkErr);
+      return [];
+    }
+    data = (fkRows as PaymentRecord[]) ?? [];
   }
 
-  const { data, error } = await query.order("initiated_at", { ascending: false });
+  // Fallback: host-batch-number match, scoped by terminal + business date
+  // window so recycled batch numbers from other terminals/days don't leak.
+  if ((!data || data.length === 0) && hostBatchNumber) {
+    let q = supabase
+      .from("order_payments")
+      .select(baseSelect)
+      .eq("orders.merchant_id", merchant.id)
+      .is("settlement_batch_id", null)
+      .or(
+        `batch_number.eq.${hostBatchNumber},dejavoo_batch_number.eq.${hostBatchNumber}`
+      );
 
-  if (error) {
-    console.error("[GetBatchPayments] Error:", error);
-    return [];
+    if (locationId && locationId !== "all") {
+      q = q.eq("orders.location_id", locationId);
+    }
+
+    if (terminalId) {
+      q = q.eq("terminal_id", terminalId);
+    }
+
+    if (businessDate) {
+      const d = new Date(`${businessDate}T00:00:00Z`);
+      const from = new Date(d.getTime() - 24 * 60 * 60 * 1000).toISOString();
+      const to = new Date(d.getTime() + 2 * 24 * 60 * 60 * 1000).toISOString();
+      q = q.gte("initiated_at", from).lt("initiated_at", to);
+    }
+
+    const { data: fbRows, error: fbErr } = await q.order("initiated_at", {
+      ascending: false,
+    });
+    if (fbErr) {
+      console.error("[GetBatchPayments] Fallback lookup error:", fbErr);
+      return [];
+    }
+    data = (fbRows as PaymentRecord[]) ?? [];
   }
 
-  return (data as PaymentRecord[]) || [];
+  return data ?? [];
 }

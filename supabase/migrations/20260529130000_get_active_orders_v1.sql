@@ -94,6 +94,5 @@ BEGIN
   LIMIT p_limit;
 END;
 $$;
-
 GRANT EXECUTE ON FUNCTION public.get_active_orders_v1(uuid, uuid, timestamptz, int)
   TO authenticated;

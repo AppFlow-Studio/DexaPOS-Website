@@ -18,6 +18,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -33,21 +40,16 @@ import { OrderOutTab } from "@/components/dashboard/orderout/OrderOutTab";
 import { NotificationsTab } from "./components/NotificationsTab";
 import { HoursConfigModal } from "./components/HoursConfigModal";
 import { WeeklySchedule } from "./hooks/useOnlineOrderingSettings";
+import { QrTableManager } from "./components/QrTableManager";
+import { QrAnalyticsPanel } from "./components/QrAnalyticsPanel";
+import { QrGuestAlertsPanel } from "./components/QrGuestAlertsPanel";
 import { useOrderOutStatus, useOnboardOrderOut } from "./hooks/useOrderOutStatus";
 import { FONT_GOOGLE_URLS } from "@/app/sites/lib/theme-utils";
+import { buildStoreUrl } from "@/app/sites/lib/store-url";
 import {
   getOnlineStoreRequestRequirements,
   saveOnlineStoreRequestRequirements,
 } from "./actions";
-
-const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "localhost:3000";
-
-function getStoreUrl(slug: string): string {
-  if (!slug) return "";
-  const isDev = ROOT_DOMAIN.includes("localhost");
-  if (isDev) return `http://${slug}.localhost:3000`;
-  return `https://${slug}.${ROOT_DOMAIN}`;
-}
 
 function getStatusTone(status: OnlineStoreSetupStatus) {
   switch (status) {
@@ -218,7 +220,14 @@ function CompletedSetupPanel({
   onSave: () => void;
   onUpdate: (updates: Partial<OnlineOrderingSettings>) => void;
 }) {
-  const storeUrl = getStoreUrl(settings.storeSlug);
+  const storeUrl = buildStoreUrl({
+    slug: settings.storeSlug,
+    customDomain: settings.customDomain,
+  });
+  const qrGate = settings.qrBillingGate;
+  const qrControlsLocked = isSaving || !qrGate.entitled;
+  const qrEnableSwitchDisabled =
+    isSaving || (!qrGate.entitled && !settings.acceptsDineIn);
   const { orgId, orgSlug } = useAuth();
   const { data: orderOutStatusResult } = useOrderOutStatus(orgId || "", selectedLocationId);
   const onboardMutation = useOnboardOrderOut(orgId || "");
@@ -988,6 +997,136 @@ function CompletedSetupPanel({
                   />
                 </div>
               </div>
+
+              <div className="rounded-xl border border-[#0C4FD1]/20 bg-[#0C4FD1]/5 p-4">
+                <div className="flex flex-col gap-4">
+                  <div>
+                    <h3 className="text-sm font-semibold text-[#0C4FD1]">QR Table Ordering</h3>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Scan-to-order settings for dine-in QR. These controls stay on the existing online-ordering surface; QR codes, analytics, and deeper billing gates remain separate work.
+                    </p>
+                  </div>
+
+                  {!qrGate.entitled ? (
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                      <p className="font-medium">QR Table Ordering is locked for this branch</p>
+                      <p className="mt-1">
+                        {qrGate.reason ??
+                          "QR Table Ordering requires an eligible merchant tier or an HQ override."}
+                      </p>
+                    </div>
+                  ) : qrGate.hasServiceOverride ? (
+                    <div className="rounded-lg border border-[#0C4FD1]/20 bg-background px-4 py-3 text-sm text-muted-foreground">
+                      HQ override is active for this location through the QR Table Ordering service assignment.
+                    </div>
+                  ) : null}
+
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="flex items-center justify-between rounded-lg border bg-background p-4">
+                      <div>
+                        <p className="font-medium">Enable QR Table Ordering</p>
+                        <p className="text-sm text-muted-foreground">
+                          Allow guests to scan a table QR and place pay-before-kitchen dine-in orders.
+                        </p>
+                      </div>
+                      <Switch
+                        checked={settings.acceptsDineIn}
+                        onCheckedChange={(checked) => onUpdate({ acceptsDineIn: checked })}
+                        disabled={qrEnableSwitchDisabled}
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between rounded-lg border bg-background p-4">
+                      <div>
+                        <p className="font-medium">QR Kill Switch</p>
+                        <p className="text-sm text-muted-foreground">
+                          Stop new QR scans immediately without turning off the rest of online ordering.
+                        </p>
+                      </div>
+                      <Switch
+                        checked={settings.qrKillSwitch}
+                        onCheckedChange={(checked) => onUpdate({ qrKillSwitch: checked })}
+                        disabled={qrControlsLocked}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 sm:grid-cols-3">
+                    <div className="space-y-2">
+                      <Label>Fulfillment Mode</Label>
+                      <Select
+                        value={settings.qrFulfillmentMode}
+                        onValueChange={(value) =>
+                          onUpdate({
+                            qrFulfillmentMode: value === "counter" ? "counter" : "runner",
+                          })
+                        }
+                        disabled={qrControlsLocked}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select mode" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="runner">Runner delivery</SelectItem>
+                          <SelectItem value="counter">Counter pickup</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>QR Service Fee (%)</Label>
+                      <Input
+                        type="number"
+                        value={settings.qrServiceFeePct}
+                        min={0}
+                        step="0.01"
+                        onChange={(e) => onUpdate({ qrServiceFeePct: Number(e.target.value) })}
+                        disabled={qrControlsLocked}
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between rounded-lg border bg-background p-4">
+                      <div>
+                        <p className="font-medium">Geofence Check</p>
+                        <p className="text-sm text-muted-foreground">
+                          Reserve geofence enforcement for QR scans when you want tighter on-premise validation later.
+                        </p>
+                      </div>
+                      <Switch
+                        checked={settings.qrGeofenceEnabled}
+                        onCheckedChange={(checked) => onUpdate({ qrGeofenceEnabled: checked })}
+                        disabled={qrControlsLocked}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="rounded-lg border bg-background p-3 text-xs text-muted-foreground">
+                    Required tier: <span className="font-medium text-foreground">{qrGate.requiredPlanName ?? qrGate.requiredPlanCode ?? "Not configured"}</span>
+                    {qrGate.currentPlanName ? (
+                      <>
+                        {" "}· Current tier: <span className="font-medium text-foreground">{qrGate.currentPlanName}</span>
+                      </>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+
+              <QrTableManager
+                locationId={selectedLocationId}
+                locationName={locationName}
+                storefrontEnabled={settings.enabled}
+                acceptsDineIn={settings.acceptsDineIn}
+                qrKillSwitch={settings.qrKillSwitch}
+                qrEntitled={qrGate.entitled}
+                qrGateMessage={qrGate.reason}
+              />
+
+              <QrAnalyticsPanel
+                locationId={selectedLocationId}
+                qrEnabled={settings.acceptsDineIn}
+              />
+
+              <QrGuestAlertsPanel locationId={selectedLocationId} />
             </CardContent>
           </Card>
 

@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback } from "react";
 
+const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "localhost:3000";
+
 /**
  * Returns a function that builds correct paths for storefront navigation.
  * When on subdomain routing (e.g. joes-coffee.localhost:3000), paths are relative (e.g. /checkout).
@@ -15,9 +17,13 @@ export function useStorefrontPath(slug: string) {
 
   useEffect(() => {
     const hostname = window.location.hostname;
+    const normalizedRootDomain = ROOT_DOMAIN.replace(/^https?:\/\//i, "").split("/")[0];
+    const rootHost = normalizedRootDomain.split(":")[0];
+    const isDevRoot = rootHost === "localhost";
     setIsSubdomain(
       hostname !== "localhost" &&
-        (hostname.endsWith(".localhost") || hostname.endsWith(".dexaposai.com"))
+        (hostname.endsWith(".localhost") ||
+          (!isDevRoot && hostname.endsWith(`.${rootHost}`)))
     );
   }, []);
 
