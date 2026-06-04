@@ -517,9 +517,10 @@ export async function CreateMenuItem(
 
   // Insert modifier group assignments if provided
   if (data.modifier_group_ids && data.modifier_group_ids.length > 0) {
-    const modifierInserts = data.modifier_group_ids.map((groupId) => ({
+    const modifierInserts = data.modifier_group_ids.map((groupId, index) => ({
       menu_item_id: item.id,
       modifier_group_id: groupId,
+      display_order: index,
       merchant_id: merchant.id,
     }));
 
@@ -829,9 +830,10 @@ export async function UpdateMenuItem(
         .eq("id", itemId)
         .single();
 
-      const modifierInserts = data.modifier_group_ids.map((groupId) => ({
+      const modifierInserts = data.modifier_group_ids.map((groupId, index) => ({
         menu_item_id: itemId,
         modifier_group_id: groupId,
+        display_order: index,
         merchant_id: itemForMerchant?.merchant_id,
       }));
 
@@ -1380,4 +1382,32 @@ export async function GetItemPriceMatrix(
       levels,
     },
   };
+}
+
+export async function ReorderMenuItemModifierGroups(
+  itemId: string,
+  groupOrders: Array<{ modifierGroupId: string; displayOrder: number }>,
+) {
+  if (!itemId) {
+    return { error: "Item ID is required" };
+  }
+
+  const supabase = createServerSupabaseClient();
+  const { data, error } = await supabase.rpc(
+    "reorder_menu_item_modifier_groups",
+    {
+      p_menu_item_id: itemId,
+      p_group_orders: groupOrders.map(({ modifierGroupId, displayOrder }) => ({
+        modifier_group_id: modifierGroupId,
+        display_order: displayOrder,
+      })),
+    },
+  );
+
+  if (error) {
+    console.error("Error reordering menu item modifier groups:", error);
+    return { error: error.message };
+  }
+
+  return { success: true, data };
 }

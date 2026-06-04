@@ -1,5 +1,22 @@
 import { LogAuditEvent } from "./audit-logs";
 
+function sortModifierItemsByDisplayOrder<T extends { display_order?: number | null; name?: string | null }>(
+  items: T[],
+) {
+  return [...items].sort((a, b) => {
+    const aOrder =
+      typeof a.display_order === "number" ? a.display_order : Number.MAX_SAFE_INTEGER;
+    const bOrder =
+      typeof b.display_order === "number" ? b.display_order : Number.MAX_SAFE_INTEGER;
+
+    if (aOrder !== bOrder) {
+      return aOrder - bOrder;
+    }
+
+    return (a.name || "").localeCompare(b.name || "");
+  });
+}
+
 // = ... exist ...
 // ... existing code ...
 
@@ -285,6 +302,9 @@ export async function GetModifierGroupWithLocationContext(
   if (!locationId || locationId === "all") {
     return {
       ...group,
+      modifier_group_items: sortModifierItemsByDisplayOrder(
+        group.modifier_group_items || [],
+      ),
       has_location_override: false,
       effective_is_active: true,
       location_override: null,
@@ -301,6 +321,9 @@ export async function GetModifierGroupWithLocationContext(
 
   return {
     ...group,
+    modifier_group_items: sortModifierItemsByDisplayOrder(
+      group.modifier_group_items || [],
+    ),
     has_location_override: !!override,
     effective_is_active,
     location_override: override,

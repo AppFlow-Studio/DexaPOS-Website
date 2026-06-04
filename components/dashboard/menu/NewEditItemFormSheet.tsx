@@ -48,6 +48,7 @@ import {
 import { ItemPreviewCard } from "./ItemPreviewCard";
 import {
   ChevronDown,
+  ChevronUp,
   ChevronRight,
   DollarSign,
   Tag,
@@ -1208,6 +1209,29 @@ export function NewEditItemFormSheet({
     );
   };
 
+  const moveSelectedModifier = (modifierId: string, direction: "up" | "down") => {
+    if (!canManageModifierLinks) return;
+
+    setSelectedModifiers((prev) => {
+      const currentIndex = prev.indexOf(modifierId);
+      if (currentIndex === -1) return prev;
+
+      const targetIndex =
+        direction === "up" ? currentIndex - 1 : currentIndex + 1;
+
+      if (targetIndex < 0 || targetIndex >= prev.length) {
+        return prev;
+      }
+
+      const next = [...prev];
+      [next[currentIndex], next[targetIndex]] = [
+        next[targetIndex],
+        next[currentIndex],
+      ];
+      return next;
+    });
+  };
+
   const toggleAllergen = (allergen: string) => {
     const current = form.getValues("allergens");
     if (current.includes(allergen)) {
@@ -2222,19 +2246,57 @@ export function NewEditItemFormSheet({
                                             </div>
                                           </div>
 
-                                          {/* Remove Button (respect permissions) */}
+                                          {/* Reorder / Remove Controls */}
                                           {canManageModifierLinks && (
-                                            <Button
-                                              type="button"
-                                              variant="ghost"
-                                              size="icon"
-                                              className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                                              onClick={() =>
-                                                toggleModifier(group.id)
-                                              }
-                                            >
-                                              <X className="h-4 w-4" />
-                                            </Button>
+                                            <div className="flex items-center gap-1">
+                                              <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-7 w-7 text-muted-foreground"
+                                                onClick={() =>
+                                                  moveSelectedModifier(
+                                                    group.id,
+                                                    "up",
+                                                  )
+                                                }
+                                                disabled={index === 0}
+                                                aria-label={`Move ${group.name} up`}
+                                              >
+                                                <ChevronUp className="h-4 w-4" />
+                                              </Button>
+                                              <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-7 w-7 text-muted-foreground"
+                                                onClick={() =>
+                                                  moveSelectedModifier(
+                                                    group.id,
+                                                    "down",
+                                                  )
+                                                }
+                                                disabled={
+                                                  index ===
+                                                  selectedGroups.length - 1
+                                                }
+                                                aria-label={`Move ${group.name} down`}
+                                              >
+                                                <ChevronDown className="h-4 w-4" />
+                                              </Button>
+                                              <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                                onClick={() =>
+                                                  toggleModifier(group.id)
+                                                }
+                                                aria-label={`Remove ${group.name}`}
+                                              >
+                                                <X className="h-4 w-4" />
+                                              </Button>
+                                            </div>
                                           )}
                                         </div>
 
