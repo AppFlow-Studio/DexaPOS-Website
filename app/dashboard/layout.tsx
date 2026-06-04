@@ -47,7 +47,6 @@ import {
   Search,
   MoreHorizontal,
   CreditCard,
-  Bell,
   User,
   LogOut,
   Utensils,
@@ -101,6 +100,8 @@ import {
 } from "@/components/ui/collapsible";
 import { ImpersonationBanner } from "@/components/dashboard/ImpersonationBanner";
 import { ImpersonationHydrator } from "@/components/dashboard/ImpersonationHydrator";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
+import { GetUnreadTicketCounts } from "./actions/support";
 import { MobileBottomNav } from "@/components/dashboard/MobileBottomNav";
 import type { BottomNavTab, MoreNavItem } from "@/components/dashboard/MobileBottomNav";
 
@@ -1273,9 +1274,11 @@ export default function MerchantDashboardLayout({
             <Button variant="ghost" size="icon" className="hidden sm:flex">
               <Search className="h-4 w-4" />
             </Button>
-            <Button variant="ghost" size="icon">
-              <Bell className="h-4 w-4" />
-            </Button>
+            <NotificationBell
+              fetchCounts={GetUnreadTicketCounts}
+              href="/dashboard/support"
+              queryKey="merchant-unread-ticket-counts"
+            />
           </div>
         </header>
         <div id="main-content" className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6 pb-20 sm:pb-6">{children}</div>
