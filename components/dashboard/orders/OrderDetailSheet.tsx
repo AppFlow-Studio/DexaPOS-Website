@@ -53,10 +53,8 @@ import {
 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import {
-  GetOrderDetails,
-  GetOrderFullHistory,
-} from "@/app/dashboard/actions/order";
+import { GetOrderDetails } from "@/app/dashboard/actions/order";
+import { GetOrderFullHistory } from "@/app/dashboard/actions/order-full-history";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   DropdownMenu,
