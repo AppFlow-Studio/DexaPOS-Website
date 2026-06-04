@@ -379,7 +379,7 @@ export function DetailsTab({ location, onUpdate, setHasUnsavedChanges }: Details
                                     placeholder="Suite 100"
                                 />
                             </div>
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div className="space-y-2">
                                     <Label htmlFor="city">City *</Label>
                                     <Input
@@ -408,7 +408,7 @@ export function DetailsTab({ location, onUpdate, setHasUnsavedChanges }: Details
                                     </Select>
                                 </div>
                             </div>
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div className="space-y-2">
                                     <Label htmlFor="postal_code">ZIP Code *</Label>
                                     <Input

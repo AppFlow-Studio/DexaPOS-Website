@@ -171,13 +171,13 @@ function SortableGridCard({
         </CardHeader>
         <CardContent>
           <div className="flex items-center justify-between gap-2 flex-wrap">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap min-w-0">
               <Badge variant={menu.is_active ? "default" : "secondary"}>
                 {menu.is_active ? "Active" : "Inactive"}
               </Badge>
               <LocationBadge menu={menu} />
             </div>
-            <span className="text-sm text-muted-foreground">
+            <span className="text-xs text-muted-foreground shrink-0">
               {new Date(menu.created_at).toLocaleDateString()}
             </span>
           </div>
@@ -431,8 +431,8 @@ export function MenuListView({
           </div>
         </SortableContext>
       ) : (
-        <div className="rounded-md border animate-in fade-in duration-300">
-          <Table>
+        <div className="rounded-md border animate-in fade-in duration-300 overflow-x-auto">
+          <Table className="min-w-[700px]">
             <TableHeader>
               <TableRow className="bg-muted/50">
                 <TableHead className="w-[80px]">Order</TableHead>

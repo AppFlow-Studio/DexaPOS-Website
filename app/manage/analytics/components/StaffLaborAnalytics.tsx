@@ -303,6 +303,7 @@ export function StaffLaborAnalytics() {
                             No shift data in this period
                         </div>
                     ) : (
+                        <div className="overflow-x-auto">
                         <Table>
                             <TableHeader>
                                 <TableRow className="bg-muted/50">
@@ -389,6 +390,7 @@ export function StaffLaborAnalytics() {
                                 })}
                             </TableBody>
                         </Table>
+                        </div>
                     )}
                 </CardContent>
             </Card>

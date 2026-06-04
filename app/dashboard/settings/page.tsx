@@ -17,9 +17,19 @@ import { Label } from '@/components/ui/label'
 import { useLocationTaxRates, useUpsertTaxRate, useDeactivateTaxRate } from '../hooks/useTaxRates'
 import { useLocationStore, useIsAllLocations, useSelectedLocation } from '@/stores/location-store'
 import { TAX_CATEGORIES, TAX_CATEGORY_LABELS, TAX_CATEGORY_DESCRIPTIONS, TaxCategory } from '@/types/tax'
-import { Plus, Edit, Trash2, AlertCircle, DollarSign, MapPin, CreditCard } from 'lucide-react'
+import { Plus, Edit, Trash2, AlertCircle, DollarSign, MapPin, CreditCard, Monitor, Flame, MonitorPlay, Receipt, Gift, ChevronRight } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
 import Link from 'next/link'
+
+const SETTINGS_SECTIONS = [
+    { title: 'Stations', description: 'POS stations, printers & terminals', href: '/dashboard/settings/stations', icon: Monitor },
+    { title: 'Prep Stations', description: 'Kitchen & prep station config', href: '/dashboard/settings/prep-stations', icon: Flame },
+    { title: 'Customer Display', description: 'Customer-facing display settings', href: '/dashboard/settings/customer-display', icon: MonitorPlay },
+    { title: 'Receipt Templates', description: 'Receipt and ticket design', href: '/dashboard/settings/receipt-templates', icon: Receipt },
+    { title: 'Tip Configuration', description: 'Tip pools and distribution rules', href: '/dashboard/settings/tips', icon: DollarSign },
+    { title: 'Loyalty', description: 'Loyalty programs and promotions', href: '/dashboard/settings/loyalty', icon: Gift },
+    { title: 'Billing', description: 'Payment methods and billing setup', href: '/dashboard/settings/billing', icon: CreditCard },
+] as const
 
 // ============================================================================
 // Main Component
@@ -84,9 +94,37 @@ export default function TaxSettingsPage() {
     // Render: All Locations View (Blocked)
     // ========================================================================
 
+    const settingsNav = (
+        <div className="space-y-3">
+            <div>
+                <h2 className="text-xl font-semibold">Settings</h2>
+                <p className="text-sm text-muted-foreground">Manage your POS configuration</p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {SETTINGS_SECTIONS.map(({ title, description, href, icon: Icon }) => (
+                    <Link key={href} href={href}>
+                        <Card className="hover:bg-accent/50 transition-colors cursor-pointer h-full">
+                            <CardContent className="flex items-center gap-3 p-4">
+                                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                                    <Icon className="h-5 w-5 text-primary" />
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                    <p className="font-medium text-sm truncate">{title}</p>
+                                    <p className="text-xs text-muted-foreground truncate">{description}</p>
+                                </div>
+                                <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                            </CardContent>
+                        </Card>
+                    </Link>
+                ))}
+            </div>
+        </div>
+    )
+
     if (isAllLocations) {
         return (
             <div className="space-y-6">
+                {settingsNav}
                 <div className="flex items-center justify-between gap-3">
                     <div>
                         <h2 className="text-2xl font-bold">Tax Settings</h2>
@@ -120,6 +158,8 @@ export default function TaxSettingsPage() {
 
     return (
         <div className="space-y-6">
+            {settingsNav}
+
             {/* Header */}
             <div className="flex items-center justify-between gap-3">
                 <div>
@@ -162,7 +202,7 @@ export default function TaxSettingsPage() {
                             ))}
                         </div>
                     ) : (
-                        <Table>
+                        <Table className="min-w-[600px]">
                             <TableHeader>
                                 <TableRow>
                                     <TableHead>Category</TableHead>

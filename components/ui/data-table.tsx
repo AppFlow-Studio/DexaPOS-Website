@@ -25,12 +25,14 @@ interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
   loading?: boolean;
+  tableClassName?: string;
 }
 
 export function DataTable<TData, TValue>({
   columns,
   data,
   loading = false,
+  tableClassName,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>([]);
 
@@ -49,7 +51,7 @@ export function DataTable<TData, TValue>({
   return (
     <div>
       <div className="rounded-md border">
-        <Table>
+        <Table className={tableClassName}>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>

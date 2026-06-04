@@ -202,7 +202,7 @@ export function AssignModifierToCategoryDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg max-h-[80vh] flex flex-col">
+      <DialogContent className="w-[calc(100vw-1rem)] sm:max-w-xl max-h-[90vh] flex flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle>
             Add &quot;{modifierGroup.name}&quot; to Categories

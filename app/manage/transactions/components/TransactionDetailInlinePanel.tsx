@@ -128,7 +128,7 @@ function PlatformFeeBreakdownSection({
       <div className="mb-3 flex items-center justify-between">
         <h4 className="flex items-center gap-1 text-sm font-semibold">
           Fees &amp; Surcharges
-          <InfoIcon tip="Platform fees collected on this transaction. Net fee applies to the subtotal; Net fee on tip applies to the gratuity. Both reconcile line-for-line with Lucra. Net deposit = gross amount minus these fees." />
+          <InfoIcon tip="Platform fees collected on this transaction. Net fee applies to the subtotal; Net fee on tip applies to the gratuity. Both reconcile line-for-line with TSYS. Net deposit = gross amount minus these fees." />
         </h4>
         {netTotal > 0 && (
           <Badge variant="outline" className="text-xs border-emerald-300 text-emerald-800 dark:text-emerald-300">
@@ -159,7 +159,7 @@ function PlatformFeeBreakdownSection({
           <div className="flex justify-between">
             <span className="text-muted-foreground flex items-center gap-1">
               Net fee{dualPct > 0 ? ` (${dualPct}%)` : ''}
-              <InfoIcon tip="The platform fee applied to the order subtotal (excluding tip). Calculated as a percentage of the subtotal portion and reconciled with Lucra." side="right" />
+              <InfoIcon tip="The platform fee applied to the order subtotal (excluding tip). Calculated as a percentage of the subtotal portion and reconciled with TSYS." side="right" />
             </span>
             <span className="font-mono">{formatCurrency(dualFee)}</span>
           </div>
@@ -176,7 +176,7 @@ function PlatformFeeBreakdownSection({
           <div className="flex justify-between">
             <span className="text-muted-foreground flex items-center gap-1">
               Net fee on tip{tipPct > 0 ? ` (${tipPct}%)` : ''}
-              <InfoIcon tip="The platform fee applied to the tip amount. Calculated as a percentage of the gratuity and reconciled separately with Lucra." side="right" />
+              <InfoIcon tip="The platform fee applied to the tip amount. Calculated as a percentage of the gratuity and reconciled separately with TSYS." side="right" />
             </span>
             <span className="font-mono">{formatCurrency(tipFee)}</span>
           </div>
@@ -201,7 +201,7 @@ function PlatformFeeBreakdownSection({
           <div className="col-span-full flex justify-between border-t pt-1 font-medium">
             <span className="flex items-center gap-1">
               Net fee after refund
-              <InfoIcon tip="Total fees collected after subtracting any refunded fee portions. This is the amount Lucra will debit from the merchant's net deposit." side="right" />
+              <InfoIcon tip="Total fees collected after subtracting any refunded fee portions. This is the amount TSYS will debit from the merchant's net deposit." side="right" />
             </span>
             <span className="font-mono">{formatCurrency(netTotal)}</span>
           </div>

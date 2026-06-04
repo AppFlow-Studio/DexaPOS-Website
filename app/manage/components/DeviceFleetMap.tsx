@@ -103,26 +103,26 @@ export function DeviceFleetMap() {
   return (
     <Card className="border border-blue-100/50 bg-white/80 backdrop-blur-sm shadow-sm rounded-xl overflow-hidden hover:shadow-md transition-all duration-200">
       <CardHeader className="pb-2 border-b border-blue-100/50">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
             <Radio className="h-4 w-4 text-blue-600" />
             <CardTitle className="text-base font-semibold text-slate-900">Device Fleet Health</CardTitle>
           </div>
-          <div className="flex items-center gap-3 text-xs">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
             <div className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-green-500"></span>
+              <span className="w-2 h-2 rounded-full bg-green-500 shrink-0"></span>
               <span>Online</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-yellow-500"></span>
+              <span className="w-2 h-2 rounded-full bg-yellow-500 shrink-0"></span>
               <span>Warning</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-red-500"></span>
+              <span className="w-2 h-2 rounded-full bg-red-500 shrink-0"></span>
               <span>Offline</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-gray-400"></span>
+              <span className="w-2 h-2 rounded-full bg-gray-400 shrink-0"></span>
               <span>Inactive</span>
             </div>
           </div>

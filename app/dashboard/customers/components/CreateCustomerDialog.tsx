@@ -225,7 +225,7 @@ export function CreateCustomerDialog({ open, onOpenChange }: CreateCustomerDialo
             {/* Contact Section */}
             <div>
               <h3 className="font-semibold text-base mb-2">Contact <span className="text-destructive">*</span></h3>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
                   name="name"
@@ -284,7 +284,7 @@ export function CreateCustomerDialog({ open, onOpenChange }: CreateCustomerDialo
             {/* Personal Section */}
             <div>
               <h3 className="font-semibold text-base mb-2">Personal</h3>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
                   name="birthday"
@@ -330,7 +330,7 @@ export function CreateCustomerDialog({ open, onOpenChange }: CreateCustomerDialo
             {/* Dining Preferences Section */}
             <div>
               <h3 className="font-semibold text-base mb-2">Dining Preferences</h3>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
                   name="vip_level"
@@ -421,7 +421,7 @@ export function CreateCustomerDialog({ open, onOpenChange }: CreateCustomerDialo
             {/* Communication Section */}
             <div>
               <h3 className="font-semibold text-base mb-2">Communication</h3>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
                   name="preferred_language"

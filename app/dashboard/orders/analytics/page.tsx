@@ -72,6 +72,8 @@ import { OrderStatusFunnel } from '@/components/dashboard/orders/analytics/Order
 import { VoidRefundAnalysis } from '@/components/dashboard/orders/analytics/VoidRefundAnalysis'
 import { OrderTypeBreakdown } from '@/components/dashboard/orders/analytics/OrderTypeBreakdown'
 import { AvgCompletionTime } from '@/components/dashboard/orders/analytics/AvgCompletionTime'
+import { useReportingQueryRange } from '@/app/dashboard/hooks/useReportingDateRange'
+import { fillDailySalesSeries } from '@/lib/reporting/date-range'
 
 /* ----------------------- Constants ----------------------- */
 
@@ -109,6 +111,7 @@ export default function AnalyticsPage() {
   const [showSettings, setShowSettings] = useState(false)
   // Default interval: 1 minute (60000 ms)
   const [refreshInterval, setRefreshInterval] = useState<number>(60000)
+  const queryDateRange = useReportingQueryRange({ from: dateFrom, to: dateTo })
 
   const handleDateRangeChange = (from: Date | null, to: Date | null) => {
     if (from && to) {
@@ -131,21 +134,21 @@ export default function AnalyticsPage() {
 
   /* ---------------- Data Hooks ---------------- */
 
-  const { data: analytics, isLoading } = useOrderAnalytics(dateFrom, dateTo)
+  const { data: analytics, isLoading } = useOrderAnalytics(queryDateRange.from, queryDateRange.to)
   const { data: revenueBreakdown, isLoading: isLoadingRevenue } =
-    useRevenueBreakdown(dateFrom, dateTo)
+    useRevenueBreakdown(queryDateRange.from, queryDateRange.to)
   const { data: dualPricing, isLoading: isLoadingDualPricing } =
-    useDualPricingComparison(dateFrom, dateTo)
+    useDualPricingComparison(queryDateRange.from, queryDateRange.to)
   const { data: discountImpact, isLoading: isLoadingDiscount } =
-    useDiscountImpact(dateFrom, dateTo)
+    useDiscountImpact(queryDateRange.from, queryDateRange.to)
   const { data: kitchenPerformance, isLoading: isLoadingKitchen } =
-    useKitchenPerformance(dateFrom, dateTo)
+    useKitchenPerformance(queryDateRange.from, queryDateRange.to)
   const { data: tablePerformance, isLoading: isLoadingTable } =
-    useTablePerformance(dateFrom, dateTo)
+    useTablePerformance(queryDateRange.from, queryDateRange.to)
   const { data: staffPerformance, isLoading: isLoadingStaff } =
-    useStaffPerformance(dateFrom, dateTo)
+    useStaffPerformance(queryDateRange.from, queryDateRange.to)
   const { data: orderFlow, isLoading: isLoadingOrderFlow } =
-    useOrderFlow(dateFrom, dateTo)
+    useOrderFlow(queryDateRange.from, queryDateRange.to)
 
   /* ---------------- Derived Data ---------------- */
 
@@ -158,7 +161,10 @@ export default function AnalyticsPage() {
   const chartData = useMemo(() => {
     if (!analytics?.salesByDate) return []
 
-    return analytics.salesByDate.map((item) => ({
+    return fillDailySalesSeries(analytics.salesByDate, {
+      from: dateFrom,
+      to: dateTo,
+    }).map((item) => ({
       date: new Date(item.date).toLocaleDateString('en-US', {
         month: 'short',
         day: 'numeric',
@@ -166,7 +172,7 @@ export default function AnalyticsPage() {
       sales: item.sales,
       orders: item.orders,
     }))
-  }, [analytics?.salesByDate])
+  }, [analytics?.salesByDate, dateFrom, dateTo])
 
   const orderTypeData = useMemo(() => {
     if (!analytics?.orderTypeBreakdown) return []
@@ -222,7 +228,7 @@ export default function AnalyticsPage() {
       </div>
 
       {/* Controls */}
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <DateRangePicker
           dateFrom={dateFrom}
           dateTo={dateTo}
@@ -305,7 +311,8 @@ export default function AnalyticsPage() {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="flex-wrap h-auto gap-2 bg-transparent border-b-2 border-slate-200 dark:border-slate-700 rounded-none p-0 pb-2">
+        <div className="overflow-x-auto">
+        <TabsList className="flex-nowrap w-max h-auto gap-2 bg-transparent border-b-2 border-slate-200 dark:border-slate-700 rounded-none p-0 pb-2">
           <TabsTrigger
             value="sales"
             className="border-0 border-b-4 border-transparent transition-colors duration-200 data-[state=active]:border-[#0A5C9E] dark:data-[state=active]:border-[#0A7AB8] data-[state=active]:shadow-none data-[state=active]:bg-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white rounded-none"
@@ -337,6 +344,7 @@ export default function AnalyticsPage() {
             Order Flow
           </TabsTrigger>
         </TabsList>
+        </div>
 
         {/* SALES TAB */}
         <TabsContent value="sales" className="space-y-6">

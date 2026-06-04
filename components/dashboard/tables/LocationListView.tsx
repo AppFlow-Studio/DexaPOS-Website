@@ -51,7 +51,7 @@ export function LocationListView({ onLocationSelect }: LocationListViewProps) {
                         <Skeleton className="h-4 w-96 mt-2" />
                     </CardHeader>
                 </Card>
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                     {[1, 2, 3].map((i) => (
                         <Card key={i}>
                             <CardHeader>
@@ -107,7 +107,7 @@ export function LocationListView({ onLocationSelect }: LocationListViewProps) {
                 </CardHeader>
             </Card>
 
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {locationsWithStats.map((stat) => {
                     const location = locationsMap.get(stat.locationId)
                     if (!location) {

@@ -71,6 +71,50 @@ async function getMerchantId(clerkOrgId: string) {
   return merchant.id;
 }
 
+const FALLBACK_REPORTING_TIMEZONE = "America/New_York";
+
+async function getLocationTimezoneMap(
+  supabase: ReturnType<typeof createServerSupabaseClient>,
+  merchantId: string,
+  locationId: string | null
+) {
+  let query = supabase
+    .from("locations")
+    .select("id, timezone")
+    .eq("merchant_id", merchantId);
+
+  if (locationId && locationId !== "all") {
+    query = query.eq("id", locationId);
+  }
+
+  const { data: locations } = await query;
+  return new Map(
+    (locations ?? []).map((location) => [
+      location.id,
+      location.timezone || FALLBACK_REPORTING_TIMEZONE,
+    ])
+  );
+}
+
+function getLocalDateKey(
+  instant: string | Date,
+  timeZone: string = FALLBACK_REPORTING_TIMEZONE
+) {
+  const date = instant instanceof Date ? instant : new Date(instant);
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+
+  const year = parts.find((part) => part.type === "year")?.value ?? "0000";
+  const month = parts.find((part) => part.type === "month")?.value ?? "01";
+  const day = parts.find((part) => part.type === "day")?.value ?? "01";
+
+  return `${year}-${month}-${day}`;
+}
+
 /**
  * Get order analytics for a date range
  */
@@ -94,7 +138,7 @@ export async function GetOrderAnalytics(
     .eq("merchant_id", merchantId)
     .not("status", "in", "(draft,cancelled,void)")
     .gte("created_at", dateFrom.toISOString())
-    .lte("created_at", dateTo.toISOString());
+    .lt("created_at", dateTo.toISOString());
 
   if (locationId && locationId !== "all") {
     query = query.eq("location_id", locationId);
@@ -108,6 +152,11 @@ export async function GetOrderAnalytics(
   }
 
   const ordersList = orders || [];
+  const locationTimezoneById = await getLocationTimezoneMap(
+    supabase,
+    merchantId,
+    locationId
+  );
 
   // Calculate today's sales
   const today = new Date();
@@ -188,7 +237,10 @@ export async function GetOrderAnalytics(
   // Sales by date
   const salesByDateMap = new Map<string, { sales: number; orders: number }>();
   ordersList.forEach((order) => {
-    const date = new Date(order.created_at).toISOString().split("T")[0];
+    const date = getLocalDateKey(
+      order.created_at,
+      locationTimezoneById.get(order.location_id) ?? FALLBACK_REPORTING_TIMEZONE
+    );
     const amount = Number(order.total_amount || 0);
 
     if (salesByDateMap.has(date)) {
@@ -266,11 +318,11 @@ export async function GetSalesByDateRange(
 
   let query = supabase
     .from("orders")
-    .select("created_at, total_amount")
+    .select("created_at, total_amount, location_id")
     .eq("merchant_id", merchantId)
     .not("status", "in", '("draft", "cancelled", "void")')
     .gte("created_at", dateFrom.toISOString())
-    .lte("created_at", dateTo.toISOString());
+    .lt("created_at", dateTo.toISOString());
 
   if (locationId && locationId !== "all") {
     query = query.eq("location_id", locationId);
@@ -283,9 +335,17 @@ export async function GetSalesByDateRange(
     return [];
   }
 
+  const locationTimezoneById = await getLocationTimezoneMap(
+    supabase,
+    merchantId,
+    locationId
+  );
   const salesByDateMap = new Map<string, { sales: number; orders: number }>();
   orders?.forEach((order) => {
-    const date = new Date(order.created_at).toISOString().split("T")[0];
+    const date = getLocalDateKey(
+      order.created_at,
+      locationTimezoneById.get(order.location_id) ?? FALLBACK_REPORTING_TIMEZONE
+    );
     const amount = Number(order.total_amount || 0);
 
     if (salesByDateMap.has(date)) {
@@ -331,7 +391,7 @@ export async function GetBestSellingItems(
     .eq("merchant_id", merchantId)
     .not("status", "in", '("draft", "cancelled", "void")')
     .gte("created_at", dateFrom.toISOString())
-    .lte("created_at", dateTo.toISOString());
+    .lt("created_at", dateTo.toISOString());
 
   if (locationId && locationId !== "all") {
     query = query.eq("location_id", locationId);
@@ -404,7 +464,7 @@ export async function GetOrderTypeBreakdown(
     .eq("merchant_id", merchantId)
     .not("status", "in", '("draft", "cancelled", "void")')
     .gte("created_at", dateFrom.toISOString())
-    .lte("created_at", dateTo.toISOString());
+    .lt("created_at", dateTo.toISOString());
 
   if (locationId && locationId !== "all") {
     query = query.eq("location_id", locationId);
@@ -469,7 +529,7 @@ export async function GetOrderStats(
     .select("total_amount, status")
     .eq("merchant_id", merchantId)
     .gte("created_at", dateFrom.toISOString())
-    .lte("created_at", dateTo.toISOString());
+    .lt("created_at", dateTo.toISOString());
 
   if (locationId && locationId !== "all") {
     query = query.eq("location_id", locationId);
@@ -760,7 +820,7 @@ export async function GetRevenueByCategoryReport(
     .eq("merchant_id", merchantId)
     .not("status", "in", "(draft,cancelled,void)")
     .gte("created_at", dateFrom.toISOString())
-    .lte("created_at", dateTo.toISOString());
+    .lt("created_at", dateTo.toISOString());
 
   if (locationId && locationId !== "all") {
     query = query.eq("location_id", locationId);
@@ -1066,7 +1126,7 @@ export async function GetTransactionVolumeReport(
     )
     .eq("orders.merchant_id", merchantId)
     .gte("initiated_at", dateFrom.toISOString())
-    .lte("initiated_at", dateTo.toISOString());
+    .lt("initiated_at", dateTo.toISOString());
 
   if (locationId && locationId !== "all") {
     query = query.eq("orders.location_id", locationId);
@@ -1207,7 +1267,7 @@ export async function GetNetCollectedBySourceReport(
     .eq("merchant_id", merchantId)
     .not("status", "in", "(draft,cancelled,void)")
     .gte("created_at", dateFrom.toISOString())
-    .lte("created_at", dateTo.toISOString());
+    .lt("created_at", dateTo.toISOString());
 
   if (locationId && locationId !== "all") {
     query = query.eq("location_id", locationId);
@@ -1360,7 +1420,7 @@ export async function GetTaxableRevenueByTenderReport(
     .eq("merchant_id", merchantId)
     .not("status", "in", "(draft,cancelled,void)")
     .gte("created_at", dateFrom.toISOString())
-    .lte("created_at", dateTo.toISOString());
+    .lt("created_at", dateTo.toISOString());
 
   if (locationId && locationId !== "all") {
     orderQuery = orderQuery.eq("location_id", locationId);
@@ -1578,7 +1638,7 @@ export async function GetRevenueBreakdown(
     .eq("merchant_id", merchantId)
     .not("status", "in", "(draft,cancelled,void)")
     .gte("created_at", dateFrom.toISOString())
-    .lte("created_at", dateTo.toISOString());
+    .lt("created_at", dateTo.toISOString());
 
   if (locationId && locationId !== "all") {
     query = query.eq("location_id", locationId);
@@ -1785,7 +1845,7 @@ export async function GetDiscountImpact(
     .eq("merchant_id", merchantId)
     .not("status", "in", "(draft,cancelled,void)")
     .gte("created_at", dateFrom.toISOString())
-    .lte("created_at", dateTo.toISOString());
+    .lt("created_at", dateTo.toISOString());
 
   if (locationId && locationId !== "all") {
     orderCountQuery = orderCountQuery.eq("location_id", locationId);
@@ -1802,7 +1862,7 @@ export async function GetDiscountImpact(
     .eq("orders.merchant_id", merchantId)
     .not("orders.status", "in", "(draft,cancelled,void)")
     .gte("orders.created_at", dateFrom.toISOString())
-    .lte("orders.created_at", dateTo.toISOString())
+    .lt("orders.created_at", dateTo.toISOString())
     .is("voided_at", null);
 
   if (locationId && locationId !== "all") {
@@ -1887,7 +1947,7 @@ export async function GetSalesSummaryReport(
     .eq("merchant_id", merchantId)
     .not("status", "in", "(draft,cancelled,void)")
     .gte("created_at", dateFrom.toISOString())
-    .lte("created_at", dateTo.toISOString());
+    .lt("created_at", dateTo.toISOString());
 
   if (locationId && locationId !== "all") {
     query = query.eq("location_id", locationId);
@@ -1963,7 +2023,7 @@ export async function GetHourlySalesReport(
     .eq("merchant_id", merchantId)
     .not("status", "in", "(draft,cancelled,void)")
     .gte("created_at", dateFrom.toISOString())
-    .lte("created_at", dateTo.toISOString());
+    .lt("created_at", dateTo.toISOString());
 
   if (locationId && locationId !== "all") {
     query = query.eq("location_id", locationId);

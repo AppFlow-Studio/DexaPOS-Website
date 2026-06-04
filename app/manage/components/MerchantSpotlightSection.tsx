@@ -21,7 +21,7 @@ export function MerchantSpotlightSection() {
 
   return (
     <Card className="border-blue-100/50 bg-white/80 backdrop-blur-sm shadow-sm">
-      <CardHeader className="flex flex-row items-center justify-between pb-4">
+      <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between pb-4">
         <div className="space-y-0.5">
           <CardTitle className="text-base font-semibold flex items-center gap-2">
             <Building2 className="h-4 w-4 text-blue-600" />
@@ -31,7 +31,7 @@ export function MerchantSpotlightSection() {
             Top merchants by today&apos;s revenue · {total} total
           </p>
         </div>
-        <Button asChild variant="ghost" size="sm" className="text-xs">
+        <Button asChild variant="ghost" size="sm" className="text-xs self-start sm:self-auto shrink-0">
           <Link href="/manage/merchants">
             View all
             <ArrowRight className="h-3.5 w-3.5 ml-1" />
@@ -39,7 +39,7 @@ export function MerchantSpotlightSection() {
         </Button>
       </CardHeader>
 
-      <CardContent>
+      <CardContent className="overflow-hidden">
         {isLoading ? (
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             {Array.from({ length: 8 }).map((_, i) => (
@@ -68,17 +68,17 @@ export function MerchantSpotlightSection() {
           </div>
         ) : (
           <>
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4 min-w-0">
               {merchants.map((m) => (
                 <MerchantSpotlightCard key={m.id} merchant={m} />
               ))}
             </div>
             {hasMore && (
-              <div className="mt-4 pt-4 border-t flex items-center justify-between">
+              <div className="mt-4 pt-4 border-t flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-xs text-muted-foreground">
                   Showing {merchants.length} of {total} merchants
                 </p>
-                <Button asChild variant="outline" size="sm">
+                <Button asChild variant="outline" size="sm" className="w-full sm:w-auto">
                   <Link href="/manage/merchants">
                     Browse all merchants
                     <ArrowRight className="h-3.5 w-3.5 ml-1.5" />

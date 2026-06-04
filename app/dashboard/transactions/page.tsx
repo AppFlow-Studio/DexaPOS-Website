@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
-import { format, subDays } from "date-fns";
+import { subDays } from "date-fns";
 import {
   CreditCard,
   LayoutDashboard,
@@ -10,10 +10,8 @@ import {
   MapPin,
   Globe,
 } from "lucide-react";
-import { DateRange } from "react-day-picker";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { useFinancialKPIs } from "../hooks/useOrderAnalytics";
 import { useOrders } from "../hooks/useOrder";
 import { FinancialHeroChart } from "./components/FinancialHeroChart";
@@ -21,8 +19,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ReceiptModal } from "@/components/dashboard/orders/ReceiptModal";
 import { OrderResponse } from "@/types/order-management";
 import { useSelectedLocation, useIsAllLocations } from "@/stores/location-store";
-import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
+import {
+  DatePreset,
+  DateRangePicker,
+} from "@/components/dashboard/orders/DateRangePicker";
+import { useReportingQueryRange } from "@/app/dashboard/hooks/useReportingDateRange";
+import { fillDailyFinancialStats } from "@/lib/reporting/date-range";
 
 // Restore Component Imports
 import { RevenueSummaryCard } from "./components/RevenueSummaryCard";
@@ -39,10 +41,11 @@ type TimeRangeType = "1d" | "7d" | "30d" | "90d" | "180d" | "365d" | "all";
 type TabType = "overview" | "transactions" | "payments";
 
 export default function TransactionsPage() {
-  const [date, setDate] = useState<DateRange | undefined>({
+  const [dateRange, setDateRange] = useState<{ from: Date; to: Date }>({
     from: subDays(new Date(), 7),
     to: new Date(),
   });
+  const [preset, setPreset] = useState<DatePreset>("last_7_days");
 
   // Chart-specific time range state
   const [chartTimeRange, setChartTimeRange] = useState<TimeRangeType>("7d");
@@ -53,11 +56,12 @@ export default function TransactionsPage() {
   );
   const selectedLocation = useSelectedLocation();
   const isAllLocations = useIsAllLocations();
+  const queryDateRange = useReportingQueryRange(dateRange);
 
   // 1. Fetch data for Left Column (Summary) based on Picker Date
   const { data: kpis, isLoading: isLoadingKPIs } = useFinancialKPIs(
-    date?.from || subDays(new Date(), 7),
-    date?.to || new Date()
+    queryDateRange.from,
+    queryDateRange.to
   );
 
   // 2. Calculate Chart Date Range based on Chart Time Range Selection
@@ -92,18 +96,19 @@ export default function TransactionsPage() {
     }
     return { from: fromDate, to: now };
   }, [chartTimeRange]);
+  const queryChartDateRange = useReportingQueryRange(chartDateRange);
 
   // 3. Fetch data for Right Column (Chart) based on Chart Date Range
   const { data: chartKpis, isLoading: isLoadingChartKPIs } = useFinancialKPIs(
-    chartDateRange.from,
-    chartDateRange.to
+    queryChartDateRange.from,
+    queryChartDateRange.to
   );
 
   // Fetch orders for the transactions tab
   const { data: orders, isLoading: isLoadingOrders } = useOrders({
     dateRange: {
-      from: date?.from || subDays(new Date(), 7),
-      to: date?.to || new Date(),
+      from: dateRange.from,
+      to: dateRange.to,
     },
   });
 
@@ -113,14 +118,12 @@ export default function TransactionsPage() {
 
   // 4. Prepare Chart Data from Chart KPIs
   const chartData = useMemo(() => {
-    return (
-      chartKpis?.daily_stats?.map((stat) => ({
+    return fillDailyFinancialStats(chartKpis?.daily_stats ?? [], chartDateRange).map((stat) => ({
         ...stat,
         gross_sales: stat.net_sales, // Placeholder/Fallback
         payments_collected: stat.net_sales, // Placeholder/Fallback
-      })) || []
-    );
-  }, [chartKpis?.daily_stats]);
+      }));
+  }, [chartDateRange, chartKpis?.daily_stats]);
 
   const isLoading = isLoadingKPIs;
 
@@ -171,7 +174,7 @@ export default function TransactionsPage() {
   return (
     <main className="space-y-6 animate-in fade-in duration-500">
       {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-semibold tracking-tight">
@@ -193,13 +196,24 @@ export default function TransactionsPage() {
             Revenue, transactions, and payment activity
           </p>
         </div>
-        <DateRangePicker date={date} setDate={setDate} className="w-auto" />
+        <DateRangePicker
+          dateFrom={dateRange.from}
+          dateTo={dateRange.to}
+          onDateRangeChange={(from, to) => {
+            if (from && to) {
+              setDateRange({ from, to });
+            }
+          }}
+          preset={preset}
+          onPresetChange={setPreset}
+          className="w-full sm:w-auto"
+        />
       </div>
 
       {/* Hero Chart */}
       <Card className="border-border/60 shadow-none overflow-hidden">
         <CardContent className="p-0">
-          <div className="h-[420px]">
+          <div className="h-[460px] sm:h-[420px]">
             <FinancialHeroChart
               data={chartData}
               isLoading={isLoadingChartKPIs}
@@ -268,7 +282,8 @@ export default function TransactionsPage() {
         onValueChange={(v) => setActiveTab(v as TabType)}
         className="w-full"
       >
-        <TabsList className="bg-muted/50 p-1 h-auto rounded-lg w-full sm:w-auto sm:inline-flex">
+        <div className="overflow-x-auto">
+        <TabsList className="bg-muted/50 p-1 h-auto rounded-lg w-max">
           <TabsTrigger
             value="overview"
             className="rounded-md px-4 py-2 text-sm font-medium data-[state=active]:bg-background data-[state=active]:shadow-sm"
@@ -291,6 +306,7 @@ export default function TransactionsPage() {
             Payments
           </TabsTrigger>
         </TabsList>
+        </div>
       </Tabs>
 
       {/* Tab Content */}

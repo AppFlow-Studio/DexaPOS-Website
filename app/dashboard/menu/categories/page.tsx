@@ -642,11 +642,11 @@ export default function CategoriesPage() {
 
   // console.log('categoriesList', categoriesList)
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
+    <div className="space-y-6 animate-in fade-in duration-500 w-full min-w-0">
       <ScopeContextStrip />
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             <h2 className="text-2xl font-bold tracking-tight">Categories</h2>
             {/* Location scope indicator */}
             <Badge
@@ -675,7 +675,7 @@ export default function CategoriesPage() {
                 }`}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
           {!isAllLocations && (
             <TooltipProvider>
               <Tooltip>
@@ -715,7 +715,7 @@ export default function CategoriesPage() {
       )}
 
       {/* Stats Overview */}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card className="transition-all hover:shadow-md">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
@@ -789,21 +789,21 @@ export default function CategoriesPage() {
       {/* Categories List */}
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <CardTitle>All Categories</CardTitle>
               <CardDescription>
                 Click a category to see its items
               </CardDescription>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <div className="relative">
                 <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
                   placeholder="Search categories..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-8 w-64"
+                  className="pl-8 w-full sm:w-64"
                 />
               </div>
               <Button
@@ -1009,8 +1009,8 @@ export default function CategoriesPage() {
                         )}
 
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-start justify-between gap-2">
-                            <div>
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                            <div className="min-w-0">
                               <h3
                                 className={cn(
                                   "font-semibold transition-colors truncate",
@@ -1025,7 +1025,7 @@ export default function CategoriesPage() {
                                 </p>
                               )}
                             </div>
-                            <div className="flex items-center gap-2 shrink-0">
+                            <div className="flex items-center gap-2 shrink-0 flex-wrap">
                               {/* Location visibility toggle */}
                               {!isAllLocations && (
                                 <TooltipProvider>
@@ -1371,19 +1371,19 @@ export default function CategoriesPage() {
 
                     {/* Expanded Items Section */}
                     {isExpanded && (
-                      <div className="border-t bg-muted/10 animate-in slide-in-from-top-2">
-                        <div className="p-4">
-                          <div className="flex items-center justify-between mb-3">
-                            <h4 className="text-sm font-medium flex items-center gap-2">
-                              <Utensils className="h-4 w-4" />
-                              Items in this category
+                      <div className="border-t bg-muted/10 animate-in slide-in-from-top-2 overflow-hidden">
+                        <div className="p-3 sm:p-4">
+                          <div className="flex flex-wrap items-center justify-between gap-2 mb-3 min-w-0">
+                            <h4 className="text-sm font-medium flex flex-wrap items-center gap-1.5 min-w-0">
+                              <Utensils className="h-4 w-4 shrink-0" />
+                              <span className="min-w-0 break-words">Items in this category</span>
                               {!isAllLocations && (
-                                <Badge variant="outline" className="text-xs">
+                                <Badge variant="outline" className="text-xs shrink-0">
                                   Location Pricing
                                 </Badge>
                               )}
                             </h4>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 shrink-0">
                               {/* Add Item Button - Only when scoping allows */}
                               {(() => {
                                 // Global categories: can only add when viewing all locations
@@ -1513,19 +1513,19 @@ export default function CategoriesPage() {
                                 <div className="space-y-4">
                                   {/* Save/Reset Banner for Items */}
                                   {itemOrderChanges.has(category.id) && (
-                                    <div className="flex items-center justify-between p-3 rounded-lg bg-primary/5 border border-primary/20 border-dashed animate-in fade-in slide-in-from-top-2">
-                                      <div className="flex items-center gap-2">
-                                        <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
-                                        <p className="text-sm font-medium text-primary">
+                                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 p-3 rounded-lg bg-primary/5 border border-primary/20 border-dashed animate-in fade-in slide-in-from-top-2">
+                                      <div className="flex items-center gap-2 min-w-0">
+                                        <div className="h-2 w-2 rounded-full bg-primary animate-pulse shrink-0" />
+                                        <p className="text-sm font-medium text-primary truncate">
                                           Item order changed
                                           {!isAllLocations && (
                                             <span className="ml-1 text-xs font-normal opacity-70">
-                                              (Specific to this location)
+                                              (This location)
                                             </span>
                                           )}
                                         </p>
                                       </div>
-                                      <div className="flex items-center gap-2">
+                                      <div className="flex items-center gap-2 shrink-0">
                                         <Button
                                           variant="ghost"
                                           size="sm"
@@ -1535,7 +1535,7 @@ export default function CategoriesPage() {
                                           disabled={
                                             savingItemOrderFor === category.id
                                           }
-                                          className="h-8 text-xs"
+                                          className="h-8 text-xs flex-1 sm:flex-none"
                                         >
                                           <RotateCcw className="h-3 w-3 mr-1" />
                                           Reset
@@ -1548,7 +1548,7 @@ export default function CategoriesPage() {
                                           disabled={
                                             savingItemOrderFor === category.id
                                           }
-                                          className="h-8 text-xs gap-1.5"
+                                          className="h-8 text-xs gap-1.5 flex-1 sm:flex-none"
                                         >
                                           {savingItemOrderFor ===
                                           category.id ? (
@@ -1919,7 +1919,7 @@ function SortableCategoryItemRow({
       ref={setNodeRef}
       style={style}
       className={cn(
-        "flex items-center gap-3 p-3 my-1 rounded-lg bg-background border transition-all",
+        "flex items-center gap-1.5 sm:gap-3 p-2 sm:p-3 my-1 rounded-lg bg-background border transition-all overflow-hidden",
         isDragging
           ? "opacity-30 shadow-lg z-50 ring-2 ring-primary"
           : "hover:shadow-sm hover:border-primary/30",
@@ -1945,21 +1945,21 @@ function SortableCategoryItemRow({
         <button
           {...attributes}
           {...listeners}
-          className="flex items-center justify-center w-7 h-7 rounded hover:bg-muted cursor-grab active:cursor-grabbing touch-none shrink-0"
+          className="flex items-center justify-center w-5 h-5 sm:w-7 sm:h-7 rounded hover:bg-muted cursor-grab active:cursor-grabbing touch-none shrink-0"
           onClick={(e) => e.stopPropagation()}
           aria-label="Drag to reorder"
         >
-          <GripVertical className="h-4 w-4 text-muted-foreground" />
+          <GripVertical className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
         </button>
       )}
 
-      {/* Order Number */}
-      <span className="flex items-center justify-center w-5 h-5 rounded-full bg-muted text-muted-foreground text-[10px] font-medium shrink-0">
+      {/* Order Number — hidden on mobile */}
+      <span className="hidden sm:flex items-center justify-center w-5 h-5 rounded-full bg-muted text-muted-foreground text-[10px] font-medium shrink-0">
         {index + 1}
       </span>
 
       {/* Item Image */}
-      <div className="w-12 h-12 rounded-lg overflow-hidden bg-muted/30 shrink-0">
+      <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-lg overflow-hidden bg-muted/30 shrink-0">
         {isValidImageUrl(item.menu_item.image) ? (
           <img
             src={item.menu_item.image}
@@ -1986,8 +1986,8 @@ function SortableCategoryItemRow({
         )}
       </div>
 
-      {/* Price with source indicator */}
-      <div className="text-right shrink-0 flex items-center gap-2">
+      {/* Price with source indicator — hidden on mobile */}
+      <div className="hidden sm:flex text-right shrink-0 items-center gap-2">
         <div className="flex flex-col items-end">
           <span className="font-semibold text-sm text-primary">
             ${item.menu_item.effective_price.toFixed(2)}
@@ -2018,7 +2018,7 @@ function SortableCategoryItemRow({
         )}
       </div>
 
-      {/* Edit / Remove buttons — hidden in selection mode */}
+      {/* Edit button — hidden on mobile (row itself is clickable), visible on sm+ */}
       {!isSelectionMode && (
       <TooltipProvider>
         <Tooltip>
@@ -2026,7 +2026,7 @@ function SortableCategoryItemRow({
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8 text-muted-foreground hover:text-primary"
+              className="hidden sm:flex h-8 w-8 text-muted-foreground hover:text-primary"
               onClick={(e) => handleEditItem(item, category, e)}
             >
               <Edit2 className="h-4 w-4" />
@@ -2054,7 +2054,7 @@ function SortableCategoryItemRow({
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                  className="hidden sm:flex h-8 w-8 text-muted-foreground hover:text-destructive"
                   onClick={(e) =>
                     handleRemoveItemFromCategory(
                       category.id,

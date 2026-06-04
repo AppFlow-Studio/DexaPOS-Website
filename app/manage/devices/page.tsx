@@ -123,7 +123,7 @@ export default function ManageDevicesPage() {
     inventoryQuery.error?.message ?? summaryQuery.error?.message ?? 'Failed to load device registry'
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 min-w-0 overflow-x-hidden">
       <DeviceRegistryPageHeader
         title="Fleet inventory"
         description="Track warehouse stock, merchant assignments, and deployment status from one HQ view."
@@ -283,7 +283,7 @@ export default function ManageDevicesPage() {
               />
             </div>
           ) : (
-            <Table containerClassName="min-h-[480px]">
+            <Table containerClassName="min-h-[480px] overflow-x-auto">
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
                   <TableHead className="pl-6">Device</TableHead>

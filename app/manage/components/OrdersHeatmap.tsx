@@ -69,14 +69,15 @@ export function OrdersHeatmap() {
       </CardHeader>
       <CardContent className="p-4 pt-3">
         <ResponsiveContainer width="100%" height={300}>
-          <BarChart data={chartData} margin={{ top: 20, right: 30, left: 0, bottom: 20 }}>
+          <BarChart data={chartData} margin={{ top: 20, right: 8, left: 0, bottom: 20 }}>
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" opacity={0.5} />
             <XAxis
               dataKey="timeLabel"
-              tick={{ fontSize: 12, fill: '#64748b' }}
+              tick={{ fontSize: 10, fill: '#64748b' }}
               tickLine={false}
               axisLine={false}
-              interval={2}
+              interval={5}
+              padding={{ left: 16, right: 8 }}
             />
             <YAxis hide />
             <Tooltip
@@ -100,25 +101,25 @@ export function OrdersHeatmap() {
             </Bar>
           </BarChart>
         </ResponsiveContainer>
-        <div className="mt-4 flex items-center justify-center gap-4 text-xs">
+        <div className="mt-4 flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5 text-xs">
           <div className="flex items-center gap-1">
-            <div className="h-3 w-3 rounded" style={{ backgroundColor: '#e5e7eb' }} />
+            <div className="h-3 w-3 rounded shrink-0" style={{ backgroundColor: '#e5e7eb' }} />
             <span className="text-muted-foreground">Low</span>
           </div>
           <div className="flex items-center gap-1">
-            <div className="h-3 w-3 rounded" style={{ backgroundColor: '#fbbf24' }} />
+            <div className="h-3 w-3 rounded shrink-0" style={{ backgroundColor: '#fbbf24' }} />
             <span className="text-muted-foreground">Medium</span>
           </div>
           <div className="flex items-center gap-1">
-            <div className="h-3 w-3 rounded" style={{ backgroundColor: '#f97316' }} />
+            <div className="h-3 w-3 rounded shrink-0" style={{ backgroundColor: '#f97316' }} />
             <span className="text-muted-foreground">High</span>
           </div>
           <div className="flex items-center gap-1">
-            <div className="h-3 w-3 rounded" style={{ backgroundColor: '#dc2626' }} />
+            <div className="h-3 w-3 rounded shrink-0" style={{ backgroundColor: '#dc2626' }} />
             <span className="text-muted-foreground">Peak</span>
           </div>
-          <div className="ml-2 flex items-center gap-1">
-            <div className="h-3 w-3 rounded bg-blue-500" />
+          <div className="flex items-center gap-1">
+            <div className="h-3 w-3 rounded bg-blue-500 shrink-0" />
             <span className="text-muted-foreground">Now</span>
           </div>
         </div>

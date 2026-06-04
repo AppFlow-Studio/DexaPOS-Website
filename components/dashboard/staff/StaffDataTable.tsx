@@ -695,57 +695,56 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
   return (
     <div className="space-y-4">
       {/* Search & Filters */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <div className="relative flex-1 max-w-sm">
+      <div className="flex items-center gap-2 flex-wrap">
+        <div className="relative flex-1 min-w-[160px]">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="Search staff..."
             value={globalFilter}
             onChange={(e) => setGlobalFilter(e.target.value)}
-            className="pl-9"
+            className="pl-9 w-full"
           />
         </div>
-        <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as "all" | "active" | "inactive")}>
-          <SelectTrigger className="w-[140px]">
-            <Filter className="mr-2 h-4 w-4" />
-            <SelectValue placeholder="Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Status</SelectItem>
-            <SelectItem value="active">Active</SelectItem>
-            <SelectItem value="inactive">Inactive</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={roleFilter} onValueChange={setRoleFilter}>
-          <SelectTrigger className="w-[180px]">
-            <Shield className="mr-2 h-4 w-4" />
-            <SelectValue placeholder="Role" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Roles</SelectItem>
-            {uniqueRoles.map(([code, name]) => (
-              <SelectItem key={code} value={code}>
-                {name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        {(statusFilter !== "active" || roleFilter !== "all") && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              setStatusFilter("active");
-              setRoleFilter("all");
-            }}
-          >
-            <X className="mr-1 h-4 w-4" />
-            Clear filters
-          </Button>
-        )}
-        <span className="text-sm text-muted-foreground ml-auto">
-          {filteredData.length} of {data.length} staff
-        </span>
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full sm:w-auto sm:shrink-0">
+          <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as "all" | "active" | "inactive")}>
+            <SelectTrigger className="w-full sm:w-[130px]">
+              <Filter className="mr-2 h-4 w-4" />
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Status</SelectItem>
+              <SelectItem value="active">Active</SelectItem>
+              <SelectItem value="inactive">Inactive</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={roleFilter} onValueChange={setRoleFilter}>
+            <SelectTrigger className="w-full sm:w-[150px]">
+              <Shield className="mr-2 h-4 w-4" />
+              <SelectValue placeholder="Role" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Roles</SelectItem>
+              {uniqueRoles.map(([code, name]) => (
+                <SelectItem key={code} value={code}>
+                  {name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {(statusFilter !== "active" || roleFilter !== "all") && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setStatusFilter("active");
+                setRoleFilter("all");
+              }}
+            >
+              <X className="mr-1 h-4 w-4" />
+              Clear filters
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Bulk Action Bar */}
@@ -804,7 +803,7 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
 
       {/* Table */}
       <div className="rounded-md border">
-        <Table>
+        <Table className="min-w-[800px]">
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>

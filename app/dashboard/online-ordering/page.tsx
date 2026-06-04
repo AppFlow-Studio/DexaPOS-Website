@@ -38,6 +38,8 @@ import { useAuth } from "@clerk/nextjs";
 import { cn } from "@/lib/utils";
 import { OrderOutTab } from "@/components/dashboard/orderout/OrderOutTab";
 import { NotificationsTab } from "./components/NotificationsTab";
+import { HoursConfigModal } from "./components/HoursConfigModal";
+import { WeeklySchedule } from "./hooks/useOnlineOrderingSettings";
 import { QrTableManager } from "./components/QrTableManager";
 import { QrAnalyticsPanel } from "./components/QrAnalyticsPanel";
 import { QrGuestAlertsPanel } from "./components/QrGuestAlertsPanel";
@@ -231,6 +233,7 @@ function CompletedSetupPanel({
   const onboardMutation = useOnboardOrderOut(orgId || "");
   const [showOrderOutForm, setShowOrderOutForm] = useState(false);
   const [uploading, setUploading] = useState<Record<string, boolean>>({});
+  const [hoursModalOpen, setHoursModalOpen] = useState(false);
 
   const locationDefaults = useMemo(() => {
     return {
@@ -337,28 +340,30 @@ function CompletedSetupPanel({
       </Card>
 
       <Tabs defaultValue="store" className="space-y-6">
-        <TabsList className="w-full justify-start overflow-x-auto">
-          <TabsTrigger value="store" className="gap-2">
-            <Store className="h-4 w-4" />
-            Store Info
-          </TabsTrigger>
-          <TabsTrigger value="branding" className="gap-2">
-            <Palette className="h-4 w-4" />
-            Branding
-          </TabsTrigger>
-          <TabsTrigger value="ordering" className="gap-2">
-            <Truck className="h-4 w-4" />
-            Ordering
-          </TabsTrigger>
-          <TabsTrigger value="orderout" className="gap-2">
-            <Plug className="h-4 w-4" />
-            OrderOut
-          </TabsTrigger>
-          <TabsTrigger value="notifications" className="gap-2">
-            <Bell className="h-4 w-4" />
-            Notifications
-          </TabsTrigger>
-        </TabsList>
+        <div className="overflow-x-auto">
+          <TabsList className="w-max justify-start">
+            <TabsTrigger value="store" className="gap-2">
+              <Store className="h-4 w-4" />
+              Store Info
+            </TabsTrigger>
+            <TabsTrigger value="branding" className="gap-2">
+              <Palette className="h-4 w-4" />
+              Branding
+            </TabsTrigger>
+            <TabsTrigger value="ordering" className="gap-2">
+              <Truck className="h-4 w-4" />
+              Ordering
+            </TabsTrigger>
+            <TabsTrigger value="orderout" className="gap-2">
+              <Plug className="h-4 w-4" />
+              OrderOut
+            </TabsTrigger>
+            <TabsTrigger value="notifications" className="gap-2">
+              <Bell className="h-4 w-4" />
+              Notifications
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
         <TabsContent value="store" className="space-y-6">
           <Card>
@@ -807,7 +812,7 @@ function CompletedSetupPanel({
               </div>
 
               {/* Row 1: Logo, Favicon, OG Image — uniform 80×80 */}
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 {(
                   [
                     { key: "logo",    label: "Logo",     url: settings.logoUrl,    assetType: "logo"    },
@@ -818,11 +823,11 @@ function CompletedSetupPanel({
                   <div key={key} className="space-y-2">
                     <Label>{label}</Label>
                     {url ? (
-                      <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-lg border bg-muted">
+                      <div className="flex h-20 w-full sm:w-20 items-center justify-center overflow-hidden rounded-lg border bg-muted">
                         <img src={url} alt={`${label} preview`} className="h-full w-full object-contain" />
                       </div>
                     ) : (
-                      <div className="flex h-20 w-20 items-center justify-center rounded-lg border bg-muted text-xs text-muted-foreground">
+                      <div className="flex h-20 w-full sm:w-20 items-center justify-center rounded-lg border bg-muted text-xs text-muted-foreground">
                         None
                       </div>
                     )}
@@ -831,6 +836,7 @@ function CompletedSetupPanel({
                       accept="image/*"
                       onChange={(e) => handleUpload(assetType, e.target.files?.[0] ?? null)}
                       disabled={Boolean(uploading[key])}
+                      className="w-full"
                     />
                     {uploading[key] && <p className="text-xs text-muted-foreground">Uploading…</p>}
                   </div>
@@ -1123,6 +1129,35 @@ function CompletedSetupPanel({
               <QrGuestAlertsPanel locationId={selectedLocationId} />
             </CardContent>
           </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Store Hours</CardTitle>
+              <CardDescription>Set the days and times your store accepts online orders.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button
+                variant="outline"
+                className="gap-2"
+                onClick={() => setHoursModalOpen(true)}
+              >
+                <Clock3 className="h-4 w-4" />
+                Edit Operating Hours
+              </Button>
+            </CardContent>
+          </Card>
+
+          <HoursConfigModal
+            open={hoursModalOpen}
+            onOpenChange={setHoursModalOpen}
+            title="Operating Hours"
+            description="Set the days and times your store accepts online orders."
+            schedule={settings.operatingHours}
+            onSave={(schedule: WeeklySchedule) => {
+              onUpdate({ operatingHours: schedule });
+              setHoursModalOpen(false);
+            }}
+          />
         </TabsContent>
 
         <TabsContent value="orderout" className="space-y-6">

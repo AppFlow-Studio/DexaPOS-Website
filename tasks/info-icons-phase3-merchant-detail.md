@@ -106,7 +106,7 @@ This ticket covers:
 
 ### `PaymentsTab.tsx` / `sections/PaymentsTable.tsx`
 
-- [ ] Table columns: same as Phase 1 PaymentsLedger (Payment ID, Date, Method, Card, Auth, Batch, Total, Status, Settled, Lucra) — reuse same tooltip text
+- [ ] Table columns: same as Phase 1 PaymentsLedger (Payment ID, Date, Method, Card, Auth, Batch, Total, Status, Settled, TSYS) — reuse same tooltip text
 
 ---
 
@@ -165,14 +165,14 @@ This ticket covers:
 
 ### `sections/LuqraTransactionsTable.tsx`
 
-- [ ] Luqra Transaction ID — *Lucra's internal identifier for this payment. Used to cross-reference Dexa and Lucra records during reconciliation.*
-- [ ] Net Deposit — *Amount deposited into the merchant's bank account for this payment after fees. Reconciles line-for-line with Lucra settlement reports.*
+- [ ] Luqra Transaction ID — *TSYS's internal identifier for this payment. Used to cross-reference Dexa and TSYS records during reconciliation.*
+- [ ] Net Deposit — *Amount deposited into the merchant's bank account for this payment after fees. Reconciles line-for-line with TSYS settlement reports.*
 - [ ] Net fee — *Platform fee charged on this payment (replaces any "Dual Pricing Fee" labels)*
-- [ ] Lucra Status — *Whether Lucra has confirmed capture and settlement of this payment*
+- [ ] TSYS Status — *Whether TSYS has confirmed capture and settlement of this payment*
 
 ### `sections/LuqraDepositsTable.tsx`
 
-- [ ] Deposit Amount — *Total funds transferred to the merchant's bank in this Lucra settlement run*
+- [ ] Deposit Amount — *Total funds transferred to the merchant's bank in this TSYS settlement run*
 - [ ] Net Deposit — *Deposit amount after all platform fees have been deducted*
 - [ ] Settlement Date — *Date the funds were credited to the merchant's bank account*
 - [ ] Payment Count — *Number of individual payments included in this deposit batch*
@@ -217,5 +217,5 @@ This ticket covers:
   merchant-scoped one. The platform-fees page uses a separate `components/platform-fees/kpi-strip.tsx`.
   Both need the `tip` extension but are separate files — update both.
 - Many tabs are behind a tab router — verify each tab renders after clicking before marking complete.
-- `LuqraTransactionsTable` and related Lucra components: use "Net fee" / "Net deposit" in tooltips,
+- `LuqraTransactionsTable` and related TSYS components: use "Net fee" / "Net deposit" in tooltips,
   not "Card Surcharge" or "Dual Pricing Fee" — consistency with TASK 2.
