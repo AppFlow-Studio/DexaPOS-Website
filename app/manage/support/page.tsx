@@ -61,19 +61,17 @@ function StatCard({
   suffix?: string;
 }) {
   return (
-    <div className="rounded-xl border bg-card p-5 flex items-start gap-4 shadow-sm">
-      <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center shrink-0">
-        <Icon className="h-5 w-5 text-muted-foreground" />
+    <div className="rounded-xl border bg-card p-4 shadow-sm min-w-0 overflow-hidden">
+      <div className="h-8 w-8 rounded-lg bg-muted flex items-center justify-center mb-3">
+        <Icon className="h-4 w-4 text-muted-foreground" />
       </div>
-      <div>
-        <p className="text-2xl font-bold leading-none tabular-nums">
-          {value}
-          {suffix && (
-            <span className="text-sm font-normal text-muted-foreground ml-1">{suffix}</span>
-          )}
-        </p>
-        <p className="text-xs text-muted-foreground mt-1.5">{label}</p>
-      </div>
+      <p className="text-2xl font-bold leading-none tabular-nums">
+        {value}
+        {suffix && (
+          <span className="text-sm font-normal text-muted-foreground ml-1">{suffix}</span>
+        )}
+      </p>
+      <p className="text-xs text-muted-foreground mt-1.5 leading-tight">{label}</p>
     </div>
   );
 }
@@ -178,9 +176,9 @@ export default function AdminSupportPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 min-w-0 overflow-x-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <MessageSquare className="h-6 w-6" />
@@ -193,6 +191,7 @@ export default function AdminSupportPage() {
         <Button
           variant="outline"
           size="sm"
+          className="self-start sm:self-auto flex-shrink-0"
           onClick={() =>
             queryClient.invalidateQueries({ queryKey: ["admin-support-tickets"] })
           }
@@ -203,7 +202,7 @@ export default function AdminSupportPage() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
         <StatCard
           label="Open Tickets"
           value={stats?.open_count ?? "—"}
@@ -229,7 +228,7 @@ export default function AdminSupportPage() {
       </div>
 
       {/* Status Tabs */}
-      <div className="flex gap-0 border-b">
+      <div className="flex gap-0 border-b overflow-x-auto">
         {STATUS_TABS.map((tab) => (
           <button
             key={tab.key}
@@ -248,7 +247,7 @@ export default function AdminSupportPage() {
 
       {/* Secondary Filters */}
       <div className="flex flex-wrap gap-2 items-center">
-        <div className="relative flex-1 min-w-[200px] max-w-sm">
+        <div className="relative flex-1 min-w-0 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Search by merchant or ticket #..."

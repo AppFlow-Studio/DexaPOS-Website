@@ -539,10 +539,10 @@ export function CreateItemWizard({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         overlayClassName="bg-slate-950/40 backdrop-blur-md"
-        className="w-full max-w-[calc(100vw-1rem)] gap-0 overflow-hidden rounded-[28px] border border-slate-200/80 bg-background/95 p-0 shadow-[0_30px_100px_rgba(15,23,42,0.26)] sm:max-w-5xl xl:max-w-6xl"
+        className="w-full max-w-[calc(100vw-1rem)] gap-0 overflow-x-hidden overflow-y-auto max-h-[92vh] rounded-[28px] border border-slate-200/80 bg-background/95 p-0 shadow-[0_30px_100px_rgba(15,23,42,0.26)] sm:max-w-5xl xl:max-w-6xl"
       >
-        <div className="flex max-h-[min(92vh,960px)] flex-col">
-          <DialogHeader className="border-b border-border/70 bg-background/95 px-6 py-5 pr-14 text-left sm:text-left">
+        <div className="flex flex-col min-w-0">
+          <DialogHeader className="sticky top-0 z-10 border-b border-border/70 bg-background/95 px-4 sm:px-6 py-5 pr-14 text-left sm:text-left">
             <div className="space-y-2">
               <DialogTitle className="flex items-center gap-2 text-[1.625rem] font-semibold tracking-tight">
                 New Menu Item
@@ -553,9 +553,9 @@ export function CreateItemWizard({
             </div>
           </DialogHeader>
 
-          <div className="min-h-0 flex flex-1 flex-col overflow-hidden lg:flex-row">
+          <div className="flex flex-col lg:flex-row w-full min-w-0">
             {/* LEFT COLUMN - FORM */}
-            <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+            <div className="flex-1 px-4 sm:px-6 py-5 min-w-0 overflow-x-hidden">
               {/* Context Banner */}
               <div className="mb-6 p-3 rounded-lg bg-primary/5 border border-primary/20">
                 <div className="flex items-center gap-2 text-sm">
@@ -1185,17 +1185,19 @@ export function CreateItemWizard({
             </div>
           </div>
 
-          <DialogFooter className="shrink-0 border-t border-border/70 bg-background/95 px-6 py-4 sm:justify-end">
+          <DialogFooter className="sticky bottom-0 z-10 border-t border-border/70 bg-background/95 px-4 sm:px-6 py-4 sm:justify-end gap-2">
             <Button
               variant="outline"
               onClick={() => onOpenChange(false)}
               disabled={isSaving}
+              className="w-full sm:w-auto"
             >
               Cancel
             </Button>
             <Button
               onClick={handleCreateItem}
               disabled={isSaving}
+              className="w-full sm:w-auto"
             >
               {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Create Item

@@ -47,7 +47,7 @@ export function DateRangePicker({ from, to, onChange }: DateRangePickerProps) {
   }
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex flex-wrap items-center gap-2">
       <span className="text-sm text-muted-foreground">Date Range:</span>
 
       {/* Preset Buttons */}

@@ -40,7 +40,7 @@ export default function ManageSubscriptionsIndexPage() {
   const loading = isLoading || authLoading || (isManagerScoped && accessLoading)
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 min-w-0 overflow-x-hidden">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Subscriptions</h1>
         <p className="text-muted-foreground">

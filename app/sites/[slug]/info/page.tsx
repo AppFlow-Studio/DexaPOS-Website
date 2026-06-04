@@ -23,7 +23,10 @@ export default async function StoreInfoPage({ params }: PageProps) {
   const bgColor = (themeStyle as Record<string, string>)["--bg"] ?? defaults.bg;
   const textColor = (themeStyle as Record<string, string>)["--text"] ?? defaults.text;
 
-  const rootVarsCss = `:root { ${Object.entries(themeStyle).map(([k, v]) => `${k}: ${v}`).join("; ")} }`;
+  const rootVarsCss = [
+    `:root { ${Object.entries(themeStyle).map(([k, v]) => `${k}: ${v}`).join("; ")} }`,
+    `:root, body { font-family: var(--font); }`,
+  ].join("\n");
 
   return (
     <>

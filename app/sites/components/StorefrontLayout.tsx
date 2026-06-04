@@ -41,6 +41,7 @@ interface StorefrontLayoutProps {
     business_hours: any;
     latitude?: number | null;
     longitude?: number | null;
+    timezone?: string | null;
   };
   menus: StorefrontMenu[];
   slug: string;
@@ -147,14 +148,16 @@ function ClassicLayout({
     site?.online_ordering_config?.operatingHours ||
     (location as any).business_hours;
 
+  const locationTimezone = (location as any).timezone ?? null;
+
   const todayHours = useMemo(
-    () => getTodayHoursString(rawBusinessHours),
-    [rawBusinessHours]
+    () => getTodayHoursString(rawBusinessHours, locationTimezone),
+    [rawBusinessHours, locationTimezone]
   );
 
   const isStoreOpen = useMemo(
-    () => isStoreOpenNow(rawBusinessHours),
-    [rawBusinessHours]
+    () => isStoreOpenNow(rawBusinessHours, locationTimezone),
+    [rawBusinessHours, locationTimezone]
   );
 
   const handleTabChange = (tab: TabType) => {

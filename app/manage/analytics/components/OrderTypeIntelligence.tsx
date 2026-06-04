@@ -87,11 +87,11 @@ function TypeStatCard({ stat }: { stat: OrderTypeStat }) {
   return (
     <Card className={`border ${TYPE_BG[stat.type] ?? 'bg-muted/20'}`}>
       <CardContent className="pt-5 pb-4">
-        <div className="flex items-start justify-between">
-          <div className={`p-2.5 rounded-lg ${TYPE_ICON_BG[stat.type] ?? 'bg-muted'}`}>
+        <div className="flex items-start justify-between gap-2 flex-wrap">
+          <div className={`p-2.5 rounded-lg shrink-0 ${TYPE_ICON_BG[stat.type] ?? 'bg-muted'}`}>
             <Icon className="h-5 w-5" />
           </div>
-          <Badge variant="secondary" className="text-xs font-medium">
+          <Badge variant="secondary" className="text-xs font-medium shrink-0">
             {stat.percentage}% of orders
           </Badge>
         </div>
@@ -123,7 +123,7 @@ export function OrderTypeIntelligence() {
   if (isLoading) {
     return (
       <div className="space-y-4">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-36" />)}
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -175,7 +175,7 @@ export function OrderTypeIntelligence() {
       </div>
 
       {/* Type cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {data.breakdown.map(stat => (
           <TypeStatCard key={stat.type} stat={stat} />
         ))}
@@ -275,11 +275,11 @@ export function OrderTypeIntelligence() {
             <CardDescription className="text-xs">By order type, last {days} days</CardDescription>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={240}>
+            <ResponsiveContainer width="100%" height={300}>
               <PieChart>
                 <Pie
                   data={data.breakdown}
-                  cx="50%" cy="50%"
+                  cx="50%" cy="45%"
                   innerRadius={60} outerRadius={95}
                   paddingAngle={3}
                   dataKey="orderCount"
@@ -295,7 +295,7 @@ export function OrderTypeIntelligence() {
                     props.payload?.label,
                   ]}
                 />
-                <Legend />
+                <Legend verticalAlign="bottom" />
               </PieChart>
             </ResponsiveContainer>
           </CardContent>

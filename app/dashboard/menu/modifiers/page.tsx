@@ -508,7 +508,7 @@ export default function ModifiersPage() {
           </div>
         </div>
 
-        <div className="grid gap-3 md:grid-cols-4 items-center">
+        <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-4 items-center">
           <div>
             <div className="text-xs text-muted-foreground mb-1">
               Price Modifier
@@ -661,25 +661,27 @@ export default function ModifiersPage() {
   return (
     <div className="flex flex-col gap-6 p-6 max-w-[1600px] mx-auto w-full">
       <ScopeContextStrip />
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Modifiers</h1>
-          <p className="text-muted-foreground mt-1">
-            Global management in All Locations. In a location view, override
-            visibility and prices, or fully manage location-owned groups.
-          </p>
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">Modifiers</h1>
+            <p className="text-muted-foreground mt-1">
+              Global management in All Locations. In a location view, override
+              visibility and prices, or fully manage location-owned groups.
+            </p>
+          </div>
+          <Button onClick={handleCreateGroup} className="gap-2 self-start flex-shrink-0">
+            <Plus className="h-4 w-4" />
+            Create Group
+          </Button>
         </div>
         {!isAllLocations && (
-          <div className="flex items-center gap-2 p-2 bg-blue-50 text-blue-800 rounded-lg text-sm border border-blue-100">
-            <Info className="h-4 w-4" />
-            Viewing <strong>{selectedLocation?.name}</strong>. Global groups are
-            structural read-only; you can override price/availability.
+          <div className="flex items-start gap-2 p-2 bg-blue-50 text-blue-800 rounded-lg text-sm border border-blue-100">
+            <Info className="h-4 w-4 mt-0.5 flex-shrink-0" />
+            <span>Viewing <strong>{selectedLocation?.name}</strong>. Global groups are
+            structural read-only; you can override price/availability.</span>
           </div>
         )}
-        <Button onClick={handleCreateGroup} className="gap-2">
-          <Plus className="h-4 w-4" />
-          Create Group
-        </Button>
       </div>
 
       <Card className="border shadow-sm">
@@ -786,12 +788,12 @@ export default function ModifiersPage() {
                   className="border rounded-lg bg-white shadow-sm"
                 >
                   <div className="flex flex-col gap-3 p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-center gap-3">
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                      <div className="flex items-center gap-3 min-w-0">
                         <div className="h-10 w-10 rounded-lg bg-purple-50 flex items-center justify-center">
                           <Layers className="h-5 w-5 text-purple-600" />
                         </div>
-                        <div>
+                        <div className="min-w-0">
                           <CardTitle className="text-lg leading-tight">
                             {group.name}
                           </CardTitle>
@@ -852,7 +854,7 @@ export default function ModifiersPage() {
                           </div>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1 flex-wrap flex-shrink-0">
                         {locationOverride && canOverrideOnly(group) && (
                           <Button
                             variant="ghost"

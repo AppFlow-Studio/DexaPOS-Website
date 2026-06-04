@@ -86,7 +86,7 @@ export function CustomerList({
 
   return (
     <div className="rounded-md border bg-card">
-      <Table>
+      <Table className="min-w-[700px]">
         <TableHeader>
           <TableRow>
             <TableHead className="w-[300px]">Customer</TableHead>

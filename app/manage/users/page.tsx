@@ -334,16 +334,16 @@ export default function UsersPage() {
     }
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 min-w-0 overflow-x-hidden">
             {/* Header */}
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                     <h1 className="text-3xl font-bold tracking-tight">Users</h1>
                     <p className="text-muted-foreground">
                         Manage user accounts, roles, and permissions across your organization.
                     </p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 self-start sm:self-auto">
                     {(isSuperAdmin || isAtLeast(8)) && (
                         <Button
                             variant="outline"
@@ -358,7 +358,7 @@ export default function UsersPage() {
                     <DialogTrigger asChild>
                         <Button className="hidden">Add User</Button>
                     </DialogTrigger>
-                    <DialogContent className="sm:max-w-106.25">
+                    <DialogContent className="max-w-[95vw] sm:max-w-106.25">
                         <DialogHeader>
                             <DialogTitle>Add New User</DialogTitle>
                             <DialogDescription>
@@ -537,49 +537,49 @@ export default function UsersPage() {
 
                     {/* Users Table */}
                     <Card>
-                        <CardContent className="p-0">
-                            <Table>
+                        <CardContent className="p-0 overflow-x-auto">
+                            <Table className="w-full min-w-[700px]">
                                 <TableHeader>
                                     <TableRow>
                                         <TableHead>User</TableHead>
                                         <TableHead>Role</TableHead>
-                                        <TableHead>Assigned Merchants</TableHead>
-                                        <TableHead>Status</TableHead>
-                                        <TableHead>Last Active</TableHead>
-                                        <TableHead>Join Date</TableHead>
+                                        <TableHead className="hidden sm:table-cell">Assigned Merchants</TableHead>
+                                        <TableHead className="hidden xs:table-cell">Status</TableHead>
+                                        <TableHead className="hidden md:table-cell">Last Active</TableHead>
+                                        <TableHead className="hidden md:table-cell">Join Date</TableHead>
                                         <TableHead className="w-12.5"></TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                     {filteredUsers?.map((user ) => (
                                         <TableRow key={user.id} className="cursor-pointer" onClick={() => router.push(`/manage/users/${user.users.id}`)}>
-                                            <TableCell>
-                                                <div className="flex items-center space-x-3">
-                                                    <Avatar className="h-8 w-8">
+                                            <TableCell className="max-w-[160px] sm:max-w-none">
+                                                <div className="flex items-center space-x-2 sm:space-x-3">
+                                                    <Avatar className="h-8 w-8 shrink-0">
                                                         <AvatarImage src={user?.users?.avatar_url || ''} alt={`${user?.users?.first_name} ${user?.users?.last_name}`} />
                                                         <AvatarFallback>{getInitials(user?.users?.first_name, user?.users?.last_name)}</AvatarFallback>
                                                     </Avatar>
-                                                    <div>
-                                                        <div className="font-medium">{user?.users?.first_name} {user?.users?.last_name}</div>
-                                                        <div className="text-sm text-muted-foreground">{user?.users?.email}</div>
+                                                    <div className="min-w-0">
+                                                        <div className="font-medium truncate">{user?.users?.first_name} {user?.users?.last_name}</div>
+                                                        <div className="text-sm text-muted-foreground truncate">{user?.users?.email}</div>
                                                     </div>
                                                 </div>
                                             </TableCell>
-                                            <TableCell>
-                                                <Badge variant={(roleColors[user?.users?.public_metadata?.role as keyof typeof roleColors] || 'secondary') as "default" | "destructive" | "outline" | "secondary"}>
+                                            <TableCell className="max-w-[110px]">
+                                                <Badge className="text-xs truncate max-w-full block" variant={(roleColors[user?.users?.public_metadata?.role as keyof typeof roleColors] || 'secondary') as "default" | "destructive" | "outline" | "secondary"}>
                                                     {user?.role}
                                                 </Badge>
                                             </TableCell>
-                                            <TableCell className="text-sm">
+                                            <TableCell className="hidden sm:table-cell text-sm">
                                                 {user?.assigned_merchant_count || 0}
                                             </TableCell>
-                                            <TableCell>
+                                            <TableCell className="hidden xs:table-cell">
                                                 <Badge variant={(statusColors[(user?.users?.public_metadata?.status || 'Active') as keyof typeof statusColors] || 'secondary') as "default" | "destructive" | "outline" | "secondary"}>
                                                     {user?.users?.public_metadata?.status || 'Active'}
                                                 </Badge>
                                             </TableCell>
-                                            <TableCell className="text-sm">{formatDate(user?.users?.updated_at || user.created_at)}</TableCell>
-                                            <TableCell className="text-sm">{formatDate(user.created_at)}</TableCell>
+                                            <TableCell className="hidden md:table-cell text-sm">{formatDate(user?.users?.updated_at || user.created_at)}</TableCell>
+                                            <TableCell className="hidden md:table-cell text-sm">{formatDate(user.created_at)}</TableCell>
                                             <TableCell>
                                                     <DropdownMenu>
                                                         <DropdownMenuTrigger asChild>
@@ -666,17 +666,18 @@ export default function UsersPage() {
                 <TabsContent value="invites" className="space-y-4">
                     <Card>
                         <CardHeader>
-                            <div className="flex items-center justify-between">
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                                 <div>
                                     <CardTitle>Invites</CardTitle>
                                     <CardDescription>Manage admin and member invitations</CardDescription>
                                 </div>
-                                <div className="flex items-center gap-2">
-                                    <Input placeholder="Search invites..." className="w-72" />
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <Input placeholder="Search invites..." className="w-full sm:w-48" />
                                     {(isSuperAdmin || isAtLeast(8)) && (
                                         <Button
                                             variant="outline"
                                             onClick={() => setIsAdminInviteOpen(true)}
+                                            className="flex-shrink-0"
                                         >
                                             <UserPlus className="h-4 w-4 mr-2" />
                                             Invite Admin
@@ -700,16 +701,16 @@ export default function UsersPage() {
                                     <div className="text-sm font-medium mb-3">Admin Invites</div>
                                     <div className="divide-y rounded-md border">
                                         {adminInvites.map((inv: any) => (
-                                            <div key={inv.id} className="flex items-center justify-between p-4">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center text-sm font-medium">
+                                            <div key={inv.id} className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between">
+                                                <div className="flex items-center gap-3 min-w-0">
+                                                    <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center text-sm font-medium shrink-0">
                                                         {(inv.email?.[0] || 'A').toUpperCase()}
                                                     </div>
-                                                    <div>
-                                                        <div className="font-medium">
+                                                    <div className="min-w-0">
+                                                        <div className="font-medium truncate">
                                                             {getInviteDisplayName(inv)}
                                                         </div>
-                                                        <div className="text-sm text-muted-foreground">{inv.email}</div>
+                                                        <div className="text-sm text-muted-foreground truncate">{inv.email}</div>
                                                         <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                                                             <span>Invited by {inv.invited_by_user?.first_name || inv.invited_by || 'Unknown'}</span>
                                                             <span>{formatDate(inv.created_at)}</span>
@@ -722,8 +723,8 @@ export default function UsersPage() {
                                                         </div>
                                                     </div>
                                                 </div>
-                                                <div className="flex items-center gap-4">
-                                                    <div className="text-muted-foreground">{inv.role}</div>
+                                                <div className="flex items-center gap-4 shrink-0">
+                                                    <div className="text-muted-foreground text-sm">{inv.role}</div>
                                                     <DropdownMenu>
                                                         <DropdownMenuTrigger asChild>
                                                             <Button variant="ghost" className="h-8 w-8 p-0">
@@ -773,7 +774,7 @@ export default function UsersPage() {
                                     <div className="text-sm font-medium mb-3">Member Invites</div>
                                     <div className="divide-y rounded-md border">
                                         {organizationInfo.pending_org_member_invites.map((inv: any) => (
-                                            <div key={inv.id} className="flex items-center justify-between p-4">
+                                            <div key={inv.id} className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between">
                                                 <div className="flex items-center gap-3">
                                                     <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center text-sm font-medium">
                                                         {(inv.email?.[0] || 'M').toUpperCase()}
@@ -825,7 +826,7 @@ export default function UsersPage() {
             <Dialog open={isEditRoleDialogOpen} onOpenChange={setIsEditRoleDialogOpen}>
                 <DialogContent
                     onClick={(event) => event.stopPropagation()}
-                    className="sm:max-w-115"
+                    className="max-w-[95vw] sm:max-w-115"
                 >
                     <DialogHeader>
                         <div className="flex items-center gap-3 mb-1">

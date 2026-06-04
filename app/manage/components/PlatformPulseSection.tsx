@@ -96,7 +96,7 @@ export function PlatformPulseSection() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="space-y-1">
           <h2 className="text-2xl font-semibold tracking-tight bg-gradient-to-br from-slate-900 to-blue-900 bg-clip-text text-transparent">
             Platform Pulse
@@ -109,7 +109,7 @@ export function PlatformPulseSection() {
             Real-time platform metrics
           </p>
         </div>
-        <div className="text-xs text-muted-foreground bg-white/60 px-3 py-1.5 rounded-full border border-blue-100">
+        <div className="self-start sm:self-auto text-xs text-muted-foreground bg-white/60 px-3 py-1.5 rounded-full border border-blue-100">
           Updated just now
         </div>
       </div>

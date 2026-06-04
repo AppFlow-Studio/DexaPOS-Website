@@ -270,21 +270,21 @@ export function BatchReconciliationSection({
               Compare settlement batches against linked order payments and flag mismatches.
             </CardDescription>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button variant="outline" onClick={() => void handleRefresh()} disabled={batchesFetching || batchPaymentsFetching}>
               <RefreshCcwDot className="mr-2 h-4 w-4" />
               Refresh
             </Button>
             <Button variant="outline" onClick={handleBatchExport} disabled={!selectedBatch}>
               <Download className="mr-2 h-4 w-4" />
-              Export Selected Batch
+              Export Selected
             </Button>
           </div>
         </div>
       </CardHeader>
 
       <CardContent className="space-y-4">
-        <div className={scopedMerchantId ? 'grid gap-3 md:grid-cols-4' : 'grid gap-3 md:grid-cols-5'}>
+        <div className={scopedMerchantId ? 'grid gap-3 grid-cols-2 lg:grid-cols-4' : 'grid gap-3 grid-cols-2 lg:grid-cols-5'}>
           {!scopedMerchantId && (
             <label className="flex flex-col gap-1 text-sm">
               <span className="text-muted-foreground">Merchant</span>
@@ -369,7 +369,7 @@ export function BatchReconciliationSection({
                 <span className="inline-flex items-center justify-end gap-1">Refund <InfoIcon tip="Total refunds processed within this batch." side="bottom" /></span>
               </TableHead>
               <TableHead className="text-right">
-                <span className="inline-flex items-center justify-end gap-1">Net Deposit <InfoIcon tip="Amount deposited into the merchant's bank account. Formula: Gross − refunds − net fees (the 4% bank fee). Reconciles line-for-line with Lucra." side="bottom" /></span>
+                <span className="inline-flex items-center justify-end gap-1">Net Deposit <InfoIcon tip="Amount deposited into the merchant's bank account. Formula: Gross − refunds − net fees (the 4% bank fee). Reconciles line-for-line with TSYS." side="bottom" /></span>
               </TableHead>
               <TableHead>
                 <span className="inline-flex items-center gap-1">Status <InfoIcon tip="Open: batch is still collecting payments. Closed: submitted to processor. Settled: processor confirmed receipt. Funded: money deposited to merchant bank." side="bottom" /></span>

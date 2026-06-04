@@ -106,10 +106,10 @@ export function ImpersonateMerchantButton({
         variant="outline"
         size={variant === "card" ? "sm" : "default"}
         onClick={handleClick}
-        className="gap-1.5"
+        className="gap-1.5 max-w-full truncate"
       >
-        <Eye className="h-4 w-4" />
-        View as merchant
+        <Eye className="h-4 w-4 shrink-0" />
+        <span className="truncate">View as merchant</span>
       </Button>
 
       <Dialog open={open} onOpenChange={setOpen}>

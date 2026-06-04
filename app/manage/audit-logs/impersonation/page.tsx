@@ -61,7 +61,7 @@ export default function ImpersonationAuditPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="space-y-1">
           <Link
             href="/manage/audit-logs"
@@ -82,6 +82,7 @@ export default function ImpersonationAuditPage() {
         <Button
           variant="outline"
           size="icon"
+          className="self-start sm:self-auto flex-shrink-0"
           onClick={load}
           disabled={loading}
         >
