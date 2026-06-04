@@ -25,6 +25,38 @@ function sortByDisplayOrder<T extends { display_order?: number | null; name?: st
   });
 }
 
+function sortGroupsWithLocationOverride<T extends {
+  display_order?: number | null;
+  name?: string | null;
+  location_override?: Array<{ display_order?: number | null }> | null;
+}>(
+  items: T[],
+) {
+  return [...items].sort((a, b) => {
+    const aOverrideOrder = a.location_override?.[0]?.display_order;
+    const bOverrideOrder = b.location_override?.[0]?.display_order;
+
+    const aOrder =
+      typeof aOverrideOrder === "number"
+        ? aOverrideOrder
+        : typeof a.display_order === "number"
+          ? a.display_order
+          : Number.MAX_SAFE_INTEGER;
+    const bOrder =
+      typeof bOverrideOrder === "number"
+        ? bOverrideOrder
+        : typeof b.display_order === "number"
+          ? b.display_order
+          : Number.MAX_SAFE_INTEGER;
+
+    if (aOrder !== bOrder) {
+      return aOrder - bOrder;
+    }
+
+    return (a.name || "").localeCompare(b.name || "");
+  });
+}
+
 function sortModifierItems(
   items: Array<
     ModifierGroupItemsModel & {
@@ -120,6 +152,7 @@ export async function GetModifierGroups(
             location_override:location_modifier_group_overrides!left(
                 id,
                 is_active,
+                display_order,
                 location_id
             )
         `,
@@ -162,10 +195,12 @@ export async function GetModifierGroups(
     return [];
   }
 
-  return (data || []).map((group: any) => ({
-    ...group,
-    modifier_group_items: sortModifierItems(group.modifier_group_items || []),
-  })) as (ModifierGroupsModel & {
+  return sortGroupsWithLocationOverride(
+    (data || []).map((group: any) => ({
+      ...group,
+      modifier_group_items: sortModifierItems(group.modifier_group_items || []),
+    })),
+  ) as (ModifierGroupsModel & {
     modifier_group_items: ModifierGroupItemsModel[];
     location_name: {
       name: string;
@@ -181,6 +216,7 @@ export async function GetModifierGroups(
     location_override?: Array<{
       id: string;
       is_active: boolean;
+      display_order?: number | null;
       location_id: string;
     }>;
   })[];

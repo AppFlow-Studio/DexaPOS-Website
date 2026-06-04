@@ -104,6 +104,32 @@ Single index for active ticket streams and their source trackers.
 - No RLS/policy rewrites unless a proven blocker appears.
 - No modifier pricing, default-option, or assignment semantic changes.
 
+## Stream I: Modifier Display Order Alignment
+
+1. Plan:
+- `docs/PLAN-2026-06-04-MODIFIER-DISPLAY-ORDER-ALIGNMENT.md`
+
+2. Continuation state:
+- `.planning/.continue-here.md`
+
+3. Scope notes:
+- Website repo only.
+- Backend migration stream for exact modifier ordering parity.
+- Preserves existing location-scoped modifier assignment behavior.
+
+## Stream J: Reporting Date Range Boundaries And Loading State
+
+1. Plan:
+- `docs/PLAN-2026-06-04-REPORTING-DATE-RANGE-BOUNDARIES.md`
+
+2. Continuation state:
+- `.planning/.continue-here.md`
+
+3. Scope notes:
+- Cross-cutting reporting stream.
+- Backend + frontend work.
+- Not a quick-fix ticket and not mixed into modifier work.
+
 ## Notes
 
 1. Keep this file updated whenever a new ticket stream starts.

@@ -76,6 +76,7 @@ import {
 import { TransactionVolumeCard } from "./components/TransactionVolumeCard";
 import { NetCollectedBySourceCard } from "./components/NetCollectedBySourceCard";
 import { TaxableRevenueByTenderCard } from "./components/TaxableRevenueByTenderCard";
+import { fillDailyFinancialStats } from "@/lib/reporting/date-range";
 
 export default function MerchantDashboardPage() {
   const { selectedLocationId, locations } = useLocationStore();
@@ -239,7 +240,10 @@ export default function MerchantDashboardPage() {
 
   // Prepare chart data for revenue trend
   const revenueChartData = useMemo(() => {
-    const data = kpis7Days?.daily_stats || [];
+    const data = fillDailyFinancialStats(kpis7Days?.daily_stats || [], {
+      from: last7Days,
+      to: now,
+    });
     if (data.length === 0) return [];
 
     return data.map((item) => ({
@@ -250,7 +254,7 @@ export default function MerchantDashboardPage() {
       sales: item.net_sales,
     }));
 
-  }, [kpis7Days]);
+  }, [kpis7Days, last7Days, now]);
 
   // Chart configuration
   const chartConfig = {

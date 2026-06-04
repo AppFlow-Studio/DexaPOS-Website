@@ -1,4 +1,25 @@
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { LogAuditEvent } from "./audit-logs";
+import type {
+  LocationModifierGroupOverridesModel,
+  LocationModifierItemOverridesModel,
+} from "@/types/db-modles";
+
+export type LocationModifierGroupOverride = LocationModifierGroupOverridesModel;
+export type LocationModifierItemOverride = LocationModifierItemOverridesModel;
+
+export interface ModifierGroupOverrideData {
+  is_active?: boolean;
+  display_order?: number | null;
+}
+
+export interface ModifierItemOverrideData {
+  price_modifier?: number | null;
+  is_active?: boolean | null;
+  display_order?: number | null;
+  stock_tracking_mode?: "quantity" | "in_stock" | "out_of_stock" | null;
+  current_stock?: number | null;
+}
 
 function sortModifierItemsByDisplayOrder<T extends { display_order?: number | null; name?: string | null }>(
   items: T[],
@@ -17,8 +38,37 @@ function sortModifierItemsByDisplayOrder<T extends { display_order?: number | nu
   });
 }
 
-// = ... exist ...
-// ... existing code ...
+// ============================================================================
+// MODIFIER GROUP OVERRIDES - GET OPERATIONS
+// ============================================================================
+
+export async function GetLocationModifierGroupOverride(
+  locationId: string,
+  modifierGroupId: string,
+): Promise<LocationModifierGroupOverride | null> {
+  if (!locationId || !modifierGroupId) {
+    return null;
+  }
+
+  const supabase = createServerSupabaseClient();
+
+  const { data, error } = await supabase
+    .from("location_modifier_group_overrides")
+    .select("*")
+    .eq("location_id", locationId)
+    .eq("modifier_group_id", modifierGroupId)
+    .single();
+
+  if (error) {
+    if (error.code === "PGRST116") {
+      return null;
+    }
+    console.error("Error getting location modifier group override:", error);
+    return null;
+  }
+
+  return data as LocationModifierGroupOverride;
+}
 
 /**
  * Upsert location override for a modifier group (hide/show at location)
@@ -43,6 +93,9 @@ export async function UpsertLocationModifierGroupOverride(
         modifier_group_id: modifierGroupId,
         merchant_id: merchantId,
         is_active: data.is_active ?? true,
+        ...(data.display_order !== undefined
+          ? { display_order: data.display_order }
+          : {}),
       },
       {
         onConflict: "location_id,modifier_group_id",
@@ -79,6 +132,7 @@ export async function UpsertLocationModifierGroupOverride(
     metadata: {
       location_name: location?.name,
       is_active: data.is_active,
+      display_order: data.display_order,
     },
     changes: { after: data },
   });

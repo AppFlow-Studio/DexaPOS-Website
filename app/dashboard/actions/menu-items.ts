@@ -1387,6 +1387,7 @@ export async function GetItemPriceMatrix(
 export async function ReorderMenuItemModifierGroups(
   itemId: string,
   groupOrders: Array<{ modifierGroupId: string; displayOrder: number }>,
+  locationId?: string | null,
 ) {
   if (!itemId) {
     return { error: "Item ID is required" };
@@ -1394,13 +1395,14 @@ export async function ReorderMenuItemModifierGroups(
 
   const supabase = createServerSupabaseClient();
   const { data, error } = await supabase.rpc(
-    "reorder_menu_item_modifier_groups",
+    "reorder_item_modifier_groups",
     {
       p_menu_item_id: itemId,
       p_group_orders: groupOrders.map(({ modifierGroupId, displayOrder }) => ({
         modifier_group_id: modifierGroupId,
         display_order: displayOrder,
       })),
+      p_location_id: locationId && locationId !== "all" ? locationId : null,
     },
   );
 

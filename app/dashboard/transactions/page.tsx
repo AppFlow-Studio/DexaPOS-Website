@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
-import { format, subDays } from "date-fns";
+import { subDays } from "date-fns";
 import {
   CreditCard,
   LayoutDashboard,
@@ -10,10 +10,8 @@ import {
   MapPin,
   Globe,
 } from "lucide-react";
-import { DateRange } from "react-day-picker";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { useFinancialKPIs } from "../hooks/useOrderAnalytics";
 import { useOrders } from "../hooks/useOrder";
 import { FinancialHeroChart } from "./components/FinancialHeroChart";
@@ -21,8 +19,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ReceiptModal } from "@/components/dashboard/orders/ReceiptModal";
 import { OrderResponse } from "@/types/order-management";
 import { useSelectedLocation, useIsAllLocations } from "@/stores/location-store";
-import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
+import {
+  DatePreset,
+  DateRangePicker,
+} from "@/components/dashboard/orders/DateRangePicker";
+import { useReportingQueryRange } from "@/app/dashboard/hooks/useReportingDateRange";
+import { fillDailyFinancialStats } from "@/lib/reporting/date-range";
 
 // Restore Component Imports
 import { RevenueSummaryCard } from "./components/RevenueSummaryCard";
@@ -39,10 +41,11 @@ type TimeRangeType = "1d" | "7d" | "30d" | "90d" | "180d" | "365d" | "all";
 type TabType = "overview" | "transactions" | "payments";
 
 export default function TransactionsPage() {
-  const [date, setDate] = useState<DateRange | undefined>({
+  const [dateRange, setDateRange] = useState<{ from: Date; to: Date }>({
     from: subDays(new Date(), 7),
     to: new Date(),
   });
+  const [preset, setPreset] = useState<DatePreset>("last_7_days");
 
   // Chart-specific time range state
   const [chartTimeRange, setChartTimeRange] = useState<TimeRangeType>("7d");
@@ -53,11 +56,12 @@ export default function TransactionsPage() {
   );
   const selectedLocation = useSelectedLocation();
   const isAllLocations = useIsAllLocations();
+  const queryDateRange = useReportingQueryRange(dateRange);
 
   // 1. Fetch data for Left Column (Summary) based on Picker Date
   const { data: kpis, isLoading: isLoadingKPIs } = useFinancialKPIs(
-    date?.from || subDays(new Date(), 7),
-    date?.to || new Date()
+    queryDateRange.from,
+    queryDateRange.to
   );
 
   // 2. Calculate Chart Date Range based on Chart Time Range Selection
@@ -92,18 +96,19 @@ export default function TransactionsPage() {
     }
     return { from: fromDate, to: now };
   }, [chartTimeRange]);
+  const queryChartDateRange = useReportingQueryRange(chartDateRange);
 
   // 3. Fetch data for Right Column (Chart) based on Chart Date Range
   const { data: chartKpis, isLoading: isLoadingChartKPIs } = useFinancialKPIs(
-    chartDateRange.from,
-    chartDateRange.to
+    queryChartDateRange.from,
+    queryChartDateRange.to
   );
 
   // Fetch orders for the transactions tab
   const { data: orders, isLoading: isLoadingOrders } = useOrders({
     dateRange: {
-      from: date?.from || subDays(new Date(), 7),
-      to: date?.to || new Date(),
+      from: dateRange.from,
+      to: dateRange.to,
     },
   });
 
@@ -113,14 +118,12 @@ export default function TransactionsPage() {
 
   // 4. Prepare Chart Data from Chart KPIs
   const chartData = useMemo(() => {
-    return (
-      chartKpis?.daily_stats?.map((stat) => ({
+    return fillDailyFinancialStats(chartKpis?.daily_stats ?? [], chartDateRange).map((stat) => ({
         ...stat,
         gross_sales: stat.net_sales, // Placeholder/Fallback
         payments_collected: stat.net_sales, // Placeholder/Fallback
-      })) || []
-    );
-  }, [chartKpis?.daily_stats]);
+      }));
+  }, [chartDateRange, chartKpis?.daily_stats]);
 
   const isLoading = isLoadingKPIs;
 
@@ -193,7 +196,18 @@ export default function TransactionsPage() {
             Revenue, transactions, and payment activity
           </p>
         </div>
-        <DateRangePicker date={date} setDate={setDate} className="w-auto" />
+        <DateRangePicker
+          dateFrom={dateRange.from}
+          dateTo={dateRange.to}
+          onDateRangeChange={(from, to) => {
+            if (from && to) {
+              setDateRange({ from, to });
+            }
+          }}
+          preset={preset}
+          onPresetChange={setPreset}
+          className="w-auto"
+        />
       </div>
 
       {/* Hero Chart */}
