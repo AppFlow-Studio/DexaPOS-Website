@@ -59,10 +59,22 @@ UPDATE public.device_inventory di
  WHERE di.linked_payment_terminal_id = ANY(w.loser_ids);
 
 -- 2. Repoint kiosk_profiles (no unique constraint to worry about).
-UPDATE public.kiosk_profiles kp
-   SET payment_terminal_id = w.winner_id
-  FROM _dedup_winners w
- WHERE kp.payment_terminal_id = ANY(w.loser_ids);
+--    Guarded with to_regclass because kiosk_profiles only exists on staging
+--    today; prod doesn't have the table yet, and we don't want the migration
+--    to abort there. EXECUTE keeps the UPDATE out of the parse-time relation
+--    resolution path, so the planner never tries to bind kiosk_profiles when
+--    the table is missing.
+DO $$
+BEGIN
+  IF to_regclass('public.kiosk_profiles') IS NOT NULL THEN
+    EXECUTE $sql$
+      UPDATE public.kiosk_profiles kp
+         SET payment_terminal_id = w.winner_id
+        FROM _dedup_winners w
+       WHERE kp.payment_terminal_id = ANY(w.loser_ids)
+    $sql$;
+  END IF;
+END $$;
 
 -- 3. Repoint station_devices (no unique constraint to worry about).
 UPDATE public.station_devices sd
