@@ -231,8 +231,11 @@ export async function getPlatformDashboardKPIs(): Promise<PlatformDashboardKPIs>
     paymentSuccessRate = (successCount / paymentsDataToday.length) * 100
   }
 
-  // 10. Open Support Tickets (table doesn't exist yet, hardcoded to 0)
-  const openSupportTickets = 0
+  // 10. Open Support Tickets — bound to get_support_dashboard_stats() (the
+  // support-tickets feature shipped after this dashboard; the old hardcoded 0
+  // was a stale data-binding gap). SECURITY DEFINER RPC, service-role invoked.
+  const { data: supportStats } = await serviceRole.rpc('get_support_dashboard_stats')
+  const openSupportTickets = Number((supportStats as { open_count?: number })?.open_count ?? 0)
 
   return {
     revenueToday,
