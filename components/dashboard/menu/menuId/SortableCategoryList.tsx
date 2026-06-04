@@ -79,17 +79,17 @@ function SortableCategoryItem({
 
       {/* Category Info */}
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <span className="font-medium truncate">
+        <div className="flex flex-wrap items-center gap-2 min-w-0">
+          <span className="font-medium truncate min-w-0">
             {category.category?.name || "Unnamed Category"}
           </span>
           {!category.is_active && (
-            <Badge variant="secondary" className="text-xs">
+            <Badge variant="secondary" className="text-xs shrink-0">
               Hidden
             </Badge>
           )}
           {category.category?.location_id && (
-            <Badge variant="outline" className="text-xs">
+            <Badge variant="outline" className="text-xs shrink-0">
               {category.category?.location_name || "Location"}
             </Badge>
           )}

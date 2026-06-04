@@ -48,7 +48,7 @@ export default function OrganizationsPage() {
     if (isLoading) return (
         <div className="space-y-6 animate-in fade-in-0 duration-300">
             {/* Header skeleton */}
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="space-y-2">
                     <div className="h-7 w-48 bg-muted rounded-md animate-pulse" />
                     <div className="h-4 w-72 bg-muted rounded-md animate-pulse" />
@@ -130,14 +130,14 @@ export default function OrganizationsPage() {
     return (
         <div className="space-y-6">
             {/* Header */}
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                     <h1 className="text-3xl font-bold tracking-tight">Organizations</h1>
                     <p className="text-muted-foreground">
                         Manage your partner organizations and their performance
                     </p>
                 </div>
-                <Button asChild>
+                <Button asChild className="self-start sm:self-auto">
                     <Link href="/manage/organizations/create-organization">
                         <Plus className="mr-2 h-4 w-4" />
                         Create Organization

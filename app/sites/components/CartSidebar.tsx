@@ -1,8 +1,8 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useCart } from "../hooks/useCart";
-import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
@@ -16,13 +16,26 @@ interface CartSidebarProps {
   config?: Partial<OnlineOrderingConfig>;
   storeConfigId?: string;
   slug: string;
-  taxRate?: number; // decimal (e.g. 0.08875 for 8.875%) — fetched server-side
+  taxRate?: number; // decimal (e.g. 0.08875 for 8.875%)
   allItems?: StorefrontItem[];
+}
+
+function useIsDesktop() {
+  const [isDesktop, setIsDesktop] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 1024px)");
+    setIsDesktop(mq.matches);
+    const handler = (e: MediaQueryListEvent) => setIsDesktop(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
+  return isDesktop;
 }
 
 export function CartSidebar({ config, storeConfigId, slug, taxRate = 0, allItems }: CartSidebarProps) {
   const router = useRouter();
   const storePath = useStorefrontPath(slug);
+  const isDesktop = useIsDesktop();
   const {
     items,
     isOpen,
@@ -50,351 +63,353 @@ export function CartSidebar({ config, storeConfigId, slug, taxRate = 0, allItems
     router.push(storePath("/checkout"));
   };
 
+  // Desktop sidebar styles (right panel, full height, rounded left corners)
+  const desktopContentStyle: React.CSSProperties = {
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: "auto",
+    width: "400px",
+    maxWidth: "40vw",
+    maxHeight: "100vh",
+    backgroundColor: "var(--bg)",
+    borderRadius: "16px 0 0 16px",
+    fontFamily: "var(--font)",
+    boxShadow: "-8px 0 40px rgba(0,0,0,0.15)",
+  };
+
+  // Mobile bottom sheet styles
+  const mobileContentStyle: React.CSSProperties = {
+    bottom: 0,
+    left: 0,
+    right: 0,
+    top: "auto",
+    width: "auto",
+    maxWidth: "none",
+    maxHeight: "85vh",
+    backgroundColor: "var(--bg)",
+    borderRadius: "20px 20px 0 0",
+    fontFamily: "var(--font)",
+    boxShadow: "0 -8px 40px rgba(0,0,0,0.15)",
+  };
+
+  const contentStyle = isDesktop ? desktopContentStyle : mobileContentStyle;
+
+  // Transition classes differ by presentation
+  const contentTransition = isDesktop
+    ? "fixed z-[70] flex flex-col transition-transform duration-300 ease-out data-[state=open]:translate-x-0 data-[state=closed]:translate-x-full"
+    : "fixed z-[70] flex flex-col transition-transform duration-300 ease-out data-[state=open]:translate-y-0 data-[state=closed]:translate-y-full";
+
   return (
     <SheetPrimitive.Root open={isOpen} onOpenChange={setOpen}>
       <SheetPrimitive.Portal>
-        {/* Backdrop */}
+        {/* Backdrop — dimmed on mobile, subtle on desktop */}
         <SheetPrimitive.Overlay
           className="fixed inset-0 z-[60] transition-opacity duration-200 data-[state=open]:opacity-100 data-[state=closed]:opacity-0"
-          style={{ backgroundColor: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }}
+          style={{
+            backgroundColor: isDesktop ? "rgba(0,0,0,0.2)" : "rgba(0,0,0,0.5)",
+            backdropFilter: isDesktop ? "none" : "blur(4px)",
+          }}
         />
 
-        {/* Bottom Sheet */}
         <SheetPrimitive.Content
           aria-label="Your cart"
-          className="fixed bottom-0 left-0 right-0 z-[70] flex flex-col transition-transform duration-300 ease-out data-[state=open]:translate-y-0 data-[state=closed]:translate-y-full"
-          style={{
-            maxHeight: "85vh",
-            backgroundColor: "var(--bg)",
-            borderRadius: "20px 20px 0 0",
-            fontFamily: "var(--font)",
-            boxShadow: "0 -8px 40px rgba(0,0,0,0.15)",
-          }}
+          className={contentTransition}
+          style={contentStyle}
         >
-            {/* Drag Handle */}
+          {/* Drag handle — mobile only */}
+          {!isDesktop && (
             <div className="flex justify-center pt-3 pb-1 shrink-0">
-              <div
-                className="w-10 h-1 rounded-full"
-                style={{ backgroundColor: "var(--border)" }}
-              />
+              <div className="w-10 h-1 rounded-full" style={{ backgroundColor: "var(--border)" }} />
             </div>
+          )}
 
-            {/* Header */}
-            <div
-              className="px-6 py-3 flex items-center justify-between shrink-0"
-              style={{ borderBottom: "1px solid var(--border)" }}
+          {/* Header */}
+          <div
+            className="px-6 py-3 flex items-center justify-between shrink-0"
+            style={{ borderBottom: "1px solid var(--border)" }}
+          >
+            <SheetPrimitive.Title
+              className="text-xl font-bold"
+              style={{ color: "var(--text)", fontFamily: "var(--font-display)" }}
             >
-              <SheetPrimitive.Title
-                className="text-xl font-bold"
-                style={{
-                  color: "var(--text)",
-                  fontFamily: "var(--font-display)",
-                }}
-              >
-                Your Order
-              </SheetPrimitive.Title>
-              <button
-                onClick={() => setOpen(false)}
-                className="p-2 rounded-xl transition-colors"
-                style={{
-                  backgroundColor: "var(--card)",
-                  border: "1px solid var(--border)",
-                  color: "var(--text)",
-                }}
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
+              Your Order
+            </SheetPrimitive.Title>
+            <button
+              onClick={() => setOpen(false)}
+              className="p-2 rounded-xl transition-colors"
+              style={{
+                backgroundColor: "var(--card)",
+                border: "1px solid var(--border)",
+                color: "var(--text)",
+              }}
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
 
-            {/* Cart Items */}
-            <div className="flex-1 overflow-y-auto">
-              {items.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-[250px] text-center px-6">
-                  <div
-                    className="w-16 h-16 rounded-full flex items-center justify-center mb-4"
-                    style={{ backgroundColor: "var(--card)" }}
-                  >
-                    <ShoppingBag
-                      className="h-8 w-8"
-                      style={{ color: "var(--text-secondary)" }}
-                    />
-                  </div>
-                  <p className="font-medium mb-1" style={{ color: "var(--text)" }}>
-                    Your cart is empty
-                  </p>
-                  <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
-                    Add items to get started
-                  </p>
+          {/* Cart Items */}
+          <div className="flex-1 overflow-y-auto">
+            {items.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-[250px] text-center px-6">
+                <div
+                  className="w-16 h-16 rounded-full flex items-center justify-center mb-4"
+                  style={{ backgroundColor: "var(--card)" }}
+                >
+                  <ShoppingBag className="h-8 w-8" style={{ color: "var(--text-secondary)" }} />
                 </div>
-              ) : (
-                <div>
-                  {items.map((item) => (
-                    <div
-                      key={item.cartItemId}
-                      className="px-6 py-4 transition-colors"
-                      style={{ borderBottom: "1px solid var(--border)" }}
-                    >
-                      <div className="flex gap-3">
-                        {item.image && (
-                          <div
-                            className="w-14 h-14 overflow-hidden shrink-0"
-                            style={{
-                              borderRadius: "var(--radius)",
-                              backgroundColor: "var(--card)",
-                            }}
-                          >
-                            <img
-                              src={item.image}
-                              alt={item.name}
-                              className="w-full h-full object-cover"
-                            />
-                          </div>
-                        )}
+                <p className="font-medium mb-1" style={{ color: "var(--text)" }}>
+                  Your cart is empty
+                </p>
+                <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
+                  Add items to get started
+                </p>
+              </div>
+            ) : (
+              <div>
+                {items.map((item) => (
+                  <div
+                    key={item.cartItemId}
+                    className="px-6 py-4 transition-colors"
+                    style={{ borderBottom: "1px solid var(--border)" }}
+                  >
+                    <div className="flex gap-3">
+                      {item.image && (
+                        <div
+                          className="w-14 h-14 overflow-hidden shrink-0"
+                          style={{
+                            borderRadius: "var(--radius)",
+                            backgroundColor: "var(--card)",
+                          }}
+                        >
+                          <img
+                            src={item.image}
+                            alt={item.name}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                      )}
 
-                        <div className="flex-1 min-w-0">
-                          <div className="flex justify-between items-start gap-2">
-                            <div className="min-w-0">
-                              <h4
-                                className="font-semibold line-clamp-1 text-[15px]"
-                                style={{ color: "var(--text)" }}
-                              >
-                                {item.name}
-                              </h4>
-                              {item.selectedModifiers &&
-                                item.selectedModifiers.length > 0 && (
-                                  <p
-                                    className="text-xs mt-0.5 line-clamp-1"
-                                    style={{ color: "var(--text-secondary)" }}
-                                  >
-                                    {item.selectedModifiers
-                                      .map((m) => m.name)
-                                      .join(", ")}
-                                  </p>
-                                )}
-                              {item.notes && (
-                                <p
-                                  className="text-xs italic mt-0.5 line-clamp-1"
-                                  style={{ color: "var(--text-secondary)", opacity: 0.7 }}
-                                >
-                                  &ldquo;{item.notes}&rdquo;
-                                </p>
-                              )}
-                            </div>
-                            <span
-                              className="font-bold shrink-0 text-[15px]"
+                      <div className="flex-1 min-w-0">
+                        <div className="flex justify-between items-start gap-2">
+                          <div className="min-w-0">
+                            <h4
+                              className="font-semibold line-clamp-1 text-[15px]"
                               style={{ color: "var(--text)" }}
                             >
-                              ${(item.totalPrice * item.quantity).toFixed(2)}
-                            </span>
+                              {item.name}
+                            </h4>
+                            {item.selectedModifiers && item.selectedModifiers.length > 0 && (
+                              <p
+                                className="text-xs mt-0.5 line-clamp-1"
+                                style={{ color: "var(--text-secondary)" }}
+                              >
+                                {item.selectedModifiers.map((m) => m.name).join(", ")}
+                              </p>
+                            )}
+                            {item.notes && (
+                              <p
+                                className="text-xs italic mt-0.5 line-clamp-1"
+                                style={{ color: "var(--text-secondary)", opacity: 0.7 }}
+                              >
+                                &ldquo;{item.notes}&rdquo;
+                              </p>
+                            )}
                           </div>
+                          <span
+                            className="font-bold shrink-0 text-[15px]"
+                            style={{ color: "var(--text)" }}
+                          >
+                            ${(item.totalPrice * item.quantity).toFixed(2)}
+                          </span>
+                        </div>
 
-                          <div className="flex items-center justify-between mt-3">
+                        <div className="flex items-center justify-between mt-3">
+                          <button
+                            onClick={() => removeItem(item.cartItemId)}
+                            className="p-1 transition-colors"
+                            style={{ color: "var(--text-secondary)" }}
+                            aria-label="Remove item"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                          <div
+                            className="flex items-center h-8"
+                            style={{
+                              border: "1px solid var(--border)",
+                              borderRadius: "var(--radius)",
+                            }}
+                          >
                             <button
-                              onClick={() => removeItem(item.cartItemId)}
-                              className="p-1 transition-colors"
-                              style={{ color: "var(--text-secondary)" }}
-                              aria-label="Remove item"
+                              className="w-8 h-full flex items-center justify-center transition-colors"
+                              style={{ color: "var(--text)" }}
+                              onClick={() => updateQuantity(item.cartItemId, item.quantity - 1)}
                             >
-                              <X className="h-4 w-4" />
+                              <Minus className="h-3 w-3" />
                             </button>
-                            <div
-                              className="flex items-center h-8"
-                              style={{
-                                border: "1px solid var(--border)",
-                                borderRadius: "var(--radius)",
-                              }}
+                            <span
+                              className="w-8 text-center text-sm font-bold"
+                              style={{ color: "var(--text)" }}
                             >
-                              <button
-                                className="w-8 h-full flex items-center justify-center transition-colors"
-                                style={{ color: "var(--text)" }}
-                                onClick={() =>
-                                  updateQuantity(
-                                    item.cartItemId,
-                                    item.quantity - 1
-                                  )
-                                }
-                              >
-                                <Minus className="h-3 w-3" />
-                              </button>
-                              <span
-                                className="w-8 text-center text-sm font-bold"
-                                style={{ color: "var(--text)" }}
-                              >
-                                {item.quantity}
-                              </span>
-                              <button
-                                className="w-8 h-full flex items-center justify-center transition-colors"
-                                style={{
-                                  backgroundColor: "var(--primary)",
-                                  color: "#FFFFFF",
-                                  borderRadius: `0 calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0`,
-                                }}
-                                onClick={() =>
-                                  updateQuantity(
-                                    item.cartItemId,
-                                    item.quantity + 1
-                                  )
-                                }
-                              >
-                                <Plus className="h-3 w-3" />
-                              </button>
-                            </div>
+                              {item.quantity}
+                            </span>
+                            <button
+                              className="w-8 h-full flex items-center justify-center transition-colors"
+                              style={{
+                                backgroundColor: "var(--primary)",
+                                color: "#FFFFFF",
+                                borderRadius: `0 calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0`,
+                              }}
+                              onClick={() => updateQuantity(item.cartItemId, item.quantity + 1)}
+                            >
+                              <Plus className="h-3 w-3" />
+                            </button>
                           </div>
                         </div>
                       </div>
                     </div>
-                  ))}
+                  </div>
+                ))}
 
-                  {/* Customers also ordered */}
-                  {upsellItems.length > 0 && (
+                {/* Customers also ordered */}
+                {upsellItems.length > 0 && (
+                  <div className="px-6 py-4" style={{ borderTop: "1px solid var(--border)" }}>
+                    <p className="mb-3 text-sm font-semibold" style={{ color: "var(--text)" }}>
+                      Customers also ordered
+                    </p>
                     <div
-                      className="px-6 py-4"
-                      style={{ borderTop: "1px solid var(--border)" }}
+                      className="flex gap-3 overflow-x-auto pb-1"
+                      style={{ scrollbarWidth: "none" } as React.CSSProperties}
                     >
-                      <p
-                        className="mb-3 text-sm font-semibold"
-                        style={{ color: "var(--text)" }}
-                      >
-                        Customers also ordered
-                      </p>
-                      <div
-                        className="flex gap-3 overflow-x-auto pb-1"
-                        style={{ scrollbarWidth: "none" } as React.CSSProperties}
-                      >
-                        {upsellItems.map((upsellItem) => (
-                          <button
-                            key={upsellItem.id}
-                            type="button"
-                            onClick={() => {
-                              requestOpenModal(upsellItem);
-                              setOpen(false);
-                            }}
-                            className="shrink-0 w-24 rounded-xl overflow-hidden text-left transition-all hover:scale-[1.02] active:scale-[0.98] touch-manipulation"
+                      {upsellItems.map((upsellItem) => (
+                        <button
+                          key={upsellItem.id}
+                          type="button"
+                          onClick={() => {
+                            requestOpenModal(upsellItem);
+                            setOpen(false);
+                          }}
+                          className="shrink-0 w-24 rounded-xl overflow-hidden text-left transition-all hover:scale-[1.02] active:scale-[0.98] touch-manipulation"
+                          style={{
+                            backgroundColor: "var(--card)",
+                            border: "1px solid var(--border)",
+                          }}
+                        >
+                          <div
+                            className="h-16 w-full overflow-hidden flex items-center justify-center"
                             style={{
-                              backgroundColor: "var(--card)",
-                              border: "1px solid var(--border)",
+                              backgroundColor: "color-mix(in srgb, var(--primary) 10%, var(--bg))",
                             }}
                           >
-                            <div
-                              className="h-16 w-full overflow-hidden flex items-center justify-center"
-                              style={{
-                                backgroundColor: "color-mix(in srgb, var(--primary) 10%, var(--bg))",
-                              }}
+                            {upsellItem.image ? (
+                              <img
+                                src={upsellItem.image}
+                                alt=""
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <span
+                                className="text-xl font-bold opacity-40"
+                                style={{ color: "var(--primary)" }}
+                                aria-hidden
+                              >
+                                {upsellItem.name.charAt(0).toUpperCase()}
+                              </span>
+                            )}
+                          </div>
+                          <div className="p-2 space-y-0.5">
+                            <p
+                              className="text-xs font-semibold leading-tight line-clamp-2"
+                              style={{ color: "var(--text)" }}
                             >
-                              {upsellItem.image ? (
-                                <img
-                                  src={upsellItem.image}
-                                  alt=""
-                                  className="w-full h-full object-cover"
-                                />
-                              ) : (
-                                <span
-                                  className="text-xl font-bold opacity-40"
-                                  style={{ color: "var(--primary)" }}
-                                  aria-hidden
-                                >
-                                  {upsellItem.name.charAt(0).toUpperCase()}
-                                </span>
-                              )}
-                            </div>
-                            <div className="p-2 space-y-0.5">
-                              <p
-                                className="text-xs font-semibold leading-tight line-clamp-2"
-                                style={{ color: "var(--text)" }}
-                              >
-                                {upsellItem.name}
-                              </p>
-                              <p
-                                className="text-xs font-medium"
-                                style={{ color: "var(--text)" }}
-                              >
-                                ${upsellItem.price.toFixed(2)}
-                              </p>
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Footer */}
-            {items.length > 0 && (
-              <div className="shrink-0" style={{ borderTop: "1px solid var(--border)" }}>
-                {/* Go Green */}
-                <div
-                  className="px-6 py-3 flex items-center justify-between"
-                  style={{ borderBottom: "1px solid var(--border)" }}
-                >
-                  <div className="flex items-center gap-2">
-                    <Leaf
-                      className={cn("h-4 w-4", goGreen ? "text-green-600" : "")}
-                      style={{ color: goGreen ? undefined : "var(--text-secondary)" }}
-                    />
-                    <div>
-                      <Label
-                        htmlFor="go-green"
-                        className="text-sm font-medium cursor-pointer"
-                        style={{ color: "var(--text)" }}
-                      >
-                        Go Green
-                      </Label>
-                      <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
-                        Skip the plastic cutlery
-                      </p>
+                              {upsellItem.name}
+                            </p>
+                            <p className="text-xs font-medium" style={{ color: "var(--text)" }}>
+                              ${upsellItem.price.toFixed(2)}
+                            </p>
+                          </div>
+                        </button>
+                      ))}
                     </div>
                   </div>
-                  <Switch
-                    id="go-green"
-                    checked={goGreen}
-                    onCheckedChange={setGoGreen}
-                  />
-                </div>
-
-                {/* Price Summary */}
-                <div className="px-6 py-3 space-y-1.5 text-sm">
-                  <div className="flex justify-between" style={{ color: "var(--text-secondary)" }}>
-                    <span>Subtotal</span>
-                    <span>${subtotal.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between" style={{ color: "var(--text-secondary)" }}>
-                    <span>Tax{taxRate > 0 ? ` (${(taxRate * 100).toFixed(taxRate * 100 % 1 === 0 ? 0 : 2)}%)` : ""}</span>
-                    <span>${tax.toFixed(2)}</span>
-                  </div>
-                  <div
-                    className="flex justify-between text-lg font-bold pt-3 mt-2"
-                    style={{
-                      color: "var(--text)",
-                      borderTop: "2px solid var(--border)",
-                    }}
-                  >
-                    <span>Total</span>
-                    <span>${total.toFixed(2)}</span>
-                  </div>
-                </div>
-
-                {/* Checkout Button */}
-                <div className="px-6 pb-6 pt-2">
-                  <button
-                    className="w-full py-4 font-bold text-base transition-all"
-                    style={{
-                      backgroundColor: "var(--primary)",
-                      color: "#FFFFFF",
-                      borderRadius: "var(--radius)",
-                      border: "none",
-                      boxShadow: "0 4px 16px color-mix(in srgb, var(--primary) 40%, transparent)",
-                      fontFamily: "var(--font)",
-                    }}
-                    disabled={items.length === 0}
-                    onClick={handleCheckout}
-                  >
-                    Checkout · ${total.toFixed(2)}
-                  </button>
-                </div>
+                )}
               </div>
             )}
+          </div>
+
+          {/* Footer */}
+          {items.length > 0 && (
+            <div className="shrink-0" style={{ borderTop: "1px solid var(--border)" }}>
+              {/* Go Green */}
+              <div
+                className="px-6 py-3 flex items-center justify-between"
+                style={{ borderBottom: "1px solid var(--border)" }}
+              >
+                <div className="flex items-center gap-2">
+                  <Leaf
+                    className={cn("h-4 w-4", goGreen ? "text-green-600" : "")}
+                    style={{ color: goGreen ? undefined : "var(--text-secondary)" }}
+                  />
+                  <div>
+                    <Label
+                      htmlFor="go-green"
+                      className="text-sm font-medium cursor-pointer"
+                      style={{ color: "var(--text)" }}
+                    >
+                      Go Green
+                    </Label>
+                    <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
+                      Skip the plastic cutlery
+                    </p>
+                  </div>
+                </div>
+                <Switch id="go-green" checked={goGreen} onCheckedChange={setGoGreen} />
+              </div>
+
+              {/* Price Summary */}
+              <div className="px-6 py-3 space-y-1.5 text-sm">
+                <div className="flex justify-between" style={{ color: "var(--text-secondary)" }}>
+                  <span>Subtotal</span>
+                  <span>${subtotal.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between" style={{ color: "var(--text-secondary)" }}>
+                  <span>
+                    Tax
+                    {taxRate > 0
+                      ? ` (${(taxRate * 100).toFixed(taxRate * 100 % 1 === 0 ? 0 : 2)}%)`
+                      : ""}
+                  </span>
+                  <span>${tax.toFixed(2)}</span>
+                </div>
+                <div
+                  className="flex justify-between text-lg font-bold pt-3 mt-2"
+                  style={{ color: "var(--text)", borderTop: "2px solid var(--border)" }}
+                >
+                  <span>Total</span>
+                  <span>${total.toFixed(2)}</span>
+                </div>
+              </div>
+
+              {/* Checkout Button */}
+              <div className="px-6 pb-6 pt-2">
+                <button
+                  className="w-full py-4 font-bold text-base transition-all"
+                  style={{
+                    backgroundColor: "var(--primary)",
+                    color: "#FFFFFF",
+                    borderRadius: "var(--radius)",
+                    border: "none",
+                    boxShadow: "0 4px 16px color-mix(in srgb, var(--primary) 40%, transparent)",
+                    fontFamily: "var(--font)",
+                  }}
+                  disabled={items.length === 0}
+                  onClick={handleCheckout}
+                >
+                  Checkout · ${total.toFixed(2)}
+                </button>
+              </div>
+            </div>
+          )}
         </SheetPrimitive.Content>
       </SheetPrimitive.Portal>
     </SheetPrimitive.Root>

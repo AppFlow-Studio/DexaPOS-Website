@@ -1,12 +1,14 @@
-import type { ReceiptTemplateFormData } from "../../types";
-import { ReceiptPaper, DottedLine, DoubleLine } from "./ReceiptPaper";
+import type { ReceiptTemplateFormData, LocationIdentity } from "../../types";
+import { ReceiptPaper, ReceiptIdentityBlock, DottedLine, DoubleLine } from "./ReceiptPaper";
 
 interface EndOfDayReportPreviewProps {
   formState: ReceiptTemplateFormData;
+  locationIdentity?: LocationIdentity;
 }
 
 export function EndOfDayReportPreview({
   formState,
+  locationIdentity,
 }: EndOfDayReportPreviewProps) {
   return (
     <ReceiptPaper>
@@ -16,7 +18,7 @@ export function EndOfDayReportPreview({
         </div>
       )}
 
-      <div className="text-center font-bold text-sm">Sample Restaurant</div>
+      <ReceiptIdentityBlock locationIdentity={locationIdentity} />
       <div className="text-center font-bold text-lg mt-1">
         END OF DAY REPORT
       </div>

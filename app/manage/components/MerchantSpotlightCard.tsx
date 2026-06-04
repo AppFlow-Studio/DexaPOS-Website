@@ -48,9 +48,9 @@ export function MerchantSpotlightCard({ merchant }: { merchant: MerchantSpotligh
   return (
     <Link
       href={`/manage/merchants/${merchant.id}`}
-      className="group block focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-xl"
+      className="group block min-w-0 overflow-hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-xl"
     >
-      <Card className="p-4 h-full transition-all duration-200 border-blue-100/50 hover:border-blue-300 hover:shadow-md group-focus-visible:border-blue-300">
+      <Card className="p-4 h-full min-w-0 overflow-hidden transition-all duration-200 border-blue-100/50 hover:border-blue-300 hover:shadow-md group-focus-visible:border-blue-300">
         <div className="flex items-start gap-3 mb-3">
           {merchant.logo_url ? (
             // eslint-disable-next-line @next/next/no-img-element

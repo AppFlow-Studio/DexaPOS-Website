@@ -41,6 +41,7 @@ interface HeroLayoutProps {
     business_hours: any;
     latitude?: number | null;
     longitude?: number | null;
+    timezone?: string | null;
   };
   menus: StorefrontMenu[];
   slug: string;
@@ -91,8 +92,9 @@ export function HeroLayout({
   const { setOpen: setCartOpen, pendingModalItem, clearPendingModalItem } = useCart();
 
   const rawBusinessHours = site?.online_ordering_config?.operatingHours || (location as any).business_hours;
-  const todayHours = useMemo(() => getTodayHoursString(rawBusinessHours), [rawBusinessHours]);
-  const isStoreOpen = useMemo(() => isStoreOpenNow(rawBusinessHours), [rawBusinessHours]);
+  const locationTimezone = (location as any).timezone ?? null;
+  const todayHours = useMemo(() => getTodayHoursString(rawBusinessHours, locationTimezone), [rawBusinessHours, locationTimezone]);
+  const isStoreOpen = useMemo(() => isStoreOpenNow(rawBusinessHours, locationTimezone), [rawBusinessHours, locationTimezone]);
 
   useEffect(() => {
     const onScroll = () => setShowScrollTop(window.scrollY > 400);

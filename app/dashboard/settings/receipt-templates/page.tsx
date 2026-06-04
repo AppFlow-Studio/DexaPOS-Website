@@ -339,7 +339,11 @@ export default function ReceiptTemplatesPage() {
               <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
                 Preview
               </h3>
-              <ReceiptPreview templateType={activeTab} formState={formState} />
+              <ReceiptPreview
+                templateType={activeTab}
+                formState={formState}
+                locationIdentity={selectedLocation ?? undefined}
+              />
             </div>
           </div>
 

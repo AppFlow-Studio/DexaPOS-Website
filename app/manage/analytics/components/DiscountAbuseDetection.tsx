@@ -130,6 +130,7 @@ export function DiscountAbuseDetection() {
             <CardDescription className="text-xs">Highest discount issuers across the platform</CardDescription>
           </CardHeader>
           <CardContent className="p-0">
+            <div className="overflow-x-auto">
             <Table>
               <TableHeader>
               <TableRow>
@@ -163,6 +164,7 @@ export function DiscountAbuseDetection() {
                 )}
               </TableBody>
             </Table>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -223,6 +225,7 @@ export function DiscountAbuseDetection() {
             <CardDescription className="text-xs">Discount rate exceeds 10% of gross revenue</CardDescription>
           </CardHeader>
           <CardContent className="p-0">
+            <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -243,6 +246,7 @@ export function DiscountAbuseDetection() {
                 ))}
               </TableBody>
             </Table>
+            </div>
           </CardContent>
         </Card>
       )}

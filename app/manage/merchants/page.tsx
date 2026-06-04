@@ -90,9 +90,9 @@ export default function MerchantsPage() {
     }
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 min-w-0 overflow-x-hidden">
             {/* Header */}
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                     <h1 className="text-3xl font-bold tracking-tight">Merchants</h1>
                     <p className="text-muted-foreground">
@@ -100,7 +100,7 @@ export default function MerchantsPage() {
                     </p>
                 </div>
                 <PermissionGate permission="hq.merchant.create">
-                    <Link href="/manage/merchants/new">
+                    <Link href="/manage/merchants/new" className="self-start sm:self-auto">
                         <Button>Create Merchant</Button>
                     </Link>
                 </PermissionGate>
@@ -410,6 +410,7 @@ function MerchantListView({
     }
 
     return (
+        <div className="overflow-x-auto">
         <Table>
             <TableHeader>
                 <TableRow>
@@ -491,5 +492,6 @@ function MerchantListView({
                 })}
             </TableBody>
         </Table>
+        </div>
     )
 }

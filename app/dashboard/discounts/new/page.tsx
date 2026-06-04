@@ -53,7 +53,7 @@ export default function NewDiscountPage() {
     const loading = categoriesLoading || menuItemsLoading;
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 w-full min-w-0">
             <div className="flex items-center gap-3">
                 <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => router.back()}>
                     <ArrowLeft className="h-4 w-4" />

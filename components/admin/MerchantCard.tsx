@@ -41,10 +41,10 @@ export function MerchantCard({ merchant, onClick }: MerchantCardProps) {
 
   return (
     <Card
-      className="cursor-pointer hover:shadow-md transition-shadow flex flex-col"
+      className="cursor-pointer hover:shadow-md transition-shadow flex flex-col min-w-0 overflow-hidden"
       onClick={onClick}
     >
-      <CardContent className="p-5 flex flex-col flex-1">
+      <CardContent className="p-5 flex flex-col flex-1 min-w-0">
         {/* Header */}
         <div className="flex items-start justify-between gap-2 mb-4">
           <div className="flex items-center gap-3 min-w-0">
@@ -76,14 +76,14 @@ export function MerchantCard({ merchant, onClick }: MerchantCardProps) {
         </div>
 
         {/* Footer */}
-        <div className="mt-4 pt-3 border-t border-border flex items-center justify-between">
-          <p className="text-xs text-muted-foreground">
+        <div className="mt-4 pt-3 border-t border-border flex flex-wrap items-center justify-between gap-2">
+          <p className="text-xs text-muted-foreground truncate">
             {merchant.last_order_at
               ? `Last order ${formatDistanceToNow(new Date(merchant.last_order_at), { addSuffix: true })}`
               : 'No orders yet'}
           </p>
           {(merchant.notes_count || 0) > 0 && (
-            <div className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+            <div className="inline-flex items-center gap-1 text-xs text-muted-foreground shrink-0">
               <MessageSquare className="h-3.5 w-3.5" />
               {merchant.notes_count}
             </div>

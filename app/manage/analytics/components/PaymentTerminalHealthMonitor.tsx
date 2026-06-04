@@ -113,12 +113,12 @@ function StatCard({
     <Card className={bg}>
       <CardContent className="pt-5 pb-4">
         <div className="flex items-center gap-3">
-          <div className={`p-2 rounded-lg ${bg ? 'bg-white/60' : 'bg-muted'}`}>
+          <div className={`p-2 rounded-lg shrink-0 ${bg ? 'bg-white/60' : 'bg-muted'}`}>
             <Icon className={`h-4 w-4 ${colorClass}`} />
           </div>
-          <div>
+          <div className="min-w-0">
             <p className={`text-xl font-bold ${colorClass}`}>{value}</p>
-            <p className="text-xs text-muted-foreground">{label}</p>
+            <p className="text-xs text-muted-foreground leading-tight">{label}</p>
           </div>
         </div>
       </CardContent>
@@ -155,7 +155,7 @@ export function PaymentTerminalHealthMonitor() {
   if (isLoading) {
     return (
       <div className="space-y-4">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[...Array(4)].map((_, i) => (
             <Card key={i}><CardContent className="pt-5"><Skeleton className="h-14 w-full" /></CardContent></Card>
           ))}
@@ -178,7 +178,7 @@ export function PaymentTerminalHealthMonitor() {
     <div className="space-y-6">
 
       {/* ── Summary cards ──────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-3">
         <StatCard icon={CreditCard}   label="Total Terminals"    value={summary.total} />
         <StatCard icon={Wifi}         label="Connected"          value={summary.connected}    colorClass="text-green-600"  bg="bg-green-50/50 dark:bg-green-950/20" />
         <StatCard icon={WifiOff}      label="Disconnected"       value={summary.disconnected} colorClass="text-red-600"    bg={summary.disconnected > 0 ? 'bg-red-50/50 dark:bg-red-950/20' : ''} />
@@ -254,17 +254,17 @@ export function PaymentTerminalHealthMonitor() {
       {/* ── Terminal grid table ─────────────────────────────────────────── */}
       <Card>
         <CardHeader className="pb-3">
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <div>
+          <div className="flex flex-wrap items-start gap-3 justify-between">
+            <div className="min-w-0">
               <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <Terminal className="h-4 w-4" />
+                <Terminal className="h-4 w-4 shrink-0" />
                 All Payment Terminals ({filteredTerminals.length} of {summary.total})
               </CardTitle>
               <CardDescription className="text-xs mt-0.5">
                 Grid showing TPN, connection status, last seen, settlement, and auth key health
               </CardDescription>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 shrink-0 flex-wrap">
               <div className="relative">
                 <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-muted-foreground" />
                 <Input
@@ -338,6 +338,7 @@ export function PaymentTerminalHealthMonitor() {
             </CardDescription>
           </CardHeader>
           <CardContent className="p-0">
+            <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -370,6 +371,7 @@ export function PaymentTerminalHealthMonitor() {
                 ))}
               </TableBody>
             </Table>
+            </div>
           </CardContent>
         </Card>
       )}

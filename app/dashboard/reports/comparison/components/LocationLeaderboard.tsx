@@ -79,8 +79,8 @@ export function LocationLeaderboard({
           Location Rankings by Gross Sales
         </CardTitle>
       </CardHeader>
-      <CardContent className="p-0">
-        <Table>
+      <CardContent className="p-0 overflow-x-auto">
+        <Table className="min-w-[500px]">
           <TableHeader>
             <TableRow className="hover:bg-transparent border-white/5">
               <TableHead className="w-[80px] pl-6 text-xs font-bold tracking-wider uppercase text-muted-foreground">

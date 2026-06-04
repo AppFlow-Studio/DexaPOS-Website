@@ -6,7 +6,9 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogTitle,
 } from "@/components/ui/dialog";
+import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { Minus, Plus, AlertCircle, Check, X } from "lucide-react";
 import {
   StorefrontItem,
@@ -292,7 +294,7 @@ export function ItemDetailsModal({
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent
         showCloseButton={false}
-        className="flex p-0 gap-0 overflow-hidden border-0 shadow-2xl"
+        className="flex p-0 gap-0 overflow-hidden border-0 shadow-2xl max-sm:inset-auto max-sm:top-1/2 max-sm:left-1/2 max-sm:-translate-x-1/2 max-sm:-translate-y-1/2 max-sm:h-auto max-sm:max-h-[92vh] max-sm:rounded-2xl max-sm:w-[calc(100vw-2rem)]"
         style={{
           maxWidth: "min(680px, calc(100vw - 2rem))",
           maxHeight: "92vh",
@@ -300,6 +302,9 @@ export function ItemDetailsModal({
           backgroundColor: "#ffffff",
         }}
       >
+        <VisuallyHidden>
+          <DialogTitle>{item.name}</DialogTitle>
+        </VisuallyHidden>
         <DialogDescription className="sr-only">
           {item.description ? `${item.name}. ${item.description}` : `${item.name}. Customize and add to your order.`}
         </DialogDescription>

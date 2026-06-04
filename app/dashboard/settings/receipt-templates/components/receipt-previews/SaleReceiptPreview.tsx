@@ -1,12 +1,13 @@
-import type { ReceiptTemplateFormData } from "../../types";
-import { ReceiptPaper, DottedLine, DoubleLine } from "./ReceiptPaper";
+import type { ReceiptTemplateFormData, LocationIdentity } from "../../types";
+import { ReceiptPaper, ReceiptIdentityBlock, DottedLine, DoubleLine } from "./ReceiptPaper";
 import { Barcode, QrCode } from "lucide-react";
 
 interface SaleReceiptPreviewProps {
   formState: ReceiptTemplateFormData;
+  locationIdentity?: LocationIdentity;
 }
 
-export function SaleReceiptPreview({ formState }: SaleReceiptPreviewProps) {
+export function SaleReceiptPreview({ formState, locationIdentity }: SaleReceiptPreviewProps) {
   return (
     <ReceiptPaper>
       {/* Logo */}
@@ -17,13 +18,7 @@ export function SaleReceiptPreview({ formState }: SaleReceiptPreviewProps) {
       )}
 
       {/* Header */}
-      <div className="text-center font-bold text-sm">Sample Restaurant</div>
-      <div className="text-center text-[10px] text-zinc-500">
-        123 Main St, City, ST 12345
-      </div>
-      <div className="text-center text-[10px] text-zinc-500">
-        (555) 123-4567
-      </div>
+      <ReceiptIdentityBlock locationIdentity={locationIdentity} />
       {formState.header_text && (
         <div className="text-center text-[10px] mt-1 whitespace-pre-wrap">
           {formState.header_text}

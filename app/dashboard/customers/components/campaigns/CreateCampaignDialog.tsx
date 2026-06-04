@@ -125,7 +125,7 @@ export function CreateCampaignDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto p-0 gap-0">
         {/* Header */}
-        <div className="px-7 pt-7 pb-5 border-b border-border/60">
+        <div className="px-4 sm:px-7 pt-6 sm:pt-7 pb-5 border-b border-border/60">
           <DialogHeader className="space-y-1">
             <DialogTitle className="text-xl font-bold">Create Campaign</DialogTitle>
             <DialogDescription className="text-sm text-muted-foreground">
@@ -134,7 +134,7 @@ export function CreateCampaignDialog({
           </DialogHeader>
         </div>
 
-        <div className="px-7 py-6 space-y-7">
+        <div className="px-4 sm:px-7 py-6 space-y-7">
 
           {/* Campaign Name */}
           <div className="space-y-1.5">
@@ -250,7 +250,7 @@ export function CreateCampaignDialog({
           {/* Audience */}
           <div className="space-y-3 border-t border-border/50 pt-6">
             <p className="text-sm font-semibold">Audience</p>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <button
                 type="button"
                 onClick={() => setAudienceType("all")}
@@ -268,8 +268,8 @@ export function CreateCampaignDialog({
                   <Users className="h-4 w-4" />
                 </div>
                 <div>
-                  <p className={cn("text-sm font-semibold", audienceType === "all" ? "text-foreground" : "text-muted-foreground")}>All Customers</p>
-                  <p className="text-xs text-muted-foreground">Everyone opted-in</p>
+                  <p className={cn("text-sm font-semibold leading-tight", audienceType === "all" ? "text-foreground" : "text-muted-foreground")}>All Customers</p>
+                  <p className="text-xs text-muted-foreground leading-tight">Everyone opted-in</p>
                 </div>
                 {audienceType === "all" && <CheckCircle2 className="h-4 w-4 text-primary ml-auto" />}
               </button>
@@ -291,8 +291,8 @@ export function CreateCampaignDialog({
                   <Tag className="h-4 w-4" />
                 </div>
                 <div>
-                  <p className={cn("text-sm font-semibold", audienceType === "tag" ? "text-foreground" : "text-muted-foreground")}>By Tag</p>
-                  <p className="text-xs text-muted-foreground">Target specific groups</p>
+                  <p className={cn("text-sm font-semibold leading-tight", audienceType === "tag" ? "text-foreground" : "text-muted-foreground")}>By Tag</p>
+                  <p className="text-xs text-muted-foreground leading-tight">Target specific groups</p>
                 </div>
                 {audienceType === "tag" && <CheckCircle2 className="h-4 w-4 text-primary ml-auto" />}
               </button>
@@ -331,7 +331,7 @@ export function CreateCampaignDialog({
           {/* Scheduling */}
           <div className="space-y-3 border-t border-border/50 pt-6">
             <p className="text-sm font-semibold">When to Send</p>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <button
                 type="button"
                 onClick={() => setScheduleType("now")}
@@ -349,8 +349,8 @@ export function CreateCampaignDialog({
                   <Send className="h-4 w-4" />
                 </div>
                 <div>
-                  <p className={cn("text-sm font-semibold", scheduleType === "now" ? "text-foreground" : "text-muted-foreground")}>Send Now</p>
-                  <p className="text-xs text-muted-foreground">Blast immediately</p>
+                  <p className={cn("text-sm font-semibold leading-tight", scheduleType === "now" ? "text-foreground" : "text-muted-foreground")}>Send Now</p>
+                  <p className="text-xs text-muted-foreground leading-tight">Blast immediately</p>
                 </div>
                 {scheduleType === "now" && <CheckCircle2 className="h-4 w-4 text-primary ml-auto" />}
               </button>
@@ -395,7 +395,7 @@ export function CreateCampaignDialog({
         </div>
 
         {/* Footer */}
-        <div className="px-7 py-5 border-t border-border/60 flex items-center justify-between gap-3 bg-muted/20">
+        <div className="px-4 sm:px-7 py-5 border-t border-border/60 flex items-center justify-between gap-3 bg-muted/20">
           <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={isLoading}>
             Cancel
           </Button>

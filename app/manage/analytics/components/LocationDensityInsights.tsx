@@ -256,7 +256,7 @@ export function LocationDensityInsights() {
   if (isLoading) {
     return (
       <div className="space-y-4">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-24" />)}
         </div>
         <Skeleton className="h-64 w-full" />
@@ -286,7 +286,7 @@ export function LocationDensityInsights() {
     <div className="space-y-6">
 
       {/* ── KPI Cards ────────────────────────────────────────────────────── */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Total Locations</CardTitle>
@@ -377,7 +377,7 @@ export function LocationDensityInsights() {
       <div className="grid gap-4 lg:grid-cols-3">
 
         {/* State table */}
-        <Card className="lg:col-span-2">
+        <Card className="lg:col-span-2 min-w-0 overflow-hidden">
           <CardHeader>
             <CardTitle>State Breakdown</CardTitle>
             <CardDescription>All represented states sorted by location count</CardDescription>
@@ -390,8 +390,8 @@ export function LocationDensityInsights() {
                     <TableHead>State</TableHead>
                     <TableHead className="text-right">Locations</TableHead>
                     <TableHead className="text-right">Merchants</TableHead>
-                    <TableHead className="text-right">30d GPV</TableHead>
-                    <TableHead>Top Cities</TableHead>
+                    <TableHead className="text-right whitespace-nowrap">30d GPV</TableHead>
+                    <TableHead className="hidden lg:table-cell">Top Cities</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -404,7 +404,7 @@ export function LocationDensityInsights() {
                       <TableCell className="text-right font-medium">{row.locationCount}</TableCell>
                       <TableCell className="text-right text-muted-foreground">{row.merchantCount}</TableCell>
                       <TableCell className="text-right text-sm">{fmtGPV(row.gpv30d)}</TableCell>
-                      <TableCell>
+                      <TableCell className="hidden lg:table-cell">
                         <div className="flex flex-wrap gap-1">
                           {row.topCities.slice(0, 2).map(city => (
                             <Badge key={city} variant="secondary" className="text-xs font-normal">{city}</Badge>
@@ -420,11 +420,11 @@ export function LocationDensityInsights() {
         </Card>
 
         {/* Coverage gaps */}
-        <Card>
+        <Card className="min-w-0 overflow-hidden">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+            <CardTitle className="flex items-center gap-2 flex-wrap">
               Coverage Gaps
-              <Badge variant={data.coverageGaps.length > 0 ? 'destructive' : 'default'} className="text-xs">
+              <Badge variant={data.coverageGaps.length > 0 ? 'destructive' : 'default'} className="text-xs shrink-0">
                 {data.coverageGaps.length} state{data.coverageGaps.length !== 1 ? 's' : ''}
               </Badge>
             </CardTitle>

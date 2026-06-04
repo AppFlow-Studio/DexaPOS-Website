@@ -133,15 +133,15 @@ export function PromotionCard({
         </div>
 
         {/* Right side: Toggle + Menu */}
-        <div className="flex items-center gap-3 ml-4">
-          <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 ml-2 shrink-0">
+          <div className="flex items-center gap-1.5">
             <Switch
               checked={promotion.is_active}
               onCheckedChange={(checked) => onToggle(promotion.id, checked)}
               disabled={isToggling}
               aria-label="Toggle promotion"
             />
-            <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">
+            <span className="text-xs font-medium text-muted-foreground whitespace-nowrap hidden sm:inline">
               {promotion.is_active ? 'Active' : 'Inactive'}
             </span>
           </div>

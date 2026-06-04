@@ -90,13 +90,13 @@ function SortableItemRow({ item, index }: SortableItemRowProps) {
 
       {/* Item Info */}
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <span className="font-medium text-sm truncate">{menuItem.name}</span>
+        <div className="flex flex-wrap items-center gap-2 min-w-0">
+          <span className="font-medium text-sm truncate min-w-0">{menuItem.name}</span>
           {item.is_featured && (
-            <Star className="h-3 w-3 text-yellow-500 fill-yellow-500" />
+            <Star className="h-3 w-3 text-yellow-500 fill-yellow-500 shrink-0" />
           )}
           {!isAvailable && (
-            <Badge variant="secondary" className="text-xs">
+            <Badge variant="secondary" className="text-xs shrink-0">
               Unavailable
             </Badge>
           )}

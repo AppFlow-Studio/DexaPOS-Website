@@ -128,11 +128,11 @@ export default function TimesheetsPage() {
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-4 p-4 bg-card border rounded-lg shadow-sm items-center">
+      <div className="flex flex-wrap gap-3 p-4 bg-card border rounded-lg shadow-sm items-center">
         <DateRangePicker
           date={dateRange}
           setDate={setDateRange}
-          className="w-[260px]"
+          className="w-full sm:w-[260px]"
         />
 
         {/* Location Select Removed - Using Global Context */}
@@ -141,7 +141,7 @@ export default function TimesheetsPage() {
           value={selectedEmployeeId}
           onValueChange={setSelectedEmployeeId}
         >
-          <SelectTrigger className="w-[200px]">
+          <SelectTrigger className="flex-1 min-w-[140px] sm:w-[200px] sm:flex-none">
             <SelectValue placeholder="All Employees" />
           </SelectTrigger>
           <SelectContent>
@@ -155,7 +155,7 @@ export default function TimesheetsPage() {
         </Select>
 
         <Select value={selectedStatus} onValueChange={setSelectedStatus}>
-          <SelectTrigger className="w-[150px]">
+          <SelectTrigger className="flex-1 min-w-[120px] sm:w-[150px] sm:flex-none">
             <SelectValue placeholder="All Status" />
           </SelectTrigger>
           <SelectContent>
@@ -167,7 +167,7 @@ export default function TimesheetsPage() {
         </Select>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Hours</CardTitle>
@@ -204,6 +204,7 @@ export default function TimesheetsPage() {
           columns={columns}
           data={filteredShifts}
           loading={isLoading}
+          tableClassName="min-w-[900px]"
         />
       </div>
     </div>

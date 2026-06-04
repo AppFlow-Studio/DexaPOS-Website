@@ -39,7 +39,7 @@ export default function PlatformFeesPage() {
     : 0
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 min-w-0 overflow-x-hidden">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div className="space-y-1">
           <nav className="text-xs text-muted-foreground">

@@ -114,7 +114,8 @@ export default function TaxReportPage() {
 
       {/* ── Tabs ── */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="bg-muted p-1 h-auto rounded-xl">
+        <div className="overflow-x-auto">
+        <TabsList className="bg-muted p-1 h-auto rounded-xl w-full sm:w-fit">
           <TabsTrigger
             value="breakdown"
             className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm text-xs font-medium px-4 py-2"
@@ -134,6 +135,7 @@ export default function TaxReportPage() {
             By Location
           </TabsTrigger>
         </TabsList>
+        </div>
 
         <TabsContent value="breakdown" className="mt-4">
           <TaxBreakdownTable

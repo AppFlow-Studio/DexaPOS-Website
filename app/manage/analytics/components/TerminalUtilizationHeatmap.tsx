@@ -259,10 +259,10 @@ export default function TerminalUtilizationHeatmap() {
             {/* ================================================================ */}
 
             {/* Section Header */}
-            <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                    <Tablet className="h-5 w-5 text-primary" />
-                    <div>
+            <div className="flex flex-wrap items-center gap-3 justify-between">
+                <div className="flex flex-wrap items-center gap-2 min-w-0">
+                    <Tablet className="h-5 w-5 text-primary shrink-0" />
+                    <div className="min-w-0">
                         <h2 className="text-lg font-semibold">Terminal Utilization</h2>
                         <p className="text-sm text-muted-foreground">
                             Identify underused tablets — reclaim hardware or adjust billing
@@ -270,17 +270,17 @@ export default function TerminalUtilizationHeatmap() {
                     </div>
                     {!isLoading && data && (
                         data.summary.overallUtilizationRate >= 75 ? (
-                            <Badge variant="default" className="flex items-center gap-1 ml-2 bg-green-600">
+                            <Badge variant="default" className="flex items-center gap-1 shrink-0 bg-green-600">
                                 <ShieldCheck className="h-3 w-3" />
                                 {data.summary.overallUtilizationRate}% Fleet Utilized
                             </Badge>
                         ) : data.summary.overallUtilizationRate >= 50 ? (
-                            <Badge variant="secondary" className="flex items-center gap-1 ml-2">
+                            <Badge variant="secondary" className="flex items-center gap-1 shrink-0">
                                 <AlertTriangle className="h-3 w-3" />
                                 {data.summary.overallUtilizationRate}% Fleet Utilized
                             </Badge>
                         ) : (
-                            <Badge variant="destructive" className="flex items-center gap-1 ml-2">
+                            <Badge variant="destructive" className="flex items-center gap-1 shrink-0">
                                 <AlertTriangle className="h-3 w-3" />
                                 {data.summary.overallUtilizationRate}% Fleet Utilized
                             </Badge>
@@ -288,7 +288,7 @@ export default function TerminalUtilizationHeatmap() {
                     )}
                 </div>
                 <Select value={String(days)} onValueChange={(v) => setDays(Number(v))}>
-                    <SelectTrigger className="w-32.5">
+                    <SelectTrigger className="w-32.5 shrink-0">
                         <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -302,7 +302,7 @@ export default function TerminalUtilizationHeatmap() {
             {/* Loading State */}
             {isLoading && (
                 <>
-                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                    <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
                         {Array.from({ length: 4 }).map((_, i) => (
                             <Card key={i}>
                                 <CardHeader className="pb-2">
@@ -331,7 +331,7 @@ export default function TerminalUtilizationHeatmap() {
             {!isLoading && data && (
                 <>
                     {/* KPI Summary Cards */}
-                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                    <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
                         <Card>
                             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                                 <CardTitle className="text-sm font-medium text-muted-foreground">Total Stations</CardTitle>
@@ -411,21 +411,23 @@ export default function TerminalUtilizationHeatmap() {
                     {/* Utilization Distribution Chart + Merchant Table */}
                     <div className="grid gap-4 lg:grid-cols-7">
                         {/* Distribution Chart */}
-                        <Card className="lg:col-span-3">
+                        <Card className="lg:col-span-3 min-w-0 overflow-hidden">
                             <CardHeader>
                                 <CardTitle className="text-sm font-medium">Utilization Distribution</CardTitle>
                                 <CardDescription>Number of merchants per utilization bracket</CardDescription>
                             </CardHeader>
                             <CardContent>
                                 {chartData.length > 0 ? (
-                                    <ResponsiveContainer width="100%" height={260}>
-                                        <BarChart data={chartData} barCategoryGap="20%">
+                                    <ResponsiveContainer width="100%" height={280}>
+                                        <BarChart data={chartData} barCategoryGap="20%" margin={{ bottom: 20 }}>
                                             <CartesianGrid strokeDasharray="3 3" vertical={false} />
                                             <XAxis
                                                 dataKey="range"
-                                                tick={{ fontSize: 11 }}
+                                                tick={{ fontSize: 10, angle: -35, textAnchor: 'end' }}
                                                 tickLine={false}
                                                 axisLine={false}
+                                                interval={0}
+                                                height={48}
                                             />
                                             <YAxis
                                                 allowDecimals={false}
@@ -465,10 +467,10 @@ export default function TerminalUtilizationHeatmap() {
                         </Card>
 
                         {/* Merchant Table */}
-                        <Card className="lg:col-span-4">
+                        <Card className="lg:col-span-4 min-w-0 overflow-hidden">
                             <CardHeader>
-                                <div className="flex items-center justify-between">
-                                    <div>
+                                <div className="flex flex-wrap items-start gap-3 justify-between">
+                                    <div className="min-w-0">
                                         <CardTitle className="text-sm font-medium">Merchant Terminal Report</CardTitle>
                                         <CardDescription>
                                             {filterTier === 'all'
@@ -477,7 +479,7 @@ export default function TerminalUtilizationHeatmap() {
                                         </CardDescription>
                                     </div>
                                     <Select value={filterTier} onValueChange={(v) => setFilterTier(v as typeof filterTier)}>
-                                        <SelectTrigger className="w-37.5">
+                                        <SelectTrigger className="w-37.5 shrink-0">
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>

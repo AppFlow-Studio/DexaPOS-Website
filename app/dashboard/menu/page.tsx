@@ -449,7 +449,7 @@ export default function MenuPage () {
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <ScopeContextStrip />
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className='text-2xl font-bold tracking-tight'>Menus</h2>
           <p className='text-muted-foreground'>
@@ -743,7 +743,7 @@ export default function MenuPage () {
       </div>
 
       {/* Stats Overview */}
-      <div className='grid gap-4 md:grid-cols-4'>
+      <div className='grid gap-4 sm:grid-cols-2 md:grid-cols-4'>
         <Card className='transition-all hover:shadow-md'>
           <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
             <CardTitle className='text-sm font-medium'>Total Menus</CardTitle>
@@ -797,12 +797,12 @@ export default function MenuPage () {
       {/* Menus List */}
       <Card>
         <CardHeader>
-          <div className='flex items-center justify-between'>
+          <div className='flex flex-col gap-3 md:flex-row md:items-center md:justify-between'>
             <div>
               <CardTitle>All Menus</CardTitle>
               <CardDescription>View and manage all your menus</CardDescription>
             </div>
-            <div className='flex items-center gap-2'>
+            <div className='flex items-center gap-2 flex-wrap'>
               {hasOrderChanges && (
                 <Button
                   variant='default'
@@ -815,13 +815,13 @@ export default function MenuPage () {
                   {isSavingOrder ? 'Saving...' : 'Save Order'}
                 </Button>
               )}
-              <div className='relative'>
+              <div className='relative flex-1 min-w-[160px]'>
                 <Search className='absolute left-2 top-2.5 h-4 w-4 text-muted-foreground' />
                 <Input
                   placeholder='Search menus...'
                   value={searchTerm}
                   onChange={e => setSearchTerm(e.target.value)}
-                  className='pl-8 w-64'
+                  className='pl-8 w-full md:w-64'
                 />
               </div>
               <div className='flex items-center border rounded-md'>
