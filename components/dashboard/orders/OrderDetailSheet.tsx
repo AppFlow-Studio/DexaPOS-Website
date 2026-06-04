@@ -79,6 +79,7 @@ import { SendReceiptModal } from "./SendReceiptModal";
 import { AssignCustomerModal } from "./AssignCustomerModal";
 import { AdjustTipModal } from "./AdjustTipModal";
 import { assignCustomerToOrder } from "@/app/actions/orders/assign-customer";
+import { resolveChargedLane, laneTotalProps } from "@/lib/orders/pricing-lane";
 import { toast } from "sonner";
 
 interface OrderDetailSheetProps {
@@ -89,6 +90,11 @@ interface OrderDetailSheetProps {
   fullPageUrlPattern?: (orderId: string) => string;
   /** When true (e.g. HQ/Carrier admin view), hide merchant-only actions */
   readOnly?: boolean;
+  /**
+   * Render above a parent Sheet (e.g. when opened from the Customer Profile
+   * Orders tab) so it appears in the foreground instead of behind the sheet.
+   */
+  elevated?: boolean;
 }
 
 function formatCurrency(amount: number): string {
@@ -859,6 +865,7 @@ export function OrderDetailSheet({
   onOpenChange,
   fullPageUrlPattern,
   readOnly = false,
+  elevated = false,
 }: OrderDetailSheetProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -1095,7 +1102,7 @@ export function OrderDetailSheet({
 
   return (
     <>
-      <BottomSheet open={open} onOpenChange={onOpenChange}>
+      <BottomSheet open={open} onOpenChange={onOpenChange} elevated={elevated}>
         <BottomSheetContent
           height="95"
           className="border-x-0 border-t border-border/60 bg-gradient-to-b from-background via-background to-muted/20 sm:inset-x-4 sm:bottom-4 sm:mx-auto sm:h-[calc(100vh-2rem)] sm:max-w-6xl sm:rounded-[28px] sm:border"
@@ -1541,19 +1548,35 @@ export function OrderDetailSheet({
                               valueClassName="text-green-600"
                             />
                           )}
-                          <div className="border-t pt-3 mt-2 space-y-1">
-                            <PriceRow
-                              label="Total (Card)"
-                              value={formatCurrency(cardTotal)}
-                              valueClassName="text-muted-foreground line-through"
-                            />
-                            <PriceRow
-                              label="Total (Cash)"
-                              value={formatCurrency(cashTotal)}
-                              bold
-                              className="text-base"
-                            />
-                          </div>
+                          {(() => {
+                            // Emphasize the lane actually charged (from the
+                            // payment tender), not a hardcoded lane. Unpaid
+                            // orders strike neither lane.
+                            const chargedLane = resolveChargedLane(
+                              displayOrder,
+                              payments
+                            );
+                            const cardProps = laneTotalProps(chargedLane, "card");
+                            const cashProps = laneTotalProps(chargedLane, "cash");
+                            return (
+                              <div className="border-t pt-3 mt-2 space-y-1">
+                                <PriceRow
+                                  label="Total (Card)"
+                                  value={formatCurrency(cardTotal)}
+                                  bold={cardProps.bold}
+                                  valueClassName={cardProps.valueClassName}
+                                  className={cardProps.bold ? "text-base" : undefined}
+                                />
+                                <PriceRow
+                                  label="Total (Cash)"
+                                  value={formatCurrency(cashTotal)}
+                                  bold={cashProps.bold}
+                                  valueClassName={cashProps.valueClassName}
+                                  className={cashProps.bold ? "text-base" : undefined}
+                                />
+                              </div>
+                            );
+                          })()}
                           {totalPaid > 0 && (
                             <PriceRow
                               label="Amount Paid"
