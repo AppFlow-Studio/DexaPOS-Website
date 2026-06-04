@@ -40,6 +40,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useSelectedLocation } from "@/stores/location-store";
 import { SalesByItemReportItem } from "@/app/dashboard/actions/order-analytics";
+import { useReportingQueryRange } from "@/app/dashboard/hooks/useReportingDateRange";
 
 type SortKey = keyof Pick<
   SalesByItemReportItem,
@@ -100,9 +101,10 @@ export default function SalesByItemsPage() {
   const [sortDir, setSortDir] = useState<SortDir>("desc");
 
   const selectedLocation = useSelectedLocation();
+  const queryDateRange = useReportingQueryRange(dateRange);
   const { data: items, isLoading } = useSalesByItemReport(
-    dateRange.from,
-    dateRange.to
+    queryDateRange.from,
+    queryDateRange.to
   );
 
   // Derived: unique categories

@@ -1260,7 +1260,7 @@ export default function MerchantDashboardLayout({
   ];
 
   return (
-    <SidebarProvider>
+    <SidebarProvider className="dashboard-sidebar-theme">
       <ImpersonationHydrator />
       <MerchantSidebar />
       <main aria-label="Dashboard content" className="flex-1 flex flex-col min-w-0">

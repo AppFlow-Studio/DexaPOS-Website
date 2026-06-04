@@ -41,6 +41,7 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { useSelectedLocation } from "@/stores/location-store";
 import type { VoidItem, RefundItem } from "@/app/dashboard/actions/order-analytics";
+import { useReportingQueryRange } from "@/app/dashboard/hooks/useReportingDateRange";
 
 type VoidSort = "voided_at" | "amount" | "item_name" | "voided_by";
 type RefundSort = "refunded_at" | "amount" | "refunded_by";
@@ -66,7 +67,8 @@ export default function VoidsReportPage() {
   const [refundDir, setRefundDir] = useState<SortDir>("desc");
 
   const selectedLocation = useSelectedLocation();
-  const { data, isLoading } = useVoidsReport(dateRange.from, dateRange.to);
+  const queryDateRange = useReportingQueryRange(dateRange);
+  const { data, isLoading } = useVoidsReport(queryDateRange.from, queryDateRange.to);
 
   const totalVoidAmount = data?.voids.reduce((s, r) => s + r.amount, 0) ?? 0;
   const totalRefundAmount = data?.refunds.reduce((s, r) => s + r.amount, 0) ?? 0;
