@@ -183,9 +183,9 @@ export default function PaymentsPage() {
   return (
     <main className="space-y-6 animate-in fade-in duration-500">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="space-y-1">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-2xl font-bold tracking-tight">Payments</h1>
             {isAllLocations ? (
               <Badge variant="outline" className="gap-1">
@@ -203,7 +203,7 @@ export default function PaymentsPage() {
             View and manage all payment transactions
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
           {/* Simple date range inputs */}
           <div className="flex items-center gap-1.5 text-sm">
             <CalendarDays className="h-4 w-4 text-muted-foreground" />

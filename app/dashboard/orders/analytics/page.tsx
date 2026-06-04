@@ -228,7 +228,7 @@ export default function AnalyticsPage() {
       </div>
 
       {/* Controls */}
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <DateRangePicker
           dateFrom={dateFrom}
           dateTo={dateTo}
@@ -311,7 +311,8 @@ export default function AnalyticsPage() {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="flex-wrap h-auto gap-2 bg-transparent border-b-2 border-slate-200 dark:border-slate-700 rounded-none p-0 pb-2">
+        <div className="overflow-x-auto">
+        <TabsList className="flex-nowrap w-max h-auto gap-2 bg-transparent border-b-2 border-slate-200 dark:border-slate-700 rounded-none p-0 pb-2">
           <TabsTrigger
             value="sales"
             className="border-0 border-b-4 border-transparent transition-colors duration-200 data-[state=active]:border-[#0A5C9E] dark:data-[state=active]:border-[#0A7AB8] data-[state=active]:shadow-none data-[state=active]:bg-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white rounded-none"
@@ -343,6 +344,7 @@ export default function AnalyticsPage() {
             Order Flow
           </TabsTrigger>
         </TabsList>
+        </div>
 
         {/* SALES TAB */}
         <TabsContent value="sales" className="space-y-6">

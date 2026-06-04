@@ -24,6 +24,9 @@ interface KPICardProps {
   icon: React.ComponentType<{ className?: string }>
   isLoading?: boolean
   warningThreshold?: number
+  // Some metrics (e.g. open support tickets) have no meaningful period delta.
+  // Hide the trend pill rather than render a faked 0.0%.
+  hideChange?: boolean
 }
 
 function KPICard({
@@ -34,6 +37,7 @@ function KPICard({
   icon: Icon,
   isLoading,
   warningThreshold,
+  hideChange,
 }: KPICardProps) {
   const isWarning = warningThreshold && typeof value === 'number' && value < warningThreshold
 
@@ -57,16 +61,18 @@ function KPICard({
               {value}
             </div>
             <div className="flex items-center gap-2 mt-1">
-              <div className={`flex items-center text-xs font-medium px-1.5 py-0.5 rounded-full ${
-                change >= 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-              }`}>
-                {change >= 0 ? (
-                  <ArrowUpRight className="h-3 w-3 mr-0.5" />
-                ) : (
-                  <ArrowDownRight className="h-3 w-3 mr-0.5" />
-                )}
-                {Math.abs(change).toFixed(1)}%
-              </div>
+              {!hideChange && (
+                <div className={`flex items-center text-xs font-medium px-1.5 py-0.5 rounded-full ${
+                  change >= 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                }`}>
+                  {change >= 0 ? (
+                    <ArrowUpRight className="h-3 w-3 mr-0.5" />
+                  ) : (
+                    <ArrowDownRight className="h-3 w-3 mr-0.5" />
+                  )}
+                  {Math.abs(change).toFixed(1)}%
+                </div>
+              )}
               <span className="text-xs text-muted-foreground">{description}</span>
             </div>
           </>
@@ -90,7 +96,7 @@ export function PlatformPulseSection() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="space-y-1">
           <h2 className="text-2xl font-semibold tracking-tight bg-gradient-to-br from-slate-900 to-blue-900 bg-clip-text text-transparent">
             Platform Pulse
@@ -103,7 +109,7 @@ export function PlatformPulseSection() {
             Real-time platform metrics
           </p>
         </div>
-        <div className="text-xs text-muted-foreground bg-white/60 px-3 py-1.5 rounded-full border border-blue-100">
+        <div className="self-start sm:self-auto text-xs text-muted-foreground bg-white/60 px-3 py-1.5 rounded-full border border-blue-100">
           Updated just now
         </div>
       </div>
@@ -175,8 +181,9 @@ export function PlatformPulseSection() {
         />
         <KPICard
           title="Support Tickets"
-          value={kpis?.openSupportTickets || '0'}
+          value={kpis?.openSupportTickets ?? 0}
           change={0}
+          hideChange
           description="Open"
           icon={Ticket}
           isLoading={isLoading}

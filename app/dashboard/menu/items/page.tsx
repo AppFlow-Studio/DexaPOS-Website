@@ -906,20 +906,20 @@ function CategoryGroup({
               isSelectionMode && selectedCount > 0 && "bg-primary/5",
             )}
           >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
+            <div className="flex items-center justify-between gap-2 min-w-0">
+              <div className="flex items-center gap-3 min-w-0 overflow-hidden">
                 {isExpanded ? (
-                  <ChevronDown className="h-5 w-5 text-muted-foreground" />
+                  <ChevronDown className="h-5 w-5 text-muted-foreground shrink-0" />
                 ) : (
-                  <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                  <ChevronRight className="h-5 w-5 text-muted-foreground shrink-0" />
                 )}
-                <div className="flex items-center gap-2">
-                  <Tag className="h-5 w-5 text-primary" />
-                  <CardTitle className="text-lg">{category.name}</CardTitle>
+                <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                  <Tag className="h-5 w-5 text-primary shrink-0" />
+                  <CardTitle className="text-lg truncate">{category.name}</CardTitle>
                   {category.is_global ? (
                     <Badge
                       variant="outline"
-                      className="text-xs bg-emerald-50 text-emerald-600 border-emerald-200"
+                      className="text-xs bg-emerald-50 text-emerald-600 border-emerald-200 shrink-0"
                     >
                       <Globe className="h-3 w-3 mr-1" />
                       Global
@@ -927,7 +927,7 @@ function CategoryGroup({
                   ) : (
                     <Badge
                       variant="outline"
-                      className="text-xs bg-purple-50 text-purple-600 border-purple-200"
+                      className="text-xs bg-purple-50 text-purple-600 border-purple-200 shrink-0"
                     >
                       <MapPin className="h-3 w-3 mr-1" />
                       {category.location_name || "Location"}
@@ -935,7 +935,7 @@ function CategoryGroup({
                   )}
                 </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 shrink-0">
                 {isSelectionMode && (
                   <>
                     {selectedCount > 0 && (
@@ -1442,9 +1442,9 @@ export default function MenuItemsPage() {
     <div className="space-y-6 animate-in fade-in duration-500">
       <ScopeContextStrip />
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between w-full min-w-0">
         <div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             <h2 className="text-2xl font-bold tracking-tight">Item Library</h2>
             <Badge
               variant={isAllLocations ? "secondary" : "default"}
@@ -1477,7 +1477,7 @@ export default function MenuItemsPage() {
               : `Viewing items for ${locationName} with location-specific pricing.`}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
           {canCreateItem ? (
             <Button
               onClick={() => setIsCreateWizardOpen(true)}
@@ -1517,7 +1517,7 @@ export default function MenuItemsPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4">
         <Card className="transition-all hover:shadow-md">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Items</CardTitle>

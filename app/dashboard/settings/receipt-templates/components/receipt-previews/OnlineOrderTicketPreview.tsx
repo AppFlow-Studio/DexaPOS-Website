@@ -1,13 +1,15 @@
-import type { ReceiptTemplateFormData } from "../../types";
-import { ReceiptPaper, DottedLine, DoubleLine } from "./ReceiptPaper";
+import type { ReceiptTemplateFormData, LocationIdentity } from "../../types";
+import { ReceiptPaper, ReceiptIdentityBlock, DottedLine, DoubleLine } from "./ReceiptPaper";
 import { Barcode, QrCode, Clock } from "lucide-react";
 
 interface OnlineOrderTicketPreviewProps {
   formState: ReceiptTemplateFormData;
+  locationIdentity?: LocationIdentity;
 }
 
 export function OnlineOrderTicketPreview({
   formState,
+  locationIdentity,
 }: OnlineOrderTicketPreviewProps) {
   return (
     <ReceiptPaper>
@@ -17,7 +19,7 @@ export function OnlineOrderTicketPreview({
         </div>
       )}
 
-      <div className="text-center font-bold text-sm">Sample Restaurant</div>
+      <ReceiptIdentityBlock locationIdentity={locationIdentity} />
 
       {/* Online platform badge */}
       <div className="text-center mt-1">

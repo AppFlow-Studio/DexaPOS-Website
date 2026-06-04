@@ -174,7 +174,7 @@ export default function TransactionsPage() {
   return (
     <main className="space-y-6 animate-in fade-in duration-500">
       {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-semibold tracking-tight">
@@ -206,14 +206,14 @@ export default function TransactionsPage() {
           }}
           preset={preset}
           onPresetChange={setPreset}
-          className="w-auto"
+          className="w-full sm:w-auto"
         />
       </div>
 
       {/* Hero Chart */}
       <Card className="border-border/60 shadow-none overflow-hidden">
         <CardContent className="p-0">
-          <div className="h-[420px]">
+          <div className="h-[460px] sm:h-[420px]">
             <FinancialHeroChart
               data={chartData}
               isLoading={isLoadingChartKPIs}
@@ -282,7 +282,8 @@ export default function TransactionsPage() {
         onValueChange={(v) => setActiveTab(v as TabType)}
         className="w-full"
       >
-        <TabsList className="bg-muted/50 p-1 h-auto rounded-lg w-full sm:w-auto sm:inline-flex">
+        <div className="overflow-x-auto">
+        <TabsList className="bg-muted/50 p-1 h-auto rounded-lg w-max">
           <TabsTrigger
             value="overview"
             className="rounded-md px-4 py-2 text-sm font-medium data-[state=active]:bg-background data-[state=active]:shadow-sm"
@@ -305,6 +306,7 @@ export default function TransactionsPage() {
             Payments
           </TabsTrigger>
         </TabsList>
+        </div>
       </Tabs>
 
       {/* Tab Content */}

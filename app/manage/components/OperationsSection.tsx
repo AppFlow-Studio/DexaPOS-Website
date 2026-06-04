@@ -290,8 +290,8 @@ export function OperationsSection({ from, to }: OperationsSectionProps) {
           </CardDescription>
         </CardHeader>
         <CardContent className="p-4 pt-3">
-          <div className="rounded-lg border border-blue-100 overflow-hidden">
-            <Table>
+          <div className="rounded-lg border border-blue-100 overflow-x-auto">
+            <Table className="min-w-[360px]">
               <TableHeader>
                 <TableRow className="bg-blue-50/50 hover:bg-blue-50/50">
                   <TableHead className="text-xs font-medium text-blue-700">Location</TableHead>

@@ -185,13 +185,13 @@ export function TablesSidebar ({
   }
 
   return (
-    <div className='w-80 border-r bg-background flex flex-col h-full'>
+    <div className='w-full border-r bg-background flex flex-col h-full overflow-hidden'>
       <Tabs
         value={activeTab}
         onValueChange={setActiveTab}
         className='flex flex-col h-full'
       >
-        <TabsList className='m-1 grid w-auto grid-cols-4 rounded-md border bg-muted/40 p-0.5'>
+        <TabsList className='m-1 grid w-full grid-cols-4 rounded-md border bg-muted/40 p-0.5'>
           <TabsTrigger
             value='tables'
             className='h-6 text-[10px] rounded-sm px-1'
@@ -283,7 +283,7 @@ export function TablesSidebar ({
                         key={table.id}
                         onClick={() => onTableClick?.(table.id)}
                         className={cn(
-                          'group rounded-md border px-2 py-1.5 cursor-pointer transition-all',
+                          'group rounded-md border px-2 py-1.5 cursor-pointer transition-all overflow-hidden',
                           isSelected
                             ? 'bg-primary/10 border-primary/50 shadow-sm'
                             : 'bg-card border-border hover:border-primary/30'

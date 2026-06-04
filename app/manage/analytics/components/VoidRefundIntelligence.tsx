@@ -118,6 +118,7 @@ export function VoidRefundIntelligence() {
             <CardDescription className="text-xs">Merchants with void rate &gt;2× platform average ({data.platformVoidRate}%)</CardDescription>
           </CardHeader>
           <CardContent className="p-0">
+            <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -159,6 +160,7 @@ export function VoidRefundIntelligence() {
                 )}
               </TableBody>
             </Table>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -173,6 +175,7 @@ export function VoidRefundIntelligence() {
             </CardDescription>
           </CardHeader>
           <CardContent className="p-0">
+            <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -199,6 +202,7 @@ export function VoidRefundIntelligence() {
                 ))}
               </TableBody>
             </Table>
+            </div>
           </CardContent>
         </Card>
       )}

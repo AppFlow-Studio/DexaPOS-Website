@@ -1,9 +1,10 @@
 "use client";
 
 import { Site } from "@/types/site";
-import { MapPin, Clock, Store, Truck } from "lucide-react";
+import { MapPin, Clock, Store, Truck, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useMemo, useCallback } from "react";
+import { useMemo, useCallback, useState } from "react";
+import { StoreHoursModal } from "./StoreHoursModal";
 
 interface StoreInfoBarProps {
   site: Site | null;
@@ -13,36 +14,75 @@ interface StoreInfoBarProps {
     city: string;
     state: string;
     postal_code: string;
+    timezone?: string | null;
   };
   isStoreOpen?: boolean | null;
   todayHours?: string | null;
   className?: string;
 }
 
-export function getTodayHoursString(businessHours: any): string | null {
-  if (!businessHours) return null;
+const DAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"] as const;
 
-  let parsed = businessHours;
+/**
+ * Returns { dayIndex, hours, minutes } for "now" expressed in the given IANA
+ * timezone (e.g. "America/New_York"). Falls back to browser-local time when
+ * timezone is absent or unrecognised.
+ */
+function getNowInTz(timezone?: string | null): { dayIndex: number; hours: number; minutes: number } {
+  const now = new Date();
+  if (timezone) {
+    try {
+      // Use Intl to extract the wall-clock fields in the store's timezone.
+      const fmt = new Intl.DateTimeFormat("en-US", {
+        timeZone: timezone,
+        weekday: "short",
+        hour: "numeric",
+        minute: "numeric",
+        hour12: false,
+      });
+      const parts = fmt.formatToParts(now);
+      const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
+      const weekdayShort = get("weekday").toLowerCase(); // "sun", "mon", …
+      const dayMap: Record<string, number> = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
+      const dayIndex = dayMap[weekdayShort] ?? now.getDay();
+      // hour12:false gives "0"–"23"; "24" can appear for midnight in some locales
+      let hours = parseInt(get("hour"), 10);
+      if (hours === 24) hours = 0;
+      const minutes = parseInt(get("minute"), 10) || 0;
+      return { dayIndex, hours, minutes };
+    } catch {
+      // Invalid timezone string — fall through to local
+    }
+  }
+  return { dayIndex: now.getDay(), hours: now.getHours(), minutes: now.getMinutes() };
+}
+
+function parseHours(businessHours: any): Record<string, any> | null {
+  if (!businessHours) return null;
   if (typeof businessHours === "string") {
     try {
-      parsed = JSON.parse(businessHours);
+      return JSON.parse(businessHours);
     } catch {
       return null;
     }
   }
+  return businessHours;
+}
 
-  const days = [
-    "sunday",
-    "monday",
-    "tuesday",
-    "wednesday",
-    "thursday",
-    "friday",
-    "saturday",
-  ];
-  const currentDay = days[new Date().getDay()];
-  const schedule = parsed[currentDay];
+function formatHour(time: string): string {
+  const [h, m] = time.split(":").map(Number);
+  const period = h >= 12 ? "PM" : "AM";
+  const displayH = h % 12 || 12;
+  const displayM = (m || 0).toString().padStart(2, "0");
+  return `${displayH}:${displayM} ${period}`;
+}
 
+export function getTodayHoursString(businessHours: any, timezone?: string | null): string | null {
+  const parsed = parseHours(businessHours);
+  if (!parsed) return null;
+
+  const { dayIndex } = getNowInTz(timezone);
+  const schedule = parsed[DAYS[dayIndex]];
   if (!schedule) return null;
 
   const isEnabled = schedule.enabled ?? !schedule.closed;
@@ -53,36 +93,19 @@ export function getTodayHoursString(businessHours: any): string | null {
   const closeTime = schedule.to || schedule.close;
   if (!openTime || !closeTime) return null;
 
-  const formatTime = (time: string): string => {
-    const [hours, minutes] = time.split(":").map(Number);
-    const period = hours >= 12 ? "PM" : "AM";
-    const displayHours = hours % 12 || 12;
-    const displayMinutes = (minutes || 0).toString().padStart(2, "0");
-    return `${displayHours}:${displayMinutes} ${period}`;
-  };
-
-  return `${formatTime(openTime)} – ${formatTime(closeTime)}`;
+  return `${formatHour(openTime)} – ${formatHour(closeTime)}`;
 }
 
 /**
  * Returns a string like "Open until 11:00 PM" given the business hours object.
  * Used for plain-text status display (no badge).
  */
-export function getOpenUntilString(businessHours: any): string | null {
-  if (!businessHours) return null;
+export function getOpenUntilString(businessHours: any, timezone?: string | null): string | null {
+  const parsed = parseHours(businessHours);
+  if (!parsed) return null;
 
-  let parsed = businessHours;
-  if (typeof businessHours === "string") {
-    try {
-      parsed = JSON.parse(businessHours);
-    } catch {
-      return null;
-    }
-  }
-
-  const days = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
-  const currentDay = days[new Date().getDay()];
-  const schedule = parsed[currentDay];
+  const { dayIndex } = getNowInTz(timezone);
+  const schedule = parsed[DAYS[dayIndex]];
   if (!schedule) return null;
 
   const isEnabled = schedule.enabled ?? !schedule.closed;
@@ -92,37 +115,28 @@ export function getOpenUntilString(businessHours: any): string | null {
   const closeTime = schedule.to || schedule.close;
   if (!closeTime) return null;
 
-  const [hours, minutes] = closeTime.split(":").map(Number);
-  const period = hours >= 12 ? "PM" : "AM";
-  const displayHours = hours % 12 || 12;
-  const displayMinutes = (minutes || 0).toString().padStart(2, "0");
-  return `Open until ${displayHours}:${displayMinutes} ${period}`;
+  return `Open until ${formatHour(closeTime)}`;
 }
 
-export function isStoreOpenNow(businessHours: any): boolean | null {
-  if (!businessHours) return null;
-  let parsed = businessHours;
-  if (typeof businessHours === "string") {
-    try {
-      parsed = JSON.parse(businessHours);
-    } catch {
-      return null;
-    }
-  }
-  const days = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
-  const currentDay = days[new Date().getDay()];
-  const schedule = parsed[currentDay];
+export function isStoreOpenNow(businessHours: any, timezone?: string | null): boolean | null {
+  const parsed = parseHours(businessHours);
+  if (!parsed) return null;
+
+  const { dayIndex, hours, minutes } = getNowInTz(timezone);
+  const schedule = parsed[DAYS[dayIndex]];
   if (!schedule) return null;
+
   const isEnabled = schedule.enabled ?? !schedule.closed;
   if (!isEnabled) return false;
   if (schedule.is24Hours) return true;
+
   const openTime = schedule.from || schedule.open;
   const closeTime = schedule.to || schedule.close;
   if (!openTime || !closeTime) return null;
-  const now = new Date();
+
   const [openH, openM] = openTime.split(":").map(Number);
   const [closeH, closeM] = closeTime.split(":").map(Number);
-  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  const nowMinutes = hours * 60 + minutes;
   const openMinutes = openH * 60 + (openM || 0);
   const closeMinutes = closeH * 60 + (closeM || 0);
   return nowMinutes >= openMinutes && nowMinutes < closeMinutes;
@@ -139,14 +153,17 @@ export function StoreInfoBar({
   const logoUrl = site?.logo_url;
   const pickupEnabled = site?.online_ordering_config?.pickupEnabled !== false;
   const deliveryEnabled = site?.online_ordering_config?.deliveryEnabled === true;
+  const [hoursModalOpen, setHoursModalOpen] = useState(false);
 
   const rawBusinessHours =
     site?.online_ordering_config?.operatingHours ||
     (location as any).business_hours;
 
+  const locationTimezone = location.timezone ?? null;
+
   const openUntilText = useMemo(
-    () => getOpenUntilString(rawBusinessHours),
-    [rawBusinessHours]
+    () => getOpenUntilString(rawBusinessHours, locationTimezone),
+    [rawBusinessHours, locationTimezone]
   );
 
   const handleOrderNow = useCallback(() => {
@@ -202,22 +219,25 @@ export function StoreInfoBar({
                   </span>
                 </span>
 
-                {/* Hours: plain text, no badge */}
-                {isStoreOpen === false ? (
-                  <span className="inline-flex items-center gap-1.5" style={{ color: "#DC2626" }}>
-                    <Clock className="h-3.5 w-3.5 shrink-0" />
-                    Closed
-                  </span>
-                ) : openUntilText ? (
-                  <span className="inline-flex items-center gap-1.5">
-                    <Clock className="h-3.5 w-3.5 shrink-0" style={{ color: "var(--primary)" }} />
-                    {openUntilText}
-                  </span>
-                ) : todayHours ? (
-                  <span className="inline-flex items-center gap-1.5">
-                    <Clock className="h-3.5 w-3.5 shrink-0" style={{ color: "var(--primary)" }} />
-                    {todayHours}
-                  </span>
+                {/* Hours pill — clickable, opens weekly schedule modal */}
+                {(isStoreOpen !== undefined && isStoreOpen !== null) || openUntilText || todayHours ? (
+                  <button
+                    type="button"
+                    onClick={() => setHoursModalOpen(true)}
+                    className="inline-flex items-center gap-1 transition-opacity hover:opacity-75"
+                    style={isStoreOpen === false ? { color: "#DC2626" } : { color: "#374151" }}
+                  >
+                    <Clock
+                      className="h-3.5 w-3.5 shrink-0"
+                      style={{ color: isStoreOpen === false ? "#DC2626" : "var(--primary)" }}
+                    />
+                    <span className="text-sm">
+                      {isStoreOpen === false
+                        ? "Closed"
+                        : openUntilText || todayHours || "See hours"}
+                    </span>
+                    <ChevronDown className="h-3 w-3 opacity-50" />
+                  </button>
                 ) : null}
               </div>
             </div>
@@ -284,6 +304,15 @@ export function StoreInfoBar({
 
         </div>
       </div>
+
+      <StoreHoursModal
+        open={hoursModalOpen}
+        onOpenChange={setHoursModalOpen}
+        businessHours={rawBusinessHours}
+        timezone={locationTimezone}
+        storeName={storeName}
+        isStoreOpen={isStoreOpen}
+      />
     </div>
   );
 }

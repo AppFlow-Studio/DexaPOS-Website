@@ -471,9 +471,9 @@ export function InviteUserWizard({
         onInteractOutside={(e) => e.preventDefault()}
         onEscapeKeyDown={(e) => e.preventDefault()}
       >
-        <div className="flex h-full">
-          {/* Left Sidebar - Steps */}
-          <div className="w-64 border-r bg-muted/30 p-6 flex flex-col">
+        <div className="flex h-full min-w-0">
+          {/* Left Sidebar - Steps (hidden on mobile; header shows current step) */}
+          <div className="hidden lg:flex w-64 shrink-0 border-r bg-muted/30 p-6 flex-col">
             <div className="space-y-1">
               {STEPS.map((step, index) => {
                 const isActive = step.key === currentStep;
@@ -521,7 +521,7 @@ export function InviteUserWizard({
           </div>
 
           {/* Main Content */}
-          <div className="flex-1 flex flex-col overflow-hidden">
+          <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
             <BottomSheetHeader className="border-b">
               <BottomSheetTitle>
                 {currentStep === "type" && "Choose staff type"}
@@ -741,7 +741,7 @@ export function InviteUserWizard({
                         </>
                       )}
 
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div className="space-y-2">
                           <Label htmlFor="firstName">First name *</Label>
                           <Input

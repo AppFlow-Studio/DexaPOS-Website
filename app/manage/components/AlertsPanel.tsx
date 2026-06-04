@@ -158,7 +158,7 @@ export function AlertsPanel() {
                   <div className="flex gap-3">
                     <div className="shrink-0 mt-0.5">{getSeverityIcon(alert.severity)}</div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
+                      <div className="flex flex-wrap items-center gap-2 mb-1">
                         {getSeverityBadge(alert.severity)}
                         {isGrouped && (
                           <Badge variant="outline" className="bg-slate-100 text-slate-700 border-slate-200">
@@ -204,9 +204,9 @@ export function AlertsPanel() {
                   {isGrouped && isExpanded && (
                     <ul className="ml-7 border-l border-slate-200 pl-3 text-xs text-slate-600 space-y-1">
                       {alert.groupedDevices!.map((d) => (
-                        <li key={d.stationId} className="flex justify-between gap-3">
-                          <span className="font-medium text-slate-700">{d.stationName}</span>
-                          <span className="text-slate-500">
+                        <li key={d.stationId} className="flex flex-wrap justify-between gap-x-3 gap-y-0.5">
+                          <span className="font-medium text-slate-700 min-w-0 truncate">{d.stationName}</span>
+                          <span className="text-slate-500 shrink-0">
                             {d.lastHeartbeatAt
                               ? `last seen ${new Date(d.lastHeartbeatAt).toLocaleTimeString()}`
                               : 'no heartbeat'}

@@ -366,6 +366,30 @@ html:has([data-template]) body {
   color: var(--text);
 }
 
+/* Storefront max-width container constraint.
+   Constrains all Tailwind `container` elements to 1280px (max-w-7xl) when
+   inside a storefront page, centered with consistent responsive padding.
+   Scoped to [data-template] so the dashboard layout is unaffected. */
+[data-template] .container {
+  max-width: 1280px;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+@media (min-width: 640px) {
+  [data-template] .container {
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
+}
+@media (min-width: 1024px) {
+  [data-template] .container {
+    padding-left: 2rem;
+    padding-right: 2rem;
+  }
+}
+
 /* Utility to hide horizontal scrollbars while keeping content scrollable */
 .no-scrollbar {
   -ms-overflow-style: none; /* IE and Edge */

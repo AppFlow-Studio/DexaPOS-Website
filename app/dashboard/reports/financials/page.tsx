@@ -68,14 +68,14 @@ export default function FinancialsPage() {
 
   if (isLoading) {
     return (
-      <div className="h-[calc(100vh-120px)] w-full p-4 space-y-8">
-        <div className="flex justify-between items-center">
-          <Skeleton className="h-12 w-[300px]" />
-          <Skeleton className="h-10 w-[300px]" />
+      <div className="w-full p-4 space-y-8">
+        <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center">
+          <Skeleton className="h-10 w-[200px]" />
+          <Skeleton className="h-10 w-full sm:w-[300px]" />
         </div>
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 h-full">
-          <Skeleton className="h-full w-full lg:col-span-1 rounded-3xl" />
-          <Skeleton className="h-full w-full lg:col-span-3 rounded-3xl" />
+        <div className="grid grid-cols-1 xl:grid-cols-4 gap-8">
+          <Skeleton className="h-[400px] w-full xl:col-span-1 rounded-3xl" />
+          <Skeleton className="h-[400px] w-full xl:col-span-3 rounded-3xl" />
         </div>
       </div>
     );
@@ -98,13 +98,13 @@ export default function FinancialsPage() {
 
   return (
     // Fixed height calculated to fit layout (100vh - 64px header - 48px padding - 4px buffer)
-    <div className="h-[calc(100vh-116px)] w-full max-w-[1920px] mx-auto flex gap-6 overflow-hidden bg-[#F9FAFB] font-sans">
+    <div className="flex flex-col xl:flex-row xl:h-[calc(100vh-116px)] w-full max-w-[1920px] mx-auto gap-6 overflow-x-hidden xl:overflow-hidden bg-[#F9FAFB] font-sans pb-4 xl:pb-0">
       {/* LEFT COLUMN: Controls & Summaries (Scrollable) */}
-      <div className="w-[440px] shrink-0 flex flex-col gap-6 h-full">
+      <div className="xl:w-[440px] shrink-0 flex flex-col gap-6 xl:h-full">
         {/* Fixed Header Section in Left Col */}
         <div className="shrink-0 space-y-4 px-1">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight text-[#111827]">
+          <div className="min-w-0">
+            <h1 className="text-2xl xl:text-3xl font-bold tracking-tight text-[#111827] truncate">
               Financial Information
             </h1>
             <p className="text-gray-500 text-sm mt-1 truncate">
@@ -141,13 +141,13 @@ export default function FinancialsPage() {
               </TabsTrigger>
               <TabsTrigger
                 value="waterfall"
-                className="rounded-lg data-[state=active]:bg-[#6366f1] data-[state=active]:text-white py-2 text-xs font-medium"
+                className="rounded-lg data-[state=active]:bg-[#6366f1] data-[state=active]:text-white py-2 text-xs font-medium truncate"
               >
                 Waterfall
               </TabsTrigger>
               <TabsTrigger
                 value="transactions"
-                className="rounded-lg data-[state=active]:bg-[#6366f1] data-[state=active]:text-white py-2 text-xs font-medium"
+                className="rounded-lg data-[state=active]:bg-[#6366f1] data-[state=active]:text-white py-2 text-xs font-medium truncate"
               >
                 Transactions
               </TabsTrigger>
@@ -162,7 +162,7 @@ export default function FinancialsPage() {
         </div>
 
         {/* Scrollable Summary Cards - Hidden Scrollbar */}
-        <div className="flex-1 overflow-y-auto pr-2 space-y-4 pb-4 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']">
+        <div className="xl:flex-1 overflow-y-auto pr-2 space-y-4 pb-4 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']">
           {activeTab === "overview" && (
             <>
               <Card className="border-none shadow-[0_2px_8px_rgba(0,0,0,0.04)] bg-white rounded-2xl overflow-hidden shrink-0">
@@ -318,7 +318,7 @@ export default function FinancialsPage() {
       </div>
 
       {/* RIGHT COLUMN: Fixed Chart Area */}
-      <div className="flex-1 h-full min-w-0">
+      <div className="flex-1 xl:h-full min-w-0 min-h-[500px]">
         {activeTab === "overview" && (
           <div className="h-full w-full rounded-[32px] overflow-hidden shadow-sm bg-white border border-gray-100 relative">
             <FinancialHeroChart data={chartData} />

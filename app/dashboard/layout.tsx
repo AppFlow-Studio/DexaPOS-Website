@@ -2,7 +2,7 @@
 
 import { useClerk, useSession } from "@clerk/nextjs";
 import { redirect, usePathname } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import {
   Sidebar,
   SidebarContent,
@@ -29,6 +29,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import {
   Store,
   LayoutDashboard,
   ShoppingCart,
@@ -41,7 +47,6 @@ import {
   Search,
   MoreHorizontal,
   CreditCard,
-  Bell,
   User,
   LogOut,
   Utensils,
@@ -95,6 +100,10 @@ import {
 } from "@/components/ui/collapsible";
 import { ImpersonationBanner } from "@/components/dashboard/ImpersonationBanner";
 import { ImpersonationHydrator } from "@/components/dashboard/ImpersonationHydrator";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
+import { GetUnreadTicketCounts } from "./actions/support";
+import { MobileBottomNav } from "@/components/dashboard/MobileBottomNav";
+import type { BottomNavTab, MoreNavItem } from "@/components/dashboard/MobileBottomNav";
 
 const navMain = [
   {
@@ -786,6 +795,7 @@ function MerchantSidebar() {
 
 // Location indicator component for the header - now using Zustand store
 function LocationIndicator({ userRole }: { userRole?: string }) {
+  const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
   const {
     selectedLocationId,
     locations,
@@ -816,7 +826,7 @@ function LocationIndicator({ userRole }: { userRole?: string }) {
     return (
       <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full text-sm bg-muted/50">
         <Skeleton className="h-3.5 w-3.5 rounded-full" />
-        <Skeleton className="h-4 w-24" />
+        <Skeleton className="h-4 w-16" />
       </div>
     );
   }
@@ -835,51 +845,83 @@ function LocationIndicator({ userRole }: { userRole?: string }) {
     );
   }
 
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button
-          className={cn(
-            "hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full text-sm transition-all duration-200",
-            isAllLocations
-              ? "bg-muted/50 hover:bg-muted"
-              : "bg-primary/10 border border-primary/20 hover:bg-primary/20"
+  const displayName = isAllLocations
+    ? "All Locations"
+    : selectedLocation?.name ||
+      locations.find((l) => l.id === selectedLocationId)?.name ||
+      "Location";
+
+  // Shared location list content used in both dropdown and mobile sheet
+  const locationListContent = (onSelect?: () => void, variant: 'dropdown' | 'sheet' = 'dropdown') => {
+    if (variant === 'sheet') {
+      return (
+        <>
+          {isMerchantOwner && (
+            <>
+              <button
+                onClick={() => { handleLocationChange("all"); onSelect?.(); }}
+                className={cn(
+                  "flex items-center w-full text-left px-3 py-3 rounded-lg text-sm transition-colors",
+                  selectedLocationId === "all"
+                    ? "bg-accent text-accent-foreground"
+                    : "text-foreground hover:bg-accent hover:text-accent-foreground"
+                )}
+              >
+                <Building2 className="mr-2 h-4 w-4 shrink-0" />
+                <span className="flex-1">All Locations</span>
+                {selectedLocationId === "all" && (
+                  <Badge variant="secondary" className="ml-auto text-[10px] px-1.5">Active</Badge>
+                )}
+              </button>
+              {locations.length > 0 && <div className="my-1 border-t" />}
+            </>
           )}
-        >
-          {isAllLocations ? (
-            <Building2 className="h-3.5 w-3.5 text-muted-foreground" />
-          ) : (
-            <MapPin className="h-3.5 w-3.5 text-primary animate-in zoom-in duration-200" />
+          {locations.length > 0 && (
+            <>
+              {isMerchantOwner && (
+                <p className="px-3 py-1 text-xs text-muted-foreground">Switch to</p>
+              )}
+              {locations.map((location) => {
+                const isPrimary = (location as any).is_primary_location === true;
+                return (
+                  <button
+                    key={location.id}
+                    onClick={() => { handleLocationChange(location.id); onSelect?.(); }}
+                    className={cn(
+                      "flex items-center w-full text-left px-3 py-3 rounded-lg text-sm transition-colors",
+                      selectedLocationId === location.id
+                        ? "bg-accent text-accent-foreground"
+                        : "text-foreground hover:bg-accent hover:text-accent-foreground"
+                    )}
+                  >
+                    <MapPin className="mr-2 h-4 w-4 shrink-0" />
+                    <span className="truncate flex-1">{location.name}</span>
+                    <div className="ml-auto flex items-center gap-1">
+                      {isPrimary && (
+                        <Badge variant="default" className="text-[10px] px-1.5 bg-primary text-primary-foreground">Primary</Badge>
+                      )}
+                      {!location.is_active && (
+                        <Badge variant="outline" className="text-[10px] px-1.5">Inactive</Badge>
+                      )}
+                      {selectedLocationId === location.id && (
+                        <Badge variant="secondary" className="text-[10px] px-1.5">Active</Badge>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </>
           )}
-          <span
-            className={cn(
-              "max-w-37.5 truncate transition-colors duration-200",
-              isAllLocations ? "text-muted-foreground" : "font-medium"
-            )}
-          >
-            {isAllLocations
-              ? "All Locations"
-              : selectedLocation?.name ||
-                locations.find((l) => l.id === selectedLocationId)?.name ||
-                "Select Location"}
-          </span>
-          <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-180" />
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent
-        align="start"
-        className="w-64 animate-in fade-in-0 zoom-in-95 duration-200"
-      >
-        <DropdownMenuLabel className="flex items-center gap-2">
-          <MapPin className="h-4 w-4" />
-          Select Location
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        {/* Show "All Locations" option for owners and admins */}
+        </>
+      );
+    }
+
+    return (
+      <>
         {isMerchantOwner && (
           <>
             <DropdownMenuItem
-              onClick={() => handleLocationChange("all")}
+              onClick={() => { handleLocationChange("all"); onSelect?.(); }}
               className={cn(
                 "cursor-pointer transition-colors",
                 selectedLocationId === "all" && "bg-accent"
@@ -911,7 +953,7 @@ function LocationIndicator({ userRole }: { userRole?: string }) {
               return (
                 <DropdownMenuItem
                   key={location.id}
-                  onClick={() => handleLocationChange(location.id)}
+                  onClick={() => { handleLocationChange(location.id); onSelect?.(); }}
                   className={cn(
                     "cursor-pointer transition-colors animate-in fade-in slide-in-from-left-1 duration-200",
                     selectedLocationId === location.id && "bg-accent"
@@ -948,8 +990,87 @@ function LocationIndicator({ userRole }: { userRole?: string }) {
             })}
           </>
         )}
-      </DropdownMenuContent>
-    </DropdownMenu>
+      </>
+    );
+  };
+
+  return (
+    <>
+      {/* Mobile compact pill — visible below md, opens a bottom sheet */}
+      <button
+        onClick={() => setMobileSheetOpen(true)}
+        className={cn(
+          "md:hidden flex items-center gap-1.5 px-2.5 py-1 rounded-full text-sm transition-all duration-200 max-w-[140px]",
+          isAllLocations
+            ? "bg-muted/50 hover:bg-muted"
+            : "bg-primary/10 border border-primary/20 hover:bg-primary/20"
+        )}
+      >
+        {isAllLocations ? (
+          <Building2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+        ) : (
+          <MapPin className="h-3.5 w-3.5 text-primary shrink-0" />
+        )}
+        <span className={cn("truncate text-xs", isAllLocations ? "text-muted-foreground" : "font-medium")}>
+          {displayName}
+        </span>
+      </button>
+
+      {/* Mobile location sheet */}
+      <Sheet open={mobileSheetOpen} onOpenChange={setMobileSheetOpen}>
+        <SheetContent side="bottom" className="h-[60vh] overflow-y-auto">
+          <SheetHeader className="pb-2">
+            <SheetTitle className="flex items-center gap-2">
+              <MapPin className="h-4 w-4" />
+              Select Location
+            </SheetTitle>
+          </SheetHeader>
+          <div className="flex flex-col">
+            {locationListContent(() => setMobileSheetOpen(false), 'sheet')}
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* Desktop dropdown — hidden below md */}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            className={cn(
+              "hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full text-sm transition-all duration-200",
+              isAllLocations
+                ? "bg-muted/50 hover:bg-muted"
+                : "bg-primary/10 border border-primary/20 hover:bg-primary/20"
+            )}
+          >
+            {isAllLocations ? (
+              <Building2 className="h-3.5 w-3.5 text-muted-foreground" />
+            ) : (
+              <MapPin className="h-3.5 w-3.5 text-primary animate-in zoom-in duration-200" />
+            )}
+            <span
+              className={cn(
+                "max-w-[100px] truncate transition-colors duration-200",
+                isAllLocations ? "text-muted-foreground" : "font-medium"
+              )}
+            >
+              {displayName}
+            </span>
+            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-180" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          align="start"
+          className="w-64 animate-in fade-in-0 zoom-in-95 duration-200"
+        >
+          <DropdownMenuLabel className="flex items-center gap-2">
+            <MapPin className="h-4 w-4" />
+            Select Location
+          </DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          {locationListContent()}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </>
   );
 }
 
@@ -958,6 +1079,8 @@ export default function MerchantDashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const [isMounted, setIsMounted] = useState(false);
+  useEffect(() => { setIsMounted(true); }, []);
   const { isLoaded, isSignedIn } = useSession();
   const { data: userInfo } = useUserInfo();
   const router = useRouter();
@@ -1080,7 +1203,7 @@ export default function MerchantDashboardLayout({
     }
   }, [isLoaded, isSignedIn]);
 
-  if (!isLoaded) {
+  if (isMounted && !isLoaded) {
     return (
       <div className="flex h-screen items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
@@ -1104,30 +1227,63 @@ export default function MerchantDashboardLayout({
     );
   }
 
+  const dashboardBottomTabs: BottomNavTab[] = [
+    { id: "home", label: "Home", icon: LayoutDashboard, url: "/dashboard" },
+    { id: "orders", label: "Orders", icon: ShoppingCart, url: "/dashboard/orders" },
+    { id: "menu", label: "Menu", icon: Utensils, url: "/dashboard/menu" },
+    { id: "staff", label: "Staff", icon: Users, url: "/dashboard/staff" },
+  ];
+
+  const dashboardMoreItems: MoreNavItem[] = [
+    { title: "Locations", url: "/dashboard/locations", icon: MapPin },
+    { title: "Tables", url: "/dashboard/tables", icon: Coffee },
+    { title: "Reservations", url: "/dashboard/reservations", icon: CalendarClock },
+    { title: "Items", url: "/dashboard/menu/items", icon: List },
+    { title: "Categories", url: "/dashboard/menu/categories", icon: Tag },
+    { title: "Discounts", url: "/dashboard/discounts", icon: Banknote },
+    { title: "Modifiers", url: "/dashboard/menu/modifiers", icon: Layers },
+    { title: "Online Ordering", url: "/dashboard/online-ordering", icon: Globe },
+    { title: "Customers", url: "/dashboard/customers", icon: User },
+    { title: "Inventory", url: "/dashboard/inventory", icon: Package },
+    { title: "Subscriptions", url: "/dashboard/subscriptions", icon: FileText },
+    { title: "Devices", url: "/dashboard/devices", icon: Monitor },
+    { title: "Cash Drawers", url: "/dashboard/cash-drawers", icon: Banknote },
+    { title: "Audit Logs", url: "/dashboard/audit-logs", icon: GitCompare },
+    { title: "Reports", url: "/dashboard/reports", icon: BarChart3 },
+    { title: "Transactions", url: "/dashboard/transactions", icon: Receipt },
+    { title: "Invoices", url: "/dashboard/invoices", icon: FileText },
+    { title: "Payments", url: "/dashboard/payments", icon: CreditCard },
+    { title: "Tips", url: "/dashboard/tips", icon: DollarSign },
+    { title: "TSYS Disputes", url: "/dashboard/payments/disputes", icon: ShieldAlert },
+    { title: "Settings", url: "/dashboard/settings", icon: Settings },
+    { title: "Get Help", url: "/dashboard/support", icon: MessageCircle },
+  ];
+
   return (
     <SidebarProvider className="dashboard-sidebar-theme">
       <ImpersonationHydrator />
       <MerchantSidebar />
-      <main aria-label="Dashboard content" className="flex-1 flex flex-col ">
+      <main aria-label="Dashboard content" className="flex-1 flex flex-col min-w-0">
         <ImpersonationBanner />
-        <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
-          <SidebarTrigger className="-ml-1" />
-          <div className="flex items-center gap-3">
-            <h1 className="text-lg font-semibold">Merchant Dashboard</h1>
-            <LocationIndicator userRole={userRole} />
-          </div>
-          <div className="ml-auto flex flex-row items-center gap-2">
+        <header className="flex h-16 shrink-0 items-center gap-2 border-b px-3 sm:px-4">
+          <SidebarTrigger className="-ml-1 hidden sm:flex" />
+          <h1 className="text-base md:text-sm lg:text-base font-semibold truncate flex-1 min-w-0">Merchant Dashboard</h1>
+          <LocationIndicator userRole={userRole} />
+          <div className="ml-auto flex flex-row items-center gap-1 sm:gap-2">
             <AnimatedThemeToggler />
-            <Button variant="ghost" size="icon">
+            <Button variant="ghost" size="icon" className="hidden sm:flex">
               <Search className="h-4 w-4" />
             </Button>
-            <Button variant="ghost" size="icon">
-              <Bell className="h-4 w-4" />
-            </Button>
+            <NotificationBell
+              fetchCounts={GetUnreadTicketCounts}
+              href="/dashboard/support"
+              queryKey="merchant-unread-ticket-counts"
+            />
           </div>
         </header>
-        <div id="main-content" className="flex-1 overflow-auto p-6">{children}</div>
+        <div id="main-content" className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6 pb-20 sm:pb-6">{children}</div>
       </main>
+      <MobileBottomNav tabs={dashboardBottomTabs} moreItems={dashboardMoreItems} />
     </SidebarProvider>
   );
 }

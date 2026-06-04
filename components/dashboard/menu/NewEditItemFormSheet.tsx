@@ -1628,7 +1628,7 @@ export function NewEditItemFormSheet({
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && handleClose()}>
       <DialogContent
         overlayClassName="bg-slate-950/40 backdrop-blur-md"
-        className="w-full max-w-[calc(100vw-1rem)] gap-0 overflow-hidden rounded-[28px] border border-slate-200/80 bg-background/95 p-0 shadow-[0_30px_100px_rgba(15,23,42,0.26)] sm:max-w-5xl xl:max-w-6xl"
+        className="w-full max-w-[calc(100vw-1rem)] gap-0 overflow-x-hidden overflow-y-auto max-h-[92vh] rounded-[28px] border border-slate-200/80 bg-background/95 p-0 shadow-[0_30px_100px_rgba(15,23,42,0.26)] sm:max-w-5xl xl:max-w-6xl"
       >
         <Form {...form}>
           <form
@@ -1664,9 +1664,9 @@ export function NewEditItemFormSheet({
                     : "Please review the highlighted fields and try again.",
               });
             })}
-            className="flex max-h-[min(92vh,960px)] flex-col"
+            className="flex flex-col min-w-0"
           >
-        <DialogHeader className="border-b border-border/70 bg-background/95 px-6 py-5 pr-14 text-left sm:text-left">
+        <DialogHeader className="sticky top-0 z-10 border-b border-border/70 bg-background/95 px-4 sm:px-6 py-5 pr-14 text-left sm:text-left">
           <DialogTitle className="flex items-center gap-2 text-[1.625rem] font-semibold tracking-tight">
             <Sparkles className="h-5 w-5 text-primary animate-pulse" />
             {editItem ? "Edit Menu Item" : "Create New Menu Item"}
@@ -1740,9 +1740,9 @@ export function NewEditItemFormSheet({
           </div></DialogDescription>
         </DialogHeader>
 
-          <div className="min-h-0 flex flex-1 flex-col overflow-hidden lg:flex-row">
+          <div className="flex flex-col lg:flex-row w-full min-w-0">
             {/* Form Section */}
-            <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5 space-y-4">
+            <div className="flex-1 px-4 sm:px-6 py-5 space-y-4 min-w-0 overflow-x-hidden">
               {/* Editing Context Banner - Shows which level user is editing */}
               {editItem && editingContext.level > 1 && (
                 <EditingContextBanner
@@ -3144,11 +3144,12 @@ export function NewEditItemFormSheet({
               </div>
             </div>
           </div>
-        <DialogFooter className="shrink-0 border-t border-border/70 bg-background/95 px-6 py-4 sm:justify-end">
+        <DialogFooter className="sticky bottom-0 z-10 border-t border-border/70 bg-background/95 px-4 sm:px-6 py-4 sm:justify-end gap-2">
           <Button
             type="button"
             variant="outline"
             onClick={handleClose}
+            className="w-full sm:w-auto"
           >
             Cancel
           </Button>
@@ -3156,7 +3157,7 @@ export function NewEditItemFormSheet({
             type="submit"
             form="item-form"
             disabled={isSubmitting}
-            className="min-w-[150px]"
+            className="w-full sm:w-auto sm:min-w-[150px]"
           >
             {isSubmitting ? (
               <>

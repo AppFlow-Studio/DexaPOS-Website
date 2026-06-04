@@ -40,7 +40,6 @@ import {
     CreditCard,
     TrendingUp,
     Package,
-    Bell,
     User,
     SquareStack,
     Layers,
@@ -69,6 +68,10 @@ import Image from 'next/image'
 import type { PermissionCode } from '@/lib/admin/permission-codes'
 import { toast } from 'sonner'
 import { DeviceRegistryCommandPaletteProvider } from '@/app/manage/devices/components/DeviceRegistryCommandPalette'
+import { NotificationBell } from '@/components/notifications/NotificationBell'
+import { GetUnreadTicketCounts } from '@/app/manage/actions/support'
+import { MobileBottomNav } from '@/components/dashboard/MobileBottomNav'
+import type { BottomNavTab, MoreNavItem } from '@/components/dashboard/MobileBottomNav'
 
 // Navigation item type with optional permission requirement
 interface NavItem {
@@ -463,6 +466,25 @@ export default function ManageLayout({
         return null
     }
 
+    const manageBottomTabs: BottomNavTab[] = [
+        { id: 'home', label: 'Home', icon: LayoutDashboard, url: '/manage' },
+        { id: 'merchants', label: 'Merchants', icon: Building2, url: '/manage/merchants' },
+        { id: 'transactions', label: 'Transactions', icon: CreditCard, url: '/manage/transactions' },
+        { id: 'users', label: 'Users', icon: UserCheck, url: '/manage/users' },
+    ]
+
+    const manageMoreItems: MoreNavItem[] = [
+        { title: 'Analytics', url: '/manage/analytics', icon: BarChart3 },
+        { title: 'TSYS Disputes', url: '/manage/disputes', icon: ShieldAlert },
+        { title: 'Platform Fees', url: '/manage/platform-fees', icon: Receipt },
+        { title: 'Subscriptions', url: '/manage/subscriptions', icon: CircleDollarSign },
+        { title: 'Roles & Permissions', url: '/manage/roles-permissions', icon: ShieldCheck },
+        { title: 'Audit Logs', url: '/manage/audit-logs', icon: History },
+        { title: 'Support', url: '/manage/support', icon: MessageSquare },
+        { title: 'Device Registry', url: '/manage/devices', icon: Package },
+        { title: 'Device Catalog', url: '/manage/device-catalog', icon: Monitor },
+    ]
+
     return (
         <SidebarProvider>
             <DeviceRegistryCommandPaletteProvider>
@@ -471,25 +493,28 @@ export default function ManageLayout({
                 </Suspense>
                 <AppSidebar />
                 <main aria-label="Admin content" className="flex-1 flex flex-col min-w-0">
-                    <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
-                        <SidebarTrigger className="-ml-1" />
-                        <div className="flex items-center gap-2">
-                            <h1 className="text-lg font-semibold">Dashboard</h1>
+                    <header className="flex h-16 shrink-0 items-center gap-2 border-b px-3 sm:px-4">
+                        <SidebarTrigger className="-ml-1 hidden sm:flex" />
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                            <h1 className="text-base sm:text-lg font-semibold truncate">Dashboard</h1>
                         </div>
-                        <div className="ml-auto flex flex-row items-center gap-2">
+                        <div className="ml-auto flex flex-row items-center gap-1 sm:gap-2">
                             <AnimatedThemeToggler />
-                            <Button variant="ghost" size="icon">
+                            <Button variant="ghost" size="icon" className="hidden sm:flex">
                                 <Search className="h-4 w-4" />
                             </Button>
-                            <Button variant="ghost" size="icon">
-                                <Bell className="h-4 w-4" />
-                            </Button>
+                            <NotificationBell
+                                fetchCounts={GetUnreadTicketCounts}
+                                href="/manage/support"
+                                queryKey="hq-unread-ticket-counts"
+                            />
                         </div>
                     </header>
-                    <div id="main-content" className="flex-1 overflow-y-auto overflow-x-hidden p-6 min-w-0">
+                    <div id="main-content" className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6 pb-20 sm:pb-6 min-w-0">
                     {children}
                     </div>
                 </main>
+                <MobileBottomNav tabs={manageBottomTabs} moreItems={manageMoreItems} />
             </DeviceRegistryCommandPaletteProvider>
         </SidebarProvider>
     )

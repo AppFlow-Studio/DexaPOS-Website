@@ -115,9 +115,9 @@ export function PriceMatrixGrid({ itemId, className }: PriceMatrixGridProps) {
   }
 
   return (
-    <div className={cn("space-y-4", className)}>
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">{matrix.itemName}</h1>
+    <div className={cn("space-y-4 w-full min-w-0", className)}>
+      <div className="min-w-0">
+        <h1 className="text-2xl font-bold tracking-tight truncate">{matrix.itemName}</h1>
         <p className="text-sm text-muted-foreground">
           Pricing Matrix — global default + every override for every location
         </p>

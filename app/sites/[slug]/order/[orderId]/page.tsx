@@ -40,7 +40,10 @@ export default async function OrderTrackingRoute({ params }: PageProps) {
   // brand color still applies to CTAs/accents via --primary. (DoD: no cream outside hero)
   const bgColor = "#FFFFFF";
   const textColor = (themeStyle as Record<string, string>)["--text"] ?? defaults.text;
-  const rootVarsCss = `:root { ${Object.entries(themeStyle).map(([k, v]) => `${k}: ${v}`).join("; ")} }`;
+  const rootVarsCss = [
+    `:root { ${Object.entries(themeStyle).map(([k, v]) => `${k}: ${v}`).join("; ")} }`,
+    `:root, body { font-family: var(--font); }`,
+  ].join("\n");
 
   return (
     <>

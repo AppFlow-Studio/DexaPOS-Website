@@ -497,10 +497,10 @@ export function ModifierGroupFormSheet({
       <Dialog open={open} onOpenChange={(isOpen) => !isOpen && handleClose()}>
         <DialogContent
           overlayClassName="bg-slate-950/40 backdrop-blur-md"
-          className="w-full max-w-[calc(100vw-1rem)] gap-0 overflow-hidden rounded-[28px] border border-slate-200/80 bg-background/95 p-0 shadow-[0_30px_100px_rgba(15,23,42,0.26)] sm:max-w-5xl xl:max-w-6xl"
+          className="w-full max-w-[calc(100vw-1rem)] gap-0 overflow-x-hidden overflow-y-auto max-h-[92vh] rounded-[28px] border border-slate-200/80 bg-background/95 p-0 shadow-[0_30px_100px_rgba(15,23,42,0.26)] sm:max-w-5xl xl:max-w-6xl"
         >
-          <div className="flex max-h-[min(92vh,960px)] flex-col">
-          <DialogHeader className="border-b border-border/70 bg-background/95 px-6 py-5 pr-14 text-left sm:text-left">
+          <div className="flex flex-col">
+          <DialogHeader className="sticky top-0 z-10 border-b border-border/70 bg-background/95 px-4 sm:px-6 py-5 pr-14 text-left sm:text-left">
             <DialogTitle className="flex items-center gap-2 text-[1.625rem] font-semibold tracking-tight">
               <Layers className="h-5 w-5 text-purple-500" />
               {!canEditStructure ? (
@@ -707,7 +707,7 @@ export function ModifierGroupFormSheet({
                           )}
                         />
 
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                           <FormField
                             control={form.control}
                             name="min_selections"
@@ -1066,7 +1066,7 @@ export function ModifierGroupFormSheet({
                 </div>
               </div>
             </div>
-          <DialogFooter className="border-t border-border/70 bg-background/95 px-6 py-4">
+          <DialogFooter className="sticky bottom-0 z-10 border-t border-border/70 bg-background/95 px-4 sm:px-6 py-4">
             <div className="flex w-full flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
               <Button
                 type="button"
@@ -1329,7 +1329,7 @@ export function ModifierGroupFormSheet({
             </div>
           </div>
 
-          <DialogFooter className="border-t border-border/70 bg-background/95 px-6 py-4">
+          <DialogFooter className="sticky bottom-0 z-10 border-t border-border/70 bg-background/95 px-4 sm:px-6 py-4">
             <div className="flex w-full flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
               <Button
                 type="button"

@@ -303,8 +303,8 @@ export function OrderFilters({ className }: OrderFiltersProps) {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Staff</SelectItem>
-            {staffMembers.map((member) => (
-              <SelectItem key={member.member_id} value={member.member_id}>
+            {staffMembers.filter((m) => m.member_id).map((member) => (
+              <SelectItem key={member.member_id!} value={member.member_id!}>
                 {member.display_name}
               </SelectItem>
             ))}
@@ -337,7 +337,7 @@ export function OrderFilters({ className }: OrderFiltersProps) {
                 </p>
               </div>
               <div className="grid gap-2">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="minAmount">Min Amount</Label>
                     <Input

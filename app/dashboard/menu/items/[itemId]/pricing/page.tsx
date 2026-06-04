@@ -12,7 +12,7 @@ export default async function ItemPricingMatrixPage({ params }: PageProps) {
   const { itemId } = await params;
 
   return (
-    <div className="space-y-4 p-4 sm:p-6">
+    <div className="space-y-4 w-full min-w-0">
       <div className="flex items-center justify-between">
         <Link
           href={`/dashboard/menu/items`}

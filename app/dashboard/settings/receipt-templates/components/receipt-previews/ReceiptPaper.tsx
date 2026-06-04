@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import type { LocationIdentity } from "../../types";
 
 function TornEdgeTop() {
   return (
@@ -42,6 +43,49 @@ export function DoubleLine() {
       <div className="border-b border-zinc-400 dark:border-zinc-600" />
       <div className="border-b border-zinc-400 dark:border-zinc-600 mt-0.5" />
     </div>
+  );
+}
+
+interface ReceiptIdentityBlockProps {
+  locationIdentity?: LocationIdentity;
+}
+
+export function ReceiptIdentityBlock({ locationIdentity }: ReceiptIdentityBlockProps) {
+  const hasName = !!locationIdentity?.name;
+  const hasAddress = !!(locationIdentity?.address_line1 && locationIdentity.city);
+  const hasPhone = !!locationIdentity?.phone;
+  const hasAnyData = hasName || hasAddress || hasPhone;
+
+  if (!hasAnyData) {
+    return (
+      <div className="text-center text-[10px] text-zinc-400 dark:text-zinc-600 italic">
+        Store name &amp; address will appear here
+      </div>
+    );
+  }
+
+  const addressParts = [
+    locationIdentity.address_line1,
+    locationIdentity.address_line2,
+  ].filter(Boolean).join(", ");
+  const cityLine = [locationIdentity.city, locationIdentity.state, locationIdentity.postal_code]
+    .filter(Boolean).join(", ");
+
+  return (
+    <>
+      {hasName && (
+        <div className="text-center font-bold text-sm">{locationIdentity.name}</div>
+      )}
+      {hasAddress && addressParts && (
+        <div className="text-center text-[10px] text-zinc-500">{addressParts}</div>
+      )}
+      {hasAddress && cityLine && (
+        <div className="text-center text-[10px] text-zinc-500">{cityLine}</div>
+      )}
+      {hasPhone && (
+        <div className="text-center text-[10px] text-zinc-500">{locationIdentity.phone}</div>
+      )}
+    </>
   );
 }
 

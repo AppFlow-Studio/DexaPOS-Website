@@ -97,7 +97,7 @@ export function ScopeExplainerPopover({
           </Button>
         )}
       </PopoverTrigger>
-      <PopoverContent align={align} className="w-[340px] p-0">
+      <PopoverContent align={align} className="w-[min(340px,calc(100vw-2rem))] p-0">
         <div className="border-b px-4 py-3">
           <h4 className="text-sm font-semibold leading-none">
             How pricing works in Dexa

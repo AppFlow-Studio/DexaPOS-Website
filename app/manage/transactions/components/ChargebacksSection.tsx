@@ -222,7 +222,7 @@ export function ChargebacksSection({
                 Review disputes, deadlines, and defense status across merchants.
               </CardDescription>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <span className="inline-flex items-center gap-1">
                 <Badge variant="outline">{pendingCount.toLocaleString()} pending/notified</Badge>
                 <InfoIcon tip="Chargebacks that are awaiting action — either just received (Notified) or actively being reviewed. These require attention before their defense deadline." side="left" />
@@ -258,7 +258,7 @@ export function ChargebacksSection({
               </div>
             )}
 
-            <div className={scopedMerchantId ? 'grid gap-3 md:grid-cols-5' : 'grid gap-3 md:grid-cols-6'}>
+            <div className={scopedMerchantId ? 'grid gap-3 grid-cols-2 lg:grid-cols-5' : 'grid gap-3 grid-cols-2 lg:grid-cols-6'}>
               {!scopedMerchantId && (
                 <label className="flex flex-col gap-1 text-sm">
                   <span className="text-muted-foreground">Merchant</span>
@@ -320,7 +320,7 @@ export function ChargebacksSection({
                 <Input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} />
               </label>
 
-              <div className="flex items-end gap-2">
+              <div className="flex items-end gap-2 col-span-2 lg:col-span-1">
                 <Button variant="outline" className="w-full" onClick={() => void refetch()} disabled={isFetching}>
                   <RefreshCcwDot className="mr-2 h-4 w-4" />
                   Refresh

@@ -101,22 +101,22 @@ export default function ReservationsPage() {
           </div>
 
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <div className="flex items-center gap-2 rounded-2xl border border-border/70 bg-muted/30 p-2">
+            <div className="flex items-center gap-2 rounded-2xl border border-border/70 bg-muted/30 p-2 min-w-0">
               <Button
                 variant="ghost"
                 size="icon"
-                className="rounded-xl"
+                className="rounded-xl shrink-0"
                 onClick={() => setSelectedDate(addDays(selectedDate, -1))}
               >
                 <ChevronLeft className="h-4 w-4" />
               </Button>
-              <div className="min-w-[170px] px-2 text-center font-medium text-foreground">
+              <div className="flex-1 min-w-0 px-2 text-center font-medium text-foreground truncate">
                 {displayDate}
               </div>
               <Button
                 variant="ghost"
                 size="icon"
-                className="rounded-xl"
+                className="rounded-xl shrink-0"
                 onClick={() => setSelectedDate(addDays(selectedDate, 1))}
               >
                 <ChevronRight className="h-4 w-4" />

@@ -204,6 +204,7 @@ export function ReceiptModal({
       <DialogContent
         className="sm:max-w-md p-0 gap-0 bg-transparent border-none shadow-none overflow-visible"
         showCloseButton={false}
+        elevation="above-sheet"
       >
         <DialogHeader className="sr-only">
           <DialogTitle>Receipt Preview</DialogTitle>
