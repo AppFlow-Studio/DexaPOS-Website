@@ -227,18 +227,37 @@ export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showL
             cell: ({ row }) => {
                 const typeConfig = getOrderTypeConfig(row.original.order_type)
                 return (
-                    <div className="flex flex-col gap-1">
-                        <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-                            {typeConfig.icon}
-                            <span className="font-medium text-foreground/80">{typeConfig.label}</span>
-                        </span>
-                        {row.original.order_type === 'qr_dine_in' && row.original.table_number ? (
-                            <span className="inline-flex items-center gap-1.5 text-xs text-[#0C4FD1]">
-                                <MapPin className="h-3 w-3" />
-                                Table {row.original.table_number}
-                            </span>
-                        ) : null}
-                    </div>
+                    <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                        {typeConfig.icon}
+                        <span className="font-medium text-foreground/80">{typeConfig.label}</span>
+                    </span>
+                )
+            },
+        },
+        {
+            id: 'table',
+            header: 'Table',
+            // Reference column so a row can be traced to its physical table for
+            // audit without opening the receipt. Dine-in / QR show the table
+            // number; other order types have no table. Merged dine-in checks
+            // resolve all their tables inside the order detail / receipt.
+            accessorFn: (row) =>
+                row.order_type === 'dine_in' || row.order_type === 'qr_dine_in'
+                    ? row.table_number || ''
+                    : '',
+            cell: ({ row }) => {
+                const order = row.original
+                const isDineIn =
+                    order.order_type === 'dine_in' ||
+                    order.order_type === 'qr_dine_in'
+                if (!isDineIn || !order.table_number) {
+                    return <span className="text-sm text-muted-foreground/50">—</span>
+                }
+                return (
+                    <span className="inline-flex items-center gap-1.5 text-xs text-[#0C4FD1]">
+                        <MapPin className="h-3 w-3" />
+                        {order.table_number}
+                    </span>
                 )
             },
         },
