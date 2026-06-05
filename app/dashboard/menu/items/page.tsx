@@ -241,6 +241,7 @@ function ItemCard({
     taxRate && !item.effective_is_tax_exempt
       ? ((item.effective_price * taxRate.percentage) / 100).toFixed(2)
       : "0.00";
+  const modifierGroupCount = item.modifier_groups?.length ?? 0;
 
   return (
     <div
@@ -446,6 +447,17 @@ function ItemCard({
 
             {/* Tax & Channel Badges */}
             <div className="flex flex-wrap gap-1.5 pt-3 border-t mt-3">
+              {modifierGroupCount > 0 && (
+                <Badge
+                  variant="secondary"
+                  className="text-[10px] px-1.5 py-0.5"
+                >
+                  <Layers className="h-2.5 w-2.5 mr-0.5" />
+                  {modifierGroupCount} modifier
+                  {modifierGroupCount === 1 ? " group" : " groups"}
+                </Badge>
+              )}
+
               {/* Tax Badge */}
               <TooltipProvider>
                 <Tooltip>
@@ -581,6 +593,7 @@ function ItemRow({
     taxRate && !item.effective_is_tax_exempt
       ? ((item.effective_price * taxRate.percentage) / 100).toFixed(2)
       : "0.00";
+  const modifierGroupCount = item.modifier_groups?.length ?? 0;
 
   return (
     <div
@@ -640,6 +653,17 @@ function ItemRow({
               )}
               {/* Category, Tax & Channel tags */}
               <div className="flex flex-wrap gap-1 mt-2">
+                {modifierGroupCount > 0 && (
+                  <Badge
+                    variant="secondary"
+                    className="text-[10px] px-1.5 py-0"
+                  >
+                    <Layers className="h-2.5 w-2.5 mr-0.5" />
+                    {modifierGroupCount} modifier
+                    {modifierGroupCount === 1 ? " group" : " groups"}
+                  </Badge>
+                )}
+
                 {/* Category tags */}
                 {item.categories.slice(0, 3).map((cat) => (
                   <Badge
