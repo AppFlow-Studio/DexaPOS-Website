@@ -1,6 +1,7 @@
 "use server";
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { LogAuditEvent } from "./audit-logs";
 import {
   Order,
@@ -101,6 +102,92 @@ export async function GetOrders(
 
   let result = (data as OrderResponse[]) || [];
 
+  // Enrich orders with staff/user names (embedded join can fail; batch fetch is reliable)
+  const staffIds = [
+    ...new Set(result.map((o) => (o as any).created_by_staff_id).filter(Boolean)),
+  ] as string[];
+  const userIds = [
+    ...new Set(result.map((o) => (o as any).created_by_user_id).filter(Boolean)),
+  ] as string[];
+
+  const [staffRes, userRes] = await Promise.all([
+    staffIds.length > 0
+      ? supabase
+          .from("staff_profiles")
+          .select("id, first_name, last_name, display_name")
+          .in("id", staffIds)
+      : Promise.resolve({ data: [] as { id: string; first_name: string | null; last_name: string | null; display_name: string | null }[] }),
+    userIds.length > 0
+      ? supabase
+          .from("users")
+          .select("id, first_name, last_name")
+          .in("id", userIds)
+      : Promise.resolve({ data: [] as { id: string; first_name: string | null; last_name: string | null }[] }),
+  ]);
+
+  const staffById = new Map<string, { first_name?: string | null; last_name?: string | null; display_name?: string | null }>();
+  for (const s of staffRes.data ?? []) {
+    if (s?.id) staffById.set(s.id, s);
+  }
+  const userById = new Map<string, { first_name?: string | null; last_name?: string | null }>();
+  for (const u of userRes.data ?? []) {
+    if (u?.id) userById.set(u.id, u);
+  }
+
+  for (const order of result) {
+    const orderAny = order as any;
+
+    if (!order.created_by_staff && orderAny.created_by_staff_id) {
+      const s = staffById.get(orderAny.created_by_staff_id);
+      if (s) {
+        orderAny.created_by_staff = {
+          first_name: s.first_name ?? undefined,
+          last_name: s.last_name ?? undefined,
+          display_name: s.display_name ?? undefined,
+        };
+      }
+    }
+    if (!order.created_by_user && orderAny.created_by_user_id) {
+      const u = userById.get(orderAny.created_by_user_id);
+      if (u) {
+        orderAny.created_by_user = {
+          first_name: u.first_name ?? undefined,
+          last_name: u.last_name ?? undefined,
+        };
+      }
+    }
+  }
+
+  // Fallback: the embedded order_items join can intermittently return empty
+  // (the same PostgREST quirk the staff/user enrichment above works around).
+  // Batch-fetch items + modifiers for any order that came back without them so
+  // receipts always have a line-item body to render.
+  const ordersMissingItems = result.filter(
+    (o) => !o.order_items || o.order_items.length === 0
+  );
+  if (ordersMissingItems.length > 0) {
+    const missingIds = ordersMissingItems.map((o) => o.id);
+    const { data: itemsData, error: itemsError } = await supabase
+      .from("order_items")
+      .select("*, order_item_modifiers(*)")
+      .in("order_id", missingIds);
+
+    if (itemsError) {
+      console.error("[GetOrders] Error backfilling order_items:", itemsError);
+    } else if (itemsData && itemsData.length > 0) {
+      const itemsByOrder = new Map<string, any[]>();
+      for (const it of itemsData as any[]) {
+        const arr = itemsByOrder.get(it.order_id) ?? [];
+        arr.push(it);
+        itemsByOrder.set(it.order_id, arr);
+      }
+      for (const o of ordersMissingItems) {
+        const items = itemsByOrder.get(o.id);
+        if (items) (o as any).order_items = items;
+      }
+    }
+  }
+
   // In-memory filter for Payment Method
   if (filters?.paymentMethod && filters.paymentMethod.length > 0) {
     result = result.filter((order) => {
@@ -116,6 +203,50 @@ export async function GetOrders(
   }
 
   return result;
+}
+
+/**
+ * Resolve the physical table label(s) for a dine-in order via its table
+ * session. A merged check spans multiple tables (one session, many
+ * `table_session_tables`), so `orders.table_number` names only one of them.
+ * Returns all active tables ordered primary-first then by seated position,
+ * plus a display label e.g. "Tables 4 + 5".
+ */
+export async function GetSessionTableLabel(
+  sessionId: string
+): Promise<{ tables: string[]; label: string | null }> {
+  if (!sessionId) return { tables: [], label: null };
+
+  const supabase = createServiceRoleClient();
+  const { data, error } = await supabase
+    .from("table_session_tables")
+    .select("is_primary, seated_position, is_active, floor_plan_objects(name)")
+    .eq("session_id", sessionId)
+    .eq("is_active", true);
+
+  if (error || !data || data.length === 0) {
+    if (error) console.error("[GetSessionTableLabel] Error:", error);
+    return { tables: [], label: null };
+  }
+
+  const rows = [...(data as any[])].sort((a, b) => {
+    // Primary table first, then by seated_position.
+    if (!!a.is_primary !== !!b.is_primary) return a.is_primary ? -1 : 1;
+    return (a.seated_position ?? 0) - (b.seated_position ?? 0);
+  });
+
+  const tables = rows
+    .map((r) => r?.floor_plan_objects?.name)
+    .filter((n): n is string => !!n);
+
+  if (tables.length === 0) return { tables: [], label: null };
+
+  const label =
+    tables.length === 1
+      ? `Table ${tables[0]}`
+      : `Tables ${tables.join(" + ")}`;
+
+  return { tables, label };
 }
 
 export async function GetCustomerOrders(
