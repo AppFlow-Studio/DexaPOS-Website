@@ -3,10 +3,8 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useCart } from "../hooks/useCart";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
-import { Minus, Plus, X, Leaf, ShoppingBag } from "lucide-react";
+import { Minus, Plus, X, ShoppingBag } from "lucide-react";
 import * as SheetPrimitive from "@radix-ui/react-dialog";
 import { OnlineOrderingConfig } from "@/types/site";
 import { StorefrontItem } from "@/types/storefront";
@@ -43,8 +41,6 @@ export function CartSidebar({ config, storeConfigId, slug, taxRate = 0, allItems
     updateQuantity,
     removeItem,
     getSubtotal,
-    goGreen,
-    setGoGreen,
     requestOpenModal,
   } = useCart();
 
@@ -340,32 +336,6 @@ export function CartSidebar({ config, storeConfigId, slug, taxRate = 0, allItems
           {/* Footer */}
           {items.length > 0 && (
             <div className="shrink-0" style={{ borderTop: "1px solid var(--border)" }}>
-              {/* Go Green */}
-              <div
-                className="px-6 py-3 flex items-center justify-between"
-                style={{ borderBottom: "1px solid var(--border)" }}
-              >
-                <div className="flex items-center gap-2">
-                  <Leaf
-                    className={cn("h-4 w-4", goGreen ? "text-green-600" : "")}
-                    style={{ color: goGreen ? undefined : "var(--text-secondary)" }}
-                  />
-                  <div>
-                    <Label
-                      htmlFor="go-green"
-                      className="text-sm font-medium cursor-pointer"
-                      style={{ color: "var(--text)" }}
-                    >
-                      Go Green
-                    </Label>
-                    <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
-                      Skip the plastic cutlery
-                    </p>
-                  </div>
-                </div>
-                <Switch id="go-green" checked={goGreen} onCheckedChange={setGoGreen} />
-              </div>
-
               {/* Price Summary */}
               <div className="px-6 py-3 space-y-1.5 text-sm">
                 <div className="flex justify-between" style={{ color: "var(--text-secondary)" }}>

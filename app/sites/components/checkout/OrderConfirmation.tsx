@@ -89,8 +89,8 @@ export function OrderConfirmation({
     ? formatScheduledTime(requestedTime, locationTimezone)
     : null;
 
-  // Current step index for status strip
-  const currentStepIndex = isPending ? 0 : 2; // Placed (pending) or Preparing (accepted)
+  // Current step index for status strip: Placed (0) while pending, Accepted (1) once confirmed
+  const currentStepIndex = isPending ? 0 : 1;
 
   const paymentLine = snapshotPayCash
     ? "Cash in store"
