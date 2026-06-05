@@ -196,7 +196,14 @@ export default function TransactionsPage() {
             Revenue, transactions, and payment activity
           </p>
         </div>
-        <DateRangePicker date={date} setDate={setDate} className="w-full sm:w-auto" />
+        <DateRangePicker
+          dateFrom={dateRange.from}
+          dateTo={dateRange.to}
+          onDateRangeChange={(from, to) => { if (from && to) setDateRange({ from, to }); }}
+          preset={preset}
+          onPresetChange={setPreset}
+          className="w-full sm:w-auto"
+        />
       </div>
 
       {/* Hero Chart */}
