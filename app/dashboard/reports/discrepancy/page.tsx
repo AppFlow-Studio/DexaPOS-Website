@@ -197,7 +197,7 @@ export default function DiscrepancyReportPage() {
     ? ((affectedOrderIds.size / totalOrders) * 100).toFixed(1)
     : "0.0";
 
-  const kpis = [
+  const kpiCards = [
     {
       label: "Total Discrepancies",
       value: isLoading ? null : isError ? "—" : allRows.length.toLocaleString(),
@@ -260,7 +260,7 @@ export default function DiscrepancyReportPage() {
 
       {/* KPI Cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {kpis.map((kpi) => (
+        {kpiCards.map((kpi) => (
           <Card key={kpi.label} className="border-none shadow-[0_2px_12px_rgba(0,0,0,0.06)] bg-card rounded-2xl overflow-hidden">
             <CardContent className="p-5">
               <div className="flex items-center justify-between mb-4">
