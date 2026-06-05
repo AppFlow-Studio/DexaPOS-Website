@@ -199,11 +199,7 @@ export default function TransactionsPage() {
         <DateRangePicker
           dateFrom={dateRange.from}
           dateTo={dateRange.to}
-          onDateRangeChange={(from, to) => {
-            if (from && to) {
-              setDateRange({ from, to });
-            }
-          }}
+          onDateRangeChange={(from, to) => { if (from && to) setDateRange({ from, to }); }}
           preset={preset}
           onPresetChange={setPreset}
           className="w-full sm:w-auto"

@@ -98,19 +98,9 @@ function formatTimeRange(from: string, to: string): string {
   return `${formatTime(from)} – ${formatTime(to)}`;
 }
 
-const card: React.CSSProperties = {
-  backgroundColor: "#FFFFFF",
-  borderColor: "#E5E7EB",
-  color: "#111827",
-};
-
-const iconBox: React.CSSProperties = {
-  backgroundColor: "#F3F4F6",
-  color: "#6B7280",
-};
-
+const border = "1px solid #E5E7EB";
 const muted: React.CSSProperties = { color: "#6B7280" };
-const label: React.CSSProperties = { color: "#9CA3AF" };
+const label: React.CSSProperties = { color: "#9CA3AF", fontSize: "0.7rem", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.06em" };
 
 export function InfoPanel({ site, location }: InfoPanelProps) {
   const storeName = site?.title || location.name;
@@ -136,38 +126,26 @@ export function InfoPanel({ site, location }: InfoPanelProps) {
   return (
     <div className="pb-8 max-w-4xl mx-auto space-y-4">
       {/* Store Header Card */}
-      <div className="rounded-xl border p-5" style={card}>
+      <div className="p-5" style={{ border, borderRadius: "8px", backgroundColor: "#fff" }}>
         <div className="flex items-start gap-4">
           {site?.logo_url ? (
-            <div
-              className="h-16 w-16 rounded-xl overflow-hidden border shrink-0"
-              style={{ borderColor: "#E5E7EB" }}
-            >
+            <div className="h-16 w-16 overflow-hidden shrink-0" style={{ border, borderRadius: "8px" }}>
               <img src={site.logo_url} alt={storeName} className="h-full w-full object-cover" />
             </div>
           ) : (
             <div
-              className="flex h-16 w-16 items-center justify-center rounded-xl font-bold text-xl shrink-0"
-              style={{
-                backgroundColor: "color-mix(in srgb, var(--primary) 10%, #FFFFFF)",
-                color: "var(--primary)",
-                border: "1px solid #E5E7EB",
-              }}
+              className="flex h-16 w-16 items-center justify-center font-bold text-xl shrink-0"
+              style={{ backgroundColor: "#f3f4f6", color: "#374151", borderRadius: "8px", border }}
             >
               {storeName.charAt(0).toUpperCase()}
             </div>
           )}
           <div className="flex-1 min-w-0">
-            <h1
-              className="text-xl font-bold truncate"
-              style={{ color: "var(--primary)", fontFamily: "var(--font-display)" }}
-            >
+            <h1 className="text-xl font-bold truncate" style={{ color: "var(--primary)", fontFamily: "var(--font-display)" }}>
               {storeName}
             </h1>
             {description && (
-              <p className="mt-1 text-sm line-clamp-2" style={muted}>
-                {description}
-              </p>
+              <p className="mt-1 text-sm line-clamp-2" style={muted}>{description}</p>
             )}
             <div className="mt-2">
               <OpenClosedIndicator businessHours={rawBusinessHours} showSchedule={true} />
@@ -186,20 +164,16 @@ export function InfoPanel({ site, location }: InfoPanelProps) {
             href={mapsUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="group flex items-center gap-4 rounded-xl border p-4 transition-colors hover:border-gray-300"
-            style={card}
+            className="flex items-center gap-4 p-4 transition-colors hover:bg-gray-50"
+            style={{ border, borderRadius: "8px", backgroundColor: "#fff" }}
           >
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg" style={iconBox}>
-              <MapPin className="h-5 w-5" />
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center" style={{ backgroundColor: "#f3f4f6", borderRadius: "8px" }}>
+              <MapPin className="h-4 w-4" style={{ color: "#6B7280" }} />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-medium uppercase tracking-wide" style={label}>Address</p>
-              <p className="text-sm font-medium truncate mt-0.5" style={{ color: "#111827" }}>
-                {location.address_line1}
-              </p>
-              <p className="text-sm truncate" style={muted}>
-                {location.city}, {location.state} {location.postal_code}
-              </p>
+              <p style={label}>Address</p>
+              <p className="text-sm font-medium truncate mt-0.5" style={{ color: "#111827" }}>{location.address_line1}</p>
+              <p className="text-sm truncate" style={muted}>{location.city}, {location.state} {location.postal_code}</p>
             </div>
             <ExternalLink className="h-4 w-4 shrink-0" style={muted} />
           </a>
@@ -208,19 +182,17 @@ export function InfoPanel({ site, location }: InfoPanelProps) {
           {location.phone && (
             <a
               href={`tel:${location.phone}`}
-              className="group flex items-center gap-4 rounded-xl border p-4 transition-colors hover:border-gray-300"
-              style={card}
+              className="flex items-center gap-4 p-4 transition-colors hover:bg-gray-50"
+              style={{ border, borderRadius: "8px", backgroundColor: "#fff" }}
             >
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg" style={iconBox}>
-                <Phone className="h-5 w-5" />
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center" style={{ backgroundColor: "#f3f4f6", borderRadius: "8px" }}>
+                <Phone className="h-4 w-4" style={{ color: "#6B7280" }} />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium uppercase tracking-wide" style={label}>Phone</p>
-                <p className="text-sm font-medium truncate mt-0.5" style={{ color: "#111827" }}>
-                  {formatPhoneForDisplay(location.phone)}
-                </p>
+                <p style={label}>Phone</p>
+                <p className="text-sm font-medium truncate mt-0.5" style={{ color: "#111827" }}>{formatPhoneForDisplay(location.phone)}</p>
               </div>
-              <ChevronRight className="h-5 w-5 shrink-0" style={muted} />
+              <ChevronRight className="h-4 w-4 shrink-0" style={muted} />
             </a>
           )}
 
@@ -228,61 +200,60 @@ export function InfoPanel({ site, location }: InfoPanelProps) {
           {location.email && (
             <a
               href={`mailto:${location.email}`}
-              className="group flex items-center gap-4 rounded-xl border p-4 transition-colors hover:border-gray-300"
-              style={card}
+              className="flex items-center gap-4 p-4 transition-colors hover:bg-gray-50"
+              style={{ border, borderRadius: "8px", backgroundColor: "#fff" }}
             >
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg" style={iconBox}>
-                <Mail className="h-5 w-5" />
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center" style={{ backgroundColor: "#f3f4f6", borderRadius: "8px" }}>
+                <Mail className="h-4 w-4" style={{ color: "#6B7280" }} />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium uppercase tracking-wide" style={label}>Email</p>
-                <p className="text-sm font-medium truncate mt-0.5" style={{ color: "#111827" }}>
-                  {location.email}
-                </p>
+                <p style={label}>Email</p>
+                <p className="text-sm font-medium truncate mt-0.5" style={{ color: "#111827" }}>{location.email}</p>
               </div>
-              <ChevronRight className="h-5 w-5 shrink-0" style={muted} />
+              <ChevronRight className="h-4 w-4 shrink-0" style={muted} />
             </a>
           )}
 
           {/* Ordering Options */}
           {showOrderingOptions && (
-            <div className="rounded-xl border p-5" style={card}>
-              <div className="flex items-center gap-3 mb-4">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg" style={iconBox}>
-                  <ShoppingBag className="h-5 w-5" />
-                </div>
-                <h3 className="text-base font-bold" style={{ color: "#111827" }}>Ordering Options</h3>
+            <div className="p-5" style={{ border, borderRadius: "8px", backgroundColor: "#fff" }}>
+              <div className="flex items-center gap-2 mb-4" style={{ borderBottom: "1px solid #f3f4f6", paddingBottom: "12px" }}>
+                <ShoppingBag className="h-4 w-4" style={{ color: "#9ca3af" }} />
+                <h3 className="text-sm font-semibold" style={{ color: "#111827" }}>Ordering Options</h3>
               </div>
 
               <div className="space-y-3">
+                {/* Pickup row */}
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 text-sm" style={muted}>
                     <ShoppingBag className="h-4 w-4" />
                     <span>Pickup</span>
                   </div>
+                  {/* MUI Chip — outlined style */}
                   <span
-                    className="text-xs font-semibold px-2 py-0.5 rounded-full border"
+                    className="text-xs font-semibold px-2.5 py-0.5"
                     style={
                       pickupEnabled
-                        ? { color: "var(--primary)", borderColor: "var(--primary)", backgroundColor: "color-mix(in srgb, var(--primary) 8%, #FFFFFF)" }
-                        : { color: "#9CA3AF", borderColor: "#E5E7EB", backgroundColor: "#F9FAFB" }
+                        ? { border: "1px solid var(--primary)", color: "var(--primary)", borderRadius: "16px" }
+                        : { border: "1px solid #E5E7EB", color: "#9CA3AF", borderRadius: "16px" }
                     }
                   >
                     {pickupEnabled ? "Available" : "Unavailable"}
                   </span>
                 </div>
 
+                {/* Delivery row */}
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 text-sm" style={muted}>
                     <Truck className="h-4 w-4" />
                     <span>Delivery</span>
                   </div>
                   <span
-                    className="text-xs font-semibold px-2 py-0.5 rounded-full border"
+                    className="text-xs font-semibold px-2.5 py-0.5"
                     style={
                       deliveryEnabled
-                        ? { color: "var(--primary)", borderColor: "var(--primary)", backgroundColor: "color-mix(in srgb, var(--primary) 8%, #FFFFFF)" }
-                        : { color: "#9CA3AF", borderColor: "#E5E7EB", backgroundColor: "#F9FAFB" }
+                        ? { border: "1px solid var(--primary)", color: "var(--primary)", borderRadius: "16px" }
+                        : { border: "1px solid #E5E7EB", color: "#9CA3AF", borderRadius: "16px" }
                     }
                   >
                     {deliveryEnabled ? "Available" : "Unavailable"}
@@ -329,65 +300,53 @@ export function InfoPanel({ site, location }: InfoPanelProps) {
         </div>
 
         {/* RIGHT: Hours */}
-        <div>
-          <div className="rounded-xl border p-5" style={card}>
-            <div className="flex items-center gap-3 mb-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg" style={iconBox}>
-                <Clock className="h-5 w-5" />
-              </div>
-              <h3 className="text-base font-bold" style={{ color: "#111827" }}>Store Hours</h3>
-            </div>
+        <div className="p-5" style={{ border, borderRadius: "8px", backgroundColor: "#fff" }}>
+          <div className="flex items-center gap-2 mb-4" style={{ borderBottom: "1px solid #f3f4f6", paddingBottom: "12px" }}>
+            <Clock className="h-4 w-4" style={{ color: "#9ca3af" }} />
+            <h3 className="text-sm font-semibold" style={{ color: "#111827" }}>Store Hours</h3>
+          </div>
 
-            {businessHours.length > 0 ? (
-              <div>
+          {businessHours.length > 0 ? (
+            <table className="w-full text-sm border-collapse">
+              <tbody>
                 {businessHours.map((item, index) => {
                   const isToday =
                     new Date().toLocaleDateString("en-US", { weekday: "long" }).toLowerCase() ===
                     item.day.toLowerCase();
                   const isClosed = item.hours.toLowerCase() === "closed";
                   return (
-                    <div
+                    <tr
                       key={index}
-                      className="flex items-center justify-between py-2.5 px-3 rounded-lg"
-                      style={
-                        isToday
-                          ? { backgroundColor: "#F9FAFB", border: "1px solid #E5E7EB" }
-                          : undefined
-                      }
+                      style={isToday ? { borderLeft: "3px solid var(--primary)" } : { borderLeft: "3px solid transparent" }}
                     >
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium" style={{ color: "#111827" }}>
-                          {item.day}
-                        </span>
+                      <td className="py-2.5 px-3" style={{ color: isToday ? "var(--primary)" : "#374151", fontWeight: isToday ? 600 : 400 }}>
+                        {item.day}
                         {isToday && (
                           <span
-                            className="text-[10px] font-semibold px-1.5 py-0.5 rounded"
-                            style={{ backgroundColor: "#111827", color: "#FFFFFF" }}
+                            className="ml-2 text-[10px] font-semibold px-1.5 py-0.5"
+                            style={{ backgroundColor: "#111827", color: "#fff", borderRadius: "3px" }}
                           >
                             TODAY
                           </span>
                         )}
-                      </div>
-                      <span
-                        className="text-sm"
-                        style={{
-                          color: isClosed ? "#9CA3AF" : isToday ? "var(--primary)" : "#6B7280",
-                          fontWeight: isToday ? 500 : undefined,
-                        }}
+                      </td>
+                      <td
+                        className="py-2.5 px-3 text-right"
+                        style={{ color: isClosed ? "#d1d5db" : isToday ? "var(--primary)" : "#6B7280", fontWeight: isToday ? 600 : 400 }}
                       >
                         {item.hours}
-                      </span>
-                    </div>
+                      </td>
+                    </tr>
                   );
                 })}
-              </div>
-            ) : (
-              <div className="text-center py-4">
-                <p className="font-medium" style={{ color: "#111827" }}>Hours not available</p>
-                <p className="text-sm mt-1" style={muted}>Contact the store for operating hours</p>
-              </div>
-            )}
-          </div>
+              </tbody>
+            </table>
+          ) : (
+            <div className="text-center py-4">
+              <p className="font-medium" style={{ color: "#111827" }}>Hours not available</p>
+              <p className="text-sm mt-1" style={muted}>Contact the store for operating hours</p>
+            </div>
+          )}
         </div>
 
       </div>
