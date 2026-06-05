@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
+import { useReportingQueryRange } from "@/app/dashboard/hooks/useReportingDateRange";
 import { format, subDays, startOfDay, endOfDay, formatDistanceToNow } from "date-fns";
 import Papa from "papaparse";
 import {
@@ -1149,9 +1150,10 @@ export default function CashDrawerReportsPage() {
   });
   const [preset, setPreset] = useState<DatePreset>("today");
   const [activeTab, setActiveTab] = useState("sessions");
+  const queryDateRange = useReportingQueryRange(dateRange);
 
   const { data: stats, isLoading: statsLoading, refetch: refetchStats, dataUpdatedAt } =
-    useCashDrawerSummaryStats(dateRange.from, dateRange.to);
+    useCashDrawerSummaryStats(queryDateRange.from, queryDateRange.to);
 
   function handleDateRangeChange(from: Date | null, to: Date | null) {
     if (from && to) setDateRange({ from, to });
@@ -1200,13 +1202,13 @@ export default function CashDrawerReportsPage() {
         </TabsList>
 
         <TabsContent value="sessions" className="mt-6">
-          <SessionsTab dateFrom={dateRange.from} dateTo={dateRange.to} />
+          <SessionsTab dateFrom={queryDateRange.from} dateTo={queryDateRange.to} />
         </TabsContent>
         <TabsContent value="no-sale" className="mt-6">
-          <NoSaleTab dateFrom={dateRange.from} dateTo={dateRange.to} />
+          <NoSaleTab dateFrom={queryDateRange.from} dateTo={queryDateRange.to} />
         </TabsContent>
         <TabsContent value="variance" className="mt-6">
-          <VarianceTrendsTab dateFrom={dateRange.from} dateTo={dateRange.to} />
+          <VarianceTrendsTab dateFrom={queryDateRange.from} dateTo={queryDateRange.to} />
         </TabsContent>
       </Tabs>
     </div>

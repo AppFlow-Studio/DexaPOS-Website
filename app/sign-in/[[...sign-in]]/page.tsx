@@ -1,13 +1,14 @@
-import { SignIn, SignedIn, SignedOut, SignOutButton } from '@clerk/nextjs'
+import { SignIn } from '@clerk/nextjs'
 import { auth } from '@clerk/nextjs/server'
-import { ArrowRight, LayoutDashboard, Settings, LogOut } from 'lucide-react'
+import { ArrowRight, LayoutDashboard, Settings } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
+import { SignOutButtonClient } from './sign-out-button'
 
 const DEXA_HQ_ORG_ID = process.env.DEXA_POS_INTERNAL_TEAM_ID
 
 export default async function SignInPage() {
-  const { orgId } = await auth()
+  const { orgId, userId } = await auth()
   const isHQ = !!orgId && !!DEXA_HQ_ORG_ID && orgId === DEXA_HQ_ORG_ID
 
   const primaryDestination = isHQ
@@ -32,7 +33,7 @@ export default async function SignInPage() {
           </span>
         </div>
 
-        <SignedOut>
+        {!userId ? (
           <div className="w-full">
             <div className="mb-8 text-center">
               <h1 className="text-3xl font-semibold text-foreground mb-2">
@@ -74,9 +75,7 @@ export default async function SignInPage() {
               />
             </div>
           </div>
-        </SignedOut>
-
-        <SignedIn>
+        ) : (
           <div className="w-full bg-card border border-border rounded-2xl p-7 shadow-sm">
             <h2 className="text-2xl font-semibold text-card-foreground mb-1">
               Welcome back!
@@ -98,14 +97,9 @@ export default async function SignInPage() {
               <ArrowRight className="w-4 h-4" />
             </Link>
 
-            <SignOutButton>
-              <button className="mt-3 flex items-center justify-center gap-2 w-full px-4 py-3 text-muted-foreground rounded-xl font-medium hover:bg-muted/60 transition-colors">
-                <LogOut className="w-4 h-4" />
-                Sign out
-              </button>
-            </SignOutButton>
+            <SignOutButtonClient />
           </div>
-        </SignedIn>
+        )}
 
         <p className="mt-8 text-xs text-muted-foreground">
           © {new Date().getFullYear()} DexaPOS. All rights reserved.

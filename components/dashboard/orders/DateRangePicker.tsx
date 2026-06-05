@@ -3,14 +3,7 @@
 import * as React from 'react'
 import { Calendar as CalendarIcon, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Button, buttonVariants } from '@/components/ui/button'
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuLabel,
-    DropdownMenuSeparator,
-    DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
 import { DayPicker } from 'react-day-picker'
 import type { DateRange } from 'react-day-picker'
@@ -203,8 +196,7 @@ export function DateRangePicker({
 
     return (
         <div className={cn('flex items-center gap-2', className)}>
-            <DropdownMenu
-                modal={false}
+            <Popover
                 open={open}
                 onOpenChange={(nextOpen) => {
                     if (!nextOpen && open) {
@@ -213,123 +205,133 @@ export function DateRangePicker({
                     setOpen(nextOpen)
                 }}
             >
-                <DropdownMenuTrigger asChild>
+                <PopoverTrigger asChild>
                     <Button variant="outline" className="gap-2">
                         <CalendarIcon className="h-4 w-4" />
                         <span>{displayText}</span>
                         <ChevronDown className="h-4 w-4" />
                     </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-auto z-[200]">
-                    <DropdownMenuLabel>Presets</DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    {PRESETS.map((presetOption) => (
-                        <DropdownMenuItem
-                            key={presetOption.value}
-                            onSelect={(event) => {
-                                event.preventDefault()
-                                handlePresetSelect(presetOption.value)
-                            }}
-                            className={cn(
-                                draftPreset === presetOption.value && 'bg-accent'
+                </PopoverTrigger>
+                <PopoverContent align="start" className="w-auto p-0 z-[200]">
+                    <div className="flex">
+                        {/* Preset list */}
+                        <div className="flex flex-col border-r border-border min-w-[130px] py-2">
+                            <p className="px-3 pb-1 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Presets</p>
+                            {PRESETS.map((presetOption) => (
+                                <button
+                                    key={presetOption.value}
+                                    type="button"
+                                    onClick={() => handlePresetSelect(presetOption.value)}
+                                    className={cn(
+                                        'px-3 py-1.5 text-sm text-left hover:bg-accent transition-colors',
+                                        draftPreset === presetOption.value && 'bg-accent font-medium'
+                                    )}
+                                >
+                                    {presetOption.label}
+                                </button>
+                            ))}
+                        </div>
+
+                        {/* Calendar + footer */}
+                        <div className="relative p-3 space-y-3">
+                            <DayPicker
+                                mode="range"
+                                selected={draftRange}
+                                onSelect={(nextRange) => {
+                                    setDraftPreset('custom')
+                                    setDraftRange(nextRange)
+                                }}
+                                captionLayout="dropdown"
+                                startMonth={new Date(2015, 0)}
+                                endMonth={new Date(currentYear, 11)}
+                                showOutsideDays={true}
+                                classNames={{
+                                    root: "p-0",
+                                    months: "flex flex-col",
+                                    month: "flex flex-col gap-4",
+                                    month_caption: "flex justify-center pt-1 relative items-center gap-1 h-8",
+                                    caption_label: "hidden",
+                                    dropdowns: "flex gap-1 items-center",
+                                    dropdown: cn(
+                                        "appearance-none bg-background border border-input rounded-md px-2 py-1",
+                                        "text-sm font-medium cursor-pointer",
+                                        "hover:bg-accent hover:text-accent-foreground",
+                                        "focus:outline-none focus:ring-1 focus:ring-ring"
+                                    ),
+                                    dropdown_root: "relative",
+                                    nav: "flex items-center justify-between absolute left-3 right-3 top-3 h-8",
+                                    button_previous: cn(
+                                        buttonVariants({ variant: "outline" }),
+                                        "h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100"
+                                    ),
+                                    button_next: cn(
+                                        buttonVariants({ variant: "outline" }),
+                                        "h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100"
+                                    ),
+                                    month_grid: "w-full border-collapse",
+                                    weekdays: "flex",
+                                    weekday: "text-muted-foreground w-9 font-normal text-[0.8rem] text-center",
+                                    weeks: "flex flex-col gap-1 mt-2",
+                                    week: "flex",
+                                    day: "h-9 w-9 text-center text-sm p-0 relative focus-within:relative focus-within:z-20 [&:has([data-selected])]:bg-accent [&:has([data-selected][data-range-end])]:rounded-r-md [&:has([data-selected][data-range-start])]:rounded-l-md first:[&:has([data-selected])]:rounded-l-md last:[&:has([data-selected])]:rounded-r-md",
+                                    day_button: cn(
+                                        buttonVariants({ variant: "ghost" }),
+                                        "h-9 w-9 p-0 font-normal",
+                                        "[&[data-selected]]:opacity-100",
+                                        "[&[data-range-start]]:bg-primary [&[data-range-start]]:text-primary-foreground",
+                                        "[&[data-range-end]]:bg-primary [&[data-range-end]]:text-primary-foreground",
+                                        "[&[data-selected][data-range-middle]]:bg-transparent [&[data-selected][data-range-middle]]:text-accent-foreground",
+                                    ),
+                                    range_start: "rounded-l-md",
+                                    range_end: "rounded-r-md",
+                                    range_middle: "bg-accent",
+                                    selected: "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground",
+                                    today: "bg-accent text-accent-foreground",
+                                    outside: "text-muted-foreground opacity-50 [&[data-selected]]:bg-accent/50 [&[data-selected]]:text-muted-foreground [&[data-selected]]:opacity-30",
+                                    disabled: "text-muted-foreground opacity-50",
+                                    hidden: "invisible",
+                                }}
+                                components={{
+                                    Chevron: ({ orientation }) => orientation === 'left'
+                                        ? <ChevronLeft className="h-4 w-4" />
+                                        : <ChevronRight className="h-4 w-4" />,
+                                }}
+                            />
+                            {draftRange?.from ? (
+                                <p className="text-xs text-muted-foreground text-center">
+                                    {draftRange.to
+                                        ? `${formatDateDisplay(draftRange.from)} → ${formatDateDisplay(draftRange.to)}`
+                                        : `From ${formatDateDisplay(draftRange.from)} — pick end date`}
+                                </p>
+                            ) : (
+                                <p className="text-xs text-muted-foreground text-center">
+                                    Pick a start and end date, then apply.
+                                </p>
                             )}
-                        >
-                            {presetOption.label}
-                        </DropdownMenuItem>
-                    ))}
-                    <DropdownMenuSeparator />
-                    <DropdownMenuLabel>Draft Range</DropdownMenuLabel>
-                    <div className="p-2 space-y-3">
-                        <DayPicker
-                            mode="range"
-                            selected={draftRange}
-                            onSelect={(nextRange) => {
-                                setDraftPreset('custom')
-                                setDraftRange(nextRange)
-                            }}
-                            captionLayout="dropdown"
-                            fromYear={2015}
-                            toYear={currentYear}
-                            showOutsideDays={true}
-                            className="p-0"
-                            classNames={{
-                                months: "flex flex-col space-y-4",
-                                month: "space-y-4",
-                                caption: "flex justify-center pt-1 relative items-center gap-1",
-                                caption_label: "hidden",
-                                caption_dropdowns: "flex gap-1 items-center",
-                                dropdown: cn(
-                                    "appearance-none bg-background border border-input rounded-md px-2 py-1",
-                                    "text-sm font-medium cursor-pointer",
-                                    "hover:bg-accent hover:text-accent-foreground",
-                                    "focus:outline-none focus:ring-1 focus:ring-ring"
-                                ),
-                                dropdown_year: "",
-                                dropdown_month: "",
-                                vhidden: "sr-only",
-                                nav: "space-x-1 flex items-center",
-                                nav_button: cn(
-                                    buttonVariants({ variant: "outline" }),
-                                    "h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100"
-                                ),
-                                nav_button_previous: "absolute left-1",
-                                nav_button_next: "absolute right-1",
-                                table: "w-full border-collapse space-y-1",
-                                head_row: "flex",
-                                head_cell: "text-muted-foreground rounded-md w-9 font-normal text-[0.8rem]",
-                                row: "flex w-full mt-2",
-                                cell: "h-9 w-9 text-center text-sm p-0 relative [&:has([aria-selected].day-range-end)]:rounded-r-md [&:has([aria-selected].day-outside)]:bg-accent/50 [&:has([aria-selected])]:bg-accent first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md focus-within:relative focus-within:z-20",
-                                day: cn(
-                                    buttonVariants({ variant: "ghost" }),
-                                    "h-9 w-9 p-0 font-normal aria-selected:opacity-100"
-                                ),
-                                day_range_end: "day-range-end",
-                                day_selected: "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground",
-                                day_today: "bg-accent text-accent-foreground",
-                                day_outside: "day-outside text-muted-foreground opacity-50 aria-selected:bg-accent/50 aria-selected:text-muted-foreground aria-selected:opacity-30",
-                                day_disabled: "text-muted-foreground opacity-50",
-                                day_range_middle: "aria-selected:bg-accent aria-selected:text-accent-foreground",
-                                day_hidden: "invisible",
-                            }}
-                            components={{
-                                IconLeft: () => <ChevronLeft className="h-4 w-4" />,
-                                IconRight: () => <ChevronRight className="h-4 w-4" />,
-                            }}
-                        />
-                        {draftRange?.from ? (
-                            <p className="text-xs text-muted-foreground text-center">
-                                {draftRange.to
-                                    ? `${formatDateDisplay(draftRange.from)} -> ${formatDateDisplay(draftRange.to)}`
-                                    : `From ${formatDateDisplay(draftRange.from)} - pick end date`}
-                            </p>
-                        ) : (
-                            <p className="text-xs text-muted-foreground text-center">
-                                Pick a start and end date, then apply.
-                            </p>
-                        )}
-                        <div className="flex items-center gap-2">
-                            <Button
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                className="flex-1"
-                                onClick={handleCancel}
-                            >
-                                Cancel
-                            </Button>
-                            <Button
-                                type="button"
-                                size="sm"
-                                className="flex-1"
-                                onClick={handleApply}
-                                disabled={!draftRange?.from || !draftRange?.to}
-                            >
-                                Apply
-                            </Button>
+                            <div className="flex items-center gap-2">
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    className="flex-1"
+                                    onClick={handleCancel}
+                                >
+                                    Cancel
+                                </Button>
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    className="flex-1"
+                                    onClick={handleApply}
+                                    disabled={!draftRange?.from || !draftRange?.to}
+                                >
+                                    Apply
+                                </Button>
+                            </div>
                         </div>
                     </div>
-                </DropdownMenuContent>
-            </DropdownMenu>
+                </PopoverContent>
+            </Popover>
         </div>
     )
 }
