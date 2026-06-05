@@ -116,6 +116,11 @@ Single index for active ticket streams and their source trackers.
 - Website repo only.
 - Backend migration stream for exact modifier ordering parity.
 - Preserves existing location-scoped modifier assignment behavior.
+- Backend migration has been applied.
+- Merchant-facing reorder controls now exist in:
+  - item edit for attached modifier groups
+  - modifier group sheet for option order
+  - modifiers page for guarded library group order
 
 ## Stream J: Reporting Date Range Boundaries And Loading State
 

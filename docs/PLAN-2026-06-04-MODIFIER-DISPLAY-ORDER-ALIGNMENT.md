@@ -85,17 +85,45 @@ Align modifier group and modifier option ordering across all menu-feed RPCs, and
 - `app/dashboard/actions/menu-items.ts`
 - `app/dashboard/actions/location-modifier-overrides.ts`
 - `types/db-modles.ts`
+- `components/dashboard/menu/NewEditItemFormSheet.tsx`
+- `components/dashboard/menu/ModifierGroupFormSheet.tsx`
+- `app/dashboard/menu/modifiers/page.tsx`
 
 ## Status
 
 - Backend migration applied in Supabase by Ali
 - App-side caller and type updates are ready locally
-- Frontend reorder UI remains a separate handoff
+- Item-level modifier group reorder is wired in `components/dashboard/menu/NewEditItemFormSheet.tsx`
+- Modifier option reorder is wired in `components/dashboard/menu/ModifierGroupFormSheet.tsx`
+- Modifier library group reorder is wired in `app/dashboard/menu/modifiers/page.tsx`
+- Location-aware option reorder for global groups is supported from the modifier group sheet
+- Library group reorder is intentionally guarded:
+  - All Locations: only when filtered to `Global`
+  - Location view: allowed when search is clear
 - Manual QA not started
 
 ## Frontend Handoff
 
 - `docs/HANDOFF-2026-06-04-MODIFIER-DISPLAY-ORDER-FRONTEND.md`
+
+## Current Merchant Flows
+
+1. Reorder modifier groups on an item
+- Open item edit
+- Go to `Modifiers`
+- Use up/down controls beside attached groups
+- Save item
+
+2. Reorder options inside a modifier group
+- Open `Modifiers`
+- Edit a group
+- Use up/down controls beside options
+- Save group
+
+3. Reorder modifier library groups
+- Open `Modifiers`
+- Use arrow controls on each group card
+- Respect the scope guard notes above
 
 ## QA Later
 
