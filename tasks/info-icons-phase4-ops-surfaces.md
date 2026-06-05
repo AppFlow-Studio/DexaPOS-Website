@@ -25,7 +25,7 @@ They can be shipped in any order and can be parallelised across developers.
 > match or update them alongside adding tooltips.
 
 **KPI Strip (extend `components/platform-fees/kpi-strip.tsx` to support `tip?`)**
-- [ ] Net platform fee — *Total platform fees collected (net of refunds) across all merchants in the selected period. Reconciles with Lucra settlement reports.*
+- [ ] Net platform fee — *Total platform fees collected (net of refunds) across all merchants in the selected period. Reconciles with TSYS settlement reports.*
 - [ ] Card surcharge — *Gross dual-pricing fee billed to cardholders before any refund credits. This is the fee added to the transaction at point of sale.*
 - [ ] Refunded — *Platform fee credits issued when a payment was refunded. Reduces net platform fee.*
 - [ ] Avg fee / payment — *Mean net platform fee per captured payment. Useful for benchmarking against expected fee rates.*

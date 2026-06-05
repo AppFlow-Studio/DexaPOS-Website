@@ -36,6 +36,7 @@ import { cn } from "@/lib/utils";
 import { useSelectedLocation } from "@/stores/location-store";
 import { exportToCsv } from "@/utils/export";
 import { format as dateFnsFormat } from "date-fns";
+import { useReportingQueryRange } from "@/app/dashboard/hooks/useReportingDateRange";
 
 type SortKey = "created_at" | "total_amount" | "tip_amount" | "staff_name";
 type SortDir = "asc" | "desc";
@@ -67,7 +68,8 @@ export default function CashManagementPage() {
   const [sortDir, setSortDir] = useState<SortDir>("desc");
 
   const selectedLocation = useSelectedLocation();
-  const { data: cashTransactions, isLoading } = useCashFlowReport(dateRange.from, dateRange.to);
+  const queryDateRange = useReportingQueryRange(dateRange);
+  const { data: cashTransactions, isLoading } = useCashFlowReport(queryDateRange.from, queryDateRange.to);
 
   const totalCollected = cashTransactions?.reduce((s, r) => s + r.total_amount, 0) ?? 0;
   const totalTips = cashTransactions?.reduce((s, r) => s + r.tip_amount, 0) ?? 0;

@@ -795,7 +795,7 @@ export function CreateMerchantWizard() {
             {step === 4 && (
               <div className="space-y-4">
                 <div className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
-                  Enter the Lucra Merchant ID (MID) assigned to this merchant. This can be added
+                  Enter the TSYS Merchant ID (MID) assigned to this merchant. This can be added
                   later from the merchant settings page if not yet available.
                 </div>
 
@@ -805,7 +805,7 @@ export function CreateMerchantWizard() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>
-                        Lucra MID{' '}
+                        TSYS MID{' '}
                         <span className="text-muted-foreground font-normal">(Optional)</span>
                       </FormLabel>
                       <FormControl>
@@ -890,7 +890,7 @@ export function CreateMerchantWizard() {
                 {values.lucraMid?.trim() && (
                   <div className="rounded-md border p-4 space-y-1">
                     <h3 className="font-semibold text-sm mb-3">Payment Processing</h3>
-                    <ReviewRow label="Lucra MID" value={values.lucraMid} />
+                    <ReviewRow label="TSYS MID" value={values.lucraMid} />
                   </div>
                 )}
 

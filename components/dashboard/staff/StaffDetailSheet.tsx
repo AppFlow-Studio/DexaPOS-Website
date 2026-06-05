@@ -172,6 +172,27 @@ export function StaffDetailSheet({
   );
   const hasPin = displayStaff?.location_assignments?.some((a) => a.has_pin) ?? false;
 
+  const formatRoleLabel = React.useCallback(
+    (roleName?: string | null, roleCode?: string | null) => {
+      const trimmedRoleName = roleName?.trim();
+      if (trimmedRoleName) return trimmedRoleName;
+
+      const catalogRoleName = roleCode
+        ? roles.find((role) => role.code === roleCode)?.name
+        : null;
+      if (catalogRoleName) return catalogRoleName;
+
+      if (!roleCode) return "Unassigned";
+
+      return roleCode
+        .split(".")
+        .pop()
+        ?.replace(/[_-]+/g, " ")
+        .replace(/\b\w/g, (char) => char.toUpperCase()) ?? roleCode;
+    },
+    [roles]
+  );
+
   // Get current user's role level for filtering assignable roles
   const currentUserLevel = React.useMemo(() => {
     if (!userInfo?.members?.[0]) return 100;
@@ -734,7 +755,10 @@ export function StaffDetailSheet({
                             <SelectTrigger className="h-10">
                               <SelectValue placeholder="Select role">
                                 {editedRole
-                                  ? (roles.find((r) => r.code === editedRole)?.name ?? editedRole)
+                                  ? formatRoleLabel(
+                                      roles.find((r) => r.code === editedRole)?.name,
+                                      editedRole
+                                    )
                                   : "Select role"}
                               </SelectValue>
                             </SelectTrigger>
@@ -743,20 +767,18 @@ export function StaffDetailSheet({
                                 .filter((r) => r.level <= currentUserLevel)
                                 .map((role) => (
                                   <SelectItem key={role.code} value={role.code}>
-                                    <div className="flex items-center gap-2">
-                                      <span>{role.name}</span>
-                                      <Badge variant="outline" className="text-[10px]">
-                                        {role.code}
-                                      </Badge>
-                                    </div>
+                                    {role.name}
                                   </SelectItem>
                                 ))}
                             </SelectContent>
                           </Select>
                         ) : (
                           <div className="rounded-xl border bg-background/50 px-4 py-3">
-                            <div className="flex items-center gap-2">
-                              <Badge variant="outline" className="font-mono">{primaryLocation.role_code}</Badge>
+                            <div className="text-sm font-medium">
+                              {formatRoleLabel(
+                                primaryLocation.role_name,
+                                primaryLocation.role_code
+                              )}
                             </div>
                           </div>
                         )}
@@ -865,24 +887,6 @@ export function StaffDetailSheet({
                       </div>
                     )}
 
-                    <Separator />
-
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <InfoRow label="Member ID" value={displayStaff.member_id} mono />
-                      <InfoRow
-                        label="Staff Profile ID"
-                        value={displayStaff.staff_profile_id || "-"}
-                        mono
-                      />
-                      <InfoRow
-                        label="Account Type"
-                        value={staff.is_clerk_user ? "Dashboard user" : "POS only"}
-                      />
-                      <InfoRow
-                        label="Primary Assignment Status"
-                        value={primaryLocation.is_active ? "Active" : "Inactive"}
-                      />
-                    </div>
                   </div>
                 ) : (
                   <div className="rounded-2xl border border-dashed p-6 text-sm text-muted-foreground">
@@ -1276,8 +1280,8 @@ export function StaffDetailSheet({
                               </Badge>
                             )}
                           </div>
-                          <p className="mt-1 text-sm font-mono text-muted-foreground">
-                            {assignment.role_code}
+                          <p className="mt-1 text-sm text-muted-foreground">
+                            {formatRoleLabel(assignment.role_name, assignment.role_code)}
                           </p>
                         </div>
 
@@ -1322,7 +1326,13 @@ export function StaffDetailSheet({
                       </div>
 
                       <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                        <InfoRow label="Role Code" value={assignment.role_code} mono />
+                        <InfoRow
+                          label="Role"
+                          value={formatRoleLabel(
+                            assignment.role_name,
+                            assignment.role_code
+                          )}
+                        />
                         <InfoRow
                           label="Employment Type"
                           value={assignment.employment_type || "-"}
@@ -1397,10 +1407,7 @@ export function StaffDetailSheet({
           </div>
         </BottomSheetBody>
         <BottomSheetFooter>
-          <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="text-xs text-muted-foreground">
-              Member ID: {displayStaff.member_id}
-            </div>
+          <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
             <div className="flex flex-wrap items-center gap-2">
               <Button variant="outline" onClick={() => onOpenChange(false)}>
                 Close

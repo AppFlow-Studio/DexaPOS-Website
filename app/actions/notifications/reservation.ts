@@ -2,6 +2,7 @@
 
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { sendSMS } from "@/lib/messaging/telnyx";
+import { logOutboundMessage } from "@/lib/messaging/message-log";
 import { sendEmail, isValidEmail } from "@/lib/messaging/resend";
 import {
   renderReservationConfirmedHtml,
@@ -103,6 +104,14 @@ export async function notifyReservationConfirmed(
     if (entry.phone) {
       const text = renderReservationConfirmedText(brand, ctx);
       const smsResult = await sendSMS(entry.phone, text);
+      await logOutboundMessage(supabase, {
+        merchantId: entry.merchant_id,
+        toNumber: entry.phone,
+        body: text,
+        telnyxMessageId: "error" in smsResult ? null : smsResult.id,
+        status: "error" in smsResult ? "failed" : "sent",
+        errorCode: "error" in smsResult ? smsResult.error : null,
+      });
       if ("error" in smsResult) {
         result.errors.push(`SMS: ${smsResult.error}`);
       } else {
@@ -171,6 +180,14 @@ export async function notifyReservationCancelled(
     if (entry.phone) {
       const text = renderReservationCancelledText(brand, ctx);
       const smsResult = await sendSMS(entry.phone, text);
+      await logOutboundMessage(supabase, {
+        merchantId: entry.merchant_id,
+        toNumber: entry.phone,
+        body: text,
+        telnyxMessageId: "error" in smsResult ? null : smsResult.id,
+        status: "error" in smsResult ? "failed" : "sent",
+        errorCode: "error" in smsResult ? smsResult.error : null,
+      });
       if ("error" in smsResult) {
         result.errors.push(`SMS: ${smsResult.error}`);
       } else {

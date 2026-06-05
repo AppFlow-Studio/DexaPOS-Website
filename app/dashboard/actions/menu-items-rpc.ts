@@ -424,29 +424,74 @@ export async function getItemModifierGroups(
   try {
     const supabase = createServiceRoleClient();
 
+    const sortAssignments = (
+      rows: any[],
+      source: "global" | "location",
+      relationKey = "modifier_groups",
+    ) =>
+      (rows || [])
+        .filter((row) => row?.[relationKey])
+        .sort((a, b) => {
+          const aOrder =
+            typeof a.display_order === "number"
+              ? a.display_order
+              : typeof a[relationKey]?.display_order === "number"
+                ? a[relationKey].display_order
+                : Number.MAX_SAFE_INTEGER;
+          const bOrder =
+            typeof b.display_order === "number"
+              ? b.display_order
+              : typeof b[relationKey]?.display_order === "number"
+                ? b[relationKey].display_order
+                : Number.MAX_SAFE_INTEGER;
+
+          if (aOrder !== bOrder) {
+            return aOrder - bOrder;
+          }
+
+          return (a[relationKey]?.name || "").localeCompare(
+            b[relationKey]?.name || "",
+          );
+        })
+        .map((row) => ({ ...row[relationKey], source }));
+
     // 1. Global assignments
     const { data: globalData } = await supabase
       .from("menu_item_modifier_groups")
-      .select("modifier_group_id, modifier_groups(id, name, description)")
+      .select(
+        "modifier_group_id, display_order, modifier_groups(id, name, description, display_order)",
+      )
       .eq("menu_item_id", menuItemId);
 
-    const globalGroups = (globalData as any[] || [])
-      .map((row) => row.modifier_groups)
-      .filter(Boolean)
-      .map((g: any) => ({ ...g, source: "global" as const }));
+    const globalGroups = sortAssignments(
+      globalData as any[] || [],
+      "global",
+    ) as Array<{
+      id: string;
+      name: string;
+      description: string | null;
+      source: "global";
+    }>;
 
     // 2. Location-specific assignments (if location provided)
     if (locationId && locationId !== "all") {
       const { data: locationData } = await supabase
         .from("location_item_modifier_groups")
-        .select("modifier_group_id, modifier_groups:modifier_groups(id, name, description)")
+        .select(
+          "modifier_group_id, display_order, modifier_groups:modifier_groups(id, name, description, display_order)",
+        )
         .eq("menu_item_id", menuItemId)
         .eq("location_id", locationId);
 
-      const locationGroups = (locationData as any[] || [])
-        .map((row) => row.modifier_groups)
-        .filter(Boolean)
-        .map((g: any) => ({ ...g, source: "location" as const }));
+      const locationGroups = sortAssignments(
+        locationData as any[] || [],
+        "location",
+      ) as Array<{
+        id: string;
+        name: string;
+        description: string | null;
+        source: "location";
+      }>;
 
       // Merge and deduplicate (global takes precedence)
       const globalIds = new Set(globalGroups.map((g: any) => g.id));
@@ -649,9 +694,10 @@ export async function updateItemOverride(
         return { success: false, error: "Could not retrieve item details" };
       }
 
-      const modifierInserts = params.modifier_group_ids.map((groupId) => ({
+      const modifierInserts = params.modifier_group_ids.map((groupId, index) => ({
         menu_item_id: params.menuItemId,
         modifier_group_id: groupId,
+        display_order: index,
         merchant_id: menuItemDetails.merchant_id,
       }));
 
@@ -673,9 +719,16 @@ export async function updateItemOverride(
       const removedGroupIds = oldModifierGroupIds.filter(
         (id) => !params.modifier_group_ids!.includes(id),
       );
+      const orderChanged =
+        addedGroupIds.length === 0 &&
+        removedGroupIds.length === 0 &&
+        oldModifierGroupIds.length === params.modifier_group_ids.length &&
+        oldModifierGroupIds.some(
+          (id, index) => id !== params.modifier_group_ids![index],
+        );
 
       // Only log if there was an actual change
-      if (addedGroupIds.length > 0 || removedGroupIds.length > 0) {
+      if (addedGroupIds.length > 0 || removedGroupIds.length > 0 || orderChanged) {
         // Fetch modifier group names for user-friendly display
         const allGroupIds = [
           ...new Set([
@@ -722,6 +775,7 @@ export async function updateItemOverride(
           metadata: {
             added_modifier_groups: addedGroupNames,
             removed_modifier_groups: removedGroupNames,
+            modifier_order_changed: orderChanged,
           },
         });
       }

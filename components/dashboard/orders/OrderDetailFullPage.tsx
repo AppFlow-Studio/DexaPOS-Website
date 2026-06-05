@@ -70,6 +70,7 @@ import { AssignCustomerModal } from "@/components/dashboard/orders/AssignCustome
 import { AdjustTipModal } from "@/components/dashboard/orders/AdjustTipModal";
 import { OrderActionBar } from "@/components/dashboard/orders/OrderActionBar";
 import { assignCustomerToOrder } from "@/app/actions/orders/assign-customer";
+import { resolveChargedLane } from "@/lib/orders/pricing-lane";
 import { useOrderActions } from "@/app/dashboard/hooks/useOrderActions";
 import type { OrderActionsUserRole } from "@/app/dashboard/hooks/useOrderActions";
 import { useLocationStore } from "@/stores/location-store";
@@ -845,12 +846,19 @@ function PricingBreakdown({
       ? Number(fullHistoryOrder.amount_due)
       : Number(order.amount_due) ?? 0;
 
-  const displayAmountDue = Math.max(0, effectiveTotal - amountPaid);
-
   const cardTotal =
     Number(order.card_total) || effectiveTotal;
   const cashTotal =
     Number(order.cash_total) || effectiveTotal;
+
+  // The amount actually owed/charged depends on the tendered lane.
+  // `effective_total` is always card_total, so it overstates cash orders
+  // (and would show a phantom Amount Due). Resolve from the payment tender.
+  const chargedLane = resolveChargedLane(order, payments);
+  const chargedTotal =
+    chargedLane === "cash" ? cashTotal : cardTotal;
+
+  const displayAmountDue = Math.max(0, chargedTotal - amountPaid);
 
   const showDualColumns = isMixed;
 
@@ -860,7 +868,7 @@ function PricingBreakdown({
         {/* Compact: small screens — Total, Amount Paid, Amount Due only */}
         <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 text-sm md:hidden">
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-            <PriceRow label="Total" value={formatMoney(effectiveTotal)} bold />
+            <PriceRow label="Total" value={formatMoney(chargedTotal)} bold />
             <PriceRow
               label="Amount Paid"
               value={formatMoney(amountPaid)}
@@ -953,7 +961,7 @@ function PricingBreakdown({
               <div className="space-y-1 text-sm">
                 <PriceRow
                   label="Total"
-                  value={formatMoney(effectiveTotal)}
+                  value={formatMoney(chargedTotal)}
                   bold
                 />
                 <PriceRow

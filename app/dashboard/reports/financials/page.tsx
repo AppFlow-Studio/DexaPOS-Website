@@ -1,12 +1,10 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
-import { format, subDays } from "date-fns";
+import { subDays } from "date-fns";
 import { CreditCard, FileSpreadsheet } from "lucide-react";
-import { DateRange } from "react-day-picker";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { useFinancialKPIs, useWaterfallReport } from "../../hooks/useOrderAnalytics";
 import { useOrders } from "../../hooks/useOrder";
 import { FinancialHeroChart } from "@/app/dashboard/transactions/components/FinancialHeroChart";
@@ -16,35 +14,43 @@ import { OrdersDataTable } from "@/components/dashboard/orders/OrdersDataTable";
 import { OrderResponse } from "@/types/order-management";
 import { useSelectedLocation } from "@/stores/location-store";
 import { WaterfallReportCard } from "./components/WaterfallReportCard";
+import {
+  DatePreset,
+  DateRangePicker,
+} from "@/components/dashboard/orders/DateRangePicker";
+import { useReportingQueryRange } from "@/app/dashboard/hooks/useReportingDateRange";
+import { fillDailyFinancialStats } from "@/lib/reporting/date-range";
 
 export default function FinancialsPage() {
-  const [date, setDate] = useState<DateRange | undefined>({
+  const [dateRange, setDateRange] = useState<{ from: Date; to: Date }>({
     from: subDays(new Date(), 30),
     to: new Date(),
   });
+  const [preset, setPreset] = useState<DatePreset>("last_30_days");
 
   const [activeTab, setActiveTab] = useState("overview");
   const [selectedOrder, setSelectedOrder] = useState<OrderResponse | null>(
     null
   );
   const selectedLocation = useSelectedLocation();
+  const queryDateRange = useReportingQueryRange(dateRange);
 
   const { data: kpis, isLoading } = useFinancialKPIs(
-    date?.from || subDays(new Date(), 30),
-    date?.to || new Date()
+    queryDateRange.from,
+    queryDateRange.to
   );
 
   // Fetch waterfall report data
   const { data: waterfallReport, isLoading: isLoadingWaterfall } = useWaterfallReport(
-    date?.from || subDays(new Date(), 30),
-    date?.to || new Date()
+    queryDateRange.from,
+    queryDateRange.to
   );
 
   // Fetch orders for the transactions tab
   const { data: orders, isLoading: isLoadingOrders } = useOrders({
     dateRange: {
-      from: date?.from || subDays(new Date(), 30),
-      to: date?.to || new Date(),
+      from: dateRange.from,
+      to: dateRange.to,
     },
   });
 
@@ -53,14 +59,12 @@ export default function FinancialsPage() {
   };
 
   const chartData = useMemo(() => {
-    return (
-      kpis?.daily_stats?.map((stat) => ({
+    return fillDailyFinancialStats(kpis?.daily_stats ?? [], dateRange).map((stat) => ({
         ...stat,
         gross_sales: stat.net_sales, // Placeholder as backend data is missing
         payments_collected: stat.net_sales, // Placeholder as backend data is missing
-      })) || []
-    );
-  }, [kpis?.daily_stats]);
+      }));
+  }, [dateRange, kpis?.daily_stats]);
 
   if (isLoading) {
     return (
@@ -109,7 +113,18 @@ export default function FinancialsPage() {
           </div>
 
           <div className="w-full">
-            <DateRangePicker date={date} setDate={setDate} className="w-full" />
+            <DateRangePicker
+              dateFrom={dateRange.from}
+              dateTo={dateRange.to}
+              onDateRangeChange={(from, to) => {
+                if (from && to) {
+                  setDateRange({ from, to });
+                }
+              }}
+              preset={preset}
+              onPresetChange={setPreset}
+              className="w-full"
+            />
           </div>
 
           <Tabs

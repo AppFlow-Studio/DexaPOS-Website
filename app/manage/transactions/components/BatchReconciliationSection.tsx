@@ -369,7 +369,7 @@ export function BatchReconciliationSection({
                 <span className="inline-flex items-center justify-end gap-1">Refund <InfoIcon tip="Total refunds processed within this batch." side="bottom" /></span>
               </TableHead>
               <TableHead className="text-right">
-                <span className="inline-flex items-center justify-end gap-1">Net Deposit <InfoIcon tip="Amount deposited into the merchant's bank account. Formula: Gross − refunds − net fees (the 4% bank fee). Reconciles line-for-line with Lucra." side="bottom" /></span>
+                <span className="inline-flex items-center justify-end gap-1">Net Deposit <InfoIcon tip="Amount deposited into the merchant's bank account. Formula: Gross − refunds − net fees (the 4% bank fee). Reconciles line-for-line with TSYS." side="bottom" /></span>
               </TableHead>
               <TableHead>
                 <span className="inline-flex items-center gap-1">Status <InfoIcon tip="Open: batch is still collecting payments. Closed: submitted to processor. Settled: processor confirmed receipt. Funded: money deposited to merchant bank." side="bottom" /></span>

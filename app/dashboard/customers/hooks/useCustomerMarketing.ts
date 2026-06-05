@@ -86,7 +86,7 @@ export function useUnsubscribeFromMarketing() {
     mutationFn: UnsubscribeFromMarketing,
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({
-        queryKey: ["customer-marketing-preferences", variables],
+        queryKey: ["customer-marketing-preferences", variables.customerId],
       });
     },
   });
@@ -101,7 +101,11 @@ export function useSendQuickMessage() {
   return useMutation({
     mutationFn: SendQuickMessage,
     onSuccess: (data, variables) => {
-      // Check if there was an error in the response
+      // Surface server-returned errors (e.g. consent gate) and per-recipient
+      // send failures so the UI shows the real reason instead of a false success.
+      if (data && "error" in data && data.error) {
+        throw new Error(data.error);
+      }
       if (data?.recipient?.error_message) {
         throw new Error(data.recipient.error_message);
       }

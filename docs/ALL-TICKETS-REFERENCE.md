@@ -75,6 +75,61 @@ Single index for active ticket streams and their source trackers.
 - In-store POS terminal payments remain separate and are not part of this hard cut.
 - Reconciliation exists as an on-demand admin action; scheduled reconciliation is still pending.
 
+## Stream G: Dashboard Staff + Sidebar Polish
+
+1. Plan:
+- `docs/PLAN-2026-06-02-DASHBOARD-STAFF-SIDEBAR-POLISH.md`
+
+2. Continuation state:
+- `.planning/.continue-here.md`
+
+3. Scope notes:
+- Merchant dashboard only.
+- No POS work.
+- No backend or schema changes.
+
+## Stream H: Modifier Reordering Safety Rollout
+
+1. Plan:
+- `docs/PLAN-2026-06-02-MODIFIER-REORDERING-SAFETY.md`
+
+2. Continuation state:
+- `.planning/.continue-here.md`
+
+3. Scope notes:
+- Website repo only.
+- Merchant dashboard/menu flows only in this phase.
+- Display-order-only changes.
+- No schema redesign.
+- No RLS/policy rewrites unless a proven blocker appears.
+- No modifier pricing, default-option, or assignment semantic changes.
+
+## Stream I: Modifier Display Order Alignment
+
+1. Plan:
+- `docs/PLAN-2026-06-04-MODIFIER-DISPLAY-ORDER-ALIGNMENT.md`
+
+2. Continuation state:
+- `.planning/.continue-here.md`
+
+3. Scope notes:
+- Website repo only.
+- Backend migration stream for exact modifier ordering parity.
+- Preserves existing location-scoped modifier assignment behavior.
+
+## Stream J: Reporting Date Range Boundaries And Loading State
+
+1. Plan:
+- `docs/PLAN-2026-06-04-REPORTING-DATE-RANGE-BOUNDARIES.md`
+
+2. Continuation state:
+- `.planning/.continue-here.md`
+
+3. Scope notes:
+- Cross-cutting reporting stream.
+- Backend + frontend work.
+- Not a quick-fix ticket and not mixed into modifier work.
+
 ## Notes
 
 1. Keep this file updated whenever a new ticket stream starts.
