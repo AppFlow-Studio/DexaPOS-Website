@@ -386,6 +386,85 @@ html:has([data-template]) body[data-scroll-locked] {
   margin-right: 0 !important;
 }
 
+/* Storefront panel animations — smooth slide-up like premium ordering sites */
+@keyframes panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes panel-out {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(12px) scale(0.99);
+  }
+}
+
+@keyframes slide-in-from-right {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+
+@keyframes slide-out-to-right {
+  from { transform: translateX(0); }
+  to   { transform: translateX(100%); }
+}
+
+@keyframes slide-in-from-bottom {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+
+@keyframes slide-out-to-bottom {
+  from { transform: translateY(0); }
+  to   { transform: translateY(100%); }
+}
+
+.cart-slide-right[data-state="open"]  { animation: slide-in-from-right 0.32s cubic-bezier(0.32,0.72,0,1) both; }
+.cart-slide-right[data-state="closed"] { animation: slide-out-to-right 0.22s cubic-bezier(0.32,0.72,0,1) both; }
+
+.cart-slide-bottom[data-state="open"]  { animation: slide-in-from-bottom 0.32s cubic-bezier(0.32,0.72,0,1) both; }
+.cart-slide-bottom[data-state="closed"] { animation: slide-out-to-bottom 0.22s cubic-bezier(0.32,0.72,0,1) both; }
+
+@keyframes overlay-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes overlay-out {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+
+/* Applied directly via data-[state] on Radix Dialog/Sheet elements */
+[data-slot="dialog-content"][data-state="open"],
+[data-slot="dialog-content"][data-state="open"] {
+  animation: panel-in 0.32s cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+
+[data-slot="dialog-content"][data-state="closed"] {
+  animation: panel-out 0.2s cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+
+[data-slot="dialog-overlay"][data-state="open"],
+[data-slot="sheet-overlay"][data-state="open"] {
+  animation: overlay-in 0.25s ease both;
+}
+
+[data-slot="dialog-overlay"][data-state="closed"],
+[data-slot="sheet-overlay"][data-state="closed"] {
+  animation: overlay-out 0.2s ease both;
+}
+
 ::view-transition-old(root),
 ::view-transition-new(root) {
   animation: none;

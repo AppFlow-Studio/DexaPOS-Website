@@ -101,16 +101,16 @@ const STATUS_LABELS: Record<string, string> = {
   void: "Voided",
 };
 
-const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
-  pending: { bg: "color-mix(in srgb, #f59e0b 15%, var(--bg))", text: "#f59e0b" },
-  accepted: { bg: "color-mix(in srgb, #3b82f6 15%, var(--bg))", text: "#3b82f6" },
-  sent_to_kitchen: { bg: "color-mix(in srgb, #8b5cf6 15%, var(--bg))", text: "#8b5cf6" },
-  preparing: { bg: "color-mix(in srgb, #f97316 15%, var(--bg))", text: "#f97316" },
-  ready: { bg: "color-mix(in srgb, #22c55e 15%, var(--bg))", text: "#22c55e" },
-  completed: { bg: "color-mix(in srgb, #22c55e 15%, var(--bg))", text: "#22c55e" },
-  cancelled: { bg: "color-mix(in srgb, #ef4444 15%, var(--bg))", text: "#ef4444" },
-  declined: { bg: "color-mix(in srgb, #ef4444 15%, var(--bg))", text: "#ef4444" },
-  void: { bg: "color-mix(in srgb, #ef4444 15%, var(--bg))", text: "#ef4444" },
+const STATUS_COLORS: Record<string, { bg: string; text: string; border: string }> = {
+  pending:        { bg: "#fffbeb", text: "#92400e", border: "#f59e0b" },
+  accepted:       { bg: "#eff6ff", text: "#1e40af", border: "#3b82f6" },
+  sent_to_kitchen:{ bg: "#f5f3ff", text: "#4c1d95", border: "#8b5cf6" },
+  preparing:      { bg: "#fff7ed", text: "#7c2d12", border: "#f97316" },
+  ready:          { bg: "#f0fdf4", text: "#14532d", border: "#22c55e" },
+  completed:      { bg: "#f0fdf4", text: "#14532d", border: "#22c55e" },
+  cancelled:      { bg: "#fef2f2", text: "#7f1d1d", border: "#ef4444" },
+  declined:       { bg: "#fef2f2", text: "#7f1d1d", border: "#ef4444" },
+  void:           { bg: "#fef2f2", text: "#7f1d1d", border: "#ef4444" },
 };
 
 function formatTime(isoString: string | null): string {
@@ -226,6 +226,13 @@ export function OrderTrackingPage({
     return () => clearInterval(interval);
   }, [orderId, order.status]);
 
+  const refreshOrder = useCallback(async () => {
+    const { data } = await getOrderTracking(orderId);
+    if (data) {
+      setOrder(data);
+    }
+  }, [orderId]);
+
   // QR-specific fallback polling: keep guest tracking fresher even if realtime
   // delivery is delayed or blocked on the current network.
   useEffect(() => {
@@ -271,13 +278,6 @@ export function OrderTrackingPage({
       if (timer) clearTimeout(timer);
     };
   }, [sessionToken, qrTableLabel, order.status, orderId, refreshOrder]);
-
-  const refreshOrder = useCallback(async () => {
-    const { data } = await getOrderTracking(orderId);
-    if (data) {
-      setOrder(data);
-    }
-  }, [orderId]);
 
   const handleCancel = async () => {
     if (!sessionToken || !cancelReason.trim()) return;
@@ -395,14 +395,14 @@ export function OrderTrackingPage({
                 <p className="text-sm" style={{ color: "#6b7280" }}>Order #{order.displayNumber}</p>
               </>
             )}
-            {/* Status pill */}
+            {/* Status chip — MUI style */}
             <div className="flex justify-center pt-1">
               <span
-                className="inline-flex items-center px-3 py-1 text-xs font-semibold"
+                className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold uppercase tracking-wide"
                 style={{
                   backgroundColor: statusColor.bg,
                   color: statusColor.text,
-                  borderRadius: "6px",
+                  borderLeft: `3px solid ${statusColor.border}`,
                 }}
               >
                 {STATUS_LABELS[order.status] ?? order.status}
@@ -450,33 +450,33 @@ export function OrderTrackingPage({
           {/* ── Pending countdown ── */}
           {isPending && pendingCountdown !== null && (
             <div
-              className="px-5 py-4 rounded-xl space-y-3"
-              style={{ backgroundColor: "#fffbeb", border: "1px solid #fcd34d" }}
+              className="px-4 py-4 space-y-3"
+              style={{ backgroundColor: "#fffbeb", borderLeft: "4px solid #f59e0b" }}
             >
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-base font-semibold" style={{ color: "#92400e" }}>
+                  <p className="text-sm font-semibold" style={{ color: "#78350f" }}>
                     Waiting for restaurant
                   </p>
-                  <p className="text-xs mt-0.5" style={{ color: "#b45309" }}>
+                  <p className="text-xs mt-0.5" style={{ color: "#92400e", opacity: 0.75 }}>
                     Auto-cancels if no response
                   </p>
                 </div>
                 <div className="text-right">
-                  <p className="text-xl font-bold tabular-nums" style={{ color: "#d97706" }}>
+                  <p className="text-xl font-bold tabular-nums" style={{ color: "#f59e0b" }}>
                     {pendingCountdown}s
                   </p>
-                  <p className="text-xs" style={{ color: "#b45309" }}>remaining</p>
+                  <p className="text-xs" style={{ color: "#92400e", opacity: 0.75 }}>remaining</p>
                 </div>
               </div>
               {canCustomerCancel && (
-                <div style={{ borderTop: "1px solid #fcd34d", paddingTop: "12px" }}>
+                <div style={{ borderTop: "1px solid #fde68a", paddingTop: "12px" }}>
                   {!showCancelForm ? (
                     <button
                       type="button"
                       onClick={() => setShowCancelForm(true)}
                       className="text-sm"
-                      style={{ color: "#6b7280" }}
+                      style={{ color: "#92400e" }}
                     >
                       Cancel this order
                     </button>
@@ -490,7 +490,7 @@ export function OrderTrackingPage({
                         value={cancelReason}
                         onChange={(e) => setCancelReason(e.target.value)}
                         placeholder="e.g. Changed my mind, ordered by mistake…"
-                        className="w-full text-sm px-3 py-2 rounded-lg resize-none outline-none"
+                        className="w-full text-sm px-3 py-2 resize-none outline-none"
                         style={{ backgroundColor: "#ffffff", border: "1px solid #e5e7eb", color: "#111827" }}
                       />
                       {cancelError && <p className="text-xs" style={{ color: "#ef4444" }}>{cancelError}</p>}
@@ -499,8 +499,8 @@ export function OrderTrackingPage({
                           type="button"
                           onClick={() => { setShowCancelForm(false); setCancelReason(""); setCancelError(null); }}
                           disabled={isCancelling}
-                          className="flex-1 text-sm font-medium py-2 rounded-lg"
-                          style={{ backgroundColor: "#ffffff", border: "1px solid #e5e7eb", color: "#374151" }}
+                          className="flex-1 text-sm font-medium py-2"
+                          style={{ backgroundColor: "#ffffff", border: "1px solid #d1d5db", color: "#374151" }}
                         >
                           Keep Order
                         </button>
@@ -508,7 +508,7 @@ export function OrderTrackingPage({
                           type="button"
                           onClick={handleCancel}
                           disabled={isCancelling || !cancelReason.trim()}
-                          className="flex-1 text-sm font-semibold py-2 rounded-lg disabled:opacity-50"
+                          className="flex-1 text-sm font-semibold py-2 disabled:opacity-50"
                           style={{ backgroundColor: "#ef4444", color: "#ffffff" }}
                         >
                           {isCancelling ? "Cancelling…" : "Confirm Cancel"}
@@ -524,23 +524,23 @@ export function OrderTrackingPage({
           {/* ── Declined banner ── */}
           {isDeclined && (
             <div
-              className="flex items-start gap-3 px-4 py-3 rounded-xl"
-              style={{ backgroundColor: "#fef2f2", border: "1px solid #fca5a5" }}
+              className="flex items-start gap-3 px-4 py-3"
+              style={{ backgroundColor: "#fef2f2", borderLeft: "4px solid #ef4444" }}
             >
-              <XCircle className="h-5 w-5 flex-shrink-0 mt-0.5" style={{ color: "#ef4444" }} />
+              <XCircle className="h-4 w-4 flex-shrink-0 mt-0.5" style={{ color: "#ef4444" }} />
               <div className="flex-1 min-w-0">
-                <p className="font-semibold text-sm" style={{ color: "#991b1b" }}>
-                  Your order was declined by the restaurant
+                <p className="font-semibold text-sm" style={{ color: "#7f1d1d" }}>
+                  Order declined
                   {order.declinedAt && (
-                    <span className="font-normal ml-2 opacity-75">{formatTime(order.declinedAt)}</span>
+                    <span className="font-normal ml-2" style={{ opacity: 0.6 }}>{formatTime(order.declinedAt)}</span>
                   )}
                 </p>
                 {order.declinedReason && (
-                  <p className="text-sm mt-1" style={{ color: "#6b7280" }}>Reason: {order.declinedReason}</p>
+                  <p className="text-sm mt-0.5" style={{ color: "#7f1d1d", opacity: 0.75 }}>Reason: {order.declinedReason}</p>
                 )}
                 {storePhone && (
                   <a href={`tel:${storePhone}`} className="inline-flex items-center gap-1.5 mt-2 text-sm font-medium" style={{ color: "#ef4444" }}>
-                    <Phone className="h-4 w-4" />
+                    <Phone className="h-3.5 w-3.5" />
                     Call {storeName}
                   </a>
                 )}
@@ -551,27 +551,27 @@ export function OrderTrackingPage({
           {/* ── Cancelled banner ── */}
           {isCancelled && (
             <div
-              className="flex items-start gap-3 px-4 py-3 rounded-xl"
-              style={{ backgroundColor: "#fef2f2", border: "1px solid #fca5a5" }}
+              className="flex items-start gap-3 px-4 py-3"
+              style={{ backgroundColor: "#fef2f2", borderLeft: "4px solid #ef4444" }}
             >
-              <AlertTriangle className="h-5 w-5 flex-shrink-0 mt-0.5" style={{ color: "#ef4444" }} />
+              <AlertTriangle className="h-4 w-4 flex-shrink-0 mt-0.5" style={{ color: "#ef4444" }} />
               <div className="flex-1 min-w-0">
-                <p className="font-semibold text-sm" style={{ color: "#991b1b" }}>
+                <p className="font-semibold text-sm" style={{ color: "#7f1d1d" }}>
                   {order.cancelledBy === "customer"
                     ? "You cancelled this order"
                     : order.status === "void"
                     ? "Order Voided"
                     : "Order Cancelled"}
                   {order.cancelledAt && (
-                    <span className="font-normal ml-2 opacity-75">{formatTime(order.cancelledAt)}</span>
+                    <span className="font-normal ml-2" style={{ opacity: 0.6 }}>{formatTime(order.cancelledAt)}</span>
                   )}
                 </p>
                 {order.cancellationReason && (
-                  <p className="text-sm mt-1" style={{ color: "#6b7280" }}>Reason: {order.cancellationReason}</p>
+                  <p className="text-sm mt-0.5" style={{ color: "#7f1d1d", opacity: 0.75 }}>Reason: {order.cancellationReason}</p>
                 )}
                 {storePhone && order.cancelledBy !== "customer" && (
                   <a href={`tel:${storePhone}`} className="inline-flex items-center gap-1.5 mt-2 text-sm font-medium" style={{ color: "#ef4444" }}>
-                    <Phone className="h-4 w-4" />
+                    <Phone className="h-3.5 w-3.5" />
                     Call {storeName}
                   </a>
                 )}
@@ -581,7 +581,7 @@ export function OrderTrackingPage({
 
           {/* ── Store info card ── */}
           {(storeAddress || storeLat) && (
-            <div className="rounded-xl overflow-hidden" style={{ border: "1px solid #e5e7eb" }}>
+            <div style={{ border: "1px solid #e5e7eb" }}>
               <StoreInfoBlock
                 storeName={storeName}
                 storeAddress={storeAddress ?? null}
@@ -596,7 +596,7 @@ export function OrderTrackingPage({
 
 
           {/* ── Order details — collapsible ── */}
-          <div className="rounded-xl overflow-hidden" style={{ border: "1px solid #e5e7eb" }}>
+          <div style={{ border: "1px solid #e5e7eb" }}>
             <button
               type="button"
               onClick={() => setOrderDetailsOpen((v) => !v)}
@@ -674,7 +674,7 @@ export function OrderTrackingPage({
             Store location unavailable
           </div>
         )}
-        <div className="absolute top-6 right-6 w-80 rounded-2xl shadow-xl overflow-hidden bg-white" style={{ border: "1px solid #e5e7eb" }}>
+        <div className="absolute top-6 right-6 w-80 shadow-xl overflow-hidden bg-white" style={{ border: "1px solid #e5e7eb" }}>
           <StoreInfoBlock
             storeName={storeName}
             storeAddress={storeAddress ?? null}
@@ -703,57 +703,43 @@ function StoreInfoBlock({
 }) {
   return (
     <div className="p-4 space-y-3">
-      <div className="flex items-start gap-3">
-        <div
-          className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"
-          style={{
-            backgroundColor: "color-mix(in srgb, var(--primary) 14%, #ffffff)",
-            color: "var(--primary)",
-          }}
-        >
-          <StoreIcon className="h-5 w-5" />
-        </div>
+      {/* Store name row */}
+      <div className="flex items-center gap-2" style={{ borderBottom: "1px solid #f3f4f6", paddingBottom: "12px" }}>
+        <StoreIcon className="h-4 w-4 flex-shrink-0" style={{ color: "#9ca3af" }} />
         <div className="min-w-0 flex-1">
-          <p className="text-base font-semibold leading-tight" style={{ color: "#111827" }}>
-            {storeName}
-          </p>
-          <p className="text-xs mt-0.5" style={{ color: "#6B7280" }}>
-            Pickup location
-          </p>
+          <p className="text-sm font-semibold leading-tight" style={{ color: "#111827" }}>{storeName}</p>
+          <p className="text-xs" style={{ color: "#9ca3af" }}>Pickup location</p>
         </div>
       </div>
 
-      {storeAddress && (
-        <div className="flex items-start gap-2 text-sm" style={{ color: "#374151" }}>
-          <MapPin className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: "#6B7280" }} />
-          <span className="leading-snug">{storeAddress}</span>
-        </div>
-      )}
-
-      {hoursLabel && (
-        <div className="flex items-center gap-2 text-sm" style={{ color: "#374151" }}>
-          <Clock4 className="h-4 w-4 flex-shrink-0" style={{ color: "#6B7280" }} />
-          <span>Today: {hoursLabel}</span>
-        </div>
-      )}
-
-      {storePhone && (
-        <a
-          href={`tel:${storePhone}`}
-          className="flex items-center gap-2 text-sm hover:underline"
-          style={{ color: "#374151" }}
-        >
-          <Phone className="h-4 w-4 flex-shrink-0" style={{ color: "#6B7280" }} />
-          <span>{storePhone}</span>
-        </a>
-      )}
+      {/* Details */}
+      <div className="space-y-2">
+        {storeAddress && (
+          <div className="flex items-start gap-2.5 text-sm" style={{ color: "#374151" }}>
+            <MapPin className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" style={{ color: "#9ca3af" }} />
+            <span className="leading-snug">{storeAddress}</span>
+          </div>
+        )}
+        {hoursLabel && (
+          <div className="flex items-center gap-2.5 text-sm" style={{ color: "#374151" }}>
+            <Clock4 className="h-3.5 w-3.5 flex-shrink-0" style={{ color: "#9ca3af" }} />
+            <span>Today: {hoursLabel}</span>
+          </div>
+        )}
+        {storePhone && (
+          <a href={`tel:${storePhone}`} className="flex items-center gap-2.5 text-sm hover:underline" style={{ color: "#374151" }}>
+            <Phone className="h-3.5 w-3.5 flex-shrink-0" style={{ color: "#9ca3af" }} />
+            <span>{storePhone}</span>
+          </a>
+        )}
+      </div>
 
       {directionsHref && (
         <a
           href={directionsHref}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center justify-center gap-2 w-full mt-1 px-4 py-2.5 rounded-lg text-sm font-semibold"
+          className="inline-flex items-center justify-center gap-2 w-full px-4 py-2.5 text-sm font-semibold mt-1"
           style={{ backgroundColor: "var(--primary)", color: "#ffffff" }}
         >
           <Navigation className="h-4 w-4" />

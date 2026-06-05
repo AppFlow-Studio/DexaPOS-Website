@@ -95,10 +95,10 @@ export function CartSidebar({ config, storeConfigId, slug, taxRate = 0, allItems
 
   const contentStyle = isDesktop ? desktopContentStyle : mobileContentStyle;
 
-  // Transition classes differ by presentation
+  // Keyframe-based animation so the panel always slides from off-screen regardless of mount timing
   const contentTransition = isDesktop
-    ? "fixed z-[70] flex flex-col transition-transform duration-300 ease-out data-[state=open]:translate-x-0 data-[state=closed]:translate-x-full"
-    : "fixed z-[70] flex flex-col transition-transform duration-300 ease-out data-[state=open]:translate-y-0 data-[state=closed]:translate-y-full";
+    ? "fixed z-[70] flex flex-col cart-slide-right"
+    : "fixed z-[70] flex flex-col cart-slide-bottom";
 
   return (
     <SheetPrimitive.Root open={isOpen} onOpenChange={setOpen}>
