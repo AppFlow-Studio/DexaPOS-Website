@@ -13,7 +13,6 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import {
   Select,
@@ -33,8 +32,6 @@ import {
   Eye,
   EyeOff,
   Mail,
-  Phone,
-  MapPin,
   Lock,
   CheckCircle2,
   UserX,
@@ -52,12 +49,6 @@ import {
   Star,
 } from "lucide-react";
 import { CredentialToast } from "@/components/ui/credential-toast";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { LocationAssignmentSheet } from "./LocationAssignmentSheet";
 import {
   useDeactivateStaff,
@@ -523,8 +514,7 @@ export function StaffDetailSheet({
         <BottomSheetBody className="flex-1 overflow-y-auto">
           <div className="space-y-6 p-1">
             <section className="rounded-[28px] border bg-gradient-to-br from-slate-50 via-white to-slate-50/70 p-6 shadow-sm">
-              <div className="grid gap-6 xl:grid-cols-[1.3fr_0.7fr]">
-                <div className="flex items-start gap-4">
+              <div className="flex items-start gap-4">
                   <Avatar className="h-20 w-20 border border-slate-200 shadow-sm">
                     <AvatarImage
                       src={displayStaff.avatar_url || undefined}
@@ -567,89 +557,8 @@ export function StaffDetailSheet({
                         Staff profile, access controls, and location-level permissions.
                       </p>
                     </div>
-
-                    <div className="grid gap-3 md:grid-cols-3">
-                      <SummaryCard
-                        icon={Mail}
-                        label="Email"
-                        value={displayStaff.email || "No email"}
-                      />
-                      <SummaryCard
-                        icon={Phone}
-                        label="Phone"
-                        value={
-                          displayStaff.phone
-                            ? formatPhoneForDisplay(displayStaff.phone)
-                            : "No phone"
-                        }
-                      />
-                      <SummaryCard
-                        icon={MapPin}
-                        label="Locations"
-                        value={`${displayStaff.total_locations} assigned`}
-                      />
-                    </div>
                   </div>
                 </div>
-
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
-                  <div className="rounded-2xl border bg-white/90 p-4">
-                    <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                      Primary role
-                    </p>
-                    <p className="mt-2 text-base font-semibold text-slate-950">
-                      {primaryLocation
-                        ? formatRoleLabel(
-                            primaryLocation.role_name,
-                            primaryLocation.role_code
-                          )
-                        : "Unassigned"}
-                    </p>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      {primaryLocation?.location_name || "No primary location"}
-                    </p>
-                  </div>
-
-                  <div className="rounded-2xl border bg-white/90 p-4">
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                          Status
-                        </p>
-                        <p className="mt-2 text-base font-semibold text-slate-950">
-                          {staff.overall_is_active ? "Active" : "Inactive"}
-                        </p>
-                        <p className="mt-1 text-sm text-muted-foreground">
-                          Toggle staff access for the primary location.
-                        </p>
-                      </div>
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <span>
-                              <Switch
-                                checked={staff.overall_is_active}
-                                onCheckedChange={handleStatusToggle}
-                                disabled={
-                                  !primaryLocation ||
-                                  !canManageStaff ||
-                                  deactivateStaff.isPending ||
-                                  reactivateStaff.isPending
-                                }
-                              />
-                            </span>
-                          </TooltipTrigger>
-                          {!canManageStaff && (
-                            <TooltipContent side="left">
-                              You don&apos;t have permission to manage staff
-                            </TooltipContent>
-                          )}
-                        </Tooltip>
-                      </TooltipProvider>
-                    </div>
-                  </div>
-                </div>
-              </div>
             </section>
             <div className="grid gap-6 xl:grid-cols-[1.08fr_0.92fr]">
               <div className="space-y-6">
@@ -1496,28 +1405,6 @@ function SectionHeader({
         </div>
       </div>
       {action ? <div className="shrink-0">{action}</div> : null}
-    </div>
-  );
-}
-
-function SummaryCard({
-  icon: Icon,
-  label,
-  value,
-}: {
-  icon: React.ComponentType<{ className?: string }>;
-  label: string;
-  value: string;
-}) {
-  return (
-    <div className="rounded-2xl border bg-white/90 p-4 shadow-sm">
-      <div className="flex items-center gap-2 text-slate-500">
-        <Icon className="h-4 w-4" />
-        <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-          {label}
-        </p>
-      </div>
-      <p className="mt-3 text-sm font-medium text-slate-950 break-words">{value}</p>
     </div>
   );
 }
