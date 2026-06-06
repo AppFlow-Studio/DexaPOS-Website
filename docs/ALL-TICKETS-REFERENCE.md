@@ -139,6 +139,22 @@ Single index for active ticket streams and their source trackers.
 - Backend + frontend work.
 - Not a quick-fix ticket and not mixed into modifier work.
 
+## Stream K: Single-Location Global Modifier And Recipe RPCs
+
+1. Plan:
+- `docs/PLAN-2026-06-06-SINGLE-LOCATION-GLOBAL-MODIFIER-RECIPE-RPCS.md`
+
+2. Continuation state:
+- `.planning/.continue-here.md`
+
+3. Scope notes:
+- Website repo only.
+- Backend/RPC stream for the single-location menu model.
+- Fixes the missing global modifier path when `location_id` is omitted.
+- Defensively removes stale recipe overload ambiguity while keeping one canonical function.
+- Overlay cleanup is staging-first and split into safe auto-collapse vs manual-review rows.
+- Charcoal cleanup must be sequenced separately.
+
 ## Notes
 
 1. Keep this file updated whenever a new ticket stream starts.
