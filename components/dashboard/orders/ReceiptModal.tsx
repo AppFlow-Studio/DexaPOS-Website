@@ -18,6 +18,16 @@ import { Location } from "@/types/merchant_locations";
 import { X, RotateCcw, Ban, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { refundAdminOrder, voidAdminOrder } from "@/app/manage/actions/admin-merchant/transactions";
+import { GetSessionTableLabel } from "@/app/dashboard/actions/order";
+import {
+  getReceiptTemplate,
+  type ReceiptTemplate,
+} from "@/app/dashboard/actions/receipt-templates";
+import {
+  resolveChargedLane,
+  laneTotalProps,
+} from "@/lib/orders/pricing-lane";
+import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -75,6 +85,126 @@ function getPaymentMethodName(method: string): string {
     external: "External",
   };
   return methods[method] || method.replace("_", " ");
+}
+
+// Format a staff name from the various shapes the API returns.
+function formatStaffName(
+  s?: { first_name?: string; last_name?: string; display_name?: string } | null
+): string | null {
+  if (!s) return null;
+  if (s.display_name) return s.display_name;
+  const full = [s.first_name, s.last_name].filter(Boolean).join(" ").trim();
+  return full || null;
+}
+
+// Group an item's modifiers by modifier_group_name, preserving order.
+function groupModifiers(
+  mods: OrderItemModifier[]
+): { group: string; mods: OrderItemModifier[] }[] {
+  const groups: { group: string; mods: OrderItemModifier[] }[] = [];
+  const byName = new Map<string, OrderItemModifier[]>();
+  for (const m of mods) {
+    const key = m.modifier_group_name || "";
+    if (!byName.has(key)) {
+      const arr: OrderItemModifier[] = [];
+      byName.set(key, arr);
+      groups.push({ group: key, mods: arr });
+    }
+    byName.get(key)!.push(m);
+  }
+  return groups;
+}
+
+// Render a single order item's body (name/qty/price, modifiers, discount, note).
+type ReceiptItem = OrderItem & { order_item_modifiers?: OrderItemModifier[] };
+
+function ReceiptItemRow({
+  item,
+  showMods,
+  modsLarge,
+}: {
+  item: ReceiptItem;
+  showMods: boolean;
+  modsLarge: boolean;
+}) {
+  const name = item.is_open_item
+    ? item.open_item_name || item.item_name
+    : item.item_name;
+  const grouped = groupModifiers(item.order_item_modifiers || []);
+  return (
+    <div className="item-row mb-2">
+      <div className="item-main flex justify-between">
+        <span
+          className={cn(
+            "item-name flex-1 pr-2",
+            item.is_voided && "line-through text-zinc-400"
+          )}
+        >
+          {item.quantity > 1 && `${item.quantity}x `}
+          {name}
+          {item.is_voided && (
+            <span className="text-red-500 ml-1 no-underline">(VOID)</span>
+          )}
+        </span>
+        <span
+          className={cn(
+            "item-price whitespace-nowrap",
+            item.is_voided && "line-through text-zinc-400"
+          )}
+        >
+          {formatCurrency(item.subtotal)}
+        </span>
+      </div>
+      {item.selected_size_name && (
+        <div className="item-modifier text-[10px] pl-3 text-zinc-500 dark:text-zinc-400">
+          Size: {item.selected_size_name}
+        </div>
+      )}
+      {showMods &&
+        grouped.map(({ group, mods }) => (
+          <div key={group || "ungrouped"} className="pl-3">
+            {group && (
+              <div
+                className={cn(
+                  "text-zinc-500 dark:text-zinc-400 uppercase tracking-wide",
+                  modsLarge ? "text-[11px]" : "text-[9px]"
+                )}
+              >
+                {group}
+              </div>
+            )}
+            {mods.map((mod) => (
+              <div
+                key={mod.id}
+                className={cn(
+                  "item-modifier pl-2 text-zinc-500 dark:text-zinc-400 flex justify-between",
+                  modsLarge ? "text-[12px]" : "text-[10px]"
+                )}
+              >
+                <span>
+                  + {mod.modifier_name}
+                  {mod.quantity > 1 && ` (×${mod.quantity})`}
+                </span>
+                {mod.price_modifier !== 0 && (
+                  <span>{formatCurrency(mod.price_modifier * mod.quantity)}</span>
+                )}
+              </div>
+            ))}
+          </div>
+        ))}
+      {item.discount_amount != null && item.discount_amount > 0 && (
+        <div className="item-modifier text-[10px] pl-3 text-green-600 dark:text-green-400 flex justify-between">
+          <span>{item.discount_name || "Discount"}</span>
+          <span>-{formatCurrency(item.discount_amount)}</span>
+        </div>
+      )}
+      {item.special_instructions && (
+        <div className="item-modifier text-[10px] pl-3 text-zinc-500 dark:text-zinc-400 italic">
+          Note: {item.special_instructions}
+        </div>
+      )}
+    </div>
+  );
 }
 
 // Torn edge SVG for top
@@ -177,11 +307,73 @@ export function ReceiptModal({
     }
   };
 
-  const items = (order.order_items || []) as (OrderItem & {
-    order_item_modifiers?: OrderItemModifier[];
-  })[];
+  const items = (order.order_items || []) as ReceiptItem[];
   const payments = (order.order_payments || []) as OrderPayment[];
   const { date, time } = formatReceiptDate(order.created_at);
+
+  const orderAny = order as unknown as Record<string, any>;
+  const sessionId: string | undefined = orderAny.session_id ?? undefined;
+  const locationId = location?.id ?? order.location_id;
+  const isDineIn =
+    order.order_type === "dine_in" || order.order_type === "qr_dine_in";
+
+  // ─── Config-driven presentation (receipt_templates → sale template) ───
+  const { data: template } = useQuery<ReceiptTemplate | null>({
+    queryKey: ["receipt-template", locationId, "sale"],
+    queryFn: async () => {
+      if (!locationId) return null;
+      const res = await getReceiptTemplate(locationId, "sale");
+      return (res?.data as ReceiptTemplate | null) ?? null;
+    },
+    enabled: open && !!locationId,
+    staleTime: 60_000,
+  });
+
+  const showMods = template ? template.show_item_modifiers : true;
+  const showTip = template ? template.show_tip_line : true;
+  const showTaxBreakdown = template ? template.show_tax_breakdown : true;
+  const showServer = template ? template.show_server_name : true;
+  const showOrderType = template ? template.show_order_type : true;
+  const modsLarge = template?.show_mods_large ?? false;
+  const headerText = template?.header_text || null;
+  const footerText = template?.footer_text || null;
+
+  // ─── Merged-table label resolution (one session, many physical tables) ───
+  const { data: tableLabelData } = useQuery({
+    queryKey: ["session-table-label", sessionId],
+    queryFn: () => GetSessionTableLabel(sessionId as string),
+    enabled: open && order.order_type === "dine_in" && !!sessionId,
+    staleTime: 60_000,
+  });
+
+  const tableLabel =
+    tableLabelData?.label ??
+    (order.table_number ? `Table ${order.table_number}` : null);
+
+  // ─── Header context ───
+  const serverName =
+    formatStaffName(order.assigned_server) ??
+    formatStaffName(order.table_sessions?.[0]?.server);
+  const partySize = order.table_sessions?.[0]?.party_size;
+  const deliveryAddress = (() => {
+    const a = orderAny.delivery_address;
+    if (!a) return null;
+    if (typeof a === "string") return a;
+    return [a.line1, a.line2, a.city, a.state, a.postal_code]
+      .filter(Boolean)
+      .join(", ");
+  })();
+  const scheduledTime: string | undefined =
+    orderAny.scheduled_at ?? orderAny.scheduled_time ?? undefined;
+
+  // ─── Dual-pricing lane (shared helper with Order Details summary) ───
+  const chargedLane = resolveChargedLane(order, payments);
+  const cardTotal = Number(order.card_total) || order.total_amount;
+  const cashTotal = Number(order.cash_total) || order.total_amount;
+  const hasDualPricing =
+    !!Number(order.card_total) &&
+    !!Number(order.cash_total) &&
+    Number(order.card_total) !== Number(order.cash_total);
 
   // Get completed payments only
   const completedPayments = payments.filter(
@@ -204,6 +396,7 @@ export function ReceiptModal({
       <DialogContent
         className="sm:max-w-md p-0 gap-0 bg-transparent border-none shadow-none overflow-visible"
         showCloseButton={false}
+        elevation="above-sheet"
       >
         <DialogHeader className="sr-only">
           <DialogTitle>Receipt Preview</DialogTitle>
@@ -251,6 +444,11 @@ export function ReceiptModal({
                   {location.phone}
                 </p>
               )}
+              {headerText && (
+                <p className="text-[10px] text-zinc-600 dark:text-zinc-400 whitespace-pre-line mt-1">
+                  {headerText}
+                </p>
+              )}
             </div>
 
             <DottedLine />
@@ -271,16 +469,32 @@ export function ReceiptModal({
                 <span>Time:</span>
                 <span>{time}</span>
               </div>
-              <div className="order-info-row flex justify-between">
-                <span>Type:</span>
-                <span className="capitalize">
-                  {order.order_type.replace("_", " ")}
-                </span>
-              </div>
-              {order.table_number && (
+              {showOrderType && (
                 <div className="order-info-row flex justify-between">
-                  <span>Table:</span>
-                  <span>{order.table_number}</span>
+                  <span>Type:</span>
+                  <span className="capitalize">
+                    {order.order_type.replace(/_/g, " ")}
+                  </span>
+                </div>
+              )}
+
+              {/* Order-type header matrix */}
+              {isDineIn && tableLabel && (
+                <div className="order-info-row flex justify-between">
+                  <span>{tableLabel.startsWith("Tables") ? "Tables:" : "Table:"}</span>
+                  <span>{tableLabel.replace(/^Tables?\s/, "")}</span>
+                </div>
+              )}
+              {order.order_type === "dine_in" && partySize ? (
+                <div className="order-info-row flex justify-between">
+                  <span>Guests:</span>
+                  <span>{partySize}</span>
+                </div>
+              ) : null}
+              {showServer && isDineIn && serverName && (
+                <div className="order-info-row flex justify-between">
+                  <span>Server:</span>
+                  <span>{serverName}</span>
                 </div>
               )}
               {order.customer_name && (
@@ -289,56 +503,90 @@ export function ReceiptModal({
                   <span>{order.customer_name}</span>
                 </div>
               )}
+              {(order.order_type === "takeout" ||
+                order.order_type === "delivery") &&
+                order.customer_phone && (
+                  <div className="order-info-row flex justify-between">
+                    <span>Phone:</span>
+                    <span>{order.customer_phone}</span>
+                  </div>
+                )}
+              {order.order_type === "delivery" && deliveryAddress && (
+                <div className="order-info-row flex justify-between gap-4">
+                  <span className="shrink-0">Deliver to:</span>
+                  <span className="text-right">{deliveryAddress}</span>
+                </div>
+              )}
+              {order.order_type === "catering" && scheduledTime && (
+                <div className="order-info-row flex justify-between">
+                  <span>Scheduled:</span>
+                  <span>
+                    {new Date(scheduledTime).toLocaleString("en-US", {
+                      month: "short",
+                      day: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </span>
+                </div>
+              )}
             </div>
 
             <DoubleLine />
 
             {/* Items */}
             <div className="items-section relative z-10">
-              {items.map((item) => (
-                <div key={item.id} className="item-row mb-2">
-                  <div className="item-main flex justify-between">
-                    <span className="item-name flex-1 pr-2">
-                      {item.quantity > 1 && `${item.quantity}x `}
-                      {item.item_name}
-                      {item.is_voided && (
-                        <span className="text-red-500 ml-1">(VOID)</span>
-                      )}
-                    </span>
-                    <span className="item-price whitespace-nowrap">
-                      {formatCurrency(item.subtotal)}
-                    </span>
-                  </div>
-                  {item.selected_size_name && (
-                    <div className="item-modifier text-[10px] pl-3 text-zinc-500 dark:text-zinc-400">
-                      Size: {item.selected_size_name}
+              {(() => {
+                // Group dine-in items by seat / course when that context exists.
+                const hasSeatCourse =
+                  order.order_type === "dine_in" &&
+                  items.some(
+                    (i) => i.seat_number != null || i.course_number != null
+                  );
+
+                if (!hasSeatCourse) {
+                  return items.map((item) => (
+                    <ReceiptItemRow
+                      key={item.id}
+                      item={item}
+                      showMods={showMods}
+                      modsLarge={modsLarge}
+                    />
+                  ));
+                }
+
+                const groupKey = (i: ReceiptItem) => {
+                  const seat = i.seat_number != null ? `Seat ${i.seat_number}` : null;
+                  const course =
+                    i.course_number != null ? `Course ${i.course_number}` : null;
+                  return [seat, course].filter(Boolean).join(" · ") || "Other";
+                };
+                const order_: string[] = [];
+                const byGroup = new Map<string, ReceiptItem[]>();
+                for (const it of items) {
+                  const k = groupKey(it);
+                  if (!byGroup.has(k)) {
+                    byGroup.set(k, []);
+                    order_.push(k);
+                  }
+                  byGroup.get(k)!.push(it);
+                }
+                return order_.map((k) => (
+                  <div key={k} className="mb-2">
+                    <div className="text-[10px] font-semibold uppercase tracking-wide text-zinc-600 dark:text-zinc-300 mb-1">
+                      {k}
                     </div>
-                  )}
-                  {item.order_item_modifiers &&
-                    item.order_item_modifiers.length > 0 &&
-                    item.order_item_modifiers.map((mod) => (
-                      <div
-                        key={mod.id}
-                        className="item-modifier text-[10px] pl-3 text-zinc-500 dark:text-zinc-400 flex justify-between"
-                      >
-                        <span>
-                          + {mod.modifier_name}
-                          {mod.quantity > 1 && ` (×${mod.quantity})`}
-                        </span>
-                        {mod.price_modifier > 0 && (
-                          <span>
-                            {formatCurrency(mod.price_modifier * mod.quantity)}
-                          </span>
-                        )}
-                      </div>
+                    {byGroup.get(k)!.map((item) => (
+                      <ReceiptItemRow
+                        key={item.id}
+                        item={item}
+                        showMods={showMods}
+                        modsLarge={modsLarge}
+                      />
                     ))}
-                  {item.special_instructions && (
-                    <div className="item-modifier text-[10px] pl-3 text-zinc-500 dark:text-zinc-400 italic">
-                      Note: {item.special_instructions}
-                    </div>
-                  )}
-                </div>
-              ))}
+                  </div>
+                ));
+              })()}
             </div>
 
             <DottedLine />
@@ -349,12 +597,6 @@ export function ReceiptModal({
                 <span>Subtotal</span>
                 <span>{formatCurrency(order.subtotal)}</span>
               </div>
-              {order.tax_amount > 0 && (
-                <div className="totals-row flex justify-between">
-                  <span>Tax</span>
-                  <span>{formatCurrency(order.tax_amount)}</span>
-                </div>
-              )}
               {order.discount_amount > 0 && (
                 <div className="totals-row flex justify-between text-green-600 dark:text-green-400">
                   <span>Discount</span>
@@ -367,16 +609,55 @@ export function ReceiptModal({
                   <span>{formatCurrency(order.service_charge)}</span>
                 </div>
               )}
-              {order.tip_amount > 0 && (
+              {showTaxBreakdown && order.tax_amount > 0 && (
+                <div className="totals-row flex justify-between">
+                  <span>Tax</span>
+                  <span>{formatCurrency(order.tax_amount)}</span>
+                </div>
+              )}
+              {showTip && order.tip_amount > 0 && (
                 <div className="totals-row flex justify-between">
                   <span>Tip</span>
                   <span>{formatCurrency(order.tip_amount)}</span>
                 </div>
               )}
-              <div className="totals-row grand-total flex justify-between font-semibold text-sm pt-2 border-t border-zinc-300 dark:border-zinc-700">
-                <span>TOTAL</span>
-                <span>{formatCurrency(order.total_amount)}</span>
-              </div>
+
+              {/* Total — dual-pricing lane emphasis (card brand-blue, cash neutral) */}
+              {hasDualPricing ? (
+                (() => {
+                  const cardProps = laneTotalProps(chargedLane, "card");
+                  const cashProps = laneTotalProps(chargedLane, "cash");
+                  return (
+                    <div className="pt-2 border-t border-zinc-300 dark:border-zinc-700 space-y-0.5">
+                      <div
+                        className={cn(
+                          "totals-row flex justify-between text-sm",
+                          cardProps.bold && "font-semibold",
+                          cardProps.valueClassName
+                        )}
+                      >
+                        <span>Total (Card)</span>
+                        <span>{formatCurrency(cardTotal)}</span>
+                      </div>
+                      <div
+                        className={cn(
+                          "totals-row flex justify-between text-sm",
+                          cashProps.bold && "font-semibold",
+                          cashProps.valueClassName
+                        )}
+                      >
+                        <span>Total (Cash)</span>
+                        <span>{formatCurrency(cashTotal)}</span>
+                      </div>
+                    </div>
+                  );
+                })()
+              ) : (
+                <div className="totals-row grand-total flex justify-between font-semibold text-sm pt-2 border-t border-zinc-300 dark:border-zinc-700">
+                  <span>TOTAL</span>
+                  <span>{formatCurrency(order.total_amount)}</span>
+                </div>
+              )}
             </div>
 
             {/* Payments */}
@@ -417,10 +698,18 @@ export function ReceiptModal({
 
             {/* Footer */}
             <div className="footer text-center relative z-10">
-              <p className="footer-thanks font-medium">Thank You!</p>
-              <p className="text-[10px] text-zinc-500 dark:text-zinc-400">
-                We appreciate your business
-              </p>
+              {footerText ? (
+                <p className="text-[11px] text-zinc-600 dark:text-zinc-300 whitespace-pre-line">
+                  {footerText}
+                </p>
+              ) : (
+                <>
+                  <p className="footer-thanks font-medium">Thank You!</p>
+                  <p className="text-[10px] text-zinc-500 dark:text-zinc-400">
+                    We appreciate your business
+                  </p>
+                </>
+              )}
               <p className="text-[10px] text-zinc-500 dark:text-zinc-400 mt-2">
                 {new Date().toLocaleDateString("en-US", {
                   weekday: "long",

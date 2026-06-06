@@ -171,11 +171,11 @@ export function TransactionVolumeCard({
             </p>
           </div>
 
-          <div className="flex items-center gap-3 shrink-0">
+          <div className="flex items-center gap-2 flex-wrap shrink-0">
             {/* Sort Toggle */}
             <div className="flex items-center gap-2">
               <span className="text-xs text-muted-foreground whitespace-nowrap">
-                Sort by Highest Debits
+                Sort by Debits
               </span>
               <button
                 onClick={() => setSortByDebits(!sortByDebits)}
@@ -251,109 +251,115 @@ export function TransactionVolumeCard({
           )}
         </div>
 
-        {/* Table */}
-        <div>
-          {/* Table Header */}
-          <div className="grid grid-cols-[1fr_auto_auto_auto] gap-4 pb-3 border-b text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-            <span className="flex items-center gap-1">
-              Payment Type <Info className="h-3 w-3" />
-            </span>
-            <span className="w-28 text-right flex items-center justify-end gap-1">
-              Credits (Inflow) <Info className="h-3 w-3" />
-            </span>
-            <span className="w-28 text-right flex items-center justify-end gap-1">
-              Debits (Outflow) <Info className="h-3 w-3" />
-            </span>
-            <span className="w-28 text-center">Net Ratio</span>
-          </div>
+        {/* Table — scrollable so names never get crushed */}
+        <div className="overflow-x-auto -mx-6 px-6">
+          <div style={{ minWidth: "340px" }}>
+            {/* Table Header */}
+            <div className="grid grid-cols-[minmax(100px,1fr)_80px_80px] sm:grid-cols-[minmax(130px,1fr)_90px_90px_100px] gap-x-3 pb-3 border-b text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              <span className="flex items-center gap-1">
+                Payment Type <Info className="h-3 w-3 shrink-0" />
+              </span>
+              <span className="text-right flex items-center justify-end gap-1">
+                Credits <Info className="h-3 w-3 shrink-0" />
+              </span>
+              <span className="text-right flex items-center justify-end gap-1">
+                Debits <Info className="h-3 w-3 shrink-0" />
+              </span>
+              <span className="hidden sm:block text-center">Net Ratio</span>
+            </div>
 
-          {/* Rows */}
-          <div className="divide-y">
-            {pagedRows.map((row) => {
-              const config = typeConfig[row.type] || {
-                icon: <Wallet className="h-4 w-4 text-muted-foreground" />,
-                subtitle: "Other payments",
-                iconBg: "bg-muted/60",
-              };
-              const rowTotal = row.credits + row.debits;
-              const efficiency =
-                rowTotal > 0
-                  ? Math.round((row.credits / rowTotal) * 100)
-                  : 0;
+            {/* Rows */}
+            <div className="divide-y">
+              {pagedRows.map((row) => {
+                const config = typeConfig[row.type] || {
+                  icon: <Wallet className="h-4 w-4 text-muted-foreground" />,
+                  subtitle: "Other payments",
+                  iconBg: "bg-muted/60",
+                };
+                const rowTotal = row.credits + row.debits;
+                const efficiency =
+                  rowTotal > 0
+                    ? Math.round((row.credits / rowTotal) * 100)
+                    : 0;
+                const displayName =
+                  row.type === "Card" ? "Card Payments" :
+                  row.type === "Cash" ? "Cash Transactions" :
+                  row.type === "Gift Card" ? "Gift Cards" :
+                  row.type;
 
-              return (
-                <div
-                  key={row.type}
-                  className="grid grid-cols-[1fr_auto_auto_auto] gap-4 py-4 items-center"
-                >
-                  {/* Payment Type */}
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={cn(
-                        "flex items-center justify-center w-9 h-9 rounded-lg",
-                        config.iconBg
-                      )}
-                    >
-                      {config.icon}
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold leading-tight">
-                        {row.type === "Card" ? "Card Payments" : row.type === "Cash" ? "Cash Transactions" : row.type === "Gift Card" ? "Gift Cards" : row.type}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {config.subtitle}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Credits */}
-                  <div className="w-28 text-right">
-                    <p className="text-sm font-bold tabular-nums">
-                      {row.credits.toLocaleString()}
-                    </p>
-                    {row.credits > 0 && (
-                      <p className="text-[11px] text-emerald-600 dark:text-emerald-400 flex items-center justify-end gap-0.5">
-                        <TrendingUp className="h-3 w-3" />+
-                        {totalVolume > 0
-                          ? ((row.credits / totalVolume) * 100).toFixed(1)
-                          : "0.0"}
-                        %
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Debits */}
-                  <div className="w-28 text-right">
-                    <p className="text-sm font-bold tabular-nums text-orange-600 dark:text-orange-400">
-                      {row.debits.toLocaleString()}
-                    </p>
-                    {row.debits > 0 && (
-                      <p className="text-[11px] text-orange-600 dark:text-orange-400 flex items-center justify-end gap-0.5">
-                        <TrendingDown className="h-3 w-3" />+
-                        {totalVolume > 0
-                          ? ((row.debits / totalVolume) * 100).toFixed(1)
-                          : "0.0"}
-                        %
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Net Ratio / Efficiency */}
-                  <div className="w-28 flex flex-col items-center gap-1">
-                    <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
+                return (
+                  <div
+                    key={row.type}
+                    className="grid grid-cols-[minmax(100px,1fr)_80px_80px] sm:grid-cols-[minmax(130px,1fr)_90px_90px_100px] gap-x-3 py-3 items-center"
+                  >
+                    {/* Payment Type */}
+                    <div className="flex items-center gap-2 min-w-0">
                       <div
-                        className="h-full bg-primary rounded-full transition-all"
-                        style={{ width: `${efficiency}%` }}
-                      />
+                        className={cn(
+                          "flex items-center justify-center w-8 h-8 rounded-lg shrink-0",
+                          config.iconBg
+                        )}
+                      >
+                        {config.icon}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold leading-tight truncate">
+                          {displayName}
+                        </p>
+                        <p className="text-xs text-muted-foreground truncate hidden sm:block">
+                          {config.subtitle}
+                        </p>
+                      </div>
                     </div>
-                    <span className="text-[11px] text-muted-foreground font-medium">
-                      {efficiency}% Efficiency
-                    </span>
-                  </div>
 
-                </div>
-              );
-            })}
+                    {/* Credits */}
+                    <div className="text-right shrink-0">
+                      <p className="text-sm font-bold tabular-nums">
+                        {row.credits.toLocaleString()}
+                      </p>
+                      {row.credits > 0 && (
+                        <p className="text-[11px] text-emerald-600 dark:text-emerald-400 flex items-center justify-end gap-0.5">
+                          <TrendingUp className="h-3 w-3" />+
+                          {totalVolume > 0
+                            ? ((row.credits / totalVolume) * 100).toFixed(1)
+                            : "0.0"}
+                          %
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Debits */}
+                    <div className="text-right shrink-0">
+                      <p className="text-sm font-bold tabular-nums text-orange-600 dark:text-orange-400">
+                        {row.debits.toLocaleString()}
+                      </p>
+                      {row.debits > 0 && (
+                        <p className="text-[11px] text-orange-600 dark:text-orange-400 flex items-center justify-end gap-0.5">
+                          <TrendingDown className="h-3 w-3" />+
+                          {totalVolume > 0
+                            ? ((row.debits / totalVolume) * 100).toFixed(1)
+                            : "0.0"}
+                          %
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Net Ratio / Efficiency — hidden on mobile */}
+                    <div className="hidden sm:flex flex-col items-center gap-1 shrink-0">
+                      <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-primary rounded-full transition-all"
+                          style={{ width: `${efficiency}%` }}
+                        />
+                      </div>
+                      <span className="text-[11px] text-muted-foreground font-medium">
+                        {efficiency}% Efficiency
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
 

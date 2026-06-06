@@ -21,8 +21,8 @@ export function MenuHeader({
   onPreview,
 }: MenuHeaderProps) {
   return (
-    <div className="flex items-center gap-4">
-      <div className="flex-1">
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <div className="flex-1 min-w-0">
         {/* Breadcrumbs */}
         <div className="text-sm text-muted-foreground flex items-center gap-2 mb-2">
           <Button variant="ghost" size="icon" onClick={onBack}>
@@ -36,9 +36,9 @@ export function MenuHeader({
             Menus
           </button>
           <span className="mx-2">/</span>
-          <div className="text-foreground">{menu.name}</div>
+          <div className="text-foreground truncate">{menu.name}</div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <h2 className="text-2xl font-bold tracking-tight">{menu.name}</h2>
           <Badge variant={menu.is_location_owned ? "secondary" : "default"}>
             {menu.is_location_owned ? (
@@ -59,7 +59,7 @@ export function MenuHeader({
         )}
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto">
         {onPreview && (
           <Button variant="outline" onClick={onPreview} className="gap-2">
             <Tablet className="h-4 w-4" />

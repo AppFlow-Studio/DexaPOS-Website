@@ -100,7 +100,7 @@ export function RevenueComparisonChart({
           {METRIC_LABELS[metric]} Comparison
         </CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className="overflow-hidden">
         <ResponsiveContainer width="100%" height={350}>
           <LineChart
             data={chartData}

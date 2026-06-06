@@ -44,7 +44,9 @@ import {
     ShoppingBag,
     Truck,
     Globe,
+    QrCode,
     ChefHat,
+    MapPin,
     ChevronLeft,
     ChevronsLeft,
     ChevronRight,
@@ -108,6 +110,10 @@ function getOrderTypeConfig(type: OrderType) {
             icon: <Utensils className="h-3 w-3 text-muted-foreground" />,
             label: 'Dine In',
         },
+        qr_dine_in: {
+            icon: <QrCode className="h-3 w-3 text-[#0C4FD1]" />,
+            label: 'QR Dine-In',
+        },
         takeout: {
             icon: <ShoppingBag className="h-3 w-3 text-muted-foreground" />,
             label: 'Takeout',
@@ -137,7 +143,7 @@ export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showL
     const [globalFilter, setGlobalFilter] = React.useState('')
     const router = useRouter()
     const isAllLocations = useIsAllLocations()
-    const { locations } = useLocationStore()
+    const { locations, setSelectedLocation } = useLocationStore()
     const shouldShowLocation = showLocationColumn ?? isAllLocations
 
     const handleRowClick = (order: OrderResponse) => {
@@ -146,6 +152,13 @@ export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showL
         } else {
             router.push(`/dashboard/orders/${order.id}`)
         }
+    }
+
+    const handleViewOnFloorPlan = (order: OrderResponse) => {
+        if (order.location_id) {
+            setSelectedLocation(order.location_id)
+        }
+        router.push('/dashboard/tables')
     }
 
     const getCreatedByName = (order: OrderResponse): string => {
@@ -217,6 +230,33 @@ export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showL
                     <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
                         {typeConfig.icon}
                         <span className="font-medium text-foreground/80">{typeConfig.label}</span>
+                    </span>
+                )
+            },
+        },
+        {
+            id: 'table',
+            header: 'Table',
+            // Reference column so a row can be traced to its physical table for
+            // audit without opening the receipt. Dine-in / QR show the table
+            // number; other order types have no table. Merged dine-in checks
+            // resolve all their tables inside the order detail / receipt.
+            accessorFn: (row) =>
+                row.order_type === 'dine_in' || row.order_type === 'qr_dine_in'
+                    ? row.table_number || ''
+                    : '',
+            cell: ({ row }) => {
+                const order = row.original
+                const isDineIn =
+                    order.order_type === 'dine_in' ||
+                    order.order_type === 'qr_dine_in'
+                if (!isDineIn || !order.table_number) {
+                    return <span className="text-sm text-muted-foreground/50">—</span>
+                }
+                return (
+                    <span className="inline-flex items-center gap-1.5 text-xs text-[#0C4FD1]">
+                        <MapPin className="h-3 w-3" />
+                        {order.table_number}
                     </span>
                 )
             },
@@ -345,6 +385,12 @@ export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showL
                                 <Eye className="mr-2 h-4 w-4" />
                                 View Details
                             </DropdownMenuItem>
+                            {order.order_type === 'qr_dine_in' && order.table_number ? (
+                                <DropdownMenuItem onClick={() => handleViewOnFloorPlan(order)}>
+                                    <MapPin className="mr-2 h-4 w-4" />
+                                    View on Floor Plan
+                                </DropdownMenuItem>
+                            ) : null}
                             {!readOnly && (
                                 <>
                                     <DropdownMenuSeparator />

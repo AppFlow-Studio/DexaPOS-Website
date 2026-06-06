@@ -7,8 +7,33 @@ interface PageProps {
   params: Promise<{ t1: string; t2: string }>;
 }
 
-export async function generateMetadata(): Promise<Metadata> {
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  const { t1, t2 } = await params;
+  const supabase = createServiceRoleClient();
+  const { data } = await supabase.rpc("get_public_receipt", {
+    p_order_token: t1,
+    p_send_token: t2,
+  });
+  const receipt = data as ReceiptData | null;
+  const storeName = receipt?.location?.name?.trim();
+  const orderNum = receipt?.order?.display_number
+    ? receipt.order.display_number
+    : receipt?.order?.order_number
+    ? `#${receipt.order.order_number}`
+    : null;
+
+  const title = storeName
+    ? `Your receipt from ${storeName}${orderNum ? ` · ${orderNum}` : ""}`
+    : "Your receipt";
+  const description = storeName
+    ? `Your digital receipt from ${storeName}${orderNum ? ` for order ${orderNum}` : ""}.`
+    : "Your digital receipt.";
+
   return {
+    title,
+    description,
+    openGraph: { title, description },
+    twitter: { card: "summary", title, description },
     robots: { index: false, follow: false },
     // Prevent iOS Safari from turning addresses, phone numbers, and
     // order codes into blue tappable links.

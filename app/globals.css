@@ -219,6 +219,28 @@
   --spacing: 0.25rem;
 }
 
+.dashboard-sidebar-theme {
+  --sidebar: #f8fafc;
+  --sidebar-foreground: #475569;
+  --sidebar-primary: #0c4fd1;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #eef3fe;
+  --sidebar-accent-foreground: #0c4fd1;
+  --sidebar-border: #e2e8f0;
+  --sidebar-ring: #0c4fd1;
+}
+
+.dark .dashboard-sidebar-theme {
+  --sidebar: oklch(0.2471 0.0265 259.8847);
+  --sidebar-foreground: oklch(0.8864 0.0103 257.1169);
+  --sidebar-primary: #0c4fd1;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: oklch(0.3204 0.0284 260.1138);
+  --sidebar-accent-foreground: oklch(0.9521 0.0058 264.5313);
+  --sidebar-border: oklch(0.3729 0.0306 259.7328);
+  --sidebar-ring: #0c4fd1;
+}
+
 .dark {
   --background: oklch(0.2077 0.0398 265.7549);
   --foreground: oklch(0.9288 0.0126 255.5078);
@@ -344,6 +366,30 @@ html:has([data-template]) body {
   color: var(--text);
 }
 
+/* Storefront max-width container constraint.
+   Constrains all Tailwind `container` elements to 1280px (max-w-7xl) when
+   inside a storefront page, centered with consistent responsive padding.
+   Scoped to [data-template] so the dashboard layout is unaffected. */
+[data-template] .container {
+  max-width: 1280px;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+@media (min-width: 640px) {
+  [data-template] .container {
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
+}
+@media (min-width: 1024px) {
+  [data-template] .container {
+    padding-left: 2rem;
+    padding-right: 2rem;
+  }
+}
+
 /* Utility to hide horizontal scrollbars while keeping content scrollable */
 .no-scrollbar {
   -ms-overflow-style: none; /* IE and Edge */
@@ -360,6 +406,85 @@ html:has([data-template]) body {
 html:has([data-template]) body[data-scroll-locked] {
   overflow-y: auto !important;
   margin-right: 0 !important;
+}
+
+/* Storefront panel animations — smooth slide-up like premium ordering sites */
+@keyframes panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes panel-out {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(12px) scale(0.99);
+  }
+}
+
+@keyframes slide-in-from-right {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+
+@keyframes slide-out-to-right {
+  from { transform: translateX(0); }
+  to   { transform: translateX(100%); }
+}
+
+@keyframes slide-in-from-bottom {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+
+@keyframes slide-out-to-bottom {
+  from { transform: translateY(0); }
+  to   { transform: translateY(100%); }
+}
+
+.cart-slide-right[data-state="open"]  { animation: slide-in-from-right 0.32s cubic-bezier(0.32,0.72,0,1) both; }
+.cart-slide-right[data-state="closed"] { animation: slide-out-to-right 0.22s cubic-bezier(0.32,0.72,0,1) both; }
+
+.cart-slide-bottom[data-state="open"]  { animation: slide-in-from-bottom 0.32s cubic-bezier(0.32,0.72,0,1) both; }
+.cart-slide-bottom[data-state="closed"] { animation: slide-out-to-bottom 0.22s cubic-bezier(0.32,0.72,0,1) both; }
+
+@keyframes overlay-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes overlay-out {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+
+/* Applied directly via data-[state] on Radix Dialog/Sheet elements */
+[data-slot="dialog-content"][data-state="open"],
+[data-slot="dialog-content"][data-state="open"] {
+  animation: panel-in 0.32s cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+
+[data-slot="dialog-content"][data-state="closed"] {
+  animation: panel-out 0.2s cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+
+[data-slot="dialog-overlay"][data-state="open"],
+[data-slot="sheet-overlay"][data-state="open"] {
+  animation: overlay-in 0.25s ease both;
+}
+
+[data-slot="dialog-overlay"][data-state="closed"],
+[data-slot="sheet-overlay"][data-state="closed"] {
+  animation: overlay-out 0.2s ease both;
 }
 
 ::view-transition-old(root),

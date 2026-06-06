@@ -395,6 +395,13 @@ enabled = true
 verify_jwt = false
 entrypoint = "./functions/notify-waitlist-guest/index.ts"
 
+[functions.telnyx-webhook]
+enabled = true
+# Telnyx authenticates via Ed25519 signature, not a Supabase JWT.
+verify_jwt = false
+import_map = "./functions/telnyx-webhook/deno.json"
+entrypoint = "./functions/telnyx-webhook/index.ts"
+
 [functions.cancel-online-order]
 enabled = true
 verify_jwt = false
@@ -405,10 +412,10 @@ enabled = true
 verify_jwt = false
 entrypoint = "./functions/create-online-order/index.ts"
 
-[functions.dejavoo-whitelist-domain]
+[functions.storefront-payment-domain-whitelist]
 enabled = true
 verify_jwt = false
-entrypoint = "./functions/dejavoo-whitelist-domain/index.ts"
+entrypoint = "./functions/storefront-payment-domain-whitelist/index.ts"
 
 [functions.orderout-onboard]
 enabled = true

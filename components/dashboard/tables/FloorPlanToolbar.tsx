@@ -248,7 +248,7 @@ export function FloorPlanEditorSidebar({
   }, {} as Record<ShapeCategory, typeof SHAPE_OPTIONS>)
 
   return (
-    <div className="w-64 bg-background border-r h-full flex flex-col z-20 shadow-xl">
+    <div className="w-full lg:w-64 bg-background border-r h-full flex flex-col z-20 shadow-xl overflow-hidden">
       <div className="p-4 border-b shrink-0">
         <h3 className="font-semibold text-sm">Shape Library</h3>
         <p className="text-xs text-muted-foreground">Drag or click shapes onto the canvas</p>

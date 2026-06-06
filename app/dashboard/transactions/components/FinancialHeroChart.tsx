@@ -266,7 +266,7 @@ export function FinancialHeroChart({
   return (
     <div className="h-full flex flex-col p-6">
         {/* Header with Hero Value and Metric Switcher */}
-        <div className="flex items-start justify-between mb-4 shrink-0">
+        <div className="flex flex-col sm:flex-row items-start sm:justify-between mb-4 gap-3 shrink-0">
           <div>
             {/* Hero Value */}
             <h2 className="text-3xl md:text-4xl font-semibold tracking-tight mb-2 tabular-nums leading-none">
@@ -306,7 +306,7 @@ export function FinancialHeroChart({
             value={activeMetric}
             onValueChange={(v) => setActiveMetric(v as MetricType)}
           >
-            <SelectTrigger className="w-[150px] h-9 bg-muted/50 border-border/60 rounded-lg text-sm font-medium">
+            <SelectTrigger className="w-full sm:w-[150px] h-9 bg-muted/50 border-border/60 rounded-lg text-sm font-medium">
               <SelectValue placeholder="Select metric" />
             </SelectTrigger>
             <SelectContent className="rounded-lg">

@@ -122,7 +122,7 @@ export function MenuCategoriesTab({
     <div className="space-y-4">
       {/* Controls */}
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {onToggleSelectionMode && (
             <Button
               variant={isSelectionMode ? "secondary" : "outline"}
@@ -150,7 +150,7 @@ export function MenuCategoriesTab({
             </>
           )}
           {onViewModeChange && (
-            <div className="flex items-center border rounded-md overflow-hidden">
+            <div className="hidden sm:flex items-center border rounded-md overflow-hidden">
               <Button
                 variant={categoryViewMode === "list" ? "default" : "ghost"}
                 size="sm"

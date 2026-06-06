@@ -11,9 +11,26 @@ interface BottomSheetContextValue {
 
 const BottomSheetContext = React.createContext<BottomSheetContextValue>({ level: 0 })
 
-function BottomSheet({ children, ...props }: React.ComponentProps<typeof DialogPrimitive.Root>) {
+// Minimum nesting level that yields a z-index clearing a right-side Sheet
+// (overlay z-[199] / content z-[200] in components/ui/sheet.tsx).
+// level 12 → overlay 210, content 211.
+const ELEVATED_MIN_LEVEL = 12
+
+function BottomSheet({
+    children,
+    elevated,
+    ...props
+}: React.ComponentProps<typeof DialogPrimitive.Root> & {
+    /**
+     * Render above a parent Sheet/Dialog (z-[200]). Use when a bottom sheet is
+     * opened from inside a Sheet (e.g. order detail from Customer Profile), so
+     * it paints in the foreground instead of behind the dimmed sheet.
+     */
+    elevated?: boolean
+}) {
     const parentContext = React.useContext(BottomSheetContext)
-    const level = parentContext.level + 1
+    let level = parentContext.level + 1
+    if (elevated && level < ELEVATED_MIN_LEVEL) level = ELEVATED_MIN_LEVEL
 
     return (
         <BottomSheetContext.Provider value={{ level }}>

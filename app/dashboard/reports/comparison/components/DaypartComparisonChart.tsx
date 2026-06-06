@@ -84,7 +84,7 @@ export function DaypartComparisonChart({
           Sales by Daypart
         </CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className="overflow-hidden">
         <ResponsiveContainer width="100%" height={300}>
           <BarChart
             data={chartData}

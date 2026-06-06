@@ -243,14 +243,14 @@ export function OrderOutTab({
       {/* A. Setup Progress */}
       {allSetupDone ? (
         <Card className="border-green-200 dark:border-green-900 bg-green-50/50 dark:bg-green-950/20">
-          <CardContent className="flex items-center justify-between py-4">
+          <CardContent className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 py-4">
             <div className="flex items-center gap-3">
-              <CheckCircle2 className="h-5 w-5 text-green-600" />
+              <CheckCircle2 className="h-5 w-5 text-green-600 shrink-0" />
               <span className="text-sm font-medium text-green-700 dark:text-green-400">
                 All set! Your location is connected to delivery platforms.
               </span>
             </div>
-            <Button variant="outline" size="sm" asChild>
+            <Button variant="outline" size="sm" asChild className="shrink-0 self-start sm:self-auto">
               <a href={dashboardUrl} target="_blank" rel="noopener noreferrer">
                 Open Dashboard
                 <ExternalLink className="h-3 w-3 ml-1" />
@@ -540,14 +540,14 @@ function SetupStep({
   actionUrl?: string;
 }) {
   return (
-    <div className="flex items-center justify-between">
-      <div className="flex items-center gap-3">
+    <div className="flex items-center justify-between gap-2 flex-wrap">
+      <div className="flex items-center gap-3 min-w-0">
         {completed ? (
           <CheckCircle2 className="h-5 w-5 text-green-500 shrink-0" />
         ) : (
           <Circle className="h-5 w-5 text-muted-foreground shrink-0" />
         )}
-        <div>
+        <div className="min-w-0">
           <span className={completed ? "text-foreground" : "text-muted-foreground"}>
             {label}
           </span>
@@ -557,7 +557,7 @@ function SetupStep({
         </div>
       </div>
       {actionUrl && !completed && (
-        <Button variant="ghost" size="sm" asChild>
+        <Button variant="ghost" size="sm" asChild className="shrink-0">
           <a href={actionUrl} target="_blank" rel="noopener noreferrer">
             {actionLabel || "Open"}
             <ExternalLink className="h-3 w-3 ml-1" />

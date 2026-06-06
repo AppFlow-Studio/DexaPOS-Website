@@ -1,6 +1,7 @@
 "use server";
 
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { currentUser } from "@clerk/nextjs/server";
 import {
   SupportTicket,
@@ -364,4 +365,31 @@ export async function GetSupportStats(): Promise<{
 
   if (error) return { error: error.message };
   return { data };
+}
+
+// ============================================================================
+// GET UNREAD TICKET COUNTS (notification bell — role-aware via JWT)
+// ============================================================================
+
+export interface UnreadTicketCounts {
+  role: "admin" | "merchant" | "none";
+  total: number;
+  perTicket: { ticket_id: string; count: number }[];
+}
+
+export async function GetUnreadTicketCounts(): Promise<UnreadTicketCounts> {
+  // Clerk-token client so the SECURITY DEFINER RPC can read auth.jwt() and
+  // resolve the caller's role/org. (Service role has no JWT → role 'none'.)
+  const supabase = createServerSupabaseClient();
+
+  const { data, error } = await supabase.rpc("get_unread_ticket_counts");
+
+  if (error || !data) return { role: "none", total: 0, perTicket: [] };
+
+  const d = data as {
+    role?: "admin" | "merchant" | "none";
+    total?: number;
+    per_ticket?: { ticket_id: string; count: number }[];
+  };
+  return { role: d.role ?? "none", total: d.total ?? 0, perTicket: d.per_ticket ?? [] };
 }

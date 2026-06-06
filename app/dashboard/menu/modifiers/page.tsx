@@ -20,6 +20,7 @@ import {
   Layers,
   Info,
   ChevronDown,
+  ChevronUp,
   Sparkles,
   Loader2,
   Trash2,
@@ -29,6 +30,7 @@ import {
   Filter,
   ListPlus,
   FolderPlus,
+  ArrowUpDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -43,12 +45,14 @@ import {
   CreateModifierGroupItem,
   UpdateModifierGroupItem,
   DeleteModifierGroupItem,
+  ReorderModifierGroups,
 } from "@/app/dashboard/actions/modifier-groups";
 import {
   updateModifierGroup,
   updateModifierItem,
 } from "@/app/dashboard/actions/menu-items-rpc";
 import {
+  UpsertLocationModifierGroupOverride,
   DeleteLocationModifierGroupOverride,
   DeleteLocationModifierItemOverride,
 } from "@/app/dashboard/actions/location-modifier-overrides";
@@ -88,6 +92,7 @@ interface ModifierGroupWithItems extends ModifierGroupsModel {
     id: string;
     is_active: boolean;
     location_id: string;
+    display_order?: number | null;
   }>;
 }
 
@@ -103,6 +108,8 @@ type ItemDraft = {
 export default function ModifiersPage() {
   const { data: userInfo } = useUserInfo();
   const clerkOrgId = userInfo?.members?.[0]?.organizations?.id;
+  const merchantId =
+    userInfo?.members?.[0]?.organizations?.merchants?.id || "";
   const queryClient = useQueryClient();
 
   const selectedLocation = useSelectedLocation();
@@ -141,6 +148,9 @@ export default function ModifiersPage() {
   const [assignCategoryGroup, setAssignCategoryGroup] = useState<ModifierGroupWithItems | null>(null);
   const [scopeFilter, setScopeFilter] = useState<"all" | "global" | "location">(
     "all",
+  );
+  const [reorderingGroupId, setReorderingGroupId] = useState<string | null>(
+    null,
   );
 
   const filteredGroups = useMemo(() => {
@@ -186,6 +196,13 @@ export default function ModifiersPage() {
 
   const canOverrideOnly = (group: ModifierGroupWithItems) =>
     !isAllLocations && !group.location_id;
+
+  const canReorderLibraryGroups =
+    !searchTerm.trim() && (!isAllLocations || scopeFilter === "global");
+
+  const reorderHelpText = isAllLocations
+    ? "Switch to the Global filter to reorder library groups."
+    : "Clear the current search before reordering groups.";
 
   const handleCreateGroup = () => {
     setEditingGroup(undefined);
@@ -435,6 +452,95 @@ export default function ModifiersPage() {
     queryClient.invalidateQueries({ queryKey: ["modifier-groups"] });
   };
 
+  const handleMoveGroup = async (
+    groupId: string,
+    direction: "up" | "down",
+  ) => {
+    if (!canReorderLibraryGroups) {
+      toast.error("Reordering unavailable", {
+        description: reorderHelpText,
+      });
+      return;
+    }
+
+    const currentIndex = filteredGroups.findIndex((group) => group.id === groupId);
+    if (currentIndex === -1) return;
+
+    const targetIndex =
+      direction === "up" ? currentIndex - 1 : currentIndex + 1;
+
+    if (targetIndex < 0 || targetIndex >= filteredGroups.length) return;
+
+    const reordered = [...filteredGroups];
+    [reordered[currentIndex], reordered[targetIndex]] = [
+      reordered[targetIndex],
+      reordered[currentIndex],
+    ];
+
+    setReorderingGroupId(groupId);
+
+    try {
+      if (isAllLocations) {
+        const result = await ReorderModifierGroups(
+          clerkOrgId || "",
+          reordered.map((group, index) => ({
+            modifierGroupId: group.id,
+            displayOrder: index,
+          })),
+        );
+
+        if (result.error) {
+          throw new Error(result.error);
+        }
+      } else {
+        if (!selectedLocationId || !merchantId) {
+          throw new Error("Location or merchant context is missing.");
+        }
+
+        for (const [index, group] of reordered.entries()) {
+          if (group.location_id) {
+            const result = await updateModifierGroup({
+              modifierGroupId: group.id,
+              displayOrder: index,
+            });
+
+            if (!result.success) {
+              throw new Error(result.error || "Failed to update group order.");
+            }
+          } else {
+            const result = await UpsertLocationModifierGroupOverride(
+              selectedLocationId,
+              group.id,
+              merchantId,
+              {
+                is_active:
+                  group.location_override?.[0]?.is_active ??
+                  group.is_active ??
+                  true,
+                display_order: index,
+              },
+            );
+
+            if (result.error) {
+              throw new Error(result.error);
+            }
+          }
+        }
+      }
+
+      toast.success("Modifier group order updated");
+      queryClient.invalidateQueries({ queryKey: ["modifier-groups"] });
+      queryClient.invalidateQueries({ queryKey: ["menu-items"] });
+      queryClient.invalidateQueries({ queryKey: ["categories-with-items"] });
+    } catch (e: any) {
+      toast.error("Failed to reorder modifier groups", {
+        description: e?.message || "Try again",
+      });
+    } finally {
+      setReorderingGroupId(null);
+    }
+  };
+
   const renderItemRow = (
     group: ModifierGroupWithItems,
     item: ModifierGroupItemsModel & {
@@ -508,7 +614,7 @@ export default function ModifiersPage() {
           </div>
         </div>
 
-        <div className="grid gap-3 md:grid-cols-4 items-center">
+        <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-4 items-center">
           <div>
             <div className="text-xs text-muted-foreground mb-1">
               Price Modifier
@@ -661,25 +767,27 @@ export default function ModifiersPage() {
   return (
     <div className="flex flex-col gap-6 p-6 max-w-[1600px] mx-auto w-full">
       <ScopeContextStrip />
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Modifiers</h1>
-          <p className="text-muted-foreground mt-1">
-            Global management in All Locations. In a location view, override
-            visibility and prices, or fully manage location-owned groups.
-          </p>
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">Modifiers</h1>
+            <p className="text-muted-foreground mt-1">
+              Global management in All Locations. In a location view, override
+              visibility and prices, or fully manage location-owned groups.
+            </p>
+          </div>
+          <Button onClick={handleCreateGroup} className="gap-2 self-start flex-shrink-0">
+            <Plus className="h-4 w-4" />
+            Create Group
+          </Button>
         </div>
         {!isAllLocations && (
-          <div className="flex items-center gap-2 p-2 bg-blue-50 text-blue-800 rounded-lg text-sm border border-blue-100">
-            <Info className="h-4 w-4" />
-            Viewing <strong>{selectedLocation?.name}</strong>. Global groups are
-            structural read-only; you can override price/availability.
+          <div className="flex items-start gap-2 p-2 bg-blue-50 text-blue-800 rounded-lg text-sm border border-blue-100">
+            <Info className="h-4 w-4 mt-0.5 flex-shrink-0" />
+            <span>Viewing <strong>{selectedLocation?.name}</strong>. Global groups are
+            structural read-only; you can override price/availability.</span>
           </div>
         )}
-        <Button onClick={handleCreateGroup} className="gap-2">
-          <Plus className="h-4 w-4" />
-          Create Group
-        </Button>
       </div>
 
       <Card className="border shadow-sm">
@@ -697,6 +805,14 @@ export default function ModifiersPage() {
             <div className="text-sm text-muted-foreground">
               {filteredGroups.length} group(s)
             </div>
+          </div>
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <ArrowUpDown className="h-3.5 w-3.5" />
+            <span>
+              {canReorderLibraryGroups
+                ? "Use the arrow buttons on each group to update order."
+                : reorderHelpText}
+            </span>
           </div>
 
           {/* Filter Buttons */}
@@ -786,12 +902,12 @@ export default function ModifiersPage() {
                   className="border rounded-lg bg-white shadow-sm"
                 >
                   <div className="flex flex-col gap-3 p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-center gap-3">
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                      <div className="flex items-center gap-3 min-w-0">
                         <div className="h-10 w-10 rounded-lg bg-purple-50 flex items-center justify-center">
                           <Layers className="h-5 w-5 text-purple-600" />
                         </div>
-                        <div>
+                        <div className="min-w-0">
                           <CardTitle className="text-lg leading-tight">
                             {group.name}
                           </CardTitle>
@@ -852,7 +968,35 @@ export default function ModifiersPage() {
                           </div>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1 flex-wrap flex-shrink-0">
+                        {canReorderLibraryGroups && (
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              disabled={
+                                reorderingGroupId === group.id ||
+                                filteredGroups[0]?.id === group.id
+                              }
+                              onClick={() => handleMoveGroup(group.id, "up")}
+                              title="Move up"
+                            >
+                              <ChevronUp className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              disabled={
+                                reorderingGroupId === group.id ||
+                                filteredGroups[filteredGroups.length - 1]?.id === group.id
+                              }
+                              onClick={() => handleMoveGroup(group.id, "down")}
+                              title="Move down"
+                            >
+                              <ChevronDown className="h-4 w-4" />
+                            </Button>
+                          </>
+                        )}
                         {locationOverride && canOverrideOnly(group) && (
                           <Button
                             variant="ghost"

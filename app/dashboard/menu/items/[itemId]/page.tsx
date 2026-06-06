@@ -627,68 +627,55 @@ export default function MenuItemDetailPage() {
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
+    <div className="space-y-6 animate-in fade-in duration-500 w-full min-w-0">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Button
-            variant="ghost"
-            size="icon"
+      <div className="w-full min-w-0 space-y-2">
+        {/* Breadcrumb + actions row */}
+        <div className="flex items-center justify-between gap-2 min-w-0">
+          <button
+            type="button"
+            className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground shrink-0"
             onClick={() => router.push("/dashboard/menu/items")}
           >
             <ArrowLeft className="h-4 w-4" />
-          </Button>
-          <div>
-            <div className="text-sm text-muted-foreground flex items-center gap-1">
-              <button
-                type="button"
-                className="hover:underline"
-                onClick={() => router.push("/dashboard/menu/items")}
+            Items
+          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            <Button size="sm" onClick={() => setIsEditSheetOpen(true)}>
+              <Edit3 className="h-4 w-4 mr-1.5" />
+              Edit Item
+            </Button>
+            {isAllLocations && (
+              <Button
+                variant="destructive"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => setIsDeleteDialogOpen(true)}
               >
-                Items
-              </button>
-              <span>/</span>
-              <span className="text-foreground font-medium">
-                {menuItem.name}
-              </span>
-            </div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-bold">{menuItem.name}</h1>
-              <Badge
-                variant={menuItem.effective_availability ? "default" : "secondary"}
-                className="h-7"
-              >
-                {menuItem.effective_availability ? (
-                  <>
-                    <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Available
-                  </>
-                ) : (
-                  <>
-                    <XCircle className="h-3.5 w-3.5 mr-1" /> Unavailable
-                  </>
-                )}
-              </Badge>
-              <EditingContextIndicator
-                context={editingContext}
-                locationName={currentLocationName}
-              />
-            </div>
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            )}
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Button onClick={() => setIsEditSheetOpen(true)}>
-            <Edit3 className="h-4 w-4 mr-2" />
-            Edit Item
-          </Button>
-          {isAllLocations && (
-            <Button
-              variant="destructive"
-              size="icon"
-              onClick={() => setIsDeleteDialogOpen(true)}
+        {/* Title + badges */}
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold truncate">{menuItem.name}</h1>
+          <div className="flex flex-wrap items-center gap-2 mt-1">
+            <Badge
+              variant={menuItem.effective_availability ? "default" : "secondary"}
+              className="h-6 text-xs"
             >
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          )}
+              {menuItem.effective_availability ? (
+                <><CheckCircle2 className="h-3 w-3 mr-1" />Available</>
+              ) : (
+                <><XCircle className="h-3 w-3 mr-1" />Unavailable</>
+              )}
+            </Badge>
+            <EditingContextIndicator
+              context={editingContext}
+              locationName={currentLocationName}
+            />
+          </div>
         </div>
       </div>
 
@@ -705,9 +692,9 @@ export default function MenuItemDetailPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="grid gap-6 md:grid-cols-2">
+              <div className="flex gap-4 sm:grid sm:gap-6 sm:grid-cols-2">
                 {/* Image */}
-                <div className="aspect-square rounded-lg bg-muted/30 overflow-hidden border">
+                <div className="w-24 h-24 sm:w-auto sm:aspect-square rounded-lg bg-muted/30 overflow-hidden border shrink-0 sm:max-h-none">
                   {isValidImageUrl(menuItem.image) ? (
                     <img
                       src={menuItem.image}

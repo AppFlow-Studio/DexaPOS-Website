@@ -176,7 +176,7 @@ export default function MyTipsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-start justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <nav className="flex items-center gap-1.5 text-sm text-muted-foreground mb-2">
             <span>Tips</span>

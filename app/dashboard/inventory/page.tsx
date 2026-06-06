@@ -651,7 +651,7 @@ export default function InventoryPage() {
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       {/* Page Header */}
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text">
             Inventory Management
@@ -664,7 +664,7 @@ export default function InventoryPage() {
                 }`}
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2">
           <Button
             variant="outline"
             size="sm"
@@ -768,7 +768,8 @@ export default function InventoryPage() {
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <CardHeader className="pb-0 border-b">
             <div className="flex flex-col gap-4 md:flex-row md:flex-wrap md:items-center md:justify-between min-w-0">
-              <TabsList className="bg-muted/50 p-1 h-auto max-w-full flex-nowrap justify-start overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <div className="overflow-x-auto w-full min-w-0">
+              <TabsList className="bg-muted/50 p-1 h-auto w-max flex-nowrap justify-start">
                 <TabsTrigger
                   value="catalog"
                   className="gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm px-4 py-2"
@@ -844,18 +845,19 @@ export default function InventoryPage() {
                   Reports
                 </TabsTrigger>
               </TabsList>
+              </div>
 
               {(activeTab === "catalog" ||
                 activeTab === "vendors" ||
                 activeTab === "purchase-orders") && (
-              <div className="flex items-center gap-2">
-                <div className="relative">
+              <div className="flex items-center gap-2 w-full md:w-auto">
+                <div className="relative flex-1 md:flex-none">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
                     placeholder="Search..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-9 w-64 bg-background"
+                    className="pl-9 w-full md:w-64 bg-background"
                   />
                 </div>
                 <Popover open={filterOpen} onOpenChange={handleFilterOpenChange}>
@@ -1025,7 +1027,8 @@ export default function InventoryPage() {
                   )}
                 </div>
               ) : (
-                <div className="divide-y">
+                <div className="overflow-x-auto">
+                <div className="divide-y min-w-[700px]">
                   {/* Table Header */}
                   <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-muted/30 text-sm font-medium text-muted-foreground">
                     {(
@@ -1169,6 +1172,7 @@ export default function InventoryPage() {
                       </div>
                     </div>
                   ))}
+                </div>
                 </div>
               )}
             </TabsContent>

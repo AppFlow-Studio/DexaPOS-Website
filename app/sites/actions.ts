@@ -22,6 +22,7 @@ export interface StorefrontData {
     business_hours: any;
     latitude?: number | null;
     longitude?: number | null;
+    timezone?: string | null;
   } | null;
   menus: StorefrontMenu[];
   pricingDisclosureText: string | null;

@@ -157,7 +157,7 @@ export function ChannelSelfConfirmCard({
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
           <div>
             <CardTitle className="text-base flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4" />
@@ -169,7 +169,7 @@ export function ChannelSelfConfirmCard({
               push menus to them.
             </CardDescription>
           </div>
-          <Button variant="outline" size="sm" asChild>
+          <Button variant="outline" size="sm" asChild className="shrink-0 self-start">
             <a href={dashboardUrl} target="_blank" rel="noopener noreferrer">
               Open OrderOut
               <ExternalLink className="h-3 w-3 ml-1" />

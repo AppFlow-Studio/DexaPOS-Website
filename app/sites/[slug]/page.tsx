@@ -153,8 +153,12 @@ export default async function StorefrontPage({ params }: PageProps) {
   );
 
   // Inject theme CSS vars into :root so Sheet/Dialog portals (which render outside the themed div) inherit them.
-  // Also override body background with the actual hex value (not var(--bg)) so it wins over globals.css bg-background.
-  const rootVarsCss = `:root { ${Object.entries(themeStyle).map(([k, v]) => `${k}: ${v}`).join("; ")} }`;
+  // Set font-family on :root and body so every element (including portals and unstyled Tailwind nodes) inherits
+  // the merchant's chosen font without needing per-component overrides.
+  const rootVarsCss = [
+    `:root { ${Object.entries(themeStyle).map(([k, v]) => `${k}: ${v}`).join("; ")} }`,
+    `:root, body { font-family: var(--font); }`,
+  ].join("\n");
 
   return (
     <>

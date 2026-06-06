@@ -6,7 +6,9 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogTitle,
 } from "@/components/ui/dialog";
+import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { Minus, Plus, AlertCircle, Check, X } from "lucide-react";
 import {
   StorefrontItem,
@@ -154,7 +156,7 @@ function ModifierGroupSection({
           isComplete ? (
             <span
               className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-semibold flex-shrink-0"
-              style={{ backgroundColor: "#dcfce7", color: "#166534", borderRadius: "6px", height: "22px" }}
+              style={{ backgroundColor: "#dcfce7", color: "#166534", borderRadius: "4px", height: "22px" }}
             >
               <Check className="w-3 h-3" strokeWidth={2.5} />
               Done
@@ -175,7 +177,7 @@ function ModifierGroupSection({
         ) : (
           <span
             className="inline-flex items-center px-2 py-0.5 text-[11px] font-semibold flex-shrink-0"
-            style={{ backgroundColor: "#f3f4f6", color: "#6b7280", borderRadius: "6px", height: "22px" }}
+            style={{ backgroundColor: "#f3f4f6", color: "#6b7280", borderRadius: "4px", height: "22px" }}
           >
             Optional
           </span>
@@ -292,14 +294,17 @@ export function ItemDetailsModal({
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent
         showCloseButton={false}
-        className="flex p-0 gap-0 overflow-hidden border-0 shadow-2xl"
+        className="flex p-0 gap-0 overflow-hidden border-0 shadow-2xl max-sm:inset-auto max-sm:top-1/2 max-sm:left-1/2 max-sm:-translate-x-1/2 max-sm:-translate-y-1/2 max-sm:h-auto max-sm:max-h-[92vh] max-sm:w-[calc(100vw-2rem)]"
         style={{
           maxWidth: "min(680px, calc(100vw - 2rem))",
           maxHeight: "92vh",
-          borderRadius: "16px",
+          borderRadius: "8px",
           backgroundColor: "#ffffff",
         }}
       >
+        <VisuallyHidden>
+          <DialogTitle>{item.name}</DialogTitle>
+        </VisuallyHidden>
         <DialogDescription className="sr-only">
           {item.description ? `${item.name}. ${item.description}` : `${item.name}. Customize and add to your order.`}
         </DialogDescription>
@@ -345,8 +350,8 @@ export function ItemDetailsModal({
             {isUnavailable && (
               <div className="absolute inset-0 flex items-center justify-center" style={{ backgroundColor: "rgba(0,0,0,0.55)" }}>
                 <span
-                  className="rounded-full px-4 py-2 text-lg font-bold tracking-wider text-white"
-                  style={{ backgroundColor: "rgba(0,0,0,0.7)", border: "2px solid rgba(255,255,255,0.3)" }}
+                  className="px-4 py-2 text-sm font-bold tracking-widest uppercase text-white"
+                  style={{ backgroundColor: "rgba(0,0,0,0.75)", border: "1px solid rgba(255,255,255,0.25)" }}
                 >
                   Sold Out
                 </span>
@@ -376,17 +381,17 @@ export function ItemDetailsModal({
                 </p>
               )}
 
-              {/* Dietary tags */}
+              {/* Dietary tags — MUI outlined chip */}
               {item.dietary_tags && item.dietary_tags.length > 0 && (
                 <div className="flex flex-wrap gap-1.5 mt-3">
                   {item.dietary_tags.map((tag) => (
                     <span
                       key={tag}
-                      className="rounded-full px-2.5 py-1 text-xs font-medium"
+                      className="px-2.5 py-0.5 text-xs font-medium"
                       style={{
-                        backgroundColor: "color-mix(in srgb, var(--primary) 10%, #ffffff)",
+                        border: "1px solid var(--primary)",
                         color: "var(--primary)",
-                        border: "1px solid color-mix(in srgb, var(--primary) 20%, transparent)",
+                        borderRadius: "16px",
                       }}
                     >
                       {tag}
@@ -395,18 +400,18 @@ export function ItemDetailsModal({
                 </div>
               )}
 
-              {/* Allergens */}
+              {/* Allergens — MUI warning alert style */}
               {item.allergens && item.allergens.length > 0 && (
                 <div
-                  className="mt-3 rounded-lg p-3 space-y-1.5"
-                  style={{ backgroundColor: "#fff7ed", border: "1px solid #fed7aa" }}
+                  className="mt-3 p-3 space-y-1.5"
+                  style={{ backgroundColor: "#fff7ed", borderLeft: "4px solid #f97316" }}
                 >
-                  <p className="text-xs font-bold uppercase tracking-wide" style={{ color: "#c2410c" }}>
+                  <p className="text-xs font-bold uppercase tracking-wide" style={{ color: "#7c2d12" }}>
                     Allergens
                   </p>
                   <div className="flex flex-wrap gap-1">
                     {item.allergens.map((allergen) => (
-                      <span key={allergen} className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: "#ffedd5", color: "#c2410c" }}>
+                      <span key={allergen} className="text-xs px-2 py-0.5" style={{ backgroundColor: "#ffedd5", color: "#9a3412", borderRadius: "4px" }}>
                         {allergen}
                       </span>
                     ))}
@@ -440,7 +445,7 @@ export function ItemDetailsModal({
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 rows={2}
-                className="w-full text-sm px-3 py-2.5 rounded-lg resize-none outline-none"
+                className="w-full text-sm px-3 py-2.5 resize-none outline-none"
                 style={{
                   border: "1px solid #e5e7eb",
                   backgroundColor: "#f9fafb",
@@ -464,8 +469,8 @@ export function ItemDetailsModal({
                       key={suggestion.id}
                       type="button"
                       onClick={() => onItemSelect?.(suggestion)}
-                      className="shrink-0 w-28 rounded-xl overflow-hidden text-left transition-all hover:scale-[1.02] active:scale-[0.98] touch-manipulation"
-                      style={{ backgroundColor: "#f9fafb", border: "1px solid #e5e7eb" }}
+                      className="shrink-0 w-28 overflow-hidden text-left transition-all hover:scale-[1.02] active:scale-[0.98] touch-manipulation"
+                      style={{ backgroundColor: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: "4px" }}
                     >
                       <div className="h-20 w-full overflow-hidden flex items-center justify-center" style={{ backgroundColor: "#f3f4f6" }}>
                         {isValidImageSrc(suggestion.image) ? (

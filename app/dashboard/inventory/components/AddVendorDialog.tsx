@@ -66,7 +66,7 @@ export function AddVendorDialog({ open, onOpenChange }: AddVendorDialogProps) {
     await createVendor.mutateAsync({
       name: values.name,
       contact_name: values.contact_name || undefined,
-      phone: normalizePhone(values.phone) ?? values.phone || undefined,
+      phone: (normalizePhone(values.phone) ?? values.phone) || undefined,
       email: values.email || undefined,
       address_line1: values.address_line1 || undefined,
       city: values.city || undefined,

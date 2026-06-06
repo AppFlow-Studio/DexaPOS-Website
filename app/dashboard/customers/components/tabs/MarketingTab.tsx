@@ -111,7 +111,7 @@ export function MarketingTab({ customer, merchantId }: MarketingTabProps) {
         "Are you sure? This will unsubscribe the customer from all marketing communications."
       )
     ) {
-      await unsubscribeMutation.mutateAsync(customerId!);
+      await unsubscribeMutation.mutateAsync({ customerId: customerId!, merchantId: merchantId! });
       setSmsOptIn(false);
       setEmailOptIn(false);
     }
@@ -276,13 +276,6 @@ export function MarketingTab({ customer, merchantId }: MarketingTabProps) {
           <CardTitle className="text-sm">Send Quick Message</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <div className="p-3 rounded-lg bg-blue-50 border border-blue-200 flex items-start gap-2">
-            <Clock className="w-4 h-4 mt-0.5 text-blue-600 shrink-0" />
-            <div className="text-xs text-blue-800">
-              <p className="font-medium">Trial Account Limitation</p>
-              <p className="mt-1">If using a Twilio Trial account, verify the recipient phone number in your Twilio console before sending SMS.</p>
-            </div>
-          </div>
           <div>
             <label className="text-sm font-medium">Channel</label>
             <Select
@@ -386,7 +379,9 @@ export function MarketingTab({ customer, merchantId }: MarketingTabProps) {
                     {item.status === "failed" && (
                       <>
                         <AlertCircle className="w-4 h-4 text-red-500" />
-                        <span className="text-xs text-red-600">Failed</span>
+                        <span className="text-xs text-red-600">
+                          {item.error_message === "not_opted_in" ? "Skipped (not opted in)" : "Failed"}
+                        </span>
                       </>
                     )}
                     {item.status === "bounced" && (
@@ -395,7 +390,17 @@ export function MarketingTab({ customer, merchantId }: MarketingTabProps) {
                         <span className="text-xs text-red-600">Bounced</span>
                       </>
                     )}
+                    {item.status === "unsubscribed" && (
+                      <>
+                        <AlertCircle className="w-4 h-4 text-amber-500" />
+                        <span className="text-xs text-amber-600">Unsubscribed</span>
+                      </>
+                    )}
                   </div>
+
+                  {item.error_message && item.error_message !== "not_opted_in" && item.status === "failed" && (
+                    <p className="text-xs text-red-500 mt-1">{item.error_message}</p>
+                  )}
 
                   {item.campaign?.body && (
                     <p className="text-xs text-muted-foreground mt-2 line-clamp-2">

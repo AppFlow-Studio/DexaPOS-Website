@@ -507,7 +507,21 @@ export function CustomerProfileSheet({
   return (
     <>
       <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent className="sm:max-w-225 w-full overflow-y-auto px-0 bg-background">
+        <SheetContent
+          className="sm:max-w-225 w-full overflow-y-auto px-0 bg-background"
+          // Keep the profile open when interacting with a nested overlay opened
+          // from inside it (e.g. the order detail bottom sheet). Without this,
+          // a click on the portaled order sheet counts as "outside" and
+          // dismisses the profile before the order can be reviewed (Defect B).
+          onPointerDownOutside={(e) => {
+            const t = e.target as HTMLElement | null;
+            if (t?.closest('[data-slot^="bottom-sheet"]')) e.preventDefault();
+          }}
+          onInteractOutside={(e) => {
+            const t = e.target as HTMLElement | null;
+            if (t?.closest('[data-slot^="bottom-sheet"]')) e.preventDefault();
+          }}
+        >
           <div className="px-8 py-8 border-b border-border/50 bg-gradient-to-b from-muted/20 to-background">
             <SheetHeader className="space-y-5">
               <div className="flex justify-between items-start gap-4">

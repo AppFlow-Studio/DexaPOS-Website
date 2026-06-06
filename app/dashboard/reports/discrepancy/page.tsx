@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { useVoidsReport, useOrderAnalytics } from "../../hooks/useOrderAnalytics";
+import { useVoidsReport, useFinancialKPIs } from "../../hooks/useOrderAnalytics";
 import {
   DateRangePicker,
   DatePreset,
@@ -42,6 +42,7 @@ import { cn } from "@/lib/utils";
 import { useSelectedLocation } from "@/stores/location-store";
 import { exportToCsv } from "@/utils/export";
 import { Download } from "lucide-react";
+import { useReportingQueryRange } from "@/app/dashboard/hooks/useReportingDateRange";
 
 // A "discrepancy" combines both void and refund events into one unified timeline
 type DiscrepancyType = "void" | "refund";
@@ -95,8 +96,9 @@ export default function DiscrepancyReportPage() {
   const [sortDir, setSortDir] = useState<SortDir>("desc");
 
   const selectedLocation = useSelectedLocation();
-  const { data: voidsData, isLoading: voidsLoading } = useVoidsReport(dateRange.from, dateRange.to);
-  const { data: analytics, isLoading: analyticsLoading } = useOrderAnalytics(dateRange.from, dateRange.to);
+  const queryDateRange = useReportingQueryRange(dateRange);
+  const { data: voidsData, isLoading: voidsLoading } = useVoidsReport(queryDateRange.from, queryDateRange.to);
+  const { data: kpis, isLoading: analyticsLoading } = useFinancialKPIs(queryDateRange.from, queryDateRange.to);
 
   const isLoading = voidsLoading || analyticsLoading;
 
@@ -187,12 +189,12 @@ export default function DiscrepancyReportPage() {
   const totalRefunds = allRows.filter(r => r.type === "refund");
   const totalVoidAmt = totalVoids.reduce((s, r) => s + r.amount, 0);
   const totalRefundAmt = totalRefunds.reduce((s, r) => s + r.amount, 0);
-  const totalOrders = analytics?.totalOrders ?? 0;
+  const totalOrders = kpis?.summary.order_count ?? 0;
   const discrepancyRate = totalOrders > 0
     ? (((totalVoids.length + totalRefunds.length) / totalOrders) * 100).toFixed(1)
     : "0.0";
 
-  const kpis = [
+  const kpiCards = [
     {
       label: "Total Discrepancies",
       value: isLoading ? null : allRows.length.toLocaleString(),
@@ -255,7 +257,7 @@ export default function DiscrepancyReportPage() {
 
       {/* KPI Cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {kpis.map((kpi) => (
+        {kpiCards.map((kpi) => (
           <Card key={kpi.label} className="border-none shadow-[0_2px_12px_rgba(0,0,0,0.06)] bg-card rounded-2xl overflow-hidden">
             <CardContent className="p-5">
               <div className="flex items-center justify-between mb-4">

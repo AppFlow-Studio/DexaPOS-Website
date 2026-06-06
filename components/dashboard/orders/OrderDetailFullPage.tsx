@@ -16,6 +16,7 @@ import {
   ShoppingBag,
   Truck,
   Globe,
+  QrCode,
   ChefHat,
   Printer,
   X,
@@ -69,8 +70,10 @@ import { AssignCustomerModal } from "@/components/dashboard/orders/AssignCustome
 import { AdjustTipModal } from "@/components/dashboard/orders/AdjustTipModal";
 import { OrderActionBar } from "@/components/dashboard/orders/OrderActionBar";
 import { assignCustomerToOrder } from "@/app/actions/orders/assign-customer";
+import { resolveChargedLane } from "@/lib/orders/pricing-lane";
 import { useOrderActions } from "@/app/dashboard/hooks/useOrderActions";
 import type { OrderActionsUserRole } from "@/app/dashboard/hooks/useOrderActions";
+import { useLocationStore } from "@/stores/location-store";
 import { toast } from "sonner";
 
 // ─── Props ───
@@ -144,6 +147,7 @@ function formatDateInTimezone(
 function orderChannelLabel(orderType: string): string {
   const map: Record<string, string> = {
     dine_in: "Dine-In",
+    qr_dine_in: "QR Table",
     takeout: "Pickup",
     delivery: "Delivery",
     online: "Online",
@@ -168,6 +172,7 @@ function formatPhoneDisplay(phone: string | null | undefined): string {
 function formatOrderType(type: string) {
   const labels: Record<string, string> = {
     dine_in: "Dine-In",
+    qr_dine_in: "QR Dine-In",
     takeout: "Takeout",
     delivery: "Delivery",
     online: "Online",
@@ -179,6 +184,7 @@ function formatOrderType(type: string) {
 function getOrderTypeIcon(type: string) {
   const icons: Record<string, React.ReactNode> = {
     dine_in: <Utensils className="h-4 w-4" />,
+    qr_dine_in: <QrCode className="h-4 w-4" />,
     takeout: <ShoppingBag className="h-4 w-4" />,
     delivery: <Truck className="h-4 w-4" />,
     online: <Globe className="h-4 w-4" />,
@@ -840,12 +846,19 @@ function PricingBreakdown({
       ? Number(fullHistoryOrder.amount_due)
       : Number(order.amount_due) ?? 0;
 
-  const displayAmountDue = Math.max(0, effectiveTotal - amountPaid);
-
   const cardTotal =
     Number(order.card_total) || effectiveTotal;
   const cashTotal =
     Number(order.cash_total) || effectiveTotal;
+
+  // The amount actually owed/charged depends on the tendered lane.
+  // `effective_total` is always card_total, so it overstates cash orders
+  // (and would show a phantom Amount Due). Resolve from the payment tender.
+  const chargedLane = resolveChargedLane(order, payments);
+  const chargedTotal =
+    chargedLane === "cash" ? cashTotal : cardTotal;
+
+  const displayAmountDue = Math.max(0, chargedTotal - amountPaid);
 
   const showDualColumns = isMixed;
 
@@ -855,7 +868,7 @@ function PricingBreakdown({
         {/* Compact: small screens — Total, Amount Paid, Amount Due only */}
         <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 text-sm md:hidden">
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-            <PriceRow label="Total" value={formatMoney(effectiveTotal)} bold />
+            <PriceRow label="Total" value={formatMoney(chargedTotal)} bold />
             <PriceRow
               label="Amount Paid"
               value={formatMoney(amountPaid)}
@@ -948,7 +961,7 @@ function PricingBreakdown({
               <div className="space-y-1 text-sm">
                 <PriceRow
                   label="Total"
-                  value={formatMoney(effectiveTotal)}
+                  value={formatMoney(chargedTotal)}
                   bold
                 />
                 <PriceRow
@@ -1095,6 +1108,7 @@ export function OrderDetailFullPage({
 }: OrderDetailFullPageProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { setSelectedLocation } = useLocationStore();
   const searchParams = useSearchParams();
   const pathname = usePathname();
   const [isAdjustTipOpen, setIsAdjustTipOpen] = React.useState(false);
@@ -1201,7 +1215,9 @@ export function OrderDetailFullPage({
         ? `${String(fullHistory.order.device_id).slice(0, 12)}…`
         : fullHistory.order.device_id
       : null);
+  const isQrDineIn = order?.order_type === "qr_dine_in";
   const isDineIn = order?.order_type === "dine_in";
+  const isTableLabeledOrder = isDineIn || isQrDineIn;
   // Use order only so all customer fields update together (same query)
   const customerName = order?.customer_name ?? null;
   const customerPhone = order?.customer_phone ?? null;
@@ -1264,6 +1280,13 @@ export function OrderDetailFullPage({
     queryClient.invalidateQueries({ queryKey: ["order-details", orderId] });
     queryClient.invalidateQueries({ queryKey: ["order-full-history", orderId] });
   }, [queryClient, orderId]);
+
+  const handleViewOnFloorPlan = React.useCallback(() => {
+    if (order?.location_id) {
+      setSelectedLocation(order.location_id);
+    }
+    router.push("/dashboard/tables");
+  }, [order?.location_id, router, setSelectedLocation]);
 
   React.useEffect(() => {
     document.title = order
@@ -1406,6 +1429,12 @@ export function OrderDetailFullPage({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
+              {isQrDineIn && tableName && (
+                <DropdownMenuItem onClick={handleViewOnFloorPlan}>
+                  <MapPin className="h-4 w-4 mr-2" />
+                  View on Floor Plan
+                </DropdownMenuItem>
+              )}
               {orderActions.canSendReceipt && (
                 <DropdownMenuItem onClick={() => setIsSendReceiptOpen(true)}>
                   <Mail className="h-4 w-4 mr-2" />
@@ -1489,30 +1518,40 @@ export function OrderDetailFullPage({
         })()}
 
         {/* Dine-in context (conditional) */}
-        {isDineIn && (tableName || serverName || partySize != null) && (
+        {isTableLabeledOrder && (tableName || (isDineIn && serverName) || (isDineIn && partySize != null)) && (
           <div className="rounded-lg border bg-muted/30 px-4 py-3">
             <p className="text-[11px] font-medium text-muted-foreground mb-2">
-              Dine-In Context
+              {isQrDineIn ? "QR Table Context" : "Dine-In Context"}
             </p>
             <div className="flex flex-wrap gap-4 text-sm">
               {tableName && (
                 <span className="flex items-center gap-1.5">
-                  <Utensils className="h-3.5 w-3.5 text-muted-foreground" />
+                  {isQrDineIn ? (
+                    <QrCode className="h-3.5 w-3.5 text-[#0C4FD1]" />
+                  ) : (
+                    <Utensils className="h-3.5 w-3.5 text-muted-foreground" />
+                  )}
                   Table: {tableName}
                 </span>
               )}
-              {serverName && (
+              {isDineIn && serverName && (
                 <span className="flex items-center gap-1.5">
                   <User className="h-3.5 w-3.5 text-muted-foreground" />
                   Server: {serverName}
                 </span>
               )}
-              {partySize != null && (
+              {isDineIn && partySize != null && (
                 <span className="flex items-center gap-1.5">
                   <Users className="h-3.5 w-3.5 text-muted-foreground" />
                   Party: {partySize} guests
                 </span>
               )}
+              {isQrDineIn ? (
+                <span className="flex items-center gap-1.5 text-[#0C4FD1]">
+                  <QrCode className="h-3.5 w-3.5" />
+                  Independent QR table order
+                </span>
+              ) : null}
             </div>
           </div>
         )}

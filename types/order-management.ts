@@ -12,6 +12,7 @@ export type OrderStatus =
 
 export type OrderType =
   | "dine_in"
+  | "qr_dine_in"
   | "takeout"
   | "delivery"
   | "online"
@@ -120,6 +121,13 @@ export interface OrderItem {
   voided_at?: string;
   voided_by?: string;
   special_instructions?: string;
+  tax_amount?: number | null;
+  // Open / custom item
+  is_open_item?: boolean | null;
+  open_item_name?: string | null;
+  // Dine-in seat / course context
+  seat_number?: string | null;
+  course_number?: number | null;
   created_at: string;
   updated_at: string;
   // Discount fields
@@ -189,6 +197,8 @@ export interface OrderPayment {
   original_tip_fee?: number | null;
   dual_pricing_percentage_snapshot?: number;
   tip_surcharge_percentage_snapshot?: number;
+  // True when this payment was tendered at the cash (discounted) price lane.
+  is_cash_priced?: boolean | null;
   // Junction table items
   order_payment_items?: OrderPaymentItem[];
 }

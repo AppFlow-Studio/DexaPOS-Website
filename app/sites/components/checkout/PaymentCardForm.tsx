@@ -366,7 +366,15 @@ export const PaymentCardForm = forwardRef<
 
   if (!tokenizationKey) {
     return (
-      <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+      <div
+        className="flex items-center gap-3 px-4 py-3 text-sm"
+        style={{
+          backgroundColor: "#fffbeb",
+          borderLeft: "4px solid #f59e0b",
+          color: "#78350f",
+        }}
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
         Online card payments are not configured for this store.
       </div>
     );

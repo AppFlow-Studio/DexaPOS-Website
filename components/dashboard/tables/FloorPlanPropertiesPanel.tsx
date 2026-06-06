@@ -49,7 +49,7 @@ export function FloorPlanPropertiesPanel ({
 
   if (!selectedTable) {
     return (
-      <div className='w-80 bg-background border-l border-border flex flex-col p-4 h-full'>
+      <div className='w-full sm:w-80 bg-background border-l border-border flex flex-col p-4 h-full'>
         <div className='flex items-center justify-between mb-4'>
           <h2 className='text-lg font-semibold'>Properties</h2>
           <Button variant='ghost' size='sm' onClick={onClose}>
@@ -92,7 +92,7 @@ export function FloorPlanPropertiesPanel ({
   }
 
   return (
-    <div className='w-80 bg-background border-l border-border flex flex-col h-full overflow-hidden'>
+    <div className='w-full lg:w-80 bg-background border-l border-border flex flex-col h-full overflow-hidden'>
       <Card className='rounded-none border-0 border-b flex-1 overflow-y-auto'>
         <CardHeader className='pb-3'>
           <div className='flex items-center justify-between'>

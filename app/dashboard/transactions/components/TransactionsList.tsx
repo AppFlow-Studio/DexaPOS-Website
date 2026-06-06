@@ -380,6 +380,10 @@ export function TransactionsList({
           </span>
         </div>
 
+        {/* Scrollable Table */}
+        <div className="overflow-x-auto">
+        <div className="min-w-[620px]">
+
         {/* Table Header */}
         <div className="grid grid-cols-[minmax(100px,1.2fr)_1fr_1fr_minmax(80px,0.8fr)_minmax(120px,1fr)_minmax(100px,0.8fr)] gap-2 px-4 py-2.5 border-b border-border/40 bg-muted/30">
           <button onClick={() => handleSort("amount")} className="flex items-center gap-1 text-xs font-medium uppercase tracking-wider text-muted-foreground hover:text-foreground text-left">
@@ -472,6 +476,8 @@ export function TransactionsList({
               );
             })
           )}
+        </div>
+        </div>
         </div>
       </CardContent>
     </Card>
