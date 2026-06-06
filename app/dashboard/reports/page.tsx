@@ -117,7 +117,7 @@ export default function ReportsPage() {
         .replace(/\b\w/g, (c) => c.toUpperCase())
     : "—";
 
-  const kpis = [
+  const kpiCards = [
     {
       label: "Total Revenue",
       value: isLoading || kpisLoading ? null : `$${totalSales.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
@@ -185,7 +185,7 @@ export default function ReportsPage() {
 
       {/* ── KPI Cards ──────────────────────────────────────────── */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {kpis.map((kpi) => (
+        {kpiCards.map((kpi) => (
           <Card
             key={kpi.label}
             className="border-none shadow-[0_2px_12px_rgba(0,0,0,0.06)] bg-card rounded-2xl overflow-hidden"
