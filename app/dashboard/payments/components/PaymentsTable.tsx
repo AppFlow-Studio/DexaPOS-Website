@@ -41,6 +41,7 @@ import {
 } from "lucide-react";
 import { PaymentRecord, EmvData } from "@/types/payment";
 import { CardBrandIcon } from "./CardBrandIcon";
+import { cn } from "@/lib/utils";
 
 // ============================================================================
 // Helpers
@@ -396,6 +397,124 @@ function PaymentDetailPanel({ payment }: { payment: PaymentRecord }) {
                   </tr>
                 ))}
               </tbody>
+              {(() => {
+                const items = payment.order_payment_items ?? [];
+                const itemsSubtotal = items.reduce(
+                  (s, it) => s + Number(it.subtotal_paid || 0),
+                  0
+                );
+                const itemsTax = items.reduce(
+                  (s, it) => s + Number(it.tax_paid || 0),
+                  0
+                );
+                const subtotal = Number(
+                  payment.subtotal_portion ?? itemsSubtotal
+                );
+                const tax = Number(payment.tax_portion ?? itemsTax);
+                const discount = Number(payment.discount_portion ?? 0);
+                const gatewayFee = Number(payment.gateway_fee ?? 0);
+                const orderSvc = Number(
+                  payment.orders?.service_charge ?? 0
+                );
+                const orderTotal = Number(
+                  payment.orders?.total_amount ?? 0
+                );
+                const payAmount = Number(payment.amount ?? 0);
+                const payTip = Number(payment.tip_amount ?? 0);
+                const payTotal = Number(
+                  payment.total_amount ?? payAmount + payTip
+                );
+                const isSplit =
+                  orderTotal > 0 &&
+                  payAmount > 0 &&
+                  payAmount + payTip < orderTotal;
+                // Service charge share for this payment, prorated when split.
+                const svcShare =
+                  orderSvc > 0 && isSplit
+                    ? orderSvc * (payAmount / Math.max(orderTotal, 1))
+                    : orderSvc;
+                // The POS taxes on top of SC, so true tax = item tax + tax on SC.
+                // In some payments the SC amount itself is bundled into
+                // tax_portion as well — detect that and peel it out so SC can
+                // always be displayed as its own line without double-counting.
+                const portionsCoverAmount =
+                  Math.abs(
+                    subtotal + tax + gatewayFee - discount - payAmount
+                  ) < 0.02;
+                const svcBundledInTax =
+                  svcShare > 0 && tax >= svcShare && portionsCoverAmount;
+                const taxDisplay = svcBundledInTax ? tax - svcShare : tax;
+                const accounted =
+                  subtotal +
+                  taxDisplay +
+                  svcShare +
+                  gatewayFee -
+                  discount;
+                const other = payAmount - accounted;
+                const rows: Array<{
+                  label: string;
+                  value: number;
+                  cls?: string;
+                }> = [
+                  { label: "Subtotal", value: subtotal },
+                  { label: "Tax", value: taxDisplay },
+                ];
+                if (svcShare > 0)
+                  rows.push({
+                    label: `Service Charge${isSplit ? " (prorated)" : ""}`,
+                    value: svcShare,
+                  });
+                if (gatewayFee > 0)
+                  rows.push({ label: "Gateway Fee", value: gatewayFee });
+                if (discount > 0)
+                  rows.push({
+                    label: "Discount",
+                    value: -discount,
+                    cls: "text-red-600",
+                  });
+                if (Math.abs(other) >= 0.005)
+                  rows.push({
+                    label: "Other / Adjustments",
+                    value: other,
+                    cls: "text-muted-foreground",
+                  });
+                rows.push({
+                  label: "Amount",
+                  value: payAmount,
+                  cls: "font-semibold",
+                });
+                if (payTip > 0) rows.push({ label: "Tip", value: payTip });
+                rows.push({
+                  label: "Total",
+                  value: payTotal,
+                  cls: "font-semibold",
+                });
+                return (
+                  <tfoot className="border-t bg-muted/30">
+                    {rows.map((r, i) => (
+                      <tr key={i}>
+                        <td
+                          colSpan={3}
+                          className={cn(
+                            "px-2 py-1 text-right text-muted-foreground",
+                            r.cls
+                          )}
+                        >
+                          {r.label}
+                        </td>
+                        <td
+                          className={cn(
+                            "px-2 py-1 text-right font-mono whitespace-nowrap",
+                            r.cls
+                          )}
+                        >
+                          {formatCurrency(r.value)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tfoot>
+                );
+              })()}
             </table>
           </div>
         </div>
@@ -631,6 +750,38 @@ export function PaymentsTable({ data, isLoading }: PaymentsTableProps) {
         </div>
       ),
     },
+    // Service Charge (prorated for split payments)
+    {
+      id: "service_charge",
+      header: "Service Charge",
+      enableSorting: false,
+      cell: ({ row }) => {
+        const svc = Number(row.original.orders?.service_charge ?? 0);
+        if (!(svc > 0)) {
+          return (
+            <div className="font-mono text-sm text-right text-muted-foreground">
+              —
+            </div>
+          );
+        }
+        const orderTotal = Number(row.original.orders?.total_amount ?? 0);
+        const payTotal = Number(
+          row.original.total_amount ?? row.original.amount ?? 0
+        );
+        const isSplit =
+          orderTotal > 0 && payTotal > 0 && payTotal < orderTotal;
+        const shown = isSplit ? svc * (payTotal / orderTotal) : svc;
+        return (
+          <div
+            className="font-mono text-sm text-right text-muted-foreground"
+            title={isSplit ? "Prorated from order service charge" : undefined}
+          >
+            {formatCurrency(shown)}
+            {isSplit && <span className="ml-1 text-[10px]">*</span>}
+          </div>
+        );
+      },
+    },
     // Total
     {
       accessorKey: "total_amount",
@@ -778,7 +929,7 @@ export function PaymentsTable({ data, isLoading }: PaymentsTableProps) {
                     onClick={() => row.toggleExpanded()}
                   >
                     {row.getVisibleCells().map((cell) => (
-                      <TableCell key={cell.id} className={cell.column.id === "amount" || cell.column.id === "tip_amount" || cell.column.id === "total_amount" ? "text-right" : undefined}>
+                      <TableCell key={cell.id} className={cell.column.id === "amount" || cell.column.id === "tip_amount" || cell.column.id === "service_charge" || cell.column.id === "total_amount" ? "text-right" : undefined}>
                         {flexRender(
                           cell.column.columnDef.cell,
                           cell.getContext()

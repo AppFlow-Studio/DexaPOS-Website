@@ -304,7 +304,7 @@ export function InviteUserWizard({
       first_name: firstName,
       last_name: lastName,
       email: email || null,
-      phone: normalizePhone(phone) ?? phone || null,
+      phone: (normalizePhone(phone) ?? phone) || null,
       role_code: selectedRoleCode,
       location_ids: Array.from(selectedLocationIds),
       primary_location_id: primaryLocationId,

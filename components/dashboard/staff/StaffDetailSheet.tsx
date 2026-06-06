@@ -13,7 +13,6 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import {
   Select,
@@ -33,8 +32,6 @@ import {
   Eye,
   EyeOff,
   Mail,
-  Phone,
-  MapPin,
   Lock,
   CheckCircle2,
   UserX,
@@ -52,12 +49,6 @@ import {
   Star,
 } from "lucide-react";
 import { CredentialToast } from "@/components/ui/credential-toast";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { LocationAssignmentSheet } from "./LocationAssignmentSheet";
 import {
   useDeactivateStaff,
@@ -512,223 +503,194 @@ export function StaffDetailSheet({
     <BottomSheet open={open} onOpenChange={onOpenChange}>
       <BottomSheetContent className="mx-auto w-full max-w-6xl" height="95">
         <BottomSheetHeader className="flex flex-col gap-2">
-          <BottomSheetTitle>Staff details</BottomSheetTitle>
+          <BottomSheetTitle>
+            {displayStaff.first_name} {displayStaff.last_name}
+          </BottomSheetTitle>
           <BottomSheetDescription>
-            View and manage this team member's access, locations, and POS
-            settings.
+            Manage profile, assignment, access, and activity from the merchant
+            dashboard.
           </BottomSheetDescription>
         </BottomSheetHeader>
         <BottomSheetBody className="flex-1 overflow-y-auto">
           <div className="space-y-6 p-1">
-            <section className="rounded-2xl border bg-card p-5">
-              <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                <div className="flex items-start gap-4">
-                  <Avatar className="h-16 w-16">
+            <section className="rounded-[28px] border bg-gradient-to-br from-slate-50 via-white to-slate-50/70 p-6 shadow-sm">
+              <div className="flex items-start gap-4">
+                  <Avatar className="h-20 w-20 border border-slate-200 shadow-sm">
                     <AvatarImage
                       src={displayStaff.avatar_url || undefined}
                       alt={displayStaff.display_name}
                     />
-                    <AvatarFallback>{initials}</AvatarFallback>
+                    <AvatarFallback className="bg-slate-100 text-lg font-semibold text-slate-700">
+                      {initials}
+                    </AvatarFallback>
                   </Avatar>
 
-                  <div className="space-y-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h2 className="text-xl font-semibold">
-                        {displayStaff.first_name} {displayStaff.last_name}
-                      </h2>
-                      {staff.is_clerk_user ? (
-                        <Badge variant="secondary" className="gap-1">
-                          <Shield className="h-3 w-3" />
-                          Dashboard User
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline" className="gap-1">
-                          <Lock className="h-3 w-3" />
-                          POS Only
-                        </Badge>
-                      )}
-                      <Badge
-                        variant={staff.overall_is_active ? "default" : "secondary"}
-                        className={cn(
-                          staff.overall_is_active
-                            ? "bg-green-600 text-white hover:bg-green-600"
-                            : ""
+                  <div className="min-w-0 flex-1 space-y-3">
+                    <div className="space-y-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h2 className="text-2xl font-semibold tracking-tight text-slate-950">
+                          {displayStaff.first_name} {displayStaff.last_name}
+                        </h2>
+                        {staff.is_clerk_user ? (
+                          <Badge variant="secondary" className="gap-1">
+                            <Shield className="h-3 w-3" />
+                            Dashboard User
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="gap-1">
+                            <Lock className="h-3 w-3" />
+                            POS Only
+                          </Badge>
                         )}
-                      >
-                        {staff.overall_is_active ? "Active" : "Inactive"}
-                      </Badge>
-                    </div>
-
-                    <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm text-muted-foreground">
-                      <div className="flex items-center gap-2">
-                        <Mail className="h-4 w-4" />
-                        <span>{displayStaff.email || "No email"}</span>
+                        <Badge
+                          variant={staff.overall_is_active ? "default" : "secondary"}
+                          className={cn(
+                            staff.overall_is_active
+                              ? "bg-green-600 text-white hover:bg-green-600"
+                              : ""
+                          )}
+                        >
+                          {staff.overall_is_active ? "Active" : "Inactive"}
+                        </Badge>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Phone className="h-4 w-4" />
-                        <span>{displayStaff.phone ? formatPhoneForDisplay(displayStaff.phone) : "No phone"}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <MapPin className="h-4 w-4" />
-                        <span>{displayStaff.total_locations} assigned location(s)</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex flex-col gap-3 sm:flex-row">
-                  <Button
-                    variant={isProfileEditMode ? "secondary" : "outline"}
-                    className="gap-2"
-                    onClick={() =>
-                      isProfileEditMode
-                        ? handleCancelProfileEdit()
-                        : setIsProfileEditMode(true)
-                    }
-                  >
-                    {isProfileEditMode ? (
-                      <>
-                        <X className="h-4 w-4" />
-                        Cancel Editing
-                      </>
-                    ) : (
-                      <>
-                        <Edit className="h-4 w-4" />
-                        Edit Profile
-                      </>
-                    )}
-                  </Button>
-
-                  <div className="flex items-center gap-3 rounded-xl border px-4 py-3">
-                    <div className="space-y-1">
-                      <p className="text-sm font-medium">Status</p>
-                      <p className="text-xs text-muted-foreground">
-                        Toggle staff access for the primary location.
+                      <p className="text-sm text-muted-foreground">
+                        Staff profile, access controls, and location-level permissions.
                       </p>
                     </div>
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          {/* span needed so Tooltip works on a disabled element */}
-                          <span className="ml-auto">
-                            <Switch
-                              checked={staff.overall_is_active}
-                              onCheckedChange={handleStatusToggle}
-                              disabled={
-                                !primaryLocation ||
-                                !canManageStaff ||
-                                deactivateStaff.isPending ||
-                                reactivateStaff.isPending
-                              }
-                            />
-                          </span>
-                        </TooltipTrigger>
-                        {!canManageStaff && (
-                          <TooltipContent side="left">
-                            You don&apos;t have permission to manage staff
-                          </TooltipContent>
-                        )}
-                      </Tooltip>
-                    </TooltipProvider>
                   </div>
                 </div>
-              </div>
-
-              {isProfileEditMode && (
-                <div className="mt-5 rounded-2xl border bg-background/60 p-4">
-                  <div className="mb-4">
-                    <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                      Edit Profile
-                    </h3>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      Update profile information without changing assignment or
-                      access details.
-                    </p>
-                  </div>
-
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
-                        First Name
-                      </Label>
-                      <Input
-                        value={editedFirstName}
-                        onChange={(e) => setEditedFirstName(e.target.value)}
-                        className="h-10"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
-                        Last Name
-                      </Label>
-                      <Input
-                        value={editedLastName}
-                        onChange={(e) => setEditedLastName(e.target.value)}
-                        className="h-10"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
-                        Email
-                      </Label>
-                      <Input
-                        type="email"
-                        value={editedEmail}
-                        onChange={(e) => setEditedEmail(e.target.value)}
-                        className="h-10"
-                        placeholder="user@example.com"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
-                        Phone
-                      </Label>
-                      <PhoneInput
-                        value={editedPhone}
-                        onChange={setEditedPhone}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <Button
-                      className="gap-2"
-                      onClick={handleSaveProfile}
-                      disabled={updateProfile.isPending}
-                    >
-                      {updateProfile.isPending ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Save className="h-4 w-4" />
-                      )}
-                      Save Profile
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={handleCancelProfileEdit}
-                      disabled={updateProfile.isPending}
-                    >
-                      Cancel
-                    </Button>
-                  </div>
-
-                  {staff.is_clerk_user && (
-                    <p className="mt-3 text-xs text-muted-foreground">
-                      Name changes will sync to the authentication provider.
-                    </p>
-                  )}
-                </div>
-              )}
             </section>
-            <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-              <section className="rounded-2xl border bg-card p-5">
-                <div className="mb-4 flex items-center justify-between gap-3">
+            <div className="grid gap-6 xl:grid-cols-[1.08fr_0.92fr]">
+              <div className="space-y-6">
+                <section className="rounded-3xl border bg-card p-6 shadow-sm">
+                  <SectionHeader
+                    icon={Mail}
+                    title="Personal & Contact Info"
+                    description="Core profile details shown to the merchant team."
+                    action={
+                      <Button
+                        variant={isProfileEditMode ? "secondary" : "outline"}
+                        className="gap-2"
+                        onClick={() =>
+                          isProfileEditMode
+                            ? handleCancelProfileEdit()
+                            : setIsProfileEditMode(true)
+                        }
+                      >
+                        {isProfileEditMode ? (
+                          <>
+                            <X className="h-4 w-4" />
+                            Cancel
+                          </>
+                        ) : (
+                          <>
+                            <Edit className="h-4 w-4" />
+                            Edit
+                          </>
+                        )}
+                      </Button>
+                    }
+                  />
+
+                  {isProfileEditMode ? (
+                    <div className="space-y-4 rounded-2xl border bg-background/60 p-4">
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div className="space-y-2">
+                          <Label className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
+                            First Name
+                          </Label>
+                          <Input
+                            value={editedFirstName}
+                            onChange={(e) => setEditedFirstName(e.target.value)}
+                            className="h-10"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
+                            Last Name
+                          </Label>
+                          <Input
+                            value={editedLastName}
+                            onChange={(e) => setEditedLastName(e.target.value)}
+                            className="h-10"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
+                            Email
+                          </Label>
+                          <Input
+                            type="email"
+                            value={editedEmail}
+                            onChange={(e) => setEditedEmail(e.target.value)}
+                            className="h-10"
+                            placeholder="user@example.com"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
+                            Phone
+                          </Label>
+                          <PhoneInput
+                            value={editedPhone}
+                            onChange={setEditedPhone}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          className="gap-2"
+                          onClick={handleSaveProfile}
+                          disabled={updateProfile.isPending}
+                        >
+                          {updateProfile.isPending ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Save className="h-4 w-4" />
+                          )}
+                          Save Profile
+                        </Button>
+                        <Button
+                          variant="outline"
+                          onClick={handleCancelProfileEdit}
+                          disabled={updateProfile.isPending}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+
+                      {staff.is_clerk_user && (
+                        <p className="text-xs text-muted-foreground">
+                          Name changes will sync to the authentication provider.
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <InfoRow label="First Name" value={displayStaff.first_name} />
+                      <InfoRow label="Last Name" value={displayStaff.last_name} />
+                      <InfoRow label="Email" value={displayStaff.email || "No email"} />
+                      <InfoRow
+                        label="Phone"
+                        value={
+                          displayStaff.phone
+                            ? formatPhoneForDisplay(displayStaff.phone)
+                            : "No phone"
+                        }
+                      />
+                    </div>
+                  )}
+                </section>
+
+                <section className="rounded-3xl border bg-card p-6 shadow-sm">
+                <div className="mb-5 flex items-center justify-between gap-3">
                   <div>
                     <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                      Primary Assignment
+                      Permissions & Assignment
                     </h3>
                     <p className="mt-1 text-sm text-muted-foreground">
-                      Merchant role, employment, and primary-location settings.
+                      Merchant role, employment details, and primary-location settings.
                     </p>
                   </div>
                   {primaryLocation && !isEditMode && (
@@ -773,13 +735,11 @@ export function StaffDetailSheet({
                             </SelectContent>
                           </Select>
                         ) : (
-                          <div className="rounded-xl border bg-background/50 px-4 py-3">
-                            <div className="text-sm font-medium">
-                              {formatRoleLabel(
-                                primaryLocation.role_name,
-                                primaryLocation.role_code
-                              )}
-                            </div>
+                          <div className="rounded-2xl border bg-background/50 px-4 py-3 text-sm font-medium">
+                            {formatRoleLabel(
+                              primaryLocation.role_name,
+                              primaryLocation.role_code
+                            )}
                           </div>
                         )}
                       </div>
@@ -788,11 +748,8 @@ export function StaffDetailSheet({
                         <Label className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
                           Primary Location
                         </Label>
-                        <div className="rounded-xl border bg-background/50 px-4 py-3">
-                          <div className="flex items-center gap-2 text-sm font-medium">
-                            <MapPin className="h-4 w-4 text-muted-foreground" />
-                            {primaryLocation.location_name}
-                          </div>
+                        <div className="rounded-2xl border bg-background/50 px-4 py-3 text-sm font-medium">
+                          {primaryLocation.location_name}
                         </div>
                       </div>
 
@@ -818,7 +775,7 @@ export function StaffDetailSheet({
                               </SelectContent>
                             </Select>
                           ) : (
-                            <div className="rounded-xl border bg-background/50 px-4 py-3 text-sm">
+                            <div className="rounded-2xl border bg-background/50 px-4 py-3 text-sm">
                               {primaryLocation.employment_type ? (
                                 <Badge variant="outline" className="capitalize">
                                   {primaryLocation.employment_type.replace("-", " ")}
@@ -850,7 +807,7 @@ export function StaffDetailSheet({
                               />
                             </div>
                           ) : (
-                            <div className="rounded-xl border bg-background/50 px-4 py-3 text-sm">
+                            <div className="rounded-2xl border bg-background/50 px-4 py-3 text-sm">
                               {primaryLocation.hourly_rate !== null &&
                               primaryLocation.hourly_rate !== undefined ? (
                                 `$${primaryLocation.hourly_rate.toFixed(2)}/hour`
@@ -894,20 +851,15 @@ export function StaffDetailSheet({
                   </div>
                 )}
               </section>
+              </div>
 
               <div className="space-y-6">
-                <section className="rounded-2xl border bg-card p-5">
-                  <div className="mb-4 flex items-start gap-2">
-                    <KeyRound className="mt-0.5 h-4 w-4 text-muted-foreground" />
-                    <div>
-                      <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                        POS Access
-                      </h3>
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        PIN-based login at assigned locations.
-                      </p>
-                    </div>
-                  </div>
+                <section className="rounded-3xl border bg-card p-6 shadow-sm">
+                  <SectionHeader
+                    icon={KeyRound}
+                    title="Employee Access Key"
+                    description="Manage PIN-based sign in for the POS."
+                  />
 
                   <div className="space-y-4">
                     <StaffPinField
@@ -930,7 +882,7 @@ export function StaffDetailSheet({
                       <div className="space-y-2">
                         <button
                           type="button"
-                          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                          className="flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
                           onClick={() => { setShowCustomPin((v) => !v); setCustomPinInput(""); }}
                         >
                           <KeyRound className="h-3 w-3" />
@@ -981,15 +933,12 @@ export function StaffDetailSheet({
 
                 {/* Dashboard Password — Clerk users only */}
                 {staff.is_clerk_user && (
-                  <section className="rounded-2xl border bg-card p-5">
-                    <div className="mb-4">
-                      <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                        Dashboard Password
-                      </h3>
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        Reset the password used to log in to the web dashboard.
-                      </p>
-                    </div>
+                  <section className="rounded-3xl border bg-card p-6 shadow-sm">
+                    <SectionHeader
+                      icon={Lock}
+                      title="Dashboard Access"
+                      description="Reset or replace the password used for web login."
+                    />
                     <div className="space-y-4">
                       {generatedPassword && (
                         <div className="space-y-1">
@@ -1022,7 +971,7 @@ export function StaffDetailSheet({
                         </Button>
                         <button
                           type="button"
-                          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                          className="flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
                           onClick={() => { setShowCustomPassword((v) => !v); setCustomPasswordInput(""); }}
                         >
                           {showCustomPassword ? "Cancel" : "Set custom password"}
@@ -1051,15 +1000,12 @@ export function StaffDetailSheet({
                 )}
 
                 {!staff.is_clerk_user && (
-                  <section className="rounded-2xl border bg-card p-5">
-                    <div className="mb-4">
-                      <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                        Upgrade To Dashboard User
-                      </h3>
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        Grant this staff member access to the web dashboard.
-                      </p>
-                    </div>
+                  <section className="rounded-3xl border bg-card p-6 shadow-sm">
+                    <SectionHeader
+                      icon={ArrowUpCircle}
+                      title="Upgrade To Dashboard User"
+                      description="Grant this team member access to the web dashboard."
+                    />
 
                     {!showUpgradeDialog ? (
                       <Button
@@ -1120,15 +1066,12 @@ export function StaffDetailSheet({
                 )}
 
                 {staff.is_clerk_user && staff.user_id && (
-                  <section className="rounded-2xl border border-orange-200 bg-orange-50/40 p-5 dark:bg-orange-950/10">
-                    <div className="mb-4">
-                      <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-orange-700 dark:text-orange-300">
-                        Demote To POS-Only
-                      </h3>
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        Revoke dashboard access while keeping POS PIN access.
-                      </p>
-                    </div>
+                  <section className="rounded-3xl border border-orange-200 bg-orange-50/40 p-6 shadow-sm dark:bg-orange-950/10">
+                    <SectionHeader
+                      icon={Shield}
+                      title="Demote To POS-Only"
+                      description="Revoke dashboard access while keeping POS PIN access."
+                    />
 
                     <Button
                       variant="outline"
@@ -1157,14 +1100,14 @@ export function StaffDetailSheet({
             </div>
 
             <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-              <section className="rounded-2xl border bg-card p-5">
-                <div className="mb-4 flex items-center justify-between gap-3">
+              <section className="rounded-3xl border bg-card p-6 shadow-sm">
+                <div className="mb-5 flex items-center justify-between gap-3">
                   <div>
                     <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                      Location Assignments
+                      Positions & Location Assignments
                     </h3>
                     <p className="mt-1 text-sm text-muted-foreground">
-                      Click a location to manage role, status, and PIN.
+                      Open a location assignment to manage role, status, and PIN.
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
@@ -1257,7 +1200,7 @@ export function StaffDetailSheet({
                       key={assignment.location_id + assignment.role_code}
                       type="button"
                       className={cn(
-                        "w-full rounded-xl border bg-background/60 p-4 text-left transition-colors hover:bg-muted/40",
+                        "w-full rounded-2xl border bg-background/70 p-4 text-left transition-colors hover:bg-muted/40",
                         !assignment.is_active && "opacity-70"
                       )}
                       onClick={() => {
@@ -1370,19 +1313,14 @@ export function StaffDetailSheet({
                 </div>
               </section>
 
-              <section className="rounded-2xl border bg-card">
-                <div className="border-b p-5">
-                  <div className="flex items-center gap-2">
-                    <Activity className="h-4 w-4 text-muted-foreground" />
-                    <div>
-                      <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                        Activity Log
-                      </h3>
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        Recent actions for this staff member.
-                      </p>
-                    </div>
-                  </div>
+              <section className="rounded-3xl border bg-card shadow-sm">
+                <div className="border-b px-6 py-5">
+                  <SectionHeader
+                    icon={Activity}
+                    title="Activity Log"
+                    description="Recent actions for this staff member."
+                    className="mb-0"
+                  />
                 </div>
                 <div className="min-h-[420px] bg-muted/5">
                   <StaffActivityLog
@@ -1440,6 +1378,37 @@ export function StaffDetailSheet({
   );
 }
 
+function SectionHeader({
+  icon: Icon,
+  title,
+  description,
+  action,
+  className,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  title: string;
+  description: string;
+  action?: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={cn("mb-5 flex items-start justify-between gap-3", className)}>
+      <div className="flex items-start gap-3">
+        <div className="mt-0.5 rounded-full bg-slate-100 p-2 text-slate-600">
+          <Icon className="h-4 w-4" />
+        </div>
+        <div>
+          <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+            {title}
+          </h3>
+          <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+        </div>
+      </div>
+      {action ? <div className="shrink-0">{action}</div> : null}
+    </div>
+  );
+}
+
 function InfoRow({
   label,
   value,
@@ -1450,7 +1419,7 @@ function InfoRow({
   mono?: boolean;
 }) {
   return (
-    <div className="rounded-xl border bg-background/50 p-3">
+    <div className="rounded-2xl border bg-background/50 p-3">
       <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
         {label}
       </p>
