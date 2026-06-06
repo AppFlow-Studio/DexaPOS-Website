@@ -8,6 +8,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PhoneDigitsInput } from "@/components/ui/phone-digits-input";
@@ -69,6 +70,7 @@ export function SendReceiptModal({
 }: SendReceiptModalProps) {
   const [method, setMethod] = React.useState<"email" | "sms">("email");
   const [recipient, setRecipient] = React.useState("");
+  const [saveToProfile, setSaveToProfile] = React.useState(false);
   const [receiptType, setReceiptType] = React.useState<string>("sale");
   const [previewHtml, setPreviewHtml] = React.useState<string | null>(null);
   const [isPreviewLoading, setIsPreviewLoading] = React.useState(false);
@@ -90,6 +92,7 @@ export function SendReceiptModal({
       setRecipient("");
     }
     setPreviewHtml(null);
+    setSaveToProfile(false);
   }, [open, customerEmail, customerPhone]);
 
   const isValid =
@@ -127,6 +130,7 @@ export function SendReceiptModal({
         deliveryMethod: method,
         recipient: recipientFormatted,
         receiptTemplateId: undefined,
+        saveToProfile: method === "email" ? saveToProfile : false,
       };
       const result = await sendReceipt(params);
       if (result.success) {
@@ -189,20 +193,29 @@ export function SendReceiptModal({
               {method === "email" ? "Email" : "Phone"}
             </Label>
             {method === "email" ? (
-              <Input
-                id="recipient"
-                type="email"
-                placeholder="john@example.com"
-                value={recipient}
-                onChange={(e) => setRecipient(e.target.value)}
-                className={cn(
-                  !recipient
-                    ? ""
-                    : isValid
-                      ? "border-green-500/50"
-                      : "border-amber-500/50"
-                )}
-              />
+              <>
+                <Input
+                  id="recipient"
+                  type="email"
+                  placeholder="john@example.com"
+                  value={recipient}
+                  onChange={(e) => setRecipient(e.target.value)}
+                  className={cn(
+                    !recipient
+                      ? ""
+                      : isValid
+                        ? "border-green-500/50"
+                        : "border-amber-500/50"
+                  )}
+                />
+                <label className="flex items-center gap-2 pt-1 text-sm text-muted-foreground cursor-pointer">
+                  <Checkbox
+                    checked={saveToProfile}
+                    onCheckedChange={(c) => setSaveToProfile(c === true)}
+                  />
+                  Save email to customer profile
+                </label>
+              </>
             ) : (
               <>
                 <PhoneDigitsInput
