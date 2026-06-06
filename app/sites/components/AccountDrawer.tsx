@@ -871,7 +871,7 @@ export function AccountDrawer({
           {/* Bottom Sheet */}
           <SheetPrimitive.Content
             aria-label="Account"
-            className="fixed bottom-0 left-0 right-0 z-[70] flex flex-col transition-transform duration-300 ease-out data-[state=open]:translate-y-0 data-[state=closed]:translate-y-full"
+            className="fixed bottom-0 left-0 right-0 z-[70] flex flex-col transition-transform duration-[280ms] [transition-timing-function:cubic-bezier(0.32,0.72,0,1)] data-[state=open]:translate-y-0 data-[state=closed]:translate-y-full"
             style={{
               maxHeight: "85vh",
               backgroundColor: "var(--bg)",

@@ -89,8 +89,8 @@ export function OrderConfirmation({
     ? formatScheduledTime(requestedTime, locationTimezone)
     : null;
 
-  // Current step index for status strip
-  const currentStepIndex = isPending ? 0 : 2; // Placed (pending) or Preparing (accepted)
+  // Current step index for status strip: Placed (0) while pending, Accepted (1) once confirmed
+  const currentStepIndex = isPending ? 0 : 1;
 
   const paymentLine = snapshotPayCash
     ? "Cash in store"
@@ -141,13 +141,13 @@ export function OrderConfirmation({
           </div>
         ) : isPending ? (
           <div
-            className="flex items-center gap-3 px-4 py-3 rounded-xl"
-            style={{ backgroundColor: "#fffbeb", border: "1px solid #fcd34d" }}
+            className="flex items-center gap-3 px-4 py-3"
+            style={{ backgroundColor: "#fffbeb", borderLeft: "4px solid #f59e0b" }}
           >
-            <Clock className="h-5 w-5 flex-shrink-0 animate-pulse" style={{ color: "#d97706" }} />
+            <Clock className="h-4 w-4 flex-shrink-0 animate-pulse" style={{ color: "#f59e0b" }} />
             <div>
-              <p className="text-sm font-semibold" style={{ color: "#92400e" }}>Awaiting restaurant acceptance</p>
-              <p className="text-xs mt-0.5" style={{ color: "#b45309" }}>Usually within 1 minute</p>
+              <p className="text-sm font-semibold" style={{ color: "#78350f" }}>Awaiting restaurant acceptance</p>
+              <p className="text-xs mt-0.5" style={{ color: "#92400e", opacity: 0.75 }}>Usually within 1 minute</p>
             </div>
           </div>
         ) : etaText ? (

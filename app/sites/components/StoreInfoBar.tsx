@@ -243,23 +243,23 @@ export function StoreInfoBar({
             </div>
           </div>
 
-          {/* Right: fulfillment toggle + Order Now */}
-          <div className="flex items-center gap-3 shrink-0">
+          {/* Right: fulfillment badge + Order Now */}
+          <div className="flex items-center gap-2 shrink-0">
             {/* Pickup / Delivery toggle — only shown when both are enabled */}
             {pickupEnabled && deliveryEnabled && (
               <div
-                className="flex items-center rounded-lg overflow-hidden border text-sm font-medium"
-                style={{ borderColor: "#E5E7EB" }}
+                className="flex items-center overflow-hidden text-sm font-medium"
+                style={{ border: "1px solid #E5E7EB", borderRadius: "20px" }}
               >
                 <span
-                  className="inline-flex items-center gap-1.5 px-3 py-2"
-                  style={{ backgroundColor: "var(--primary)", color: "var(--primary-text)" }}
+                  className="inline-flex items-center gap-1.5 px-4 py-2"
+                  style={{ backgroundColor: "var(--primary)", color: "var(--primary-text)", borderRadius: "20px 0 0 20px" }}
                 >
                   <Store className="h-3.5 w-3.5" />
                   Pickup
                 </span>
                 <span
-                  className="inline-flex items-center gap-1.5 px-3 py-2"
+                  className="inline-flex items-center gap-1.5 px-4 py-2"
                   style={{ backgroundColor: "#FFFFFF", color: "#6B7280" }}
                 >
                   <Truck className="h-3.5 w-3.5" />
@@ -271,19 +271,19 @@ export function StoreInfoBar({
             {/* Single label when only one is enabled */}
             {pickupEnabled && !deliveryEnabled && (
               <span
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border"
-                style={{ borderColor: "#E5E7EB", color: "#6B7280", backgroundColor: "#FFFFFF" }}
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium"
+                style={{ border: "1px solid #E5E7EB", borderRadius: "20px", color: "#374151", backgroundColor: "#FFFFFF" }}
               >
-                <Store className="h-3.5 w-3.5" />
+                <Store className="h-3.5 w-3.5" style={{ color: "#9ca3af" }} />
                 Pickup only
               </span>
             )}
             {!pickupEnabled && deliveryEnabled && (
               <span
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border"
-                style={{ borderColor: "#E5E7EB", color: "#6B7280", backgroundColor: "#FFFFFF" }}
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium"
+                style={{ border: "1px solid #E5E7EB", borderRadius: "20px", color: "#374151", backgroundColor: "#FFFFFF" }}
               >
-                <Truck className="h-3.5 w-3.5" />
+                <Truck className="h-3.5 w-3.5" style={{ color: "#9ca3af" }} />
                 Delivery only
               </span>
             )}
@@ -291,11 +291,11 @@ export function StoreInfoBar({
             <button
               type="button"
               onClick={handleOrderNow}
-              className="inline-flex items-center px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors sm:px-5 sm:py-2.5 sm:text-sm"
+              className="inline-flex items-center px-4 py-2 text-sm font-semibold transition-opacity hover:opacity-90"
               style={{
                 backgroundColor: "var(--primary)",
                 color: "var(--primary-text)",
-                minHeight: "36px",
+                borderRadius: "20px",
               }}
             >
               Order Now
