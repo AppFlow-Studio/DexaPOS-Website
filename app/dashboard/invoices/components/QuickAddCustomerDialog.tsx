@@ -55,7 +55,7 @@ export function QuickAddCustomerDialog({
       const result = await CreateCustomerQuick(clerkOrgId, {
         name: name.trim() || null,
         email: email.trim() || null,
-        phone: normalizePhone(phone) ?? phone.trim() || null,
+        phone: (normalizePhone(phone) ?? phone.trim()) || null,
       });
 
       if (result.error) {

@@ -109,7 +109,7 @@ export function CreateStaffDialog({
           firstName: firstName.trim(),
           lastName: lastName.trim(),
           email: email.trim() || undefined,
-          phone: normalizePhone(phone) ?? phone.trim() || undefined,
+          phone: (normalizePhone(phone) ?? phone.trim()) || undefined,
           locationId,
           roleCode,
           hourlyRate: hourlyRate ? parseFloat(hourlyRate) : undefined,
