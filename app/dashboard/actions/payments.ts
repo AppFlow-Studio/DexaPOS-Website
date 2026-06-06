@@ -40,7 +40,9 @@ export async function GetPayments(
         order_type,
         customer_name,
         created_at,
-        merchant_id
+        merchant_id,
+        service_charge,
+        total_amount
       ),
       order_payment_items(
         *,

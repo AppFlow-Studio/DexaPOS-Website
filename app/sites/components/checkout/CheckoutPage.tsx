@@ -734,33 +734,18 @@ export function CheckoutPage({
       <CheckoutHeader slug={slug} storeName={displayStoreName} logoUrl={site?.logo_url} />
 
       <main className="max-w-6xl mx-auto p-4 pb-32 lg:pb-10">
-        <div className="flex items-center justify-between">
-          <div className="flex justify-end w-full">
-            <Link
-              href={storePath()}
-              className="inline-flex items-center justify-center px-4 py-2 text-xs font-semibold border rounded-full transition-colors"
-              style={{
-                borderColor: "var(--primary)",
-                color: "var(--primary)",
-                borderRadius: "9999px",
-              }}
-            >
-              Back to menu
-            </Link>
-          </div>
-        </div>
 
         {/* Store closed banner */}
         {storeIsClosed && (
           <div
-            className="p-4 rounded-lg text-sm font-medium text-center"
+            className="flex items-center gap-3 px-4 py-3 mb-4 text-sm"
             style={{
-              backgroundColor: "color-mix(in srgb, #ef4444 10%, var(--bg))",
-              color: "#ef4444",
-              border: "1px solid color-mix(in srgb, #ef4444 40%, transparent)",
-              borderRadius: "var(--radius)",
+              backgroundColor: "#fff2f2",
+              borderLeft: "4px solid #ef4444",
+              color: "#7f1d1d",
             }}
           >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
             This store is currently closed and not accepting orders.
           </div>
         )}

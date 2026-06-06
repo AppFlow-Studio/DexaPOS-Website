@@ -82,127 +82,103 @@ export function StoreHoursModal({
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay
-          className="fixed inset-0 z-[80] bg-black/50 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0"
-        />
+        <Dialog.Overlay data-slot="dialog-overlay" className="fixed inset-0 z-[80] bg-black/40 backdrop-blur-[2px]" />
         <Dialog.Content
-          className="fixed left-1/2 top-1/2 z-[81] w-full max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-2xl p-6 shadow-2xl data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
-          style={{ backgroundColor: "var(--bg, #ffffff)" }}
+          data-slot="dialog-content"
+          className="fixed left-1/2 top-1/2 z-[81] w-full max-w-sm -translate-x-1/2 -translate-y-1/2 overflow-hidden shadow-xl"
+          style={{
+            backgroundColor: "var(--bg, #ffffff)",
+            borderRadius: "8px",
+          }}
         >
           {/* Header */}
-          <div className="flex items-center justify-between mb-5">
+          <div className="flex items-start justify-between px-5 pt-5 pb-4" style={{ borderBottom: "1px solid #f3f4f6" }}>
             <div>
-              <Dialog.Title
-                className="text-base font-semibold"
-                style={{ color: "var(--fg, #111827)" }}
-              >
+              <Dialog.Title className="text-base font-semibold" style={{ color: "var(--fg, #111827)" }}>
                 Store Hours
               </Dialog.Title>
-              <p className="text-xs mt-0.5" style={{ color: "#6B7280" }}>
-                {storeName}
-              </p>
+              <p className="text-xs mt-0.5" style={{ color: "#9CA3AF" }}>{storeName}</p>
+
+              {/* MUI-style status chip — left border, flat */}
+              {isStoreOpen === true ? (
+                <span
+                  className="inline-flex items-center mt-3 px-2.5 py-0.5 text-xs font-semibold"
+                  style={{ backgroundColor: "#f0fdf4", borderLeft: "3px solid #22c55e", color: "#14532d" }}
+                >
+                  Open now
+                </span>
+              ) : isStoreOpen === false ? (
+                <span
+                  className="inline-flex items-center mt-3 px-2.5 py-0.5 text-xs font-semibold"
+                  style={{ backgroundColor: "#fef2f2", borderLeft: "3px solid #ef4444", color: "#7f1d1d" }}
+                >
+                  Closed
+                </span>
+              ) : null}
             </div>
+
             <Dialog.Close asChild>
-              <button
-                className="rounded-full p-1.5 transition-colors hover:bg-black/5"
-                aria-label="Close"
-              >
-                <X className="h-4 w-4" style={{ color: "#6B7280" }} />
+              <button className="p-1 transition-opacity hover:opacity-50" aria-label="Close">
+                <X className="h-4 w-4" style={{ color: "#9CA3AF" }} />
               </button>
             </Dialog.Close>
           </div>
 
-          {/* Status badge */}
-          <div className="mb-5">
-            {isStoreOpen === true ? (
-              <span
-                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium"
-                style={{ backgroundColor: "#D1FAE5", color: "#065F46" }}
-              >
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 inline-block" />
-                Open now
-              </span>
-            ) : isStoreOpen === false ? (
-              <span
-                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium"
-                style={{ backgroundColor: "#FEE2E2", color: "#991B1B" }}
-              >
-                <span className="h-1.5 w-1.5 rounded-full bg-red-500 inline-block" />
-                Closed
-              </span>
-            ) : null}
-          </div>
-
           {/* Weekly schedule */}
-          {parsed ? (
-            <div className="space-y-2">
-              {DAYS.map((day, idx) => {
-                const schedule = parsed[day];
-                const isToday = idx === todayIndex;
-                const isEnabled = schedule ? (schedule.enabled ?? !schedule.closed) : false;
-                const is24h = schedule?.is24Hours;
-                const openTime = schedule?.from || schedule?.open;
-                const closeTime = schedule?.to || schedule?.close;
+          <div className="px-2 py-3">
+            {parsed ? (
+              <table className="w-full text-sm border-collapse">
+                <tbody>
+                  {DAYS.map((day, idx) => {
+                    const schedule = parsed[day];
+                    const isToday = idx === todayIndex;
+                    const isEnabled = schedule ? (schedule.enabled ?? !schedule.closed) : false;
+                    const is24h = schedule?.is24Hours;
+                    const openTime = schedule?.from || schedule?.open;
+                    const closeTime = schedule?.to || schedule?.close;
 
-                let hoursText = "Closed";
-                if (isEnabled) {
-                  if (is24h) {
-                    hoursText = "Open 24 hours";
-                  } else if (openTime && closeTime) {
-                    hoursText = `${formatHourLabel(openTime)} – ${formatHourLabel(closeTime)}`;
-                  }
-                }
-
-                return (
-                  <div
-                    key={day}
-                    className="flex items-center justify-between py-1.5 px-2 rounded-lg text-sm"
-                    style={
-                      isToday
-                        ? {
-                            backgroundColor: "color-mix(in srgb, var(--primary) 8%, transparent)",
-                            fontWeight: 600,
-                          }
-                        : {}
+                    let hoursText = "Closed";
+                    if (isEnabled) {
+                      if (is24h) hoursText = "Open 24 hours";
+                      else if (openTime && closeTime) hoursText = `${formatHourLabel(openTime)} – ${formatHourLabel(closeTime)}`;
                     }
-                  >
-                    <span
-                      style={{
-                        color: isToday ? "var(--primary)" : "#374151",
-                        fontWeight: isToday ? 600 : 400,
-                      }}
-                    >
-                      {DAY_LABELS[day]}
-                      {isToday && (
-                        <span
-                          className="ml-1.5 text-xs font-normal"
-                          style={{ color: "var(--primary)", opacity: 0.7 }}
+
+                    return (
+                      <tr
+                        key={day}
+                        style={isToday ? { borderLeft: "3px solid var(--primary, #6366f1)" } : { borderLeft: "3px solid transparent" }}
+                      >
+                        <td
+                          className="px-3 py-2.5"
+                          style={{ color: isToday ? "var(--primary, #6366f1)" : "#374151", fontWeight: isToday ? 600 : 400 }}
                         >
-                          Today
-                        </span>
-                      )}
-                    </span>
-                    <span
-                      style={{
-                        color: isEnabled
-                          ? isToday
-                            ? "var(--primary)"
-                            : "#374151"
-                          : "#9CA3AF",
-                        fontWeight: isToday ? 600 : 400,
-                      }}
-                    >
-                      {hoursText}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <p className="text-sm text-center py-4" style={{ color: "#9CA3AF" }}>
-              Hours not available
-            </p>
-          )}
+                          {DAY_LABELS[day]}
+                          {isToday && (
+                            <span className="ml-2 text-xs font-normal" style={{ color: "var(--primary, #6366f1)", opacity: 0.55 }}>
+                              Today
+                            </span>
+                          )}
+                        </td>
+                        <td
+                          className="px-3 py-2.5 text-right"
+                          style={{
+                            color: isEnabled ? (isToday ? "var(--primary, #6366f1)" : "#111827") : "#d1d5db",
+                            fontWeight: isToday ? 600 : 400,
+                          }}
+                        >
+                          {hoursText}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            ) : (
+              <p className="text-sm text-center py-6" style={{ color: "#9CA3AF" }}>
+                Hours not available
+              </p>
+            )}
+          </div>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
