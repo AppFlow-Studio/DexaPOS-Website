@@ -88,9 +88,9 @@ export default function OrganizationInfoPage() {
             {/* Header */}
             <Card>
                 <CardHeader className="pb-4">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-4">
-                            <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center overflow-hidden">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex items-center gap-4 min-w-0">
+                            <div className="h-12 w-12 shrink-0 rounded-lg bg-primary/10 flex items-center justify-center overflow-hidden">
                                 {orgImage ? (
                                     // eslint-disable-next-line @next/next/no-img-element
                                     <img src={orgImage} alt={orgName} className="h-full w-full object-cover" />
@@ -98,10 +98,10 @@ export default function OrganizationInfoPage() {
                                     <Shield className="h-6 w-6 text-primary" />
                                 )}
                             </div>
-                            <div>
+                            <div className="min-w-0">
                                 <CardTitle className="text-2xl font-semibold">{orgName}</CardTitle>
-                                <div className="flex items-center gap-2 mt-1">
-                                    {orgId && <Badge variant="outline">{orgId}</Badge>}
+                                <div className="flex flex-wrap items-center gap-2 mt-1">
+                                    {orgId && <Badge variant="outline" className="font-mono text-xs max-w-[180px] truncate sm:max-w-none">{orgId}</Badge>}
                                     {orgDomain && <Badge variant="secondary">{orgDomain}</Badge>}
                                     {createdAt && (
                                         <span className="text-xs text-muted-foreground">Created {new Date(createdAt).toLocaleDateString()}</span>
@@ -109,13 +109,10 @@ export default function OrganizationInfoPage() {
                                 </div>
                             </div>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto">
                             <Button variant="outline" size="sm">
                                 <Settings className="h-4 w-4 mr-2" /> Settings
                             </Button>
-                            {/* <Button size="sm">
-                                <UserPlus2 className="h-4 w-4 mr-2" /> Invite user
-                            </Button> */}
                         </div>
                     </div>
                 </CardHeader>
@@ -182,6 +179,7 @@ export default function OrganizationInfoPage() {
                                     </div>
                                 </div>
 
+                                <div className="overflow-x-auto">
                                 <Table>
                                     <TableHeader>
                                         <TableRow>
@@ -214,6 +212,7 @@ export default function OrganizationInfoPage() {
                                         ))}
                                     </TableBody>
                                 </Table>
+                                </div>
 
                                 <Card className="mt-4">
                                     <CardHeader>
@@ -239,6 +238,7 @@ export default function OrganizationInfoPage() {
                                 <CardContent>
                                     {
                                         members.length > 0 &&
+                                        <div className="overflow-x-auto">
                                         <Table>
                                             <TableHeader>
                                                 <TableRow>
@@ -288,6 +288,7 @@ export default function OrganizationInfoPage() {
                                                 ))}
                                             </TableBody>
                                         </Table>
+                                        </div>
                                     }
                                     {
                                         members.length === 0 &&
@@ -340,13 +341,13 @@ export default function OrganizationInfoPage() {
                         <TabsContent value="invites" className="mt-6">
                             <Card>
                                 <CardHeader>
-                                    <div className="flex items-center justify-between">
+                                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                                         <div>
                                             <CardTitle>Invites</CardTitle>
                                             <CardDescription>Pending invitations</CardDescription>
                                         </div>
-                                        <div className="flex items-center gap-2">
-                                            <Input placeholder="Search..." className="w-72" />
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <Input placeholder="Search..." className="flex-1 min-w-[160px] sm:w-60 sm:flex-none" />
                                             {org.members.length > 1 ?
                                                 <SendOrganizationMembersInviteButton organizationId={organizationId as string} refetch={refetchOrganizationInfo} role_types='carrier' /> :
                                                 <SendAdminInviteButton organizationId={organizationId as string} refetch={refetchOrganizationInfo} role_types='carrier' />

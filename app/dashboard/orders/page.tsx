@@ -278,7 +278,7 @@ export default function OrdersPage() {
           </div>
         </div>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+      <div className="grid gap-4 grid-cols-2 xl:grid-cols-5">
         {/* Total Orders */}
         <Card className="border-border/60 shadow-none overflow-hidden">
           <CardContent className="p-5">

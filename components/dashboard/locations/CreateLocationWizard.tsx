@@ -273,7 +273,7 @@ export function CreateLocationWizard({ clerkOrgId, actorUserId, mode = 'standard
 
                     createLocationSchema.parse({
                         ...formData,
-                        phone: normalizePhone(formData.phone) ?? formData.phone || undefined,
+                        phone: (normalizePhone(formData.phone) ?? formData.phone) || undefined,
                         email: formData.email || undefined,
                         code: formData.code || undefined,
                         address_line2: formData.address_line2 || undefined,
