@@ -8,6 +8,14 @@
 --   tip_out_received, tip_pool_contributed, tip_pool_received
 --
 -- The cast preserves existing whole-dollar values (50 -> 50.00). No data loss.
+--
+-- NOTE: total_tips is a STORED generated column that references six of these
+-- columns, so Postgres blocks ALTER TYPE on them while the dependency exists.
+-- We drop total_tips, alter the underlying columns, then recreate total_tips
+-- with the same expression (cast-free, since all inputs are now numeric).
+
+ALTER TABLE public.employee_daily_tips
+  DROP COLUMN IF EXISTS total_tips;
 
 ALTER TABLE public.employee_daily_tips
   ALTER COLUMN cash_tips_declared   TYPE numeric(12,2) USING cash_tips_declared::numeric(12,2),
@@ -23,3 +31,15 @@ ALTER TABLE public.employee_daily_tips
   ALTER COLUMN tip_pool_contributed SET DEFAULT 0.00,
   ALTER COLUMN tip_pool_received    TYPE numeric(12,2) USING tip_pool_received::numeric(12,2),
   ALTER COLUMN tip_pool_received    SET DEFAULT 0.00;
+
+ALTER TABLE public.employee_daily_tips
+  ADD COLUMN total_tips numeric
+  GENERATED ALWAYS AS (
+    cash_tips_declared
+    + cash_payment_tips
+    + charged_tips
+    + tip_pool_received
+    - tip_pool_contributed
+    + tip_out_received
+    - tip_out_given
+  ) STORED;

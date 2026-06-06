@@ -1,4 +1,4 @@
-import { SignUp, SignedIn, SignedOut } from '@clerk/nextjs'
+import { SignUp, Show } from '@clerk/nextjs'
 import { Shield, MailCheck } from 'lucide-react'
 import Link from 'next/link'
 
@@ -26,7 +26,7 @@ export default async function SignUpPage({
                         <span className="text-xl font-semibold text-foreground">DexaPOS</span>
                     </div>
 
-                    <SignedOut>
+                    <Show when="signed-out">
                         {hasInvitationTicket ? (
                             <>
                                 <div className="mb-8">
@@ -95,9 +95,9 @@ export default async function SignUpPage({
                                 </Link>
                             </div>
                         )}
-                    </SignedOut>
+                    </Show>
 
-                    <SignedIn>
+                    <Show when="signed-in">
                         <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
                             <h2 className="text-xl font-semibold text-card-foreground mb-2">
                                 You&apos;re already signed in.
@@ -112,7 +112,7 @@ export default async function SignUpPage({
                                 Continue
                             </Link>
                         </div>
-                    </SignedIn>
+                    </Show>
                 </div>
             </div>
         </div>
