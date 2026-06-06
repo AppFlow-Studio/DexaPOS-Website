@@ -119,7 +119,7 @@ export function DetailsTab({ location, onUpdate, setHasUnsavedChanges }: Details
             }
         } else if (section === 'contact') {
             updateData = {
-                phone: normalizePhone(contactInfo.phone) ?? contactInfo.phone.trim() || undefined,
+                phone: (normalizePhone(contactInfo.phone) ?? contactInfo.phone.trim()) || undefined,
                 email: contactInfo.email.trim() || undefined,
             }
         } else if (section === 'address') {

@@ -1469,6 +1469,14 @@ export function OrderDetailSheet({
                                   )}
                                 />
                               )}
+                              {Number(displayOrder.service_charge) > 0 && (
+                                <PriceRow
+                                  label="Service Charge"
+                                  value={formatCurrency(
+                                    Number(displayOrder.service_charge)
+                                  )}
+                                />
+                              )}
                             </>
                           )}
 
@@ -1544,6 +1552,14 @@ export function OrderDetailSheet({
                               label="Discount"
                               value={`-${formatCurrency(Number(displayOrder.discount_amount))}`}
                               valueClassName="text-green-600"
+                            />
+                          )}
+                          {Number(displayOrder.service_charge) > 0 && (
+                            <PriceRow
+                              label="Service Charge"
+                              value={formatCurrency(
+                                Number(displayOrder.service_charge)
+                              )}
                             />
                           )}
                           {(() => {
