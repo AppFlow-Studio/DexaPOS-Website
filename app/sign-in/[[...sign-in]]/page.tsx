@@ -1,4 +1,4 @@
-import { SignIn, SignedIn, SignedOut, SignOutButton } from '@clerk/nextjs'
+import { SignIn, SignOutButton } from '@clerk/nextjs'
 import { auth } from '@clerk/nextjs/server'
 import { ArrowRight, LayoutDashboard, Settings, LogOut } from 'lucide-react'
 import Image from 'next/image'
@@ -32,7 +32,7 @@ export default async function SignInPage() {
           </span>
         </div>
 
-        <SignedOut>
+        {!orgId ? (
           <div className="w-full">
             <div className="mb-8 text-center">
               <h1 className="text-3xl font-semibold text-foreground mb-2">
@@ -74,9 +74,7 @@ export default async function SignInPage() {
               />
             </div>
           </div>
-        </SignedOut>
-
-        <SignedIn>
+        ) : (
           <div className="w-full bg-card border border-border rounded-2xl p-7 shadow-sm">
             <h2 className="text-2xl font-semibold text-card-foreground mb-1">
               Welcome back!
@@ -105,7 +103,7 @@ export default async function SignInPage() {
               </button>
             </SignOutButton>
           </div>
-        </SignedIn>
+        )}
 
         <p className="mt-8 text-xs text-muted-foreground">
           © {new Date().getFullYear()} DexaPOS. All rights reserved.

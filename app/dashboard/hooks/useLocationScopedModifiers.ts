@@ -15,9 +15,11 @@ import {
     UpsertLocationModifierItemOverride,
     DeleteLocationModifierGroupOverride,
     DeleteLocationModifierItemOverride,
+} from '../actions/location-modifier-overrides'
+import type {
     ModifierGroupOverrideData,
     ModifierItemOverrideData,
-} from '../actions/location-modifier-overrides'
+} from '../actions/location-modifier-overrides.types'
 import { toast } from 'sonner'
 
 // ============================================================================

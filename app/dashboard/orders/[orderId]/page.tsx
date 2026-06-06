@@ -1046,6 +1046,16 @@ export default function OrderDetailPage() {
                           </span>
                         </div>
                       )}
+                      {Number(order.service_charge) > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">
+                            Service Charge
+                          </span>
+                          <span>
+                            {formatCurrency(Number(order.service_charge))}
+                          </span>
+                        </div>
+                      )}
                     </>
                   )}
 
@@ -1130,6 +1140,16 @@ export default function OrderDetailPage() {
                       <span className="text-muted-foreground">Discount</span>
                       <span className="text-green-600">
                         -{formatCurrency(Number(order.discount_amount))}
+                      </span>
+                    </div>
+                  )}
+                  {Number(order.service_charge) > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">
+                        Service Charge
+                      </span>
+                      <span>
+                        {formatCurrency(Number(order.service_charge))}
                       </span>
                     </div>
                   )}

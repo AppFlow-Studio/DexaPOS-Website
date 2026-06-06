@@ -183,29 +183,46 @@ export function ContactSection({
         </div>
       )}
 
-      <div className="space-y-2 pt-2 border-t" style={{ borderColor: "var(--border)" }}>
-        <label className="flex items-start gap-2 text-sm cursor-pointer" style={{ color: "var(--text)" }}>
-          <input
-            type="checkbox"
-            checked={emailOptIn}
-            onChange={(e) => onEmailOptInChange(e.target.checked)}
-            className="mt-0.5"
-          />
-          <span>Email me a receipt and order updates</span>
-        </label>
-        <label className="flex items-start gap-2 text-sm cursor-pointer" style={{ color: "var(--text)" }}>
-          <input
-            type="checkbox"
-            checked={smsOptIn}
-            onChange={(e) => onSmsOptInChange(e.target.checked)}
-            className="mt-0.5"
-          />
-          <span>Text me order status updates</span>
-        </label>
+      <div className="pt-2 border-t" style={{ borderColor: "var(--border)" }}>
+        {[
+          { checked: emailOptIn, onChange: onEmailOptInChange, label: "Email me a receipt and order updates" },
+          { checked: smsOptIn,   onChange: onSmsOptInChange,   label: "Text me order status updates" },
+        ].map(({ checked, onChange, label }) => (
+          <label
+            key={label}
+            className="flex items-center gap-3 px-1 py-2 cursor-pointer select-none"
+            style={{ color: "var(--text)" }}
+          >
+            {/* MUI-style checkbox */}
+            <span className="relative flex items-center justify-center w-[18px] h-[18px] shrink-0">
+              <input
+                type="checkbox"
+                checked={checked}
+                onChange={(e) => onChange(e.target.checked)}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer m-0"
+              />
+              <span
+                className="w-[18px] h-[18px] flex items-center justify-center transition-colors"
+                style={{
+                  borderRadius: "2px",
+                  border: checked ? "none" : "2px solid #9ca3af",
+                  backgroundColor: checked ? "var(--primary)" : "transparent",
+                }}
+              >
+                {checked && (
+                  <svg width="11" height="8" viewBox="0 0 11 8" fill="none">
+                    <path d="M1 3.5L4 6.5L10 1" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                )}
+              </span>
+            </span>
+            <span className="text-sm leading-snug">{label}</span>
+          </label>
+        ))}
       </div>
 
-      <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
-        Fields marked <span className="text-red-500">*</span> are required.
+      <p className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>
+        Fields marked <span style={{ color: "#ef4444" }}>*</span> are required.
       </p>
     </section>
   );

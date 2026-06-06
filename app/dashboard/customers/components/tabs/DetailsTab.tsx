@@ -132,7 +132,7 @@ export function DetailsTab ({ customer, merchantId }: DetailsTabProps) {
       customerId: customerId!,
       updates: {
         name,
-        phone: normalizePhone(phone) ?? phone || null,
+        phone: (normalizePhone(phone) ?? phone) || null,
         email,
         address,
         birthday: birthday || null,
