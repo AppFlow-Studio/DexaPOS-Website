@@ -85,6 +85,10 @@ Single index for active ticket streams and their source trackers.
 
 3. Scope notes:
 - Merchant dashboard only.
+- Staff detail sheet only for the staff surface.
+- That detail sheet now includes a stronger sectioned redesign, not only field cleanup.
+- `/dashboard/staff` list/table view was not part of this polish pass.
+- HQ/admin `/manage/*` staff pages were not part of this polish pass.
 - No POS work.
 - No backend or schema changes.
 
