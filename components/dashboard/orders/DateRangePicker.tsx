@@ -4,13 +4,11 @@ import * as React from 'react'
 import { Calendar as CalendarIcon, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Button, buttonVariants } from '@/components/ui/button'
 import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuLabel,
-    DropdownMenuSeparator,
-    DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from '@/components/ui/popover'
+import { Separator } from '@/components/ui/separator'
 import { cn } from '@/lib/utils'
 import { DayPicker } from 'react-day-picker'
 import type { DateRange } from 'react-day-picker'
@@ -203,7 +201,7 @@ export function DateRangePicker({
 
     return (
         <div className={cn('flex items-center gap-2', className)}>
-            <DropdownMenu
+            <Popover
                 modal={false}
                 open={open}
                 onOpenChange={(nextOpen) => {
@@ -213,32 +211,35 @@ export function DateRangePicker({
                     setOpen(nextOpen)
                 }}
             >
-                <DropdownMenuTrigger asChild>
+                <PopoverTrigger asChild>
                     <Button variant="outline" className="gap-2">
                         <CalendarIcon className="h-4 w-4" />
                         <span>{displayText}</span>
                         <ChevronDown className="h-4 w-4" />
                     </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-auto z-[200]">
-                    <DropdownMenuLabel>Presets</DropdownMenuLabel>
-                    <DropdownMenuSeparator />
+                </PopoverTrigger>
+                <PopoverContent
+                    align="start"
+                    collisionPadding={8}
+                    className="w-auto z-[200] max-h-[min(70vh,var(--radix-popover-content-available-height))] overflow-y-auto overscroll-contain p-1"
+                >
+                    <div className="px-2 py-1.5 text-sm font-semibold">Presets</div>
+                    <Separator className="my-1" />
                     {PRESETS.map((presetOption) => (
-                        <DropdownMenuItem
+                        <button
                             key={presetOption.value}
-                            onSelect={(event) => {
-                                event.preventDefault()
-                                handlePresetSelect(presetOption.value)
-                            }}
+                            type="button"
+                            onClick={() => handlePresetSelect(presetOption.value)}
                             className={cn(
+                                'flex w-full items-center rounded-sm px-2 py-1.5 text-left text-sm outline-none hover:bg-accent hover:text-accent-foreground',
                                 draftPreset === presetOption.value && 'bg-accent'
                             )}
                         >
                             {presetOption.label}
-                        </DropdownMenuItem>
+                        </button>
                     ))}
-                    <DropdownMenuSeparator />
-                    <DropdownMenuLabel>Draft Range</DropdownMenuLabel>
+                    <Separator className="my-1" />
+                    <div className="px-2 py-1.5 text-sm font-semibold">Draft Range</div>
                     <div className="p-2 space-y-3">
                         <DayPicker
                             mode="range"
@@ -251,7 +252,7 @@ export function DateRangePicker({
                             fromYear={2015}
                             toYear={currentYear}
                             showOutsideDays={true}
-                            className="p-0"
+                            className="p-0 [&_table]:block [&_thead]:block [&_tbody]:block [&_tr]:grid [&_tr]:grid-cols-7"
                             classNames={{
                                 months: "flex flex-col space-y-4",
                                 month: "space-y-4",
@@ -275,13 +276,13 @@ export function DateRangePicker({
                                 nav_button_previous: "absolute left-1",
                                 nav_button_next: "absolute right-1",
                                 table: "w-full border-collapse space-y-1",
-                                head_row: "flex",
-                                head_cell: "text-muted-foreground rounded-md w-9 font-normal text-[0.8rem]",
-                                row: "flex w-full mt-2",
-                                cell: "h-9 w-9 text-center text-sm p-0 relative [&:has([aria-selected].day-range-end)]:rounded-r-md [&:has([aria-selected].day-outside)]:bg-accent/50 [&:has([aria-selected])]:bg-accent first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md focus-within:relative focus-within:z-20",
+                                head_row: "",
+                                head_cell: "text-muted-foreground rounded-md font-normal text-[0.8rem] text-center",
+                                row: "mt-2",
+                                cell: "h-9 text-center text-sm p-0 relative [&:has([aria-selected].day-range-end)]:rounded-r-md [&:has([aria-selected].day-outside)]:bg-accent/50 [&:has([aria-selected])]:bg-accent first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md focus-within:relative focus-within:z-20",
                                 day: cn(
                                     buttonVariants({ variant: "ghost" }),
-                                    "h-9 w-9 p-0 font-normal aria-selected:opacity-100"
+                                    "h-9 w-full p-0 font-normal aria-selected:opacity-100"
                                 ),
                                 day_range_end: "day-range-end",
                                 day_selected: "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground",
@@ -328,8 +329,8 @@ export function DateRangePicker({
                             </Button>
                         </div>
                     </div>
-                </DropdownMenuContent>
-            </DropdownMenu>
+                </PopoverContent>
+            </Popover>
         </div>
     )
 }

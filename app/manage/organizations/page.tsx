@@ -40,11 +40,22 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useCarrierOrganizations } from '../hooks/useCarrierOrganizations'
 import { useRouter } from 'next/navigation'
+import { useMemo, useState } from 'react'
 
 
 export default function OrganizationsPage() {
     const router = useRouter()
         const { data: organizationsData, isLoading, error } = useCarrierOrganizations()
+    const [search, setSearch] = useState('')
+
+    const filteredOrganizations = useMemo(() => {
+        const query = search.trim().toLowerCase()
+        if (!query) return organizationsData ?? []
+        return (organizationsData ?? []).filter((org) =>
+            org.name?.toLowerCase().includes(query) ||
+            org.clerk_org_id?.toLowerCase().includes(query)
+        )
+    }, [organizationsData, search])
     if (isLoading) return (
         <div className="space-y-6 animate-in fade-in-0 duration-300">
             {/* Header skeleton */}
@@ -213,6 +224,8 @@ export default function OrganizationsPage() {
                                 <Input
                                     placeholder="Search by name, domain, or organization ID"
                                     className="pl-8 w-full sm:w-72"
+                                    value={search}
+                                    onChange={(e) => setSearch(e.target.value)}
                                 />
                             </div>
                             <Button variant="outline" size="sm">
@@ -240,7 +253,7 @@ export default function OrganizationsPage() {
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {organizationsData?.map((org) => (
+                            {filteredOrganizations.map((org) => (
                                 <TableRow key={org.id} className='cursor-pointer' onClick={() => router.push(`/manage/organizations/${org.clerk_org_id}`)}>
                                     <TableCell className="font-medium">
                                         <div>

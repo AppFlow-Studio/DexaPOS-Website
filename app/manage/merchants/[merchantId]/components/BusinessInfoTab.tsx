@@ -242,13 +242,13 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                                     </div>
                                 </div>
 
-                                <div className="space-y-2">
+                                <div className="space-y-2 min-w-0">
                                     <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                                        <FileText className="h-4 w-4" />
+                                        <FileText className="h-4 w-4 shrink-0" />
                                         Business Type
                                     </div>
                                     <div>
-                                        <Badge variant="outline" className="text-base px-3 py-1">
+                                        <Badge variant="outline" className="text-sm px-2 py-0.5">
                                             {businessType}
                                         </Badge>
                                         {businessType !== 'Not specified' && businessTypes[businessType as keyof typeof businessTypes] && (
@@ -269,13 +269,13 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                                     </div>
                                 </div>
 
-                                <div className="space-y-2">
+                                <div className="space-y-2 min-w-0">
                                     <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                                        <DollarSign className="h-4 w-4" />
+                                        <DollarSign className="h-4 w-4 shrink-0" />
                                         Default Pricing Strategy
                                     </div>
                                     <div>
-                                        <Badge variant="outline" className="text-base px-3 py-1">
+                                        <Badge variant="outline" className="text-sm px-2 py-0.5 whitespace-normal break-words">
                                             {pricingStrategyLabel}
                                         </Badge>
                                         <div className="text-sm text-muted-foreground mt-1">
@@ -311,7 +311,7 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                             <CardDescription>Additional business details and metadata</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
-                            <div className="grid gap-4 md:grid-cols-2">
+                            <div className="grid gap-4 md:grid-cols-2 [&>*]:min-w-0">
                                 {/* <div className="space-y-2">
                                     <div className="text-sm font-medium text-muted-foreground">Merchant ID</div>
                                     <div className="text-sm font-mono">{merchantInfo?.id || 'N/A'}</div>

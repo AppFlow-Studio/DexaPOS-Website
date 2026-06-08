@@ -276,7 +276,7 @@ export function HoursConfigModal({
 
         <div className="flex-1 overflow-y-auto py-4">
           {/* Quick Actions */}
-          <div className="flex gap-2 mb-4 px-1">
+          <div className="flex flex-wrap gap-2 mb-4 px-1">
             <Button variant="outline" size="sm" onClick={setAllOpen}>
               All Open
             </Button>
@@ -289,16 +289,18 @@ export function HoursConfigModal({
           </div>
 
           {/* Days List */}
-          <div className="space-y-2">
-            {dayOrder.map((day) => (
-              <DayRow
-                key={day}
-                day={day}
-                schedule={localSchedule[day]}
-                onChange={(daySchedule) => updateDay(day, daySchedule)}
-                onCopyToAll={() => copyToAllDays(day)}
-              />
-            ))}
+          <div className="overflow-x-auto">
+            <div className="space-y-2 min-w-[460px]">
+              {dayOrder.map((day) => (
+                <DayRow
+                  key={day}
+                  day={day}
+                  schedule={localSchedule[day]}
+                  onChange={(daySchedule) => updateDay(day, daySchedule)}
+                  onCopyToAll={() => copyToAllDays(day)}
+                />
+              ))}
+            </div>
           </div>
         </div>
 
