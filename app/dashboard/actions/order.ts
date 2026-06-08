@@ -298,7 +298,7 @@ export async function GetOrderDetails(
         .single();
 
       if (merchantError || !merchant) {
-        console.error("[GetOrderDetails] Error getting merchant from clerk org:", merchantError);
+        console.error("[GetOrderDetails] Error getting merchant from clerk org:", clerkOrgId, merchantError);
         return null;
       }
 
@@ -324,7 +324,7 @@ export async function GetOrderDetails(
                 users(first_name, last_name),
                 staff_profiles(first_name, last_name)
                 ),
-                table_sessions(
+                table_sessions!table_sessions_order_id_fkey(
                 *,
                 table_session_events(
                 *,
@@ -367,7 +367,7 @@ export async function GetOrderDetails(
                 users(first_name, last_name),
                 staff_profiles(first_name, last_name)
                 ),
-                table_sessions(
+                table_sessions!table_sessions_order_id_fkey(
                 *,
                 table_session_events(
                 *,
