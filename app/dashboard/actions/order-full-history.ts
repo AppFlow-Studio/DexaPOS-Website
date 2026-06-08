@@ -136,7 +136,7 @@ export async function GetOrderFullHistory(
       `
       )
       .eq("order_id", orderId)
-      .order("created_at", { ascending: true }),
+      .order("changed_at", { ascending: true }),
     sessionId
       ? supabase
           .from("table_session_events")
@@ -147,7 +147,7 @@ export async function GetOrderFullHistory(
           `
           )
           .eq("session_id", sessionId)
-          .order("created_at", { ascending: true })
+          .order("occurred_at", { ascending: true })
       : Promise.resolve({ data: [] as any[], error: null }),
   ]);
 
@@ -221,91 +221,143 @@ export async function GetOrderFullHistory(
     internal_notes: order.internal_notes ?? null,
   };
 
-  const projectedItems: OrderFullHistoryItem[] = items.map((it: any) => ({
-    id: it.id,
-    item_name: it.item_name,
-    quantity: n(it.quantity),
-    unit_price: n(it.unit_price ?? it.price_paid),
-    subtotal: n(it.subtotal),
-    cash_price: it.cash_price != null ? n(it.cash_price) : null,
-    category_name: it.category_name ?? null,
-    course_number: it.course_number ?? null,
-    is_voided: !!it.is_voided,
-    void_reason: it.void_reason ?? null,
-    voided_at: it.voided_at ?? null,
-    voided_by_name: formatStaffName(it.voider),
-    special_instructions: it.special_instructions ?? it.kitchen_notes ?? null,
-    kitchen_status: it.kitchen_status ?? null,
-    fire_time: it.fire_time ?? null,
-    completed_at: it.completed_at ?? null,
-    item_status: String(it.item_status ?? ""),
-    created_at: it.created_at,
-    discount_name: it.discount_name ?? null,
-    discount_amount: it.discount_amount != null ? n(it.discount_amount) : null,
-    modifiers: ((it.order_item_modifiers ?? []) as any[]).map((m: any) => ({
-      modified_group_name: m.modifier_group_name ?? m.group_name ?? "",
-      modifier_name: m.modifier_name ?? m.name ?? "",
-      price_modifier: n(m.price_modifier ?? m.price ?? 0),
-      quantity: n(m.quantity ?? 1),
-    })),
-    refund_info: refundsByItemArr.get(it.id) ?? null,
-  }));
+  const projectedItems: OrderFullHistoryItem[] = items.map((it: any) => {
+    const { order_item_modifiers: _mods, voider: _vv, ...itemRow } = it;
+    return {
+      // Preserve raw order_items columns for downstream consumers (KitchenSection
+      // / EnhancedItemsSection read several fields not in the declared type).
+      ...(itemRow as any),
+      id: it.id,
+      item_name: it.item_name,
+      quantity: n(it.quantity),
+      unit_price: n(it.unit_price ?? it.price_paid),
+      subtotal: n(it.subtotal),
+      cash_price: it.cash_price != null ? n(it.cash_price) : null,
+      category_name: it.category_name ?? null,
+      course_number: it.course_number ?? null,
+      is_voided: !!it.is_voided,
+      void_reason: it.void_reason ?? null,
+      voided_at: it.voided_at ?? null,
+      voided_by_name: formatStaffName(it.voider),
+      special_instructions: it.special_instructions ?? it.kitchen_notes ?? null,
+      kitchen_status: it.kitchen_status ?? null,
+      fire_time: it.fire_time ?? null,
+      // KitchenSection reads preparing_at / ready_at; map from the real columns.
+      preparing_at: it.started_preparing_at ?? null,
+      ready_at: it.completed_at ?? null,
+      completed_at: it.completed_at ?? null,
+      item_status: String(it.item_status ?? ""),
+      created_at: it.created_at,
+      discount_name: it.discount_name ?? null,
+      discount_amount: it.discount_amount != null ? n(it.discount_amount) : null,
+      modifiers: ((it.order_item_modifiers ?? []) as any[]).map((m: any) => ({
+        modified_group_name: m.modifier_group_name ?? "",
+        modifier_name: m.modifier_name ?? "",
+        price_modifier: n(m.price_modifier ?? 0),
+        quantity: n(m.quantity ?? 1),
+      })),
+      refund_info: refundsByItemArr.get(it.id) ?? null,
+    } as OrderFullHistoryItem;
+  });
 
-  const projectedPayments: OrderFullHistoryPayment[] = payments.map((p: any) => ({
-    id: p.id,
-    payment_method: String(p.payment_method ?? ""),
-    amount: n(p.amount),
-    tip_amount: n(p.tip_amount),
-    total_amount: n(p.total_amount),
-    status: String(p.status ?? ""),
-    card_type: p.card_type ?? null,
-    card_last_four: p.card_last_four ?? null,
-    auth_code: p.authorization_code ?? p.auth_code ?? null,
-    terminal_type: p.terminal_type ?? null,
-    terminal_id: p.terminal_id ?? null,
-    batch_number: p.batch_number ?? p.dejavoo_batch_number ?? null,
-    psp_reference: p.transaction_id ?? p.reference_number ?? null,
-    captured_at: p.captured_at ?? null,
-    voided_at: p.voided_at ?? null,
-    voided_by_name: formatStaffName(p.voider),
-    void_reason: p.void_reason ?? null,
-    created_at: p.initiated_at ?? p.created_at,
-    processed_by_name: formatStaffName(p.processor),
-    payment_items: Array.isArray(p.order_payment_items)
-      ? p.order_payment_items.map((pi: any) => ({
-          item_name: pi.order_items?.item_name ?? "",
-          quantity_paid: n(pi.quantity_paid),
-          subtotal_paid: n(pi.subtotal_paid),
-          tax_paid: n(pi.tax_paid),
-        }))
-      : null,
-  }));
+  const projectedPayments: OrderFullHistoryPayment[] = payments.map((p: any) => {
+    // Strip nested relations we project explicitly below so they don't shadow.
+    const {
+      order_payment_items: _opi,
+      voider: _v,
+      processor: _pr,
+      reversals: _rv,
+      chargebacks: _cb,
+      ...payRow
+    } = p;
+    return {
+      // Preserve every raw column from order_payments. EnhancedPayments reads
+      // many fields (events, result_code, response_message, tip_adjusted_at,
+      // original_tip_amount, dual_pricing_fee, tip_fee, dejavoo_*, etc.) that
+      // aren't in the declared type but exist at runtime.
+      ...(payRow as any),
+      id: p.id,
+      payment_method: String(p.payment_method ?? ""),
+      amount: n(p.amount),
+      tip_amount: n(p.tip_amount),
+      total_amount: n(p.total_amount),
+      status: String(p.status ?? ""),
+      card_type: p.card_type ?? null,
+      card_last_four: p.card_last_four ?? null,
+      auth_code: p.authorization_code ?? p.auth_code ?? null,
+      authorization_code: p.authorization_code ?? null,
+      terminal_type: p.terminal_type ?? null,
+      terminal_id: p.terminal_id ?? null,
+      batch_number: p.batch_number ?? p.dejavoo_batch_number ?? null,
+      dejavoo_batch_number: p.dejavoo_batch_number ?? null,
+      dejavoo_invoice_number: p.dejavoo_invoice_number ?? null,
+      transaction_id: p.transaction_id ?? null,
+      psp_reference: p.transaction_id ?? p.reference_number ?? null,
+      captured_at: p.captured_at ?? null,
+      authorized_at: p.authorized_at ?? null,
+      approved_at: p.approved_at ?? null,
+      voided_at: p.voided_at ?? null,
+      voided_by: p.voided_by ?? null,
+      voided_by_name: formatStaffName(p.voider),
+      void_reason: p.void_reason ?? null,
+      created_at: p.initiated_at ?? p.created_at,
+      processed_by_name: formatStaffName(p.processor),
+      tip_adjusted_at: p.tip_adjusted_at ?? null,
+      tip_adjusted_by_name: null,
+      original_tip_amount: p.original_tip_amount ?? null,
+      result_code: p.result_code ?? null,
+      response_message: p.result_message ?? null,
+      events: [],
+      payment_items: Array.isArray(p.order_payment_items)
+        ? p.order_payment_items.map((pi: any) => ({
+            item_name: pi.order_items?.item_name ?? "",
+            quantity_paid: n(pi.quantity_paid),
+            subtotal_paid: n(pi.subtotal_paid),
+            tax_paid: n(pi.tax_paid),
+          }))
+        : null,
+    } as OrderFullHistoryPayment;
+  });
 
-  const projectedReversals: OrderFullHistoryReversal[] = reversalsFlat.map((r: any) => ({
-    id: r.id,
-    reversal_type: (r.reversal_type ?? "refund") as OrderFullHistoryReversal["reversal_type"],
-    amount: n(r.amount),
-    status: String(r.status ?? ""),
-    reason_code: r.reason_code ?? r.reason ?? "",
-    reason_description: r.reason_description ?? null,
-    completed_at: r.completed_at ?? r.processed_at ?? null,
-    initiated_by_name: formatStaffName(r.initiator),
-    approved_by_name: formatStaffName(r.approver),
-    reversal_reference_id:
-      r.reversal_reference_id ?? r.reference_number ?? r.transaction_id ?? r.id,
-    original_payment_method: r._payment?.payment_method ?? "",
-    original_card_last_four: r._payment?.card_last_four ?? null,
-    refund_items: ((r.order_refund_items ?? []) as any[]).map((ri: any) => ({
-      item_name: ri.item_name ?? "",
-      quantity_refunded: n(ri.quantity_refunded),
-      subtotal_refunded: n(ri.subtotal_refunded ?? ri.amount),
-      tax_refunded: n(ri.tax_refunded),
-      total_refunded: n(ri.total_refunded ?? ri.amount),
-      refund_reason: r.reason_code ?? r.reason ?? "",
-      refund_reason_detail: r.reason_description ?? null,
-      return_to_inventory: !!ri.return_to_inventory,
-    })),
-  }));
+  const projectedReversals: OrderFullHistoryReversal[] = reversalsFlat.map((r: any) => {
+    const {
+      order_refund_items: _ri,
+      initiator: _in,
+      approver: _ap,
+      _payment,
+      ...revRow
+    } = r;
+    return {
+      // Preserve raw reversals columns; ReversalsSection reads result_code,
+      // response_message, requested_at directly off the row.
+      ...(revRow as any),
+      id: r.id,
+      reversal_type: (r.reversal_type ?? "refund") as OrderFullHistoryReversal["reversal_type"],
+      amount: n(r.amount),
+      status: String(r.status ?? ""),
+      reason_code: r.reason_code ?? "",
+      reason_description: r.reason_description ?? null,
+      completed_at: r.completed_at ?? r.processed_at ?? null,
+      initiated_by_name: formatStaffName(r.initiator),
+      approved_by_name: formatStaffName(r.approver),
+      reversal_reference_id: r.reversal_reference_id ?? r.id,
+      original_payment_method: _payment?.payment_method ?? "",
+      original_card_last_four: _payment?.card_last_four ?? null,
+      result_code: r.result_code ?? null,
+      response_message: r.response_message ?? null,
+      requested_at: r.requested_at ?? r.created_at ?? null,
+      refund_items: ((r.order_refund_items ?? []) as any[]).map((ri: any) => ({
+        item_name: ri.item_name ?? "",
+        quantity_refunded: n(ri.quantity_refunded),
+        subtotal_refunded: n(ri.subtotal_refunded),
+        tax_refunded: n(ri.tax_refunded),
+        total_refunded: n(ri.total_refunded),
+        refund_reason: r.reason_code ?? "",
+        refund_reason_detail: r.reason_description ?? null,
+        return_to_inventory: !!ri.return_to_inventory,
+      })),
+    } as OrderFullHistoryReversal;
+  });
 
   const projectedDiscounts: OrderFullHistoryDiscount[] = discounts.map((d: any) => ({
     discount_name: d.discount_name ?? "",
@@ -352,7 +404,7 @@ export async function GetOrderFullHistory(
   for (const s of statusHistory) {
     const actorName =
       formatStaffName(s.changed_by_staff) ?? formatUserName(s.changed_by_user);
-    const newStatus = String(s.new_status ?? s.to_status ?? s.status ?? "");
+    const newStatus = String(s.to_status ?? "");
     const sev: OrderFullHistoryTimeline["severity"] =
       newStatus === "cancelled" || newStatus === "voided"
         ? "warning"
@@ -360,13 +412,13 @@ export async function GetOrderFullHistory(
           ? "success"
           : "info";
     timeline.push({
-      timestamp: s.created_at,
+      timestamp: s.changed_at,
       category: "status",
       event_type: `status_${newStatus || "change"}`,
       description: `Status → ${newStatus || "updated"}${s.reason ? ` (${s.reason})` : ""}`,
       actor_name: actorName,
-      actor_role: s.changed_by_staff?.role ?? null,
-      details: { from: s.previous_status ?? null, to: newStatus, reason: s.reason ?? null },
+      actor_role: null,
+      details: { from: s.from_status ?? null, to: newStatus, reason: s.reason ?? null, notes: s.notes ?? null },
       severity: sev,
     });
   }
@@ -500,14 +552,13 @@ export async function GetOrderFullHistory(
   for (const e of sessionEvents) {
     const evType = String(e.event_type ?? "session_event");
     timeline.push({
-      timestamp: e.created_at,
+      timestamp: e.occurred_at,
       category: "session",
       event_type: evType,
-      description:
-        e.description ?? evType.replace(/_/g, " "),
+      description: e.notes ?? evType.replace(/_/g, " "),
       actor_name: formatStaffName(e.triggered_by),
-      actor_role: e.triggered_by?.role ?? null,
-      details: e.metadata ?? null,
+      actor_role: null,
+      details: e.event_data ?? null,
       severity: "info",
     });
   }
