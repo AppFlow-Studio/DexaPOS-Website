@@ -402,7 +402,7 @@ export async function UpdateMenuItemRecipe(
 
   const { error } = await supabase.rpc("upsert_menu_item_with_recipe", {
     p_menu_item_id: menuItemId,
-    p_ingredients: recipeItems, // Use p_ingredients to match RPC
+    p_recipe_items: recipeItems,
     p_location_id: locationId || null,
   });
 

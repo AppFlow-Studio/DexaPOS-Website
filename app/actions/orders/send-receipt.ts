@@ -4,7 +4,6 @@ import { auth } from "@clerk/nextjs/server";
 import { Resend } from "resend";
 import { sendSMS } from "@/lib/messaging/telnyx";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
-import { GetOrderDetails } from "@/app/dashboard/actions/order";
 import {
   renderReceiptHtml,
   renderReceiptText,
@@ -13,11 +12,34 @@ import {
 const RATE_LIMIT_SENDS = 3;
 const RATE_LIMIT_WINDOW_HOURS = 1;
 
+/**
+ * Authorizes the Clerk-authenticated caller against an order's merchant.
+ * Uses the service-role client to resolve the caller's org → merchant id and
+ * compares it to the order's merchant_id (the codebase's standard tenancy
+ * check). Returns false when the org is missing or doesn't own the order — we
+ * surface that as a generic "Order not found" so order UUIDs can't be probed.
+ */
+async function callerOwnsOrder(
+  supabase: ReturnType<typeof createServiceRoleClient>,
+  orgId: string | null | undefined,
+  merchantId: string | null | undefined
+): Promise<boolean> {
+  if (!orgId || !merchantId) return false;
+  const { data } = await supabase
+    .from("merchants")
+    .select("id")
+    .eq("clerk_org_id", orgId)
+    .maybeSingle();
+  return !!data && (data as { id: string }).id === merchantId;
+}
+
 export interface SendReceiptParams {
   orderId: string;
   deliveryMethod: "email" | "sms";
   recipient: string;
   receiptTemplateId?: string;
+  /** When true (email only), persist the recipient to the linked customer's profile. */
+  saveToProfile?: boolean;
 }
 
 export interface SendReceiptResult {
@@ -31,8 +53,8 @@ export async function getReceiptPreviewHtml(orderId: string): Promise<{
   html?: string;
   message?: string;
 }> {
-  const existingOrder = await GetOrderDetails(orderId);
-  if (!existingOrder) return { success: false, message: "Order not found" };
+  const { userId, orgId } = await auth();
+  if (!userId) return { success: false, message: "Unauthorized" };
 
   const supabase = createServiceRoleClient();
   const { data: order, error } = await supabase
@@ -51,15 +73,24 @@ export async function getReceiptPreviewHtml(orderId: string): Promise<{
   if (error || !order) {
     return { success: false, message: "Order not found" };
   }
+  if (!(await callerOwnsOrder(supabase, orgId, (order as { merchant_id?: string }).merchant_id))) {
+    return { success: false, message: "Order not found" };
+  }
   const location = (order as { location?: unknown }).location ?? null;
   const merchantLogoUrl = await fetchMerchantLogoUrl(
     supabase,
     (order as { merchant_id?: string }).merchant_id
   );
+  // Representative CTA so the preview matches what's actually sent. The link is
+  // inert in the modal's sandboxed iframe; the real send uses a valid send_token.
+  const receiptToken = (order as { receipt_token?: string | null }).receipt_token;
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? "";
+  const receiptUrl =
+    receiptToken && appUrl ? `${appUrl}/receipts/${receiptToken}/preview` : null;
   const html = renderReceiptHtml(
     order as Parameters<typeof renderReceiptHtml>[0],
     location as Parameters<typeof renderReceiptHtml>[1],
-    { merchantLogoUrl }
+    { merchantLogoUrl, receiptUrl }
   );
   return { success: true, html };
 }
@@ -78,6 +109,35 @@ async function fetchMerchantLogoUrl(
   if (!org) return null;
   const record = Array.isArray(org) ? org[0] : org;
   return record?.imageURL ?? null;
+}
+
+/**
+ * Saves the recipient email to the order's linked customer profile (and the
+ * order itself). Best-effort — a failure here must not fail the receipt send.
+ */
+async function persistCustomerEmail(
+  supabase: ReturnType<typeof createServiceRoleClient>,
+  order: unknown,
+  email: string
+): Promise<void> {
+  const customerId = (order as { customer_id?: string | null }).customer_id;
+  const orderId = (order as { id?: string }).id;
+  try {
+    if (customerId) {
+      await supabase
+        .from("customers")
+        .update({ email })
+        .eq("id", customerId);
+    }
+    if (orderId) {
+      await supabase
+        .from("orders")
+        .update({ customer_email: email })
+        .eq("id", orderId);
+    }
+  } catch {
+    // best-effort; receipt already sent
+  }
 }
 
 /** Ensures the order has a receipt_token; lazy-backfills if missing. */
@@ -106,14 +166,9 @@ async function ensureReceiptToken(
 export async function sendReceipt(
   params: SendReceiptParams
 ): Promise<SendReceiptResult> {
-  const { userId } = await auth();
+  const { userId, orgId } = await auth();
   if (!userId) {
     return { success: false, message: "Unauthorized" };
-  }
-
-  const existingOrder = await GetOrderDetails(params.orderId);
-  if (!existingOrder) {
-    return { success: false, message: "Order not found" };
   }
 
   const supabase = createServiceRoleClient();
@@ -132,6 +187,9 @@ export async function sendReceipt(
     .single();
 
   if (orderError || !order) {
+    return { success: false, message: "Order not found" };
+  }
+  if (!(await callerOwnsOrder(supabase, orgId, (order as { merchant_id?: string }).merchant_id))) {
     return { success: false, message: "Order not found" };
   }
 
@@ -176,10 +234,40 @@ export async function sendReceipt(
         supabase,
         (order as { merchant_id?: string }).merchant_id
       );
+
+      // Insert a pending row first so we have a send_token to build the hosted
+      // receipt URL — the email's "View receipt online" CTA points at the same
+      // /receipts/{t1}/{t2} page the SMS link does.
+      const { data: pendingRow, error: pendingErr } = await supabase
+        .from("receipt_sends")
+        .insert({
+          order_id: params.orderId,
+          merchant_id: (order as { merchant_id?: string }).merchant_id,
+          delivery_method: "email",
+          recipient: params.recipient,
+          receipt_template_id: params.receiptTemplateId || null,
+          status: "pending",
+          created_by: userId,
+        })
+        .select("id, send_token")
+        .single();
+
+      if (pendingErr || !pendingRow) {
+        return { success: false, message: "Failed to initialise receipt send record." };
+      }
+
+      const receiptToken = await ensureReceiptToken(supabase, params.orderId);
+      const sendToken = (pendingRow as { send_token?: string }).send_token;
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? "";
+      const receiptUrl =
+        receiptToken && sendToken && appUrl
+          ? `${appUrl}/receipts/${receiptToken}/${sendToken}`
+          : null;
+
       const html = renderReceiptHtml(
         order as Parameters<typeof renderReceiptHtml>[0],
         location as Parameters<typeof renderReceiptHtml>[1],
-        { merchantLogoUrl }
+        { merchantLogoUrl, receiptUrl }
       );
       const { error: emailError } = await resend.emails.send({
         from: fromEmail,
@@ -187,29 +275,22 @@ export async function sendReceipt(
         subject: `Your receipt from ${businessName} · Order ${orderNumber}`,
         html,
       });
+
+      await supabase
+        .from("receipt_sends")
+        .update({
+          status: emailError ? "failed" : "sent",
+          error_message: emailError ? emailError.message : null,
+        })
+        .eq("id", (pendingRow as { id: string }).id);
+
       if (emailError) {
-        await supabase.from("receipt_sends").insert({
-          order_id: params.orderId,
-          merchant_id: (order as { merchant_id?: string }).merchant_id,
-          delivery_method: "email",
-          recipient: params.recipient,
-          receipt_template_id: params.receiptTemplateId || null,
-          status: "failed",
-          error_message: emailError.message,
-          created_by: userId,
-        });
         return { success: false, message: emailError.message };
       }
 
-      await supabase.from("receipt_sends").insert({
-        order_id: params.orderId,
-        merchant_id: (order as { merchant_id?: string }).merchant_id,
-        delivery_method: "email",
-        recipient: params.recipient,
-        receipt_template_id: params.receiptTemplateId || null,
-        status: "sent",
-        created_by: userId,
-      });
+      if (params.saveToProfile) {
+        await persistCustomerEmail(supabase, order, params.recipient);
+      }
     } else {
       if (
         !process.env.TELNYX_API_KEY ||

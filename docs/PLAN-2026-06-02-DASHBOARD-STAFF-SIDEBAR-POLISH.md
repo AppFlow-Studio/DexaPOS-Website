@@ -10,6 +10,8 @@ This ticket is a merchant dashboard frontend polish pass with two scoped tasks:
 The staff-detail pass was later expanded to include a stronger sectioned presentation,
 using the reference employee drawer video as visual direction while staying on the
 same merchant-dashboard route and behavior model.
+That redesign now uses an internal section navigator instead of one long stacked
+column of cards.
 
 It is explicitly a web-dashboard ticket. It does not include POS, schema, auth, or backend behavior changes.
 
@@ -106,11 +108,12 @@ Implement Task 1 in `components/dashboard/staff/StaffDetailSheet.tsx`:
 - remove footer `Member ID` leak
 - reshape the sheet into clearer sections:
   - profile summary hero
-  - personal/contact section
-  - permissions/assignment section
-  - access/security section
-  - location assignments
-  - activity log
+  - internal left-side section navigator
+  - personal/contact panel
+  - permissions/assignment panel
+  - access/security panel
+  - location assignments panel
+  - activity log panel
 - keep all actions wired exactly as they are now
 
 ### Phase 3
