@@ -22,6 +22,7 @@ import {
 import { TaxCategoryChart } from "./components/TaxCategoryChart";
 import { TaxLocationTable } from "./components/TaxLocationTable";
 import { useSelectedLocation } from "@/stores/location-store";
+import { useReportingQueryRange } from "@/app/dashboard/hooks/useReportingDateRange";
 
 const PAGE_SIZE = 50;
 
@@ -43,6 +44,7 @@ export default function TaxReportPage() {
   const [sortDir, setSortDir] = useState<SortDir>("desc");
 
   const selectedLocation = useSelectedLocation();
+  const queryDateRange = useReportingQueryRange(dateRange);
 
   function handleDateRangeChange(from: Date | null, to: Date | null) {
     if (from && to) {
@@ -61,13 +63,13 @@ export default function TaxReportPage() {
     setPage(0);
   }
 
-  const { data: summaryResult, isLoading: summaryLoading } = useTaxSummary(
-    dateRange.from,
-    dateRange.to
+  const { data: summaryResult, isLoading: summaryLoading, isError: summaryError } = useTaxSummary(
+    queryDateRange.from,
+    queryDateRange.to
   );
-  const { data: breakdownResult, isLoading: breakdownLoading } = useTaxBreakdown(
-    dateRange.from,
-    dateRange.to,
+  const { data: breakdownResult, isLoading: breakdownLoading, isError: breakdownError } = useTaxBreakdown(
+    queryDateRange.from,
+    queryDateRange.to,
     page,
     PAGE_SIZE,
     {
@@ -78,13 +80,13 @@ export default function TaxReportPage() {
     sortKey,
     sortDir
   );
-  const { data: categoryResult, isLoading: categoryLoading } = useTaxByCategory(
-    dateRange.from,
-    dateRange.to
+  const { data: categoryResult, isLoading: categoryLoading, isError: categoryError } = useTaxByCategory(
+    queryDateRange.from,
+    queryDateRange.to
   );
-  const { data: locationResult, isLoading: locationLoading } = useTaxByLocation(
-    dateRange.from,
-    dateRange.to
+  const { data: locationResult, isLoading: locationLoading, isError: locationError } = useTaxByLocation(
+    queryDateRange.from,
+    queryDateRange.to
   );
 
   return (
@@ -110,7 +112,7 @@ export default function TaxReportPage() {
       </div>
 
       {/* ── KPI Cards ── */}
-      <TaxSummaryCards summary={summaryResult?.data} isLoading={summaryLoading} />
+      <TaxSummaryCards summary={summaryResult?.data} isLoading={summaryLoading} isError={summaryError} />
 
       {/* ── Tabs ── */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>

@@ -36,6 +36,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useSelectedLocation } from "@/stores/location-store";
 import type { KitchenStationStats } from "@/types/analytics";
+import { useReportingQueryRange } from "@/app/dashboard/hooks/useReportingDateRange";
 
 type StationSort = keyof Pick<KitchenStationStats, "display_name" | "total_items" | "avg_prep_minutes" | "auto_bumped">;
 type SortDir = "asc" | "desc";
@@ -64,7 +65,8 @@ export default function KitchenPerformancePage() {
   const [stationDir, setStationDir] = useState<SortDir>("desc");
 
   const selectedLocation = useSelectedLocation();
-  const { data: kitchen, isLoading } = useKitchenPerformance(dateRange.from, dateRange.to);
+  const queryDateRange = useReportingQueryRange(dateRange);
+  const { data: kitchen, isLoading, isError } = useKitchenPerformance(queryDateRange.from, queryDateRange.to);
 
   function handleStationSort(key: StationSort) {
     if (key === stationSort) setStationDir(d => d === "asc" ? "desc" : "asc");
@@ -88,32 +90,32 @@ export default function KitchenPerformancePage() {
   const kpis = [
     {
       label: "Avg Ticket Time",
-      value: isLoading ? null : `${(kitchen?.avg_ticket_time_minutes ?? 0).toFixed(1)} min`,
-      sub: "Per kitchen ticket",
+      value: isLoading ? null : isError ? "—" : `${(kitchen?.avg_ticket_time_minutes ?? 0).toFixed(1)} min`,
+      sub: isError ? "Failed to load" : "Per kitchen ticket",
       icon: Clock,
       iconColor: "text-indigo-500",
       iconBg: "bg-indigo-50",
     },
     {
       label: "Items Processed",
-      value: isLoading ? null : (kitchen?.total_items_processed ?? 0).toLocaleString(),
-      sub: "Total items completed",
+      value: isLoading ? null : isError ? "—" : (kitchen?.total_items_processed ?? 0).toLocaleString(),
+      sub: isError ? "Failed to load" : "Total items completed",
       icon: Utensils,
       iconColor: "text-emerald-600",
       iconBg: "bg-emerald-50",
     },
     {
       label: "Rush Item Rate",
-      value: isLoading ? null : `${(kitchen?.rush_stats?.rush_percentage ?? 0).toFixed(1)}%`,
-      sub: `${kitchen?.rush_stats?.rush_items ?? 0} rush items`,
+      value: isLoading ? null : isError ? "—" : `${(kitchen?.rush_stats?.rush_percentage ?? 0).toFixed(1)}%`,
+      sub: isError ? "Failed to load" : `${kitchen?.rush_stats?.rush_items ?? 0} rush items`,
       icon: Zap,
       iconColor: "text-amber-500",
       iconBg: "bg-amber-50",
     },
     {
       label: "Auto-Bump Rate",
-      value: isLoading ? null : `${(kitchen?.auto_bump_stats?.auto_bump_rate ?? 0).toFixed(1)}%`,
-      sub: `${kitchen?.auto_bump_stats?.auto_bumped ?? 0} auto-bumped`,
+      value: isLoading ? null : isError ? "—" : `${(kitchen?.auto_bump_stats?.auto_bump_rate ?? 0).toFixed(1)}%`,
+      sub: isError ? "Failed to load" : `${kitchen?.auto_bump_stats?.auto_bumped ?? 0} auto-bumped`,
       icon: Activity,
       iconColor: "text-purple-500",
       iconBg: "bg-purple-50",
@@ -180,6 +182,8 @@ export default function KitchenPerformancePage() {
               <div className="space-y-3">
                 {[1, 2, 3].map(i => <div key={i} className="h-12 bg-muted animate-pulse rounded-xl" />)}
               </div>
+            ) : isError ? (
+              <p className="text-sm text-muted-foreground text-center py-4">Failed to load</p>
             ) : (
               <>
                 <div className="flex items-center justify-between p-3 rounded-xl bg-amber-50">
@@ -226,6 +230,10 @@ export default function KitchenPerformancePage() {
           <CardContent className="px-3 pb-5">
             {isLoading ? (
               <div className="h-44 bg-muted animate-pulse rounded-xl" />
+            ) : isError ? (
+              <div className="h-44 flex items-center justify-center text-sm text-muted-foreground">
+                Failed to load trend data
+              </div>
             ) : dailyTrend.length === 0 ? (
               <div className="h-44 flex items-center justify-center text-sm text-muted-foreground">
                 No trend data available
@@ -315,6 +323,16 @@ export default function KitchenPerformancePage() {
                     ))}
                   </TableRow>
                 ))
+              ) : isError ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="h-40 text-center">
+                    <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                      <ChefHat className="h-8 w-8 opacity-30" />
+                      <p className="text-sm font-medium">Failed to load station data</p>
+                      <p className="text-xs">Try refreshing the page or selecting a different date range.</p>
+                    </div>
+                  </TableCell>
+                </TableRow>
               ) : sortedStations.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={5} className="h-40 text-center">

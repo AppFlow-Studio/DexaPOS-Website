@@ -30,6 +30,7 @@ import {
   DatePreset,
 } from "@/components/dashboard/orders/DateRangePicker";
 import { useOnlineOrderingAnalytics } from "../../hooks/useOrderAnalytics";
+import { useReportingQueryRange } from "@/app/dashboard/hooks/useReportingDateRange";
 import {
   DollarSign,
   ShoppingCart,
@@ -80,17 +81,33 @@ function PlatformOverviewCards({
   totalOrders,
   platforms,
   isLoading,
+  isError,
 }: {
   totalRevenue: number;
   totalOrders: number;
   platforms: PlatformSummary[];
   isLoading: boolean;
+  isError?: boolean;
 }) {
   if (isLoading) {
     return (
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {[1, 2, 3, 4].map((i) => (
           <div key={i} className="h-24 bg-muted animate-pulse rounded-lg" />
+        ))}
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        {[1, 2, 3, 4].map((i) => (
+          <Card key={i}>
+            <CardContent className="flex items-center justify-center h-24">
+              <p className="text-sm text-muted-foreground">Failed to load</p>
+            </CardContent>
+          </Card>
         ))}
       </div>
     );
@@ -372,10 +389,11 @@ export default function OnlineOrderingReportsPage() {
     to: new Date(),
   });
   const [preset, setPreset] = useState<DatePreset>("last_30_days");
+  const queryDateRange = useReportingQueryRange(dateRange);
 
-  const { data, isLoading } = useOnlineOrderingAnalytics(
-    dateRange.from,
-    dateRange.to
+  const { data, isLoading, isError } = useOnlineOrderingAnalytics(
+    queryDateRange.from,
+    queryDateRange.to
   );
 
   const platforms = data?.platforms || [];
@@ -415,6 +433,7 @@ export default function OnlineOrderingReportsPage() {
         totalOrders={data?.totalOnlineOrders || 0}
         platforms={platforms}
         isLoading={isLoading}
+        isError={isError}
       />
 
       {/* Tabs: Overview vs per-platform detail */}
