@@ -39,6 +39,7 @@ import {
   Layers,
   Info,
   ChevronDown,
+  ChevronUp,
   Sparkles,
   Loader2,
   Trash2,
@@ -264,7 +265,7 @@ export default function ModifiersPage() {
     ? "Switch to the Global filter to reorder library groups."
     : "Clear the current search before reordering groups.";
 
-  const sensors = useSensors(
+const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
@@ -284,7 +285,7 @@ export default function ModifiersPage() {
     if (!canEditStructure(group)) {
       if (!isAllLocations && !group.location_id) {
         toast.error("Cannot delete a global modifier group from a location view", {
-          description: "Switch to All Locations to delete this group.",
+        description: "Switch to All Locations to delete this group.",
         });
       } else if (!isAllLocations && group.location_id && group.location_id !== selectedLocationId) {
         toast.error("Cannot delete this modifier group from the current location", {

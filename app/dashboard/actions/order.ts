@@ -324,7 +324,7 @@ export async function GetOrderDetails(
                 users(first_name, last_name),
                 staff_profiles(first_name, last_name)
                 ),
-                table_sessions!table_sessions_order_id_fkey(
+                table_sessions(
                 *,
                 table_session_events(
                 *,
