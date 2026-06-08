@@ -1,3 +1,6 @@
+import { getOrderBreakdown, type BreakdownOrderInput } from "@/lib/orders/order-breakdown";
+import type { OrderPayment } from "@/types/order-management";
+
 type ReceiptOrder = {
   display_number?: string | null;
   order_number?: string | null;
@@ -15,10 +18,18 @@ type ReceiptOrder = {
   service_charge?: number | string | null;
   tip_amount?: number | string | null;
   total_amount?: number | string | null;
+  amount_paid?: number | string | null;
+  amount_due?: number | string | null;
   effective_subtotal?: number | string | null;
   effective_tax_amount?: number | string | null;
   effective_total?: number | string | null;
   payment_pricing_mode?: string | null;
+  // Per-lane columns (present in the orders row; required to resolve the
+  // charged lane so cash-order receipts foot — never pair effective_* w/ cash_total).
+  card_subtotal?: number | string | null;
+  card_tax_amount?: number | string | null;
+  cash_subtotal?: number | string | null;
+  cash_tax_amount?: number | string | null;
   cash_total?: number | string | null;
   card_total?: number | string | null;
   special_instructions?: string | null;
@@ -249,24 +260,24 @@ export function renderReceiptHtml(
   const isVoided = !!order.voided_at;
   const isRefunded = (order.payment_status ?? "").toLowerCase() === "refunded";
 
-  // Totals — mirror the hosted page's pricing-mode + payment-sum logic.
-  const orderTotal =
-    order.payment_pricing_mode === "cash"
-      ? num(order.cash_total)
-      : order.payment_pricing_mode === "card"
-      ? num(order.card_total)
-      : num(order.effective_total ?? order.total_amount);
-  const paymentSum = payments.reduce(
-    (s, p) => s + num(p.total_amount ?? p.amount),
-    0
+  // Totals — single pricing track so the breakdown always foots. The lane the
+  // order was charged on drives every line; `effective_*` is a card alias and
+  // pairing it with `cash_total` is exactly the cash-order mismatch we fix here.
+  const breakdown = getOrderBreakdown(
+    order as BreakdownOrderInput,
+    payments as unknown as OrderPayment[]
   );
-  const chargedTotal = paymentSum > 0 ? paymentSum : orderTotal;
-
-  const subtotal = num(order.effective_subtotal ?? order.subtotal);
-  const tax = num(order.effective_tax_amount ?? order.tax_amount);
-  const discount = num(order.discount_amount);
-  const service = num(order.service_charge);
-  const tip = num(order.tip_amount);
+  const lane = breakdown.primary;
+  const subtotal = lane.subtotal;
+  const tax = lane.tax;
+  const discount = lane.discount;
+  const service = lane.serviceCharge;
+  const tip = lane.tip;
+  // Split-tender orders show the list ladder bridged by the cash discount down
+  // to what was collected; pure lanes already bake the discount into the total.
+  const cashDiscount = breakdown.mixedCashDiscount;
+  const chargedTotal =
+    breakdown.isMixed && lane.amountPaid > 0 ? lane.amountPaid : lane.total + tip;
 
   // ── Banner ──
   const banner =
@@ -363,6 +374,7 @@ export function renderReceiptHtml(
     service > 0 ? lineRow("Service Charge", fmtMoney(service)) : "",
     order.tax_amount != null ? lineRow("Tax", fmtMoney(tax)) : "",
     tip > 0 ? lineRow("Tip", fmtMoney(tip)) : "",
+    cashDiscount > 0 ? lineRow("Cash Discount", `−${fmtMoney(cashDiscount)}`) : "",
   ].join("");
 
   // ── Payments ──
