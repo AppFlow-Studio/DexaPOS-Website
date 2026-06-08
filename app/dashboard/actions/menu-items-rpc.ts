@@ -297,14 +297,19 @@ export async function updateModifierItem(params: UpdateModifierItemParams) {
   }
 
   // Global update
+  if (stockTrackingMode !== undefined || currentStock !== undefined) {
+    return {
+      success: false,
+      error:
+        "Global modifier edits cannot set stock fields. Use a location override.",
+    };
+  }
+
   const updateData: Record<string, any> = {
     updated_at: new Date().toISOString(),
   };
   if (priceModifier !== undefined) updateData.price_modifier = priceModifier;
   if (isActive !== undefined) updateData.is_active = isActive;
-  if (stockTrackingMode !== undefined)
-    updateData.stock_tracking_mode = stockTrackingMode;
-  if (currentStock !== undefined) updateData.current_stock = currentStock;
 
   const { error } = await supabase
     .from("modifier_group_items")
@@ -592,7 +597,7 @@ export interface UpdateResult {
 // ============================================================================
 
 export async function upsertModifierOverride(
-  locationId: string,
+  locationId: string | null,
   modifierId: string,
   price: number,
   isActive: boolean,
@@ -601,7 +606,7 @@ export async function upsertModifierOverride(
 ) {
   const supabase = createServerSupabaseClient();
   const { data, error } = await supabase.rpc("upsert_modifier_override", {
-    p_location_id: locationId,
+    p_location_id: locationId ?? null,
     p_modifier_item_id: modifierId,
     p_price_modifier: price,
     p_is_active: isActive,
