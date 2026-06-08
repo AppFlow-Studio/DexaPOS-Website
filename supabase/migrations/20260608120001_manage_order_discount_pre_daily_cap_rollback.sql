@@ -1,9 +1,22 @@
 -- ============================================
+-- ROLLBACK SNIPPET — manage_order_discount (pre-daily-cap)
+--
+-- This is the previous version of manage_order_discount before migration
+-- 20260608120000_fix_discount_daily_cap.sql added max_uses_per_day
+-- enforcement and the discount_usage_log atomic write/release.
+--
+-- Originally lived as migration 20260608120001_manage_discounts.sql, which
+-- was deleted because its lex-order sequenced AFTER the fix and would
+-- silently clobber the daily-cap logic on `supabase db push`.
+--
+-- Apply this manually only if you need to revert the daily-cap behavior
+-- (e.g., a regression in the cap check). Running it does NOT touch
+-- discount_usage_log rows; any inserts the fix wrote remain harmless.
+--
 -- MANAGE ORDER DISCOUNT (with Item Distribution)
 -- Actions: 'apply', 'void'
 -- Distributes discounts to order_items
 -- Recalculates order totals atomically
-
 -- ============================================
 CREATE OR REPLACE FUNCTION public.manage_order_discount(
     p_action TEXT,                              -- 'apply' or 'void'
