@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { useOrganization } from "@clerk/nextjs";
+import { useClerkOrgId } from "../../hooks/useLocationScoped";
 import {
   Card,
   CardContent,
@@ -215,10 +215,9 @@ function PaymentCard({ payment }: { payment: OrderPayment }) {
 export default function OrderDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const { organization } = useOrganization();
   const queryClient = useQueryClient();
   const orderId = params.orderId as string;
-  const clerkOrgId = organization?.id;
+  const clerkOrgId = useClerkOrgId();
   const [confirmRefundOpen, setConfirmRefundOpen] = React.useState(false);
   const [confirmVoidOpen, setConfirmVoidOpen] = React.useState(false);
   const [isRefunding, setIsRefunding] = React.useState(false);
@@ -310,7 +309,10 @@ export default function OrderDetailPage() {
   const tableSessions: TableSessionWithEvents[] =
     orderDetails?.table_sessions || [];
 
-  if (isLoading) {
+  // Show the skeleton while the query is fetching OR while the merchant org is
+  // still resolving (clerkOrgId is "" until useUserInfo loads, which keeps the
+  // query disabled). Without this guard the page would flash "Order not found".
+  if (isLoading || !clerkOrgId) {
     return (
       <div className="space-y-6 animate-in fade-in duration-500">
         <div className="flex items-center gap-4">

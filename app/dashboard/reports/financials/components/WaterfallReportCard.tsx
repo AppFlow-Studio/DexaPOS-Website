@@ -212,14 +212,21 @@ function WaterfallSkeleton() {
 interface WaterfallReportCardProps {
   report: WaterfallReport | null | undefined;
   isLoading?: boolean;
+  isError?: boolean;
 }
 
 export function WaterfallReportCard({
   report,
   isLoading,
+  isError,
 }: WaterfallReportCardProps) {
   if (isLoading) return <WaterfallSkeleton />;
-  if (!report) return null;
+  if (isError || !report) return (
+    <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-2">
+      <p className="text-sm font-medium">{isError ? "Failed to load waterfall report" : "No data for this period"}</p>
+      {isError && <p className="text-xs">Try refreshing the page or selecting a different date range.</p>}
+    </div>
+  );
 
   const { revenue, collections, validation } = report;
 
