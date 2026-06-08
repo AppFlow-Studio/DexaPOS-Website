@@ -87,6 +87,7 @@ Single index for active ticket streams and their source trackers.
 - Merchant dashboard only.
 - Staff detail sheet only for the staff surface.
 - That detail sheet now includes a stronger sectioned redesign, not only field cleanup.
+- The staff detail sheet now uses an internal section navigator instead of a long stacked card layout.
 - `/dashboard/staff` list/table view was not part of this polish pass.
 - HQ/admin `/manage/*` staff pages were not part of this polish pass.
 - No POS work.
@@ -138,6 +139,22 @@ Single index for active ticket streams and their source trackers.
 - Cross-cutting reporting stream.
 - Backend + frontend work.
 - Not a quick-fix ticket and not mixed into modifier work.
+
+## Stream K: Single-Location Global Modifier And Recipe RPCs
+
+1. Plan:
+- `docs/PLAN-2026-06-06-SINGLE-LOCATION-GLOBAL-MODIFIER-RECIPE-RPCS.md`
+
+2. Continuation state:
+- `.planning/.continue-here.md`
+
+3. Scope notes:
+- Website repo only.
+- Backend/RPC stream for the single-location menu model.
+- Fixes the missing global modifier path when `location_id` is omitted.
+- Defensively removes stale recipe overload ambiguity while keeping one canonical function.
+- Overlay cleanup is staging-first and split into safe auto-collapse vs manual-review rows.
+- Charcoal cleanup must be sequenced separately.
 
 ## Notes
 

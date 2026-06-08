@@ -182,6 +182,16 @@ export async function GetModifierGroups(
       `location_id.is.null,location_id.eq.${locationId}`,
       { referencedTable: "category_modifier_groups" },
     );
+  } else {
+    // All Locations: exclude location overrides so global display_order is used for sorting
+    query = query.eq(
+      "modifier_group_items.location_modifier_item_overrides.location_id",
+      "00000000-0000-0000-0000-000000000000",
+    );
+    query = query.eq(
+      "location_modifier_group_overrides.location_id",
+      "00000000-0000-0000-0000-000000000000",
+    );
   }
 
   query = query
