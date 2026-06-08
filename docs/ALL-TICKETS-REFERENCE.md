@@ -87,6 +87,7 @@ Single index for active ticket streams and their source trackers.
 - Merchant dashboard only.
 - Staff detail sheet only for the staff surface.
 - That detail sheet now includes a stronger sectioned redesign, not only field cleanup.
+- The staff detail sheet now uses an internal section navigator instead of a long stacked card layout.
 - `/dashboard/staff` list/table view was not part of this polish pass.
 - HQ/admin `/manage/*` staff pages were not part of this polish pass.
 - No POS work.
