@@ -77,7 +77,7 @@ import { SendReceiptModal } from "./SendReceiptModal";
 import { AssignCustomerModal } from "./AssignCustomerModal";
 import { AdjustTipModal } from "./AdjustTipModal";
 import { assignCustomerToOrder } from "@/app/actions/orders/assign-customer";
-import { resolveChargedLane, laneTotalProps } from "@/lib/orders/pricing-lane";
+import { getOrderBreakdown } from "@/lib/orders/order-breakdown";
 import { toast } from "sonner";
 
 interface OrderDetailSheetProps {
@@ -1342,327 +1342,146 @@ export function OrderDetailSheet({
                 icon={<DollarSign className="h-4 w-4" />}
               >
                 {(() => {
-                  const cardSubtotal =
-                    Number(displayOrder.card_subtotal) ||
-                    displayOrder.subtotal;
-                  const cashSubtotal =
-                    Number(displayOrder.cash_subtotal) ||
-                    displayOrder.subtotal;
-                  const cardTax =
-                    Number(displayOrder.card_tax_amount) ||
-                    Number(displayOrder.tax_amount) ||
-                    0;
-                  const cashTax =
-                    Number(displayOrder.cash_tax_amount) ||
-                    Number(displayOrder.tax_amount) ||
-                    0;
-                  const cardTotal =
-                    Number(displayOrder.card_total) ||
-                    displayOrder.total_amount;
-                  const cashTotal =
-                    Number(displayOrder.cash_total) ||
-                    displayOrder.total_amount;
-
-                  const hasDualPricing = cardSubtotal !== cashSubtotal;
-                  const totalSavings = hasDualPricing
-                    ? cardTotal - cashTotal
-                    : 0;
+                  // Single source of truth: one consistent pricing track per
+                  // render. The breakdown ladder always foots; the alternate
+                  // lane and split tenders are shown as separate context rows.
+                  const b = getOrderBreakdown(displayOrder, payments);
+                  const lane = b.primary;
                   const isMixedPayment =
-                    displayOrder.payment_pricing_mode === "mixed";
+                    displayOrder.payment_pricing_mode === "mixed" ||
+                    b.charged === "mixed";
+                  const laneLabel = b.display === "cash" ? "Cash" : "Card";
+                  const altTotal =
+                    b.display === "cash" ? b.card.total : b.cash.total;
+                  const altLabel =
+                    b.display === "cash" ? "If paid by card" : "If paid by cash";
+                  const cashSavings = b.card.total - b.cash.total;
 
                   const paidPayments = payments.filter(
                     (p) => p.status === "paid" || p.status === "captured"
                   );
                   const cashPayments = paidPayments
                     .filter((p) => p.payment_method === "cash")
-                    .reduce(
-                      (sum, p) => sum + Number(p.total_amount),
-                      0
-                    );
+                    .reduce((sum, p) => sum + Number(p.total_amount), 0);
                   const cardPayments = paidPayments
                     .filter((p) => p.payment_method !== "cash")
-                    .reduce(
-                      (sum, p) => sum + Number(p.total_amount),
-                      0
-                    );
-                  const totalPaid = cashPayments + cardPayments;
+                    .reduce((sum, p) => sum + Number(p.total_amount), 0);
 
                   return (
                     <div className="space-y-2 text-sm">
-                      {isMixedPayment ? (
-                        <>
-                          <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-800 mb-3">
-                            <DollarSign className="h-3.5 w-3.5 text-amber-600" />
-                            <span className="text-xs text-amber-700 dark:text-amber-400">
-                              Mixed Payment: Paid with both cash and card
-                            </span>
-                          </div>
+                      {isMixedPayment && (
+                        <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-800 mb-3">
+                          <DollarSign className="h-3.5 w-3.5 text-amber-600" />
+                          <span className="text-xs text-amber-700 dark:text-amber-400">
+                            Mixed Payment: Paid with both cash and card
+                          </span>
+                        </div>
+                      )}
 
-                          {hasDualPricing && (
-                            <div className="grid grid-cols-2 gap-2 mb-3">
-                              <div className="p-3 rounded-lg bg-muted/50 border space-y-1.5">
-                                <p className="text-xs font-medium text-muted-foreground">
-                                  If All Card
-                                </p>
-                                <PriceRow
-                                  label="Subtotal"
-                                  value={formatCurrency(cardSubtotal)}
-                                />
-                                <PriceRow
-                                  label="Tax"
-                                  value={formatCurrency(cardTax)}
-                                />
-                                <div className="border-t pt-1.5 mt-1.5">
-                                  <PriceRow
-                                    label="Total"
-                                    value={formatCurrency(cardTotal)}
-                                    bold
-                                  />
-                                </div>
-                              </div>
-                              <div className="p-3 rounded-lg bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 space-y-1.5">
-                                <p className="text-xs font-medium text-green-700 dark:text-green-400">
-                                  If All Cash
-                                </p>
-                                <PriceRow
-                                  label="Subtotal"
-                                  value={formatCurrency(cashSubtotal)}
-                                />
-                                <PriceRow
-                                  label="Tax"
-                                  value={formatCurrency(cashTax)}
-                                />
-                                <div className="border-t border-green-200 dark:border-green-800 pt-1.5 mt-1.5">
-                                  <PriceRow
-                                    label="Total"
-                                    value={formatCurrency(cashTotal)}
-                                    bold
-                                    valueClassName="text-green-700 dark:text-green-400"
-                                  />
-                                </div>
-                              </div>
-                            </div>
+                      {/* Footing ladder — every line from the charged track */}
+                      <PriceRow
+                        label="Subtotal"
+                        value={formatCurrency(lane.subtotal)}
+                      />
+                      {lane.discount > 0 && (
+                        <PriceRow
+                          label="Discount"
+                          value={`-${formatCurrency(lane.discount)}`}
+                          valueClassName="text-green-600"
+                        />
+                      )}
+                      {lane.serviceCharge > 0 && (
+                        <PriceRow
+                          label="Service Charge"
+                          value={formatCurrency(lane.serviceCharge)}
+                        />
+                      )}
+                      {lane.tax > 0 && (
+                        <PriceRow label="Tax" value={formatCurrency(lane.tax)} />
+                      )}
+                      {lane.tip > 0 && (
+                        <PriceRow label="Tip" value={formatCurrency(lane.tip)} />
+                      )}
+                      {b.mixedCashDiscount > 0 && (
+                        <PriceRow
+                          label="Cash Discount"
+                          value={`-${formatCurrency(b.mixedCashDiscount)}`}
+                          valueClassName="text-green-600 dark:text-green-400 font-medium"
+                        />
+                      )}
+                      <div className="border-t pt-3 mt-2">
+                        <PriceRow
+                          label={
+                            isMixedPayment
+                              ? "Total"
+                              : b.dual
+                              ? `Total (${laneLabel})`
+                              : "Total"
+                          }
+                          value={formatCurrency(
+                            isMixedPayment && lane.amountPaid > 0
+                              ? lane.amountPaid
+                              : lane.total
                           )}
+                          bold
+                          className="text-base"
+                          valueClassName={
+                            !isMixedPayment && b.display === "card"
+                              ? "text-[#0C4FD1]"
+                              : undefined
+                          }
+                        />
+                      </div>
 
-                          {totalSavings > 0 && (
-                            <div className="flex justify-between items-center p-3 bg-green-100 dark:bg-green-900/30 rounded-lg mb-3">
-                              <span className="text-xs font-medium text-green-700 dark:text-green-400">
-                                Cash Discount Available
-                              </span>
-                              <span className="text-sm font-bold text-green-700 dark:text-green-400">
-                                -{formatCurrency(totalSavings)}
-                              </span>
-                            </div>
-                          )}
+                      {b.dual && !isMixedPayment && (
+                        <PriceRow
+                          label={altLabel}
+                          value={formatCurrency(altTotal)}
+                          valueClassName="text-muted-foreground"
+                        />
+                      )}
+                      {b.dual && !isMixedPayment && cashSavings > 0 && (
+                        <PriceRow
+                          label="Cash savings"
+                          value={`-${formatCurrency(cashSavings)}`}
+                          valueClassName="text-green-600 dark:text-green-400 font-medium"
+                        />
+                      )}
 
-                          {!hasDualPricing && (
-                            <>
-                              <PriceRow
-                                label="Subtotal"
-                                value={formatCurrency(displayOrder.subtotal)}
-                              />
-                              {Number(displayOrder.tax_amount) > 0 && (
-                                <PriceRow
-                                  label="Tax"
-                                  value={formatCurrency(
-                                    Number(displayOrder.tax_amount)
-                                  )}
-                                />
-                              )}
-                              {Number(displayOrder.service_charge) > 0 && (
-                                <PriceRow
-                                  label="Service Charge"
-                                  value={formatCurrency(
-                                    Number(displayOrder.service_charge)
-                                  )}
-                                />
-                              )}
-                            </>
-                          )}
-
-                          <div className="border-t pt-3 mt-3 space-y-1.5">
-                            <p className="text-xs font-medium text-muted-foreground mb-1">
-                              Payments
-                            </p>
-                            {cashPayments > 0 && (
-                              <PriceRow
-                                label={`Cash${hasDualPricing ? " (discounted)" : ""}`}
-                                value={formatCurrency(cashPayments)}
-                                valueClassName={
-                                  hasDualPricing
-                                    ? "text-green-600 dark:text-green-400 font-medium"
-                                    : ""
-                                }
-                              />
-                            )}
-                            {cardPayments > 0 && (
-                              <PriceRow
-                                label={`Card${hasDualPricing ? " (full rate)" : ""}`}
-                                value={formatCurrency(cardPayments)}
-                              />
-                            )}
-                          </div>
-
-                          <div className="border-t pt-3 mt-2">
+                      {isMixedPayment && (
+                        <div className="border-t pt-3 mt-3 space-y-1.5">
+                          <p className="text-xs font-medium text-muted-foreground mb-1">
+                            Tendered
+                          </p>
+                          {cashPayments > 0 && (
                             <PriceRow
-                              label="Total Paid"
-                              value={formatCurrency(totalPaid)}
-                              bold
-                              className="text-base"
-                            />
-                          </div>
-                        </>
-                      ) : hasDualPricing ? (
-                        <>
-                          <PriceRow
-                            label="Card Subtotal"
-                            value={formatCurrency(cardSubtotal)}
-                            valueClassName="text-muted-foreground"
-                          />
-                          <PriceRow
-                            label="Cash Subtotal"
-                            value={formatCurrency(cashSubtotal)}
-                          />
-                          {totalSavings > 0 && (
-                            <PriceRow
-                              label="Cash Savings"
-                              value={`-${formatCurrency(totalSavings)}`}
+                              label="Cash"
+                              value={formatCurrency(cashPayments)}
                               valueClassName="text-green-600 dark:text-green-400 font-medium"
-                              className="text-green-600 dark:text-green-400"
                             />
                           )}
-                          {Number(displayOrder.tax_amount) > 0 && (
+                          {cardPayments > 0 && (
                             <PriceRow
-                              label="Tax"
-                              value={formatCurrency(
-                                Number(displayOrder.tax_amount)
-                              )}
+                              label="Card"
+                              value={formatCurrency(cardPayments)}
                             />
                           )}
-                          {Number(displayOrder.tip_amount) > 0 && (
-                            <PriceRow
-                              label="Tip"
-                              value={formatCurrency(
-                                Number(displayOrder.tip_amount)
-                              )}
-                            />
-                          )}
-                          {Number(displayOrder.discount_amount) > 0 && (
-                            <PriceRow
-                              label="Discount"
-                              value={`-${formatCurrency(Number(displayOrder.discount_amount))}`}
-                              valueClassName="text-green-600"
-                            />
-                          )}
-                          {Number(displayOrder.service_charge) > 0 && (
-                            <PriceRow
-                              label="Service Charge"
-                              value={formatCurrency(
-                                Number(displayOrder.service_charge)
-                              )}
-                            />
-                          )}
-                          {(() => {
-                            // Emphasize the lane actually charged (from the
-                            // payment tender), not a hardcoded lane. Unpaid
-                            // orders strike neither lane.
-                            const chargedLane = resolveChargedLane(
-                              displayOrder,
-                              payments
-                            );
-                            const cardProps = laneTotalProps(chargedLane, "card");
-                            const cashProps = laneTotalProps(chargedLane, "cash");
-                            return (
-                              <div className="border-t pt-3 mt-2 space-y-1">
-                                <PriceRow
-                                  label="Total (Card)"
-                                  value={formatCurrency(cardTotal)}
-                                  bold={cardProps.bold}
-                                  valueClassName={cardProps.valueClassName}
-                                  className={cardProps.bold ? "text-base" : undefined}
-                                />
-                                <PriceRow
-                                  label="Total (Cash)"
-                                  value={formatCurrency(cashTotal)}
-                                  bold={cashProps.bold}
-                                  valueClassName={cashProps.valueClassName}
-                                  className={cashProps.bold ? "text-base" : undefined}
-                                />
-                              </div>
-                            );
-                          })()}
-                          {totalPaid > 0 && (
-                            <PriceRow
-                              label="Amount Paid"
-                              value={formatCurrency(totalPaid)}
-                              valueClassName="text-green-600"
-                            />
-                          )}
-                        </>
-                      ) : (
-                        <>
-                          <PriceRow
-                            label="Subtotal"
-                            value={formatCurrency(displayOrder.subtotal)}
-                          />
-                          {Number(displayOrder.tax_amount) > 0 && (
-                            <PriceRow
-                              label="Tax"
-                              value={formatCurrency(
-                                Number(displayOrder.tax_amount)
-                              )}
-                            />
-                          )}
-                          {Number(displayOrder.tip_amount) > 0 && (
-                            <PriceRow
-                              label="Tip"
-                              value={formatCurrency(
-                                Number(displayOrder.tip_amount)
-                              )}
-                            />
-                          )}
-                          {Number(displayOrder.discount_amount) > 0 && (
-                            <PriceRow
-                              label="Discount"
-                              value={`-${formatCurrency(Number(displayOrder.discount_amount))}`}
-                              valueClassName="text-green-600"
-                            />
-                          )}
-                          {Number(displayOrder.service_charge) > 0 && (
-                            <PriceRow
-                              label="Service Charge"
-                              value={formatCurrency(
-                                Number(displayOrder.service_charge)
-                              )}
-                            />
-                          )}
-                          <div className="border-t pt-3 mt-2">
-                            <PriceRow
-                              label="Total"
-                              value={formatCurrency(
-                                displayOrder.total_amount
-                              )}
-                              bold
-                              className="text-base"
-                            />
-                          </div>
-                          {totalPaid > 0 && (
-                            <PriceRow
-                              label="Amount Paid"
-                              value={formatCurrency(totalPaid)}
-                              valueClassName="text-green-600"
-                            />
-                          )}
-                          {Number(displayOrder.amount_due) > 0 && (
-                            <PriceRow
-                              label="Amount Due"
-                              value={formatCurrency(
-                                Number(displayOrder.amount_due)
-                              )}
-                              valueClassName="text-amber-600"
-                            />
-                          )}
-                        </>
+                        </div>
+                      )}
+
+                      {!isMixedPayment && lane.amountPaid > 0 && (
+                        <PriceRow
+                          label="Amount Paid"
+                          value={formatCurrency(lane.amountPaid)}
+                          valueClassName="text-green-600"
+                        />
+                      )}
+                      {lane.amountDue > 0 && (
+                        <PriceRow
+                          label="Amount Due"
+                          value={formatCurrency(lane.amountDue)}
+                          valueClassName="text-amber-600"
+                        />
                       )}
                     </div>
                   );
