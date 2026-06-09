@@ -158,7 +158,7 @@ export function PushChannelsCard({
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <CardTitle className="text-base flex items-center gap-2">
               <Radio className="h-4 w-4" />
@@ -168,7 +168,7 @@ export function PushChannelsCard({
               Fan out an already-uploaded menu to your delivery platforms.
             </CardDescription>
           </div>
-          <div className="flex items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5 sm:shrink-0 sm:justify-end">
             {connectedChannels.map((c) => (
               <Badge key={c} variant="outline" className="text-xs">
                 {c}

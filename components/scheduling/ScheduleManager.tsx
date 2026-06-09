@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import {
   startOfWeek,
   endOfWeek,
@@ -64,6 +65,7 @@ export function ScheduleManager({ scheduleId }: { scheduleId: string }) {
     compareSchedules,
   } = useScheduleStore();
   const { templates } = useScheduleTemplateStore();
+  const router = useRouter();
 
   const [isApplyDialogOpen, setIsApplyDialogOpen] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(
@@ -391,9 +393,7 @@ export function ScheduleManager({ scheduleId }: { scheduleId: string }) {
             size="sm"
             variant="outline"
             className="gap-2"
-            onClick={() =>
-              window.open("/dashboard/schedules/templates", "_blank")
-            }
+            onClick={() => router.push("/dashboard/schedules/templates")}
           >
             <CalendarIcon className="h-4 w-4" />
             Library

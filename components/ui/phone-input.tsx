@@ -62,7 +62,10 @@ function PhoneInput({
           '--react-international-phone-font-size': '0.875rem',
         } as React.CSSProperties
       }
-      className={cn('w-full', className)}
+      className={cn(
+        'w-full [&_.react-international-phone-input-container]:flex [&_.react-international-phone-input-container]:w-full [&_.react-international-phone-input]:min-w-0 [&_.react-international-phone-input]:flex-1 [&_.react-international-phone-input]:w-full',
+        className,
+      )}
     />
   )
 }

@@ -1,7 +1,7 @@
 'use client'
 
+import React, { useEffect, useState } from 'react'
 import { useParams, useSearchParams } from 'next/navigation'
-import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { PageLoader } from '@/components/ui/page-loader'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -207,8 +207,44 @@ export default function MerchantDetailsPage() {
 
             <Card>
                 <CardContent className="pt-6">
+                    {/* Mobile: horizontal scrollable tab strip */}
+                    <div className="md:hidden mb-4 -mx-1 overflow-x-auto">
+                        <div className="flex gap-1 px-1 min-w-max">
+                            {([
+                                { value: 'overview', icon: LayoutDashboard, label: 'Overview' },
+                                { value: 'business-info', icon: Building2, label: 'Business' },
+                                { value: 'notes', icon: StickyNote, label: 'Notes' },
+                                { value: 'audit', icon: History, label: 'Audit' },
+                                { value: 'mids', icon: CreditCard, label: 'MIDs' },
+                                { value: 'nmi-accounts', icon: CreditCard, label: 'NMI' },
+                                { value: 'settlements', icon: Banknote, label: 'Settlements' },
+                                { value: 'disputes', icon: ShieldCheck, label: 'Disputes' },
+                                { value: 'billing', icon: Receipt, label: 'Billing' },
+                                { value: 'online-store', icon: Globe, label: 'Online Store' },
+                                { value: 'support', icon: LifeBuoy, label: 'Support' },
+                                ...(canManageDevices ? [{ value: 'devices', icon: Monitor, label: 'Devices' }] : []),
+                                { value: 'locations', icon: MapPin, label: 'Locations' },
+                            ] as Array<{ value: SectionKey; icon: React.ElementType; label: string }>).map(({ value, icon: Icon, label }) => (
+                                <button
+                                    key={value}
+                                    onClick={() => setActiveTab(value)}
+                                    className={cn(
+                                        'flex items-center gap-1.5 whitespace-nowrap rounded-md px-3 py-1.5 text-xs transition-colors',
+                                        activeTab === value
+                                            ? 'bg-primary/10 font-medium text-primary'
+                                            : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                                    )}
+                                >
+                                    <Icon className="h-3.5 w-3.5 shrink-0" />
+                                    {label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
                     <div className="flex gap-6">
-                        <nav className="w-[200px] shrink-0 space-y-5 sticky top-7 self-start">
+                        {/* Desktop: vertical sidebar nav */}
+                        <nav className="hidden md:block w-[200px] shrink-0 space-y-5 sticky top-7 self-start">
                             <NavGroup label="Account">
                                 <NavItem value="overview" icon={LayoutDashboard} active={activeTab === 'overview'} onClick={setActiveTab}>
                                     Overview
@@ -260,7 +296,7 @@ export default function MerchantDetailsPage() {
                             </NavGroup>
                         </nav>
 
-                        <div className="min-w-0 flex-1 border-l pl-6">
+                        <div className="min-w-0 flex-1 md:border-l md:pl-6">
                             {activeTab === 'overview' && (
                                 <div className="space-y-6">
                                     <OnboardingStatusCard merchant={merchantDetails} />

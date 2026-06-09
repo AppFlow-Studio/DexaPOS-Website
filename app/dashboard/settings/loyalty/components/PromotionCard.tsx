@@ -107,10 +107,10 @@ export function PromotionCard({
 
   return (
     <Card className="overflow-hidden">
-      <div className="flex items-center justify-between p-4">
-        <div className="flex items-start gap-4 flex-1">
+      <div className="flex items-center justify-between gap-2 p-4">
+        <div className="flex items-start gap-4 flex-1 min-w-0">
           {/* Icon */}
-          <div className="text-muted-foreground mt-0.5">
+          <div className="text-muted-foreground mt-0.5 shrink-0">
             {icon || <Snowflake className="h-5 w-5" />}
           </div>
 
@@ -122,9 +122,9 @@ export function PromotionCard({
                 {getPromoTypeLabel()}
               </Badge>
             </div>
-            <div className="flex flex-col gap-0.5 text-sm text-muted-foreground">
-              <span>{getDiscountText()}</span>
-              <span className="text-xs">{getScheduleText()}</span>
+            <div className="flex flex-col gap-0.5 text-sm text-muted-foreground min-w-0">
+              <span className="truncate">{getDiscountText()}</span>
+              <span className="text-xs truncate">{getScheduleText()}</span>
             </div>
             {promotion.description && (
               <p className="text-xs text-muted-foreground mt-2">{promotion.description}</p>

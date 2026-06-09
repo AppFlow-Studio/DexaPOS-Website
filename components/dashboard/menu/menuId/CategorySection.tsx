@@ -212,8 +212,8 @@ export function CategorySection({
           !category.is_active && "opacity-60",
         )}
       >
-        <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors py-3">
-          <div className="flex items-center justify-between">
+        <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors py-3 px-3 sm:px-6">
+          <div className="flex items-center justify-between gap-2">
             {/* Category-level selection checkbox */}
             {isSelectionMode && categoryItemIds.length > 0 && (
               <div
@@ -224,15 +224,15 @@ export function CategorySection({
               </div>
             )}
             <CollapsibleTrigger asChild>
-              <div className="flex items-center gap-3 flex-1 cursor-pointer">
+              <div className="flex min-w-0 items-center gap-2 flex-1 cursor-pointer sm:gap-3">
                 {isExpanded ? (
-                  <ChevronDown className="h-5 w-5 text-muted-foreground" />
+                  <ChevronDown className="h-5 w-5 shrink-0 text-muted-foreground" />
                 ) : (
-                  <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                  <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
                 )}
-                <div>
-                  <div className="flex items-center gap-2">
-                    <CardTitle className="text-lg">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <CardTitle className="truncate text-base sm:text-lg">
                       {category.category?.name || "Unnamed Category"}
                     </CardTitle>
                     {/* Location-scoped category badge */}
@@ -309,10 +309,12 @@ export function CategorySection({
             </CollapsibleTrigger>
 
             {/* Controls */}
-            <div className="flex items-center gap-3">
+            <div className="flex flex-shrink-0 items-center gap-2 sm:gap-3">
               {/* Level indicator */}
               {showLocationPricing && (
-                <LevelIndicator level={editingLevel} variant="inline" />
+                <span className="hidden sm:inline-flex">
+                  <LevelIndicator level={editingLevel} variant="inline" />
+                </span>
               )}
 
               {/* Reset override button */}
@@ -364,14 +366,14 @@ export function CategorySection({
                 </Tooltip>
               </TooltipProvider>
 
-              <Badge variant="outline">
+              <Badge variant="outline" className="hidden whitespace-nowrap sm:inline-flex">
                 {itemCount} item{itemCount !== 1 ? "s" : ""}
               </Badge>
             </div>
           </div>
         </CardHeader>
         <CollapsibleContent>
-          <CardContent className="pt-0">
+          <CardContent className="pt-0 px-2 sm:px-6">
             {itemCount === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 No items in this category

@@ -115,7 +115,7 @@ export function TableTurnsReport({
   return (
     <div className="space-y-4">
       {/* Summary Cards */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <SummaryCard
           label="Avg Turn Time"
           value={`${formatMinutes(data.avg_turn_time_minutes)} min`}

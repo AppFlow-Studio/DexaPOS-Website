@@ -1582,7 +1582,7 @@ export default function CategoriesPage() {
                                       ).map((i) => i.menu_item_id)}
                                       strategy={verticalListSortingStrategy}
                                     >
-                                      <ScrollArea className="space-y-2 flex flex-col max-h-[500px]">
+                                      <ScrollArea className="max-h-[500px] [&>div>div]:!block [&>div>div]:min-w-0">
                                         {(
                                           reorderedItemsMap.get(category.id) ||
                                           categoryItems
