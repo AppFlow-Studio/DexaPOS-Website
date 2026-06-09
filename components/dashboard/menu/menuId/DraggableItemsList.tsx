@@ -83,7 +83,7 @@ function SortableItemWrapper({
         </div>
       )}
 
-      <div className="flex-1">
+      <div className="flex-1 min-w-0">
         <CategoryItemRow
           item={item}
           onClick={() => onItemClick(item.menu_item_id)}
@@ -208,8 +208,8 @@ export function DraggableItemsList({
     <div className="space-y-2">
       {/* Save/Reset bar when there are changes */}
       {hasItemOrderChanges && (
-        <div className="flex items-center justify-between p-2 rounded-lg bg-primary/5 border border-primary/20 mb-2">
-          <p className="text-xs text-muted-foreground">
+        <div className="flex flex-wrap items-center justify-between gap-2 p-2 rounded-lg bg-primary/5 border border-primary/20 mb-2">
+          <p className="text-xs text-muted-foreground min-w-0">
             Item order changed
             {isLocationScoped && (
               <span className="ml-1 text-primary font-medium">
@@ -217,7 +217,7 @@ export function DraggableItemsList({
               </span>
             )}
           </p>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0 ml-auto">
             {onResetItemOrder && (
               <Button
                 variant="ghost"

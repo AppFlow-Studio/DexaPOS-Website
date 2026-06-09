@@ -32,8 +32,8 @@ export function LocationsSection({ locations }: { locations: LocationSummary[] }
     return (
         <div>
             <SectionHead title="Locations" sub={`${locations.length} total`} />
-            <div className="overflow-hidden rounded-lg border bg-card">
-                <table className="w-full text-[12.5px]">
+            <div className="overflow-x-auto rounded-lg border bg-card">
+                <table className="w-full min-w-[560px] text-[12.5px]">
                     <thead className="bg-muted/40 text-[10.5px] uppercase tracking-[0.08em] text-muted-foreground">
                         <tr className="border-b">
                             <th className="px-4 py-2 text-left font-medium">Name</th>
@@ -45,14 +45,14 @@ export function LocationsSection({ locations }: { locations: LocationSummary[] }
                     <tbody className="[&>tr]:border-b last:[&>tr]:border-b-0">
                         {locations.map((loc) => (
                             <tr key={loc.id} className="hover:bg-muted/30">
-                                <td className="px-4 py-2.5">
+                                <td className="px-4 py-2.5 whitespace-nowrap">
                                     <div className="flex items-center gap-2 font-medium text-foreground">
-                                        <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
+                                        <MapPin className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                                         {loc.name}
                                     </div>
                                 </td>
                                 <td className="px-4 py-2.5 text-muted-foreground">{formatAddress(loc)}</td>
-                                <td className="px-4 py-2.5">
+                                <td className="px-4 py-2.5 whitespace-nowrap">
                                     {loc.is_active ? (
                                         <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200">
                                             Live
@@ -63,7 +63,7 @@ export function LocationsSection({ locations }: { locations: LocationSummary[] }
                                         </Badge>
                                     )}
                                 </td>
-                                <td className="px-4 py-2.5 text-right font-mono tabular-nums text-foreground">
+                                <td className="px-4 py-2.5 text-right font-mono tabular-nums text-foreground whitespace-nowrap">
                                     {formatMoney(loc.revenue_today ?? 0)}
                                     <span className="ml-1 text-muted-foreground">
                                         ({loc.orders_today ?? 0})

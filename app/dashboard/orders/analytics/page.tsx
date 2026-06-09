@@ -40,7 +40,9 @@ import {
   MapPin,
   Globe,
   Settings,
+  ArrowLeft,
 } from 'lucide-react'
+import Link from 'next/link'
 
 import {
   DateRangePicker,
@@ -200,6 +202,14 @@ export default function AnalyticsPage() {
 
   return (
     <main className="space-y-6 animate-in fade-in duration-500 ">
+      {/* Back to Orders */}
+      <Button variant="ghost" size="sm" className="-ml-2 h-8 gap-1.5 text-muted-foreground" asChild>
+        <Link href="/dashboard/orders">
+          <ArrowLeft className="h-4 w-4" />
+          Back to Orders
+        </Link>
+      </Button>
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="space-y-1">
@@ -311,8 +321,8 @@ export default function AnalyticsPage() {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <div className="overflow-x-auto">
-        <TabsList className="flex-nowrap w-max h-auto gap-2 bg-transparent border-b-2 border-slate-200 dark:border-slate-700 rounded-none p-0 pb-2">
+        <div className="w-full min-w-0 overflow-x-auto pb-px">
+        <TabsList className="inline-flex flex-nowrap w-max h-auto gap-2 bg-transparent border-b-2 border-slate-200 dark:border-slate-700 rounded-none p-0 pb-2">
           <TabsTrigger
             value="sales"
             className="border-0 border-b-4 border-transparent transition-colors duration-200 data-[state=active]:border-[#0A5C9E] dark:data-[state=active]:border-[#0A7AB8] data-[state=active]:shadow-none data-[state=active]:bg-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white rounded-none"
@@ -348,7 +358,7 @@ export default function AnalyticsPage() {
 
         {/* SALES TAB */}
         <TabsContent value="sales" className="space-y-6">
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 [&>*]:min-w-0">
             {/* Total Sales */}
             <Card className="dark:bg-slate-900 dark:border-slate-700">
               <CardHeader className="flex justify-between pb-2">
@@ -408,7 +418,7 @@ export default function AnalyticsPage() {
 
         {/* KITCHEN TAB */}
         <TabsContent value="kitchen" className="space-y-6">
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 [&>*]:min-w-0">
             <AvgTicketTimeCard data={kitchenPerformance ?? undefined} isLoading={isLoadingKitchen} />
             <RushTrackingCard data={kitchenPerformance?.rush_stats} isLoading={isLoadingKitchen} />
             <AutoBumpRateCard data={kitchenPerformance?.auto_bump_stats} isLoading={isLoadingKitchen} />
@@ -421,13 +431,13 @@ export default function AnalyticsPage() {
         {/* TABLES TAB */}
         <TabsContent value="tables" className="space-y-6">
           <AvgTableTurnTime data={tablePerformance} isLoading={isLoadingTable} />
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-2">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-2 [&>*]:min-w-0">
             <CoversTracker data={tablePerformance} isLoading={isLoadingTable} />
             <RevenueSeatHour data={tablePerformance?.hourly_revpash} isLoading={isLoadingTable} />
           </div>
           <ServiceTimelineBreakdown phases={tablePerformance?.service_phases} isLoading={isLoadingTable} />
-          <div className="grid gap-4 md:grid-cols-3">
-            <div className="md:col-span-2">
+          <div className="grid gap-4 md:grid-cols-3 [&>*]:min-w-0">
+            <div className="md:col-span-2 min-w-0">
               <TableUtilization tables={tablePerformance?.table_utilization} isLoading={isLoadingTable} />
             </div>
             <SectionHeatmap sections={tablePerformance?.section_stats} isLoading={isLoadingTable} />
@@ -449,7 +459,7 @@ export default function AnalyticsPage() {
         {/* ORDER FLOW TAB */}
         <TabsContent value="orders" className="space-y-6">
           <OrderStatusFunnel data={orderFlow} isLoading={isLoadingOrderFlow} />
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 md:grid-cols-2 [&>*]:min-w-0">
             <OrderTypeBreakdown data={orderFlow} isLoading={isLoadingOrderFlow} />
             <AvgCompletionTime data={orderFlow} isLoading={isLoadingOrderFlow} />
           </div>

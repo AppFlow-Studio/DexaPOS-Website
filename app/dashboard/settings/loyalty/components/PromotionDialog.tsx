@@ -24,6 +24,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Search, Clock, Cake, PartyPopper, RotateCcw, Share2, Calendar, Banknote, Package } from 'lucide-react';
+import { DateTimePicker } from '@/components/ui/date-time-picker';
 import type { Promotion, PromotionInsert } from '../../../actions/loyalty-programs';
 
 interface MenuItem {
@@ -240,7 +241,7 @@ export function PromotionDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto overflow-x-hidden">
         <DialogHeader>
           <DialogTitle>{isEditing ? 'Edit Promotion' : 'Create Promotion'}</DialogTitle>
           <DialogDescription>
@@ -278,7 +279,7 @@ export function PromotionDialog({
           {/* Promo Type Selector Grid */}
           <div className="space-y-4">
             <h3 className="font-semibold text-sm">Promotion Type</h3>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {PROMO_TYPES.map((type) => (
                 <button
                   key={type.value}
@@ -304,7 +305,7 @@ export function PromotionDialog({
             {/* Happy Hour - Time fields */}
             {formData.promo_type === 'happy_hour' && (
               <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="time-start">Start time *</Label>
                     <Input
@@ -326,9 +327,9 @@ export function PromotionDialog({
                 </div>
                 <div className="space-y-3">
                   <Label>Active Days</Label>
-                  <div className="grid grid-cols-7 gap-2">
+                  <div className="flex flex-wrap gap-2">
                     {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day, idx) => (
-                      <div key={day} className="flex items-center gap-2">
+                      <div key={day} className="flex items-center gap-1.5">
                         <Checkbox
                           id={`day-${idx}`}
                           checked={formData.active_days?.includes(idx) ?? false}
@@ -443,7 +444,7 @@ export function PromotionDialog({
             {/* BOGO - Buy/Get quantities */}
             {formData.promo_type === 'bogo' && (
               <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="bogo-buy">Buy quantity *</Label>
                     <Input
@@ -520,7 +521,7 @@ export function PromotionDialog({
             </div>
 
             {formData.discount_type !== 'free_item' && (
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="discount-value">Discount Value *</Label>
                   <div className="relative">
@@ -798,38 +799,40 @@ export function PromotionDialog({
           <div className="space-y-4">
             <h3 className="font-semibold text-sm">Schedule & Limits</h3>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="starts-at">Start date</Label>
-                <Input
+                <DateTimePicker
                   id="starts-at"
-                  type="date"
-                  value={formData.starts_at?.substring(0, 10) || ''}
-                  onChange={(e) =>
+                  dateOnly
+                  value={formData.starts_at}
+                  onChange={(value) =>
                     setFormData({
                       ...formData,
-                      starts_at: e.target.value ? `${e.target.value}T00:00:00Z` : null,
+                      starts_at: value ? `${value.substring(0, 10)}T00:00:00Z` : null,
                     })
                   }
+                  placeholder="No start date"
                 />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="ends-at">End date</Label>
-                <Input
+                <DateTimePicker
                   id="ends-at"
-                  type="date"
-                  value={formData.ends_at?.substring(0, 10) || ''}
-                  onChange={(e) =>
+                  dateOnly
+                  value={formData.ends_at}
+                  onChange={(value) =>
                     setFormData({
                       ...formData,
-                      ends_at: e.target.value ? `${e.target.value}T23:59:59Z` : null,
+                      ends_at: value ? `${value.substring(0, 10)}T23:59:59Z` : null,
                     })
                   }
+                  placeholder="No end date"
                 />
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="max-uses">Max uses (total)</Label>
                 <Input

@@ -39,11 +39,19 @@ const METHOD_COLORS: Record<string, string> = {
 };
 
 const CARD_COLORS: Record<string, string> = {
-  Visa: "hsl(221, 83%, 53%)",
-  Mastercard: "hsl(24, 95%, 53%)",
-  Amex: "hsl(262, 83%, 58%)",
-  Discover: "hsl(142, 71%, 45%)",
+  visa: "hsl(221, 83%, 53%)",
+  mastercard: "hsl(24, 95%, 53%)",
+  amex: "hsl(262, 83%, 58%)",
+  discover: "hsl(142, 71%, 45%)",
 };
+
+// Fallback palette for unrecognized card types (cycled by index)
+const FALLBACK_COLORS = [
+  "hsl(173, 58%, 39%)",
+  "hsl(330, 81%, 60%)",
+  "hsl(48, 96%, 53%)",
+  "hsl(199, 89%, 48%)",
+];
 
 function formatMethodLabel(method: string): string {
   const labels: Record<string, string> = {
@@ -78,7 +86,7 @@ export function PaymentCharts({ summary, isLoading }: PaymentChartsProps) {
   const methodData = (summary?.byMethod || []).map((m) => ({
     name: formatMethodLabel(m.method),
     value: m.amount,
-    fill: METHOD_COLORS[m.method] || "hsl(var(--muted-foreground))",
+    fill: METHOD_COLORS[m.method] || "hsl(215, 16%, 47%)",
   }));
 
   const methodChartConfig: ChartConfig = {
@@ -94,10 +102,12 @@ export function PaymentCharts({ summary, isLoading }: PaymentChartsProps) {
   // Card Type Bar data
   const cardTypeData = (summary?.byCardType || [])
     .sort((a, b) => b.count - a.count)
-    .map((c) => ({
+    .map((c, index) => ({
       name: c.cardType,
       count: c.count,
-      fill: CARD_COLORS[c.cardType] || "hsl(var(--primary))",
+      fill:
+        CARD_COLORS[c.cardType?.toLowerCase()] ||
+        FALLBACK_COLORS[index % FALLBACK_COLORS.length],
     }));
 
   const cardChartConfig: ChartConfig = {
@@ -129,7 +139,7 @@ export function PaymentCharts({ summary, isLoading }: PaymentChartsProps) {
     return (
       <div className="grid gap-4 md:grid-cols-3">
         {[1, 2, 3].map((i) => (
-          <Card key={i}>
+          <Card key={i} className="min-w-0">
             <CardHeader>
               <Skeleton className="h-5 w-32" />
             </CardHeader>
@@ -145,7 +155,7 @@ export function PaymentCharts({ summary, isLoading }: PaymentChartsProps) {
   return (
     <div className="grid gap-4 md:grid-cols-3">
       {/* Payment Method Donut */}
-      <Card>
+      <Card className="min-w-0">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-medium">
             Payment Methods
@@ -157,7 +167,7 @@ export function PaymentCharts({ summary, isLoading }: PaymentChartsProps) {
               No payment data
             </div>
           ) : (
-            <ChartContainer config={methodChartConfig} className="h-[200px]">
+            <ChartContainer config={methodChartConfig} className="aspect-auto h-[200px] w-full">
               <PieChart>
                 <ChartTooltip
                   content={
@@ -187,7 +197,7 @@ export function PaymentCharts({ summary, isLoading }: PaymentChartsProps) {
       </Card>
 
       {/* Card Type Bar Chart */}
-      <Card>
+      <Card className="min-w-0">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-medium">
             Card Types
@@ -199,7 +209,7 @@ export function PaymentCharts({ summary, isLoading }: PaymentChartsProps) {
               No card payment data
             </div>
           ) : (
-            <ChartContainer config={cardChartConfig} className="h-[200px]">
+            <ChartContainer config={cardChartConfig} className="aspect-auto h-[200px] w-full">
               <BarChart
                 data={cardTypeData}
                 layout="vertical"
@@ -227,7 +237,7 @@ export function PaymentCharts({ summary, isLoading }: PaymentChartsProps) {
       </Card>
 
       {/* Daily Volume Area Chart */}
-      <Card>
+      <Card className="min-w-0">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-medium">
             Daily Volume
@@ -239,7 +249,7 @@ export function PaymentCharts({ summary, isLoading }: PaymentChartsProps) {
               No daily data
             </div>
           ) : (
-            <ChartContainer config={dailyChartConfig} className="h-[200px]">
+            <ChartContainer config={dailyChartConfig} className="aspect-auto h-[200px] w-full">
               <AreaChart
                 data={dailyData}
                 margin={{ top: 5, right: 5, bottom: 5, left: 5 }}

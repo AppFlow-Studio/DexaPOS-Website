@@ -380,7 +380,7 @@ export function InvoiceForm({ existing }: InvoiceFormProps) {
                         {dueDate ? format(dueDate, "PPP") : "Pick a due date"}
                       </Button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
+                    <PopoverContent className="w-auto min-w-[280px] p-0" align="start">
                       <Calendar
                         mode="single"
                         selected={dueDate}

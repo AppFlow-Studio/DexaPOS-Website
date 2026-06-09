@@ -173,8 +173,8 @@ export function NotesTab({ merchantId }: NotesTabProps) {
           {(notes as NoteRecord[] | undefined)?.map((note) => (
             <div key={note.id} className="rounded-lg border p-3 space-y-2">
               <div className="flex items-start justify-between gap-3">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
+                <div className="space-y-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-sm font-medium">{note.author_name}</span>
                     {note.author_role && <Badge variant="outline" className="text-[10px]">{note.author_role}</Badge>}
                     {note.is_pinned && (
@@ -191,7 +191,7 @@ export function NotesTab({ merchantId }: NotesTabProps) {
 
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" disabled={isBusy}>
+                    <Button variant="ghost" size="icon" className="shrink-0" disabled={isBusy}>
                       <MoreHorizontal className="h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>

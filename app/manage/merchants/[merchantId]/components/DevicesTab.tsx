@@ -281,14 +281,14 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
     return (
         <div className="space-y-6">
             {/* Header */}
-            <div className="flex items-center justify-between">
-                <div>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
                     <h2 className="text-2xl font-bold tracking-tight">Stations & Terminals</h2>
                     <p className="text-muted-foreground">
                         Manage POS stations and payment terminals for this merchant
                     </p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 shrink-0">
                     <Button variant="outline" size="sm" onClick={() => {
                         refetchStations()
                         refetchTerminals()
@@ -300,7 +300,7 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
             </div>
 
             {/* Stats Cards */}
-            <div className="grid gap-4 md:grid-cols-4">
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">Total Stations</CardTitle>
@@ -354,32 +354,34 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
             {/* Tabs & Content */}
             <Card>
                 <CardHeader>
-                    <div className="flex items-center justify-between">
-                        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'stations' | 'terminals')}>
-                            <TabsList>
-                                <TabsTrigger value="stations">
-                                    <Monitor className="h-4 w-4 mr-2" />
-                                    Stations ({filteredStations.length})
-                                </TabsTrigger>
-                                <TabsTrigger value="terminals">
-                                    <CreditCard className="h-4 w-4 mr-2" />
-                                    Payment Terminals ({filteredTerminals.length})
-                                </TabsTrigger>
-                            </TabsList>
+                    <div className="flex w-full min-w-0 flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'stations' | 'terminals')} className="min-w-0">
+                            <div className="overflow-x-auto">
+                                <TabsList className="w-max">
+                                    <TabsTrigger value="stations">
+                                        <Monitor className="h-4 w-4 mr-2" />
+                                        Stations ({filteredStations.length})
+                                    </TabsTrigger>
+                                    <TabsTrigger value="terminals">
+                                        <CreditCard className="h-4 w-4 mr-2" />
+                                        Payment Terminals ({filteredTerminals.length})
+                                    </TabsTrigger>
+                                </TabsList>
+                            </div>
                         </Tabs>
-                        <div className="flex items-center gap-2">
-                            <div className="relative">
+                        <div className="flex w-full min-w-0 flex-wrap items-center gap-2 lg:w-auto">
+                            <div className="relative min-w-[140px] flex-1 sm:flex-none">
                                 <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                                 <Input
                                     placeholder="Search..."
                                     value={searchTerm}
                                     onChange={(e) => setSearchTerm(e.target.value)}
-                                    className="pl-8 w-64"
+                                    className="pl-8 w-full sm:w-64"
                                 />
                             </div>
                             <Select value={selectedLocationId} onValueChange={setSelectedLocationId}>
-                                <SelectTrigger className="w-[200px]">
-                                    <MapPin className="h-4 w-4 mr-2" />
+                                <SelectTrigger className="w-full sm:w-[200px]">
+                                    <MapPin className="h-4 w-4 mr-2 shrink-0" />
                                     <SelectValue placeholder="All Locations">
                                         {selectedLocationId === 'all'
                                             ? 'All Locations'
@@ -397,13 +399,13 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
                                 </SelectContent>
                             </Select>
                             {activeTab === 'stations' && (
-                                <Button onClick={() => setIsAddStationOpen(true)} disabled={!canManageDevices}>
+                                <Button className="w-full sm:w-auto" onClick={() => setIsAddStationOpen(true)} disabled={!canManageDevices}>
                                     <Plus className="h-4 w-4 mr-2" />
                                     Add Station
                                 </Button>
                             )}
                             {activeTab === 'terminals' && (
-                                <Button onClick={() => setIsAddTerminalOpen(true)} disabled={!canManageDevices}>
+                                <Button className="w-full sm:w-auto" onClick={() => setIsAddTerminalOpen(true)} disabled={!canManageDevices}>
                                     <Plus className="h-4 w-4 mr-2" />
                                     Add Terminal
                                 </Button>
@@ -436,6 +438,7 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
                                             </EmptyHeader>
                                         </Empty>
                                     ) : (
+                                        <div className="overflow-x-auto">
                                         <Table>
                                             <TableHeader>
                                                 <TableRow>
@@ -554,6 +557,7 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
                                                 ))}
                                             </TableBody>
                                         </Table>
+                                        </div>
                                     )}
                                 </>
                             )}
@@ -576,6 +580,7 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
                                             </EmptyHeader>
                                         </Empty>
                                     ) : (
+                                        <div className="overflow-x-auto">
                                         <Table>
                                             <TableHeader>
                                                 <TableRow>
@@ -688,6 +693,7 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
                                                 ))}
                                             </TableBody>
                                         </Table>
+                                        </div>
                                     )}
                                 </>
                             )}

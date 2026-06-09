@@ -400,7 +400,7 @@ export function OrderTypeSection({
                     {scheduledDate ? format(scheduledDate, "PPP") : "Pick a date"}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
+                <PopoverContent className="w-auto min-w-[280px] p-0">
                   <Calendar
                     mode="single"
                     selected={scheduledDate}

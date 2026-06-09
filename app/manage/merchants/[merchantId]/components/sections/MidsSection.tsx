@@ -31,21 +31,19 @@ function MidCard({
     const hasMid = !!row.luqra_mid
     return (
         <div className="rounded-lg border bg-card">
-            <div className="flex items-start justify-between gap-3 border-b px-5 py-3">
-                <div className="space-y-0.5">
+            <div className="flex items-start justify-between gap-3 border-b px-4 py-3">
+                <div className="space-y-0.5 min-w-0">
                     <div className="flex items-center gap-2">
-                        <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
-                        <span className="text-[13px] font-medium">{row.name}</span>
+                        <MapPin className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                        <span className="text-[13px] font-medium truncate">{row.name}</span>
                     </div>
-                    <div className="text-[11.5px] text-muted-foreground">
+                    <div className="text-[11.5px] text-muted-foreground break-all">
                         {hasMid ? (
                             <>
                                 <span className="font-mono">{row.luqra_mid}</span>
                                 {row.luqra_mid_descriptor && (
                                     <>
-                                        <span className="mx-1.5" aria-hidden>
-                                            ·
-                                        </span>
+                                        <span className="mx-1.5" aria-hidden>·</span>
                                         <span>&ldquo;{row.luqra_mid_descriptor}&rdquo;</span>
                                     </>
                                 )}
@@ -55,7 +53,7 @@ function MidCard({
                         )}
                     </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 shrink-0">
                     <Badge className={STATUS_CLASS[row.luqra_mid_status] ?? STATUS_CLASS.pending}>
                         {row.luqra_mid_status}
                     </Badge>
@@ -69,12 +67,12 @@ function MidCard({
                             {hasMid ? (
                                 <>
                                     <Pencil className="h-3.5 w-3.5" />
-                                    Edit
+                                    <span className="hidden sm:inline">Edit</span>
                                 </>
                             ) : (
                                 <>
                                     <Plus className="h-3.5 w-3.5" />
-                                    Assign
+                                    <span className="hidden sm:inline">Assign</span>
                                 </>
                             )}
                         </Button>
@@ -97,11 +95,11 @@ function MidCard({
 
 function Cell({ label, value }: { label: string; value: string }) {
     return (
-        <div className="bg-card px-4 py-3">
+        <div className="bg-card px-3 py-3 min-w-0">
             <div className="text-[10.5px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
                 {label}
             </div>
-            <div className="mt-0.5 text-[12.5px] text-foreground">{value}</div>
+            <div className="mt-0.5 text-[12.5px] text-foreground break-words">{value}</div>
         </div>
     )
 }

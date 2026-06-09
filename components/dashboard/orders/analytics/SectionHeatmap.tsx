@@ -89,7 +89,7 @@ export function SectionHeatmap({ sections, isLoading }: SectionHeatmapProps) {
     >
       {!isEmpty && sections && (
         <div className="space-y-4">
-          <DataTable columns={columns} data={sections} />
+          <DataTable columns={columns} data={sections} tableClassName="min-w-[560px]" />
           <div className="text-xs text-muted-foreground flex items-center gap-4 px-3">
             <div className="flex items-center gap-2">
               <div className="w-4 h-4 rounded" style={{ backgroundColor: 'rgba(239, 68, 68, 0.7)' }} />

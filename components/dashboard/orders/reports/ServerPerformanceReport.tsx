@@ -160,7 +160,7 @@ export function ServerPerformanceReport({
       />
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <SummaryCard
           label="Top Server"
           value={topServerName}

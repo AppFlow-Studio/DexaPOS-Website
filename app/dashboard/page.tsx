@@ -920,24 +920,24 @@ export default function MerchantDashboardPage() {
                   .map((item, index) => (
                     <div
                       key={index}
-                      className="flex items-center justify-between p-2 rounded-lg border"
+                      className="flex items-center justify-between gap-3 p-2 rounded-lg border"
                     >
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
                         <Badge
                           variant="outline"
-                          className="w-6 h-6 flex items-center justify-center p-0"
+                          className="w-6 h-6 flex items-center justify-center p-0 shrink-0"
                         >
                           {index + 1}
                         </Badge>
-                        <span className="font-medium text-sm">
+                        <span className="font-medium text-sm truncate">
                           {item.item_name}
                         </span>
                       </div>
-                      <div className="flex items-center gap-4">
-                        <span className="text-xs text-muted-foreground">
+                      <div className="flex items-center gap-4 shrink-0">
+                        <span className="text-xs text-muted-foreground whitespace-nowrap">
                           {item.quantity} sold
                         </span>
-                        <span className="font-semibold text-sm">
+                        <span className="font-semibold text-sm whitespace-nowrap">
                           {formatCurrency(item.revenue)}
                         </span>
                       </div>
