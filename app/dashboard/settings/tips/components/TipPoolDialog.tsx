@@ -53,6 +53,7 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { DatePopover } from "./DatePopover";
 import type { TipPoolConfigWithShares, Role } from "@/app/dashboard/actions/tips";
 
 interface TipPoolDialogProps {
@@ -278,7 +279,7 @@ export function TipPoolDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl max-h-[90vh] grid-cols-[minmax(0,1fr)] overflow-x-hidden overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{pool ? "Edit Tip Pool" : "Create Tip Pool"}</DialogTitle>
             <DialogDescription>
@@ -336,31 +337,30 @@ export function TipPoolDialog({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="min-w-0">
                   <Label htmlFor="pool-eff-date">Effective Date</Label>
-                  <Input
-                    id="pool-eff-date"
-                    type="date"
-                    value={formData.effective_date}
-                    onChange={(e) => {
-                      set("effective_date", e.target.value);
-                      if (formData.end_date && e.target.value >= formData.end_date) {
-                        set("end_date", null);
-                      }
-                    }}
-                    className="mt-1 w-full min-w-0"
-                  />
+                  <div className="mt-1">
+                    <DatePopover
+                      id="pool-eff-date"
+                      value={formData.effective_date}
+                      onChange={(v) => {
+                        set("effective_date", v ?? "");
+                        if (v && formData.end_date && v >= formData.end_date) {
+                          set("end_date", null);
+                        }
+                      }}
+                    />
+                  </div>
                 </div>
                 <div className="min-w-0">
                   <Label htmlFor="pool-end-date">End Date</Label>
-                  <Input
-                    id="pool-end-date"
-                    type="date"
-                    value={formData.end_date || ""}
-                    min={formData.effective_date}
-                    onChange={(e) => {
-                      set("end_date", e.target.value || null);
-                    }}
-                    className="mt-1 w-full min-w-0"
-                  />
+                  <div className="mt-1">
+                    <DatePopover
+                      id="pool-end-date"
+                      value={formData.end_date || ""}
+                      min={formData.effective_date}
+                      placeholder="No end date"
+                      onChange={(v) => set("end_date", v)}
+                    />
+                  </div>
                   <p className="text-xs text-muted-foreground mt-1">Leave blank = no end date</p>
                 </div>
               </div>
@@ -549,7 +549,7 @@ export function TipPoolDialog({
                   value={formData.distribution_method}
                   onValueChange={(v) => handleMethodChange(v as TipPoolFormData["distribution_method"])}
                 >
-                  <SelectTrigger className="mt-1">
+                  <SelectTrigger className="mt-1 w-full min-w-0">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -599,7 +599,7 @@ export function TipPoolDialog({
                 {/* Add contributing role dropdown */}
                 {roles.filter((r) => !formData.contributing_role_codes.includes(r.code)).length > 0 && (
                   <Select onValueChange={(v) => toggleContributing(v)}>
-                    <SelectTrigger className="w-full">
+                    <SelectTrigger className="w-full min-w-0">
                       <SelectValue placeholder="Add contributing role..." />
                     </SelectTrigger>
                     <SelectContent>
@@ -759,7 +759,7 @@ export function TipPoolDialog({
                 {availableReceivingRoles.length > 0 && (
                   <div className="mt-2">
                     <Select onValueChange={(v) => addRoleShare(v)}>
-                      <SelectTrigger className="w-full">
+                      <SelectTrigger className="w-full min-w-0">
                         <div className="flex items-center gap-1.5 text-muted-foreground">
                           <Plus className="w-3.5 h-3.5" />
                           <span>Add receiving role...</span>

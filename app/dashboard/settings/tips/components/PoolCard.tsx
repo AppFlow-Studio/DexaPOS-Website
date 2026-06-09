@@ -47,19 +47,19 @@ export function PoolCard({ pool, roles, poolCount, onEdit, onDelete, onToggle, i
   return (
     <Card
       className={cn(
-        "min-w-0 transition-all duration-200 hover:shadow-md",
+        "min-w-0 overflow-hidden transition-all duration-200 hover:shadow-md",
         !pool.is_active && "opacity-60"
       )}
     >
       <CardHeader className="pb-3">
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start justify-between gap-3 min-w-0">
           <div className="flex items-start gap-3 flex-1 min-w-0">
             <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
               <Percent className="w-4 h-4 text-primary" />
             </div>
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <p className="font-semibold text-foreground leading-tight truncate">{pool.name}</p>
+              <div className="flex items-center gap-2 min-w-0">
+                <p className="font-semibold text-foreground leading-tight truncate min-w-0">{pool.name}</p>
                 {showPriority && (
                   <Badge variant="outline" className="text-[10px] font-mono shrink-0">
                     #{priority}

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 import { Empty } from "@/components/ui/empty";
 import {
   Card,
@@ -136,16 +137,16 @@ function SortableGridCard({
       )}
 
       <Card
-        className={`transition-all hover:shadow-lg cursor-pointer h-full min-w-0 ${
+        className={`transition-all hover:shadow-lg cursor-pointer h-full min-w-0 overflow-hidden ${
           isDragging ? "shadow-xl ring-2 ring-primary/20" : ""
         }`}
         onClick={() => handleRowClick(menu.id)}
       >
-        <CardHeader className={!isFiltered ? "pl-12" : ""}>
-          <div className="flex items-start justify-between gap-2">
+        <CardHeader className={cn("min-w-0", !isFiltered && "pl-12")}>
+          <div className="flex items-start justify-between gap-2 min-w-0">
             <div className="flex-1 min-w-0 space-y-1">
               <div className="flex items-center gap-2 min-w-0">
-                <CardTitle className="truncate group-hover:text-primary transition-colors">
+                <CardTitle className="truncate min-w-0 group-hover:text-primary transition-colors">
                   {menu.name}
                 </CardTitle>
                 {menu.display_order !== null && (
@@ -160,13 +161,15 @@ function SortableGridCard({
                 </CardDescription>
               )}
             </div>
-            <MenuActionsDropdown
-              menuId={menu.id}
-              menuName={menu.name}
-              isActive={menu.is_active}
-              menuLocationId={menu.location_id}
-              {...actions}
-            />
+            <div className="shrink-0">
+              <MenuActionsDropdown
+                menuId={menu.id}
+                menuName={menu.name}
+                isActive={menu.is_active}
+                menuLocationId={menu.location_id}
+                {...actions}
+              />
+            </div>
           </div>
         </CardHeader>
         <CardContent>

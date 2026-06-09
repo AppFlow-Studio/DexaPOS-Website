@@ -24,6 +24,7 @@ import {
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
+import { DatePopover } from "./DatePopover";
 import type { TipOutRule, Role } from "@/app/dashboard/actions/tips";
 
 interface TipOutRuleDialogProps {
@@ -151,7 +152,7 @@ export function TipOutRuleDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-md max-h-[90vh] grid-cols-[minmax(0,1fr)] overflow-x-hidden overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {rule ? "Edit Tip-Out Rule" : "Create Tip-Out Rule"}
@@ -170,7 +171,7 @@ export function TipOutRuleDialog({
                 handleChange("from_role_code", value)
               }
             >
-              <SelectTrigger id="from-role" className="mt-1">
+              <SelectTrigger id="from-role" className="mt-1 w-full min-w-0">
                 <SelectValue placeholder="Select role" />
               </SelectTrigger>
               <SelectContent>
@@ -196,7 +197,7 @@ export function TipOutRuleDialog({
                 handleChange("to_role_code", value)
               }
             >
-              <SelectTrigger id="to-role" className="mt-1">
+              <SelectTrigger id="to-role" className="mt-1 w-full min-w-0">
                 <SelectValue placeholder="Select role" />
               </SelectTrigger>
               <SelectContent>
@@ -324,31 +325,30 @@ export function TipOutRuleDialog({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="min-w-0">
               <Label htmlFor="effective-date">Effective Date</Label>
-              <Input
-                id="effective-date"
-                type="date"
-                value={formData.effective_date}
-                onChange={(e) => {
-                  handleChange("effective_date", e.target.value);
-                  if (formData.end_date && e.target.value >= formData.end_date) {
-                    handleChange("end_date", null);
-                  }
-                }}
-                className="mt-1 w-full min-w-0"
-              />
+              <div className="mt-1">
+                <DatePopover
+                  id="effective-date"
+                  value={formData.effective_date}
+                  onChange={(v) => {
+                    handleChange("effective_date", v ?? "");
+                    if (v && formData.end_date && v >= formData.end_date) {
+                      handleChange("end_date", null);
+                    }
+                  }}
+                />
+              </div>
             </div>
             <div className="min-w-0">
               <Label htmlFor="end-date">End Date</Label>
-              <Input
-                id="end-date"
-                type="date"
-                value={formData.end_date || ""}
-                min={formData.effective_date}
-                onChange={(e) => {
-                  handleChange("end_date", e.target.value || null);
-                }}
-                className="mt-1 w-full min-w-0"
-              />
+              <div className="mt-1">
+                <DatePopover
+                  id="end-date"
+                  value={formData.end_date || ""}
+                  min={formData.effective_date}
+                  placeholder="No end date"
+                  onChange={(v) => handleChange("end_date", v)}
+                />
+              </div>
               <p className="text-xs text-muted-foreground mt-1">Leave blank = no end date</p>
             </div>
           </div>
