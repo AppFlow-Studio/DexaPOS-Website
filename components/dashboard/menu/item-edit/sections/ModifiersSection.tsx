@@ -4,8 +4,8 @@ import * as React from "react";
 import {
   DndContext,
   closestCenter,
-  KeyboardSensor,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   useSensor,
   useSensors,
   DragEndEvent,
@@ -15,7 +15,6 @@ import {
 import {
   arrayMove,
   SortableContext,
-  sortableKeyboardCoordinates,
   useSortable,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
@@ -85,6 +84,7 @@ function SortableGroupRow({ entry, index }: SortableGroupRowProps) {
       <button
         {...attributes}
         {...listeners}
+        onMouseDown={(e) => { console.log("[drag] mousedown on handle", entry.id, e.target); }}
         className="flex items-center justify-center w-7 h-7 rounded hover:bg-muted cursor-grab active:cursor-grabbing touch-none"
         aria-label="Drag to reorder"
       >
@@ -121,18 +121,20 @@ export function ModifiersSection({ item, itemId, globalScope }: SectionRenderCtx
   const [isSaving, setIsSaving] = React.useState(false);
   const [activeId, setActiveId] = React.useState<string | null>(null);
 
-  // Sync when item reloads
+  // Sync when item or its modifier group list changes (e.g. after save/refetch)
+  const groupsKey = rawGroups.map((g) => `${g.id}:${g.display_order}`).join(",");
   React.useEffect(() => {
+    if (isSaving) return; // don't overwrite local state while save is in flight
     const sorted = sortEntries(rawGroups);
     setGroups(sorted);
     setOriginalGroups(sorted);
     setHasChanges(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [item?.id]);
+  }, [groupsKey]);
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 5 } }),
   );
 
   const handleDragStart = (event: DragStartEvent) => {
@@ -157,15 +159,12 @@ export function ModifiersSection({ item, itemId, globalScope }: SectionRenderCtx
 
   const handleSave = async () => {
     setIsSaving(true);
+    const payload = groups.map((g, idx) => ({
+      modifierGroupId: g.modifier_group?.id ?? g.id,
+      displayOrder: idx + 1,
+    }));
     try {
-      const result = await ReorderMenuItemModifierGroups(
-        itemId,
-        groups.map((g, idx) => ({
-          modifierGroupId: g.modifier_group?.id ?? g.id,
-          displayOrder: idx + 1,
-        })),
-        locationId
-      );
+      const result = await ReorderMenuItemModifierGroups(itemId, payload, locationId);
       if (result.error) throw new Error(result.error);
       toast.success("Modifier group order saved");
       setOriginalGroups(groups);
