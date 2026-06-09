@@ -518,12 +518,12 @@ export function StaffDetailSheet({
             settings.
           </BottomSheetDescription>
         </BottomSheetHeader>
-        <BottomSheetBody className="flex-1 overflow-y-auto">
+        <BottomSheetBody className="flex-1 overflow-x-hidden overflow-y-auto">
           <div className="space-y-6 p-1">
             <section className="rounded-2xl border bg-card p-5">
               <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                <div className="flex items-start gap-4">
-                  <Avatar className="h-16 w-16">
+                <div className="flex min-w-0 items-start gap-4">
+                  <Avatar className="h-16 w-16 shrink-0">
                     <AvatarImage
                       src={displayStaff.avatar_url || undefined}
                       alt={displayStaff.display_name}
@@ -531,9 +531,9 @@ export function StaffDetailSheet({
                     <AvatarFallback>{initials}</AvatarFallback>
                   </Avatar>
 
-                  <div className="space-y-2">
+                  <div className="min-w-0 space-y-2">
                     <div className="flex flex-wrap items-center gap-2">
-                      <h2 className="text-xl font-semibold">
+                      <h2 className="min-w-0 break-words text-xl font-semibold">
                         {displayStaff.first_name} {displayStaff.last_name}
                       </h2>
                       {staff.is_clerk_user ? (
@@ -560,16 +560,16 @@ export function StaffDetailSheet({
                     </div>
 
                     <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm text-muted-foreground">
-                      <div className="flex items-center gap-2">
-                        <Mail className="h-4 w-4" />
-                        <span>{displayStaff.email || "No email"}</span>
+                      <div className="flex min-w-0 items-center gap-2">
+                        <Mail className="h-4 w-4 shrink-0" />
+                        <span className="min-w-0 break-all">{displayStaff.email || "No email"}</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Phone className="h-4 w-4" />
+                        <Phone className="h-4 w-4 shrink-0" />
                         <span>{displayStaff.phone ? formatPhoneForDisplay(displayStaff.phone) : "No phone"}</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <MapPin className="h-4 w-4" />
+                        <MapPin className="h-4 w-4 shrink-0" />
                         <span>{displayStaff.total_locations} assigned location(s)</span>
                       </div>
                     </div>
@@ -720,10 +720,10 @@ export function StaffDetailSheet({
                 </div>
               )}
             </section>
-            <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-              <section className="rounded-2xl border bg-card p-5">
-                <div className="mb-4 flex items-center justify-between gap-3">
-                  <div>
+            <div className="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
+              <section className="min-w-0 rounded-2xl border bg-card p-5">
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                  <div className="min-w-0">
                     <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                       Primary Assignment
                     </h3>
@@ -734,7 +734,7 @@ export function StaffDetailSheet({
                   {primaryLocation && !isEditMode && (
                     <Button
                       variant="outline"
-                      className="gap-2"
+                      className="shrink-0 gap-2"
                       onClick={() => setIsEditMode(true)}
                     >
                       <Edit className="h-4 w-4" />
@@ -895,11 +895,11 @@ export function StaffDetailSheet({
                 )}
               </section>
 
-              <div className="space-y-6">
+              <div className="min-w-0 space-y-6">
                 <section className="rounded-2xl border bg-card p-5">
                   <div className="mb-4 flex items-start gap-2">
-                    <KeyRound className="mt-0.5 h-4 w-4 text-muted-foreground" />
-                    <div>
+                    <KeyRound className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                    <div className="min-w-0">
                       <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                         POS Access
                       </h3>
@@ -1156,10 +1156,10 @@ export function StaffDetailSheet({
               </div>
             </div>
 
-            <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-              <section className="rounded-2xl border bg-card p-5">
-                <div className="mb-4 flex items-center justify-between gap-3">
-                  <div>
+            <div className="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
+              <section className="min-w-0 rounded-2xl border bg-card p-5">
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                  <div className="min-w-0">
                     <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                       Location Assignments
                     </h3>
@@ -1167,7 +1167,7 @@ export function StaffDetailSheet({
                       Click a location to manage role, status, and PIN.
                     </p>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex shrink-0 items-center gap-2">
                     <Badge variant="outline">{activeLocations.length} active</Badge>
                     {availableLocationsToAdd.length > 0 && (
                       <Button
@@ -1266,9 +1266,9 @@ export function StaffDetailSheet({
                       }}
                     >
                       <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div>
+                        <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
-                            <p className="font-medium">{assignment.location_name}</p>
+                            <p className="break-words font-medium">{assignment.location_name}</p>
                             {assignment.is_primary && <Badge>Primary</Badge>}
                             {!assignment.is_active && (
                               <Badge variant="outline">Inactive</Badge>
@@ -1370,11 +1370,11 @@ export function StaffDetailSheet({
                 </div>
               </section>
 
-              <section className="rounded-2xl border bg-card">
+              <section className="min-w-0 rounded-2xl border bg-card">
                 <div className="border-b p-5">
                   <div className="flex items-center gap-2">
-                    <Activity className="h-4 w-4 text-muted-foreground" />
-                    <div>
+                    <Activity className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    <div className="min-w-0">
                       <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                         Activity Log
                       </h3>

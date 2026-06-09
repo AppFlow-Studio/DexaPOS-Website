@@ -81,7 +81,7 @@ export function CategoryItemRow({
     return (
         <div
             className={cn(
-                "flex items-center gap-4 py-4 px-2 hover:bg-muted/50 cursor-pointer transition-colors rounded-lg",
+                "flex items-center gap-2 sm:gap-4 py-4 px-1 sm:px-2 hover:bg-muted/50 cursor-pointer transition-colors rounded-lg",
                 isSelectionMode && isSelected && "bg-primary/5",
             )}
             onClick={isSelectionMode ? onToggleSelect : onEdit}
@@ -97,7 +97,7 @@ export function CategoryItemRow({
             )}
 
             {/* Item Image */}
-            <div className="h-16 w-16 rounded-lg bg-muted flex items-center justify-center overflow-hidden flex-shrink-0">
+            <div className="h-12 w-12 sm:h-16 sm:w-16 rounded-lg bg-muted flex items-center justify-center overflow-hidden flex-shrink-0">
                 {menuItem?.image ? (
                     <img
                         src={menuItem.image}
@@ -133,7 +133,7 @@ export function CategoryItemRow({
             </div>
 
             {/* Price */}
-            <div className="text-right flex-shrink-0 flex items-center gap-2">
+            <div className="text-right flex-shrink-0 flex items-center gap-1 sm:gap-2">
                 <div onClick={(e) => e.stopPropagation()}>
                     <PriceSourcePopover
                         itemId={menuItem?.id || item.menu_item_id}
@@ -174,7 +174,7 @@ export function CategoryItemRow({
                                 <Button
                                     variant="ghost"
                                     size="icon"
-                                    className="h-8 w-8"
+                                    className="hidden sm:inline-flex h-8 w-8"
                                     onClick={(e) => {
                                         e.stopPropagation()
                                         onEdit()

@@ -333,8 +333,8 @@ export function TipPoolDialog({
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="min-w-0">
                   <Label htmlFor="pool-eff-date">Effective Date</Label>
                   <Input
                     id="pool-eff-date"
@@ -346,10 +346,10 @@ export function TipPoolDialog({
                         set("end_date", null);
                       }
                     }}
-                    className="mt-1"
+                    className="mt-1 w-full min-w-0"
                   />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <Label htmlFor="pool-end-date">End Date</Label>
                   <Input
                     id="pool-end-date"
@@ -359,7 +359,7 @@ export function TipPoolDialog({
                     onChange={(e) => {
                       set("end_date", e.target.value || null);
                     }}
-                    className="mt-1"
+                    className="mt-1 w-full min-w-0"
                   />
                   <p className="text-xs text-muted-foreground mt-1">Leave blank = no end date</p>
                 </div>
@@ -398,7 +398,7 @@ export function TipPoolDialog({
               </p>
 
               <TooltipProvider>
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   {/* Full Workday */}
                   <button
                     type="button"
@@ -582,13 +582,13 @@ export function TipPoolDialog({
                     <Badge
                       key={code}
                       variant="secondary"
-                      className="text-xs gap-1 pr-1"
+                      className="text-xs gap-1 pr-1 max-w-full"
                     >
-                      {code} · {getRoleName(code)}
+                      <span className="truncate">{code} · {getRoleName(code)}</span>
                       <button
                         type="button"
                         onClick={() => toggleContributing(code)}
-                        className="ml-0.5 rounded-full p-0.5 hover:bg-muted-foreground/20"
+                        className="ml-0.5 rounded-full p-0.5 hover:bg-muted-foreground/20 shrink-0"
                       >
                         <X className="w-3 h-3" />
                       </button>
@@ -640,7 +640,7 @@ export function TipPoolDialog({
                         key={share.role_code}
                         className="flex items-center gap-3 px-3 py-2.5"
                       >
-                        <div className="flex-1 min-w-0">
+                        <div className="flex-1 min-w-0 truncate">
                           <span className="text-sm font-medium">{share.role_code}</span>
                           <span className="text-xs text-muted-foreground ml-1.5">
                             · {getRoleName(share.role_code)}

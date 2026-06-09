@@ -212,10 +212,10 @@ export function DateRangePicker({
                 }}
             >
                 <PopoverTrigger asChild>
-                    <Button variant="outline" className="gap-2">
-                        <CalendarIcon className="h-4 w-4" />
-                        <span>{displayText}</span>
-                        <ChevronDown className="h-4 w-4" />
+                    <Button variant="outline" className="gap-2 max-w-full min-w-0">
+                        <CalendarIcon className="h-4 w-4 shrink-0" />
+                        <span className="truncate">{displayText}</span>
+                        <ChevronDown className="h-4 w-4 shrink-0" />
                     </Button>
                 </PopoverTrigger>
                 <PopoverContent

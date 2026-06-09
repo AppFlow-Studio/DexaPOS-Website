@@ -24,6 +24,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { Card } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { DateTimePicker } from '@/components/ui/date-time-picker';
 import { ChevronLeft, ChevronRight, Star, Coffee, Hash, Loader2, Gift, Target, Flame } from 'lucide-react';
 import { useMenuItems } from '../../../hooks/useMenuItems';
 import { useCategories } from '../../../hooks/useCategories';
@@ -326,7 +327,7 @@ export function ProgramWizard({
       {formData.program_type === 'points' && (
         <div className="space-y-4 border rounded-lg p-4 bg-muted/30">
           <h4 className="font-semibold text-sm">Points Configuration</h4>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="space-y-2">
               <Label htmlFor="ppd">Points per $1 *</Label>
               <Input
@@ -554,7 +555,7 @@ export function ProgramWizard({
         </RadioGroup>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label htmlFor="reward-val">Reward Value *</Label>
           <div className="relative">
@@ -735,7 +736,7 @@ export function ProgramWizard({
           <p className="text-xs text-muted-foreground">Multiple rewards per order</p>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label htmlFor="cooldown">Cooldown (minutes)</Label>
             <Input
@@ -859,33 +860,23 @@ export function ProgramWizard({
 
       {/* Schedule Tab */}
       <TabsContent value="schedule" className="space-y-4 py-4">
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label htmlFor="starts">Start date</Label>
-            <Input
+            <DateTimePicker
               id="starts"
-              type="datetime-local"
-              value={formData.starts_at?.substring(0, 16) || ''}
-              onChange={(e) =>
-                setFormData({
-                  ...formData,
-                  starts_at: e.target.value ? `${e.target.value}:00Z` : null,
-                })
-              }
+              value={formData.starts_at}
+              onChange={(value) => setFormData({ ...formData, starts_at: value })}
+              placeholder="No start date"
             />
           </div>
           <div className="space-y-2">
             <Label htmlFor="ends">End date</Label>
-            <Input
+            <DateTimePicker
               id="ends"
-              type="datetime-local"
-              value={formData.ends_at?.substring(0, 16) || ''}
-              onChange={(e) =>
-                setFormData({
-                  ...formData,
-                  ends_at: e.target.value ? `${e.target.value}:00Z` : null,
-                })
-              }
+              value={formData.ends_at}
+              onChange={(value) => setFormData({ ...formData, ends_at: value })}
+              placeholder="No end date"
             />
           </div>
         </div>
@@ -939,7 +930,7 @@ export function ProgramWizard({
 
       {/* Display Tab */}
       <TabsContent value="display" className="space-y-4 py-4">
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label htmlFor="color">Display Color</Label>
             <div className="flex gap-2">
@@ -1009,7 +1000,7 @@ export function ProgramWizard({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto overflow-x-hidden">
         <DialogHeader>
           <DialogTitle>{isEditing ? 'Edit Program' : 'Create Loyalty Program'}</DialogTitle>
           <DialogDescription>

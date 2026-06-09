@@ -35,7 +35,7 @@ export function RuleCard({ rule, roles, onEdit, onDelete, onToggle, isToggling }
   return (
     <Card
       className={cn(
-        "transition-all duration-200 hover:shadow-md",
+        "min-w-0 transition-all duration-200 hover:shadow-md",
         !rule.is_active && "opacity-60"
       )}
     >
@@ -48,13 +48,13 @@ export function RuleCard({ rule, roles, onEdit, onDelete, onToggle, isToggling }
             {/* From → To */}
             <div className="flex items-center gap-2 flex-wrap min-w-0">
               <div className="flex flex-col min-w-0">
-                <span className="font-semibold text-sm text-foreground leading-tight">{rule.from_role_code}</span>
-                <span className="text-xs text-muted-foreground leading-tight">{fromRole}</span>
+                <span className="font-semibold text-sm text-foreground leading-tight truncate">{rule.from_role_code}</span>
+                <span className="text-xs text-muted-foreground leading-tight truncate">{fromRole}</span>
               </div>
               <ArrowRight className="w-4 h-4 text-primary shrink-0" />
               <div className="flex flex-col min-w-0">
-                <span className="font-semibold text-sm text-foreground leading-tight">{rule.to_role_code}</span>
-                <span className="text-xs text-muted-foreground leading-tight">{toRole}</span>
+                <span className="font-semibold text-sm text-foreground leading-tight truncate">{rule.to_role_code}</span>
+                <span className="text-xs text-muted-foreground leading-tight truncate">{toRole}</span>
               </div>
             </div>
           </div>

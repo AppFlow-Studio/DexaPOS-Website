@@ -47,7 +47,7 @@ export function PoolCard({ pool, roles, poolCount, onEdit, onDelete, onToggle, i
   return (
     <Card
       className={cn(
-        "transition-all duration-200 hover:shadow-md",
+        "min-w-0 transition-all duration-200 hover:shadow-md",
         !pool.is_active && "opacity-60"
       )}
     >
@@ -95,23 +95,25 @@ export function PoolCard({ pool, roles, poolCount, onEdit, onDelete, onToggle, i
       <CardContent className="space-y-4">
         {/* Method + Source + Interval */}
         <div className="grid grid-cols-3 gap-3">
-          <div className="space-y-1">
+          <div className="space-y-1 min-w-0">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Method</p>
-            <Badge variant="outline" className={cn("text-xs font-medium", method.className)}>
-              {method.label}
+            <Badge variant="outline" className={cn("text-xs font-medium max-w-full", method.className)}>
+              <span className="truncate">{method.label}</span>
             </Badge>
           </div>
-          <div className="space-y-1">
+          <div className="space-y-1 min-w-0">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Source</p>
-            <Badge variant="outline" className={cn("text-xs font-medium", source.className)}>
-              {source.label}
-              {pool.source_percentage < 100 && ` (${pool.source_percentage}%)`}
+            <Badge variant="outline" className={cn("text-xs font-medium max-w-full", source.className)}>
+              <span className="truncate">
+                {source.label}
+                {pool.source_percentage < 100 && ` (${pool.source_percentage}%)`}
+              </span>
             </Badge>
           </div>
-          <div className="space-y-1">
+          <div className="space-y-1 min-w-0">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Interval</p>
-            <Badge variant="outline" className={cn("text-xs font-medium", interval.className)}>
-              {interval.label}
+            <Badge variant="outline" className={cn("text-xs font-medium max-w-full", interval.className)}>
+              <span className="truncate">{interval.label}</span>
             </Badge>
           </div>
         </div>
@@ -128,10 +130,12 @@ export function PoolCard({ pool, roles, poolCount, onEdit, onDelete, onToggle, i
                 <Badge
                   key={code}
                   variant="secondary"
-                  className="text-xs border border-border/60"
+                  className="text-xs border border-border/60 max-w-full"
                 >
-                  {code}
-                  <span className="ml-1 text-muted-foreground font-normal">· {getRoleName(code)}</span>
+                  <span className="truncate">
+                    {code}
+                    <span className="ml-1 text-muted-foreground font-normal">· {getRoleName(code)}</span>
+                  </span>
                 </Badge>
               ))}
             </div>
@@ -144,12 +148,12 @@ export function PoolCard({ pool, roles, poolCount, onEdit, onDelete, onToggle, i
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Distribution</p>
             <div className="rounded-lg border bg-muted/30 divide-y divide-border/50">
               {pool.tip_pool_role_shares.map((share) => (
-                <div key={share.role_code} className="flex items-center justify-between px-3 py-1.5">
-                  <div className="flex items-center gap-1.5 text-sm">
-                    <span className="font-medium text-foreground">{share.role_code}</span>
-                    <span className="text-muted-foreground text-xs">· {getRoleName(share.role_code)}</span>
+                <div key={share.role_code} className="flex items-center justify-between gap-2 px-3 py-1.5">
+                  <div className="flex items-center gap-1.5 text-sm min-w-0">
+                    <span className="font-medium text-foreground shrink-0">{share.role_code}</span>
+                    <span className="text-muted-foreground text-xs truncate">· {getRoleName(share.role_code)}</span>
                   </div>
-                  <span className="text-sm font-semibold tabular-nums text-foreground">
+                  <span className="text-sm font-semibold tabular-nums text-foreground shrink-0">
                     {share.share_percentage !== null
                       ? `${share.share_percentage}%`
                       : share.points_per_hour !== null

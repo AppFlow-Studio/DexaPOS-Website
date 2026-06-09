@@ -83,7 +83,7 @@ function SortableItemWrapper({
         </div>
       )}
 
-      <div className="flex-1">
+      <div className="flex-1 min-w-0">
         <CategoryItemRow
           item={item}
           onClick={() => onItemClick(item.menu_item_id)}

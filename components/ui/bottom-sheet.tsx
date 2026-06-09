@@ -96,9 +96,9 @@ function BottomSheetContent({
     const { level } = React.useContext(BottomSheetContext)
 
     const heightClasses = {
-        auto: "h-auto max-h-[95vh]",
+        auto: "h-auto max-h-[95dvh]",
         full: "h-full",
-        "95": "h-[95vh]",
+        "95": "h-[95dvh]",
     }
 
     return (
@@ -124,7 +124,7 @@ function BottomSheetContent({
             >
                 {/* Drag Handle */}
                 {showDragHandle && (
-                    <div className="flex justify-center pt-3 pb-1">
+                    <div className="flex shrink-0 justify-center pt-3 pb-1">
                         <div className="w-12 h-1.5 rounded-full bg-muted-foreground/30" />
                     </div>
                 )}
@@ -155,7 +155,7 @@ function BottomSheetBody({ className, ...props }: React.ComponentProps<"div">) {
     return (
         <div
             data-slot="bottom-sheet-body"
-            className={cn("flex-1 overflow-y-auto px-6 py-4", className)}
+            className={cn("min-h-0 flex-1 overflow-y-auto px-6 py-4", className)}
             {...props}
         />
     )

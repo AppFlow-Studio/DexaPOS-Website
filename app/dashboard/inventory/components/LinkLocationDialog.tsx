@@ -103,7 +103,7 @@ export function LinkLocationDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-[425px]" elevation="above-sheet">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <MapPin className="h-5 w-5 text-primary" />
@@ -138,7 +138,7 @@ export function LinkLocationDialog({
                   <SelectTrigger>
                     <SelectValue placeholder="Choose a location..." />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="z-[220]">
                     {availableLocations.map((loc) => (
                       <SelectItem key={loc.id} value={loc.id}>
                         {loc.name}

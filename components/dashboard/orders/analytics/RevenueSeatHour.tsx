@@ -2,7 +2,7 @@
 
 import { ChartCard } from './ChartCard'
 import { ChartContainer, ChartTooltip, type ChartConfig } from '@/components/ui/chart'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend, ResponsiveContainer } from 'recharts'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend } from 'recharts'
 import { DollarSign } from 'lucide-react'
 import type { RevPASHByHour } from '@/types/analytics'
 
@@ -46,8 +46,7 @@ export function RevenueSeatHour({ data, isLoading }: RevenueSeatHourProps) {
         <div className="space-y-4">
           {/* Bar Chart */}
           <div className="w-full h-[280px]">
-            <ChartContainer config={chartConfig} className="w-full h-full">
-              <ResponsiveContainer width="100%" height="100%">
+            <ChartContainer config={chartConfig} className="aspect-auto w-full h-full">
                 <BarChart data={chartData} margin={{ left: 0, right: 10, top: 5, bottom: 20 }}>
                   <CartesianGrid vertical={false} strokeDasharray="3 3" />
                   <XAxis
@@ -104,7 +103,6 @@ export function RevenueSeatHour({ data, isLoading }: RevenueSeatHourProps) {
                     radius={[8, 8, 0, 0]}
                   />
                 </BarChart>
-              </ResponsiveContainer>
             </ChartContainer>
           </div>
         </div>

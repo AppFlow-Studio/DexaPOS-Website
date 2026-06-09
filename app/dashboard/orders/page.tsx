@@ -22,7 +22,10 @@ import {
   MapPin,
   Globe,
   RefreshCcwDot,
+  BarChart3,
+  FileText,
 } from "lucide-react";
+import Link from "next/link";
 import { OrdersDataTable } from "@/components/dashboard/orders/OrdersDataTable";
 import {
   Order,
@@ -192,6 +195,17 @@ export default function OrdersPage() {
     };
   }, [ordersList, statsRange]);
 
+  // Group with thousands separators so large revenue amounts stay compact and don't overflow the card.
+  const revenueFormatter = useMemo(
+    () =>
+      new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency: "USD",
+        maximumFractionDigits: 2,
+      }),
+    []
+  );
+
   // Build daily breakdown for sparkline charts based on selected range
   const dailyData = useMemo(() => {
     const days: { date: string; label: string; orders: number; revenue: number; completed: number; pending: number }[] = [];
@@ -240,7 +254,7 @@ export default function OrdersPage() {
   return (
     <main className="space-y-6 animate-in fade-in duration-500">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-semibold tracking-tight">Orders</h1>
@@ -248,6 +262,20 @@ export default function OrdersPage() {
           <p className="text-sm text-muted-foreground">
             View and manage all orders across your locations
           </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" className="flex-1 sm:flex-none" asChild>
+            <Link href="/dashboard/orders/analytics">
+              <BarChart3 className="h-4 w-4" />
+              Analytics
+            </Link>
+          </Button>
+          <Button variant="outline" size="sm" className="flex-1 sm:flex-none" asChild>
+            <Link href="/dashboard/orders/reports">
+              <FileText className="h-4 w-4" />
+              Reports
+            </Link>
+          </Button>
         </div>
       </div>
 
@@ -426,9 +454,11 @@ export default function OrdersPage() {
                   <span className="text-sm font-medium text-muted-foreground">Revenue</span>
                   <DollarSign className="h-4 w-4 text-muted-foreground/40" />
                 </div>
-                <div className="flex items-baseline gap-2">
-                  <span className="text-3xl font-semibold tracking-tight">${stats.revenue.toFixed(2)}</span>
-                  <span className="text-xs text-muted-foreground/60">{rangeLabel}</span>
+                <div className="flex items-baseline gap-2 min-w-0">
+                  <span className="text-3xl font-semibold tracking-tight truncate">
+                    {revenueFormatter.format(stats.revenue)}
+                  </span>
+                  <span className="text-xs text-muted-foreground/60 shrink-0">{rangeLabel}</span>
                 </div>
                 <div className="mt-3 h-12">
                   <ResponsiveContainer width="100%" height="100%">

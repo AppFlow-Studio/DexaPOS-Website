@@ -151,7 +151,7 @@ export function TipOutRuleDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {rule ? "Edit Tip-Out Rule" : "Create Tip-Out Rule"}
@@ -321,8 +321,8 @@ export function TipOutRuleDialog({
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="min-w-0">
               <Label htmlFor="effective-date">Effective Date</Label>
               <Input
                 id="effective-date"
@@ -334,10 +334,10 @@ export function TipOutRuleDialog({
                     handleChange("end_date", null);
                   }
                 }}
-                className="mt-1"
+                className="mt-1 w-full min-w-0"
               />
             </div>
-            <div>
+            <div className="min-w-0">
               <Label htmlFor="end-date">End Date</Label>
               <Input
                 id="end-date"
@@ -347,7 +347,7 @@ export function TipOutRuleDialog({
                 onChange={(e) => {
                   handleChange("end_date", e.target.value || null);
                 }}
-                className="mt-1"
+                className="mt-1 w-full min-w-0"
               />
               <p className="text-xs text-muted-foreground mt-1">Leave blank = no end date</p>
             </div>

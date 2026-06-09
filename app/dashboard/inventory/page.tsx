@@ -116,14 +116,16 @@ function StatCard({
         className
       )}
     >
-      <CardContent className="p-6">
-        <div className="flex items-start justify-between">
-          <div className="space-y-2">
+      <CardContent className="p-4 sm:p-6">
+        <div className="flex items-start justify-between gap-2 sm:gap-3">
+          <div className="space-y-2 min-w-0 flex-1">
             <p className="text-sm font-medium text-muted-foreground">{title}</p>
             {isLoading ? (
               <Skeleton className="h-8 w-16" />
             ) : (
-              <p className="text-3xl font-bold tracking-tight">{value}</p>
+              <p className="text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight tabular-nums break-words">
+                {value}
+              </p>
             )}
             {subtitle && (
               <p className="text-xs text-muted-foreground">{subtitle}</p>
@@ -145,7 +147,10 @@ function StatCard({
             )}
           </div>
           <div
-            className={cn("p-3 rounded-xl", iconClassName || "bg-primary/10")}
+            className={cn(
+              "shrink-0 p-3 rounded-xl",
+              iconClassName || "bg-primary/10"
+            )}
           >
             <Icon
               className={cn(
@@ -1240,7 +1245,10 @@ export default function InventoryPage() {
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
                                 <DropdownMenuItem
-                                  onClick={() => setEditingVendor(vendor)}
+                                  onClick={() => {
+                                    setIsDetailSheetOpen(false);
+                                    setEditingVendor(vendor);
+                                  }}
                                 >
                                   Edit Vendor
                                 </DropdownMenuItem>

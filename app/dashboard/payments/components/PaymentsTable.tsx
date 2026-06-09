@@ -724,7 +724,7 @@ export function PaymentsTable({ data, isLoading }: PaymentsTableProps) {
   });
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 min-w-0">
       {/* Search */}
       <div className="flex items-center gap-2">
         <div className="relative flex-1 max-w-sm">

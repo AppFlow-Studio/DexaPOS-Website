@@ -96,10 +96,10 @@ export function ProgramCard({
 
   return (
     <Card className="overflow-hidden border-l-4" style={{ borderLeftColor: program.display_color }}>
-      <div className="flex items-center justify-between p-4">
-        <div className="flex items-start gap-4 flex-1">
+      <div className="flex items-center justify-between gap-3 p-4">
+        <div className="flex items-start gap-4 flex-1 min-w-0">
           {/* Icon */}
-          <div className="mt-1">{getIcon()}</div>
+          <div className="mt-1 shrink-0">{getIcon()}</div>
 
           {/* Content */}
           <div className="flex-1 min-w-0">
@@ -109,15 +109,15 @@ export function ProgramCard({
                 {getProgramTypeLabel()}
               </Badge>
             </div>
-            <p className="text-sm text-muted-foreground">{getStatsText()}</p>
+            <p className="text-sm text-muted-foreground truncate">{getStatsText()}</p>
             {program.description && (
-              <p className="text-xs text-muted-foreground mt-1">{program.description}</p>
+              <p className="text-xs text-muted-foreground mt-1 truncate">{program.description}</p>
             )}
           </div>
         </div>
 
         {/* Right side: Toggle + Menu */}
-        <div className="flex items-center gap-3 ml-4">
+        <div className="flex items-center gap-3 shrink-0">
           <div className="flex items-center gap-2">
             <Switch
               checked={program.is_active}
@@ -125,7 +125,7 @@ export function ProgramCard({
               disabled={isToggling}
               aria-label="Toggle program"
             />
-            <span className="text-xs font-medium text-muted-foreground">
+            <span className="hidden text-xs font-medium text-muted-foreground sm:inline">
               {program.is_active ? 'Active' : 'Inactive'}
             </span>
           </div>
