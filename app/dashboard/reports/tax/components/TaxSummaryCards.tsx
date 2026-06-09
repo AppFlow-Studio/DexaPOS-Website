@@ -13,6 +13,7 @@ import type { TaxSummary } from "@/app/dashboard/reports/tax/types";
 interface TaxSummaryCardsProps {
   summary: TaxSummary | undefined;
   isLoading: boolean;
+  isError?: boolean;
 }
 
 function fmt(value: number) {
@@ -80,7 +81,7 @@ const CARDS = [
   },
 ];
 
-export function TaxSummaryCards({ summary, isLoading }: TaxSummaryCardsProps) {
+export function TaxSummaryCards({ summary, isLoading, isError }: TaxSummaryCardsProps) {
   if (isLoading) {
     return (
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
@@ -127,9 +128,9 @@ export function TaxSummaryCards({ summary, isLoading }: TaxSummaryCardsProps) {
             <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
               {card.title}
             </p>
-            <p className="text-xl font-bold mt-1">{card.format(s)}</p>
+            <p className="text-xl font-bold mt-1">{isError ? "—" : card.format(s)}</p>
             <p className="text-[11px] text-muted-foreground mt-1">
-              {card.sub(s)}
+              {isError ? "Failed to load" : card.sub(s)}
             </p>
           </CardContent>
         </Card>

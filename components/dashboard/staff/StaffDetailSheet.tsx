@@ -13,7 +13,6 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import {
   Select,
@@ -33,8 +32,6 @@ import {
   Eye,
   EyeOff,
   Mail,
-  Phone,
-  MapPin,
   Lock,
   CheckCircle2,
   UserX,
@@ -50,14 +47,9 @@ import {
   ChevronRight,
   Shield,
   Star,
+  MapPin,
 } from "lucide-react";
 import { CredentialToast } from "@/components/ui/credential-toast";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { LocationAssignmentSheet } from "./LocationAssignmentSheet";
 import {
   useDeactivateStaff,
@@ -85,6 +77,14 @@ interface StaffDetailSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
+
+type StaffDetailPanel =
+  | "profile"
+  | "assignment"
+  | "pos-access"
+  | "dashboard-access"
+  | "locations"
+  | "activity";
 
 export function StaffDetailSheet({
   staff,
@@ -123,6 +123,8 @@ export function StaffDetailSheet({
   const [editedLastName, setEditedLastName] = React.useState("");
   const [editedEmail, setEditedEmail] = React.useState("");
   const [editedPhone, setEditedPhone] = React.useState("");
+  const [activePanel, setActivePanel] =
+    React.useState<StaffDetailPanel>("profile");
 
   // Location management state
   const [showAddLocation, setShowAddLocation] = React.useState(false);
@@ -253,6 +255,7 @@ export function StaffDetailSheet({
     }
     setIsProfileEditMode(false);
     setShowAddLocation(false);
+    setActivePanel("profile");
   }, [staff?.member_id]);
 
   // Ã¢â€â‚¬Ã¢â€â‚¬ Location management derived values Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
@@ -507,33 +510,877 @@ export function StaffDetailSheet({
     });
   };
 
+  const panelItems: Array<{
+    id: StaffDetailPanel;
+    label: string;
+    description: string;
+    icon: React.ComponentType<{ className?: string }>;
+  }> = [
+    {
+      id: "profile",
+      label: "Profile",
+      description: "Name, email, phone",
+      icon: Mail,
+    },
+    {
+      id: "assignment",
+      label: "Assignment",
+      description: "Role and primary location",
+      icon: Shield,
+    },
+    {
+      id: "pos-access",
+      label: "POS Access",
+      description: "PIN and staff status",
+      icon: KeyRound,
+    },
+    {
+      id: "dashboard-access",
+      label: staff.is_clerk_user ? "Dashboard Access" : "Upgrade Access",
+      description: staff.is_clerk_user
+        ? "Password and account access"
+        : "Promote this staff member",
+      icon: staff.is_clerk_user ? Lock : ArrowUpCircle,
+    },
+    {
+      id: "locations",
+      label: "Locations",
+      description: "Assignments and roles",
+      icon: MapPin,
+    },
+    {
+      id: "activity",
+      label: "Activity",
+      description: "Recent changes",
+      icon: Activity,
+    },
+  ];
+
+  const profilePanel = (
+    <section className="rounded-3xl border bg-card p-6 shadow-sm">
+      <SectionHeader
+        icon={Mail}
+        title="Personal & Contact Info"
+        description="Core profile details shown to the merchant team."
+        action={
+          <Button
+            variant={isProfileEditMode ? "secondary" : "outline"}
+            className="gap-2"
+            onClick={() =>
+              isProfileEditMode
+                ? handleCancelProfileEdit()
+                : setIsProfileEditMode(true)
+            }
+          >
+            {isProfileEditMode ? (
+              <>
+                <X className="h-4 w-4" />
+                Cancel
+              </>
+            ) : (
+              <>
+                <Edit className="h-4 w-4" />
+                Edit
+              </>
+            )}
+          </Button>
+        }
+      />
+
+      {isProfileEditMode ? (
+        <div className="space-y-4 rounded-2xl border bg-background/60 p-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
+                First Name
+              </Label>
+              <Input
+                value={editedFirstName}
+                onChange={(e) => setEditedFirstName(e.target.value)}
+                className="h-10"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
+                Last Name
+              </Label>
+              <Input
+                value={editedLastName}
+                onChange={(e) => setEditedLastName(e.target.value)}
+                className="h-10"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
+                Email
+              </Label>
+              <Input
+                type="email"
+                value={editedEmail}
+                onChange={(e) => setEditedEmail(e.target.value)}
+                className="h-10"
+                placeholder="user@example.com"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
+                Phone
+              </Label>
+              <PhoneInput value={editedPhone} onChange={setEditedPhone} />
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <Button
+              className="gap-2"
+              onClick={handleSaveProfile}
+              disabled={updateProfile.isPending}
+            >
+              {updateProfile.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Save className="h-4 w-4" />
+              )}
+              Save Profile
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleCancelProfileEdit}
+              disabled={updateProfile.isPending}
+            >
+              Cancel
+            </Button>
+          </div>
+
+          {staff.is_clerk_user && (
+            <p className="text-xs text-muted-foreground">
+              Name changes will sync to the authentication provider.
+            </p>
+          )}
+        </div>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2">
+          <InfoRow label="First Name" value={displayStaff.first_name} />
+          <InfoRow label="Last Name" value={displayStaff.last_name} />
+          <InfoRow label="Email" value={displayStaff.email || "No email"} />
+          <InfoRow
+            label="Phone"
+            value={
+              displayStaff.phone
+                ? formatPhoneForDisplay(displayStaff.phone)
+                : "No phone"
+            }
+          />
+        </div>
+      )}
+    </section>
+  );
+
+  const assignmentPanel = (
+    <section className="rounded-3xl border bg-card p-6 shadow-sm">
+      <div className="mb-5 flex items-center justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+            Permissions & Assignment
+          </h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Merchant role, employment details, and primary-location settings.
+          </p>
+        </div>
+        {primaryLocation && !isEditMode && (
+          <Button
+            variant="outline"
+            className="gap-2"
+            onClick={() => setIsEditMode(true)}
+          >
+            <Edit className="h-4 w-4" />
+            Edit Assignment
+          </Button>
+        )}
+      </div>
+
+      {primaryLocation ? (
+        <div className="space-y-5">
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
+                Role
+              </Label>
+              {isEditMode ? (
+                <Select value={editedRole} onValueChange={setEditedRole}>
+                  <SelectTrigger className="h-10">
+                    <SelectValue placeholder="Select role">
+                      {editedRole
+                        ? formatRoleLabel(
+                            roles.find((r) => r.code === editedRole)?.name,
+                            editedRole
+                          )
+                        : "Select role"}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {roles
+                      .filter((r) => r.level <= currentUserLevel)
+                      .map((role) => (
+                        <SelectItem key={role.code} value={role.code}>
+                          {role.name}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <div className="rounded-2xl border bg-background/50 px-4 py-3 text-sm font-medium">
+                  {formatRoleLabel(
+                    primaryLocation.role_name,
+                    primaryLocation.role_code
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
+                Primary Location
+              </Label>
+              <div className="rounded-2xl border bg-background/50 px-4 py-3 text-sm font-medium">
+                {primaryLocation.location_name}
+              </div>
+            </div>
+
+            {!staff.is_clerk_user && (
+              <div className="space-y-2">
+                <Label className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
+                  Employment Type
+                </Label>
+                {isEditMode ? (
+                  <Select
+                    value={editedEmploymentType || undefined}
+                    onValueChange={(value) =>
+                      setEditedEmploymentType(value as EmploymentType)
+                    }
+                  >
+                    <SelectTrigger className="h-10">
+                      <SelectValue placeholder="Select type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="full-time">Full-time</SelectItem>
+                      <SelectItem value="part-time">Part-time</SelectItem>
+                      <SelectItem value="contractor">Contractor</SelectItem>
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <div className="rounded-2xl border bg-background/50 px-4 py-3 text-sm">
+                    {primaryLocation.employment_type ? (
+                      <Badge variant="outline" className="capitalize">
+                        {primaryLocation.employment_type.replace("-", " ")}
+                      </Badge>
+                    ) : (
+                      <span className="text-muted-foreground">Not set</span>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {!staff.is_clerk_user && (
+              <div className="space-y-2">
+                <Label className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
+                  Hourly Rate
+                </Label>
+                {isEditMode ? (
+                  <div className="relative">
+                    <DollarSign className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      placeholder="0.00"
+                      value={editedHourlyRate}
+                      onChange={(e) => setEditedHourlyRate(e.target.value)}
+                      className="h-10 pl-9"
+                    />
+                  </div>
+                ) : (
+                  <div className="rounded-2xl border bg-background/50 px-4 py-3 text-sm">
+                    {primaryLocation.hourly_rate !== null &&
+                    primaryLocation.hourly_rate !== undefined ? (
+                      `$${primaryLocation.hourly_rate.toFixed(2)}/hour`
+                    ) : (
+                      <span className="text-muted-foreground">Not set</span>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {isEditMode && (
+            <div className="flex flex-wrap gap-2">
+              <Button
+                className="gap-2"
+                onClick={handleSaveChanges}
+                disabled={updateAssignment.isPending}
+              >
+                {updateAssignment.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4" />
+                )}
+                Save Changes
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handleCancelEdit}
+                disabled={updateAssignment.isPending}
+              >
+                Cancel
+              </Button>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-dashed p-6 text-sm text-muted-foreground">
+          No primary location is assigned to this staff member yet.
+        </div>
+      )}
+    </section>
+  );
+
+  const posAccessPanel = (
+    <section className="rounded-3xl border bg-card p-6 shadow-sm">
+      <SectionHeader
+        icon={KeyRound}
+        title="Employee Access Key"
+        description="Manage PIN-based sign in for the POS."
+      />
+
+      <div className="space-y-4">
+        <StaffPinField
+          memberId={displayStaff?.member_id ?? ""}
+          locationId={primaryLocation?.location_id ?? ""}
+          locationName={primaryLocation?.location_name}
+          hasPin={Boolean(primaryLocation?.has_pin)}
+          canReveal={canRevealPin}
+          canManage={canManageStaff}
+          onGenerate={handleResetPIN}
+          isGenerating={resetPIN.isPending}
+          disabled={!primaryLocation}
+          buttonLabel={
+            primaryLocation?.has_pin ? "Generate New PIN" : "Generate PIN"
+          }
+        />
+
+        {primaryLocation && (
+          <div className="space-y-2">
+            <button
+              type="button"
+              className="flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+              onClick={() => {
+                setShowCustomPin((v) => !v);
+                setCustomPinInput("");
+              }}
+            >
+              <KeyRound className="h-3 w-3" />
+              {showCustomPin ? "Cancel custom PIN" : "Set custom PIN"}
+            </button>
+            {showCustomPin && (
+              <div className="flex items-center gap-2">
+                <Input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="\d{4,6}"
+                  maxLength={6}
+                  placeholder="4-6 digit PIN"
+                  value={customPinInput}
+                  onChange={(e) =>
+                    setCustomPinInput(e.target.value.replace(/\D/g, ""))
+                  }
+                  className="h-8 w-36 font-mono text-sm"
+                />
+                <Button
+                  size="sm"
+                  onClick={handleSetCustomPin}
+                  disabled={resetPIN.isPending || customPinInput.length < 4}
+                >
+                  Set PIN
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
+
+        <Separator />
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <StatusPill
+            label="PIN Status"
+            active={hasPin}
+            activeLabel="PIN set"
+            inactiveLabel="No PIN"
+          />
+          <StatusPill
+            label="Overall Status"
+            active={staff.overall_is_active}
+            activeLabel="Active"
+            inactiveLabel="Inactive"
+          />
+        </div>
+      </div>
+    </section>
+  );
+
+  const dashboardAccessPanel = (
+    <div className="space-y-6">
+      {staff.is_clerk_user ? (
+        <>
+          <section className="rounded-3xl border bg-card p-6 shadow-sm">
+            <SectionHeader
+              icon={Lock}
+              title="Dashboard Access"
+              description="Reset or replace the password used for web login."
+            />
+            <div className="space-y-4">
+              {generatedPassword && (
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">
+                    New Password
+                  </Label>
+                  <div className="relative">
+                    <Input
+                      readOnly
+                      value={
+                        showPasswordValue
+                          ? generatedPassword
+                          : "•".repeat(generatedPassword.length)
+                      }
+                      className="pr-10 font-mono text-sm"
+                    />
+                    <button
+                      type="button"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      onClick={() => setShowPasswordValue((v) => !v)}
+                    >
+                      {showPasswordValue ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+              )}
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => handleResetPassword()}
+                  disabled={resetPassword.isPending}
+                >
+                  <Lock className="mr-1.5 h-3.5 w-3.5" />
+                  {resetPassword.isPending ? "Resetting..." : "Reset Password"}
+                </Button>
+                <button
+                  type="button"
+                  className="flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+                  onClick={() => {
+                    setShowCustomPassword((v) => !v);
+                    setCustomPasswordInput("");
+                  }}
+                >
+                  {showCustomPassword ? "Cancel" : "Set custom password"}
+                </button>
+              </div>
+              {showCustomPassword && (
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="text"
+                    placeholder="Min 8 characters"
+                    value={customPasswordInput}
+                    onChange={(e) => setCustomPasswordInput(e.target.value)}
+                    className="h-8 font-mono text-sm"
+                  />
+                  <Button
+                    size="sm"
+                    onClick={() => handleResetPassword(customPasswordInput)}
+                    disabled={
+                      resetPassword.isPending || customPasswordInput.length < 8
+                    }
+                  >
+                    Set
+                  </Button>
+                </div>
+              )}
+            </div>
+          </section>
+
+          {staff.user_id && (
+            <section className="rounded-3xl border border-orange-200 bg-orange-50/40 p-6 shadow-sm dark:bg-orange-950/10">
+              <SectionHeader
+                icon={Shield}
+                title="Demote To POS-Only"
+                description="Revoke dashboard access while keeping POS PIN access."
+              />
+
+              <Button
+                variant="outline"
+                className="w-full gap-2 border-orange-300 text-orange-700 hover:bg-orange-100 dark:hover:bg-orange-950/20"
+                onClick={() => {
+                  if (
+                    confirm(
+                      `Demote ${displayStaff.display_name} to POS-only? This will revoke their dashboard access.`
+                    )
+                  ) {
+                    demoteClerkToPOS.mutate(staff.member_id);
+                  }
+                }}
+                disabled={demoteClerkToPOS.isPending}
+              >
+                {demoteClerkToPOS.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Shield className="h-4 w-4" />
+                )}
+                Demote Account
+              </Button>
+            </section>
+          )}
+        </>
+      ) : (
+        <section className="rounded-3xl border bg-card p-6 shadow-sm">
+          <SectionHeader
+            icon={ArrowUpCircle}
+            title="Upgrade To Dashboard User"
+            description="Grant this team member access to the web dashboard."
+          />
+
+          {!showUpgradeDialog ? (
+            <Button
+              variant="outline"
+              className="w-full gap-2"
+              onClick={() => setShowUpgradeDialog(true)}
+              disabled={!primaryLocation}
+            >
+              <ArrowUpCircle className="h-4 w-4" />
+              Upgrade Account
+            </Button>
+          ) : (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label
+                  htmlFor="upgrade-email"
+                  className="text-xs uppercase tracking-[0.14em] text-muted-foreground"
+                >
+                  Email Address
+                </Label>
+                <Input
+                  id="upgrade-email"
+                  type="email"
+                  placeholder="user@example.com"
+                  value={upgradeEmail}
+                  onChange={(e) => setUpgradeEmail(e.target.value)}
+                  className="h-10"
+                />
+                <p className="text-xs text-muted-foreground">
+                  A temporary password will be generated and displayed.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  className="gap-2"
+                  onClick={handleUpgradeToClerk}
+                  disabled={upgradePOSToClerk.isPending || !upgradeEmail}
+                >
+                  {upgradePOSToClerk.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <ArrowUpCircle className="h-4 w-4" />
+                  )}
+                  Confirm Upgrade
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={handleCancelUpgrade}
+                  disabled={upgradePOSToClerk.isPending}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          )}
+        </section>
+      )}
+    </div>
+  );
+
+  const locationsPanel = (
+    <section className="rounded-3xl border bg-card p-6 shadow-sm">
+      <div className="mb-5 flex items-center justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+            Positions & Location Assignments
+          </h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Open a location assignment to manage role, status, and PIN.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Badge variant="outline">{activeLocations.length} active</Badge>
+          {availableLocationsToAdd.length > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              onClick={() => {
+                setShowAddLocation(!showAddLocation);
+                if (primaryLocation) {
+                  setAddLocationRole(primaryLocation.role_code);
+                }
+              }}
+            >
+              {showAddLocation ? "Hide Add Form" : "Add Location"}
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {showAddLocation && (
+        <div className="mb-4 rounded-2xl border bg-background/60 p-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
+                Location
+              </Label>
+              <Select value={addLocationId} onValueChange={setAddLocationId}>
+                <SelectTrigger className="h-10">
+                  <SelectValue placeholder="Select location" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableLocationsToAdd.map((loc) => (
+                    <SelectItem key={loc.id} value={loc.id}>
+                      {loc.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
+                Role
+              </Label>
+              <Select value={addLocationRole} onValueChange={setAddLocationRole}>
+                <SelectTrigger className="h-10">
+                  <SelectValue placeholder="Select role" />
+                </SelectTrigger>
+                <SelectContent>
+                  {roles
+                    .filter((r) => r.level <= currentUserLevel)
+                    .map((r) => (
+                      <SelectItem key={r.code} value={r.code}>
+                        {r.name}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Button
+              onClick={handleAddToLocation}
+              disabled={
+                addToLocation.isPending || !addLocationId || !addLocationRole
+              }
+            >
+              {addToLocation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : null}
+              Add To Location
+            </Button>
+            <Button variant="outline" onClick={() => setShowAddLocation(false)}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      )}
+
+      <div className="space-y-3">
+        {displayStaff.location_assignments.map((assignment) => (
+          <button
+            key={assignment.location_id + assignment.role_code}
+            type="button"
+            className={cn(
+              "w-full rounded-2xl border bg-background/70 p-4 text-left transition-colors hover:bg-muted/40",
+              !assignment.is_active && "opacity-70"
+            )}
+            onClick={() => {
+              setSelectedAssignmentLocationId(assignment.location_id);
+              setIsLocationSheetOpen(true);
+            }}
+          >
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="font-medium">{assignment.location_name}</p>
+                  {assignment.is_primary && <Badge>Primary</Badge>}
+                  {!assignment.is_active && (
+                    <Badge variant="outline">Inactive</Badge>
+                  )}
+                  {assignment.has_pin && (
+                    <Badge variant="secondary" className="gap-1">
+                      <Lock className="h-3 w-3" />
+                      PIN
+                    </Badge>
+                  )}
+                </div>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {formatRoleLabel(assignment.role_name, assignment.role_code)}
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {assignment.is_active && !assignment.is_primary && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 gap-1 px-2"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleSetPrimary(assignment.location_id);
+                    }}
+                    disabled={setPrimary.isPending}
+                    title="Set as primary location"
+                  >
+                    {setPrimary.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Star className="h-4 w-4" />
+                    )}
+                    <span className="hidden sm:inline">Set primary</span>
+                  </Button>
+                )}
+                {assignment.is_active && !assignment.is_primary && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 px-2 text-destructive hover:text-destructive"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleRemoveFromLocation(assignment.location_id);
+                    }}
+                    disabled={removeFromLocation.isPending}
+                    title="Remove from location"
+                  >
+                    <UserX className="h-4 w-4" />
+                  </Button>
+                )}
+                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+              </div>
+            </div>
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <InfoRow
+                label="Role"
+                value={formatRoleLabel(
+                  assignment.role_name,
+                  assignment.role_code
+                )}
+              />
+              <InfoRow
+                label="Employment Type"
+                value={assignment.employment_type || "-"}
+              />
+              <InfoRow
+                label="Hourly Rate"
+                value={
+                  assignment.hourly_rate !== null &&
+                  assignment.hourly_rate !== undefined
+                    ? `$${Number(assignment.hourly_rate).toFixed(2)}`
+                    : "-"
+                }
+              />
+              <InfoRow
+                label="Assigned At"
+                value={
+                  assignment.assigned_at
+                    ? new Date(assignment.assigned_at).toLocaleString("en-US", {
+                        month: "long",
+                        day: "numeric",
+                        year: "numeric",
+                        hour: "numeric",
+                        minute: "2-digit",
+                        hour12: true,
+                      })
+                    : "-"
+                }
+              />
+            </div>
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+
+  const activityPanel = (
+    <section className="rounded-3xl border bg-card shadow-sm">
+      <div className="border-b px-6 py-5">
+        <SectionHeader
+          icon={Activity}
+          title="Activity Log"
+          description="Recent actions for this staff member."
+          className="mb-0"
+        />
+      </div>
+      <div className="min-h-[420px] bg-muted/5">
+        <StaffActivityLog
+          staffProfileId={displayStaff.staff_profile_id}
+          userId={displayStaff.user_id}
+        />
+      </div>
+    </section>
+  );
+
+  const activePanelContent: Record<StaffDetailPanel, React.ReactNode> = {
+    profile: profilePanel,
+    assignment: assignmentPanel,
+    "pos-access": posAccessPanel,
+    "dashboard-access": dashboardAccessPanel,
+    locations: locationsPanel,
+    activity: activityPanel,
+  };
+
 
   return (
     <BottomSheet open={open} onOpenChange={onOpenChange}>
       <BottomSheetContent className="mx-auto w-full max-w-6xl" height="95">
         <BottomSheetHeader className="flex flex-col gap-2">
-          <BottomSheetTitle>Staff details</BottomSheetTitle>
+          <BottomSheetTitle>
+            {displayStaff.first_name} {displayStaff.last_name}
+          </BottomSheetTitle>
           <BottomSheetDescription>
-            View and manage this team member's access, locations, and POS
-            settings.
+            Manage profile, assignment, access, and activity from the merchant
+            dashboard.
           </BottomSheetDescription>
         </BottomSheetHeader>
-        <BottomSheetBody className="flex-1 overflow-x-hidden overflow-y-auto">
+        <BottomSheetBody className="flex-1 overflow-y-auto">
           <div className="space-y-6 p-1">
-            <section className="rounded-2xl border bg-card p-5">
-              <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                <div className="flex min-w-0 items-start gap-4">
-                  <Avatar className="h-16 w-16 shrink-0">
-                    <AvatarImage
-                      src={displayStaff.avatar_url || undefined}
-                      alt={displayStaff.display_name}
-                    />
-                    <AvatarFallback>{initials}</AvatarFallback>
-                  </Avatar>
+            <section className="rounded-[28px] border bg-gradient-to-br from-slate-50 via-white to-slate-50/70 p-6 shadow-sm">
+              <div className="flex items-start gap-4">
+                <Avatar className="h-20 w-20 border border-slate-200 shadow-sm">
+                  <AvatarImage
+                    src={displayStaff.avatar_url || undefined}
+                    alt={displayStaff.display_name}
+                  />
+                  <AvatarFallback className="bg-slate-100 text-lg font-semibold text-slate-700">
+                    {initials}
+                  </AvatarFallback>
+                </Avatar>
 
-                  <div className="min-w-0 space-y-2">
+                <div className="min-w-0 flex-1 space-y-3">
+                  <div className="space-y-2">
                     <div className="flex flex-wrap items-center gap-2">
-                      <h2 className="min-w-0 break-words text-xl font-semibold">
+                      <h2 className="text-2xl font-semibold tracking-tight text-slate-950">
                         {displayStaff.first_name} {displayStaff.last_name}
                       </h2>
                       {staff.is_clerk_user ? (
@@ -558,841 +1405,67 @@ export function StaffDetailSheet({
                         {staff.overall_is_active ? "Active" : "Inactive"}
                       </Badge>
                     </div>
-
-                    <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm text-muted-foreground">
-                      <div className="flex min-w-0 items-center gap-2">
-                        <Mail className="h-4 w-4 shrink-0" />
-                        <span className="min-w-0 break-all">{displayStaff.email || "No email"}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Phone className="h-4 w-4 shrink-0" />
-                        <span>{displayStaff.phone ? formatPhoneForDisplay(displayStaff.phone) : "No phone"}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <MapPin className="h-4 w-4 shrink-0" />
-                        <span>{displayStaff.total_locations} assigned location(s)</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex flex-col gap-3 sm:flex-row">
-                  <Button
-                    variant={isProfileEditMode ? "secondary" : "outline"}
-                    className="gap-2"
-                    onClick={() =>
-                      isProfileEditMode
-                        ? handleCancelProfileEdit()
-                        : setIsProfileEditMode(true)
-                    }
-                  >
-                    {isProfileEditMode ? (
-                      <>
-                        <X className="h-4 w-4" />
-                        Cancel Editing
-                      </>
-                    ) : (
-                      <>
-                        <Edit className="h-4 w-4" />
-                        Edit Profile
-                      </>
-                    )}
-                  </Button>
-
-                  <div className="flex items-center gap-3 rounded-xl border px-4 py-3">
-                    <div className="space-y-1">
-                      <p className="text-sm font-medium">Status</p>
-                      <p className="text-xs text-muted-foreground">
-                        Toggle staff access for the primary location.
-                      </p>
-                    </div>
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          {/* span needed so Tooltip works on a disabled element */}
-                          <span className="ml-auto">
-                            <Switch
-                              checked={staff.overall_is_active}
-                              onCheckedChange={handleStatusToggle}
-                              disabled={
-                                !primaryLocation ||
-                                !canManageStaff ||
-                                deactivateStaff.isPending ||
-                                reactivateStaff.isPending
-                              }
-                            />
-                          </span>
-                        </TooltipTrigger>
-                        {!canManageStaff && (
-                          <TooltipContent side="left">
-                            You don&apos;t have permission to manage staff
-                          </TooltipContent>
-                        )}
-                      </Tooltip>
-                    </TooltipProvider>
+                    <p className="text-sm text-muted-foreground">
+                      Staff profile, access controls, and location-level
+                      permissions.
+                    </p>
                   </div>
                 </div>
               </div>
-
-              {isProfileEditMode && (
-                <div className="mt-5 rounded-2xl border bg-background/60 p-4">
-                  <div className="mb-4">
-                    <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                      Edit Profile
-                    </h3>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      Update profile information without changing assignment or
-                      access details.
-                    </p>
-                  </div>
-
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
-                        First Name
-                      </Label>
-                      <Input
-                        value={editedFirstName}
-                        onChange={(e) => setEditedFirstName(e.target.value)}
-                        className="h-10"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
-                        Last Name
-                      </Label>
-                      <Input
-                        value={editedLastName}
-                        onChange={(e) => setEditedLastName(e.target.value)}
-                        className="h-10"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
-                        Email
-                      </Label>
-                      <Input
-                        type="email"
-                        value={editedEmail}
-                        onChange={(e) => setEditedEmail(e.target.value)}
-                        className="h-10"
-                        placeholder="user@example.com"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
-                        Phone
-                      </Label>
-                      <PhoneInput
-                        value={editedPhone}
-                        onChange={setEditedPhone}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <Button
-                      className="gap-2"
-                      onClick={handleSaveProfile}
-                      disabled={updateProfile.isPending}
-                    >
-                      {updateProfile.isPending ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Save className="h-4 w-4" />
-                      )}
-                      Save Profile
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={handleCancelProfileEdit}
-                      disabled={updateProfile.isPending}
-                    >
-                      Cancel
-                    </Button>
-                  </div>
-
-                  {staff.is_clerk_user && (
-                    <p className="mt-3 text-xs text-muted-foreground">
-                      Name changes will sync to the authentication provider.
-                    </p>
-                  )}
-                </div>
-              )}
             </section>
-            <div className="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
-              <section className="min-w-0 rounded-2xl border bg-card p-5">
-                <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                      Primary Assignment
-                    </h3>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      Merchant role, employment, and primary-location settings.
+
+            <div className="grid gap-6 xl:grid-cols-[260px_minmax(0,1fr)]">
+              <aside className="space-y-4 xl:sticky xl:top-0 xl:self-start">
+                <div className="rounded-3xl border bg-card p-3 shadow-sm">
+                  <div className="mb-3 rounded-2xl border bg-background/60 p-4">
+                    <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
+                      Staff Overview
                     </p>
-                  </div>
-                  {primaryLocation && !isEditMode && (
-                    <Button
-                      variant="outline"
-                      className="shrink-0 gap-2"
-                      onClick={() => setIsEditMode(true)}
-                    >
-                      <Edit className="h-4 w-4" />
-                      Edit Assignment
-                    </Button>
-                  )}
-                </div>
-
-                {primaryLocation ? (
-                  <div className="space-y-5">
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <div className="space-y-2">
-                        <Label className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
-                          Role
-                        </Label>
-                        {isEditMode ? (
-                          <Select value={editedRole} onValueChange={setEditedRole}>
-                            <SelectTrigger className="h-10">
-                              <SelectValue placeholder="Select role">
-                                {editedRole
-                                  ? formatRoleLabel(
-                                      roles.find((r) => r.code === editedRole)?.name,
-                                      editedRole
-                                    )
-                                  : "Select role"}
-                              </SelectValue>
-                            </SelectTrigger>
-                            <SelectContent>
-                              {roles
-                                .filter((r) => r.level <= currentUserLevel)
-                                .map((role) => (
-                                  <SelectItem key={role.code} value={role.code}>
-                                    {role.name}
-                                  </SelectItem>
-                                ))}
-                            </SelectContent>
-                          </Select>
-                        ) : (
-                          <div className="rounded-xl border bg-background/50 px-4 py-3">
-                            <div className="text-sm font-medium">
-                              {formatRoleLabel(
-                                primaryLocation.role_name,
-                                primaryLocation.role_code
-                              )}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
+                    <div className="mt-3 space-y-3 text-sm">
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
                           Primary Location
-                        </Label>
-                        <div className="rounded-xl border bg-background/50 px-4 py-3">
-                          <div className="flex items-center gap-2 text-sm font-medium">
-                            <MapPin className="h-4 w-4 text-muted-foreground" />
-                            {primaryLocation.location_name}
-                          </div>
-                        </div>
+                        </p>
+                        <p className="mt-1 font-medium">
+                          {primaryLocation?.location_name || "Not assigned"}
+                        </p>
                       </div>
-
-                      {!staff.is_clerk_user && (
-                        <div className="space-y-2">
-                          <Label className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
-                            Employment Type
-                          </Label>
-                          {isEditMode ? (
-                            <Select
-                              value={editedEmploymentType || undefined}
-                              onValueChange={(value) =>
-                                setEditedEmploymentType(value as EmploymentType)
-                              }
-                            >
-                              <SelectTrigger className="h-10">
-                                <SelectValue placeholder="Select type" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="full-time">Full-time</SelectItem>
-                                <SelectItem value="part-time">Part-time</SelectItem>
-                                <SelectItem value="contractor">Contractor</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          ) : (
-                            <div className="rounded-xl border bg-background/50 px-4 py-3 text-sm">
-                              {primaryLocation.employment_type ? (
-                                <Badge variant="outline" className="capitalize">
-                                  {primaryLocation.employment_type.replace("-", " ")}
-                                </Badge>
-                              ) : (
-                                <span className="text-muted-foreground">Not set</span>
-                              )}
-                            </div>
-                          )}
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
+                            Active
+                          </p>
+                          <p className="mt-1 font-medium">{activeLocations.length}</p>
                         </div>
-                      )}
-
-                      {!staff.is_clerk_user && (
-                        <div className="space-y-2">
-                          <Label className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
-                            Hourly Rate
-                          </Label>
-                          {isEditMode ? (
-                            <div className="relative">
-                              <DollarSign className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                              <Input
-                                type="number"
-                                step="0.01"
-                                min="0"
-                                placeholder="0.00"
-                                value={editedHourlyRate}
-                                onChange={(e) => setEditedHourlyRate(e.target.value)}
-                                className="h-10 pl-9"
-                              />
-                            </div>
-                          ) : (
-                            <div className="rounded-xl border bg-background/50 px-4 py-3 text-sm">
-                              {primaryLocation.hourly_rate !== null &&
-                              primaryLocation.hourly_rate !== undefined ? (
-                                `$${primaryLocation.hourly_rate.toFixed(2)}/hour`
-                              ) : (
-                                <span className="text-muted-foreground">Not set</span>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-
-                    {isEditMode && (
-                      <div className="flex flex-wrap gap-2">
-                        <Button
-                          className="gap-2"
-                          onClick={handleSaveChanges}
-                          disabled={updateAssignment.isPending}
-                        >
-                          {updateAssignment.isPending ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <Save className="h-4 w-4" />
-                          )}
-                          Save Changes
-                        </Button>
-                        <Button
-                          variant="outline"
-                          onClick={handleCancelEdit}
-                          disabled={updateAssignment.isPending}
-                        >
-                          Cancel
-                        </Button>
-                      </div>
-                    )}
-
-                  </div>
-                ) : (
-                  <div className="rounded-2xl border border-dashed p-6 text-sm text-muted-foreground">
-                    No primary location is assigned to this staff member yet.
-                  </div>
-                )}
-              </section>
-
-              <div className="min-w-0 space-y-6">
-                <section className="rounded-2xl border bg-card p-5">
-                  <div className="mb-4 flex items-start gap-2">
-                    <KeyRound className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-                    <div className="min-w-0">
-                      <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                        POS Access
-                      </h3>
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        PIN-based login at assigned locations.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="space-y-4">
-                    <StaffPinField
-                      memberId={displayStaff?.member_id ?? ""}
-                      locationId={primaryLocation?.location_id ?? ""}
-                      locationName={primaryLocation?.location_name}
-                      hasPin={Boolean(primaryLocation?.has_pin)}
-                      canReveal={canRevealPin}
-                      canManage={canManageStaff}
-                      onGenerate={handleResetPIN}
-                      isGenerating={resetPIN.isPending}
-                      disabled={!primaryLocation}
-                      buttonLabel={
-                        primaryLocation?.has_pin ? "Generate New PIN" : "Generate PIN"
-                      }
-                    />
-
-                    {/* Custom PIN input */}
-                    {primaryLocation && (
-                      <div className="space-y-2">
-                        <button
-                          type="button"
-                          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                          onClick={() => { setShowCustomPin((v) => !v); setCustomPinInput(""); }}
-                        >
-                          <KeyRound className="h-3 w-3" />
-                          {showCustomPin ? "Cancel custom PIN" : "Set custom PIN"}
-                        </button>
-                        {showCustomPin && (
-                          <div className="flex items-center gap-2">
-                            <Input
-                              type="text"
-                              inputMode="numeric"
-                              pattern="\d{4,6}"
-                              maxLength={6}
-                              placeholder="4–6 digit PIN"
-                              value={customPinInput}
-                              onChange={(e) => setCustomPinInput(e.target.value.replace(/\D/g, ""))}
-                              className="h-8 w-36 font-mono text-sm"
-                            />
-                            <Button
-                              size="sm"
-                              onClick={handleSetCustomPin}
-                              disabled={resetPIN.isPending || customPinInput.length < 4}
-                            >
-                              Set PIN
-                            </Button>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    <Separator />
-
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <StatusPill
-                        label="PIN Status"
-                        active={hasPin}
-                        activeLabel="PIN set"
-                        inactiveLabel="No PIN"
-                      />
-                      <StatusPill
-                        label="Overall Status"
-                        active={staff.overall_is_active}
-                        activeLabel="Active"
-                        inactiveLabel="Inactive"
-                      />
-                    </div>
-                  </div>
-                </section>
-
-                {/* Dashboard Password — Clerk users only */}
-                {staff.is_clerk_user && (
-                  <section className="rounded-2xl border bg-card p-5">
-                    <div className="mb-4">
-                      <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                        Dashboard Password
-                      </h3>
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        Reset the password used to log in to the web dashboard.
-                      </p>
-                    </div>
-                    <div className="space-y-4">
-                      {generatedPassword && (
-                        <div className="space-y-1">
-                          <Label className="text-xs text-muted-foreground">New Password</Label>
-                          <div className="relative">
-                            <Input
-                              readOnly
-                              value={showPasswordValue ? generatedPassword : "•".repeat(generatedPassword.length)}
-                              className="font-mono text-sm pr-10"
-                            />
-                            <button
-                              type="button"
-                              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                              onClick={() => setShowPasswordValue((v) => !v)}
-                            >
-                              {showPasswordValue ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleResetPassword()}
-                          disabled={resetPassword.isPending}
-                        >
-                          <Lock className="h-3.5 w-3.5 mr-1.5" />
-                          {resetPassword.isPending ? "Resetting…" : "Reset Password"}
-                        </Button>
-                        <button
-                          type="button"
-                          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                          onClick={() => { setShowCustomPassword((v) => !v); setCustomPasswordInput(""); }}
-                        >
-                          {showCustomPassword ? "Cancel" : "Set custom password"}
-                        </button>
-                      </div>
-                      {showCustomPassword && (
-                        <div className="flex items-center gap-2">
-                          <Input
-                            type="text"
-                            placeholder="Min 8 characters"
-                            value={customPasswordInput}
-                            onChange={(e) => setCustomPasswordInput(e.target.value)}
-                            className="h-8 font-mono text-sm"
-                          />
-                          <Button
-                            size="sm"
-                            onClick={() => handleResetPassword(customPasswordInput)}
-                            disabled={resetPassword.isPending || customPasswordInput.length < 8}
-                          >
-                            Set
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                  </section>
-                )}
-
-                {!staff.is_clerk_user && (
-                  <section className="rounded-2xl border bg-card p-5">
-                    <div className="mb-4">
-                      <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                        Upgrade To Dashboard User
-                      </h3>
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        Grant this staff member access to the web dashboard.
-                      </p>
-                    </div>
-
-                    {!showUpgradeDialog ? (
-                      <Button
-                        variant="outline"
-                        className="w-full gap-2"
-                        onClick={() => setShowUpgradeDialog(true)}
-                        disabled={!primaryLocation}
-                      >
-                        <ArrowUpCircle className="h-4 w-4" />
-                        Upgrade Account
-                      </Button>
-                    ) : (
-                      <div className="space-y-4">
-                        <div className="space-y-2">
-                          <Label
-                            htmlFor="upgrade-email"
-                            className="text-xs uppercase tracking-[0.14em] text-muted-foreground"
-                          >
-                            Email Address
-                          </Label>
-                          <Input
-                            id="upgrade-email"
-                            type="email"
-                            placeholder="user@example.com"
-                            value={upgradeEmail}
-                            onChange={(e) => setUpgradeEmail(e.target.value)}
-                            className="h-10"
-                          />
-                          <p className="text-xs text-muted-foreground">
-                            A temporary password will be generated and displayed.
+                        <div>
+                          <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
+                            Access
+                          </p>
+                          <p className="mt-1 font-medium">
+                            {staff.is_clerk_user ? "Dashboard" : "POS Only"}
                           </p>
                         </div>
-
-                        <div className="flex flex-wrap gap-2">
-                          <Button
-                            className="gap-2"
-                            onClick={handleUpgradeToClerk}
-                            disabled={upgradePOSToClerk.isPending || !upgradeEmail}
-                          >
-                            {upgradePOSToClerk.isPending ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <ArrowUpCircle className="h-4 w-4" />
-                            )}
-                            Confirm Upgrade
-                          </Button>
-                          <Button
-                            variant="outline"
-                            onClick={handleCancelUpgrade}
-                            disabled={upgradePOSToClerk.isPending}
-                          >
-                            Cancel
-                          </Button>
-                        </div>
                       </div>
-                    )}
-                  </section>
-                )}
-
-                {staff.is_clerk_user && staff.user_id && (
-                  <section className="rounded-2xl border border-orange-200 bg-orange-50/40 p-5 dark:bg-orange-950/10">
-                    <div className="mb-4">
-                      <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-orange-700 dark:text-orange-300">
-                        Demote To POS-Only
-                      </h3>
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        Revoke dashboard access while keeping POS PIN access.
-                      </p>
                     </div>
+                  </div>
 
-                    <Button
-                      variant="outline"
-                      className="w-full gap-2 border-orange-300 text-orange-700 hover:bg-orange-100 dark:hover:bg-orange-950/20"
-                      onClick={() => {
-                        if (
-                          confirm(
-                            `Demote ${displayStaff.display_name} to POS-only? This will revoke their dashboard access.`
-                          )
-                        ) {
-                          demoteClerkToPOS.mutate(staff.member_id);
-                        }
-                      }}
-                      disabled={demoteClerkToPOS.isPending}
-                    >
-                      {demoteClerkToPOS.isPending ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Shield className="h-4 w-4" />
-                      )}
-                      Demote Account
-                    </Button>
-                  </section>
-                )}
-              </div>
+                  <nav className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
+                    {panelItems.map((item) => (
+                      <SectionNavButton
+                        key={item.id}
+                        icon={item.icon}
+                        label={item.label}
+                        description={item.description}
+                        active={activePanel === item.id}
+                        onClick={() => setActivePanel(item.id)}
+                      />
+                    ))}
+                  </nav>
+                </div>
+              </aside>
+
+              <div className="min-w-0 space-y-6">{activePanelContent[activePanel]}</div>
             </div>
-
-            <div className="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
-              <section className="min-w-0 rounded-2xl border bg-card p-5">
-                <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                      Location Assignments
-                    </h3>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      Click a location to manage role, status, and PIN.
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    <Badge variant="outline">{activeLocations.length} active</Badge>
-                    {availableLocationsToAdd.length > 0 && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="gap-2"
-                        onClick={() => {
-                          setShowAddLocation(!showAddLocation);
-                          if (primaryLocation) {
-                            setAddLocationRole(primaryLocation.role_code);
-                          }
-                        }}
-                      >
-                        {showAddLocation ? "Hide Add Form" : "Add Location"}
-                      </Button>
-                    )}
-                  </div>
-                </div>
-
-                {showAddLocation && (
-                  <div className="mb-4 rounded-2xl border bg-background/60 p-4">
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <div className="space-y-2">
-                        <Label className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
-                          Location
-                        </Label>
-                        <Select value={addLocationId} onValueChange={setAddLocationId}>
-                          <SelectTrigger className="h-10">
-                            <SelectValue placeholder="Select location" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {availableLocationsToAdd.map((loc) => (
-                              <SelectItem key={loc.id} value={loc.id}>
-                                {loc.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
-                          Role
-                        </Label>
-                        <Select value={addLocationRole} onValueChange={setAddLocationRole}>
-                          <SelectTrigger className="h-10">
-                            <SelectValue placeholder="Select role" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {roles
-                              .filter((r) => r.level <= currentUserLevel)
-                              .map((r) => (
-                                <SelectItem key={r.code} value={r.code}>
-                                  {r.name}
-                                </SelectItem>
-                              ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      <Button
-                        onClick={handleAddToLocation}
-                        disabled={
-                          addToLocation.isPending || !addLocationId || !addLocationRole
-                        }
-                      >
-                        {addToLocation.isPending ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : null}
-                        Add To Location
-                      </Button>
-                      <Button
-                        variant="outline"
-                        onClick={() => setShowAddLocation(false)}
-                      >
-                        Cancel
-                      </Button>
-                    </div>
-                  </div>
-                )}
-
-                <div className="space-y-3">
-                  {displayStaff.location_assignments.map((assignment) => (
-                    <button
-                      key={assignment.location_id + assignment.role_code}
-                      type="button"
-                      className={cn(
-                        "w-full rounded-xl border bg-background/60 p-4 text-left transition-colors hover:bg-muted/40",
-                        !assignment.is_active && "opacity-70"
-                      )}
-                      onClick={() => {
-                        setSelectedAssignmentLocationId(assignment.location_id);
-                        setIsLocationSheetOpen(true);
-                      }}
-                    >
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <p className="break-words font-medium">{assignment.location_name}</p>
-                            {assignment.is_primary && <Badge>Primary</Badge>}
-                            {!assignment.is_active && (
-                              <Badge variant="outline">Inactive</Badge>
-                            )}
-                            {assignment.has_pin && (
-                              <Badge variant="secondary" className="gap-1">
-                                <Lock className="h-3 w-3" />
-                                PIN
-                              </Badge>
-                            )}
-                          </div>
-                          <p className="mt-1 text-sm text-muted-foreground">
-                            {formatRoleLabel(assignment.role_name, assignment.role_code)}
-                          </p>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          {assignment.is_active && !assignment.is_primary && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-8 gap-1 px-2"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleSetPrimary(assignment.location_id);
-                              }}
-                              disabled={setPrimary.isPending}
-                              title="Set as primary location"
-                            >
-                              {setPrimary.isPending ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                              ) : (
-                                <Star className="h-4 w-4" />
-                              )}
-                              <span className="hidden sm:inline">Set primary</span>
-                            </Button>
-                          )}
-                          {assignment.is_active && !assignment.is_primary && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-8 px-2 text-destructive hover:text-destructive"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleRemoveFromLocation(assignment.location_id);
-                              }}
-                              disabled={removeFromLocation.isPending}
-                              title="Remove from location"
-                            >
-                              <UserX className="h-4 w-4" />
-                            </Button>
-                          )}
-                          <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                        </div>
-                      </div>
-
-                      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                        <InfoRow
-                          label="Role"
-                          value={formatRoleLabel(
-                            assignment.role_name,
-                            assignment.role_code
-                          )}
-                        />
-                        <InfoRow
-                          label="Employment Type"
-                          value={assignment.employment_type || "-"}
-                        />
-                        <InfoRow
-                          label="Hourly Rate"
-                          value={
-                            assignment.hourly_rate !== null &&
-                            assignment.hourly_rate !== undefined
-                              ? `$${Number(assignment.hourly_rate).toFixed(2)}`
-                              : "-"
-                          }
-                        />
-                        <InfoRow
-                          label="Assigned At"
-                          value={
-                            assignment.assigned_at
-                              ? new Date(assignment.assigned_at).toLocaleString(
-                                  "en-US",
-                                  {
-                                    month: "long",
-                                    day: "numeric",
-                                    year: "numeric",
-                                    hour: "numeric",
-                                    minute: "2-digit",
-                                    hour12: true,
-                                  }
-                                )
-                              : "-"
-                          }
-                        />
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </section>
-
-              <section className="min-w-0 rounded-2xl border bg-card">
-                <div className="border-b p-5">
-                  <div className="flex items-center gap-2">
-                    <Activity className="h-4 w-4 shrink-0 text-muted-foreground" />
-                    <div className="min-w-0">
-                      <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                        Activity Log
-                      </h3>
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        Recent actions for this staff member.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-                <div className="min-h-[420px] bg-muted/5">
-                  <StaffActivityLog
-                    staffProfileId={displayStaff.staff_profile_id}
-                    userId={displayStaff.user_id}
-                  />
-                </div>
-              </section>
-            </div>
-
             {selectedAssignment && (
               <LocationAssignmentSheet
                 open={isLocationSheetOpen}
@@ -1440,6 +1513,77 @@ export function StaffDetailSheet({
   );
 }
 
+function SectionHeader({
+  icon: Icon,
+  title,
+  description,
+  action,
+  className,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  title: string;
+  description: string;
+  action?: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={cn("mb-5 flex items-start justify-between gap-3", className)}>
+      <div className="flex items-start gap-3">
+        <div className="mt-0.5 rounded-full bg-slate-100 p-2 text-slate-600">
+          <Icon className="h-4 w-4" />
+        </div>
+        <div>
+          <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+            {title}
+          </h3>
+          <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+        </div>
+      </div>
+      {action ? <div className="shrink-0">{action}</div> : null}
+    </div>
+  );
+}
+
+function SectionNavButton({
+  icon: Icon,
+  label,
+  description,
+  active,
+  onClick,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  description: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "flex w-full items-start gap-3 rounded-2xl border px-4 py-3 text-left transition-colors",
+        active
+          ? "border-[#0C4FD1]/30 bg-[#EEF3FE] text-slate-950"
+          : "border-transparent bg-background/60 hover:bg-muted/40"
+      )}
+    >
+      <div
+        className={cn(
+          "mt-0.5 rounded-full p-2",
+          active ? "bg-white text-[#0C4FD1]" : "bg-slate-100 text-slate-600"
+        )}
+      >
+        <Icon className="h-4 w-4" />
+      </div>
+      <div className="min-w-0">
+        <p className="text-sm font-medium">{label}</p>
+        <p className="mt-1 text-xs text-muted-foreground">{description}</p>
+      </div>
+    </button>
+  );
+}
+
 function InfoRow({
   label,
   value,
@@ -1450,7 +1594,7 @@ function InfoRow({
   mono?: boolean;
 }) {
   return (
-    <div className="rounded-xl border bg-background/50 p-3">
+    <div className="rounded-2xl border bg-background/50 p-3">
       <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
         {label}
       </p>
@@ -1499,3 +1643,4 @@ function StatusPill({
     </div>
   );
 }
+

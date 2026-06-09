@@ -208,9 +208,43 @@ serve(async (req: Request) => {
       const resend = new Resend(apiKey);
       const fromEmail =
         Deno.env.get('RESEND_FROM_EMAIL') || 'receipts@resend.dev';
+
+      // Mirror the SMS branch: insert the pending row first so we can mint a
+      // send_token and embed the same /receipts/{t1}/{t2} CTA URL the hosted
+      // page uses. Keeps email & SMS in parity (PR #171 server-action flow).
+      const { data: pendingRow, error: pendingErr } = await sb
+        .from('receipt_sends')
+        .insert({
+          order_id,
+          merchant_id: merchantId,
+          delivery_method: 'email',
+          recipient,
+          receipt_template_id: receipt_template_id ?? null,
+          status: 'pending',
+          created_by: userId,
+        })
+        .select('id, send_token')
+        .single();
+
+      if (pendingErr || !pendingRow) {
+        return jsonResp({
+          success: false,
+          message: 'Failed to initialise receipt send record.',
+        });
+      }
+
+      const receiptToken = await ensureReceiptToken(sb, order_id);
+      const sendToken = (pendingRow as { send_token?: string }).send_token;
+      const baseUrl = appBaseUrl();
+      const receiptUrl =
+        receiptToken && sendToken && baseUrl
+          ? `${baseUrl}/receipts/${receiptToken}/${sendToken}`
+          : null;
+
       const merchantLogoUrl = await fetchMerchantLogoUrl(sb, merchantId);
       const html = renderReceiptHtml(order as any, location, {
         merchantLogoUrl,
+        receiptUrl,
       });
 
       const { error: emailError } = await resend.emails.send({
@@ -220,29 +254,19 @@ serve(async (req: Request) => {
         html,
       });
 
+      const sendRowId = (pendingRow as { id: string }).id;
       if (emailError) {
-        await sb.from('receipt_sends').insert({
-          order_id,
-          merchant_id: merchantId,
-          delivery_method: 'email',
-          recipient,
-          receipt_template_id: receipt_template_id ?? null,
-          status: 'failed',
-          error_message: emailError.message,
-          created_by: userId,
-        });
+        await sb
+          .from('receipt_sends')
+          .update({ status: 'failed', error_message: emailError.message })
+          .eq('id', sendRowId);
         return jsonResp({ success: false, message: emailError.message });
       }
 
-      await sb.from('receipt_sends').insert({
-        order_id,
-        merchant_id: merchantId,
-        delivery_method: 'email',
-        recipient,
-        receipt_template_id: receipt_template_id ?? null,
-        status: 'sent',
-        created_by: userId,
-      });
+      await sb
+        .from('receipt_sends')
+        .update({ status: 'sent' })
+        .eq('id', sendRowId);
 
       return jsonResp({
         success: true,

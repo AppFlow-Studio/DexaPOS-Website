@@ -35,13 +35,13 @@ export default function FinancialsPage() {
   const selectedLocation = useSelectedLocation();
   const queryDateRange = useReportingQueryRange(dateRange);
 
-  const { data: kpis, isLoading } = useFinancialKPIs(
+  const { data: kpis, isLoading, isError } = useFinancialKPIs(
     queryDateRange.from,
     queryDateRange.to
   );
 
   // Fetch waterfall report data
-  const { data: waterfallReport, isLoading: isLoadingWaterfall } = useWaterfallReport(
+  const { data: waterfallReport, isLoading: isLoadingWaterfall, isError: isErrorWaterfall } = useWaterfallReport(
     queryDateRange.from,
     queryDateRange.to
   );
@@ -66,7 +66,7 @@ export default function FinancialsPage() {
       }));
   }, [dateRange, kpis?.daily_stats]);
 
-  if (isLoading) {
+  if (isLoading && !kpis) {
     return (
       <div className="w-full p-4 space-y-8">
         <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center">
@@ -77,6 +77,15 @@ export default function FinancialsPage() {
           <Skeleton className="h-[400px] w-full xl:col-span-1 rounded-3xl" />
           <Skeleton className="h-[400px] w-full xl:col-span-3 rounded-3xl" />
         </div>
+      </div>
+    );
+  }
+
+  if (isError && !kpis) {
+    return (
+      <div className="w-full p-4 flex flex-col items-center justify-center h-64 gap-3 text-muted-foreground">
+        <p className="text-sm font-medium">Failed to load financial data</p>
+        <p className="text-xs">Try refreshing the page or selecting a different date range.</p>
       </div>
     );
   }
@@ -312,6 +321,7 @@ export default function FinancialsPage() {
             <WaterfallReportCard
               report={waterfallReport}
               isLoading={isLoadingWaterfall}
+              isError={isErrorWaterfall}
             />
           )}
         </div>

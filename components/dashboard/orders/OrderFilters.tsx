@@ -38,6 +38,10 @@ import {
   PaymentMethod,
 } from "@/types/order-management";
 import { useUnifiedStaff } from "@/app/dashboard/hooks/useStaff";
+import {
+  ORDER_STATUS_ORDER,
+  ORDER_STATUS_LABELS,
+} from "@/lib/constants/order-status";
 import { useSelectedLocation } from "@/stores/location-store";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
@@ -175,15 +179,7 @@ export function OrderFilters({ className }: OrderFiltersProps) {
           <DropdownMenuContent align="start" className="w-[200px]">
             <DropdownMenuLabel>Filter by Status</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            {[
-              "pending",
-              "preparing",
-              "ready",
-              "completed",
-              "cancelled",
-              "void",
-              "refunded",
-            ].map((status) => {
+            {ORDER_STATUS_ORDER.map((status) => {
               const isSelected = searchParams
                 .get("status")
                 ?.split(",")
@@ -192,12 +188,9 @@ export function OrderFilters({ className }: OrderFiltersProps) {
                 <DropdownMenuCheckboxItem
                   key={status}
                   checked={isSelected}
-                  onCheckedChange={() =>
-                    handleStatusToggle(status as OrderStatus)
-                  }
-                  className="capitalize"
+                  onCheckedChange={() => handleStatusToggle(status)}
                 >
-                  {status}
+                  {ORDER_STATUS_LABELS[status]}
                 </DropdownMenuCheckboxItem>
               );
             })}

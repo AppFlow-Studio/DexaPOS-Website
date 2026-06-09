@@ -460,16 +460,23 @@ function MerchantSidebar() {
                           return (
                             <SidebarMenuItem key={menuItem.title}>
                               <Collapsible defaultOpen={isReportsOpen} className="group">
-                                <CollapsibleTrigger asChild>
+                                <div className="flex items-center">
                                   <SidebarMenuButton
+                                    asChild
                                     isActive={isReportsActive}
-                                    className="w-full"
+                                    className="flex-1"
                                   >
-                                    <menuItem.icon className="h-4 w-4" />
-                                    <span>{menuItem.title}</span>
-                                    <ChevronRight className="ml-auto h-4 w-4 transition-transform duration-200 group-data-[state=open]:rotate-90" />
+                                    <Link href={menuItem.url}>
+                                      <menuItem.icon className="h-4 w-4" />
+                                      <span>{menuItem.title}</span>
+                                    </Link>
                                   </SidebarMenuButton>
-                                </CollapsibleTrigger>
+                                  <CollapsibleTrigger asChild>
+                                    <button className="flex items-center justify-center h-8 w-8 rounded-md hover:bg-accent transition-colors shrink-0">
+                                      <ChevronRight className="h-4 w-4 transition-transform duration-200 group-data-[state=open]:rotate-90" />
+                                    </button>
+                                  </CollapsibleTrigger>
+                                </div>
                                 <CollapsibleContent>
                                   <SidebarMenuSub>
                                     {/* @ts-ignore */}

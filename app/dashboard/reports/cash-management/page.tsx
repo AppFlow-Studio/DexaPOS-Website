@@ -69,7 +69,7 @@ export default function CashManagementPage() {
 
   const selectedLocation = useSelectedLocation();
   const queryDateRange = useReportingQueryRange(dateRange);
-  const { data: cashTransactions, isLoading } = useCashFlowReport(queryDateRange.from, queryDateRange.to);
+  const { data: cashTransactions, isLoading, isError } = useCashFlowReport(queryDateRange.from, queryDateRange.to);
 
   const totalCollected = cashTransactions?.reduce((s, r) => s + r.total_amount, 0) ?? 0;
   const totalTips = cashTransactions?.reduce((s, r) => s + r.tip_amount, 0) ?? 0;
@@ -102,32 +102,32 @@ export default function CashManagementPage() {
   const kpis = [
     {
       label: "Total Cash Collected",
-      value: isLoading ? null : `$${totalCollected.toFixed(2)}`,
-      sub: `${cashTransactions?.length ?? 0} transactions`,
+      value: isLoading ? null : isError ? "—" : `$${totalCollected.toFixed(2)}`,
+      sub: isError ? "Failed to load" : `${cashTransactions?.length ?? 0} transactions`,
       icon: Banknote,
       iconColor: "text-emerald-600",
       iconBg: "bg-emerald-50",
     },
     {
       label: "Net Sales (Cash)",
-      value: isLoading ? null : `$${totalSales.toFixed(2)}`,
-      sub: "Excluding tips",
+      value: isLoading ? null : isError ? "—" : `$${totalSales.toFixed(2)}`,
+      sub: isError ? "Failed to load" : "Excluding tips",
       icon: DollarSign,
       iconColor: "text-indigo-500",
       iconBg: "bg-indigo-50",
     },
     {
       label: "Total Tips",
-      value: isLoading ? null : `$${totalTips.toFixed(2)}`,
-      sub: "Cash tips collected",
+      value: isLoading ? null : isError ? "—" : `$${totalTips.toFixed(2)}`,
+      sub: isError ? "Failed to load" : "Cash tips collected",
       icon: TrendingUp,
       iconColor: "text-amber-500",
       iconBg: "bg-amber-50",
     },
     {
       label: "Avg per Transaction",
-      value: isLoading ? null : `$${avgPerTx.toFixed(2)}`,
-      sub: "Per cash order",
+      value: isLoading ? null : isError ? "—" : `$${avgPerTx.toFixed(2)}`,
+      sub: isError ? "Failed to load" : "Per cash order",
       icon: ShoppingCart,
       iconColor: "text-purple-500",
       iconBg: "bg-purple-50",
@@ -246,6 +246,16 @@ export default function CashManagementPage() {
                     ))}
                   </TableRow>
                 ))
+              ) : isError ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="h-40 text-center">
+                    <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                      <Banknote className="h-8 w-8 opacity-30" />
+                      <p className="text-sm font-medium">Failed to load cash transactions</p>
+                      <p className="text-xs">Try refreshing the page or selecting a different date range.</p>
+                    </div>
+                  </TableCell>
+                </TableRow>
               ) : processed.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={6} className="h-40 text-center">

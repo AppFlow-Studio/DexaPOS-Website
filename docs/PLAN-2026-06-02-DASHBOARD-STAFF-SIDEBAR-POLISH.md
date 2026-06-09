@@ -7,6 +7,12 @@ This ticket is a merchant dashboard frontend polish pass with two scoped tasks:
 1. Remove developer/internal fields from the merchant staff detail view.
 2. Apply a calmer two-tone treatment to the merchant dashboard sidebar.
 
+The staff-detail pass was later expanded to include a stronger sectioned presentation,
+using the reference employee drawer video as visual direction while staying on the
+same merchant-dashboard route and behavior model.
+That redesign now uses an internal section navigator instead of one long stacked
+column of cards.
+
 It is explicitly a web-dashboard ticket. It does not include POS, schema, auth, or backend behavior changes.
 
 ## Source Ticket
@@ -16,6 +22,11 @@ Source: user-provided ticket brief from June 2, 2026.
 Surfaces:
 - merchant dashboard staff detail sheet at `/dashboard/staff`
 - merchant dashboard left sidebar in the shared `/dashboard/*` layout
+
+Explicitly not part of this ticket:
+- the `/dashboard/staff` list/table view
+- HQ/admin staff pages under `/manage/*`
+- POS staff surfaces
 
 ## What The Ticket Means
 
@@ -43,12 +54,13 @@ This should be a scoped dashboard treatment, not a global app theme rewrite.
 ## Scope
 
 In scope:
-- merchant dashboard staff detail presentation cleanup
+- merchant dashboard staff detail presentation cleanup and sectioned visual redesign
 - role label humanization in the visible staff detail UI
 - merchant dashboard sidebar color-token tuning
 - before/after test notes for manual QA
 
 Out of scope:
+- `/dashboard/staff` list/table redesign
 - POS staff screens
 - HQ admin staff screens
 - schema or RPC changes
@@ -93,6 +105,15 @@ Implement Task 1 in `components/dashboard/staff/StaffDetailSheet.tsx`:
 - remove redundant `Account Type` row
 - remove redundant `Primary Assignment Status` row
 - replace visible raw role codes with human-readable role labels
+- remove footer `Member ID` leak
+- reshape the sheet into clearer sections:
+  - profile summary hero
+  - internal left-side section navigator
+  - personal/contact panel
+  - permissions/assignment panel
+  - access/security panel
+  - location assignments panel
+  - activity log panel
 - keep all actions wired exactly as they are now
 
 ### Phase 3
@@ -115,6 +136,7 @@ Run a targeted syntax pass and prepare the manual QA checklist.
 - no visible raw IDs in merchant dashboard staff detail UI
 - role labels are human-readable wherever this sheet presents role information
 - no behavior change in edit, PIN, password, status, or assignment flows
+- no required redesign of the staff list/table page
 
 ### Task 2
 
@@ -154,3 +176,19 @@ Run a targeted syntax pass and prepare the manual QA checklist.
 - [x] Task 2 implemented
 - [x] Targeted syntax validation
 - [ ] Manual QA
+
+## Verified Staff Diff
+
+The staff-side code change in this ticket is specifically in:
+- `components/dashboard/staff/StaffDetailSheet.tsx`
+
+Verified changes:
+- added role label humanization instead of raw role codes
+- removed the visible `Member ID` row
+- removed the visible `Staff Profile ID` row
+- removed the redundant `Account Type` row
+- removed the redundant `Primary Assignment Status` row
+- removed the footer `Member ID` leak
+- rebuilt the staff detail sheet into a more sectioned employee-profile layout
+
+If someone checks the staff list/table or an HQ/admin staff page and says "it looks the same", that does not contradict this ticket. Those surfaces were not in scope.

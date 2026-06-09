@@ -79,11 +79,11 @@ export default function ReportsPage() {
   const selectedLocation = useSelectedLocation();
   const queryDateRange = useReportingQueryRange(dateRange);
 
-  const { data: analytics, isLoading } = useOrderAnalytics(
+  const { data: analytics, isLoading, isError } = useOrderAnalytics(
     queryDateRange.from,
     queryDateRange.to
   );
-  const { data: kpis, isLoading: kpisLoading } = useFinancialKPIs(
+  const { data: financialKPIs, isLoading: kpisLoading, isError: kpisError } = useFinancialKPIs(
     queryDateRange.from,
     queryDateRange.to
   );
@@ -93,12 +93,12 @@ export default function ReportsPage() {
   };
 
   // Derived metrics
-  const totalSales = kpis?.summary.net_sales ?? 0;
+  const totalSales = financialKPIs?.summary.net_sales ?? 0;
   const previousSales = analytics?.previousPeriodSales ?? 0;
   const salesTrend =
     previousSales > 0 ? ((totalSales - previousSales) / previousSales) * 100 : null;
   const chartData = fillDailyFinancialStats(
-    kpis?.daily_stats ?? [],
+    financialKPIs?.daily_stats ?? [],
     dateRange
   ).map((item) => ({
     date: item.date,
@@ -117,14 +117,16 @@ export default function ReportsPage() {
         .replace(/\b\w/g, (c) => c.toUpperCase())
     : "—";
 
+  const isAnyError = isError || kpisError;
   const kpiCards = [
     {
       label: "Total Revenue",
-      value: isLoading || kpisLoading ? null : `$${totalSales.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      value: isLoading || kpisLoading ? null : isAnyError ? "—" : `$${totalSales.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
       icon: DollarSign,
-      trend: salesTrend,
-      description:
-        previousSales > 0
+      trend: isAnyError ? null : salesTrend,
+      description: isAnyError
+        ? "Failed to load"
+        : previousSales > 0
           ? `vs $${previousSales.toLocaleString("en-US", { maximumFractionDigits: 0 })} prev.`
           : "For selected period",
       iconColor: "text-indigo-500",
@@ -132,30 +134,28 @@ export default function ReportsPage() {
     },
     {
       label: "Total Orders",
-      value: isLoading || kpisLoading ? null : (kpis?.summary.order_count ?? 0).toLocaleString(),
+      value: isLoading || kpisLoading ? null : isAnyError ? "—" : (financialKPIs?.summary.order_count ?? 0).toLocaleString(),
       icon: ShoppingCart,
       trend: null,
-      description: "Completed orders",
+      description: isAnyError ? "Failed to load" : "Completed orders",
       iconColor: "text-emerald-500",
       iconBg: "bg-emerald-50",
     },
     {
       label: "Avg Order Value",
-      value: isLoading || kpisLoading ? null : `$${(kpis?.summary.avg_order_value ?? 0).toFixed(2)}`,
+      value: isLoading || kpisLoading ? null : isAnyError ? "—" : `$${(financialKPIs?.summary.avg_order_value ?? 0).toFixed(2)}`,
       icon: TrendingUp,
       trend: null,
-      description: "Per transaction",
+      description: isAnyError ? "Failed to load" : "Per transaction",
       iconColor: "text-amber-500",
       iconBg: "bg-amber-50",
     },
     {
       label: "Top Order Type",
-      value: isLoading ? null : topOrderTypeLabel,
+      value: isLoading ? null : isAnyError ? "—" : topOrderTypeLabel,
       icon: Tag,
       trend: null,
-      description: topOrderTypeEntry
-        ? `${topOrderTypeEntry[1]} orders`
-        : "No data",
+      description: isAnyError ? "Failed to load" : topOrderTypeEntry ? `${topOrderTypeEntry[1]} orders` : "No data",
       iconColor: "text-purple-500",
       iconBg: "bg-purple-50",
     },
@@ -184,7 +184,8 @@ export default function ReportsPage() {
       </div>
 
       {/* ── KPI Cards ──────────────────────────────────────────── */}
-      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+
         {kpiCards.map((kpi) => (
           <Card
             key={kpi.label}

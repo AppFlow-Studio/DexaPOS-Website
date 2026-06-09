@@ -23,10 +23,7 @@ import {
   getReceiptTemplate,
   type ReceiptTemplate,
 } from "@/app/dashboard/actions/receipt-templates";
-import {
-  resolveChargedLane,
-  laneTotalProps,
-} from "@/lib/orders/pricing-lane";
+import { getOrderBreakdown } from "@/lib/orders/order-breakdown";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -366,14 +363,15 @@ export function ReceiptModal({
   const scheduledTime: string | undefined =
     orderAny.scheduled_at ?? orderAny.scheduled_time ?? undefined;
 
-  // ─── Dual-pricing lane (shared helper with Order Details summary) ───
-  const chargedLane = resolveChargedLane(order, payments);
-  const cardTotal = Number(order.card_total) || order.total_amount;
-  const cashTotal = Number(order.cash_total) || order.total_amount;
-  const hasDualPricing =
-    !!Number(order.card_total) &&
-    !!Number(order.cash_total) &&
-    Number(order.card_total) !== Number(order.cash_total);
+  // ─── Single-track breakdown (shared helper across all order surfaces) ───
+  // Every total line is sourced from one pricing lane so the receipt foots.
+  const breakdown = getOrderBreakdown(order, payments);
+  const lane = breakdown.primary;
+  const laneLabel = breakdown.display === "cash" ? "Cash" : "Card";
+  const altLaneTotal =
+    breakdown.display === "cash" ? breakdown.card.total : breakdown.cash.total;
+  const altLaneLabel =
+    breakdown.display === "cash" ? "If paid by card" : "If paid by cash";
 
   // Get completed payments only
   const completedPayments = payments.filter(
@@ -591,71 +589,69 @@ export function ReceiptModal({
 
             <DottedLine />
 
-            {/* Totals */}
+            {/* Totals — single pricing lane, always foots to the displayed total */}
             <div className="totals-section space-y-1 relative z-10">
               <div className="totals-row flex justify-between">
                 <span>Subtotal</span>
-                <span>{formatCurrency(order.subtotal)}</span>
+                <span>{formatCurrency(lane.subtotal)}</span>
               </div>
-              {order.discount_amount > 0 && (
+              {lane.discount > 0 && (
                 <div className="totals-row flex justify-between text-green-600 dark:text-green-400">
                   <span>Discount</span>
-                  <span>-{formatCurrency(order.discount_amount)}</span>
+                  <span>-{formatCurrency(lane.discount)}</span>
                 </div>
               )}
-              {order.service_charge > 0 && (
+              {lane.serviceCharge > 0 && (
                 <div className="totals-row flex justify-between">
                   <span>Service Charge</span>
-                  <span>{formatCurrency(order.service_charge)}</span>
+                  <span>{formatCurrency(lane.serviceCharge)}</span>
                 </div>
               )}
-              {showTaxBreakdown && order.tax_amount > 0 && (
+              {showTaxBreakdown && lane.tax > 0 && (
                 <div className="totals-row flex justify-between">
                   <span>Tax</span>
-                  <span>{formatCurrency(order.tax_amount)}</span>
+                  <span>{formatCurrency(lane.tax)}</span>
                 </div>
               )}
-              {showTip && order.tip_amount > 0 && (
+              {showTip && lane.tip > 0 && (
                 <div className="totals-row flex justify-between">
                   <span>Tip</span>
-                  <span>{formatCurrency(order.tip_amount)}</span>
+                  <span>{formatCurrency(lane.tip)}</span>
+                </div>
+              )}
+              {breakdown.mixedCashDiscount > 0 && (
+                <div className="totals-row flex justify-between text-green-600 dark:text-green-400">
+                  <span>Cash Discount</span>
+                  <span>-{formatCurrency(breakdown.mixedCashDiscount)}</span>
                 </div>
               )}
 
-              {/* Total — dual-pricing lane emphasis (card brand-blue, cash neutral) */}
-              {hasDualPricing ? (
-                (() => {
-                  const cardProps = laneTotalProps(chargedLane, "card");
-                  const cashProps = laneTotalProps(chargedLane, "cash");
-                  return (
-                    <div className="pt-2 border-t border-zinc-300 dark:border-zinc-700 space-y-0.5">
-                      <div
-                        className={cn(
-                          "totals-row flex justify-between text-sm",
-                          cardProps.bold && "font-semibold",
-                          cardProps.valueClassName
-                        )}
-                      >
-                        <span>Total (Card)</span>
-                        <span>{formatCurrency(cardTotal)}</span>
-                      </div>
-                      <div
-                        className={cn(
-                          "totals-row flex justify-between text-sm",
-                          cashProps.bold && "font-semibold",
-                          cashProps.valueClassName
-                        )}
-                      >
-                        <span>Total (Cash)</span>
-                        <span>{formatCurrency(cashTotal)}</span>
-                      </div>
-                    </div>
-                  );
-                })()
-              ) : (
-                <div className="totals-row grand-total flex justify-between font-semibold text-sm pt-2 border-t border-zinc-300 dark:border-zinc-700">
-                  <span>TOTAL</span>
-                  <span>{formatCurrency(order.total_amount)}</span>
+              {/* Grand total — collected amount for split tenders, else lane total */}
+              <div
+                className={cn(
+                  "totals-row grand-total flex justify-between font-semibold text-sm pt-2 border-t border-zinc-300 dark:border-zinc-700",
+                  !breakdown.isMixed && breakdown.display === "card" && "text-[#0C4FD1]"
+                )}
+              >
+                <span>
+                  {breakdown.isMixed
+                    ? "TOTAL"
+                    : breakdown.dual
+                    ? `TOTAL (${laneLabel})`
+                    : "TOTAL"}
+                </span>
+                <span>
+                  {formatCurrency(
+                    breakdown.isMixed && lane.amountPaid > 0
+                      ? lane.amountPaid
+                      : lane.total + lane.tip
+                  )}
+                </span>
+              </div>
+              {breakdown.dual && !breakdown.isMixed && (
+                <div className="totals-row flex justify-between text-xs text-zinc-500 dark:text-zinc-400">
+                  <span>{altLaneLabel}</span>
+                  <span>{formatCurrency(altLaneTotal)}</span>
                 </div>
               )}
             </div>

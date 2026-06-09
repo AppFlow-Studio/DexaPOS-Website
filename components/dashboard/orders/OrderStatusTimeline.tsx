@@ -2,6 +2,7 @@
 
 import * as React from 'react'
 import { OrderStatusHistory, OrderStatus, TableSessionWithEvents, TableSessionEvent } from '@/types/order-management'
+import { ORDER_STATUS_LABELS } from '@/lib/constants/order-status'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { Clock, User, Smartphone, Utensils, Calendar } from 'lucide-react'
@@ -13,18 +14,8 @@ interface OrderStatusTimelineProps {
     tableSessions?: TableSessionWithEvents[]
 }
 
-// Status labels for display
-const statusLabels: Record<OrderStatus, string> = {
-    draft: 'Draft',
-    pending: 'Pending',
-    sent_to_kitchen: 'Sent to Kitchen',
-    preparing: 'Preparing',
-    ready: 'Ready',
-    completed: 'Completed',
-    cancelled: 'Cancelled',
-    refunded: 'Refunded',
-    void: 'Void',
-}
+// Status labels for display (shared source of truth)
+const statusLabels = ORDER_STATUS_LABELS
 
 const statusColors: Record<OrderStatus, string> = {
     draft: 'bg-gray-500',
