@@ -6,12 +6,19 @@ import { cn } from '@/lib/utils'
 interface PaymentStatusBadgeProps {
     status: PaymentStatus
     className?: string
+    /**
+     * Optional dimension label (e.g. "Payment") rendered as a "{prefix}: {label}" pill.
+     * Use on surfaces that show order + payment status side by side, where a bare
+     * label can collide (both read "Void" when an order is voided). Leave unset in
+     * table columns that already carry a "Payment" header.
+     */
+    prefix?: string
 }
 
-export function PaymentStatusBadge({ status, className }: PaymentStatusBadgeProps) {
+export function PaymentStatusBadge({ status, className, prefix }: PaymentStatusBadgeProps) {
     const statusConfig: Record<PaymentStatus, { label: string; dotColor: string; textColor: string; bgColor: string }> = {
         pending: {
-            label: 'Awaiting Payment',
+            label: 'Pending',
             dotColor: 'bg-amber-400',
             textColor: 'text-amber-700 dark:text-amber-400',
             bgColor: 'bg-amber-50 dark:bg-amber-900/20',
@@ -84,7 +91,7 @@ export function PaymentStatusBadge({ status, className }: PaymentStatusBadgeProp
             )}
         >
             <span className={cn('h-1.5 w-1.5 rounded-full', config.dotColor)} />
-            {config.label}
+            {prefix ? `${prefix}: ${config.label}` : config.label}
         </span>
     )
 }

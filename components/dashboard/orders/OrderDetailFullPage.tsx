@@ -1434,9 +1434,9 @@ export function OrderDetailFullPage({
           <h1 className="text-2xl font-bold tracking-tight">
             Order #{String(order.display_number || order.order_number).replace(/^#/, "")}
           </h1>
-          <OrderStatusBadge status={order.status} />
+          <OrderStatusBadge status={order.status} prefix="Order" />
           <span className="text-muted-foreground">●</span>
-          <PaymentStatusBadge status={order.payment_status} />
+          <PaymentStatusBadge status={order.payment_status} prefix="Payment" />
           <div className="flex-1 min-w-0" />
           <div className="hidden md:block">
             <DropdownMenu>

@@ -7,10 +7,17 @@ import { cn } from '@/lib/utils'
 interface OrderStatusBadgeProps {
     status: OrderStatus
     className?: string
+    /**
+     * Optional dimension label (e.g. "Order") rendered as a "{prefix}: {label}" pill.
+     * Use on surfaces that show order + payment status side by side, where a bare
+     * label can collide (both read "Void" when an order is voided). Leave unset in
+     * table columns that already carry a "Status" header.
+     */
+    prefix?: string
 }
 
-export function OrderStatusBadge({ status, className }: OrderStatusBadgeProps) {
-    const statusColors: Record<OrderStatus, { textColor: string; bgColor: string }> = {
+export function OrderStatusBadge({ status, className, prefix }: OrderStatusBadgeProps) {
+    const statusColors: Record<OrderStatus, { dotColor: string; textColor: string; bgColor: string }> = {
         draft: {
             textColor: 'text-gray-600 dark:text-gray-400',
             bgColor: 'bg-gray-50 dark:bg-gray-800/40',
@@ -61,7 +68,8 @@ export function OrderStatusBadge({ status, className }: OrderStatusBadgeProps) {
                 className
             )}
         >
-            {config.label}
+            <span className={cn('h-1.5 w-1.5 rounded-full', config.dotColor)} />
+            {prefix ? `${prefix}: ${config.label}` : config.label}
         </span>
     )
 }
