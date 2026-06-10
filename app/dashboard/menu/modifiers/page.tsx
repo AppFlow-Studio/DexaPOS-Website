@@ -39,7 +39,6 @@ import {
   Layers,
   Info,
   ChevronDown,
-  ChevronUp,
   Sparkles,
   Loader2,
   Trash2,
@@ -209,19 +208,22 @@ export default function ModifiersPage() {
   );
   const [isDraggingGroupId, setIsDraggingGroupId] = useState<string | null>(null);
   const [groupOrderSaving, setGroupOrderSaving] = useState(false);
+  // Optimistic local order — set on drag, cleared after save/error
+  const [localGroupOrder, setLocalGroupOrder] = useState<ModifierGroupWithItems[] | null>(null);
+  const isSavingGroupRef = React.useRef(false);
   // Per-group option (item) ordering state
   const [optionOrders, setOptionOrders] = useState<Record<string, any[]>>({});
   const [optionOrderChanged, setOptionOrderChanged] = useState<Record<string, boolean>>({});
   const [optionOrderSaving, setOptionOrderSaving] = useState<Record<string, boolean>>({});
 
   const filteredGroups = useMemo(() => {
-    return (modifierGroups || []).filter((group: any) => {
+    const source = localGroupOrder ?? (modifierGroups || []);
+    return source.filter((group: any) => {
       const term = searchTerm.toLowerCase();
       const matchesSearch =
         group.name.toLowerCase().includes(term) ||
         group.description?.toLowerCase().includes(term);
 
-      // Scope filter
       const matchesScope =
         scopeFilter === "all" ||
         (scopeFilter === "global" && !group.location_id) ||
@@ -229,7 +231,7 @@ export default function ModifiersPage() {
 
       return matchesSearch && matchesScope;
     }) as ModifierGroupWithItems[];
-  }, [modifierGroups, searchTerm, scopeFilter]);
+  }, [localGroupOrder, modifierGroups, searchTerm, scopeFilter]);
 
   // Counts for filters
   const counts = useMemo(() => {
@@ -526,17 +528,21 @@ const sensors = useSensors(
     const { active, over } = event;
     setIsDraggingGroupId(null);
     if (!over || active.id === over.id) return;
-    if (!canReorderLibraryGroups) {
-      toast.error("Reordering unavailable", { description: reorderHelpText });
-      return;
-    }
+    if (!canReorderLibraryGroups) return;
+    if (isSavingGroupRef.current) return;
 
-    const oldIndex = filteredGroups.findIndex((g) => g.id === active.id);
-    const newIndex = filteredGroups.findIndex((g) => g.id === over.id);
+    const currentList = localGroupOrder ?? (filteredGroups as ModifierGroupWithItems[]);
+    const oldIndex = currentList.findIndex((g) => g.id === active.id);
+    const newIndex = currentList.findIndex((g) => g.id === over.id);
     if (oldIndex === -1 || newIndex === -1) return;
 
-    const reordered = arrayMove([...filteredGroups], oldIndex, newIndex);
+    const reordered = arrayMove([...currentList], oldIndex, newIndex);
+
+    // Optimistic update immediately so UI doesn't snap back during save
+    setLocalGroupOrder(reordered);
+    isSavingGroupRef.current = true;
     setGroupOrderSaving(true);
+
     try {
       if (isAllLocations) {
         const result = await ReorderModifierGroups(
@@ -551,34 +557,33 @@ const sensors = useSensors(
         if (!selectedLocationId || !merchantId) {
           throw new Error("Location or merchant context is missing.");
         }
-        for (const [index, group] of reordered.entries()) {
-          if (group.location_id) {
-            const result = await updateModifierGroup({
-              modifierGroupId: group.id,
-              displayOrder: index,
-            });
-            if (!result.success) throw new Error(result.error || "Failed to update group order.");
-          } else {
-            const result = await UpsertLocationModifierGroupOverride(
-              selectedLocationId,
-              group.id,
-              merchantId,
-              {
-                is_active: group.location_override?.[0]?.is_active ?? group.is_active ?? true,
-                display_order: index,
-              },
-            );
-            if (result.error) throw new Error(result.error);
-          }
-        }
+        const results = await Promise.all(
+          reordered.map((group, index) => {
+            if (group.location_id) {
+              return updateModifierGroup({ modifierGroupId: group.id, displayOrder: index });
+            } else {
+              return UpsertLocationModifierGroupOverride(
+                selectedLocationId,
+                group.id,
+                merchantId,
+                {
+                  is_active: group.location_override?.[0]?.is_active ?? group.is_active ?? true,
+                  display_order: index,
+                },
+              );
+            }
+          }),
+        );
+        const failed = results.find((r) => ("error" in r && r.error) || ("success" in r && !r.success));
+        if (failed) throw new Error(("error" in failed ? failed.error : (failed as any).error) || "Failed to update group order.");
       }
       toast.success("Modifier group order updated");
       queryClient.invalidateQueries({ queryKey: ["modifier-groups"] });
-      queryClient.invalidateQueries({ queryKey: ["menu-items"] });
-      queryClient.invalidateQueries({ queryKey: ["categories-with-items"] });
     } catch (e: any) {
+      setLocalGroupOrder(null);
       toast.error("Failed to reorder modifier groups", { description: e?.message || "Try again" });
     } finally {
+      isSavingGroupRef.current = false;
       setGroupOrderSaving(false);
     }
   };
