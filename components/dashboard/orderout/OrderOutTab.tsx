@@ -295,12 +295,12 @@ export function OrderOutTab({
       {/* B. Connected Channels */}
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <CardTitle className="text-base">Connected Channels</CardTitle>
               <CardDescription>Delivery platforms linked to this location</CardDescription>
             </div>
-            <Button variant="outline" size="sm" asChild>
+            <Button variant="outline" size="sm" asChild className="shrink-0 self-start">
               <a href={dashboardUrl} target="_blank" rel="noopener noreferrer">
                 Manage
                 <ExternalLink className="h-3 w-3 ml-1" />
@@ -323,27 +323,27 @@ export function OrderOutTab({
               return (
                 <div
                   key={platform}
-                  className={`flex items-center gap-3 rounded-lg border p-3 ${
+                  className={`flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border p-3 ${
                     isActive ? style.bg : "bg-muted/30"
                   }`}
                 >
-                  <PlatformLogo platform={platform} className={`h-6 w-6 ${!isActive ? "opacity-40 grayscale" : ""}`} />
-                  <div className="flex-1 min-w-0">
-                    <p className={`text-sm font-medium ${isActive ? "" : "text-muted-foreground"}`}>
-                      {platform}
-                    </p>
-                  </div>
+                  <PlatformLogo platform={platform} className={`h-6 w-6 shrink-0 ${!isActive ? "opacity-40 grayscale" : ""}`} />
+                  <p className={`text-sm font-medium shrink-0 ${isActive ? "" : "text-muted-foreground"}`}>
+                    {platform}
+                  </p>
+                  {/* Spacer keeps status right-aligned, lets it wrap below on ≤320px. */}
+                  <span className="flex-1" />
                   {isVerified ? (
-                    <Badge variant="default" className="bg-green-600 text-xs">Connected</Badge>
+                    <Badge variant="default" className="bg-green-600 text-xs shrink-0">Connected</Badge>
                   ) : isSelfConfirmed ? (
                     <Badge
                       variant="outline"
-                      className="text-xs border-amber-500 text-amber-700 dark:text-amber-400"
+                      className="text-xs border-amber-500 text-amber-700 dark:text-amber-400 shrink-0"
                     >
                       Self-confirmed
                     </Badge>
                   ) : (
-                    <span className="text-xs text-muted-foreground">Not Connected</span>
+                    <span className="text-xs text-muted-foreground shrink-0">Not Connected</span>
                   )}
                 </div>
               );
@@ -359,16 +359,17 @@ export function OrderOutTab({
               return (
                 <div
                   key={channel}
-                  className="flex items-center gap-3 rounded-lg border p-3 mt-3 bg-blue-50 dark:bg-blue-950/20"
+                  className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border p-3 mt-3 bg-blue-50 dark:bg-blue-950/20"
                 >
-                  <Plug className="h-5 w-5 text-blue-600" />
-                  <p className="text-sm font-medium flex-1">{channel}</p>
+                  <Plug className="h-5 w-5 text-blue-600 shrink-0" />
+                  <p className="text-sm font-medium shrink-0">{channel}</p>
+                  <span className="flex-1" />
                   {isVerified ? (
-                    <Badge variant="default" className="bg-green-600 text-xs">Connected</Badge>
+                    <Badge variant="default" className="bg-green-600 text-xs shrink-0">Connected</Badge>
                   ) : (
                     <Badge
                       variant="outline"
-                      className="text-xs border-amber-500 text-amber-700 dark:text-amber-400"
+                      className="text-xs border-amber-500 text-amber-700 dark:text-amber-400 shrink-0"
                     >
                       Self-confirmed
                     </Badge>

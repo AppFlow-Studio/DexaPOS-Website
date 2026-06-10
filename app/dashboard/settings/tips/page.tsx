@@ -221,7 +221,8 @@ function PreviewPanel({
           {roles.length === 0 ? (
             <p className="text-sm text-muted-foreground">No roles available.</p>
           ) : (
-            <div className="space-y-3">
+            <div className="overflow-x-auto">
+              <div className="space-y-3 min-w-[560px]">
               <div className="grid grid-cols-5 gap-2 text-xs font-medium text-muted-foreground pb-1 border-b">
                 <span>Role</span>
                 <span>Charged Tips ($)</span>
@@ -231,7 +232,7 @@ function PreviewPanel({
               </div>
               {roles.map((role) => (
                 <div key={role.code} className="grid grid-cols-5 gap-2 items-center">
-                  <Label className="text-sm font-medium">{role.code}</Label>
+                  <Label className="text-sm font-medium truncate">{role.code}</Label>
                   <Input
                     type="number"
                     min="0"
@@ -278,6 +279,7 @@ function PreviewPanel({
                   />
                 </div>
               ))}
+              </div>
             </div>
           )}
 

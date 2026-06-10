@@ -448,11 +448,17 @@ export function AddStationDialog({
             "grid w-full gap-1 rounded-2xl bg-slate-100/80 p-1",
             isKds ? "grid-cols-5" : "grid-cols-3"
           )}>
-            <TabsTrigger value="basic">Basic Info</TabsTrigger>
-            <TabsTrigger value="device">Device</TabsTrigger>
-            {isKds && <TabsTrigger value="kds-display">Display</TabsTrigger>}
-            {isKds && <TabsTrigger value="kds-behavior">Behavior</TabsTrigger>}
-            <TabsTrigger value="capabilities">Capabilities</TabsTrigger>
+            <TabsTrigger value="basic" className="px-1 text-xs sm:text-sm sm:px-3">
+              <span className="sm:hidden">Basic</span>
+              <span className="hidden sm:inline">Basic Info</span>
+            </TabsTrigger>
+            <TabsTrigger value="device" className="px-1 text-xs sm:text-sm sm:px-3">Device</TabsTrigger>
+            {isKds && <TabsTrigger value="kds-display" className="px-1 text-xs sm:text-sm sm:px-3">Display</TabsTrigger>}
+            {isKds && <TabsTrigger value="kds-behavior" className="px-1 text-xs sm:text-sm sm:px-3">Behavior</TabsTrigger>}
+            <TabsTrigger value="capabilities" className="px-1 text-xs sm:text-sm sm:px-3">
+              <span className="sm:hidden">Caps</span>
+              <span className="hidden sm:inline">Capabilities</span>
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="basic" className="space-y-4 py-4">

@@ -105,12 +105,12 @@ const navMain: NavGroup[] = [
                 icon: Building2,
                 requiredPermission: 'merchants.view',
             },
-            // {
-            //     title: 'Organizations',
-            //     url: '/manage/organizations',
-            //     icon: Layers,
-            //     permission: 'hq.org.view',
-            // },
+            {
+                title: 'Organizations',
+                url: '/manage/organizations',
+                icon: Layers,
+                requiredPermission: 'merchants.view',
+            },
             {
                 title: 'Transactions',
                 url: '/manage/transactions',
@@ -474,6 +474,7 @@ export default function ManageLayout({
     ]
 
     const manageMoreItems: MoreNavItem[] = [
+        { title: 'Organizations', url: '/manage/organizations', icon: Layers },
         { title: 'Analytics', url: '/manage/analytics', icon: BarChart3 },
         { title: 'TSYS Disputes', url: '/manage/disputes', icon: ShieldAlert },
         { title: 'Platform Fees', url: '/manage/platform-fees', icon: Receipt },

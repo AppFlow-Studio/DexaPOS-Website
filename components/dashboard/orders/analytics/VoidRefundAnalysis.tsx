@@ -1,17 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import {
-  BarChart,
-  Bar,
-  PieChart,
-  Pie,
-  Cell,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  ResponsiveContainer,
-} from 'recharts'
+import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Legend } from 'recharts'
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart'
 import { ChartCard } from './ChartCard'
 import { SummaryCard } from '../reports/SummaryCard'
@@ -139,16 +129,14 @@ export function VoidRefundAnalysis({ data, isLoading }: VoidRefundAnalysisProps)
         <div className="grid gap-4 md:grid-cols-2">
           {/* Refund Reason Pie Chart */}
           {refundReasonData.length > 0 && (
-            <ChartContainer config={chartConfig} className="h-[300px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
+            <ChartContainer config={chartConfig} className="aspect-auto h-[300px] w-full">
                 <PieChart>
                   <Pie
                     data={refundReasonData}
                     cx="50%"
                     cy="50%"
                     labelLine={false}
-                    label={({ name, value }) => `${name}: ${value}`}
-                    outerRadius={100}
+                    outerRadius="80%"
                     fill="#3b82f6"
                     dataKey="value"
                   >
@@ -157,27 +145,33 @@ export function VoidRefundAnalysis({ data, isLoading }: VoidRefundAnalysisProps)
                     ))}
                   </Pie>
                   <ChartTooltip content={<ChartTooltipContent />} />
+                  <Legend
+                    verticalAlign="bottom"
+                    height={36}
+                    wrapperStyle={{ fontSize: 12 }}
+                    formatter={(value, entry) => {
+                      const v = (entry?.payload as { value?: number } | undefined)?.value
+                      return `${value}${v != null ? `: ${v}` : ''}`
+                    }}
+                  />
                 </PieChart>
-              </ResponsiveContainer>
             </ChartContainer>
           )}
 
           {/* Staff Voids Bar Chart */}
           {staffVoidChartData.length > 0 && (
-            <ChartContainer config={chartConfig} className="h-[300px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
+            <ChartContainer config={chartConfig} className="aspect-auto h-[300px] w-full">
                 <BarChart
                   data={staffVoidChartData}
                   layout="vertical"
-                  margin={{ top: 5, right: 30, left: 150, bottom: 5 }}
+                  margin={{ top: 5, right: 16, left: 0, bottom: 5 }}
                 >
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis type="number" />
-                  <YAxis dataKey="name" type="category" width={150} tick={{ fontSize: 12 }} />
+                  <YAxis dataKey="name" type="category" width={90} tick={{ fontSize: 12 }} />
                   <ChartTooltip content={<ChartTooltipContent />} />
                   <Bar dataKey="voids" fill="#ef4444" radius={[0, 8, 8, 0]} />
                 </BarChart>
-              </ResponsiveContainer>
             </ChartContainer>
           )}
         </div>
@@ -205,7 +199,7 @@ export function VoidRefundAnalysis({ data, isLoading }: VoidRefundAnalysisProps)
               />
             </div>
 
-            <DataTable columns={voidedItemsColumns} data={filteredVoidedItems} />
+            <DataTable columns={voidedItemsColumns} data={filteredVoidedItems} tableClassName="min-w-[560px]" />
           </div>
         )}
       </div>

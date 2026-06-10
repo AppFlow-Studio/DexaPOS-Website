@@ -13,7 +13,8 @@ import { DataTable } from "@/components/ui/data-table";
 import { columns } from "./columns";
 import { Button } from "@/components/ui/button";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
-import { Download, Plus, Store } from "lucide-react";
+import { ArrowLeft, Download, Store } from "lucide-react";
+import Link from "next/link";
 import {
   downloadTimesheetCSV,
   calculateShiftDuration,
@@ -103,6 +104,19 @@ export default function TimesheetsPage() {
 
   return (
     <div className="space-y-6 p-6">
+      {/* Back to Staff */}
+      <Button
+        variant="ghost"
+        size="sm"
+        className="-ml-2 h-8 gap-1.5 text-muted-foreground"
+        asChild
+      >
+        <Link href="/dashboard/staff">
+          <ArrowLeft className="h-4 w-4" />
+          Back to Staff
+        </Link>
+      </Button>
+
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Timesheets</h1>
@@ -121,9 +135,6 @@ export default function TimesheetsPage() {
             disabled={!filteredShifts.length}
           >
             <Download className="mr-2 h-4 w-4" /> Export
-          </Button>
-          <Button>
-            <Plus className="mr-2 h-4 w-4" /> Add Shift
           </Button>
         </div>
       </div>

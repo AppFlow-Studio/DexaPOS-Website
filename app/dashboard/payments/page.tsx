@@ -203,10 +203,10 @@ export default function PaymentsPage() {
             View and manage all payment transactions
           </p>
         </div>
-        <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
+        <div className="flex w-full items-start gap-2 sm:w-auto sm:flex-shrink-0">
           {/* Simple date range inputs */}
-          <div className="flex items-center gap-1.5 text-sm">
-            <CalendarDays className="h-4 w-4 text-muted-foreground" />
+          <CalendarDays className="mt-2 h-4 w-4 flex-shrink-0 text-muted-foreground sm:mt-1.5" />
+          <div className="flex flex-1 flex-col gap-1.5 text-sm sm:flex-row sm:items-center">
             <input
               type="date"
               value={dateFrom.toISOString().slice(0, 10)}
@@ -214,9 +214,9 @@ export default function PaymentsPage() {
                 const d = new Date(e.target.value + "T00:00:00");
                 if (!isNaN(d.getTime())) setDateFrom(d);
               }}
-              className="rounded-md border bg-background px-2 py-1 text-sm"
+              className="w-full min-w-0 rounded-md border bg-background px-2 py-1 text-sm sm:w-auto"
             />
-            <span className="text-muted-foreground">to</span>
+            <span className="hidden text-muted-foreground sm:inline">to</span>
             <input
               type="date"
               value={dateTo.toISOString().slice(0, 10)}
@@ -224,7 +224,7 @@ export default function PaymentsPage() {
                 const d = new Date(e.target.value + "T23:59:59.999");
                 if (!isNaN(d.getTime())) setDateTo(d);
               }}
-              className="rounded-md border bg-background px-2 py-1 text-sm"
+              className="w-full min-w-0 rounded-md border bg-background px-2 py-1 text-sm sm:w-auto"
             />
           </div>
         </div>
@@ -251,7 +251,7 @@ export default function PaymentsPage() {
           <PaymentCharts summary={summary} isLoading={paymentsLoading} />
 
           {/* Payments Table */}
-          <Card>
+          <Card className="min-w-0">
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle>All Payments</CardTitle>
@@ -266,7 +266,7 @@ export default function PaymentsPage() {
                 </Button>
               </div>
             </CardHeader>
-            <CardContent>
+            <CardContent className="min-w-0">
               {paymentsLoading && paymentsList.length === 0 ? (
                 <div className="space-y-2">
                   <Skeleton className="h-10 w-full" />

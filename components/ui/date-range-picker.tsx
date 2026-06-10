@@ -25,41 +25,76 @@ export function DateRangePicker({
   date,
   setDate,
 }: DateRangePickerProps) {
+  const handleFromSelect = (from: Date | undefined) => {
+    if (!from) {
+      setDate({ from: undefined, to: date?.to });
+      return;
+    }
+    // If from is after current to, clear to
+    const to = date?.to && from > date.to ? undefined : date?.to;
+    setDate({ from, to });
+  };
+
+  const handleToSelect = (to: Date | undefined) => {
+    if (!to) {
+      setDate({ from: date?.from, to: undefined });
+      return;
+    }
+    // If to is before current from, clear from
+    const from = date?.from && to < date.from ? undefined : date?.from;
+    setDate({ from, to });
+  };
+
   return (
-    <div className={cn("grid gap-2", className)}>
+    <div className={cn("flex items-center gap-2 flex-wrap", className)}>
+      {/* Start date */}
       <Popover>
         <PopoverTrigger asChild>
           <Button
-            id="date"
-            variant={"outline"}
+            variant="outline"
             className={cn(
-              "w-[260px] justify-start text-left font-normal",
-              !date && "text-muted-foreground"
+              "h-9 justify-start text-left font-normal w-[140px]",
+              !date?.from && "text-muted-foreground"
             )}
           >
-            <CalendarIcon className="mr-2 h-4 w-4" />
-            {date?.from ? (
-              date.to ? (
-                <>
-                  {format(date.from, "LLL dd, y")} -{" "}
-                  {format(date.to, "LLL dd, y")}
-                </>
-              ) : (
-                format(date.from, "LLL dd, y")
-              )
-            ) : (
-              <span>Pick a date</span>
-            )}
+            <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
+            {date?.from ? format(date.from, "MMM dd, y") : <span>Start date</span>}
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-auto p-0" align="start">
+        <PopoverContent className="w-auto min-w-[280px] p-0" align="start">
           <Calendar
             initialFocus
-            mode="range"
-            defaultMonth={date?.from}
-            selected={date}
-            onSelect={setDate}
-            numberOfMonths={2}
+            mode="single"
+            selected={date?.from}
+            onSelect={handleFromSelect}
+            toDate={date?.to}
+          />
+        </PopoverContent>
+      </Popover>
+
+      <span className="text-muted-foreground text-sm">→</span>
+
+      {/* End date */}
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            className={cn(
+              "h-9 justify-start text-left font-normal w-[140px]",
+              !date?.to && "text-muted-foreground"
+            )}
+          >
+            <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
+            {date?.to ? format(date.to, "MMM dd, y") : <span>End date</span>}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-auto min-w-[280px] p-0" align="start">
+          <Calendar
+            initialFocus
+            mode="single"
+            selected={date?.to}
+            onSelect={handleToSelect}
+            fromDate={date?.from}
           />
         </PopoverContent>
       </Popover>
