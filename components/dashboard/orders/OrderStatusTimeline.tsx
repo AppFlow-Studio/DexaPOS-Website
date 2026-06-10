@@ -15,7 +15,7 @@ interface OrderStatusTimelineProps {
 
 // Status labels for display
 const statusLabels: Record<OrderStatus, string> = {
-    draft: 'Draft',
+    draft: 'Open',
     pending: 'Pending',
     sent_to_kitchen: 'Sent to Kitchen',
     preparing: 'Preparing',
@@ -212,7 +212,7 @@ export function OrderStatusTimeline({
 
                         if (event.type === 'creation') {
                             statusColor = statusColors[event.toStatus || 'draft'] || 'bg-gray-500'
-                            eventMessage = `Order created with status: ${statusLabel(event.toStatus) || 'Draft'}`
+                            eventMessage = `Order created with status: ${statusLabel(event.toStatus) || 'Open'}`
                         } else if (event.type === 'status_change') {
                             statusColor = statusColors[event.toStatus || 'draft'] || 'bg-gray-500'
                             eventMessage = getStatusChangeMessage(event.fromStatus, event.toStatus)
