@@ -161,3 +161,5 @@ Single index for active ticket streams and their source trackers.
 1. Keep this file updated whenever a new ticket stream starts.
 2. Keep links here PR-safe (planning/internal tracker files only).
 3. Keep `.planning/.continue-here.md` as the primary technical handoff state.
+4. Recent senior-review bundle:
+- `docs/HANDOFF-2026-06-10-SENIOR-RECENT-THREE-TICKETS.md`
