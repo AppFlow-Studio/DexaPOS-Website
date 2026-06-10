@@ -223,7 +223,7 @@ export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showL
         },
         {
             accessorKey: 'order_type',
-            header: 'Type',
+            header: 'Order Type',
             cell: ({ row }) => {
                 const typeConfig = getOrderTypeConfig(row.original.order_type)
                 return (
@@ -269,7 +269,7 @@ export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showL
                     onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
                     className="h-8 px-2"
                 >
-                    Status
+                    Order Status
                     <ArrowUpDown className="ml-2 h-3 w-3" />
                 </Button>
             ),

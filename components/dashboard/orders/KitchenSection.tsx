@@ -52,6 +52,24 @@ function stageIndex(status: string | null): number {
   return idx;
 }
 
+/**
+ * Per-item kitchen_status falls back to inference from the timestamp columns.
+ * Why: the POS keeps the timestamp columns (sent_to_kitchen_at,
+ * started_preparing_at, completed_at) up to date but doesn't always write
+ * order_items.kitchen_status. Without this fallback the pipeline silently
+ * hides itself for items that clearly went through the kitchen.
+ */
+function deriveKitchenStatus(item: RichItem): KitchenStage | null {
+  if (item.kitchen_status && (KITCHEN_STAGES as readonly string[]).includes(item.kitchen_status)) {
+    return item.kitchen_status as KitchenStage;
+  }
+  const anyItem = item as any;
+  if (item.completed_at) return "completed";
+  if (anyItem.started_preparing_at || anyItem.preparing_at) return "preparing";
+  if (anyItem.sent_to_kitchen_at || item.fire_time) return "new";
+  return null;
+}
+
 // ─── Helpers ───
 
 function formatShortTime(dateString: string | null | undefined): string | null {
@@ -100,7 +118,7 @@ function getCourseOverallStatus(items: RichItem[]): {
     };
   }
 
-  const statuses = activeItems.map((i) => i.kitchen_status);
+  const statuses = activeItems.map((i) => deriveKitchenStatus(i));
 
   if (statuses.every((s) => s === "completed")) {
     return {
@@ -218,7 +236,8 @@ function KitchenStatusPipeline({
 
 function KitchenItemRow({ item }: { item: RichItem }) {
   const isVoided = item.is_voided;
-  const hasKitchenStatus = !!item.kitchen_status;
+  const effectiveStatus = deriveKitchenStatus(item);
+  const hasKitchenStatus = !!effectiveStatus;
   const timestamps = getStageTimestamps(item);
   const completedTimeStr = formatShortTime(item.completed_at);
 
@@ -250,20 +269,20 @@ function KitchenItemRow({ item }: { item: RichItem }) {
           </span>
           {isVoided && (
             <span className="text-xs text-muted-foreground font-medium">
-              VOIDED {!item.kitchen_status ? "(never prepared)" : ""}
+              VOIDED {!effectiveStatus ? "(never prepared)" : ""}
             </span>
           )}
         </div>
 
         {!isVoided && hasKitchenStatus && (
           <div className="mt-1.5">
-            <KitchenStatusPipeline status={item.kitchen_status} timestamps={timestamps} />
+            <KitchenStatusPipeline status={effectiveStatus} timestamps={timestamps} />
           </div>
         )}
       </div>
 
       {/* Completion time on the right */}
-      {!isVoided && item.kitchen_status === "completed" && completedTimeStr && (
+      {!isVoided && effectiveStatus === "completed" && completedTimeStr && (
         <span className="text-xs text-muted-foreground shrink-0 tabular-nums">
           {completedTimeStr}
         </span>
@@ -444,7 +463,12 @@ interface KitchenSectionProps {
 }
 
 export function hasKitchenData(items: RichItem[]): boolean {
-  return items.some((i) => i.kitchen_status != null || i.course_number != null);
+  return items.some(
+    (i) =>
+      i.kitchen_status != null ||
+      i.course_number != null ||
+      deriveKitchenStatus(i) != null
+  );
 }
 
 export function KitchenSection({ items }: KitchenSectionProps) {
@@ -487,7 +511,9 @@ export function KitchenSection({ items }: KitchenSectionProps) {
         .map((i) => i.completed_at)
         .filter(Boolean) as string[];
       const lastCompletedAt =
-        completedTimes.length > 0 && completedTimes.length === activeItems.filter((i) => i.kitchen_status === "completed").length
+        completedTimes.length > 0 &&
+        completedTimes.length ===
+          activeItems.filter((i) => deriveKitchenStatus(i) === "completed").length
           ? completedTimes.sort().at(-1)!
           : null;
 

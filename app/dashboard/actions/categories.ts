@@ -282,6 +282,46 @@ export async function CreateCategory(
     return { error: error.message };
   }
 
+  if (data.menu_id) {
+    const attachResult = await AddCategoryToMenu(
+      data.menu_id,
+      category.id,
+      merchant.id,
+      data.display_order ?? 0,
+      undefined,
+      locationId,
+    );
+
+    if ("error" in attachResult && attachResult.error) {
+      console.error(
+        "Error attaching newly created category to menu:",
+        attachResult.error,
+      );
+
+      const { error: cleanupError } = await supabase
+        .from("categories")
+        .delete()
+        .eq("id", category.id);
+
+      if (cleanupError) {
+        console.error(
+          "Failed to roll back category after menu attachment failure:",
+          cleanupError,
+        );
+
+        return {
+          error:
+            "Category was created but could not be attached to the selected menu. Please remove the orphaned category manually.",
+        };
+      }
+
+      return {
+        error:
+          "Category could not be attached to the selected menu. Creation was rolled back.",
+      };
+    }
+  }
+
   // Log Audit Event
   await LogAuditEvent({
     merchantId: merchant.id,
