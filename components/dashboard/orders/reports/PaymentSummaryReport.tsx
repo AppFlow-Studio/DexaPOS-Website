@@ -100,7 +100,7 @@ export function PaymentSummaryReport({
   return (
     <div className="space-y-6">
       {/* Summary Cards */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <SummaryCard
           label="Total Revenue"
           value={formatCurrency(totalRevenue)}

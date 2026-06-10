@@ -342,8 +342,8 @@ export function CreateExpenseDialog({
           {/* Add Item Section */}
           <div className="space-y-3 pt-2 border-t">
             <Label>Add Items</Label>
-            <div className="grid grid-cols-12 gap-2">
-              <div className="col-span-6">
+            <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
+              <div className="sm:col-span-6 min-w-0">
                 <Popover
                   open={openItemCombobox}
                   onOpenChange={setOpenItemCombobox}
@@ -356,15 +356,17 @@ export function CreateExpenseDialog({
                       aria-expanded={openItemCombobox}
                       className="w-full justify-between"
                     >
-                      {selectedInventoryItem
-                        ? inventoryItems.find(
-                            (item) => item.id === selectedInventoryItem
-                          )?.name
-                        : "Select inventory item..."}
+                      <span className="truncate">
+                        {selectedInventoryItem
+                          ? inventoryItems.find(
+                              (item) => item.id === selectedInventoryItem
+                            )?.name
+                          : "Select inventory item..."}
+                      </span>
                       <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-[400px] p-0 z-[100]">
+                  <PopoverContent className="w-[min(400px,calc(100vw-2rem))] p-0 z-[100]">
                     <Command>
                       <CommandInput placeholder="Search items..." />
                       <CommandList>
@@ -418,7 +420,7 @@ export function CreateExpenseDialog({
                   </PopoverContent>
                 </Popover>
               </div>
-              <div className="col-span-2">
+              <div className="sm:col-span-6 flex items-center gap-2">
                 <Input
                   type="number"
                   placeholder="Qty"
@@ -426,10 +428,9 @@ export function CreateExpenseDialog({
                   step="0.01"
                   value={newItemQty}
                   onChange={(e) => setNewItemQty(e.target.value)}
+                  className="w-0 flex-1 min-w-0"
                 />
-              </div>
-              <div className="col-span-3">
-                <div className="flex items-center">
+                <div className="flex items-center flex-[1.5] min-w-0">
                   <span className="text-muted-foreground mr-1">$</span>
                   <Input
                     type="number"
@@ -438,16 +439,16 @@ export function CreateExpenseDialog({
                     step="0.01"
                     value={newItemCost}
                     onChange={(e) => setNewItemCost(e.target.value)}
+                    className="w-0 flex-1 min-w-0"
                   />
                 </div>
-              </div>
-              <div className="col-span-1">
                 <Button
                   type="button"
                   variant="secondary"
                   size="icon"
                   onClick={addLineItem}
                   disabled={!selectedInventoryItem || !newItemCost}
+                  className="shrink-0"
                 >
                   <Plus className="h-4 w-4" />
                 </Button>
@@ -468,10 +469,10 @@ export function CreateExpenseDialog({
               <div className="rounded-lg border divide-y">
                 {/* Header */}
                 <div className="grid grid-cols-12 gap-2 px-3 py-2 bg-muted/50 text-sm font-medium text-muted-foreground">
-                  <div className="col-span-6">Item</div>
-                  <div className="col-span-2">Qty</div>
-                  <div className="col-span-2">Cost</div>
-                  <div className="col-span-2">Total</div>
+                  <div className="col-span-5">Item</div>
+                  <div className="col-span-2 text-right">Qty</div>
+                  <div className="col-span-2 text-right">Cost</div>
+                  <div className="col-span-3 text-right">Total</div>
                 </div>
 
                 {/* Items */}
@@ -480,7 +481,7 @@ export function CreateExpenseDialog({
                     key={item.id}
                     className="grid grid-cols-12 gap-2 px-3 py-2 items-center"
                   >
-                    <div className="col-span-6 flex items-center gap-2">
+                    <div className="col-span-5 flex items-center gap-2 min-w-0">
                       <span className="text-sm font-medium truncate">
                         {item.name}
                       </span>
@@ -490,19 +491,21 @@ export function CreateExpenseDialog({
                         </Badge>
                       )}
                     </div>
-                    <div className="col-span-2 text-sm">{item.quantity}</div>
-                    <div className="col-span-2 text-sm">
+                    <div className="col-span-2 text-sm text-right tabular-nums">
+                      {item.quantity}
+                    </div>
+                    <div className="col-span-2 text-sm text-right tabular-nums break-all">
                       ${item.unit_cost.toFixed(2)}
                     </div>
-                    <div className="col-span-2 flex items-center justify-between">
-                      <span className="font-medium text-sm">
+                    <div className="col-span-3 flex items-center justify-end gap-1 min-w-0">
+                      <span className="font-medium text-sm tabular-nums break-all text-right">
                         ${(item.quantity * item.unit_cost).toFixed(2)}
                       </span>
                       <Button
                         type="button"
                         variant="ghost"
                         size="icon"
-                        className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
+                        className="h-7 w-7 shrink-0 text-destructive hover:text-destructive hover:bg-destructive/10"
                         onClick={() => removeLineItem(item.id)}
                       >
                         <Trash2 className="h-3.5 w-3.5" />
@@ -512,12 +515,12 @@ export function CreateExpenseDialog({
                 ))}
 
                 {/* Total */}
-                <div className="grid grid-cols-12 gap-2 px-3 py-3 bg-muted/30">
-                  <div className="col-span-10 text-right font-medium">
+                <div className="grid grid-cols-12 gap-2 px-3 py-3 bg-muted/30 items-center">
+                  <div className="col-span-8 text-right font-medium">
                     Total:
                   </div>
-                  <div className="col-span-2">
-                    <span className="text-lg font-bold text-primary">
+                  <div className="col-span-4 text-right min-w-0">
+                    <span className="text-lg font-bold text-primary tabular-nums break-all">
                       ${totalAmount.toFixed(2)}
                     </span>
                   </div>

@@ -126,7 +126,7 @@ export function AddVendorItemDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[500px]" elevation="above-sheet">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Plus className="h-5 w-5 text-primary" />
@@ -161,7 +161,7 @@ export function AddVendorItemDialog({
                   <SelectTrigger>
                     <SelectValue placeholder="Select an item..." />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="z-[220]">
                     {availableItems.map((item) => (
                       <SelectItem key={item.id} value={item.id}>
                         <div className="flex items-center gap-2">

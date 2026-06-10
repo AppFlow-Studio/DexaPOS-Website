@@ -197,6 +197,7 @@ export function DateRangePicker({
     return (
         <div className={cn('flex items-center gap-2', className)}>
             <Popover
+                modal={false}
                 open={open}
                 onOpenChange={(nextOpen) => {
                     if (!nextOpen && open) {
@@ -206,10 +207,10 @@ export function DateRangePicker({
                 }}
             >
                 <PopoverTrigger asChild>
-                    <Button variant="outline" className="gap-2">
-                        <CalendarIcon className="h-4 w-4" />
-                        <span>{displayText}</span>
-                        <ChevronDown className="h-4 w-4" />
+                    <Button variant="outline" className="gap-2 max-w-full min-w-0">
+                        <CalendarIcon className="h-4 w-4 shrink-0" />
+                        <span className="truncate">{displayText}</span>
+                        <ChevronDown className="h-4 w-4 shrink-0" />
                     </Button>
                 </PopoverTrigger>
                 <PopoverContent align="start" className="w-auto p-0 z-[200]">

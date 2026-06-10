@@ -113,7 +113,7 @@ function DroppableCell({
   return (
     <div
       ref={setNodeRef}
-      className={`flex-1 min-w-[140px] p-2 border-r last:border-r-0 relative min-h-[100px] group/cell transition-colors flex flex-col gap-2 ${
+      className={`flex-1 min-w-[80px] sm:min-w-[140px] p-2 border-r last:border-r-0 relative min-h-[100px] group/cell transition-colors flex flex-col gap-2 ${
         isOver
           ? "bg-primary/15 ring-2 ring-primary/20 ring-inset"
           : "hover:bg-muted/10"
@@ -206,10 +206,11 @@ const TemplateGrid: React.FC<TemplateGridProps> = ({
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      <div className="flex-1 bg-background rounded-lg overflow-hidden border shadow-sm">
+      <div className="flex-1 bg-background rounded-lg overflow-x-auto border shadow-sm">
+        <div className="min-w-[700px] sm:min-w-[900px]">
         {/* Header Row */}
         <div className="flex bg-muted/50 border-b">
-          <div className="w-64 p-4 border-r flex-shrink-0 bg-muted/20">
+          <div className="w-40 sm:w-64 p-3 sm:p-4 border-r flex-shrink-0 bg-muted/20 sticky left-0 z-20">
             <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Employee
             </span>
@@ -218,7 +219,7 @@ const TemplateGrid: React.FC<TemplateGridProps> = ({
             {weekDates.map((date, i) => (
               <div
                 key={i}
-                className="flex-1 min-w-[140px] p-3 text-center border-r last:border-r-0 flex flex-col items-center justify-center bg-muted/20"
+                className="flex-1 min-w-[80px] sm:min-w-[140px] p-3 text-center border-r last:border-r-0 flex flex-col items-center justify-center bg-muted/20"
               >
                 <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                   {format(date, "EEE")}
@@ -239,7 +240,7 @@ const TemplateGrid: React.FC<TemplateGridProps> = ({
               className="flex border-b group transition-colors hover:bg-muted/5 even:bg-muted/[0.02]"
             >
               {/* Employee Column */}
-              <div className="w-64 p-4 flex items-center border-r bg-background/50 flex-shrink-0 sticky left-0 z-10 backdrop-blur-sm">
+              <div className="w-40 sm:w-64 p-3 sm:p-4 flex items-center border-r bg-background/50 flex-shrink-0 sticky left-0 z-10 backdrop-blur-sm">
                 <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/10 flex items-center justify-center mr-3 shadow-sm flex-shrink-0 text-primary font-bold text-sm">
                   {employee.fullName
                     .split(" ")
@@ -290,6 +291,7 @@ const TemplateGrid: React.FC<TemplateGridProps> = ({
               </div>
             </div>
           ))}
+        </div>
         </div>
       </div>
 

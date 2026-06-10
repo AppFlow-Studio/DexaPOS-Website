@@ -2,7 +2,7 @@
 
 import { ChartCard } from './ChartCard'
 import { ChartContainer, ChartTooltip, type ChartConfig } from '@/components/ui/chart'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend, ResponsiveContainer } from 'recharts'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend } from 'recharts'
 import { CreditCard } from 'lucide-react'
 import type { DualPricingComparison } from '@/types/analytics'
 
@@ -60,7 +60,7 @@ export function DualPricingCard({ data, isLoading }: DualPricingCardProps) {
     >
       {data && (
         <>
-          <div className="grid grid-cols-2 gap-3 mb-4">
+          <div className="grid grid-cols-1 gap-3 mb-4 sm:grid-cols-2">
             <div className="space-y-1 bg-[#0A5C9E]/10 p-2 rounded">
               <p className="text-xs text-muted-foreground">Card Revenue</p>
               <p className="text-lg font-bold text-[#0A5C9E]">
@@ -85,8 +85,7 @@ export function DualPricingCard({ data, isLoading }: DualPricingCardProps) {
           </div>
 
           <div className="w-full h-[320px]">
-            <ChartContainer config={chartConfig} className="w-full h-full">
-              <ResponsiveContainer width="100%" height="100%">
+            <ChartContainer config={chartConfig} className="aspect-auto w-full h-full">
                 <BarChart data={chartData} margin={{ left: 0, right: 10, top: 5, bottom: 20 }}>
                   <CartesianGrid vertical={false} strokeDasharray="3 3" />
                   <XAxis
@@ -136,7 +135,6 @@ export function DualPricingCard({ data, isLoading }: DualPricingCardProps) {
                   <Bar dataKey="cardRevenue" fill={COLORS.cardRevenue} name="Card Revenue" />
                   <Bar dataKey="cashRevenue" fill={COLORS.cashRevenue} name="Cash Revenue" />
                 </BarChart>
-              </ResponsiveContainer>
             </ChartContainer>
           </div>
         </>

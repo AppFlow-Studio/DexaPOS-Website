@@ -1008,34 +1008,36 @@ function TransactionsPageInner() {
                     </div>
 
                     {/* Search + Filter bar */}
-                    <div className="flex flex-wrap items-center gap-2 pt-2">
+                    <div className="flex flex-col gap-2 pt-2 sm:flex-row sm:items-center">
                         <TransactionSearchBar
                             value={searchValue}
                             onChange={handleSearchChange}
-                            className="flex-1 min-w-0"
+                            className="w-full min-w-0 sm:flex-1"
                         />
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button variant="outline" size="sm" className="gap-2">
-                                    <Columns3 className="h-4 w-4" />
-                                    Columns
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-56">
-                                <DropdownMenuLabel>Visible Columns</DropdownMenuLabel>
-                                <DropdownMenuSeparator />
-                                {COLUMN_TOGGLE_ORDER.map((columnKey) => (
-                                    <DropdownMenuCheckboxItem
-                                        key={columnKey}
-                                        checked={columnVisibility[columnKey]}
-                                        onCheckedChange={() => toggleColumnVisibility(columnKey)}
-                                    >
-                                        {COLUMN_LABELS[columnKey]}
-                                    </DropdownMenuCheckboxItem>
-                                ))}
-                            </DropdownMenuContent>
-                        </DropdownMenu>
-                        <TransactionFilterSheet searchParams={searchParams} />
+                        <div className="flex items-center gap-2">
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button variant="outline" size="sm" className="gap-2">
+                                        <Columns3 className="h-4 w-4" />
+                                        Columns
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-56">
+                                    <DropdownMenuLabel>Visible Columns</DropdownMenuLabel>
+                                    <DropdownMenuSeparator />
+                                    {COLUMN_TOGGLE_ORDER.map((columnKey) => (
+                                        <DropdownMenuCheckboxItem
+                                            key={columnKey}
+                                            checked={columnVisibility[columnKey]}
+                                            onCheckedChange={() => toggleColumnVisibility(columnKey)}
+                                        >
+                                            {COLUMN_LABELS[columnKey]}
+                                        </DropdownMenuCheckboxItem>
+                                    ))}
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                            <TransactionFilterSheet searchParams={searchParams} />
+                        </div>
                     </div>
                 </CardHeader>
 

@@ -101,7 +101,7 @@ export function TableUtilization({ tables, isLoading }: TableUtilizationProps) {
     >
       {!isEmpty && tables && (
         <div className="space-y-4">
-          <DataTable columns={columns} data={tables} />
+          <DataTable columns={columns} data={tables} tableClassName="min-w-[640px]" />
         </div>
       )}
     </ChartCard>

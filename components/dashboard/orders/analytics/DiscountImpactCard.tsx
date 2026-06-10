@@ -3,7 +3,7 @@
 import { ChartCard } from './ChartCard'
 import { Badge } from '@/components/ui/badge'
 import { ChartContainer, ChartTooltip, type ChartConfig } from '@/components/ui/chart'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Cell, ResponsiveContainer } from 'recharts'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Cell } from 'recharts'
 import { Percent } from 'lucide-react'
 import type { DiscountImpact } from '@/types/analytics'
 
@@ -45,7 +45,7 @@ export function DiscountImpactCard({ data, isLoading }: DiscountImpactCardProps)
         <>
           {/* Stat boxes – DexaPOS themed with dark mode support */}
           <div className="mt-4 space-y-3">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="bg-gray-50 dark:bg-slate-800/50 border border-gray-200 dark:border-gray-700 p-2 rounded space-y-1">
                 <p className="text-xs text-gray-500 dark:text-gray-400">Total Discounts</p>
                 <p className="text-2xl font-bold text-gray-900 dark:text-white">{formatCurrency(data.totalDiscounts)}</p>
@@ -80,12 +80,11 @@ export function DiscountImpactCard({ data, isLoading }: DiscountImpactCardProps)
               </div>
 
               <div className="w-full h-[240px]">
-                <ChartContainer config={chartConfig} className="w-full h-full">
-                  <ResponsiveContainer width="100%" height="100%">
+                <ChartContainer config={chartConfig} className="aspect-auto w-full h-full">
                     <BarChart
                       data={data.bySource}
                       layout="vertical"
-                      margin={{ left: 110, right: 20, top: 5, bottom: 5 }}
+                      margin={{ left: 0, right: 20, top: 5, bottom: 5 }}
                     >
                       <CartesianGrid 
                         horizontal={false} 
@@ -146,7 +145,6 @@ export function DiscountImpactCard({ data, isLoading }: DiscountImpactCardProps)
                         ))}
                       </Bar>
                     </BarChart>
-                  </ResponsiveContainer>
                 </ChartContainer>
               </div>
 

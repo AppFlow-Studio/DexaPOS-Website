@@ -70,7 +70,7 @@ import { AssignCustomerModal } from "@/components/dashboard/orders/AssignCustome
 import { AdjustTipModal } from "@/components/dashboard/orders/AdjustTipModal";
 import { OrderActionBar } from "@/components/dashboard/orders/OrderActionBar";
 import { assignCustomerToOrder } from "@/app/actions/orders/assign-customer";
-import { resolveChargedLane } from "@/lib/orders/pricing-lane";
+import { getOrderBreakdown } from "@/lib/orders/order-breakdown";
 import { useOrderActions } from "@/app/dashboard/hooks/useOrderActions";
 import type { OrderActionsUserRole } from "@/app/dashboard/hooks/useOrderActions";
 import { useLocationStore } from "@/stores/location-store";
@@ -801,63 +801,30 @@ function PricingBreakdown({
     null;
   const isMixed = pricingMode === "mixed";
 
-  // Prefer RPC order fields when available, else order (OrderResponse)
-  const cardSubtotal =
-    fullHistoryOrder?.card_subtotal != null
-      ? Number(fullHistoryOrder.card_subtotal)
-      : Number(order.card_subtotal) || Number(order.subtotal) || 0;
-  const cashSubtotal =
-    fullHistoryOrder?.cash_subtotal != null
-      ? Number(fullHistoryOrder.cash_subtotal)
-      : Number(order.cash_subtotal) || Number(order.subtotal) || 0;
-  const cashSavings =
-    fullHistoryOrder?.cash_discount_amount != null
-      ? Number(fullHistoryOrder.cash_discount_amount)
-      : Number(order.cash_discount_amount) || 0;
+  // Single source of truth: each pricing lane is assembled from its own track
+  // columns (so it foots), and the lane actually charged drives the headline.
+  const breakdown = getOrderBreakdown(order, payments);
+  const cardLane = breakdown.card;
+  const cashLane = breakdown.cash;
+  const primaryLane = breakdown.primary;
+  const laneLabel = breakdown.display === "cash" ? "Cash" : "Card";
 
-  // In dual pricing, show actual savings when API returns 0: card subtotal − cash subtotal
-  const displayCashSavings =
-    isMixed && cardSubtotal > cashSubtotal && cashSavings === 0
-      ? cardSubtotal - cashSubtotal
-      : cashSavings;
+  const cashSavings = cardLane.total - cashLane.total;
+  const discountAmount = primaryLane.discount;
 
-  const taxAmount =
-    fullHistoryOrder?.tax_amount != null
-      ? Number(fullHistoryOrder.tax_amount)
-      : Number(order.card_tax_amount) || Number(order.tax_amount) || 0;
-  const discountAmount =
-    fullHistoryOrder?.discount_amount != null
-      ? Number(fullHistoryOrder.discount_amount)
-      : Number(order.discount_amount) || 0;
+  // Tip shown is what was actually captured at tender (may post-date the total).
   const tipTotal = payments.reduce(
     (sum, p) => sum + (Number(p.tip_amount) || 0),
     0
   );
-  const effectiveTotal =
-    fullHistoryOrder?.effective_total != null
-      ? Number(fullHistoryOrder.effective_total)
-      : Number(order.effective_total) || Number(order.total_amount) || 0;
   const amountPaid =
     fullHistoryOrder?.amount_paid != null
       ? Number(fullHistoryOrder.amount_paid)
       : Number(order.amount_paid) || 0;
-  const amountDue =
-    fullHistoryOrder?.amount_due != null
-      ? Number(fullHistoryOrder.amount_due)
-      : Number(order.amount_due) ?? 0;
 
-  const cardTotal =
-    Number(order.card_total) || effectiveTotal;
-  const cashTotal =
-    Number(order.cash_total) || effectiveTotal;
-
-  // The amount actually owed/charged depends on the tendered lane.
-  // `effective_total` is always card_total, so it overstates cash orders
-  // (and would show a phantom Amount Due). Resolve from the payment tender.
-  const chargedLane = resolveChargedLane(order, payments);
-  const chargedTotal =
-    chargedLane === "cash" ? cashTotal : cardTotal;
-
+  // `effective_total` is always card_total and would show a phantom Amount Due
+  // on cash orders; the charged lane's own total is authoritative.
+  const chargedTotal = primaryLane.total;
   const displayAmountDue = Math.max(0, chargedTotal - amountPaid);
 
   const showDualColumns = isMixed;
@@ -888,50 +855,83 @@ function PricingBreakdown({
         <div className="hidden md:block">
           {showDualColumns ? (
             <>
+              {/* Two self-consistent lanes — each column foots on its own track */}
               <div className="grid grid-cols-2 gap-x-8 gap-y-1 text-sm">
                 <div className="space-y-1">
+                  <p className="text-xs font-medium text-muted-foreground">
+                    If all card
+                  </p>
                   <PriceRow
-                    label="Card Subtotal"
-                    value={formatMoney(cardSubtotal)}
+                    label="Subtotal"
+                    value={formatMoney(cardLane.subtotal)}
                   />
+                  {discountAmount > 0 && (
+                    <PriceRow
+                      label="Discount"
+                      value={formatMoney(-discountAmount)}
+                    />
+                  )}
+                  {cardLane.serviceCharge > 0 && (
+                    <PriceRow
+                      label="Service Charge"
+                      value={formatMoney(cardLane.serviceCharge)}
+                    />
+                  )}
+                  <PriceRow label="Tax" value={formatMoney(cardLane.tax)} />
                   <PriceRow
-                    label="Cash Savings"
-                    value={formatMoney(-displayCashSavings)}
-                    valueClassName="text-teal-600 dark:text-teal-400 font-medium"
-                  />
-                  <PriceRow
-                    label="Discount"
-                    value={formatMoney(-discountAmount)}
+                    label="Total (Card)"
+                    value={formatMoney(cardLane.total)}
+                    bold
                   />
                 </div>
                 <div className="space-y-1">
+                  <p className="text-xs font-medium text-green-700 dark:text-green-400">
+                    If all cash
+                  </p>
                   <PriceRow
-                    label="Cash Subtotal"
-                    value={formatMoney(cashSubtotal)}
+                    label="Subtotal"
+                    value={formatMoney(cashLane.subtotal)}
                   />
-                  <PriceRow label="Tax" value={formatMoney(taxAmount)} />
-                  <PriceRow label="Tip" value={formatMoney(tipTotal)} />
+                  {discountAmount > 0 && (
+                    <PriceRow
+                      label="Discount"
+                      value={formatMoney(-discountAmount)}
+                    />
+                  )}
+                  {cashLane.serviceCharge > 0 && (
+                    <PriceRow
+                      label="Service Charge"
+                      value={formatMoney(cashLane.serviceCharge)}
+                    />
+                  )}
+                  <PriceRow label="Tax" value={formatMoney(cashLane.tax)} />
+                  <PriceRow
+                    label="Total (Cash)"
+                    value={formatMoney(cashLane.total)}
+                    bold
+                    valueClassName="text-green-700 dark:text-green-400"
+                  />
                 </div>
               </div>
               <div className="my-2 border-t border-border" />
               <div className="grid grid-cols-2 gap-x-8 gap-y-1 text-sm">
                 <div className="space-y-1">
-                  <PriceRow
-                    label="Total (Card)"
-                    value={formatMoney(cardTotal)}
-                    bold
-                  />
+                  {cashSavings > 0 && (
+                    <PriceRow
+                      label="Cash Savings"
+                      value={formatMoney(-cashSavings)}
+                      valueClassName="text-teal-600 dark:text-teal-400 font-medium"
+                    />
+                  )}
+                  {tipTotal > 0 && (
+                    <PriceRow label="Tip" value={formatMoney(tipTotal)} />
+                  )}
+                </div>
+                <div className="space-y-1">
                   <PriceRow
                     label="Amount Paid"
                     value={formatMoney(amountPaid)}
                     valueClassName="text-green-600 dark:text-green-400"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <PriceRow
-                    label="Total (Cash)"
-                    value={formatMoney(cashTotal)}
-                    bold
                   />
                   <PriceRow
                     label="Amount Due"
@@ -945,25 +945,43 @@ function PricingBreakdown({
             </>
           ) : (
             <>
+              {/* Single track — every line foots to the displayed Total */}
               <div className="space-y-1 text-sm">
                 <PriceRow
                   label="Subtotal"
-                  value={formatMoney(cashSubtotal || cardSubtotal)}
+                  value={formatMoney(primaryLane.subtotal)}
                 />
-                <PriceRow label="Tax" value={formatMoney(taxAmount)} />
-                <PriceRow
-                  label="Discount"
-                  value={formatMoney(-discountAmount)}
-                />
-                <PriceRow label="Tip" value={formatMoney(tipTotal)} />
+                {discountAmount > 0 && (
+                  <PriceRow
+                    label="Discount"
+                    value={formatMoney(-discountAmount)}
+                  />
+                )}
+                {primaryLane.serviceCharge > 0 && (
+                  <PriceRow
+                    label="Service Charge"
+                    value={formatMoney(primaryLane.serviceCharge)}
+                  />
+                )}
+                <PriceRow label="Tax" value={formatMoney(primaryLane.tax)} />
+                {tipTotal > 0 && (
+                  <PriceRow label="Tip" value={formatMoney(tipTotal)} />
+                )}
               </div>
               <div className="my-2 border-t border-border" />
               <div className="space-y-1 text-sm">
                 <PriceRow
-                  label="Total"
+                  label={breakdown.dual ? `Total (${laneLabel})` : "Total"}
                   value={formatMoney(chargedTotal)}
                   bold
                 />
+                {breakdown.dual && cashSavings > 0 && (
+                  <PriceRow
+                    label="Cash savings"
+                    value={formatMoney(-cashSavings)}
+                    valueClassName="text-teal-600 dark:text-teal-400 font-medium"
+                  />
+                )}
                 <PriceRow
                   label="Amount Paid"
                   value={formatMoney(amountPaid)}
@@ -1290,7 +1308,7 @@ export function OrderDetailFullPage({
 
   React.useEffect(() => {
     document.title = order
-      ? `Order #${order.display_number || order.order_number} | DEXA POS`
+      ? `Order #${String(order.display_number || order.order_number).replace(/^#/, "")} | DEXA POS`
       : "Order | DEXA POS";
     return () => {
       document.title = "DEXA POS";
@@ -1380,7 +1398,7 @@ export function OrderDetailFullPage({
           const isLast = i === breadcrumbs.length - 1;
           const label =
             isLast && order
-              ? `Order #${order.display_number || order.order_number}`
+              ? `Order #${String(order.display_number || order.order_number).replace(/^#/, "")}`
               : crumb.label;
           return (
             <React.Fragment key={i}>
@@ -1414,7 +1432,7 @@ export function OrderDetailFullPage({
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <h1 className="text-2xl font-bold tracking-tight">
-            Order #{order.display_number || order.order_number}
+            Order #{String(order.display_number || order.order_number).replace(/^#/, "")}
           </h1>
           <OrderStatusBadge status={order.status} />
           <span className="text-muted-foreground">●</span>

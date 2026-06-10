@@ -71,7 +71,6 @@ export function CoversTracker({ data, isLoading, numberOfDays = 1 }: CoversTrack
 
   return (
     <ChartCard
-      className="min-w-[400px]" // replaced min-w-100 with a specific width
       title="Covers Tracker"
       subtitle={numberOfDays > 1 ? 'Average covers per hour' : 'Covers per hour'}
       icon={Users}
@@ -81,7 +80,7 @@ export function CoversTracker({ data, isLoading, numberOfDays = 1 }: CoversTrack
       {data && !isEmpty && (
         <div className="space-y-4">
           {/* Stat Cards */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="space-y-1 bg-pink-50 dark:bg-pink-950 p-2 rounded">
               <p className="text-xs text-muted-foreground">Total Covers</p>
               <p className="text-lg font-bold text-pink-600 dark:text-pink-400">

@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { MoreHorizontal, Shield, Settings, UserPlus2, Users, AlertTriangle, Trash2 } from 'lucide-react'
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useState } from 'react'
 import { SendAdminInviteButton } from './components/SendAdminInviteButton'
 import { SendOrganizationMembersInviteButton } from './components/SendOrganizationMembersInviteButton'
@@ -25,6 +25,7 @@ import { DeleteOrganizationDialog } from './components/DeleteOrganizationDialog'
 import { AdminInviteWizard } from './components/AdminInviteWizard'
 export default function OrganizationInfoPage() {
     const { organizationId } = useParams()
+    const router = useRouter()
     const { data, isLoading, error, refetch: refetchOrganizationInfo } = useOrganizationInfo(organizationId as string)
     const [revokeAdminInvitePopup, setRevokeAdminInvitePopup] = useState<PendingOrgAdminInvitesModel | null>(null)
     const [openRevokeAdminInvitePopup, setOpenRevokeAdminInvitePopup] = useState(false)
@@ -33,7 +34,8 @@ export default function OrganizationInfoPage() {
     const [resendAdminInvitePopup, setResendAdminInvitePopup] = useState<PendingOrgAdminInvitesModel | null>(null)
     const [openResendAdminInvitePopup, setOpenResendAdminInvitePopup] = useState(false)
     const [openDeleteOrganizationDialog, setOpenDeleteOrganizationDialog] = useState(false)
-    console.log('organization info data', data)
+    const [activeTab, setActiveTab] = useState('overview')
+    const [inviteSearch, setInviteSearch] = useState('')
     if (isLoading) return (
         <div className="space-y-6 animate-in fade-in-0 duration-300">
             <div className="h-5 w-56 bg-muted rounded-md animate-pulse" />
@@ -76,6 +78,14 @@ export default function OrganizationInfoPage() {
     const members = org?.members || []
     const carrierId = org?.carriers?.id
 
+    const inviteQuery = inviteSearch.trim().toLowerCase()
+    const matchesInvite = (inv: any) =>
+        !inviteQuery ||
+        inv?.email?.toLowerCase().includes(inviteQuery) ||
+        inv?.role?.toLowerCase?.().includes(inviteQuery)
+    const filteredAdminInvites = (org?.pending_org_admin_invites || []).filter(matchesInvite)
+    const filteredMemberInvites = (org?.pending_org_member_invites || []).filter(matchesInvite)
+
     return (
         <div className="space-y-6">
             {/* Breadcrumb */}
@@ -88,9 +98,9 @@ export default function OrganizationInfoPage() {
             {/* Header */}
             <Card>
                 <CardHeader className="pb-4">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-4">
-                            <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center overflow-hidden">
+                    <div className="flex flex-col gap-3 min-w-0 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex items-center gap-4 min-w-0 w-full sm:w-auto">
+                            <div className="h-12 w-12 shrink-0 rounded-lg bg-primary/10 flex items-center justify-center overflow-hidden">
                                 {orgImage ? (
                                     // eslint-disable-next-line @next/next/no-img-element
                                     <img src={orgImage} alt={orgName} className="h-full w-full object-cover" />
@@ -98,10 +108,14 @@ export default function OrganizationInfoPage() {
                                     <Shield className="h-6 w-6 text-primary" />
                                 )}
                             </div>
-                            <div>
-                                <CardTitle className="text-2xl font-semibold">{orgName}</CardTitle>
-                                <div className="flex items-center gap-2 mt-1">
-                                    {orgId && <Badge variant="outline">{orgId}</Badge>}
+                            <div className="min-w-0 flex-1">
+                                <CardTitle className="text-2xl font-semibold truncate">{orgName}</CardTitle>
+                                {orgId && (
+                                    <Badge variant="outline" className="font-mono text-xs flex max-w-full mt-1 sm:max-w-none">
+                                        <span className="block truncate">{orgId}</span>
+                                    </Badge>
+                                )}
+                                <div className="flex flex-wrap items-center gap-2 mt-1 min-w-0">
                                     {orgDomain && <Badge variant="secondary">{orgDomain}</Badge>}
                                     {createdAt && (
                                         <span className="text-xs text-muted-foreground">Created {new Date(createdAt).toLocaleDateString()}</span>
@@ -109,28 +123,27 @@ export default function OrganizationInfoPage() {
                                 </div>
                             </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                            <Button variant="outline" size="sm">
+                        <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto">
+                            <Button variant="outline" size="sm" onClick={() => setActiveTab('settings')}>
                                 <Settings className="h-4 w-4 mr-2" /> Settings
                             </Button>
-                            {/* <Button size="sm">
-                                <UserPlus2 className="h-4 w-4 mr-2" /> Invite user
-                            </Button> */}
                         </div>
                     </div>
                 </CardHeader>
                 <CardContent>
                     {/* Tabs */}
-                    <Tabs defaultValue="overview" className="w-full">
-                        <TabsList className="flex flex-wrap">
-                            <TabsTrigger value="overview">Overview</TabsTrigger>
-                            <TabsTrigger value="members">Members</TabsTrigger>
-                            <TabsTrigger value="merchants">Merchants</TabsTrigger>
-                            <TabsTrigger value="roles">Roles</TabsTrigger>
-                            <TabsTrigger value="invites">Invites</TabsTrigger>
-                            <TabsTrigger value="audit">Audit Logs</TabsTrigger>
-                            <TabsTrigger value="settings">Settings</TabsTrigger>
-                        </TabsList>
+                    <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                        <div className="overflow-x-auto">
+                            <TabsList className="inline-flex w-max">
+                                <TabsTrigger value="overview">Overview</TabsTrigger>
+                                <TabsTrigger value="members">Members</TabsTrigger>
+                                <TabsTrigger value="merchants">Merchants</TabsTrigger>
+                                <TabsTrigger value="roles">Roles</TabsTrigger>
+                                <TabsTrigger value="invites">Invites</TabsTrigger>
+                                <TabsTrigger value="audit">Audit Logs</TabsTrigger>
+                                <TabsTrigger value="settings">Settings</TabsTrigger>
+                            </TabsList>
+                        </div>
 
                         {/* Overview */}
                         <TabsContent value="overview" className="mt-6">
@@ -171,17 +184,18 @@ export default function OrganizationInfoPage() {
                         {/* Roles */}
                         <TabsContent value="roles" className="mt-6">
                             <div className="space-y-4">
-                                <div className="flex items-center justify-between">
-                                    <div>
+                                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                    <div className="min-w-0">
                                         <h3 className="text-lg font-semibold">Organization roles</h3>
                                         <p className="text-sm text-muted-foreground">Assign POS roles to manage access for merchants and staff.</p>
                                     </div>
-                                    <div className="flex items-center gap-2">
-                                        <Button variant="outline" size="sm">Edit priority</Button>
-                                        <Button size="sm">Create role</Button>
+                                    <div className="flex flex-wrap items-center gap-2 shrink-0">
+                                        <Button variant="outline" size="sm" onClick={() => router.push('/manage/roles-permissions')}>Edit priority</Button>
+                                        <Button size="sm" onClick={() => router.push('/manage/roles-permissions')}>Create role</Button>
                                     </div>
                                 </div>
 
+                                <div className="overflow-x-auto">
                                 <Table>
                                     <TableHeader>
                                         <TableRow>
@@ -214,6 +228,7 @@ export default function OrganizationInfoPage() {
                                         ))}
                                     </TableBody>
                                 </Table>
+                                </div>
 
                                 <Card className="mt-4">
                                     <CardHeader>
@@ -239,6 +254,7 @@ export default function OrganizationInfoPage() {
                                 <CardContent>
                                     {
                                         members.length > 0 &&
+                                        <div className="overflow-x-auto">
                                         <Table>
                                             <TableHeader>
                                                 <TableRow>
@@ -288,6 +304,7 @@ export default function OrganizationInfoPage() {
                                                 ))}
                                             </TableBody>
                                         </Table>
+                                        </div>
                                     }
                                     {
                                         members.length === 0 &&
@@ -340,13 +357,18 @@ export default function OrganizationInfoPage() {
                         <TabsContent value="invites" className="mt-6">
                             <Card>
                                 <CardHeader>
-                                    <div className="flex items-center justify-between">
+                                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                                         <div>
                                             <CardTitle>Invites</CardTitle>
                                             <CardDescription>Pending invitations</CardDescription>
                                         </div>
-                                        <div className="flex items-center gap-2">
-                                            <Input placeholder="Search..." className="w-72" />
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <Input
+                                                placeholder="Search..."
+                                                className="flex-1 min-w-[160px] sm:w-60 sm:flex-none"
+                                                value={inviteSearch}
+                                                onChange={(e) => setInviteSearch(e.target.value)}
+                                            />
                                             {org.members.length > 1 ?
                                                 <SendOrganizationMembersInviteButton organizationId={organizationId as string} refetch={refetchOrganizationInfo} role_types='carrier' /> :
                                                 <SendAdminInviteButton organizationId={organizationId as string} refetch={refetchOrganizationInfo} role_types='carrier' />
@@ -355,20 +377,22 @@ export default function OrganizationInfoPage() {
                                     </div>
                                 </CardHeader>
                                 <CardContent>
-                                    {(!org?.pending_org_admin_invites?.length && !org?.pending_org_member_invites?.length) && (
+                                    {(!filteredAdminInvites.length && !filteredMemberInvites.length) && (
                                         <div className="flex flex-col items-center justify-center space-y-2 py-8 text-center">
                                             <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
                                                 <Users className="h-6 w-6 text-muted-foreground" />
                                             </div>
-                                            <div className="text-sm text-muted-foreground">No pending invites.</div>
+                                            <div className="text-sm text-muted-foreground">
+                                                {inviteQuery ? 'No invites match your search.' : 'No pending invites.'}
+                                            </div>
                                         </div>
                                     )}
 
-                                    {org?.pending_org_admin_invites?.length > 0 && (
+                                    {filteredAdminInvites.length > 0 && (
                                         <div className="mb-6">
                                             <div className="text-sm font-medium mb-3">Admin invite</div>
                                             <div className="divide-y rounded-md border">
-                                                {org.pending_org_admin_invites.map((inv: PendingOrgAdminInvitesModel) => (
+                                                {filteredAdminInvites.map((inv: PendingOrgAdminInvitesModel) => (
                                                     <div key={inv.id} className="flex items-center justify-between p-4">
                                                         <div className="flex items-center gap-3">
                                                             <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center text-sm font-medium">
@@ -424,11 +448,11 @@ export default function OrganizationInfoPage() {
                                         </div>
                                     )}
 
-                                    {org?.pending_org_member_invites?.length > 0 && (
+                                    {filteredMemberInvites.length > 0 && (
                                         <div>
                                             <div className="text-sm font-medium mb-3">Member invites</div>
                                             <div className="divide-y rounded-md border">
-                                                {org.pending_org_member_invites.map((inv: any) => (
+                                                {filteredMemberInvites.map((inv: any) => (
                                                     <div key={inv.id} className="flex items-center justify-between p-4">
                                                         <div className="flex items-center gap-3">
                                                             <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center text-sm font-medium">
@@ -507,8 +531,8 @@ export default function OrganizationInfoPage() {
                                     </CardHeader>
                                     <CardContent>
                                         <div className="space-y-4">
-                                            <div className="flex items-center justify-between p-4 border border-destructive/20 rounded-lg bg-destructive/5">
-                                                <div className="space-y-1">
+                                            <div className="flex flex-col gap-3 p-4 border border-destructive/20 rounded-lg bg-destructive/5 sm:flex-row sm:items-center sm:justify-between">
+                                                <div className="space-y-1 min-w-0">
                                                     <h4 className="font-medium text-destructive">Delete Organization</h4>
                                                     <p className="text-sm text-muted-foreground">
                                                         Permanently delete this organization and all associated data.
@@ -518,7 +542,7 @@ export default function OrganizationInfoPage() {
                                                 <Button
                                                     variant="destructive"
                                                     onClick={() => setOpenDeleteOrganizationDialog(true)}
-                                                    className="ml-4"
+                                                    className="shrink-0 w-full sm:w-auto"
                                                 >
                                                     <Trash2 className="h-4 w-4 mr-2" />
                                                     Delete Organization
