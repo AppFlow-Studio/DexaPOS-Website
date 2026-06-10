@@ -1114,8 +1114,8 @@ export function OrderDetailSheet({
                     <Badge className="rounded-full border border-border/60 bg-background/90 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground shadow-sm hover:bg-background">
                       Order Details
                     </Badge>
-                    <OrderStatusBadge status={displayOrder.status} />
-                    <PaymentStatusBadge status={displayOrder.payment_status} />
+                    <OrderStatusBadge status={displayOrder.status} prefix="Order" />
+                    <PaymentStatusBadge status={displayOrder.payment_status} prefix="Payment" />
                   </div>
 
                   <div className="space-y-2">
