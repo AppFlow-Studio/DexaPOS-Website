@@ -2,7 +2,7 @@
 
 import { ChartCard } from './ChartCard'
 import { ChartContainer, ChartTooltip, type ChartConfig } from '@/components/ui/chart'
-import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend, ResponsiveContainer } from 'recharts'
+import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend } from 'recharts'
 import { Timer } from 'lucide-react'
 import type { TablePerformanceStats } from '@/types/analytics'
 
@@ -38,8 +38,7 @@ export function AvgTableTurnTime({ data, isLoading }: AvgTableTurnTimeProps) {
   }
 
   return (
-    <ChartCard 
-      className='min-w-150 '
+    <ChartCard
       title="Average Table Turn Time"
       subtitle="Seated to cleared"
       icon={Timer}
@@ -49,7 +48,7 @@ export function AvgTableTurnTime({ data, isLoading }: AvgTableTurnTimeProps) {
       {data && !isEmpty && (
         <div className="space-y-6">
           {/* Stat Cards */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div className="space-y-1 bg-blue-50 dark:bg-blue-950 p-2 rounded">
               <p className="text-xs text-muted-foreground">Avg Turn Time</p>
               <p className="text-lg font-bold text-blue-600 dark:text-blue-400">
@@ -70,13 +69,12 @@ export function AvgTableTurnTime({ data, isLoading }: AvgTableTurnTimeProps) {
             </div>
           </div>
 
-          {/* Charts side by side - flexible heights */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 auto-rows-fr ">
+          {/* Charts side by side - fixed heights so they don't collapse on mobile */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Daily Trend Line Chart */}
             {dailyChartData.length > 0 && (
-              <div className="w-full min-h-[250px]">
-                <ChartContainer config={chartConfig} className="w-full h-full">
-                  <ResponsiveContainer width="100%" height="100%">
+              <div className="w-full h-[250px]">
+                <ChartContainer config={chartConfig} className="aspect-auto w-full h-full">
                     <LineChart data={dailyChartData} margin={{ left: 0, right: 10, top: 5, bottom: 20 }}>
                       <CartesianGrid vertical={false} strokeDasharray="3 3" />
                       <XAxis
@@ -129,18 +127,16 @@ export function AvgTableTurnTime({ data, isLoading }: AvgTableTurnTimeProps) {
                       />
                       <Legend />
                     </LineChart>
-                  </ResponsiveContainer>
                 </ChartContainer>
               </div>
             )}
 
             {/* Party Size Breakdown Bar Chart */}
             {partySizeChartData.length > 0 && (
-              <div className="w-full min-h-[250px]">
+              <div className="w-full h-[274px]">
                 <p className="text-xs font-semibold mb-2 text-muted-foreground">Turn Time by Party Size</p>
-                <div className="h-[calc(100%-24px)]">
-                  <ChartContainer config={chartConfig} className="w-full h-full">
-                    <ResponsiveContainer width="100%" height="100%">
+                <div className="h-[250px]">
+                  <ChartContainer config={chartConfig} className="aspect-auto w-full h-full">
                       <BarChart data={partySizeChartData} margin={{ left: 0, right: 10, top: 5, bottom: 20 }}>
                         <CartesianGrid vertical={false} strokeDasharray="3 3" />
                         <XAxis
@@ -184,7 +180,6 @@ export function AvgTableTurnTime({ data, isLoading }: AvgTableTurnTimeProps) {
                           radius={[8, 8, 0, 0]}
                         />
                       </BarChart>
-                    </ResponsiveContainer>
                   </ChartContainer>
                 </div>
               </div>

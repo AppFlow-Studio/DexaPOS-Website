@@ -194,14 +194,15 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                     {/* Business Details Card */}
                     <Card>
                         <CardHeader>
-                            <div className="flex items-center justify-between">
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                                 <div>
                                     <CardTitle className="text-lg">Business Details</CardTitle>
                                     <CardDescription>Legal business information and registration details</CardDescription>
                                 </div>
-                                <Button 
-                                    variant="outline" 
+                                <Button
+                                    variant="outline"
                                     size="sm"
+                                    className="self-start sm:self-auto shrink-0"
                                     onClick={() => setIsEditDialogOpen(true)}
                                 >
                                     <Edit className="h-4 w-4 mr-2" />
@@ -210,7 +211,7 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                             </div>
                         </CardHeader>
                         <CardContent className="space-y-6">
-                            <div className="grid gap-6 md:grid-cols-2">
+                            <div className="grid gap-6 md:grid-cols-2 [&>*]:min-w-0">
                                 <div className="space-y-2">
                                     <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
                                         <Building2 className="h-4 w-4" />
@@ -241,13 +242,13 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                                     </div>
                                 </div>
 
-                                <div className="space-y-2">
+                                <div className="space-y-2 min-w-0">
                                     <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                                        <FileText className="h-4 w-4" />
+                                        <FileText className="h-4 w-4 shrink-0" />
                                         Business Type
                                     </div>
                                     <div>
-                                        <Badge variant="outline" className="text-base px-3 py-1">
+                                        <Badge variant="outline" className="text-sm px-2 py-0.5">
                                             {businessType}
                                         </Badge>
                                         {businessType !== 'Not specified' && businessTypes[businessType as keyof typeof businessTypes] && (
@@ -268,13 +269,13 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                                     </div>
                                 </div>
 
-                                <div className="space-y-2">
+                                <div className="space-y-2 min-w-0">
                                     <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                                        <DollarSign className="h-4 w-4" />
+                                        <DollarSign className="h-4 w-4 shrink-0" />
                                         Default Pricing Strategy
                                     </div>
                                     <div>
-                                        <Badge variant="outline" className="text-base px-3 py-1">
+                                        <Badge variant="outline" className="text-sm px-2 py-0.5 whitespace-normal break-words">
                                             {pricingStrategyLabel}
                                         </Badge>
                                         <div className="text-sm text-muted-foreground mt-1">
@@ -310,14 +311,14 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                             <CardDescription>Additional business details and metadata</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
-                            <div className="grid gap-4 md:grid-cols-2">
+                            <div className="grid gap-4 md:grid-cols-2 [&>*]:min-w-0">
                                 {/* <div className="space-y-2">
                                     <div className="text-sm font-medium text-muted-foreground">Merchant ID</div>
                                     <div className="text-sm font-mono">{merchantInfo?.id || 'N/A'}</div>
                                 </div> */}
-                                <div className="space-y-2">
+                                <div className="space-y-2 min-w-0">
                                     <div className="text-sm font-medium text-muted-foreground">Clerk Organization ID</div>
-                                    <div className="text-sm font-mono">{merchantInfo?.clerk_org_id || 'N/A'}</div>
+                                    <div className="text-sm font-mono break-all">{merchantInfo?.clerk_org_id || 'N/A'}</div>
                                 </div>
                                 <div className="space-y-2">
                                     <div className="text-sm font-medium text-muted-foreground">Status</div>
@@ -341,12 +342,12 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
             <TabsContent value="locations" className="mt-6">
                 <Card>
                     <CardHeader>
-                        <div className="flex items-center justify-between">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                             <div>
                                 <CardTitle className="text-lg">Business Locations</CardTitle>
                                 <CardDescription>All locations associated with this merchant</CardDescription>
                             </div>
-                            <Button variant="outline" size="sm" asChild>
+                            <Button variant="outline" size="sm" className="self-start sm:self-auto shrink-0" asChild>
                                 <Link href={`/manage/merchants/${merchantInfo.id}/locations/new`}>
                                     <MapPin className="h-4 w-4 mr-2" />
                                     Add Location
@@ -382,6 +383,7 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                                 </EmptyContent>
                             </Empty>
                         ) : (
+                            <div className="overflow-x-auto">
                             <Table>
                                 <TableHeader>
                                     <TableRow>
@@ -433,13 +435,14 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                                     ))}
                                 </TableBody>
                             </Table>
+                            </div>
                         )}
                     </CardContent>
                 </Card>
 
                 {/* Location Statistics */}
                 {locationsList.length > 0 && (
-                    <div className="grid gap-4 md:grid-cols-3 mt-6">
+                    <div className="grid gap-4 grid-cols-2 md:grid-cols-3 mt-6">
                         <Card>
                             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                                 <CardTitle className="text-sm font-medium">Total Locations</CardTitle>

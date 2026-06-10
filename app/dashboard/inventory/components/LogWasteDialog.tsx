@@ -121,9 +121,9 @@ export function LogWasteDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-[520px] p-0 gap-0 overflow-hidden">
+      <DialogContent className="sm:max-w-[520px] p-0 gap-0 overflow-hidden flex flex-col max-sm:h-dvh sm:max-h-[90vh]">
         {/* Header band */}
-        <DialogHeader className="space-y-0 border-b bg-gradient-to-br from-red-500/10 via-background to-background px-6 py-5">
+        <DialogHeader className="shrink-0 space-y-0 border-b bg-gradient-to-br from-red-500/10 via-background to-background px-6 py-5">
           <div className="flex items-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-red-500/15 ring-1 ring-red-500/20">
               <Trash2 className="h-5 w-5 text-red-500" />
@@ -139,7 +139,7 @@ export function LogWasteDialog({
 
         <form
           onSubmit={handleSubmit}
-          className="max-h-[60vh] space-y-5 overflow-y-auto px-6 py-5"
+          className="flex-1 min-h-0 space-y-5 overflow-y-auto px-6 py-5"
         >
           {/* Item picker */}
           <div className="space-y-2">
@@ -209,7 +209,7 @@ export function LogWasteDialog({
           </div>
 
           {/* Quantity + Date */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 xs:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label
                 htmlFor="waste-qty"
@@ -287,14 +287,16 @@ export function LogWasteDialog({
                     type="button"
                     onClick={() => setReason(r.value)}
                     className={cn(
-                      "flex flex-col items-center gap-1.5 rounded-lg border px-2 py-2.5 text-xs font-medium transition-all",
+                      "flex flex-col items-center gap-1.5 rounded-lg border px-1 py-2.5 text-center text-xs font-medium transition-all",
                       active
                         ? "border-red-500/40 bg-red-500/10 text-red-600 ring-1 ring-red-500/20"
                         : "border-border bg-background text-muted-foreground hover:border-foreground/20 hover:text-foreground",
                     )}
                   >
-                    <Icon className="h-4 w-4" />
-                    {r.label}
+                    <Icon className="h-4 w-4 shrink-0" />
+                    <span className="leading-tight break-words hyphens-auto">
+                      {r.label}
+                    </span>
                   </button>
                 );
               })}
@@ -321,7 +323,7 @@ export function LogWasteDialog({
         </form>
 
         {/* Footer with cost summary */}
-        <DialogFooter className="flex-row items-center justify-between gap-3 border-t bg-muted/30 px-6 py-4 sm:justify-between">
+        <DialogFooter className="shrink-0 flex-row items-center justify-between gap-3 border-t bg-muted/30 px-6 py-4 sm:justify-between">
           <div>
             <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
               Estimated Cost

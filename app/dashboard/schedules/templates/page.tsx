@@ -109,9 +109,9 @@ export default function TemplateLibraryPage() {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-6rem)] p-8 space-y-8 bg-background overflow-y-auto w-full">
+    <div className="flex flex-col h-[calc(100vh-6rem)] p-4 sm:p-8 space-y-6 sm:space-y-8 bg-background overflow-y-auto w-full">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="icon" onClick={() => router.back()}>
             <ChevronLeft className="w-5 h-5" />
@@ -129,23 +129,23 @@ export default function TemplateLibraryPage() {
         </div>
 
         {!isSelectionMode && (
-          <div className="flex gap-3">
+          <div className="flex flex-wrap gap-3">
             <Button
               variant="outline"
               onClick={() => setSelectionMode(true)}
-              className="gap-2"
+              className="gap-2 flex-1 sm:flex-none"
             >
-              <CheckCircle2 className="w-4 h-4" />
-              Set Active Templates
+              <CheckCircle2 className="w-4 h-4 shrink-0" />
+              <span className="truncate">Set Active Templates</span>
             </Button>
             <Button
               onClick={() =>
                 router.push("/dashboard/schedules/templates/create")
               }
-              className="gap-2"
+              className="gap-2 flex-1 sm:flex-none"
             >
-              <Plus className="w-4 h-4" />
-              Create Template
+              <Plus className="w-4 h-4 shrink-0" />
+              <span className="truncate">Create Template</span>
             </Button>
           </div>
         )}
@@ -153,9 +153,9 @@ export default function TemplateLibraryPage() {
 
       {/* Selection Mode Banner */}
       {isSelectionMode && (
-        <div className="bg-primary/10 border border-primary/20 rounded-lg p-4 flex items-center justify-between">
+        <div className="bg-primary/10 border border-primary/20 rounded-lg p-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
-            <CheckCircle2 className="w-5 h-5 text-primary" />
+            <CheckCircle2 className="w-5 h-5 text-primary shrink-0" />
             <div>
               <h3 className="font-semibold text-foreground">
                 Select Templates for Quick Access
@@ -166,11 +166,18 @@ export default function TemplateLibraryPage() {
               </p>
             </div>
           </div>
-          <div className="flex gap-2">
-            <Button variant="ghost" onClick={handleCancelSelection}>
+          <div className="flex gap-2 shrink-0">
+            <Button
+              variant="ghost"
+              onClick={handleCancelSelection}
+              className="flex-1 sm:flex-none"
+            >
               Cancel
             </Button>
-            <Button onClick={handleSaveSelection}>
+            <Button
+              onClick={handleSaveSelection}
+              className="flex-1 sm:flex-none"
+            >
               Save Selection ({selectedActiveIds.length})
             </Button>
           </div>

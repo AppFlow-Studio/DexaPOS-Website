@@ -1,18 +1,7 @@
 'use client'
 
 import { useMemo } from 'react'
-import {
-  BarChart,
-  Bar,
-  PieChart,
-  Pie,
-  Cell,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-} from 'recharts'
+import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts'
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart'
 import { ChartCard } from './ChartCard'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -157,16 +146,14 @@ export function TipsAnalysisCard({ data, isLoading }: TipsAnalysisCardProps) {
         <div className="grid gap-4 md:grid-cols-2">
           {/* Pie Chart */}
           {pieData.length > 0 && (
-            <ChartContainer config={chartConfig} className="h-[300px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
+            <ChartContainer config={chartConfig} className="aspect-auto h-[300px] w-full">
                 <PieChart>
                   <Pie
                     data={pieData}
                     cx="50%"
                     cy="50%"
                     labelLine={false}
-                    label={({ name, value }) => `${name}: $${value.toFixed(2)}`}
-                    outerRadius={100}
+                    outerRadius="80%"
                     fill="#8884d8"
                     dataKey="value"
                   >
@@ -175,15 +162,22 @@ export function TipsAnalysisCard({ data, isLoading }: TipsAnalysisCardProps) {
                     ))}
                   </Pie>
                   <ChartTooltip content={<ChartTooltipContent />} />
+                  <Legend
+                    verticalAlign="bottom"
+                    height={36}
+                    wrapperStyle={{ fontSize: 12 }}
+                    formatter={(value, entry) => {
+                      const v = (entry?.payload as { value?: number } | undefined)?.value
+                      return `${value}${v != null ? `: $${v.toFixed(2)}` : ''}`
+                    }}
+                  />
                 </PieChart>
-              </ResponsiveContainer>
             </ChartContainer>
           )}
 
           {/* Distribution Bar Chart */}
           {distributionData.length > 0 && (
-            <ChartContainer config={chartConfig} className="h-[300px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
+            <ChartContainer config={chartConfig} className="aspect-auto h-[300px] w-full">
                 <BarChart data={distributionData}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="bucket" />
@@ -191,7 +185,6 @@ export function TipsAnalysisCard({ data, isLoading }: TipsAnalysisCardProps) {
                   <ChartTooltip content={<ChartTooltipContent />} />
                   <Bar dataKey="count" fill="#3b82f6" radius={[8, 8, 0, 0]} />
                 </BarChart>
-              </ResponsiveContainer>
             </ChartContainer>
           )}
         </div>
@@ -200,7 +193,7 @@ export function TipsAnalysisCard({ data, isLoading }: TipsAnalysisCardProps) {
         {staffTipsData.length > 0 && (
           <div>
             <h3 className="text-sm font-semibold mb-4">Tips by Staff Member</h3>
-            <DataTable columns={columns} data={staffTipsData} />
+            <DataTable columns={columns} data={staffTipsData} tableClassName="min-w-[560px]" />
           </div>
         )}
       </div>

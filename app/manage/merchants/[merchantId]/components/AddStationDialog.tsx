@@ -219,7 +219,7 @@ export function AddStationDialog({ open, onOpenChange, merchantId, locations }: 
                             <div
                                 key={item.id}
                                 className={cn(
-                                    'rounded-xl border px-3 py-2 text-sm transition-colors',
+                                    'min-w-0 rounded-xl border px-2 py-2 text-sm transition-colors sm:px-3',
                                     step === item.id
                                         ? 'border-primary bg-primary/10 text-primary'
                                         : step > item.id
@@ -227,10 +227,10 @@ export function AddStationDialog({ open, onOpenChange, merchantId, locations }: 
                                             : 'border-slate-200 bg-slate-50 text-slate-500'
                                 )}
                             >
-                                <div className="text-[11px] uppercase tracking-wide opacity-70">
+                                <div className="text-[10px] uppercase tracking-wide opacity-70 sm:text-[11px]">
                                     Step {item.id}
                                 </div>
-                                <div className="font-medium">{item.label}</div>
+                                <div className="truncate text-xs font-medium sm:text-sm">{item.label}</div>
                             </div>
                         ))}
                     </div>

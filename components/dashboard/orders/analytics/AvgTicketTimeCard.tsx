@@ -2,7 +2,7 @@
 
 import { ChartCard } from './ChartCard'
 import { ChartContainer, ChartTooltip, type ChartConfig } from '@/components/ui/chart'
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Legend, ResponsiveContainer, ReferenceLine } from 'recharts'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Legend, ReferenceLine } from 'recharts'
 import { Clock } from 'lucide-react'
 import type { KitchenPerformanceStats } from '@/types/analytics'
 
@@ -56,7 +56,7 @@ export function AvgTicketTimeCard({
       {data && !isEmpty && (
         <div className="space-y-4">
           {/* Current Metric */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div className="space-y-1 bg-blue-50 dark:bg-blue-950 p-2 rounded">
               <p className="text-xs text-muted-foreground">Current Avg</p>
               <p className="text-lg font-bold text-blue-600 dark:text-blue-400">
@@ -75,8 +75,7 @@ export function AvgTicketTimeCard({
 
           {/* Trend Line Chart */}
           <div className="w-full h-[320px]">
-            <ChartContainer config={chartConfig} className="w-full h-full">
-              <ResponsiveContainer width="100%" height="100%">
+            <ChartContainer config={chartConfig} className="aspect-auto w-full h-full">
                 <LineChart data={chartData} margin={{ left: 0, right: 10, top: 5, bottom: 20 }}>
                   <CartesianGrid vertical={false} strokeDasharray="3 3" />
                   <XAxis
@@ -135,7 +134,6 @@ export function AvgTicketTimeCard({
                   />
                   <Legend />
                 </LineChart>
-              </ResponsiveContainer>
             </ChartContainer>
           </div>
         </div>

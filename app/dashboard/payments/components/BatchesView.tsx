@@ -276,21 +276,21 @@ function DbBatchCard({ batch }: { batch: SettlementBatchRecord }) {
           {/* Header row */}
           <CollapsibleTrigger asChild>
             <button className="w-full text-left cursor-pointer">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex min-w-0 items-center gap-3">
                   {isOpen ? (
-                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                    <ChevronDown className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
                   ) : (
-                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                    <ChevronRight className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
                   )}
-                  <div>
-                    <div className="flex items-center gap-2">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
                       <span className="font-mono font-semibold text-sm">
                         Batch {formatBatchLabel(batch)}
                       </span>
                       {getStatusBadge(batch.status)}
                     </div>
-                    <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground mt-0.5">
                       <span>{formatDate(batch.business_date)}</span>
                       {(batch.payment_terminals?.terminal_name ||
                         batch.payment_terminals?.serial_number ||
@@ -314,7 +314,7 @@ function DbBatchCard({ batch }: { batch: SettlementBatchRecord }) {
                 </div>
 
                 {/* Financial summary */}
-                <div className="flex items-center gap-6 text-sm">
+                <div className="flex flex-shrink-0 flex-wrap items-center gap-x-6 gap-y-1 pl-7 text-sm sm:pl-0">
                   <div className="flex items-center gap-1 text-green-700">
                     <ArrowDownLeft className="h-3.5 w-3.5" />
                     <span>{formatCurrency(batch.gross_amount)}</span>
@@ -417,18 +417,18 @@ function ComputedBatchCard({ batch }: { batch: ComputedBatch }) {
         <CardContent className="p-4">
           <CollapsibleTrigger asChild>
             <button className="w-full text-left cursor-pointer">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex min-w-0 items-center gap-3">
                   {isOpen ? (
-                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                    <ChevronDown className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
                   ) : (
-                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                    <ChevronRight className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
                   )}
-                  <div>
+                  <div className="min-w-0">
                     <span className="font-mono font-semibold text-sm">
                       Batch {batch.batch_number}
                     </span>
-                    <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground mt-0.5">
                       <span>{formatDate(batch.earliest_payment)}</span>
                       {batch.earliest_payment !== batch.latest_payment && (
                         <span>to {formatDate(batch.latest_payment)}</span>
@@ -437,7 +437,7 @@ function ComputedBatchCard({ batch }: { batch: ComputedBatch }) {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-6 text-sm">
+                <div className="flex flex-shrink-0 flex-wrap items-center gap-x-6 gap-y-1 pl-7 text-sm sm:pl-0">
                   <div className="flex items-center gap-1 text-green-700">
                     <ArrowDownLeft className="h-3.5 w-3.5" />
                     <span>{formatCurrency(batch.gross_amount)}</span>
@@ -501,8 +501,8 @@ function BatchPaymentsTable({
   }
 
   return (
-    <div className="rounded border text-xs">
-      <table className="w-full">
+    <div className="overflow-x-auto rounded border text-xs">
+      <table className="w-full min-w-[480px]">
         <thead>
           <tr className="border-b text-muted-foreground">
             <th className="p-2 text-left font-medium">Order #</th>

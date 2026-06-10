@@ -211,7 +211,7 @@ export function VoidsReport({
         {data.voids && data.voids.length > 0 ? (
           <div className="space-y-4">
             {/* Summary Cards */}
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <SummaryCard
                 label="Total Voids"
                 value={totalVoids.toLocaleString()}
@@ -255,7 +255,7 @@ export function VoidsReport({
         {data.refunds && data.refunds.length > 0 ? (
           <div className="space-y-4">
             {/* Summary Cards */}
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <SummaryCard
                 label="Total Refunds"
                 value={totalRefunds.toLocaleString()}

@@ -178,11 +178,11 @@ const navMain = [
         url: "/dashboard/staff",
         icon: Users,
       },
-      // {
-      //   title: "Schedules",
-      //   url: "/dashboard/schedules",
-      //   icon: Calendar,
-      // },
+      {
+        title: "Schedules",
+        url: "/dashboard/schedules",
+        icon: Calendar,
+      },
       {
         title: "Online Ordering",
         url: "/dashboard/online-ordering",
@@ -1245,6 +1245,7 @@ export default function MerchantDashboardLayout({
     { title: "Locations", url: "/dashboard/locations", icon: MapPin },
     { title: "Tables", url: "/dashboard/tables", icon: Coffee },
     { title: "Reservations", url: "/dashboard/reservations", icon: CalendarClock },
+    { title: "Schedules", url: "/dashboard/schedules", icon: Calendar },
     { title: "Items", url: "/dashboard/menu/items", icon: List },
     { title: "Categories", url: "/dashboard/menu/categories", icon: Tag },
     { title: "Discounts", url: "/dashboard/discounts", icon: Banknote },
