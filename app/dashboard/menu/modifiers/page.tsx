@@ -543,8 +543,6 @@ const sensors = useSensors(
     isSavingGroupRef.current = true;
     setGroupOrderSaving(true);
 
-    const reordered = arrayMove([...filteredGroups], oldIndex, newIndex);
-    setGroupOrderSaving(true);
     try {
       if (isAllLocations) {
         const result = await ReorderModifierGroups(
