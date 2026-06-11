@@ -31,6 +31,7 @@ import {
   ChevronDown,
 } from "lucide-react";
 import { MenuActionsDropdown } from "./MenuActionsDropdown";
+import { useIsSingleLocation } from "@/stores/location-store";
 import {
   DndContext,
   closestCenter,
@@ -473,6 +474,14 @@ export function MenuListView({
 
 // Location Badge Component
 function LocationBadge({ menu }: { menu: MenuWithLocation }) {
+  const isSingleLocation = useIsSingleLocation();
+
+  // Single-location accounts have one menu plane — a "Global"/location badge on
+  // every menu is noise that leaks the multi-location framing. Hide it.
+  if (isSingleLocation) {
+    return null;
+  }
+
   if (menu.location_id && menu.locations) {
     return (
       <Badge

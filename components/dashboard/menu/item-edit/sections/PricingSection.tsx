@@ -11,6 +11,7 @@ import { UpdateMenuItem } from "@/app/dashboard/actions/menu-items";
 import {
   useIsAllLocations,
   useLocationStore,
+  useIsSingleLocation,
 } from "@/stores/location-store";
 import { AffectsTag } from "../../AffectsTag";
 import { CascadeLadder } from "../../CascadeLadder";
@@ -20,8 +21,12 @@ import type { SectionRenderCtx } from "@/app/dashboard/menu/items/[itemId]/edit/
 export function PricingSection({ itemId, item, scope }: SectionRenderCtx) {
   const queryClient = useQueryClient();
   const isAllLocations = useIsAllLocations();
+  const isSingleLocation = useIsSingleLocation();
   const { selectedLocationId } = useLocationStore();
-  const locationId = isAllLocations ? null : selectedLocationId;
+  // Single-location accounts write the core directly — omit location_id even if a
+  // stale per-location selection is still in scope (first-load window before the
+  // scope-reset effect runs). isSingleLocation drives the omission, not just the UI.
+  const locationId = isAllLocations || isSingleLocation ? null : selectedLocationId;
 
   const initialPrice =
     item?.effective_price != null ? String(item.effective_price) : "";
@@ -78,16 +83,18 @@ export function PricingSection({ itemId, item, scope }: SectionRenderCtx) {
     <div className="space-y-4">
       <SectionHeader title="Pricing" scope={scope} />
       <div className="space-y-4 rounded-lg border bg-card p-4">
-        <div className="space-y-2">
-          <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Cascade
-          </Label>
-          <CascadeLadder
-            itemId={itemId}
-            context={scope}
-            locationId={locationId}
-          />
-        </div>
+        {!isSingleLocation && (
+          <div className="space-y-2">
+            <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Cascade
+            </Label>
+            <CascadeLadder
+              itemId={itemId}
+              context={scope}
+              locationId={locationId}
+            />
+          </div>
+        )}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="space-y-1.5">
             <Label htmlFor="pricing-price">Price</Label>

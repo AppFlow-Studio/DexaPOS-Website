@@ -89,6 +89,8 @@ import {
   useLocationStore,
   useSelectedLocation,
   useIsAllLocations,
+  useIsSingleLocation,
+  useSingleLocationName,
 } from "@/stores/location-store";
 import { useSessionSync } from "./hooks/useSessionSync";
 import { useQueryClient } from "@tanstack/react-query";
@@ -812,9 +814,15 @@ function LocationIndicator({ userRole }: { userRole?: string }) {
   } = useLocationStore();
   const selectedLocation = useSelectedLocation();
   const isAllLocations = useIsAllLocations();
+  const isSingleLocation = useIsSingleLocation();
+  const singleLocationName = useSingleLocationName();
 
   // Check if user is merchant.owner or merchant.admin — both can view All Locations
   const isMerchantOwner = userRole === "merchant.owner" || userRole === "merchant.admin";
+
+  // Multi-location pickers never list inactive locations: an inactive store
+  // cannot be a switch target and must not appear in the picker.
+  const pickableLocations = locations.filter((l) => l.is_active);
 
   const handleLocationChange = (locationId: string) => {
     setSelectedLocation(locationId);
@@ -852,6 +860,19 @@ function LocationIndicator({ userRole }: { userRole?: string }) {
     );
   }
 
+  // Single-location accounts manage one menu (the core). There is nothing to
+  // pick, so show the store name as static text — no picker, no "All Locations".
+  if (isSingleLocation) {
+    return (
+      <div className="flex items-center gap-2 px-3 py-1.5 rounded-full text-sm bg-muted/50">
+        <Store className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+        <span className="max-w-40 truncate font-medium">
+          {singleLocationName ?? "Your store"}
+        </span>
+      </div>
+    );
+  }
+
   const displayName = isAllLocations
     ? "All Locations"
     : selectedLocation?.name ||
@@ -880,15 +901,15 @@ function LocationIndicator({ userRole }: { userRole?: string }) {
                   <Badge variant="secondary" className="ml-auto text-[10px] px-1.5">Active</Badge>
                 )}
               </button>
-              {locations.length > 0 && <div className="my-1 border-t" />}
+              {pickableLocations.length > 0 && <div className="my-1 border-t" />}
             </>
           )}
-          {locations.length > 0 && (
+          {pickableLocations.length > 0 && (
             <>
               {isMerchantOwner && (
                 <p className="px-3 py-1 text-xs text-muted-foreground">Switch to</p>
               )}
-              {locations.map((location) => {
+              {pickableLocations.map((location) => {
                 const isPrimary = (location as any).is_primary_location === true;
                 return (
                   <button
@@ -945,17 +966,17 @@ function LocationIndicator({ userRole }: { userRole?: string }) {
                 </Badge>
               )}
             </DropdownMenuItem>
-            {locations.length > 0 && <DropdownMenuSeparator />}
+            {pickableLocations.length > 0 && <DropdownMenuSeparator />}
           </>
         )}
-        {locations.length > 0 && (
+        {pickableLocations.length > 0 && (
           <>
             {isMerchantOwner && (
               <DropdownMenuLabel className="text-xs text-muted-foreground">
                 Switch to
               </DropdownMenuLabel>
             )}
-            {locations.map((location, index) => {
+            {pickableLocations.map((location, index) => {
               const isPrimary = (location as any).is_primary_location === true;
               return (
                 <DropdownMenuItem
@@ -1129,6 +1150,12 @@ export default function MerchantDashboardLayout({
   // Check if user is merchant.owner or merchant.admin
   const isMerchantOwner = userRole === "merchant.owner" || userRole === "merchant.admin";
 
+  // Effective reach for this identity: count ACTIVE locations only, so an
+  // inactive store never inflates the count. Drives the single-location lock.
+  const activeLocationCount = Array.isArray(locations)
+    ? locations.filter((l) => l.is_active).length
+    : 0;
+
   // Monitor session state to prevent unnecessary query invalidation
   useSessionSync();
 
@@ -1167,16 +1194,14 @@ export default function MerchantDashboardLayout({
     // (the "Viewing Unknown Location" bug for first-time merchants).
     setLocations(locations);
 
-    // Set primary location as default only on first load for non-owners with a single location.
-    // Owners and users with multiple locations can remain on 'all'.
+    // Single-location accounts manage one menu — the global core. Keep their
+    // scope on 'all' (which omits location_id and writes the core) so we never
+    // create per-location overlay rows. Multi-location accounts are untouched.
     if (
-      !wasInitialized &&
-      locations.length > 0 &&
-      selectedLocationId === "all" &&
-      !isMerchantOwner &&
-      locations.length === 1
+      activeLocationCount === 1 &&
+      selectedLocationId !== "all"
     ) {
-      setSelectedLocation(locations[0].id);
+      setSelectedLocation("all");
     }
   }, [
     clerkOrgId,
@@ -1189,20 +1214,8 @@ export default function MerchantDashboardLayout({
     initialize,
     isInitialized,
     selectedLocationId,
-    isMerchantOwner,
+    activeLocationCount,
   ]);
-
-  // Handle non-owner case: if user only has access to a single location, force them to it
-  useEffect(() => {
-    if (
-      !isMerchantOwner &&
-      locations &&
-      locations.length === 1 &&
-      selectedLocationId === "all"
-    ) {
-      setSelectedLocation(locations[0].id);
-    }
-  }, [isMerchantOwner, locations, selectedLocationId, setSelectedLocation]);
 
   useEffect(() => {
     if (isLoaded && !isSignedIn) {

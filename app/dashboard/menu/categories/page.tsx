@@ -61,7 +61,7 @@ import {
   UpdateLocationCategoryOverride,
   RemoveLocationCategoryOverride,
 } from "../../actions/categories";
-import { useLocationStore } from "@/stores/location-store";
+import { useLocationStore, useIsSingleLocation } from "@/stores/location-store";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -133,6 +133,7 @@ export default function CategoriesPage() {
   const queryClient = useQueryClient();
   const { selectedLocationId } = useLocationStore();
   const isAllLocations = selectedLocationId === "all" || !selectedLocationId;
+  const isSingleLocation = useIsSingleLocation();
 
   // Prep station hooks (location-scoped)
   const { data: prepStations = [] } = usePrepStations(selectedLocationId);
@@ -648,35 +649,39 @@ export default function CategoriesPage() {
         <div>
           <div className="flex items-center gap-3 flex-wrap">
             <h2 className="text-2xl font-bold tracking-tight">Categories</h2>
-            {/* Location scope indicator */}
-            <Badge
-              variant={isAllLocations ? "secondary" : "default"}
-              className={cn(
-                "gap-1.5 animate-in fade-in slide-in-from-left-2 duration-300",
-                !isAllLocations &&
-                  "bg-blue-500/10 text-blue-600 border-blue-200",
-              )}
-            >
-              {isAllLocations ? (
-                <Globe className="h-3 w-3" />
-              ) : (
-                <MapPin className="h-3 w-3" />
-              )}
-              {isAllLocations
-                ? "All Locations"
-                : currentLocation?.name || "Location"}
-            </Badge>
+            {/* Location scope indicator — hidden for single-location accounts */}
+            {!isSingleLocation && (
+              <Badge
+                variant={isAllLocations ? "secondary" : "default"}
+                className={cn(
+                  "gap-1.5 animate-in fade-in slide-in-from-left-2 duration-300",
+                  !isAllLocations &&
+                    "bg-blue-500/10 text-blue-600 border-blue-200",
+                )}
+              >
+                {isAllLocations ? (
+                  <Globe className="h-3 w-3" />
+                ) : (
+                  <MapPin className="h-3 w-3" />
+                )}
+                {isAllLocations
+                  ? "All Locations"
+                  : currentLocation?.name || "Location"}
+              </Badge>
+            )}
           </div>
           <p className="text-muted-foreground">
-            {isAllLocations
-              ? "Manage global categories for your menus"
-              : `Customize categories for ${
-                  currentLocation?.name || "this location"
-                }`}
+            {isSingleLocation
+              ? "Manage your menu categories"
+              : isAllLocations
+                ? "Manage global categories for your menus"
+                : `Customize categories for ${
+                    currentLocation?.name || "this location"
+                  }`}
           </p>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
-          {!isAllLocations && (
+          {!isSingleLocation && !isAllLocations && (
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -695,12 +700,16 @@ export default function CategoriesPage() {
             </TooltipProvider>
           )}
           <Button onClick={() => setIsCreateSheetOpen(true)} className="gap-2">
-            {isAllLocations ? (
+            {isSingleLocation ? (
+              <Plus className="h-4 w-4" />
+            ) : isAllLocations ? (
               <Globe className="h-4 w-4" />
             ) : (
               <MapPin className="h-4 w-4" />
             )}
-            Create {isAllLocations ? "Global" : "Location"} Category
+            {isSingleLocation
+              ? "Create Category"
+              : `Create ${isAllLocations ? "Global" : "Location"} Category`}
           </Button>
         </div>
       </div>

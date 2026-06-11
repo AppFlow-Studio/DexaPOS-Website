@@ -163,6 +163,33 @@ export const useHasLocations = () => {
   return useLocationStore((state) => state.locations.length > 0);
 };
 
+// ----------------------------------------------------------------------------
+// Single-location resolver
+// ----------------------------------------------------------------------------
+// "How many locations can this identity actually reach" is derived from the
+// already-resolved store list (GetLocations resolves owners/admins to all
+// merchant locations and managers to their assigned ones). We count ACTIVE
+// locations only, so an inactive location never inflates the count and an
+// account with one active store collapses to the single-location experience.
+
+export const useActiveLocations = () => {
+  return useLocationStore((state) =>
+    state.locations.filter((l) => l.is_active),
+  );
+};
+
+export const useIsSingleLocation = () => {
+  return useLocationStore(
+    (state) => state.locations.filter((l) => l.is_active).length === 1,
+  );
+};
+
+export const useSingleLocationName = () => {
+  return useLocationStore(
+    (state) => state.locations.filter((l) => l.is_active)[0]?.name ?? null,
+  );
+};
+
 // ============================================================================
 // Helper Types
 // ============================================================================
