@@ -8,7 +8,6 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts'
-import { ChartContainer, ChartTooltipContent } from '@/components/ui/chart'
 import { ChartCard } from './ChartCard'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -105,45 +104,56 @@ export function OrderStatusFunnel({
         {/* Donut + Legend */}
         {chartData.length > 0 && (
           <div className="grid md:grid-cols-2 gap-12 items-center">
-            <ChartContainer
-              config={{ pie: { label: 'Orders' } }}
-              className="h-[340px] w-full"
-            >
-              <div className="relative h-full w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Tooltip content={<ChartTooltipContent />} />
-                    <Pie
-                      data={chartData}
-                      dataKey="count"
-                      nameKey="label"
-                      innerRadius={90}
-                      outerRadius={130}
-                      paddingAngle={4}
-                    >
-                      {chartData.map((entry) => (
-                        <Cell
-                          key={entry.status}
-                          fill={
-                            STATUS_COLOR_MAP[entry.status] ?? '#3b82f6'
-                          }
-                        />
-                      ))}
-                    </Pie>
-                  </PieChart>
-                </ResponsiveContainer>
+            <div className="relative h-[340px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Tooltip
+                    content={({ active, payload }) => {
+                      if (!active || !payload?.length) return null
+                      const item = payload[0]
+                      const step = item.payload as { label: string; count: number; percentage: string }
+                      return (
+                        <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-lg dark:border-slate-700 dark:bg-slate-950">
+                          <p className="mb-1 text-xs font-semibold text-slate-500 dark:text-slate-400">
+                            {step.label}
+                          </p>
+                          <p className="text-xs font-bold text-slate-900 dark:text-slate-100">
+                            {step.count} ({step.percentage}%)
+                          </p>
+                        </div>
+                      )
+                    }}
+                  />
+                  <Pie
+                    data={chartData}
+                    dataKey="count"
+                    nameKey="label"
+                    innerRadius="62%"
+                    outerRadius="90%"
+                    paddingAngle={4}
+                  >
+                    {chartData.map((entry) => (
+                      <Cell
+                        key={entry.status}
+                        fill={
+                          STATUS_COLOR_MAP[entry.status] ?? '#3b82f6'
+                        }
+                      />
+                    ))}
+                  </Pie>
+                </PieChart>
+              </ResponsiveContainer>
 
-                {/* Center Label */}
-                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                  <div className="text-4xl font-bold leading-none">
-                    {totalOrders}
-                  </div>
-                  <div className="text-sm text-muted-foreground mt-1">
-                    Total Orders
-                  </div>
+              {/* Center Label */}
+              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                <div className="text-4xl font-bold leading-none">
+                  {totalOrders}
+                </div>
+                <div className="text-sm text-muted-foreground mt-1">
+                  Total Orders
                 </div>
               </div>
-            </ChartContainer>
+            </div>
 
             {/* Legend */}
             <div className="space-y-4">

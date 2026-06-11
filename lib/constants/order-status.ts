@@ -8,7 +8,7 @@ import { OrderStatus } from "@/types/order-management";
  * NOTE: this is fulfillment `status`, not `payment_status` — do not conflate the two.
  */
 
-/** Display order for the Status filter dropdown (Draft … Void). */
+/** Display order for the Status filter dropdown (`draft`/Open … Void). */
 export const ORDER_STATUS_ORDER: OrderStatus[] = [
   "draft",
   "pending",
@@ -23,7 +23,7 @@ export const ORDER_STATUS_ORDER: OrderStatus[] = [
 
 /** Human-readable labels for each order status. */
 export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
-  draft: "Draft",
+  draft: "Open",
   pending: "Pending",
   sent_to_kitchen: "Sent to Kitchen",
   preparing: "Preparing",

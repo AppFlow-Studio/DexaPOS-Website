@@ -1308,7 +1308,7 @@ export function OrderDetailFullPage({
 
   React.useEffect(() => {
     document.title = order
-      ? `Order #${order.display_number || order.order_number} | DEXA POS`
+      ? `Order #${String(order.display_number || order.order_number).replace(/^#/, "")} | DEXA POS`
       : "Order | DEXA POS";
     return () => {
       document.title = "DEXA POS";
@@ -1398,7 +1398,7 @@ export function OrderDetailFullPage({
           const isLast = i === breadcrumbs.length - 1;
           const label =
             isLast && order
-              ? `Order #${order.display_number || order.order_number}`
+              ? `Order #${String(order.display_number || order.order_number).replace(/^#/, "")}`
               : crumb.label;
           return (
             <React.Fragment key={i}>
@@ -1432,11 +1432,11 @@ export function OrderDetailFullPage({
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <h1 className="text-2xl font-bold tracking-tight">
-            Order #{order.display_number || order.order_number}
+            Order #{String(order.display_number || order.order_number).replace(/^#/, "")}
           </h1>
-          <OrderStatusBadge status={order.status} />
+          <OrderStatusBadge status={order.status} prefix="Order" />
           <span className="text-muted-foreground">●</span>
-          <PaymentStatusBadge status={order.payment_status} />
+          <PaymentStatusBadge status={order.payment_status} prefix="Payment" />
           <div className="flex-1 min-w-0" />
           <div className="hidden md:block">
             <DropdownMenu>

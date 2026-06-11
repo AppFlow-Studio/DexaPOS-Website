@@ -210,14 +210,22 @@ function CategoryFilterBar({
   onToggle,
   onReset,
   eventCounts,
+  issueCount,
+  issuesOnly,
+  onToggleIssuesOnly,
 }: {
   categories: TimelineCategory[];
   activeCategories: Set<TimelineCategory>;
   onToggle: (cat: TimelineCategory) => void;
   onReset: () => void;
   eventCounts: Map<TimelineCategory, number>;
+  issueCount: number;
+  issuesOnly: boolean;
+  onToggleIssuesOnly: () => void;
 }) {
-  const allActive = activeCategories.size === categories.length;
+  // "All" is the resting state: every category active and no issues-only focus.
+  const allActive =
+    !issuesOnly && activeCategories.size === categories.length;
 
   return (
     <div className="flex flex-wrap items-center gap-1.5">
@@ -236,7 +244,9 @@ function CategoryFilterBar({
         const cfg = CATEGORY_CONFIG[cat];
         const count = eventCounts.get(cat) ?? 0;
         if (count === 0) return null;
-        const isActive = activeCategories.has(cat);
+        // While issues-only focus is on, category selection is overridden, so
+        // render every category chip in its inactive state.
+        const isActive = !issuesOnly && activeCategories.has(cat);
         return (
           <button
             key={cat}
@@ -261,6 +271,41 @@ function CategoryFilterBar({
           </button>
         );
       })}
+
+      {/* Errors & Warnings — only renders when the order has at least one
+          warning/error event; its presence is itself a "something went wrong"
+          signal. Tapping it focuses the timeline on just those events. The
+          divider sets it apart from the category chips: it filters by severity,
+          a different axis, so its count overlaps the categories rather than
+          adding to them. */}
+      {issueCount > 0 && (
+        <>
+          <span
+            aria-hidden
+            className="mx-1 h-4 w-px shrink-0 self-center bg-border"
+          />
+          <button
+            onClick={onToggleIssuesOnly}
+            className={cn(
+              "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium transition-colors border",
+              issuesOnly
+                ? "bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400 border-red-200 dark:border-red-800"
+                : "bg-muted/30 text-muted-foreground/60 border-transparent hover:bg-muted/50 hover:text-muted-foreground"
+            )}
+          >
+            <span aria-hidden>⚠️</span>
+            Errors &amp; Warnings
+            <span
+              className={cn(
+                "text-[10px] font-normal",
+                issuesOnly ? "opacity-80" : "opacity-50"
+              )}
+            >
+              {issueCount}
+            </span>
+          </button>
+        </>
+      )}
     </div>
   );
 }
@@ -406,6 +451,9 @@ export function OrderFullTimeline({
     new Set()
   );
   const [useRelativeTime, setUseRelativeTime] = React.useState(false);
+  // When true, the timeline is focused on warning + error events only. This
+  // overrides the category selection while active.
+  const [issuesOnly, setIssuesOnly] = React.useState(false);
 
   const timeline = fullHistory?.timeline ?? [];
   const orderCreatedAt = fullHistory?.order?.created_at ?? "";
@@ -423,13 +471,34 @@ export function OrderFullTimeline({
     [eventCounts]
   );
 
+  const issueCount = React.useMemo(
+    () =>
+      timeline.filter(
+        (e) => e.severity === "warning" || e.severity === "error"
+      ).length,
+    [timeline]
+  );
+
   const filteredTimeline = React.useMemo(
-    () => timeline.filter((e) => activeCategories.has(e.category)),
-    [timeline, activeCategories]
+    () =>
+      issuesOnly
+        ? timeline.filter(
+            (e) => e.severity === "warning" || e.severity === "error"
+          )
+        : timeline.filter((e) => activeCategories.has(e.category)),
+    [timeline, activeCategories, issuesOnly]
   );
 
   const handleToggleCategory = React.useCallback(
     (cat: TimelineCategory) => {
+      // While issues-only focus is on, every category chip renders inactive, so
+      // a tap means "select just this category" — leave focus mode and isolate
+      // the tapped category rather than deselecting it from the full set.
+      if (issuesOnly) {
+        setIssuesOnly(false);
+        setActiveCategories(new Set([cat]));
+        return;
+      }
       setActiveCategories((prev) => {
         const next = new Set(prev);
         if (next.has(cat)) {
@@ -441,11 +510,16 @@ export function OrderFullTimeline({
         return next;
       });
     },
-    []
+    [issuesOnly]
   );
 
   const handleResetCategories = React.useCallback(() => {
+    setIssuesOnly(false);
     setActiveCategories(new Set(ALL_CATEGORIES));
+  }, []);
+
+  const handleToggleIssuesOnly = React.useCallback(() => {
+    setIssuesOnly((prev) => !prev);
   }, []);
 
   const toggleExpanded = React.useCallback((key: string) => {
@@ -509,6 +583,9 @@ export function OrderFullTimeline({
             onToggle={handleToggleCategory}
             onReset={handleResetCategories}
             eventCounts={eventCounts}
+            issueCount={issueCount}
+            issuesOnly={issuesOnly}
+            onToggleIssuesOnly={handleToggleIssuesOnly}
           />
 
           {/* Time toggle */}

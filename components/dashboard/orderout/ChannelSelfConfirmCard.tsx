@@ -190,7 +190,7 @@ export function ChannelSelfConfirmCard({
               <label
                 key={channel}
                 htmlFor={inputId}
-                className={`flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors ${
+                className={`flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border p-3 cursor-pointer transition-colors ${
                   checked ? style.bg : "bg-muted/20 hover:bg-muted/30"
                 }`}
               >
@@ -199,22 +199,26 @@ export function ChannelSelfConfirmCard({
                   checked={checked}
                   onCheckedChange={() => toggle(channel)}
                   disabled={mutation.isPending}
+                  className="shrink-0"
                 />
                 <PlatformLogo channel={channel} active={checked} />
-                <span className="text-sm font-medium flex-1">
+                <span className="text-sm font-medium shrink-0">
                   {platformLabel(channel)}
                 </span>
+                {/* Spacer: keeps the badge right-aligned on wide rows, and lets
+                    it wrap below the name on narrow (≤320px) rows. */}
+                <span className="flex-1" />
                 {isVerified ? (
                   <Badge
                     variant="default"
-                    className="bg-green-600 text-xs"
+                    className="bg-green-600 text-xs shrink-0"
                   >
-                    Verified by webhook
+                    Verified
                   </Badge>
                 ) : isServerConfirmed ? (
                   <Badge
                     variant="outline"
-                    className="text-xs border-amber-500 text-amber-700 dark:text-amber-400"
+                    className="text-xs border-amber-500 text-amber-700 dark:text-amber-400 shrink-0"
                   >
                     Awaiting verification
                   </Badge>

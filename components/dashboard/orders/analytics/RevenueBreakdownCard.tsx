@@ -2,7 +2,7 @@
 
 import { ChartCard } from './ChartCard'
 import { ChartContainer, type ChartConfig } from '@/components/ui/chart'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts'
 import { DollarSign } from 'lucide-react'
 import type { RevenueBreakdown } from '@/types/analytics'
 
@@ -74,7 +74,7 @@ export function RevenueBreakdownCard({ data, isLoading }: RevenueBreakdownCardPr
       {data && (
         <>
           {/* Stat boxes – DexaPOS themed with dark mode support */}
-          <div className="grid grid-cols-2 gap-3 mb-4">
+          <div className="grid grid-cols-1 gap-3 mb-4 sm:grid-cols-2">
             <div className="bg-gray-50 dark:bg-slate-800/50 border border-gray-200 dark:border-gray-700 p-2 rounded space-y-1">
               <p className="text-xs text-gray-500 dark:text-gray-400">Subtotal</p>
               <p className="text-lg font-bold text-gray-900 dark:text-white">{formatCurrency(data.subtotal)}</p>
@@ -99,8 +99,7 @@ export function RevenueBreakdownCard({ data, isLoading }: RevenueBreakdownCardPr
 
           {/* Stacked bar chart */}
           <div className="w-full h-[350px]">
-            <ChartContainer config={chartConfig} className="w-full h-full">
-              <ResponsiveContainer width="100%" height="100%">
+            <ChartContainer config={chartConfig} className="aspect-auto w-full h-full">
                 <BarChart data={chartData} margin={{ left: 0, right: 10, top: 5, bottom: 20 }}>
                   <CartesianGrid 
                     vertical={false} 
@@ -158,7 +157,6 @@ export function RevenueBreakdownCard({ data, isLoading }: RevenueBreakdownCardPr
                   <Bar dataKey="serviceCharges" stackId="a" fill={COLORS.serviceCharges} />
                   <Bar dataKey="discounts" stackId="a" fill={COLORS.discounts} />
                 </BarChart>
-              </ResponsiveContainer>
             </ChartContainer>
           </div>
 

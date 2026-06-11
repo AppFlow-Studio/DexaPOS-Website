@@ -66,6 +66,7 @@ import {
   Plus,
   X,
   Grip,
+  GripVertical,
   Search,
   Loader2,
   Flame,
@@ -81,6 +82,7 @@ import {
   UpdateMenuItem,
   CreateMenuItem,
   ResetMenuItemToGlobal,
+  ReorderMenuItemModifierGroups,
 } from "@/app/dashboard/actions/menu-items";
 import { AddItemToCategory, RemoveItemFromCategory } from "@/app/dashboard/actions/item-assignments";
 import {
@@ -89,6 +91,22 @@ import {
   ModifierGroupItemsModel,
 } from "@/types/db-modles";
 import { useLocationStore, useIsAllLocations } from "@/stores/location-store";
+import {
+  DndContext,
+  closestCenter,
+  MouseSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS as DndCSS } from "@dnd-kit/utilities";
 import ModifierItemRow, { ExtendedModifierItem } from "./ModifierItemRow";
 import { LocationLibraryItem, ModifierGroup, ModifierItem } from "@/types/menu";
 import {
@@ -661,6 +679,21 @@ interface ModifierGroupSearchListProps {
   onSelect: (groupId: string) => void;
 }
 
+function SortableModifierGroupRow({ id, children }: { id: string; children: React.ReactNode }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ transform: DndCSS.Transform.toString(transform), transition }}
+      className={isDragging ? "opacity-50 z-50" : undefined}
+      {...attributes}
+      {...listeners}
+    >
+      {children}
+    </div>
+  );
+}
+
 function ModifierGroupSearchList({
   availableGroups,
   onSelect,
@@ -931,16 +964,23 @@ export function NewEditItemFormSheet({
 
   // Merchant-facing scope for AffectsTag / headers / banners.
   // Kept separate from editingContext (which still carries table routing info).
+  // Library + specific location (no menu, no category) is technically level 1 routing
+  // but writes to location_item_overrides — show it as location-scoped (level 3) in UI.
   const scopeCtx = React.useMemo<ScopeContext>(
-    () => ({
-      level: editingContext.level as CascadeLevel,
-      locationName: isAllLocations ? null : currentLocationName,
-      categoryName: categoryName ?? null,
-      menuName: menuName ?? null,
-    }),
+    () => {
+      const isLibraryLocationScope = !isAllLocations && !menuId && !categoryId;
+      return {
+        level: (isLibraryLocationScope ? 3 : editingContext.level) as CascadeLevel,
+        locationName: isAllLocations ? null : currentLocationName,
+        categoryName: categoryName ?? null,
+        menuName: menuName ?? null,
+      };
+    },
     [
       editingContext.level,
       isAllLocations,
+      menuId,
+      categoryId,
       currentLocationName,
       categoryName,
       menuName,
@@ -1209,6 +1249,42 @@ export function NewEditItemFormSheet({
     );
   };
 
+  const modifierDndSensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 5 } }),
+  );
+
+  const handleModifierDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    if (!editItem) return;
+
+    const reordered = (() => {
+      const oldIndex = selectedModifiers.indexOf(active.id as string);
+      const newIndex = selectedModifiers.indexOf(over.id as string);
+      if (oldIndex === -1 || newIndex === -1) return null;
+      return arrayMove(selectedModifiers, oldIndex, newIndex);
+    })();
+    if (!reordered) return;
+
+    // Update UI immediately (optimistic)
+    setSelectedModifiers(reordered);
+
+    // Call the RPC directly — this writes only menu_item_modifier_groups.display_order
+    // for this specific item, never touching library order or other items
+    const locationId = isAllLocations ? null : (selectedLocationId ?? null);
+    const result = await ReorderMenuItemModifierGroups(
+      editItem.id,
+      reordered.map((groupId, idx) => ({ modifierGroupId: groupId, displayOrder: idx + 1 })),
+      locationId,
+    );
+    if (result.error) {
+      toast.error("Failed to save modifier order", { description: result.error });
+      // Rollback
+      setSelectedModifiers(selectedModifiers);
+    }
+  };
+
   const moveSelectedModifier = (modifierId: string, direction: "up" | "down") => {
     if (!canManageModifierLinks) return;
 
@@ -1456,12 +1532,16 @@ export function NewEditItemFormSheet({
       // Success message based on context
       const itemName = values.name;
       const contextName = menuName || categoryName || "menu";
+      // Level 1 from Library + specific location still writes to location_item_overrides
+      const isLocationScopedSave = !isAllLocations && !!selectedLocationId;
       const levelMessages: Record<number, string> = {
-        1: `"${itemName}" updated globally`,
-        2: `"${itemName}" category pricing updated for "${contextName}"`,
-        3: `"${itemName}" branch category pricing updated at ${currentLocationName}`,
-        4: `"${itemName}" menu category pricing updated for "${menuName || contextName}"`,
-        5: `"${itemName}" branch menu pricing updated at ${currentLocationName}`,
+        1: isLocationScopedSave
+          ? `"${itemName}" updated for branch "${currentLocationName}"`
+          : `"${itemName}" updated — affects all branches`,
+        2: `"${itemName}" category pricing updated for "${contextName}" — affects all branches`,
+        3: `"${itemName}" updated for branch "${currentLocationName}"`,
+        4: `"${itemName}" menu category pricing updated for "${menuName || contextName}" — affects all branches`,
+        5: `"${itemName}" updated for branch "${currentLocationName}"`,
       };
 
       toast.success(editItem ? "Item Updated" : "Item Created", {
@@ -2081,16 +2161,22 @@ export function NewEditItemFormSheet({
                       <CollapsibleContent className="space-y-4 pt-4">
 
                       {/* Modifier Info */}
-                      <p className="text-xs text-muted-foreground flex items-center gap-1.5 px-1">
-                        <Info className="h-3 w-3 shrink-0" />
-                        Add or remove groups here. Edit individual options in the{" "}
-                        <Link
-                          href="/dashboard/menu/modifiers"
-                          className="font-medium underline underline-offset-2 hover:text-primary"
-                        >
-                          Modifiers page
-                        </Link>.
-                      </p>
+                      <div className="space-y-1.5 px-1">
+                        <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                          <Info className="h-3 w-3 shrink-0" />
+                          Add or remove groups here. Edit individual options in the{" "}
+                          <Link
+                            href="/dashboard/menu/modifiers"
+                            className="font-medium underline underline-offset-2 hover:text-primary"
+                          >
+                            Modifiers page
+                          </Link>.
+                        </p>
+                        <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                          <GripVertical className="h-3 w-3 shrink-0" />
+                          Drag to reorder — order is saved per-item and does not affect other items or the library.
+                        </p>
+                      </div>
                       {(() => {
                         // Build selected groups with enriched data from editItem (has location-specific overrides)
                         const isItemLocationOwned =
@@ -2177,6 +2263,15 @@ export function NewEditItemFormSheet({
                                 </p>
                               </div>
                             ) : (
+                              <DndContext
+                                sensors={modifierDndSensors}
+                                collisionDetection={closestCenter}
+                                onDragEnd={handleModifierDragEnd}
+                              >
+                              <SortableContext
+                                items={selectedGroups.map((g: any) => g.id)}
+                                strategy={verticalListSortingStrategy}
+                              >
                               <div className="space-y-2">
                                 {selectedGroups.map(
                                   (group: any, index: number) => {
@@ -2191,16 +2286,13 @@ export function NewEditItemFormSheet({
                                       !isLocationOwnedGroup;
 
                                     return (
+                                      <SortableModifierGroupRow key={group.id} id={group.id}>
                                       <div
-                                        key={group.id}
-                                        className="rounded-lg border border-primary/30 bg-primary/5 overflow-hidden animate-in fade-in slide-in-from-top-2"
-                                        style={{
-                                          animationDelay: `${index * 50}ms`,
-                                        }}
+                                        className="rounded-lg border border-primary/30 bg-primary/5 overflow-hidden"
                                       >
                                         <div className="p-3 flex items-center gap-3">
-                                          {/* Drag Handle (visual only for now) */}
-                                          <div className="text-muted-foreground/50">
+                                          {/* Drag Handle */}
+                                          <div className="text-muted-foreground/50 cursor-grab active:cursor-grabbing">
                                             <Grip className="h-4 w-4" />
                                           </div>
 
@@ -2400,10 +2492,13 @@ export function NewEditItemFormSheet({
                                             </div>
                                           )}
                                       </div>
+                                      </SortableModifierGroupRow>
                                     );
                                   },
                                 )}
                               </div>
+                              </SortableContext>
+                              </DndContext>
                             )}
 
                             {/* Add Modifier Section (All Levels) */}

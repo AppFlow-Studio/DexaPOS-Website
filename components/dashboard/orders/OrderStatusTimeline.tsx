@@ -203,7 +203,7 @@ export function OrderStatusTimeline({
 
                         if (event.type === 'creation') {
                             statusColor = statusColors[event.toStatus || 'draft'] || 'bg-gray-500'
-                            eventMessage = `Order created with status: ${statusLabel(event.toStatus) || 'Draft'}`
+                            eventMessage = `Order created with status: ${statusLabel(event.toStatus) || ORDER_STATUS_LABELS.draft}`
                         } else if (event.type === 'status_change') {
                             statusColor = statusColors[event.toStatus || 'draft'] || 'bg-gray-500'
                             eventMessage = getStatusChangeMessage(event.fromStatus, event.toStatus)

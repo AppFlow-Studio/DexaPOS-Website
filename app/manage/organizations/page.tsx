@@ -40,11 +40,22 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useCarrierOrganizations } from '../hooks/useCarrierOrganizations'
 import { useRouter } from 'next/navigation'
+import { useMemo, useState } from 'react'
 
 
 export default function OrganizationsPage() {
     const router = useRouter()
         const { data: organizationsData, isLoading, error } = useCarrierOrganizations()
+    const [search, setSearch] = useState('')
+
+    const filteredOrganizations = useMemo(() => {
+        const query = search.trim().toLowerCase()
+        if (!query) return organizationsData ?? []
+        return (organizationsData ?? []).filter((org) =>
+            org.name?.toLowerCase().includes(query) ||
+            org.clerk_org_id?.toLowerCase().includes(query)
+        )
+    }, [organizationsData, search])
     if (isLoading) return (
         <div className="space-y-6 animate-in fade-in-0 duration-300">
             {/* Header skeleton */}
@@ -57,7 +68,7 @@ export default function OrganizationsPage() {
             </div>
 
             {/* KPI cards skeleton */}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
                 {Array.from({ length: 4 }).map((_, i) => (
                     <div key={i} className="border rounded-xl p-4 bg-card">
                         <div className="flex items-center justify-between pb-2">
@@ -146,7 +157,7 @@ export default function OrganizationsPage() {
             </div>
 
             {/* KPI Cards */}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">Total Partners</CardTitle>
@@ -200,19 +211,21 @@ export default function OrganizationsPage() {
             {/* Search and Filters */}
             <Card>
                 <CardHeader>
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <div>
                             <CardTitle>Partner Organizations</CardTitle>
                             <CardDescription>
                                 Manage and monitor your partner organizations
                             </CardDescription>
                         </div>
-                        <div className="flex items-center space-x-2">
-                            <div className="relative">
+                        <div className="flex items-center gap-2">
+                            <div className="relative flex-1 sm:flex-none">
                                 <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                                 <Input
                                     placeholder="Search by name, domain, or organization ID"
-                                    className="pl-8 w-80"
+                                    className="pl-8 w-full sm:w-72"
+                                    value={search}
+                                    onChange={(e) => setSearch(e.target.value)}
                                 />
                             </div>
                             <Button variant="outline" size="sm">
@@ -223,6 +236,7 @@ export default function OrganizationsPage() {
                     </div>
                 </CardHeader>
                 <CardContent>
+                    <div className="overflow-x-auto">
                     <Table>
                         <TableHeader>
                             <TableRow>
@@ -239,7 +253,7 @@ export default function OrganizationsPage() {
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {organizationsData?.map((org) => (
+                            {filteredOrganizations.map((org) => (
                                 <TableRow key={org.id} className='cursor-pointer' onClick={() => router.push(`/manage/organizations/${org.clerk_org_id}`)}>
                                     <TableCell className="font-medium">
                                         <div>
@@ -339,6 +353,7 @@ export default function OrganizationsPage() {
                             ))}
                         </TableBody>
                     </Table>
+                    </div>
                 </CardContent>
             </Card>
 

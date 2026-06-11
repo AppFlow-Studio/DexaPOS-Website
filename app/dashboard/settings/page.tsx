@@ -202,6 +202,7 @@ export default function TaxSettingsPage() {
                             ))}
                         </div>
                     ) : (
+                        <div className="overflow-x-auto">
                         <Table className="min-w-[600px]">
                             <TableHeader>
                                 <TableRow>
@@ -294,6 +295,7 @@ export default function TaxSettingsPage() {
                                 })}
                             </TableBody>
                         </Table>
+                        </div>
                     )}
                 </CardContent>
             </Card>

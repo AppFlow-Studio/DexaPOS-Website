@@ -75,23 +75,22 @@ export function DeleteOrganizationDialog({
                         <AlertTriangle className="h-5 w-5" />
                         Delete Organization
                     </DialogTitle>
-                    <DialogDescription className="space-y-2">
-                        <p>
-                            This action <strong>cannot be undone</strong>. This will permanently delete the organization
-                            <strong> "{organizationName}"</strong> and remove all associated data.
-                        </p>
-                        <p className="text-sm text-muted-foreground">
-                            This includes:
-                        </p>
-                        <ul className="text-sm text-muted-foreground list-disc list-inside space-y-1 ml-4">
-                            <li>All organization members and their access</li>
-                            <li>All associated merchants and stores</li>
-                            <li>All transaction history and data</li>
-                            <li>All pending invitations</li>
-                            <li>Organization settings and configurations</li>
-                        </ul>
+                    <DialogDescription>
+                        This action <strong>cannot be undone</strong>. This will permanently delete the organization
+                        <strong> &quot;{organizationName}&quot;</strong> and remove all associated data.
                     </DialogDescription>
                 </DialogHeader>
+
+                <div className="space-y-2">
+                    <p className="text-sm text-muted-foreground">This includes:</p>
+                    <ul className="text-sm text-muted-foreground list-disc list-inside space-y-1 ml-4">
+                        <li>All organization members and their access</li>
+                        <li>All associated merchants and stores</li>
+                        <li>All transaction history and data</li>
+                        <li>All pending invitations</li>
+                        <li>Organization settings and configurations</li>
+                    </ul>
+                </div>
 
                 <div className="space-y-4">
                     <div className="space-y-2">

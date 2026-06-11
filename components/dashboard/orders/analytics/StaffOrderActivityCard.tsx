@@ -1,16 +1,7 @@
 'use client'
 
 import { useMemo } from 'react'
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-} from 'recharts'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts'
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart'
 import { ChartCard } from './ChartCard'
 import { DataTable } from '@/components/ui/data-table'
@@ -131,19 +122,27 @@ export function StaffOrderActivityCard({ data, isLoading }: StaffOrderActivityCa
       <div className="space-y-6">
         {/* Stacked Bar Chart */}
         {chartData.length > 0 && (
-          <ChartContainer config={chartConfig} className="h-[300px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData}>
+          <ChartContainer config={chartConfig} className="aspect-auto h-[340px] w-full">
+              <BarChart data={chartData} margin={{ left: 0, right: 8, top: 5, bottom: 50 }}>
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" />
-                <YAxis />
+                <XAxis
+                  dataKey="name"
+                  interval={0}
+                  angle={-40}
+                  textAnchor="end"
+                  height={70}
+                  tick={{ fontSize: 11 }}
+                  tickFormatter={(value: string) =>
+                    value.length > 10 ? `${value.slice(0, 10)}…` : value
+                  }
+                />
+                <YAxis tick={{ fontSize: 12 }} width={32} />
                 <ChartTooltip content={<ChartTooltipContent />} />
-                <Legend />
+                <Legend wrapperStyle={{ fontSize: 12 }} />
                 <Bar dataKey="orders_created" stackId="a" fill="#3b82f6" />
                 <Bar dataKey="payments_processed" stackId="a" fill="#10b981" />
                 <Bar dataKey="voids_count" stackId="a" fill="#ef4444" />
               </BarChart>
-            </ResponsiveContainer>
           </ChartContainer>
         )}
 
@@ -151,7 +150,7 @@ export function StaffOrderActivityCard({ data, isLoading }: StaffOrderActivityCa
         {data?.order_activity && (
           <div>
             <h3 className="text-sm font-semibold mb-4">Detailed Activity</h3>
-            <DataTable columns={columns} data={data.order_activity} />
+            <DataTable columns={columns} data={data.order_activity} tableClassName="min-w-[640px]" />
           </div>
         )}
 

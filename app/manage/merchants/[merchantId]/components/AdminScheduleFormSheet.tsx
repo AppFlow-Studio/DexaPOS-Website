@@ -330,7 +330,7 @@ export function AdminScheduleFormSheet({
                 </ScheduleSection>
 
                 <ScheduleSection title="Active Days">
-                  <div className="grid grid-cols-7 gap-2">
+                  <div className="grid grid-cols-7 gap-1 sm:gap-2">
                     {DAYS_OF_WEEK.map((day, index) => {
                       const isSelected = selectedDays.includes(index)
                       return (
@@ -339,7 +339,7 @@ export function AdminScheduleFormSheet({
                           type="button"
                           onClick={() => toggleDay(index)}
                           className={cn(
-                            'aspect-square rounded-xl text-sm font-medium transition-all duration-200',
+                            'aspect-square min-w-0 rounded-xl text-xs sm:text-sm font-medium transition-all duration-200',
                             'flex items-center justify-center active:scale-95',
                             isSelected
                               ? 'bg-primary text-primary-foreground shadow-md scale-105'

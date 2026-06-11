@@ -127,13 +127,15 @@ export function SettlementsSection({ merchantId }: { merchantId: string }) {
             <KpiStrip cells={cells} loading={isLoading} />
 
             <Tabs defaultValue="ours">
-                <TabsList>
+                <div className="overflow-x-auto overflow-y-hidden">
+                <TabsList className="inline-flex w-max">
                     <TabsTrigger value="ours">Our batches</TabsTrigger>
                     <TabsTrigger value="payments">Payments</TabsTrigger>
                     <TabsTrigger value="luqra">TSYS transactions</TabsTrigger>
                     <TabsTrigger value="batches">TSYS batches</TabsTrigger>
                     <TabsTrigger value="deposits">Deposits</TabsTrigger>
                 </TabsList>
+                </div>
 
                 <TabsContent value="ours" className="pt-4">
                     <BatchReconciliationSection

@@ -185,6 +185,7 @@ export default function ReportsPage() {
 
       {/* ── KPI Cards ──────────────────────────────────────────── */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+
         {kpiCards.map((kpi) => (
           <Card
             key={kpi.label}

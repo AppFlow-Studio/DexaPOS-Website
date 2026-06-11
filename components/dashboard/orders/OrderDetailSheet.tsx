@@ -364,15 +364,15 @@ function HeroStatCard({
       )}
     >
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
             {label}
           </p>
-          <div className="mt-2 text-lg font-semibold tracking-tight text-foreground">
+          <div className="mt-2 text-lg font-semibold tracking-tight text-foreground break-words">
             {value}
           </div>
           {description && (
-            <div className="mt-1 text-xs text-muted-foreground">
+            <div className="mt-1 text-xs text-muted-foreground break-words">
               {description}
             </div>
           )}
@@ -1103,24 +1103,24 @@ export function OrderDetailSheet({
       <BottomSheet open={open} onOpenChange={onOpenChange} elevated={elevated}>
         <BottomSheetContent
           height="95"
-          className="border-x-0 border-t border-border/60 bg-gradient-to-b from-background via-background to-muted/20 sm:inset-x-4 sm:bottom-4 sm:mx-auto sm:h-[calc(100vh-2rem)] sm:max-w-6xl sm:rounded-[28px] sm:border"
+          className="border-x-0 border-t border-border/60 bg-gradient-to-b from-background via-background to-muted/20 sm:inset-x-4 sm:bottom-4 sm:mx-auto sm:h-[calc(100dvh-2rem)] sm:max-w-6xl sm:rounded-[28px] sm:border"
         >
-          {/* ─── Header ─── */}
-          <BottomSheetHeader className="shrink-0 border-b border-border/60 bg-gradient-to-b from-muted/60 via-background to-background px-6 pb-6 pt-2 sm:px-8">
+          {/* ─── Header (non-scrollable part — capped at half the sheet, scrolls internally if it overflows) ─── */}
+          <BottomSheetHeader className="max-h-[50%] min-h-0 shrink-0 overflow-y-auto border-b border-border/60 bg-gradient-to-b from-muted/60 via-background to-background px-4 pb-6 pt-2 sm:px-8">
             <div className="space-y-6">
               <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
-                <div className="min-w-0 space-y-4">
+                <div className="min-w-0 space-y-4 pr-10 xl:pr-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge className="rounded-full border border-border/60 bg-background/90 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground shadow-sm hover:bg-background">
                       Order Details
                     </Badge>
-                    <OrderStatusBadge status={displayOrder.status} />
-                    <PaymentStatusBadge status={displayOrder.payment_status} />
+                    <OrderStatusBadge status={displayOrder.status} prefix="Order" />
+                    <PaymentStatusBadge status={displayOrder.payment_status} prefix="Payment" />
                   </div>
 
                   <div className="space-y-2">
-                    <BottomSheetTitle className="text-2xl font-semibold tracking-tight sm:text-3xl">
-                      Order #{displayOrder.display_number || displayOrder.order_number}
+                    <BottomSheetTitle className="text-2xl font-semibold tracking-tight break-words sm:text-3xl">
+                      Order #{String(displayOrder.display_number || displayOrder.order_number).replace(/^#/, "")}
                     </BottomSheetTitle>
                     <BottomSheetDescription className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
                       <span className="flex items-center gap-1.5">
@@ -1145,12 +1145,12 @@ export function OrderDetailSheet({
                   </div>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2 pr-8 xl:max-w-[360px] xl:justify-end">
+                <div className="flex flex-wrap items-center gap-2 xl:max-w-[360px] xl:justify-end">
                   {isQrDineIn && tableName ? (
                     <Button
                       variant="outline"
                       size="sm"
-                      className="rounded-xl border-[#0C4FD1]/20 bg-[#0C4FD1]/5 text-[#0C4FD1] hover:bg-[#0C4FD1]/10"
+                      className="flex-1 rounded-xl border-[#0C4FD1]/20 bg-[#0C4FD1]/5 text-[#0C4FD1] hover:bg-[#0C4FD1]/10 xl:flex-none"
                       onClick={handleViewOnFloorPlan}
                     >
                       <MapPin className="mr-1.5 h-4 w-4" />
@@ -1160,7 +1160,7 @@ export function OrderDetailSheet({
                   <Button
                     variant="outline"
                     size="sm"
-                    className="rounded-xl border-border/60 bg-background/80 hover:bg-background"
+                    className="flex-1 rounded-xl border-border/60 bg-background/80 hover:bg-background xl:flex-none"
                     onClick={() => setIsSendReceiptOpen(true)}
                   >
                     <Mail className="mr-1.5 h-4 w-4" />
@@ -1169,7 +1169,7 @@ export function OrderDetailSheet({
                 </div>
               </div>
 
-              <div className="grid gap-3 md:grid-cols-3">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 <HeroStatCard
                   label="Order Total"
                   value={formatCurrency(totalAmount)}
@@ -1208,7 +1208,7 @@ export function OrderDetailSheet({
           </BottomSheetHeader>
 
           {/* ─── Body ─── */}
-          <BottomSheetBody className="bg-transparent px-6 py-6 sm:px-8">
+          <BottomSheetBody className="bg-transparent px-4 py-6 sm:px-8">
             <div className="space-y-6">
               {metaChips.length === 0 && isMetadataLoading ? (
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">

@@ -2,7 +2,7 @@
 
 import { ChartCard } from './ChartCard'
 import { ChartContainer, ChartTooltip, type ChartConfig } from '@/components/ui/chart'
-import { BarChart, Bar, XAxis, YAxis, Cell, Legend, ResponsiveContainer } from 'recharts'
+import { BarChart, Bar, XAxis, YAxis, Cell, Legend } from 'recharts'
 import { Workflow } from 'lucide-react'
 import type { ServicePhase } from '@/types/analytics'
 
@@ -66,9 +66,8 @@ export function ServiceTimelineBreakdown({ phases, isLoading }: ServiceTimelineB
         <div className="space-y-6">
           {/* Stacked Bar Chart */}
           <div className="w-full h-[120px]">
-            <ChartContainer config={chartConfig} className="w-full h-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartData} layout="vertical" margin={{ left: 100, right: 10, top: 10, bottom: 10 }}>
+            <ChartContainer config={chartConfig} className="aspect-auto w-full h-full">
+                <BarChart data={chartData} layout="vertical" margin={{ left: 0, right: 10, top: 10, bottom: 10 }}>
                   <XAxis type="number" tickFormatter={(value) => `${value.toFixed(0)}m`} />
                   <YAxis dataKey="name" type="category" width={90} />
                   <ChartTooltip
@@ -107,7 +106,6 @@ export function ServiceTimelineBreakdown({ phases, isLoading }: ServiceTimelineB
                     />
                   ))}
                 </BarChart>
-              </ResponsiveContainer>
             </ChartContainer>
           </div>
 

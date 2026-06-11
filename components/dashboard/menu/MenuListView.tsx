@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 import { Empty } from "@/components/ui/empty";
 import {
   Card,
@@ -137,20 +138,20 @@ function SortableGridCard({
       )}
 
       <Card
-        className={`transition-all hover:shadow-lg hover:scale-[1.02] cursor-pointer h-full ${
+        className={`transition-all hover:shadow-lg cursor-pointer h-full min-w-0 overflow-hidden ${
           isDragging ? "shadow-xl ring-2 ring-primary/20" : ""
         }`}
         onClick={() => handleRowClick(menu.id)}
       >
-        <CardHeader className={!isFiltered ? "pl-12" : ""}>
-          <div className="flex items-start justify-between">
-            <div className="flex-1 space-y-1">
-              <div className="flex items-center gap-2">
-                <CardTitle className="group-hover:text-primary transition-colors">
+        <CardHeader className={cn("min-w-0", !isFiltered && "pl-12")}>
+          <div className="flex items-start justify-between gap-2 min-w-0">
+            <div className="flex-1 min-w-0 space-y-1">
+              <div className="flex items-center gap-2 min-w-0">
+                <CardTitle className="truncate min-w-0 group-hover:text-primary transition-colors">
                   {menu.name}
                 </CardTitle>
                 {menu.display_order !== null && (
-                  <Badge variant="outline" className="text-xs">
+                  <Badge variant="outline" className="text-xs shrink-0">
                     #{menu.display_order}
                   </Badge>
                 )}
@@ -161,13 +162,15 @@ function SortableGridCard({
                 </CardDescription>
               )}
             </div>
-            <MenuActionsDropdown
-              menuId={menu.id}
-              menuName={menu.name}
-              isActive={menu.is_active}
-              menuLocationId={menu.location_id}
-              {...actions}
-            />
+            <div className="shrink-0">
+              <MenuActionsDropdown
+                menuId={menu.id}
+                menuName={menu.name}
+                isActive={menu.is_active}
+                menuLocationId={menu.location_id}
+                {...actions}
+              />
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -486,10 +489,10 @@ function LocationBadge({ menu }: { menu: MenuWithLocation }) {
     return (
       <Badge
         variant="outline"
-        className="gap-1 bg-blue-50 text-blue-700 border-blue-200 shrink-0"
+        className="gap-1 bg-blue-50 text-blue-700 border-blue-200 max-w-full min-w-0"
       >
-        <MapPin className="h-3 w-3" />
-        {menu.locations.name}
+        <MapPin className="h-3 w-3 shrink-0" />
+        <span className="truncate">{menu.locations.name}</span>
       </Badge>
     );
   }

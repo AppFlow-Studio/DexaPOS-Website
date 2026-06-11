@@ -3,7 +3,7 @@
 import { ChartCard } from './ChartCard'
 import { DataTable } from '@/components/ui/data-table'
 import { ChartContainer, ChartTooltip, type ChartConfig } from '@/components/ui/chart'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend, ResponsiveContainer } from 'recharts'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend } from 'recharts'
 import { Badge } from '@/components/ui/badge'
 import { Activity } from 'lucide-react'
 import type { KitchenStationStats } from '@/types/analytics'
@@ -113,8 +113,7 @@ export function StationPerformanceCard({
         <div className="space-y-6">
           {/* Bar Chart */}
           <div className="w-full h-[300px]">
-            <ChartContainer config={chartConfig} className="w-full h-full">
-              <ResponsiveContainer width="100%" height="100%">
+            <ChartContainer config={chartConfig} className="aspect-auto w-full h-full">
                 <BarChart data={chartData} margin={{ left: 0, right: 10, top: 5, bottom: 20 }}>
                   <CartesianGrid vertical={false} strokeDasharray="3 3" />
                   <XAxis
@@ -160,14 +159,13 @@ export function StationPerformanceCard({
                   <Bar dataKey="total_items" fill={COLORS.itemsProcessed} name="Total Items" />
                   <Legend />
                 </BarChart>
-              </ResponsiveContainer>
             </ChartContainer>
           </div>
 
           {/* Detail Table */}
           <div>
             <p className="text-xs font-semibold mb-3 text-muted-foreground">Detailed Breakdown</p>
-            <DataTable columns={columns} data={stations} />
+            <DataTable columns={columns} data={stations} tableClassName="min-w-[560px]" />
           </div>
         </div>
       )}

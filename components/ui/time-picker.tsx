@@ -414,7 +414,7 @@ export function TimeInput({ value = '09:00', onChange, className, disabled }: Ti
 
     return (
         <div className={cn(
-            "inline-flex items-center gap-1 bg-muted/50 rounded-lg px-3 py-2",
+            "inline-flex items-center justify-center gap-0.5 bg-muted/50 rounded-lg px-2 py-2",
             disabled && "opacity-50 pointer-events-none",
             className
         )}>
@@ -425,7 +425,7 @@ export function TimeInput({ value = '09:00', onChange, className, disabled }: Ti
                     setHour(h)
                     emitChange(h, minute, period)
                 }}
-                className="bg-transparent text-lg font-semibold appearance-none cursor-pointer focus:outline-none"
+                className="bg-transparent text-lg font-semibold cursor-pointer focus:outline-none text-center w-[2.75rem] px-1"
                 disabled={disabled}
             >
                 {HOURS.map(h => (
@@ -442,7 +442,7 @@ export function TimeInput({ value = '09:00', onChange, className, disabled }: Ti
                     setMinute(m)
                     emitChange(hour, m, period)
                 }}
-                className="bg-transparent text-lg font-semibold appearance-none cursor-pointer focus:outline-none"
+                className="bg-transparent text-lg font-semibold cursor-pointer focus:outline-none text-center w-[3.25rem] px-1"
                 disabled={disabled}
             >
                 {MINUTES.map(m => (
@@ -457,7 +457,7 @@ export function TimeInput({ value = '09:00', onChange, className, disabled }: Ti
                     setPeriod(p)
                     emitChange(hour, minute, p)
                 }}
-                className="bg-transparent text-sm font-semibold text-primary appearance-none cursor-pointer focus:outline-none ml-1"
+                className="bg-transparent text-sm font-semibold text-primary cursor-pointer focus:outline-none ml-1 px-1"
                 disabled={disabled}
             >
                 <option value="AM">AM</option>

@@ -302,15 +302,17 @@ export function CreatePurchaseOrderDialog({
                     variant="outline"
                     role="combobox"
                     aria-expanded={openItemCombobox}
-                    className="flex-1 justify-between"
+                    className="flex-1 min-w-0 justify-between"
                   >
-                    {selectedItemId
-                      ? items.find((item) => item.id === selectedItemId)?.name
-                      : "Select an item to add..."}
+                    <span className="truncate">
+                      {selectedItemId
+                        ? items.find((item) => item.id === selectedItemId)?.name
+                        : "Select an item to add..."}
+                    </span>
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-[500px] p-0 z-[100]">
+                <PopoverContent className="w-[min(500px,calc(100vw-2rem))] p-0 z-[100]">
                   <Command>
                     <CommandInput placeholder="Search items..." />
                     <CommandList>
@@ -391,12 +393,12 @@ export function CreatePurchaseOrderDialog({
               </div>
             ) : (
               <div className="rounded-lg border divide-y">
-                {/* Header */}
-                <div className="grid grid-cols-12 gap-2 px-4 py-2 bg-muted/50 text-sm font-medium text-muted-foreground">
-                  <div className="col-span-5">Item</div>
+                {/* Header (desktop only — mobile rows use inline labels) */}
+                <div className="hidden sm:grid grid-cols-12 gap-2 px-4 py-2 bg-muted/50 text-sm font-medium text-muted-foreground">
+                  <div className="col-span-4">Item</div>
                   <div className="col-span-2">Qty</div>
                   <div className="col-span-2">Cost</div>
-                  <div className="col-span-2">Total</div>
+                  <div className="col-span-3 text-right">Total</div>
                   <div className="col-span-1"></div>
                 </div>
 
@@ -404,74 +406,89 @@ export function CreatePurchaseOrderDialog({
                 {lineItems.map((item, index) => (
                   <div
                     key={item.inventory_item_id}
-                    className="grid grid-cols-12 gap-2 px-4 py-3 items-center"
+                    className="flex flex-col gap-2 px-4 py-3 sm:grid sm:grid-cols-12 sm:gap-2 sm:items-center"
                   >
-                    <div className="col-span-5">
-                      <p className="font-medium text-sm">{item.name}</p>
+                    <div className="sm:col-span-4 min-w-0">
+                      <p className="font-medium text-sm break-words">
+                        {item.name}
+                      </p>
                       <p className="text-xs text-muted-foreground">
                         {item.unit_type}
                       </p>
                     </div>
-                    <div className="col-span-2">
-                      <Input
-                        type="number"
-                        min="1"
-                        value={item.quantity_ordered}
-                        onChange={(e) =>
-                          updateLineItem(
-                            index,
-                            "quantity_ordered",
-                            parseFloat(e.target.value) || 0
-                          )
-                        }
-                        className="h-8"
-                      />
-                    </div>
-                    <div className="col-span-2">
-                      <div className="flex items-center">
-                        <span className="text-muted-foreground mr-1">$</span>
+                    <div className="flex items-center gap-2 sm:contents">
+                      <div className="flex-1 min-w-0 sm:col-span-2">
+                        <Label className="text-[10px] uppercase text-muted-foreground sm:hidden">
+                          Qty
+                        </Label>
                         <Input
                           type="number"
-                          step="0.01"
-                          min="0"
-                          value={item.unit_cost}
+                          min="1"
+                          value={item.quantity_ordered}
                           onChange={(e) =>
                             updateLineItem(
                               index,
-                              "unit_cost",
+                              "quantity_ordered",
                               parseFloat(e.target.value) || 0
                             )
                           }
-                          className="h-8"
+                          className="h-8 w-full min-w-0"
                         />
                       </div>
-                    </div>
-                    <div className="col-span-2">
-                      <span className="font-medium">
-                        ${(item.quantity_ordered * item.unit_cost).toFixed(2)}
-                      </span>
-                    </div>
-                    <div className="col-span-1 flex justify-end">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                        onClick={() => removeLineItem(index)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      <div className="flex-1 min-w-0 sm:col-span-2">
+                        <Label className="text-[10px] uppercase text-muted-foreground sm:hidden">
+                          Cost
+                        </Label>
+                        <div className="flex items-center">
+                          <span className="text-muted-foreground mr-1 shrink-0">
+                            $
+                          </span>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={item.unit_cost}
+                            onChange={(e) =>
+                              updateLineItem(
+                                index,
+                                "unit_cost",
+                                parseFloat(e.target.value) || 0
+                              )
+                            }
+                            className="h-8 w-full min-w-0"
+                          />
+                        </div>
+                      </div>
+                      <div className="text-right min-w-0 sm:col-span-3">
+                        <Label className="block text-[10px] uppercase text-muted-foreground sm:hidden">
+                          Total
+                        </Label>
+                        <span className="font-medium text-sm tabular-nums break-all">
+                          ${(item.quantity_ordered * item.unit_cost).toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="flex justify-end sm:col-span-1">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 shrink-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                          onClick={() => removeLineItem(index)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 ))}
 
                 {/* Total */}
-                <div className="grid grid-cols-12 gap-2 px-4 py-3 bg-muted/30">
-                  <div className="col-span-9 text-right font-medium">
+                <div className="grid grid-cols-12 gap-2 px-4 py-3 bg-muted/30 items-center">
+                  <div className="col-span-8 text-right font-medium">
                     Order Total:
                   </div>
-                  <div className="col-span-2">
-                    <span className="text-lg font-bold text-primary">
+                  <div className="col-span-3 text-right min-w-0">
+                    <span className="text-lg font-bold text-primary tabular-nums break-all">
                       ${totalAmount.toFixed(2)}
                     </span>
                   </div>
