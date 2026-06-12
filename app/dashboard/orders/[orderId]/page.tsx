@@ -21,6 +21,7 @@ import { OrderStatusBadge } from "@/components/dashboard/orders/OrderStatusBadge
 import { PaymentStatusBadge } from "@/components/dashboard/orders/PaymentStatusBadge";
 import { OrderStatusTimeline } from "@/components/dashboard/orders/OrderStatusTimeline";
 import { RichTimeline } from "@/components/dashboard/orders/RichTimeline";
+import { KitchenActivitySection } from "@/components/dashboard/orders/KitchenActivitySection";
 import { cn } from "@/lib/utils";
 import {
   ArrowLeft,
@@ -730,6 +731,11 @@ export default function OrderDetailPage() {
               )}
             </CardContent>
           </Card>
+
+          {/* Kitchen Activity - per-item KDS lifecycle */}
+          {orderFullHistory && (
+            <KitchenActivitySection items={orderFullHistory.items} />
+          )}
 
           {/* Payment History */}
           {payments.length > 0 && (

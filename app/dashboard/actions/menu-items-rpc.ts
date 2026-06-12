@@ -504,6 +504,49 @@ export async function getItemModifierGroups(
         ...globalGroups,
         ...locationGroups.filter((g: any) => !globalIds.has(g.id)),
       ];
+
+      // 3. Per-location order override. reorder_item_modifier_groups upserts
+      // location_modifier_group_overrides(location_id, modifier_group_id,
+      // display_order) when called with a location_id, so that table is the
+      // source of truth for per-location ordering. The assignment tables only
+      // track membership/global order.
+      if (combined.length > 0) {
+        const { data: overrideRows } = await supabase
+          .from("location_modifier_group_overrides")
+          .select("modifier_group_id, display_order")
+          .eq("location_id", locationId)
+          .in(
+            "modifier_group_id",
+            combined.map((g) => g.id),
+          );
+
+        const overrideOrder = new Map<string, number>();
+        for (const row of (overrideRows ?? []) as Array<{
+          modifier_group_id: string;
+          display_order: number | null;
+        }>) {
+          if (typeof row.display_order === "number") {
+            overrideOrder.set(row.modifier_group_id, row.display_order);
+          }
+        }
+
+        if (overrideOrder.size > 0) {
+          // Stable sort: groups with a location override use it; groups without
+          // fall back to their current relative position (which already encodes
+          // the global order from sortAssignments above).
+          const withIdx = combined.map((g, idx) => ({ g, idx }));
+          withIdx.sort((a, b) => {
+            const aO = overrideOrder.get(a.g.id);
+            const bO = overrideOrder.get(b.g.id);
+            if (aO != null && bO != null) return aO - bO;
+            if (aO != null) return -1;
+            if (bO != null) return 1;
+            return a.idx - b.idx;
+          });
+          return withIdx.map((x) => x.g);
+        }
+      }
+
       return combined;
     }
 

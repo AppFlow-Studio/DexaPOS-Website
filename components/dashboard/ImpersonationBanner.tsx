@@ -23,6 +23,7 @@ import {
   useImpersonationStore,
 } from "@/stores/impersonation-store";
 import { endImpersonation } from "@/lib/admin/impersonation";
+import { IMPERSONATION_TTL_HOURS } from "@/lib/admin/impersonation-config";
 import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
 import { useAdminAuth } from "@/lib/hooks/useAdminAuth";
 import { cn } from "@/lib/utils";
@@ -186,7 +187,7 @@ export function ImpersonationBanner() {
                       <li>Every action you take is audit-logged under your HQ account.</li>
                       <li>RLS still applies — you only see what the merchant owner sees.</li>
                       <li>Refunds and voids remain POS-only and aren't available here.</li>
-                      <li>The session auto-expires after 24 hours of inactivity.</li>
+                      <li>The session auto-expires after {IMPERSONATION_TTL_HOURS} hours of inactivity.</li>
                     </ul>
                   </PopoverContent>
                 </Popover>

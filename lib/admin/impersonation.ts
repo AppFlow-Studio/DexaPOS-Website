@@ -29,6 +29,7 @@ import { cookies, headers } from "next/headers";
 import { cache } from "react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { LogAuditEvent } from "@/app/dashboard/actions/audit-logs";
+import { IMPERSONATION_TTL_SECONDS } from "@/lib/admin/impersonation-config";
 
 // Cookie names. Plain (no __Host- prefix) for parity with x-location-id and
 // to keep local dev working without HTTPS. httpOnly + Secure + SameSite=Lax
@@ -36,9 +37,10 @@ import { LogAuditEvent } from "@/app/dashboard/actions/audit-logs";
 const COOKIE_MERCHANT_ID = "x-impersonate-merchant-id";
 const COOKIE_SESSION_ID = "x-impersonate-session-id";
 
-// 24-hour sliding TTL. Mirrors the value enforced server-side in
-// touch_impersonation_session and is_merchant_admin_or_impersonating.
-const SESSION_TTL_SECONDS = 24 * 60 * 60;
+// Session TTL — sourced from shared config (lib/admin/impersonation-config).
+// Mirrors the value enforced server-side in touch_impersonation_session and
+// is_merchant_admin_or_impersonating.
+const SESSION_TTL_SECONDS = IMPERSONATION_TTL_SECONDS;
 
 // UUID v4-ish regex. Cheap middleware/cookie validation.
 const UUID_REGEX =
@@ -198,13 +200,25 @@ export async function getImpersonationContext(): Promise<ImpersonationContext | 
 
   if (!merchant?.name) return null;
 
+  // Anchor the auto-exit deadline to the persisted session start, NOT to
+  // now(). getImpersonationContext runs on every ImpersonationHydrator mount
+  // (i.e. every full page load), so deriving expiresAt from Date.now() here
+  // re-seeded the countdown toward a fresh ~24h window on each navigation
+  // while "Started X ago" (anchored to the real started_at) kept growing —
+  // the divergence the banner exhibited. started_at + 24h is fixed across
+  // mounts so the countdown stays consistent.
+  const startedAtIso = session?.started_at ?? new Date().toISOString();
+  const expiresAtIso = new Date(
+    new Date(startedAtIso).getTime() + SESSION_TTL_SECONDS * 1000,
+  ).toISOString();
+
   return {
     sessionId: resolved.sessionId,
     merchantId: resolved.merchantId,
     clerkOrgId: resolved.clerkOrgId,
     merchantName: merchant.name,
-    expiresAt: new Date(Date.now() + SESSION_TTL_SECONDS * 1000).toISOString(),
-    startedAt: session?.started_at ?? new Date().toISOString(),
+    expiresAt: expiresAtIso,
+    startedAt: startedAtIso,
     reason: session?.reason ?? null,
   };
 }
@@ -302,16 +316,20 @@ export async function startImpersonation(
   // TODO(impersonation-pr3): notify merchant owner via email. Wiring to the
   // transactional email path will land alongside the UI PR.
 
+  // Anchor expiresAt to started_at (= start + 24h) so it matches the deadline
+  // getImpersonationContext re-derives on later mounts. Here started_at is
+  // "now", but keep the formula identical to avoid any drift between paths.
   const nowIso = new Date().toISOString();
+  const expiresAtIso = new Date(
+    new Date(nowIso).getTime() + SESSION_TTL_SECONDS * 1000,
+  ).toISOString();
   return {
     context: {
       sessionId: sessionId as string,
       merchantId,
       clerkOrgId: merchant.clerk_org_id,
       merchantName: merchant.name,
-      expiresAt: new Date(
-        Date.now() + SESSION_TTL_SECONDS * 1000,
-      ).toISOString(),
+      expiresAt: expiresAtIso,
       startedAt: nowIso,
       reason: reason ?? null,
     },

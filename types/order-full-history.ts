@@ -30,7 +30,21 @@ export interface OrderFullHistoryItem {
   special_instructions: string | null;
   kitchen_status: string | null;
   fire_time: string | null;
+  sent_to_kitchen_at: string | null;
+  started_preparing_at: string | null;
   completed_at: string | null;
+  kitchen_events: Array<{
+    event_type:
+      | "kitchen_sent"
+      | "kitchen_fired"
+      | "kitchen_acknowledged"
+      | "kitchen_preparing"
+      | "kitchen_ready"
+      | "kitchen_bumped";
+    timestamp: string;
+    actor_name: string | null;
+    display_name: string | null;
+  }>;
   item_status: string;
   created_at: string;
   discount_name: string | null;
