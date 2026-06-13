@@ -14,6 +14,7 @@ import {
   Eye,
   CheckCheck,
   Ban,
+  Send,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -36,6 +37,8 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { useInvoices, useUpdateInvoiceStatus, useDeleteInvoice } from "./hooks/useInvoices";
 import { InvoiceStatusBadge } from "./components/InvoiceStatusBadge";
+import { SendInvoiceDialog } from "./components/SendInvoiceDialog";
+import { isSendable } from "@/lib/invoices/lifecycle";
 import type { Invoice, InvoiceStatus } from "@/app/dashboard/actions/invoices";
 import {
   AlertDialog,
@@ -75,6 +78,7 @@ export default function InvoicesPage() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<InvoiceStatus | "all">("all");
   const [deleteTarget, setDeleteTarget] = useState<Invoice | null>(null);
+  const [sendTarget, setSendTarget] = useState<Invoice | null>(null);
 
   const { data: invoices = [], isLoading } = useInvoices(
     activeTab === "all" ? null : activeTab
@@ -271,6 +275,14 @@ export default function InvoicesPage() {
                             <Eye className="mr-2 h-4 w-4" />
                             View
                           </DropdownMenuItem>
+                          {isSendable(invoice.status) && (
+                            <DropdownMenuItem
+                              onClick={() => setSendTarget(invoice)}
+                            >
+                              <Send className="mr-2 h-4 w-4" />
+                              {invoice.status === "draft" ? "Send" : "Resend"}
+                            </DropdownMenuItem>
+                          )}
                           {invoice.status !== "paid" && (
                             <DropdownMenuItem
                               onClick={() =>
@@ -315,6 +327,15 @@ export default function InvoicesPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Send dialog */}
+      {sendTarget && (
+        <SendInvoiceDialog
+          open={!!sendTarget}
+          onOpenChange={(v) => !v && setSendTarget(null)}
+          invoice={sendTarget}
+        />
+      )}
 
       {/* Delete confirmation */}
       <AlertDialog

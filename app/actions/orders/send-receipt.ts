@@ -1,7 +1,6 @@
 "use server";
 
 import { auth } from "@clerk/nextjs/server";
-import { headers } from "next/headers";
 import { Resend } from "resend";
 import { sendSMS } from "@/lib/messaging/telnyx";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
@@ -13,6 +12,7 @@ import {
   renderReceiptHtml,
   renderReceiptText,
 } from "@/lib/messaging/receipt-template";
+import { resolveAppUrl } from "@/lib/messaging/app-url";
 
 const RATE_LIMIT_SENDS = 3;
 const RATE_LIMIT_WINDOW_HOURS = 1;
@@ -35,31 +35,6 @@ async function effectiveMerchantOwnsOrder(
     if (err instanceof UnauthorizedOrgError) return false;
     throw err;
   }
-}
-
-/**
- * Resolves the public app origin used to build hosted receipt URLs.
- * Prefers NEXT_PUBLIC_APP_URL when set; falls back to the current request's
- * host header (and x-forwarded-proto where present). Without this, deployments
- * that forget to set NEXT_PUBLIC_APP_URL emit relative paths in SMS receipts
- * ("/receipts/..." with no https:// prefix).
- */
-async function resolveAppUrl(): Promise<string> {
-  const envUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "");
-  if (envUrl) return envUrl;
-  try {
-    const h = await headers();
-    const host = h.get("host");
-    if (host) {
-      const proto =
-        h.get("x-forwarded-proto") ??
-        (host.startsWith("localhost") || host.startsWith("127.") ? "http" : "https");
-      return `${proto}://${host}`;
-    }
-  } catch {
-    // headers() is not available in this context — fall through.
-  }
-  return "";
 }
 
 export interface SendReceiptParams {

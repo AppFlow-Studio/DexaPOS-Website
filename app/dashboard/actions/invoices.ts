@@ -13,7 +13,8 @@ export type InvoiceStatus =
   | "viewed"
   | "paid"
   | "overdue"
-  | "cancelled";
+  | "cancelled"
+  | "payment_failed";
 
 export type PaymentDueType =
   | "upon_receipt"

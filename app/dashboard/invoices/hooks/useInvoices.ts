@@ -14,6 +14,10 @@ import {
   type CreateInvoiceInput,
   type UpdateInvoiceInput,
 } from "@/app/dashboard/actions/invoices";
+import {
+  sendInvoice,
+  type SendInvoiceParams,
+} from "@/app/actions/invoices/send-invoice";
 import { useClerkOrgId } from "@/app/dashboard/hooks/useLocationScoped";
 import { useLocationStore } from "@/stores/location-store";
 
@@ -129,6 +133,36 @@ export function useUpdateInvoiceStatus() {
     },
     onError: () => {
       toast.error("Failed to update invoice status");
+    },
+  });
+}
+
+export function useSendInvoice() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (params: SendInvoiceParams) => sendInvoice(params),
+    onSuccess: (result, variables) => {
+      if (!result.success) {
+        toast.error("Failed to send invoice", { description: result.message });
+        return;
+      }
+      if (result.results.some((r) => !r.success)) {
+        toast.warning(result.message, {
+          description: result.results
+            .map((r) => `${r.channel.toUpperCase()}: ${r.message}`)
+            .join("  ·  "),
+        });
+      } else {
+        toast.success(result.message);
+      }
+      queryClient.invalidateQueries({ queryKey: ["invoices"] });
+      queryClient.invalidateQueries({
+        queryKey: ["invoice", variables.invoiceId],
+      });
+    },
+    onError: () => {
+      toast.error("Failed to send invoice");
     },
   });
 }
