@@ -2,6 +2,8 @@ import { notFound } from "next/navigation";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import type { Metadata } from "next";
 import Image from "next/image";
+import { PayPanel } from "./PayPanel";
+import { getInvoicePaymentBootstrap } from "@/app/actions/invoices/invoice-payment-bootstrap";
 
 interface PageProps {
   params: Promise<{ token: string }>;
@@ -134,6 +136,13 @@ export default async function PublicInvoicePage({ params }: PageProps) {
   const paid = Number(invoice.amount_paid ?? 0);
   const amountDue = Math.max(0, total - paid);
   const isPaid = invoice.status === "paid";
+  const isPayable = !isPaid && invoice.status !== "cancelled";
+
+  // Resolve the NMI Collect.js tokenization key for this invoice's location.
+  // Null when NMI isn't provisioned — the card form degrades gracefully.
+  const { tokenizationKey } = isPayable
+    ? await getInvoicePaymentBootstrap(token)
+    : { tokenizationKey: null };
 
   return (
     <div className="min-h-screen bg-neutral-200 flex flex-col items-center justify-start py-6 sm:py-10 px-4 gap-5">
@@ -262,16 +271,13 @@ export default async function PublicInvoicePage({ params }: PageProps) {
           </div>
         </div>
 
-        {/* ── Pay button (lit up in §3) ───────────────────────── */}
-        {!isPaid && invoice.status !== "cancelled" && (
-          <button
-            type="button"
-            disabled
-            className="mt-5 w-full rounded-md bg-[#0C4FD1] py-3 text-sm font-semibold text-white opacity-60 cursor-not-allowed"
-            title="Online payment is coming soon"
-          >
-            Pay {fmt(amountDue)} — coming soon
-          </button>
+        {/* ── Pay (NMI Collect.js — §3) ───────────────────────── */}
+        {isPayable && (
+          <PayPanel
+            publicToken={token}
+            amountDue={amountDue}
+            tokenizationKey={tokenizationKey}
+          />
         )}
 
         {/* ── Note ────────────────────────────────────────────── */}
