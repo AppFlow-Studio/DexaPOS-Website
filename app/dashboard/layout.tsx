@@ -104,6 +104,7 @@ import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { GetUnreadTicketCounts } from "./actions/support";
 import { MobileBottomNav } from "@/components/dashboard/MobileBottomNav";
 import type { BottomNavTab, MoreNavItem } from "@/components/dashboard/MobileBottomNav";
+import { GlobalSearch } from "./components/global-search/GlobalSearch";
 
 const navMain = [
   {
@@ -1088,6 +1089,19 @@ export default function MerchantDashboardLayout({
 }) {
   const [isMounted, setIsMounted] = useState(false);
   useEffect(() => { setIsMounted(true); }, []);
+  const [searchOpen, setSearchOpen] = useState(false);
+
+  // Global ⌘K / Ctrl+K opens the command palette from anywhere in the dashboard.
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && (e.key === "k" || e.key === "K")) {
+        e.preventDefault();
+        setSearchOpen((prev) => !prev);
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, []);
   const { isLoaded, isSignedIn } = useSession();
   const { data: userInfo } = useUserInfo();
   const router = useRouter();
@@ -1279,7 +1293,14 @@ export default function MerchantDashboardLayout({
           <LocationIndicator userRole={userRole} />
           <div className="ml-auto flex flex-row items-center gap-1 sm:gap-2">
             <AnimatedThemeToggler />
-            <Button variant="ghost" size="icon" className="hidden sm:flex">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="hidden sm:flex"
+              onClick={() => setSearchOpen(true)}
+              aria-label="Search (⌘K)"
+              title="Search (⌘K)"
+            >
               <Search className="h-4 w-4" />
             </Button>
             <NotificationBell
@@ -1292,6 +1313,7 @@ export default function MerchantDashboardLayout({
         <div id="main-content" className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6 pb-20 sm:pb-6">{children}</div>
       </main>
       <MobileBottomNav tabs={dashboardBottomTabs} moreItems={dashboardMoreItems} />
+      <GlobalSearch open={searchOpen} onOpenChange={setSearchOpen} />
     </SidebarProvider>
   );
 }
