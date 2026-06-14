@@ -48,7 +48,7 @@ export function AddCustomItemDialog({
     onAdd({
       name: name.trim(),
       description: description.trim() || undefined,
-      quantity: parseFloat(quantity) || 1,
+      quantity: parseInt(quantity, 10) || 1,
       unit_price: parseFloat(price) || 0,
     });
     reset();
@@ -98,10 +98,14 @@ export function AddCustomItemDialog({
               <Input
                 id="custom-qty"
                 type="number"
-                min="0.01"
-                step="0.01"
+                min="1"
+                step="1"
                 value={quantity}
                 onChange={(e) => setQuantity(e.target.value)}
+                onBlur={(e) => {
+                  const v = parseInt(e.target.value, 10);
+                  setQuantity(Number.isNaN(v) || v < 1 ? "1" : String(v));
+                }}
               />
             </div>
             <div className="space-y-1.5">

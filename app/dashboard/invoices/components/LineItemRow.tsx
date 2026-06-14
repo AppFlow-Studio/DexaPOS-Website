@@ -35,10 +35,17 @@ export function LineItemRow({ item, onChange, onRemove }: LineItemRowProps) {
 
       <Input
         type="number"
-        min="0.01"
-        step="0.01"
+        min="1"
+        step="1"
         value={item.quantity}
-        onChange={(e) => onChange(item.id, "quantity", parseFloat(e.target.value) || 0)}
+        onChange={(e) => {
+          const v = parseInt(e.target.value, 10);
+          onChange(item.id, "quantity", Number.isNaN(v) ? 0 : v);
+        }}
+        onBlur={(e) => {
+          const v = parseInt(e.target.value, 10);
+          onChange(item.id, "quantity", Number.isNaN(v) || v < 1 ? 1 : v);
+        }}
         className="h-8 text-center text-sm"
         aria-label="Quantity"
       />

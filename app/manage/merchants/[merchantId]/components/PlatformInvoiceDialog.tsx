@@ -102,7 +102,7 @@ export function PlatformInvoiceDialog({
 
   function addItem() {
     const name = newName.trim()
-    const qty = parseFloat(newQty) || 0
+    const qty = parseInt(newQty, 10) || 0
     const price = parseFloat(newPrice) || 0
     if (!name || qty <= 0) return
     setItems((prev) => [
@@ -216,6 +216,10 @@ export function PlatformInvoiceDialog({
                   step="1"
                   value={newQty}
                   onChange={(e) => setNewQty(e.target.value)}
+                  onBlur={(e) => {
+                    const v = parseInt(e.target.value, 10)
+                    setNewQty(Number.isNaN(v) || v < 1 ? '1' : String(v))
+                  }}
                   className="h-8 text-center"
                 />
               </div>
