@@ -91,6 +91,28 @@ export type UpdateInvoiceInput = Partial<
   Omit<CreateInvoiceInput, "items"> & { items?: CreateInvoiceItemInput[] }
 >;
 
+/**
+ * DB-authoritative dashboard KPIs (§4). Derived server-side from the
+ * event-written columns (`amount_paid`, `paid_at`, `status`) via the
+ * `get_invoice_kpis` RPC — overdue is read-time derived from the effective
+ * due date, never a persisted status.
+ */
+export interface InvoiceKpis {
+  outstanding: number;
+  paidThisMonth: number;
+  overdueCount: number;
+  overdueAmount: number;
+  draftCount: number;
+}
+
+const EMPTY_KPIS: InvoiceKpis = {
+  outstanding: 0,
+  paidThisMonth: 0,
+  overdueCount: 0,
+  overdueAmount: 0,
+  draftCount: 0,
+};
+
 // =============================================================================
 // Helpers
 // =============================================================================
@@ -211,6 +233,44 @@ export async function GetInvoice(
   }
 
   return data as Invoice;
+}
+
+export async function GetInvoiceKpis(
+  clerkOrgId: string,
+  locationId?: string | null
+): Promise<InvoiceKpis> {
+  if (!clerkOrgId) return EMPTY_KPIS;
+
+  const merchantId = await getMerchantId(clerkOrgId);
+  if (!merchantId) return EMPTY_KPIS;
+
+  const supabase = createServerSupabaseClient();
+
+  const { data, error } = await supabase.rpc("get_invoice_kpis", {
+    p_merchant_id: merchantId,
+    p_location_id: locationId && locationId !== "all" ? locationId : null,
+  });
+
+  if (error || !data) {
+    console.error("[GetInvoiceKpis] error:", error);
+    return EMPTY_KPIS;
+  }
+
+  const k = data as {
+    outstanding?: number | string;
+    paid_this_month?: number | string;
+    overdue_count?: number | string;
+    overdue_amount?: number | string;
+    draft_count?: number | string;
+  };
+
+  return {
+    outstanding: Number(k.outstanding ?? 0),
+    paidThisMonth: Number(k.paid_this_month ?? 0),
+    overdueCount: Number(k.overdue_count ?? 0),
+    overdueAmount: Number(k.overdue_amount ?? 0),
+    draftCount: Number(k.draft_count ?? 0),
+  };
 }
 
 // =============================================================================

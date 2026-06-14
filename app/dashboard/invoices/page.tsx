@@ -35,7 +35,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useInvoices, useUpdateInvoiceStatus, useDeleteInvoice } from "./hooks/useInvoices";
+import {
+  useInvoices,
+  useInvoiceKpis,
+  useUpdateInvoiceStatus,
+  useDeleteInvoice,
+} from "./hooks/useInvoices";
 import { InvoiceStatusBadge } from "./components/InvoiceStatusBadge";
 import { SendInvoiceDialog } from "./components/SendInvoiceDialog";
 import { isSendable } from "@/lib/invoices/lifecycle";
@@ -86,22 +91,14 @@ export default function InvoicesPage() {
   const updateStatus = useUpdateInvoiceStatus();
   const deleteInvoice = useDeleteInvoice();
 
-  // Summary stats (from all invoices, not filtered)
-  const { data: allInvoices = [] } = useInvoices(null);
-  const outstanding = allInvoices
-    .filter((i) => i.status === "sent" || i.status === "viewed")
-    .reduce((sum, i) => sum + i.total_amount, 0);
-  const now = new Date();
-  const paidThisMonth = allInvoices
-    .filter(
-      (i) =>
-        i.status === "paid" &&
-        new Date(i.updated_at).getMonth() === now.getMonth() &&
-        new Date(i.updated_at).getFullYear() === now.getFullYear()
-    )
-    .reduce((sum, i) => sum + i.total_amount, 0);
-  const overdueCount = allInvoices.filter((i) => i.status === "overdue").length;
-  const draftCount = allInvoices.filter((i) => i.status === "draft").length;
+  // DB-authoritative, location-scoped KPIs (§4) — derived server-side from
+  // amount_paid/paid_at/status; overdue is read-time derived. Refetched via
+  // React Query invalidation whenever any invoice mutation runs.
+  const { data: kpi } = useInvoiceKpis();
+  const outstanding = kpi?.outstanding ?? 0;
+  const paidThisMonth = kpi?.paidThisMonth ?? 0;
+  const overdueCount = kpi?.overdueCount ?? 0;
+  const draftCount = kpi?.draftCount ?? 0;
 
   return (
     <div className="space-y-6">
@@ -130,7 +127,7 @@ export default function InvoicesPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{formatCurrency(outstanding)}</div>
-            <p className="text-xs text-muted-foreground">Sent + viewed</p>
+            <p className="text-xs text-muted-foreground">Unpaid balance</p>
           </CardContent>
         </Card>
         <Card>

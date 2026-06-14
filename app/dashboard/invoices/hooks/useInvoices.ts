@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import {
   GetInvoices,
   GetInvoice,
+  GetInvoiceKpis,
   CreateInvoice,
   UpdateInvoice,
   UpdateInvoiceStatus,
@@ -34,6 +35,19 @@ export function useInvoices(status?: InvoiceStatus | null) {
   return useQuery({
     queryKey: ["invoices", clerkOrgId, effectiveLocationId, status ?? "all"],
     queryFn: () => GetInvoices(clerkOrgId!, effectiveLocationId, status),
+    enabled: !!clerkOrgId,
+  });
+}
+
+export function useInvoiceKpis() {
+  const clerkOrgId = useClerkOrgId();
+  const { selectedLocationId } = useLocationStore();
+  const effectiveLocationId =
+    selectedLocationId === "all" ? null : selectedLocationId;
+
+  return useQuery({
+    queryKey: ["invoice-kpis", clerkOrgId, effectiveLocationId],
+    queryFn: () => GetInvoiceKpis(clerkOrgId!, effectiveLocationId),
     enabled: !!clerkOrgId,
   });
 }
@@ -68,6 +82,7 @@ export function useCreateInvoice() {
         toast.success("Invoice created");
       }
       queryClient.invalidateQueries({ queryKey: ["invoices"] });
+      queryClient.invalidateQueries({ queryKey: ["invoice-kpis"] });
     },
     onError: () => {
       toast.error("Failed to create invoice");
@@ -97,6 +112,7 @@ export function useUpdateInvoice() {
         toast.success("Invoice updated");
       }
       queryClient.invalidateQueries({ queryKey: ["invoices"] });
+      queryClient.invalidateQueries({ queryKey: ["invoice-kpis"] });
       queryClient.invalidateQueries({
         queryKey: ["invoice", variables.invoiceId],
       });
@@ -127,6 +143,7 @@ export function useUpdateInvoiceStatus() {
         variables.status.charAt(0).toUpperCase() + variables.status.slice(1);
       toast.success(`Invoice marked as ${statusLabel}`);
       queryClient.invalidateQueries({ queryKey: ["invoices"] });
+      queryClient.invalidateQueries({ queryKey: ["invoice-kpis"] });
       queryClient.invalidateQueries({
         queryKey: ["invoice", variables.invoiceId],
       });
@@ -157,6 +174,7 @@ export function useSendInvoice() {
         toast.success(result.message);
       }
       queryClient.invalidateQueries({ queryKey: ["invoices"] });
+      queryClient.invalidateQueries({ queryKey: ["invoice-kpis"] });
       queryClient.invalidateQueries({
         queryKey: ["invoice", variables.invoiceId],
       });
@@ -179,6 +197,7 @@ export function useDeleteInvoice() {
       }
       toast.success("Invoice deleted");
       queryClient.invalidateQueries({ queryKey: ["invoices"] });
+      queryClient.invalidateQueries({ queryKey: ["invoice-kpis"] });
     },
     onError: () => {
       toast.error("Failed to delete invoice");

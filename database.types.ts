@@ -22785,6 +22785,10 @@ export type Database = {
           revenue: number
         }[]
       }
+      get_invoice_kpis: {
+        Args: { p_merchant_id: string; p_location_id?: string }
+        Returns: Json
+      }
       get_pos_full_sync: { Args: { p_location_id: string }; Returns: Json }
       get_pos_inventory_sync: { Args: { p_location_id: string }; Returns: Json }
       get_pto_balance: { Args: { p_employee_id: string }; Returns: number }
