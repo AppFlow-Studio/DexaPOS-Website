@@ -409,6 +409,9 @@ export const adminKeys = {
       status ?? 'all',
     ] as const,
 
+  merchantPlatformInvoices: (merchantId: string) =>
+    [...adminKeys.merchants(), merchantId, 'platform-invoices'] as const,
+
   merchantTipSession: (
     merchantId: string,
     locationId: string,

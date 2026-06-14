@@ -188,6 +188,9 @@ export async function GetInvoices(
     `
     )
     .eq("merchant_id", merchantId)
+    // Only the merchant's own customer invoices — platform_to_merchant bills
+    // (HQ → merchant, §5) are payables and must not pollute this list.
+    .eq("bill_type", "merchant_to_customer")
     .order("created_at", { ascending: false });
 
   if (locationId && locationId !== "all") {
