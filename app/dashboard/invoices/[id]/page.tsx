@@ -3,7 +3,7 @@
 import { use } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Edit, CheckCheck, Trash2, Send } from "lucide-react";
+import { ArrowLeft, Edit, CheckCheck, Trash2, Send, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
@@ -166,6 +166,12 @@ export default function InvoiceDetailPage({
               Mark Paid
             </Button>
           )}
+          <Button size="sm" variant="outline" asChild>
+            <a href={`/api/invoices/${invoice.id}/pdf`} target="_blank" rel="noopener noreferrer">
+              <Download className="h-4 w-4 mr-1" />
+              Download PDF
+            </a>
+          </Button>
           <Button
             size="sm"
             variant="outline"

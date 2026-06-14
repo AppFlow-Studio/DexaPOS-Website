@@ -12,8 +12,13 @@ import { resolveAppUrl } from "@/lib/messaging/app-url";
 import {
   renderInvoiceHtml,
   renderInvoiceText,
+  dueLabelFor,
   type InvoiceTemplateData,
 } from "@/lib/messaging/invoice-template";
+import {
+  generateInvoicePdfBuffer,
+  buildInvoicePdfFilename,
+} from "@/lib/invoices/invoice-pdf";
 import { isValidEmail } from "@/lib/messaging/resend";
 import { isValidPhoneNumber } from "@/lib/messaging/telnyx";
 import { LogAuditEvent } from "@/app/dashboard/actions/audit-logs";
@@ -79,32 +84,6 @@ async function fetchMerchantLogoUrl(
   if (!org) return null;
   const record = Array.isArray(org) ? org[0] : org;
   return record?.imageURL ?? null;
-}
-
-function dueLabelFor(
-  paymentDueType: string | null,
-  dueDate: string | null,
-): string | null {
-  switch (paymentDueType) {
-    case "upon_receipt":
-      return "Upon receipt";
-    case "net_15":
-      return "Net 15";
-    case "net_30":
-      return "Net 30";
-    case "net_60":
-      return "Net 60";
-    case "custom":
-      return dueDate
-        ? new Date(dueDate).toLocaleDateString("en-US", {
-            month: "long",
-            day: "numeric",
-            year: "numeric",
-          })
-        : null;
-    default:
-      return null;
-  }
 }
 
 export async function sendInvoice(
@@ -260,6 +239,25 @@ export async function sendInvoice(
         merchantLogoUrl: logoUrl,
         payUrl,
       });
+
+      // Attach the invoice as a PDF. Generation failure must not block delivery
+      // — the HTML body + pay link stand on their own — so fall back to no
+      // attachment and log.
+      let attachments:
+        | { filename: string; content: Buffer }[]
+        | undefined;
+      try {
+        const pdfBuffer = await generateInvoicePdfBuffer(templateData);
+        attachments = [
+          {
+            filename: buildInvoicePdfFilename(templateData.invoiceNumber),
+            content: pdfBuffer,
+          },
+        ];
+      } catch (pdfError) {
+        console.error("[sendInvoice] PDF generation failed:", pdfError);
+      }
+
       const resend = new Resend(apiKey);
       const fromEmail = process.env.RESEND_FROM_EMAIL || "invoices@resend.dev";
       const { error: emailError } = await resend.emails.send({
@@ -267,6 +265,7 @@ export async function sendInvoice(
         to: emailRecipient,
         subject: `Invoice ${templateData.invoiceNumber} from ${businessName}`,
         html,
+        ...(attachments ? { attachments } : {}),
       });
 
       if (pendingRow) {

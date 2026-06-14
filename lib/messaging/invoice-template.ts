@@ -31,6 +31,36 @@ export interface RenderInvoiceOptions {
   payUrl?: string | null;
 }
 
+/**
+ * Human label for an invoice's payment-due terms. Shared by the email sender,
+ * the public page, and the PDF so all three render terms identically.
+ */
+export function dueLabelFor(
+  paymentDueType: string | null,
+  dueDate: string | null,
+): string | null {
+  switch (paymentDueType) {
+    case "upon_receipt":
+      return "Upon receipt";
+    case "net_15":
+      return "Net 15";
+    case "net_30":
+      return "Net 30";
+    case "net_60":
+      return "Net 60";
+    case "custom":
+      return dueDate
+        ? new Date(dueDate).toLocaleDateString("en-US", {
+            month: "long",
+            day: "numeric",
+            year: "numeric",
+          })
+        : null;
+    default:
+      return null;
+  }
+}
+
 // DEXA palette — neutral/white with a single brand blue.
 const INK = "#171717";
 const INK_SOFT = "#404040";
