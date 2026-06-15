@@ -343,7 +343,7 @@ export function InvoiceForm({ existing }: InvoiceFormProps) {
         <div className="space-y-5">
 
           {/* ── Invoice Details ──────────────────────────────────── */}
-          <Card>
+          <Card className="shadow-none">
             <CardHeader className="pb-4">
               <div className="flex items-center gap-2.5">
                 <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
@@ -464,7 +464,7 @@ export function InvoiceForm({ existing }: InvoiceFormProps) {
           </Card>
 
           {/* ── Sale Details ─────────────────────────────────────── */}
-          <Card>
+          <Card className="shadow-none">
             <CardHeader className="pb-4">
               <div className="flex items-center justify-between gap-3 flex-wrap">
                 <div className="flex items-center gap-2.5">
@@ -620,7 +620,7 @@ export function InvoiceForm({ existing }: InvoiceFormProps) {
         <div className="space-y-4 lg:sticky lg:top-6">
 
           {/* ── Order Summary ────────────────────────────────────── */}
-          <Card>
+          <Card className="shadow-none">
             <CardHeader className="pb-3">
               <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                 Order Summary
@@ -714,7 +714,7 @@ export function InvoiceForm({ existing }: InvoiceFormProps) {
           </Card>
 
           {/* ── Note ────────────────────────────────────────────── */}
-          <Card>
+          <Card className="shadow-none">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-semibold">
                 Note{" "}

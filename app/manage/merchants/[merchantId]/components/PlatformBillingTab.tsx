@@ -102,7 +102,7 @@ export function PlatformBillingTab({ merchantId, locations }: PlatformBillingTab
         </Button>
       </div>
 
-      <Card>
+      <Card className="shadow-none">
         <CardContent className="p-0">
           {isLoading ? (
             <div className="space-y-3 p-6">

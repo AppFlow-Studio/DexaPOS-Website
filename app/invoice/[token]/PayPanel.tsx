@@ -111,7 +111,7 @@ export function PayPanel({ publicToken, amountDue, tokenizationKey }: PayPanelPr
           price={amountDue.toFixed(2)}
         />
       ) : (
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 text-[13px] text-slate-500 shadow-sm">
+        <div className="rounded-lg border border-neutral-200 bg-white p-4 text-[13px] text-neutral-500">
           Loading secure card fields…
         </div>
       )}

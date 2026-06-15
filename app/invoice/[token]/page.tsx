@@ -145,8 +145,8 @@ export default async function PublicInvoicePage({ params }: PageProps) {
     : { tokenizationKey: null };
 
   return (
-    <div className="min-h-screen bg-neutral-200 flex flex-col items-center justify-start py-6 sm:py-10 px-4 gap-5">
-      <div className="w-full max-w-[420px] bg-white shadow-[0_6px_24px_rgba(0,0,0,0.10)] text-neutral-900 px-7 pt-8 pb-7 rounded-lg">
+    <div className="min-h-screen bg-neutral-50 flex flex-col items-center justify-start py-8 sm:py-14 px-4 gap-5">
+      <div className="w-full max-w-[440px] bg-white border border-neutral-200/80 text-neutral-900 px-7 pt-8 pb-7 rounded-xl">
         {/* ── Header ──────────────────────────────────────────── */}
         <div className="flex flex-col items-center text-center">
           {logo_url ? (
@@ -187,16 +187,16 @@ export default async function PublicInvoicePage({ params }: PageProps) {
           <p className="text-[12px] font-semibold uppercase tracking-[0.06em] text-neutral-500">
             {isPaid ? "Paid in full" : "Amount due"}
           </p>
-          <p className="mt-1 text-3xl font-bold tabular-nums">
+          <p className="mt-1.5 text-[2.5rem] leading-none font-bold tabular-nums tracking-tight">
             {fmt(isPaid ? total : amountDue)}
           </p>
           <span
-            className={`inline-block mt-2 px-2.5 py-0.5 rounded-full text-[12px] font-medium ${
+            className={`inline-block mt-3 px-2.5 py-0.5 rounded-full text-[12px] font-medium ${
               isPaid
                 ? "bg-green-100 text-green-700"
                 : invoice.status === "overdue" || invoice.status === "payment_failed"
                 ? "bg-red-100 text-red-700"
-                : "bg-blue-100 text-blue-700"
+                : "bg-[#0C4FD1]/10 text-[#0C4FD1]"
             }`}
           >
             {STATUS_LABELS[invoice.status] ?? invoice.status}
@@ -220,27 +220,33 @@ export default async function PublicInvoicePage({ params }: PageProps) {
         <Rule />
 
         {/* ── Items ───────────────────────────────────────────── */}
-        <div className="space-y-3">
+        <p className="text-[12px] font-semibold uppercase tracking-[0.06em] text-neutral-500 mb-2.5">
+          Items
+        </p>
+        <div className="space-y-3.5">
           {items.length === 0 ? (
             <p className="text-[13px] text-neutral-500">No items</p>
           ) : (
             items.map((item) => (
-              <div key={item.id}>
-                <div className="flex justify-between items-start gap-3">
-                  <span className="text-[14px] leading-snug flex-1 min-w-0 wrap-break-word">
-                    <span className="tabular-nums">{item.quantity ?? 1}</span>
-                    {"  "}
+              <div key={item.id} className="flex justify-between items-start gap-3">
+                <div className="flex-1 min-w-0">
+                  <p className="text-[14px] leading-snug wrap-break-word text-neutral-900">
                     {item.name ?? "Item"}
-                    {item.description ? (
-                      <span className="block text-[12.5px] text-neutral-500 mt-0.5">
-                        {item.description}
-                      </span>
-                    ) : null}
-                  </span>
-                  <span className="text-[14px] tabular-nums shrink-0 pt-px">
-                    {fmt(item.total_price)}
-                  </span>
+                  </p>
+                  {item.description ? (
+                    <p className="text-[12.5px] text-neutral-500 mt-0.5 wrap-break-word">
+                      {item.description}
+                    </p>
+                  ) : null}
+                  {Number(item.quantity ?? 1) > 1 && (
+                    <p className="text-[12.5px] text-neutral-500 mt-0.5 tabular-nums">
+                      {item.quantity} × {fmt(item.unit_price)}
+                    </p>
+                  )}
                 </div>
+                <span className="text-[14px] tabular-nums shrink-0 pt-px text-neutral-900">
+                  {fmt(item.total_price)}
+                </span>
               </div>
             ))
           )}

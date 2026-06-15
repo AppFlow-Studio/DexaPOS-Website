@@ -10,13 +10,14 @@ import {
   loadInvoiceForSend,
   dispatchInvoiceSend,
   type SendInvoiceChannel,
-  type ChannelResult,
   type SendInvoiceResult,
 } from "@/lib/messaging/invoice-send-core";
 
-// Re-export the shared channel/result types so existing consumers
-// (useSendInvoice, SendInvoiceDialog) keep importing them from here.
-export type { SendInvoiceChannel, ChannelResult, SendInvoiceResult };
+// NOTE: this is a "use server" module — every *value* export is registered as a
+// server action. Re-exporting types from here (even via `export type`) makes the
+// SWC transform emit a runtime binding for a name that doesn't exist → a
+// "X is not defined" ReferenceError on SSR. Consumers import these types directly
+// from "@/lib/messaging/invoice-send-core" instead.
 
 export interface SendInvoiceParams {
   invoiceId: string;

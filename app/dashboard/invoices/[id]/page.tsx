@@ -192,7 +192,7 @@ export default function InvoiceDetailPage({
       </div>
 
       {/* Invoice Details */}
-      <Card>
+      <Card className="shadow-none">
         <CardHeader>
           <CardTitle className="text-base">Invoice Details</CardTitle>
         </CardHeader>
@@ -229,7 +229,7 @@ export default function InvoiceDetailPage({
       </Card>
 
       {/* Line Items */}
-      <Card>
+      <Card className="shadow-none">
         <CardHeader>
           <CardTitle className="text-base">Items</CardTitle>
         </CardHeader>
@@ -304,7 +304,7 @@ export default function InvoiceDetailPage({
 
       {/* Note */}
       {invoice.note && (
-        <Card>
+        <Card className="shadow-none">
           <CardHeader>
             <CardTitle className="text-base">Note</CardTitle>
           </CardHeader>

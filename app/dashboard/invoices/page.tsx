@@ -120,7 +120,7 @@ export default function InvoicesPage() {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card>
+        <Card className="shadow-none">
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
             <CardTitle className="text-sm font-medium">Outstanding</CardTitle>
             <DollarSign className="h-4 w-4 text-muted-foreground" />
@@ -130,7 +130,7 @@ export default function InvoicesPage() {
             <p className="text-xs text-muted-foreground">Unpaid balance</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="shadow-none">
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
             <CardTitle className="text-sm font-medium">Paid This Month</CardTitle>
             <CheckCircle2 className="h-4 w-4 text-green-500" />
@@ -140,7 +140,7 @@ export default function InvoicesPage() {
             <p className="text-xs text-muted-foreground">Current month</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="shadow-none">
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
             <CardTitle className="text-sm font-medium">Overdue</CardTitle>
             <AlertCircle className="h-4 w-4 text-red-500" />
@@ -150,7 +150,7 @@ export default function InvoicesPage() {
             <p className="text-xs text-muted-foreground">Needs attention</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="shadow-none">
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
             <CardTitle className="text-sm font-medium">Drafts</CardTitle>
             <Clock className="h-4 w-4 text-muted-foreground" />
@@ -163,7 +163,7 @@ export default function InvoicesPage() {
       </div>
 
       {/* Table with tabs */}
-      <Card>
+      <Card className="shadow-none">
         <CardHeader className="pb-3">
           <Tabs
             value={activeTab}
