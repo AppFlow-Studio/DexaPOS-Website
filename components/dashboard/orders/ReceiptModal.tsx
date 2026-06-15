@@ -24,6 +24,8 @@ import {
   type ReceiptTemplate,
 } from "@/app/dashboard/actions/receipt-templates";
 import { getOrderBreakdown } from "@/lib/orders/order-breakdown";
+import { resolveReceiptHeader } from "@/lib/receipts/header";
+import { formatReceiptDateTime } from "@/lib/receipts/format";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -51,23 +53,6 @@ function formatCurrency(amount: number): string {
     currency: "USD",
     minimumFractionDigits: 2,
   }).format(amount);
-}
-
-// Format date for receipt
-function formatReceiptDate(dateString: string): { date: string; time: string } {
-  const date = new Date(dateString);
-  return {
-    date: date.toLocaleDateString("en-US", {
-      month: "2-digit",
-      day: "2-digit",
-      year: "numeric",
-    }),
-    time: date.toLocaleTimeString("en-US", {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: true,
-    }),
-  };
 }
 
 // Get payment method display name
@@ -306,7 +291,8 @@ export function ReceiptModal({
 
   const items = (order.order_items || []) as ReceiptItem[];
   const payments = (order.order_payments || []) as OrderPayment[];
-  const { date, time } = formatReceiptDate(order.created_at);
+  // Store-local order date, one format, used for both the body and footer.
+  const orderDateTime = formatReceiptDateTime(order.created_at, location?.timezone);
 
   const orderAny = order as unknown as Record<string, any>;
   const sessionId: string | undefined = orderAny.session_id ?? undefined;
@@ -378,21 +364,14 @@ export function ReceiptModal({
     (p) => p.status === "captured" || p.status === "paid"
   );
 
-  // Build location address
-  const locationAddress = location
-    ? [
-        location.address_line1,
-        location.address_line2,
-        `${location.city}, ${location.state} ${location.postal_code}`,
-      ]
-        .filter(Boolean)
-        .join("\n")
-    : "";
+  // ─── Single resolved header block (template header_text → else location) ───
+  // One block only — never location fields AND header_text together.
+  const header = resolveReceiptHeader(location, headerText);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="sm:max-w-md p-0 gap-0 bg-transparent border-none shadow-none overflow-visible"
+        className="sm:max-w-md p-0 gap-0 bg-transparent border-none shadow-none flex flex-col max-h-[88vh]"
         showCloseButton={false}
         elevation="above-sheet"
       >
@@ -400,16 +379,11 @@ export function ReceiptModal({
           <DialogTitle>Receipt Preview</DialogTitle>
         </DialogHeader>
 
-        {/* Receipt Container with paper effect */}
-        <div className="relative">
-          {/* Paper curl shadow effect */}
-          <div
-            className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/10 rounded-sm pointer-events-none"
-            style={{
-              transform: "perspective(1000px) rotateX(2deg)",
-              transformOrigin: "top center",
-            }}
-          />
+        {/* Receipt Container — scrolls vertically when taller than the viewport.
+            overscroll-contain + thin scrollbar keep it tidy; no horizontal scroll. */}
+        <div
+          className="relative min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain px-2 py-3 [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-black/20 dark:[&::-webkit-scrollbar-thumb]:bg-white/20 [&::-webkit-scrollbar-track]:bg-transparent"
+        >
 
           {/* Receipt Paper */}
           <div
@@ -427,25 +401,30 @@ export function ReceiptModal({
             <TornEdgeTop />
             <TornEdgeBottom />
 
-            {/* Business Header */}
+            {/* Business Header — exactly one resolved block */}
             <div className="receipt-header text-center mb-4 relative z-10">
               <h2 className="business-name text-base font-semibold tracking-tight">
-                {location?.name || "Restaurant Name"}
+                {header.name || "Restaurant Name"}
               </h2>
-              {locationAddress && (
-                <p className="business-address text-[10px] text-zinc-600 dark:text-zinc-400 whitespace-pre-line mt-1">
-                  {locationAddress}
-                </p>
-              )}
-              {location?.phone && (
-                <p className="text-[10px] text-zinc-600 dark:text-zinc-400">
-                  {location.phone}
-                </p>
-              )}
-              {headerText && (
-                <p className="text-[10px] text-zinc-600 dark:text-zinc-400 whitespace-pre-line mt-1">
-                  {headerText}
-                </p>
+              {header.source === "template" ? (
+                header.rawText && (
+                  <p className="business-address text-[10px] text-zinc-600 dark:text-zinc-400 whitespace-pre-line mt-1">
+                    {header.rawText}
+                  </p>
+                )
+              ) : (
+                <>
+                  {header.addressLines.length > 0 && (
+                    <p className="business-address text-[10px] text-zinc-600 dark:text-zinc-400 whitespace-pre-line mt-1">
+                      {header.addressLines.join("\n")}
+                    </p>
+                  )}
+                  {header.phone && (
+                    <p className="text-[10px] text-zinc-600 dark:text-zinc-400">
+                      {header.phone}
+                    </p>
+                  )}
+                </>
               )}
             </div>
 
@@ -461,11 +440,7 @@ export function ReceiptModal({
               </div>
               <div className="order-info-row flex justify-between">
                 <span>Date:</span>
-                <span>{date}</span>
-              </div>
-              <div className="order-info-row flex justify-between">
-                <span>Time:</span>
-                <span>{time}</span>
+                <span>{orderDateTime}</span>
               </div>
               {showOrderType && (
                 <div className="order-info-row flex justify-between">
@@ -707,12 +682,7 @@ export function ReceiptModal({
                 </>
               )}
               <p className="text-[10px] text-zinc-500 dark:text-zinc-400 mt-2">
-                {new Date().toLocaleDateString("en-US", {
-                  weekday: "long",
-                  year: "numeric",
-                  month: "long",
-                  day: "numeric",
-                })}
+                {orderDateTime}
               </p>
             </div>
           </div>
