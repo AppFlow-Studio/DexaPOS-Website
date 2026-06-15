@@ -2,7 +2,8 @@
 
 import { useCustomers } from "./hooks/useCustomers";
 import { CustomerList } from "./components/CustomerList";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Search, Plus, Megaphone } from "lucide-react";
@@ -14,12 +15,28 @@ import { getCustomerDisplayName } from "@/types/customer";
 
 export default function CustomersPage() {
   const { data: customers = [], isLoading } = useCustomers();
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCustomer, setSelectedCustomer] =
     useState<CustomerListItem | null>(null);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isCampaignOpen, setIsCampaignOpen] = useState(false);
+
+  // Deep-link support: ?customerId=<id> (e.g. from global search) auto-opens
+  // that customer's profile once the list has loaded, then clears the param so
+  // closing the sheet doesn't re-open it.
+  const deepLinkCustomerId = searchParams.get("customerId");
+  useEffect(() => {
+    if (!deepLinkCustomerId || customers.length === 0) return;
+    const match = customers.find((c) => c.id === deepLinkCustomerId);
+    if (match) {
+      setSelectedCustomer(match);
+      setIsProfileOpen(true);
+      router.replace("/dashboard/customers");
+    }
+  }, [deepLinkCustomerId, customers, router]);
 
   // Filter customers based on search term
   const filteredData = useMemo(() => {
