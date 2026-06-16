@@ -7,7 +7,7 @@ import {
   type OnlineOrderingSettings,
   type OnlineStoreSetupStatus,
 } from "./hooks/useOnlineOrderingSettings";
-import { useLocationStore, useSelectedLocation } from "@/stores/location-store";
+import { useGatedLocationId, useGatedLocation } from "@/stores/location-store";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -1212,9 +1212,12 @@ export default function OnlineOrderingPage() {
     loadSettings,
     isLoading,
   } = useOnlineOrderingSettings();
-  const { selectedLocationId } = useLocationStore();
-  const selectedLocation = useSelectedLocation();
-  const isAllLocations = selectedLocationId === "all";
+  // Resolve to the gated location so single-location accounts (locked to 'all')
+  // skip the "Select a Location" prompt. Multi-location on 'all' -> "all"/null.
+  const gatedLocationId = useGatedLocationId();
+  const selectedLocationId = gatedLocationId ?? "all";
+  const selectedLocation = useGatedLocation();
+  const isAllLocations = !gatedLocationId;
 
   const [requirementsOpen, setRequirementsOpen] = useState(false);
   const [requirementsMissing, setRequirementsMissing] = useState<Record<string, boolean> | null>(null);
