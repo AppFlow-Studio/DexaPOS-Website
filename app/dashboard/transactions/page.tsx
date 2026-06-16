@@ -362,6 +362,11 @@ export default function TransactionsPage() {
             transactions={orders || []}
             isLoading={isLoadingOrders}
             onTransactionClick={handleOrderClick}
+            timeZone={
+              selectedLocation?.id && !Array.isArray(selectedLocation)
+                ? selectedLocation.timezone
+                : undefined
+            }
           />
         </div>
       )}

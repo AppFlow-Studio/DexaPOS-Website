@@ -2,6 +2,15 @@ import { notFound } from "next/navigation";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import type { Metadata } from "next";
 import Image from "next/image";
+import { formatReceiptDateTime } from "@/lib/receipts/format";
+import {
+  toReceiptData,
+  type RawPublicReceipt,
+  type ReceiptContractItem,
+  type ReceiptContractPayment,
+} from "@/lib/receipts/contract";
+import { getOrderBreakdown } from "@/lib/orders/order-breakdown";
+import type { OrderPayment } from "@/types/order-management";
 
 interface PageProps {
   params: Promise<{ t1: string; t2: string }>;
@@ -14,7 +23,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     p_order_token: t1,
     p_send_token: t2,
   });
-  const receipt = data as ReceiptData | null;
+  const receipt = data as RawPublicReceipt | null;
   const storeName = receipt?.location?.name?.trim();
   const orderNum = receipt?.order?.display_number
     ? receipt.order.display_number
@@ -42,74 +51,12 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-
-interface Modifier {
-  modifier_group_name: string | null;
-  modifier_name: string | null;
-  price_modifier: number | null;
-  quantity: number | null;
-  is_no: boolean | null;
-}
-
-interface OrderItem {
-  id: string;
-  item_name: string | null;
-  quantity: number | null;
-  unit_price: number | null;
-  subtotal: number | null;
-  is_voided: boolean | null;
-  modifiers: Modifier[];
-}
-
-interface Payment {
-  payment_method: string | null;
-  amount: number | null;
-  tip_amount: number | null;
-  total_amount: number | null;
-  status: string | null;
-  card_type: string | null;
-  card_last_four: string | null;
-  terminal_type: string | null;
-  authorization_code: string | null;
-  refunded_amount: number | null;
-  refunded_at: string | null;
-}
-
-interface ReceiptData {
-  order: {
-    display_number: string | null;
-    order_number: string | null;
-    created_at: string | null;
-    status: string | null;
-    payment_status: string | null;
-    voided_at: string | null;
-    void_reason: string | null;
-    subtotal: number | null;
-    tax_amount: number | null;
-    tip_amount: number | null;
-    discount_amount: number | null;
-    service_charge: number | null;
-    total_amount: number | null;
-    effective_subtotal: number | null;
-    effective_tax_amount: number | null;
-    effective_total: number | null;
-    payment_pricing_mode: string | null;
-    cash_total: number | null;
-    card_total: number | null;
-  };
-  location: {
-    name: string | null;
-    address_line1: string | null;
-    address_line2: string | null;
-    city: string | null;
-    state: string | null;
-    postal_code: string | null;
-    phone: string | null;
-  };
-  logo_url: string | null;
-  items: OrderItem[];
-  payments: Payment[];
-}
+//
+// This page renders from the shared receipt contract (lib/receipts/contract.ts)
+// — the same contract the dashboard receipt and the email receipt consume — so
+// header, dates, and totals stay identical across surfaces. The RPC returns the
+// raw shape (RawPublicReceipt); toReceiptData() normalizes it (resolving the
+// single header block) into ReceiptData for rendering.
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -118,18 +65,7 @@ function fmt(amount: number | null | undefined): string {
   return `$${Number(amount).toFixed(2)}`;
 }
 
-function fmtDatetime(iso: string | null | undefined): string {
-  if (!iso) return "";
-  return new Date(iso).toLocaleString("en-US", {
-    month: "numeric",
-    day: "numeric",
-    year: "2-digit",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
-
-function paymentBrand(p: Payment): string {
+function paymentBrand(p: ReceiptContractPayment): string {
   if (p.payment_method === "cash") return "Cash";
   const brand = p.card_type ? p.card_type.toUpperCase() : "CARD";
   return p.card_last_four ? `${brand} ····${p.card_last_four}` : brand;
@@ -184,8 +120,11 @@ export default async function ReceiptPage({ params }: PageProps) {
     notFound();
   }
 
-  const receipt = data as ReceiptData;
-  const { order, location, logo_url, items, payments } = receipt;
+  // Normalize the raw RPC response into the shared receipt contract. This
+  // resolves the single header block (template header_text → else location
+  // record) — the same precedence the dashboard receipt uses.
+  const receipt = toReceiptData(data as RawPublicReceipt);
+  const { order, location, header, logo_url, items, payments } = receipt;
 
   const orderNumber = order.display_number
     ? order.display_number
@@ -196,21 +135,18 @@ export default async function ReceiptPage({ params }: PageProps) {
   const isVoided = !!order.voided_at;
   const isRefunded = order.payment_status === "refunded";
 
-  const orderTotal =
-    order.payment_pricing_mode === "cash"
-      ? order.cash_total
-      : order.payment_pricing_mode === "card"
-      ? order.card_total
-      : order.effective_total ?? order.total_amount;
-
-  // The order-level total may exclude a tip captured at the terminal.
-  // Sum the payments to get the real amount collected, then fall back
-  // to the order total if no payments have been recorded yet.
-  const paymentSum = payments.reduce(
-    (s, p) => s + Number(p.total_amount ?? p.amount ?? 0),
-    0
-  );
-  const chargedTotal = paymentSum > 0 ? paymentSum : orderTotal;
+  // Single source of truth for totals — the same lane resolver the dashboard
+  // receipt uses. Every total line comes from one self-consistent pricing track
+  // so the receipt foots on dual / mixed-tender orders.
+  const breakdown = getOrderBreakdown(order, payments as unknown as OrderPayment[]);
+  const lane = breakdown.primary;
+  const laneLabel = breakdown.display === "cash" ? "Cash" : "Card";
+  const altLaneTotal =
+    breakdown.display === "cash" ? breakdown.card.total : breakdown.cash.total;
+  const altLaneLabel =
+    breakdown.display === "cash" ? "If paid by card" : "If paid by cash";
+  const grandTotal =
+    breakdown.isMixed && lane.amountPaid > 0 ? lane.amountPaid : lane.total + lane.tip;
 
   const activeItems = items.filter((i) => !i.is_voided);
 
@@ -256,21 +192,26 @@ export default async function ReceiptPage({ params }: PageProps) {
                 unoptimized
               />
             ) : null}
-            <h1 className="text-lg font-bold uppercase tracking-wide leading-tight wrap-break-word">
-              {location.name}
+            <h1 className="text-lg font-bold tracking-wide leading-tight wrap-break-word">
+              {header.name}
             </h1>
-            {location.address_line1 && (
-              <p className="text-[13px] text-neutral-600 mt-1.5 leading-relaxed">
-                {location.address_line1}
-                {location.address_line2 ? <><br />{location.address_line2}</> : null}
-                <br />
-                {location.city ? `${location.city}, ` : ""}
-                {location.state ? `${location.state} ` : ""}
-                {location.postal_code ?? ""}
-              </p>
-            )}
-            {location.phone && (
-              <p className="text-[13px] text-neutral-600 mt-1">{location.phone}</p>
+            {header.source === "template" ? (
+              header.rawText && (
+                <p className="text-[13px] text-neutral-600 mt-1.5 leading-relaxed whitespace-pre-line">
+                  {header.rawText}
+                </p>
+              )
+            ) : (
+              <>
+                {header.addressLines.length > 0 && (
+                  <p className="text-[13px] text-neutral-600 mt-1.5 leading-relaxed whitespace-pre-line">
+                    {header.addressLines.join("\n")}
+                  </p>
+                )}
+                {header.phone && (
+                  <p className="text-[13px] text-neutral-600 mt-1">{header.phone}</p>
+                )}
+              </>
             )}
           </div>
 
@@ -279,68 +220,56 @@ export default async function ReceiptPage({ params }: PageProps) {
           {/* ── Order meta ──────────────────────────────────────── */}
           <div className="space-y-1">
             <Line label="Order" value={orderNumber} strong />
-            <Line label="Ordered" value={fmtDatetime(order.created_at)} />
+            <Line label="Ordered" value={formatReceiptDateTime(order.created_at, location.timezone)} />
           </div>
 
           <Rule />
 
-          {/* ── Items ───────────────────────────────────────────── */}
+          {/* ── Items (seat/course grouping when present, matching dashboard) ── */}
           <div className="space-y-3">
-            {activeItems.map((item) => (
-              <div key={item.id}>
-                <div className="flex justify-between items-start gap-3">
-                  <span className="text-[14px] leading-snug flex-1 min-w-0 wrap-break-word">
-                    <span className="tabular-nums">{item.quantity ?? 1}</span>
-                    {"  "}
-                    {item.item_name ?? "Item"}
-                  </span>
-                  <span className="text-[14px] tabular-nums shrink-0 pt-px">
-                    {fmt(item.subtotal)}
-                  </span>
-                </div>
-
-                {/* Modifiers — plain indented text, no glyphs */}
-                {item.modifiers
-                  .filter((m) => !m.is_no && m.modifier_name)
-                  .map((m, idx) => (
-                    <div
-                      key={idx}
-                      className="flex justify-between items-start gap-2 text-[12.5px] text-neutral-500 pl-5 mt-0.5"
-                    >
-                      <span className="flex-1 min-w-0 wrap-break-word">{m.modifier_name}</span>
-                      {m.price_modifier && Number(m.price_modifier) > 0 ? (
-                        <span className="tabular-nums shrink-0">+{fmt(m.price_modifier)}</span>
-                      ) : null}
-                    </div>
-                  ))}
+            {groupItemsBySeatCourse(activeItems, order.order_type).map((grp) => (
+              <div key={grp.key}>
+                {grp.label && (
+                  <div className="text-[11px] font-semibold uppercase tracking-wide text-neutral-600 mb-1">
+                    {grp.label}
+                  </div>
+                )}
+                {grp.items.map((item) => (
+                  <ItemRow key={item.id} item={item} />
+                ))}
               </div>
             ))}
           </div>
 
           <Rule />
 
-          {/* ── Totals ──────────────────────────────────────────── */}
+          {/* ── Totals — single footing pricing lane (shared getOrderBreakdown) ── */}
           <div className="space-y-1.5">
-            {order.subtotal != null && (
-              <Line label="Subtotal" value={fmt(order.effective_subtotal ?? order.subtotal)} />
+            <Line label="Subtotal" value={fmt(lane.subtotal)} />
+            {lane.discount > 0 && (
+              <Line label="Discount" value={`−${fmt(lane.discount)}`} />
             )}
-            {order.discount_amount != null && Number(order.discount_amount) > 0 && (
-              <Line label="Discount" value={`−${fmt(order.discount_amount)}`} />
+            {lane.serviceCharge > 0 && (
+              <Line label="Service Charge" value={fmt(lane.serviceCharge)} />
             )}
-            {order.service_charge != null && Number(order.service_charge) > 0 && (
-              <Line label="Service Charge" value={fmt(order.service_charge)} />
-            )}
-            {order.tax_amount != null && (
-              <Line label="Tax" value={fmt(order.effective_tax_amount ?? order.tax_amount)} />
-            )}
-            {order.tip_amount != null && Number(order.tip_amount) > 0 && (
-              <Line label="Tip" value={fmt(order.tip_amount)} />
+            {lane.tax > 0 && <Line label="Tax" value={fmt(lane.tax)} />}
+            {lane.tip > 0 && <Line label="Tip" value={fmt(lane.tip)} />}
+            {breakdown.mixedCashDiscount > 0 && (
+              <Line label="Cash Discount" value={`−${fmt(breakdown.mixedCashDiscount)}`} />
             )}
 
             <div className="flex justify-between items-baseline pt-2.5 mt-1.5 border-t border-neutral-300">
-              <span className="text-[15px] font-bold uppercase tracking-wide">Total</span>
-              <span className="text-[15px] font-bold tabular-nums">{fmt(chargedTotal)}</span>
+              <span className="text-[15px] font-bold uppercase tracking-wide">
+                {breakdown.isMixed ? "Total" : breakdown.dual ? `Total (${laneLabel})` : "Total"}
+              </span>
+              <span className="text-[15px] font-bold tabular-nums">{fmt(grandTotal)}</span>
             </div>
+            {breakdown.dual && !breakdown.isMixed && (
+              <div className="flex justify-between items-baseline text-[12px] text-neutral-500">
+                <span>{altLaneLabel}</span>
+                <span className="tabular-nums">{fmt(altLaneTotal)}</span>
+              </div>
+            )}
           </div>
 
           {/* ── Payments ────────────────────────────────────────── */}
@@ -374,16 +303,35 @@ export default async function ReceiptPage({ params }: PageProps) {
                     </div>
                   );
                 })}
+
+                {/* Reconciliation — matches dashboard */}
+                {lane.amountPaid > 0 && (
+                  <div className="pt-1.5 border-t border-dashed border-neutral-300">
+                    <Line label="Amount Paid" value={fmt(lane.amountPaid)} strong />
+                  </div>
+                )}
+                {lane.amountDue > 0 && (
+                  <Line label="Amount Due" value={fmt(lane.amountDue)} />
+                )}
               </div>
             </>
           )}
 
           <Rule />
 
-          {/* ── Footer ──────────────────────────────────────────── */}
+          {/* ── Footer — template footer_text, matching dashboard ─────────── */}
           <div className="text-center">
-            <p className="text-[13px] font-medium">Thank you for your order!</p>
-            <p className="text-[12px] text-neutral-500 mt-0.5">We appreciate your business.</p>
+            {receipt.footerText ? (
+              <p className="text-[13px] whitespace-pre-line">{receipt.footerText}</p>
+            ) : (
+              <>
+                <p className="text-[13px] font-medium">Thank you for your order!</p>
+                <p className="text-[12px] text-neutral-500 mt-0.5">We appreciate your business.</p>
+              </>
+            )}
+            <p className="text-[12px] text-neutral-500 mt-2">
+              {formatReceiptDateTime(order.created_at, location.timezone)}
+            </p>
           </div>
         </div>
 
@@ -432,6 +380,90 @@ function Line({
       >
         {value}
       </span>
+    </div>
+  );
+}
+
+/**
+ * Group items by seat · course for dine-in orders that carry that context,
+ * mirroring the dashboard receipt. Returns a single unlabeled group otherwise.
+ */
+function groupItemsBySeatCourse(
+  items: ReceiptContractItem[],
+  orderType: string | null | undefined
+): { key: string; label: string | null; items: ReceiptContractItem[] }[] {
+  const hasSeatCourse =
+    orderType === "dine_in" &&
+    items.some((i) => i.seat_number != null || i.course_number != null);
+
+  if (!hasSeatCourse) {
+    return [{ key: "all", label: null, items }];
+  }
+
+  const order: string[] = [];
+  const byGroup = new Map<string, ReceiptContractItem[]>();
+  for (const it of items) {
+    const seat = it.seat_number != null ? `Seat ${it.seat_number}` : null;
+    const course = it.course_number != null ? `Course ${it.course_number}` : null;
+    const label = [seat, course].filter(Boolean).join(" · ") || "Other";
+    if (!byGroup.has(label)) {
+      byGroup.set(label, []);
+      order.push(label);
+    }
+    byGroup.get(label)!.push(it);
+  }
+  return order.map((label) => ({ key: label, label, items: byGroup.get(label)! }));
+}
+
+/** One item line with size, grouped modifiers (+price), per-item discount, and notes. */
+function ItemRow({ item }: { item: ReceiptContractItem }) {
+  const mods = item.modifiers.filter((m) => !m.is_no && m.modifier_name);
+  return (
+    <div className="mb-2">
+      <div className="flex justify-between items-start gap-3">
+        <span className="text-[14px] leading-snug flex-1 min-w-0 wrap-break-word">
+          <span className="tabular-nums">{item.quantity ?? 1}</span>
+          {"  "}
+          {item.item_name ?? "Item"}
+        </span>
+        <span className="text-[14px] tabular-nums shrink-0 pt-px">{fmt(item.subtotal)}</span>
+      </div>
+
+      {item.selected_size_name && (
+        <div className="text-[12.5px] text-neutral-500 pl-5 mt-0.5">
+          Size: {item.selected_size_name}
+        </div>
+      )}
+
+      {mods.map((m, idx) => (
+        <div
+          key={m.id ?? idx}
+          className="flex justify-between items-start gap-2 text-[12.5px] text-neutral-500 pl-5 mt-0.5"
+        >
+          <span className="flex-1 min-w-0 wrap-break-word">
+            {m.modifier_name}
+            {m.quantity && Number(m.quantity) > 1 ? ` (×${m.quantity})` : ""}
+          </span>
+          {m.price_modifier && Number(m.price_modifier) !== 0 ? (
+            <span className="tabular-nums shrink-0">
+              +{fmt(Number(m.price_modifier) * Number(m.quantity ?? 1))}
+            </span>
+          ) : null}
+        </div>
+      ))}
+
+      {item.discount_amount != null && Number(item.discount_amount) > 0 && (
+        <div className="flex justify-between items-start gap-2 text-[12.5px] text-emerald-700 pl-5 mt-0.5">
+          <span className="flex-1 min-w-0 wrap-break-word">{item.discount_name || "Discount"}</span>
+          <span className="tabular-nums shrink-0">−{fmt(item.discount_amount)}</span>
+        </div>
+      )}
+
+      {item.special_instructions && (
+        <div className="text-[12.5px] text-neutral-500 italic pl-5 mt-0.5">
+          Note: {item.special_instructions}
+        </div>
+      )}
     </div>
   );
 }
