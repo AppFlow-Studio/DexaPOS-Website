@@ -12,7 +12,13 @@ import {
   Repeat2,
   ScanLine,
 } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { getQrAnalyticsSnapshot, type QrAnalyticsSnapshot } from "../actions";
@@ -81,9 +87,20 @@ export function QrAnalyticsPanel({
   const peakHour = useMemo(() => {
     const byHour = data?.byHour ?? [];
     return byHour.reduce(
-      (best, current) =>
-        current.scans > best.scans ? current : best,
+      (best, current) => (current.scans > best.scans ? current : best),
       byHour[0] ?? { hour: 0, label: "12AM", scans: 0, paid: 0 }
+    );
+  }, [data?.byHour]);
+
+  const hasAnyFunnelActivity = useMemo(() => {
+    const stages = data?.stages;
+    if (!stages) return false;
+    return Object.values(stages).some((value) => value > 0);
+  }, [data?.stages]);
+
+  const hasHourlyActivity = useMemo(() => {
+    return (data?.byHour ?? []).some(
+      (entry) => entry.scans > 0 || entry.paid > 0
     );
   }, [data?.byHour]);
 
@@ -104,10 +121,11 @@ export function QrAnalyticsPanel({
               QR Analytics
             </CardTitle>
             <CardDescription>
-              Merchant-level QR funnel and table-order performance for the last {rangeDays} days.
+              Merchant-level QR funnel and table-order performance for the last{" "}
+              {rangeDays} days.
             </CardDescription>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2" aria-label="QR analytics range">
             {[7, 30].map((days) => (
               <Button
                 key={days}
@@ -128,15 +146,20 @@ export function QrAnalyticsPanel({
         </div>
         {!qrEnabled ? (
           <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            QR analytics can still show historical activity, but new scans stay off until QR Table Ordering is enabled for this branch.
+            QR analytics can still show historical activity, but new scans stay
+            off until QR Table Ordering is enabled for this branch.
           </div>
         ) : null}
       </CardHeader>
       <CardContent className="space-y-6">
         {isLoading ? (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <div
+            className="flex items-center gap-2 text-sm text-muted-foreground"
+            role="status"
+            aria-live="polite"
+          >
             <Loader2 className="h-4 w-4 animate-spin" />
-            Loading QR analytics…
+            Loading QR analytics...
           </div>
         ) : data?.error ? (
           <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
@@ -211,6 +234,21 @@ export function QrAnalyticsPanel({
               </div>
             </div>
 
+            {!hasAnyFunnelActivity ? (
+              <div className="rounded-xl border border-dashed bg-muted/20 px-4 py-5 text-sm text-muted-foreground">
+                No QR scans were recorded in this window yet. Generate a code,
+                open a guest preview, and complete one table checkout to populate
+                the funnel, top tables, and top items.
+              </div>
+            ) : null}
+
+            {hasAnyFunnelActivity && (data?.stages.paid ?? 0) === 0 ? (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                QR traffic is being recorded, but no paid QR orders landed in
+                this window yet.
+              </div>
+            ) : null}
+
             <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
               <div className="space-y-4 rounded-xl border bg-background p-4">
                 <div className="flex items-center justify-between">
@@ -226,9 +264,18 @@ export function QrAnalyticsPanel({
                 </div>
                 <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
                   <FunnelMetric label="Scanned" value={data?.stages.scanned ?? 0} />
-                  <FunnelMetric label="Menu" value={data?.stages.menuViewed ?? 0} />
-                  <FunnelMetric label="Cart" value={data?.stages.cartStarted ?? 0} />
-                  <FunnelMetric label="Checkout" value={data?.stages.checkout ?? 0} />
+                  <FunnelMetric
+                    label="Menu"
+                    value={data?.stages.menuViewed ?? 0}
+                  />
+                  <FunnelMetric
+                    label="Cart"
+                    value={data?.stages.cartStarted ?? 0}
+                  />
+                  <FunnelMetric
+                    label="Checkout"
+                    value={data?.stages.checkout ?? 0}
+                  />
                   <FunnelMetric
                     label="Paid"
                     value={data?.stages.paid ?? 0}
@@ -281,7 +328,7 @@ export function QrAnalyticsPanel({
                   </div>
                   <Badge variant="outline" className="gap-1">
                     <Clock3 className="h-3 w-3" />
-                    Peak {peakHour.label}
+                    {hasHourlyActivity ? `Peak ${peakHour.label}` : "No scan data yet"}
                   </Badge>
                 </div>
                 <div className="space-y-3">
@@ -290,7 +337,7 @@ export function QrAnalyticsPanel({
                       <div className="flex items-center justify-between text-xs text-muted-foreground">
                         <span>{entry.label}</span>
                         <span>
-                          {entry.scans} scans · {entry.paid} paid
+                          {entry.scans} scans - {entry.paid} paid
                         </span>
                       </div>
                       <div className="grid gap-1">
@@ -334,10 +381,12 @@ export function QrAnalyticsPanel({
                           <div>
                             <p className="font-medium">{table.tableLabel}</p>
                             <p className="text-xs text-muted-foreground">
-                              {table.scans} scans · {table.paidOrders} paid orders
+                              {table.scans} scans - {table.paidOrders} paid orders
                             </p>
                           </div>
-                          <p className="font-semibold">{formatCurrency(table.revenue)}</p>
+                          <p className="font-semibold">
+                            {formatCurrency(table.revenue)}
+                          </p>
                         </div>
                       ))
                     )}
@@ -368,7 +417,9 @@ export function QrAnalyticsPanel({
                               {item.quantity} sold
                             </p>
                           </div>
-                          <p className="font-semibold">{formatCurrency(item.revenue)}</p>
+                          <p className="font-semibold">
+                            {formatCurrency(item.revenue)}
+                          </p>
                         </div>
                       ))
                     )}

@@ -121,10 +121,10 @@ export function QrGuestAlertsPanel({
               Open QR Guest Alerts
             </CardTitle>
             <CardDescription>
-              Staff-side verification surface for the guest `Call your server` flow.
+              Staff-side verification surface for the guest `Call your server` flow, with realtime invalidation and a polling fallback.
             </CardDescription>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2" role="status" aria-live="polite">
             {headerBadge}
             <Button
               type="button"
@@ -145,7 +145,11 @@ export function QrGuestAlertsPanel({
       </CardHeader>
       <CardContent>
         {isLoading ? (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <div
+            className="flex items-center gap-2 text-sm text-muted-foreground"
+            role="status"
+            aria-live="polite"
+          >
             <Loader2 className="h-4 w-4 animate-spin" />
             Loading QR guest alerts...
           </div>
@@ -158,9 +162,9 @@ export function QrGuestAlertsPanel({
             No open guest alerts for this location right now.
           </div>
         ) : (
-          <div className="space-y-3">
+          <ul className="space-y-3" role="list">
             {data?.alerts.map((alert) => (
-              <div
+              <li
                 key={alert.id}
                 className="flex flex-col gap-3 rounded-xl border bg-background px-4 py-4 lg:flex-row lg:items-start lg:justify-between"
               >
@@ -190,6 +194,7 @@ export function QrGuestAlertsPanel({
                     size="sm"
                     onClick={() => resolveMutation.mutate(alert.id)}
                     disabled={resolveMutation.isPending && resolvingId === alert.id}
+                    aria-label={`Resolve guest alert for Table ${alert.tableLabel}`}
                   >
                     {resolveMutation.isPending && resolvingId === alert.id ? (
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -199,9 +204,9 @@ export function QrGuestAlertsPanel({
                     Resolve
                   </Button>
                 </div>
-              </div>
+              </li>
             ))}
-          </div>
+          </ul>
         )}
       </CardContent>
     </Card>
