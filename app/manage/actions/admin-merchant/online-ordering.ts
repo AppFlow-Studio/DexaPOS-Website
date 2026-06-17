@@ -158,6 +158,7 @@ interface LocationNmiPaymentDeviceSummary {
   provider_merchant_id: string | null
   provider_gateway_id: string | null
   has_provider_secret: boolean
+  has_webhook_secret?: boolean
 }
 
 interface OnlineOrderingSettings {
@@ -221,7 +222,9 @@ interface OnlineOrderingSettings {
   acceptCardOnDelivery?: boolean
   nmiTokenizationKey?: string
   nmiPrivateApiKey?: string
+  nmiWebhookSecret?: string
   nmiConfigured?: boolean
+  nmiWebhookConfigured?: boolean
   tippingEnabled?: boolean
   tipConfig?: TipConfig
   baseDeliveryFee?: number
@@ -724,9 +727,14 @@ export async function getAdminOnlineOrderingSettings(
       settings.acceptCardOnDelivery = config.accepts_card_on_delivery ?? false
       settings.nmiTokenizationKey = locationPaymentDevice?.provider_public_key ?? ''
       settings.nmiPrivateApiKey = ''
+      settings.nmiWebhookSecret = ''
       settings.nmiConfigured = Boolean(
         locationPaymentDevice?.provider_public_key &&
         locationPaymentDevice?.has_provider_secret &&
+        locationPaymentDevice?.status === 'active'
+      )
+      settings.nmiWebhookConfigured = Boolean(
+        locationPaymentDevice?.has_webhook_secret &&
         locationPaymentDevice?.status === 'active'
       )
     }
@@ -1209,12 +1217,18 @@ export async function adminSaveOnlineOrderingSettings(
         ? settings.nmiTokenizationKey.trim()
         : existingLocationPaymentDevice?.provider_public_key ?? ''
     const providedPrivateApiKey = settings.nmiPrivateApiKey?.trim() ?? ''
+    const providedWebhookSecret = settings.nmiWebhookSecret?.trim() ?? ''
     const tokenizationKeyChanged =
       settings.nmiTokenizationKey !== undefined &&
       nextTokenizationKey !== (existingLocationPaymentDevice?.provider_public_key ?? '')
+    const webhookSecretProvided = providedWebhookSecret.length > 0
     const shouldUpsertLocationPaymentDevice =
       tokenizationKeyChanged ||
       providedPrivateApiKey.length > 0
+    const shouldUpdateWebhookSecretOnly =
+      Boolean(existingLocationPaymentDevice?.id) &&
+      !shouldUpsertLocationPaymentDevice &&
+      webhookSecretProvided
 
     if (shouldUpsertLocationPaymentDevice && nextTokenizationKey.length === 0) {
       return {
@@ -1314,7 +1328,7 @@ export async function adminSaveOnlineOrderingSettings(
           p_provider_gateway_id: providerGatewayId,
           p_public_key: nextTokenizationKey,
           p_security_key: providedPrivateApiKey,
-          p_webhook_secret: null,
+          p_webhook_secret: webhookSecretProvided ? providedWebhookSecret : null,
         }
       )
 
@@ -1322,6 +1336,23 @@ export async function adminSaveOnlineOrderingSettings(
         return {
           success: false,
           error: `NMI device activation failed: ${activateDeviceError.message}`,
+        }
+      }
+    }
+
+    if (shouldUpdateWebhookSecretOnly) {
+      const { error: webhookSecretError } = await (supabase as any).rpc(
+        'set_nmi_payment_device_webhook_secret',
+        {
+          p_device_id: existingLocationPaymentDevice!.id,
+          p_webhook_secret: providedWebhookSecret,
+        }
+      )
+
+      if (webhookSecretError) {
+        return {
+          success: false,
+          error: `NMI webhook secret update failed: ${webhookSecretError.message}`,
         }
       }
     }
@@ -1351,7 +1382,13 @@ export async function adminSaveOnlineOrderingSettings(
             existingLocationPaymentDevice?.has_provider_secret &&
             existingLocationPaymentDevice?.status === 'active'
           ),
+        nmi_webhook_configured: shouldUpsertLocationPaymentDevice
+          ? webhookSecretProvided || Boolean(existingLocationPaymentDevice?.has_webhook_secret)
+          : shouldUpdateWebhookSecretOnly || Boolean(existingLocationPaymentDevice?.has_webhook_secret),
         nmi_tokenization_key_changed: tokenizationKeyChanged,
+        nmi_webhook_secret_updated: shouldUpsertLocationPaymentDevice
+          ? webhookSecretProvided
+          : shouldUpdateWebhookSecretOnly,
       },
     })
 

@@ -56,7 +56,7 @@ export function PayPanel({ publicToken, amountDue, tokenizationKey }: PayPanelPr
 
     try {
       // 2. Tokenize the card via Collect.js (PAN/CVV never touch our server).
-      const { tokenId } = await form.tokenize();
+      const { tokenId, cardType, cardLastFour } = await form.tokenize();
 
       // 3. Charge through the server boundary. A FRESH idempotency key per
       //    attempt so a retry after a decline is never blocked, while a
@@ -65,6 +65,8 @@ export function PayPanel({ publicToken, amountDue, tokenizationKey }: PayPanelPr
         publicToken,
         paymentToken: tokenId,
         idempotencyKey: crypto.randomUUID(),
+        cardType,
+        cardLastFour,
       });
 
       if (result.success && result.status === "paid") {
