@@ -1,8 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { format, parseISO, isToday, isYesterday } from "date-fns";
 import { cn } from "@/lib/utils";
+import { DEFAULT_REPORTING_TIMEZONE } from "@/lib/reporting/date-range";
+import { getOrderBreakdown } from "@/lib/orders/order-breakdown";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -27,6 +28,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { OrderResponse } from "@/types/order-management";
+import {
+  getPaymentStatusLabel,
+  getPaymentStatusStyle,
+} from "@/lib/constants/payment-status";
 
 // ============================================================================
 // Types & Constants
@@ -36,6 +41,8 @@ interface TransactionsListProps {
   transactions: OrderResponse[];
   isLoading?: boolean;
   onTransactionClick?: (transaction: OrderResponse) => void;
+  /** Store IANA timezone for date display; falls back to America/New_York. */
+  timeZone?: string | null;
 }
 
 type SortField = "date" | "amount" | "status";
@@ -72,11 +79,50 @@ function formatCurrency(value: number): string {
   }).format(value);
 }
 
-function formatTxDate(dateStr: string): string {
-  const date = parseISO(dateStr);
-  if (isToday(date)) return `Today, ${format(date, "h:mm a")}`;
-  if (isYesterday(date)) return `Yesterday, ${format(date, "h:mm a")}`;
-  return format(date, "MMM d, h:mm a");
+// Store-local date for the table, consistent with the receipt (never browser-local).
+// Falls back to America/New_York to match the reporting / receipt convention.
+function formatTxDate(dateStr: string, timeZone?: string | null): string {
+  const tz = timeZone || DEFAULT_REPORTING_TIMEZONE;
+  const date = new Date(dateStr);
+  if (Number.isNaN(date.getTime())) return "";
+
+  // Calendar day in the store tz (YYYY-MM-DD) for Today/Yesterday comparison.
+  const dayKey = (d: Date) =>
+    new Intl.DateTimeFormat("en-CA", {
+      timeZone: tz,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(d);
+  const now = new Date();
+  const yesterday = new Date(now.getTime() - 86400000);
+
+  const time = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  }).format(date);
+
+  if (dayKey(date) === dayKey(now)) return `Today, ${time}`;
+  if (dayKey(date) === dayKey(yesterday)) return `Yesterday, ${time}`;
+
+  const md = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    month: "short",
+    day: "numeric",
+  }).format(date);
+  return `${md}, ${time}`;
+}
+
+// The receipt-consistent total: collected amount for split tenders, else the
+// charged lane's total (+ tip). Uses the shared breakdown so the table matches
+// what the receipt foots to — never the bare card/list total for cash orders.
+function getDisplayTotal(tx: OrderResponse): number {
+  const b = getOrderBreakdown(tx, tx.order_payments);
+  return b.isMixed && b.primary.amountPaid > 0
+    ? b.primary.amountPaid
+    : b.primary.total + b.primary.tip;
 }
 
 function getOrderTypeConfig(orderType: string) {
@@ -231,6 +277,7 @@ export function TransactionsList({
   transactions,
   isLoading,
   onTransactionClick,
+  timeZone,
 }: TransactionsListProps) {
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [typeFilter, setTypeFilter] = useState<string[]>([]);
@@ -259,7 +306,7 @@ export function TransactionsList({
           cmp = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
           break;
         case "amount":
-          cmp = a.total_amount - b.total_amount;
+          cmp = getDisplayTotal(a) - getDisplayTotal(b);
           break;
         case "status":
           cmp = a.status.localeCompare(b.status);
@@ -382,17 +429,18 @@ export function TransactionsList({
 
         {/* Scrollable Table */}
         <div className="overflow-x-auto">
-        <div className="min-w-[620px]">
+        <div className="min-w-[730px]">
 
         {/* Table Header */}
-        <div className="grid grid-cols-[minmax(100px,1.2fr)_1fr_1fr_minmax(80px,0.8fr)_minmax(120px,1fr)_minmax(100px,0.8fr)] gap-2 px-4 py-2.5 border-b border-border/40 bg-muted/30">
+        <div className="grid grid-cols-[minmax(100px,1.2fr)_1fr_1fr_minmax(110px,0.9fr)_minmax(80px,0.8fr)_minmax(120px,1fr)_minmax(100px,0.8fr)] gap-2 px-4 py-2.5 border-b border-border/40 bg-muted/30">
           <button onClick={() => handleSort("amount")} className="flex items-center gap-1 text-xs font-medium uppercase tracking-wider text-muted-foreground hover:text-foreground text-left">
             Amount <SortIcon field="amount" />
           </button>
           <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Payment</span>
           <button onClick={() => handleSort("status")} className="flex items-center gap-1 text-xs font-medium uppercase tracking-wider text-muted-foreground hover:text-foreground text-left">
-            Status <SortIcon field="status" />
+            Order Status <SortIcon field="status" />
           </button>
+          <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Payment Status</span>
           <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Type</span>
           <button onClick={() => handleSort("date")} className="flex items-center gap-1 text-xs font-medium uppercase tracking-wider text-muted-foreground hover:text-foreground text-left">
             Date <SortIcon field="date" />
@@ -428,7 +476,7 @@ export function TransactionsList({
                   key={tx.id}
                   onClick={() => onTransactionClick?.(tx)}
                   className={cn(
-                    "grid grid-cols-[minmax(100px,1.2fr)_1fr_1fr_minmax(80px,0.8fr)_minmax(120px,1fr)_minmax(100px,0.8fr)] gap-2 px-4 py-3 items-center cursor-pointer transition-colors",
+                    "grid grid-cols-[minmax(100px,1.2fr)_1fr_1fr_minmax(110px,0.9fr)_minmax(80px,0.8fr)_minmax(120px,1fr)_minmax(100px,0.8fr)] gap-2 px-4 py-3 items-center cursor-pointer transition-colors",
                     "hover:bg-muted/40",
                     (isRefund || isVoid) && "opacity-70"
                   )}
@@ -436,7 +484,7 @@ export function TransactionsList({
                   {/* Amount */}
                   <div className="flex flex-col">
                     <span className={cn("text-sm font-semibold tabular-nums", isRefund && "text-rose-600 dark:text-rose-400")}>
-                      {isRefund ? "−" : ""}{formatCurrency(tx.total_amount)}
+                      {isRefund ? "−" : ""}{formatCurrency(getDisplayTotal(tx))}
                     </span>
                     <span className="text-[11px] text-muted-foreground/60 font-mono">
                       {tx.display_number || tx.order_number || tx.id.slice(0, 8)}
@@ -449,12 +497,25 @@ export function TransactionsList({
                     <span className="truncate">{payment.label}</span>
                   </div>
 
-                  {/* Status */}
+                  {/* Order Status */}
                   <div>
                     <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium", status.bg, status.text)}>
                       <span className={cn("h-1.5 w-1.5 rounded-full", status.dot)} />
                       {tx.status.charAt(0).toUpperCase() + tx.status.slice(1)}
                     </span>
+                  </div>
+
+                  {/* Payment Status — independent of order status (payment_status enum) */}
+                  <div>
+                    {(() => {
+                      const pay = getPaymentStatusStyle(tx.payment_status);
+                      return (
+                        <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium", pay.bg, pay.text)}>
+                          <span className={cn("h-1.5 w-1.5 rounded-full", pay.dot)} />
+                          {getPaymentStatusLabel(tx.payment_status)}
+                        </span>
+                      );
+                    })()}
                   </div>
 
                   {/* Type */}
@@ -465,7 +526,7 @@ export function TransactionsList({
 
                   {/* Date */}
                   <span className="text-sm text-muted-foreground">
-                    {formatTxDate(tx.created_at)}
+                    {formatTxDate(tx.created_at, timeZone)}
                   </span>
 
                   {/* Staff */}
