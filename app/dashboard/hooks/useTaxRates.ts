@@ -6,7 +6,7 @@
 // ============================================================================
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useLocationStore } from '@/stores/location-store'
+import { useGatedLocationId } from '@/stores/location-store'
 import {
     getTaxRatesForLocation,
     getTaxRateById,
@@ -29,7 +29,9 @@ import { toast } from 'sonner'
  * Note: Disabled when selectedLocationId === 'all' (tax rates are location-specific)
  */
 export function useLocationTaxRates() {
-    const { selectedLocationId } = useLocationStore()
+    // Gated resolver: single-location accounts (locked to 'all') resolve to their
+    // one active location; multi-location on 'all' stays 'all' -> guards still bail.
+    const selectedLocationId = useGatedLocationId() ?? 'all'
 
     return useQuery({
         queryKey: ['tax-rates', selectedLocationId],
@@ -64,7 +66,9 @@ export function useTaxRate(taxRateId: string | null) {
  * Get tax rate for a specific category at the current location
  */
 export function useTaxRateForCategory(taxCategory: TaxCategory | null) {
-    const { selectedLocationId } = useLocationStore()
+    // Gated resolver: single-location accounts (locked to 'all') resolve to their
+    // one active location; multi-location on 'all' stays 'all' -> guards still bail.
+    const selectedLocationId = useGatedLocationId() ?? 'all'
 
     return useQuery({
         queryKey: ['tax-rate-for-category', selectedLocationId, taxCategory],
@@ -83,7 +87,9 @@ export function useTaxRateForCategory(taxCategory: TaxCategory | null) {
  * Includes L2 > L1 inheritance logic
  */
 export function useEffectiveItemTax(menuItemId: string | null) {
-    const { selectedLocationId } = useLocationStore()
+    // Gated resolver: single-location accounts (locked to 'all') resolve to their
+    // one active location; multi-location on 'all' stays 'all' -> guards still bail.
+    const selectedLocationId = useGatedLocationId() ?? 'all'
 
     return useQuery({
         queryKey: ['effective-item-tax', menuItemId, selectedLocationId],
@@ -106,7 +112,9 @@ export function useCalculateItemTax(
     unitPrice: number,
     enabled = true
 ) {
-    const { selectedLocationId } = useLocationStore()
+    // Gated resolver: single-location accounts (locked to 'all') resolve to their
+    // one active location; multi-location on 'all' stays 'all' -> guards still bail.
+    const selectedLocationId = useGatedLocationId() ?? 'all'
 
     return useQuery({
         queryKey: ['calculate-item-tax', menuItemId, selectedLocationId, quantity, unitPrice],
@@ -129,7 +137,9 @@ export function useCalculateItemTax(
  */
 export function useUpsertTaxRate() {
     const queryClient = useQueryClient()
-    const { selectedLocationId } = useLocationStore()
+    // Gated resolver: single-location accounts (locked to 'all') resolve to their
+    // one active location; multi-location on 'all' stays 'all' -> guards still bail.
+    const selectedLocationId = useGatedLocationId() ?? 'all'
 
     return useMutation({
         mutationFn: async ({
@@ -168,7 +178,9 @@ export function useUpsertTaxRate() {
  */
 export function useDeactivateTaxRate() {
     const queryClient = useQueryClient()
-    const { selectedLocationId } = useLocationStore()
+    // Gated resolver: single-location accounts (locked to 'all') resolve to their
+    // one active location; multi-location on 'all' stays 'all' -> guards still bail.
+    const selectedLocationId = useGatedLocationId() ?? 'all'
 
     return useMutation({
         mutationFn: (taxRateId: string) => deactivateTaxRate(taxRateId),

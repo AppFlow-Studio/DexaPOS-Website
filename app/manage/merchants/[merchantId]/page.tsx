@@ -17,6 +17,7 @@ import {
     Banknote,
     ShieldCheck,
     Receipt,
+    FileText,
     LifeBuoy,
     Monitor,
     MapPin,
@@ -43,6 +44,7 @@ import { NotesTab } from './components/NotesTab'
 import { AuditLogsTab } from './components/AuditLogsTab'
 import { DevicesTab } from './components/DevicesTab'
 import { BillingTab } from './components/BillingTab'
+import { PlatformBillingTab } from './components/PlatformBillingTab'
 import { OnlineStoreTab } from './components/OnlineStoreTab'
 import { OnboardingStatusCard } from './components/OnboardingStatusCard'
 import { MerchantHeaderBar } from './components/MerchantHeaderBar'
@@ -66,6 +68,7 @@ type SectionKey =
     | 'settlements'
     | 'disputes'
     | 'billing'
+    | 'platform-billing'
     | 'online-store'
     | 'support'
     | 'devices'
@@ -81,6 +84,7 @@ const VALID_SECTIONS: SectionKey[] = [
     'settlements',
     'disputes',
     'billing',
+    'platform-billing',
     'online-store',
     'support',
     'devices',
@@ -220,6 +224,7 @@ export default function MerchantDetailsPage() {
                                 { value: 'settlements', icon: Banknote, label: 'Settlements' },
                                 { value: 'disputes', icon: ShieldCheck, label: 'Disputes' },
                                 { value: 'billing', icon: Receipt, label: 'Billing' },
+                                { value: 'platform-billing', icon: FileText, label: 'Platform Billing' },
                                 { value: 'online-store', icon: Globe, label: 'Online Store' },
                                 { value: 'support', icon: LifeBuoy, label: 'Support' },
                                 ...(canManageDevices ? [{ value: 'devices', icon: Monitor, label: 'Devices' }] : []),
@@ -276,6 +281,9 @@ export default function MerchantDetailsPage() {
                                 <NavItem value="billing" icon={Receipt} active={activeTab === 'billing'} onClick={setActiveTab}>
                                     Billing
                                 </NavItem>
+                                <NavItem value="platform-billing" icon={FileText} active={activeTab === 'platform-billing'} onClick={setActiveTab}>
+                                    Platform Billing
+                                </NavItem>
                             </NavGroup>
 
                             <NavGroup label="Operations">
@@ -331,6 +339,13 @@ export default function MerchantDetailsPage() {
                                     merchantId={merchantDetails.id}
                                     merchantName={merchantDetails.name}
                                     canEdit={canManageMerchantStatus}
+                                    locations={merchantDetails.locations}
+                                />
+                            )}
+
+                            {activeTab === 'platform-billing' && (
+                                <PlatformBillingTab
+                                    merchantId={merchantDetails.id}
                                     locations={merchantDetails.locations}
                                 />
                             )}

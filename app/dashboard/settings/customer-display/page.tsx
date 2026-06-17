@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { MultiFileUpload } from '@/components/ui/multi-file-upload'
-import { useLocationStore, useIsAllLocations, useSelectedLocation } from '@/stores/location-store'
+import { useGatedLocationId, useGatedLocation } from '@/stores/location-store'
 import { MapPin, Loader2, Trash2, Save, Info } from 'lucide-react'
 import { toast } from 'sonner'
 import Image from 'next/image'
@@ -83,9 +83,12 @@ function buildRejectedFilesMessage(rejections: FileRejection[]) {
 }
 
 export default function CustomerDisplaySettingsPage() {
-    const isAllLocations = useIsAllLocations()
-    const selectedLocation = useSelectedLocation()
-    const { selectedLocationId } = useLocationStore()
+    // Resolve to the gated location so single-location accounts (locked to 'all')
+    // skip the "Select a Location" prompt. Multi-location on 'all' -> null.
+    const gatedLocationId = useGatedLocationId()
+    const selectedLocationId = gatedLocationId ?? 'all'
+    const isAllLocations = !gatedLocationId
+    const selectedLocation = useGatedLocation()
     const { getToken } = useAuth()
     
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!

@@ -93,6 +93,7 @@ import {
   useLocationStore,
   useIsAllLocations,
   useSelectedLocation,
+  useIsSingleLocation,
 } from "@/stores/location-store";
 import { PriceSourcePopover } from "@/components/dashboard/menu/PriceSourcePopover";
 import {
@@ -229,6 +230,7 @@ function ItemCard({
     PRICE_SOURCE_COLORS[item.price_source] || PRICE_SOURCE_COLORS.base;
 
   const isAllLocations = useIsAllLocations();
+  const isSingleLocation = useIsSingleLocation();
   const { selectedLocationId } = useLocationStore();
   const selectedLocation = useSelectedLocation();
   const locationName = selectedLocation?.name ?? null;
@@ -416,7 +418,7 @@ function ItemCard({
                   itemId={item.id}
                   currentPrice={item.effective_price}
                   sourceLevel={priceSourceToLevel(item.price_source)}
-                  locationId={isAllLocations ? null : selectedLocationId}
+                  locationId={isAllLocations || isSingleLocation ? null : selectedLocationId}
                   canRemoveOverride={
                     item.price_source === "location_item" && !isAllLocations
                   }
@@ -1073,6 +1075,7 @@ export default function MenuItemsPage() {
 
   // Location context
   const { isAllLocations, locationName } = useLocationContext();
+  const isSingleLocation = useIsSingleLocation();
 
   // Gate the "Create Item" trigger on role + current location context.
   // Owners can always create. Managers at "all" need exactly 1 assigned
@@ -1281,13 +1284,13 @@ export default function MenuItemsPage() {
   }, [itemsList]);
 
   // Handlers
-  const useNewEditPage =
-    process.env.NEXT_PUBLIC_NEW_ITEM_EDIT === "true";
+  // The popup item editor is canonical for both single- and multi-location
+  // accounts. It respects the single-vs-multi flow via location scope: a
+  // single-location account is locked to the 'all'/core scope, so edits write
+  // the global core (no per-location overlay rows); a multi-location account can
+  // target a specific location for cascade overrides. The dedicated /edit page
+  // stays reachable by direct URL.
   const handleQuickEdit = async (item: FlatItem) => {
-    if (useNewEditPage) {
-      router.push(`/dashboard/menu/items/${item.id}/edit`);
-      return;
-    }
     // If the RPC didn't return modifier_groups, fetch them directly
     let itemWithModifiers = item;
     if (!item.modifier_groups || item.modifier_groups.length === 0) {
@@ -1470,22 +1473,24 @@ export default function MenuItemsPage() {
         <div>
           <div className="flex items-center gap-3 flex-wrap">
             <h2 className="text-2xl font-bold tracking-tight">Item Library</h2>
-            <Badge
-              variant={isAllLocations ? "secondary" : "default"}
-              className={cn(
-                "gap-1.5 animate-in fade-in slide-in-from-left-2 duration-300",
-                !isAllLocations &&
-                  "bg-blue-500/10 text-blue-600 border-blue-200",
-              )}
-            >
-              {isAllLocations ? (
-                <Globe className="h-3 w-3" />
-              ) : (
-                <MapPin className="h-3 w-3" />
-              )}
-              {locationName}
-            </Badge>
-            {!isAllLocations && stats.withOverrides > 0 && (
+            {!isSingleLocation && (
+              <Badge
+                variant={isAllLocations ? "secondary" : "default"}
+                className={cn(
+                  "gap-1.5 animate-in fade-in slide-in-from-left-2 duration-300",
+                  !isAllLocations &&
+                    "bg-blue-500/10 text-blue-600 border-blue-200",
+                )}
+              >
+                {isAllLocations ? (
+                  <Globe className="h-3 w-3" />
+                ) : (
+                  <MapPin className="h-3 w-3" />
+                )}
+                {locationName}
+              </Badge>
+            )}
+            {!isSingleLocation && !isAllLocations && stats.withOverrides > 0 && (
               <Badge
                 variant="outline"
                 className="gap-1 bg-amber-500/10 text-amber-600 border-amber-200"
@@ -1496,9 +1501,11 @@ export default function MenuItemsPage() {
             )}
           </div>
           <p className="text-muted-foreground mt-1">
-            {isAllLocations
-              ? "All items across your organization. Items live within categories."
-              : `Viewing items for ${locationName} with location-specific pricing.`}
+            {isSingleLocation
+              ? "All items on your menu. Items live within categories."
+              : isAllLocations
+                ? "All items across your organization. Items live within categories."
+                : `Viewing items for ${locationName} with location-specific pricing.`}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2 shrink-0">
@@ -2183,7 +2190,7 @@ export default function MenuItemsPage() {
         open={bulkPriceDialogOpen}
         onOpenChange={setBulkPriceDialogOpen}
         clerkOrgId={clerkOrgId}
-        currentLocationId={isAllLocations ? null : selectedLocationId}
+        currentLocationId={isAllLocations || isSingleLocation ? null : selectedLocationId}
         isAllLocations={isAllLocations}
         selectedItems={filteredItems
           .filter((it) => selectedItemIds.has(it.id))
@@ -2209,7 +2216,7 @@ export default function MenuItemsPage() {
         open={bulkDeliveryDialogOpen}
         onOpenChange={setBulkDeliveryDialogOpen}
         clerkOrgId={clerkOrgId}
-        currentLocationId={isAllLocations ? null : selectedLocationId}
+        currentLocationId={isAllLocations || isSingleLocation ? null : selectedLocationId}
         isAllLocations={isAllLocations}
         selectedItems={filteredItems
           .filter((it) => selectedItemIds.has(it.id))

@@ -3,7 +3,7 @@
 import { use } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Edit, CheckCheck, Ban, Trash2 } from "lucide-react";
+import { ArrowLeft, Edit, CheckCheck, Trash2, Send, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
@@ -23,6 +23,8 @@ import { formatPhoneForDisplay } from "@/lib/phone";
 import { useInvoice, useUpdateInvoiceStatus, useDeleteInvoice } from "../hooks/useInvoices";
 import { InvoiceStatusBadge } from "../components/InvoiceStatusBadge";
 import { InvoiceForm } from "../components/InvoiceForm";
+import { SendInvoiceDialog } from "../components/SendInvoiceDialog";
+import { isSendable } from "@/lib/invoices/lifecycle";
 
 function formatDate(dateStr: string) {
   return new Date(dateStr).toLocaleDateString("en-US", {
@@ -48,6 +50,7 @@ export default function InvoiceDetailPage({
   const router = useRouter();
   const [editMode, setEditMode] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
+  const [showSend, setShowSend] = useState(false);
 
   const { data: invoice, isLoading } = useInvoice(id);
   const updateStatus = useUpdateInvoiceStatus();
@@ -144,15 +147,10 @@ export default function InvoiceDetailPage({
           </p>
         </div>
         <div className="flex gap-2">
-          {invoice.status === "draft" && (
-            <Button
-              size="sm"
-              onClick={() =>
-                updateStatus.mutate({ invoiceId: invoice.id, status: "sent" })
-              }
-              disabled={updateStatus.isPending}
-            >
-              Send Invoice
+          {isSendable(invoice.status) && (
+            <Button size="sm" onClick={() => setShowSend(true)}>
+              <Send className="h-4 w-4 mr-1" />
+              {invoice.status === "draft" ? "Send Invoice" : "Resend"}
             </Button>
           )}
           {invoice.status !== "paid" && invoice.status !== "cancelled" && (
@@ -168,6 +166,12 @@ export default function InvoiceDetailPage({
               Mark Paid
             </Button>
           )}
+          <Button size="sm" variant="outline" asChild>
+            <a href={`/api/invoices/${invoice.id}/pdf`} target="_blank" rel="noopener noreferrer">
+              <Download className="h-4 w-4 mr-1" />
+              Download PDF
+            </a>
+          </Button>
           <Button
             size="sm"
             variant="outline"
@@ -188,7 +192,7 @@ export default function InvoiceDetailPage({
       </div>
 
       {/* Invoice Details */}
-      <Card>
+      <Card className="shadow-none">
         <CardHeader>
           <CardTitle className="text-base">Invoice Details</CardTitle>
         </CardHeader>
@@ -225,7 +229,7 @@ export default function InvoiceDetailPage({
       </Card>
 
       {/* Line Items */}
-      <Card>
+      <Card className="shadow-none">
         <CardHeader>
           <CardTitle className="text-base">Items</CardTitle>
         </CardHeader>
@@ -300,7 +304,7 @@ export default function InvoiceDetailPage({
 
       {/* Note */}
       {invoice.note && (
-        <Card>
+        <Card className="shadow-none">
           <CardHeader>
             <CardTitle className="text-base">Note</CardTitle>
           </CardHeader>
@@ -309,6 +313,13 @@ export default function InvoiceDetailPage({
           </CardContent>
         </Card>
       )}
+
+      {/* Send Dialog */}
+      <SendInvoiceDialog
+        open={showSend}
+        onOpenChange={setShowSend}
+        invoice={invoice}
+      />
 
       {/* Delete Dialog */}
       <AlertDialog open={showDelete} onOpenChange={setShowDelete}>

@@ -26,18 +26,18 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Plus, AlertTriangle, MapPin, Loader2, Flame } from "lucide-react";
 import {
-  useLocationStore,
-  useIsAllLocations,
-  useSelectedLocation,
+  useGatedLocationId,
+  useGatedLocation,
 } from "@/stores/location-store";
 import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
 
 export default function PrepStationsPage() {
-  const selectedLocationId = useLocationStore(
-    (state) => state.selectedLocationId,
-  );
-  const isAllLocations = useIsAllLocations();
-  const selectedLocation = useSelectedLocation();
+  // Resolve to the gated location so single-location accounts (locked to 'all')
+  // skip the "Select a Location" prompt. Multi-location on 'all' -> null.
+  const gatedLocationId = useGatedLocationId();
+  const selectedLocationId = gatedLocationId ?? "all";
+  const isAllLocations = !gatedLocationId;
+  const selectedLocation = useGatedLocation();
   const { data: userInfo } = useUserInfo();
   const clerkOrgId = userInfo?.members?.[0]?.organizations?.id;
 

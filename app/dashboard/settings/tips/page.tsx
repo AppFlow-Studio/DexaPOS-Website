@@ -17,7 +17,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useClerkOrgId } from "@/app/dashboard/hooks/useLocationScoped";
-import { useLocationStore } from "@/stores/location-store";
+import { useGatedLocationId } from "@/stores/location-store";
 import {
   useTipPoolConfigs,
   useCreateTipPool,
@@ -337,7 +337,10 @@ function PreviewPanel({
 
 export default function TipsSettingsPage() {
   const clerkOrgId = useClerkOrgId();
-  const { selectedLocationId } = useLocationStore();
+  // Resolve to the gated location so single-location accounts (locked to 'all')
+  // skip the "Select a Location" prompt. The shadowed `selectedLocationId` keeps
+  // every `=== "all"` guard below correct.
+  const selectedLocationId = useGatedLocationId() ?? "all";
 
   const [isPoolDialogOpen, setIsPoolDialogOpen] = useState(false);
   const [editingPool, setEditingPool] = useState<TipPoolConfigWithShares | null>(null);
