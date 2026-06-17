@@ -40,6 +40,7 @@ import { ItemSearch } from "./ItemSearch";
 import { LineItemRow, type LineItem } from "./LineItemRow";
 import { AddCustomItemDialog } from "./AddCustomItemDialog";
 import { QuickAddCustomerDialog } from "./QuickAddCustomerDialog";
+import { SendInvoiceDialog } from "./SendInvoiceDialog";
 import { useCreateInvoice, useUpdateInvoice } from "../hooks/useInvoices";
 import { useLocationStore } from "@/stores/location-store";
 import type {
@@ -93,6 +94,7 @@ export function InvoiceForm({ existing }: InvoiceFormProps) {
       description: i.description,
       quantity: i.quantity,
       unit_price: i.unit_price,
+      is_to_go: i.is_to_go ?? false,
     })) ?? []
   );
   const [showAddCustomItem, setShowAddCustomItem] = useState(false);
@@ -121,6 +123,11 @@ export function InvoiceForm({ existing }: InvoiceFormProps) {
 
   // ── Pending state ─────────────────────────────────────────────────────────
   const [savingAs, setSavingAs] = useState<"draft" | "sent" | null>(null);
+
+  // After save-and-send, hold the saved invoice so the send dialog can open.
+  const [sendDialogInvoice, setSendDialogInvoice] = useState<
+    Pick<Invoice, "id" | "invoice_number" | "customer"> | null
+  >(null);
 
   // ── Mutations ─────────────────────────────────────────────────────────────
   const createInvoice = useCreateInvoice();
@@ -176,6 +183,7 @@ export function InvoiceForm({ existing }: InvoiceFormProps) {
     description?: string;
     quantity: number;
     unit_price: number;
+    is_to_go: boolean;
   }) => {
     setLineItems((prev) => [
       ...prev,
@@ -186,6 +194,7 @@ export function InvoiceForm({ existing }: InvoiceFormProps) {
         description: item.description,
         quantity: item.quantity,
         unit_price: item.unit_price,
+        is_to_go: item.is_to_go,
       },
     ]);
   };
@@ -207,6 +216,7 @@ export function InvoiceForm({ existing }: InvoiceFormProps) {
       description: item.description,
       quantity: item.quantity,
       unit_price: item.unit_price,
+      is_to_go: item.is_to_go ?? false,
       sort_order: idx,
     }));
   };
@@ -254,6 +264,68 @@ export function InvoiceForm({ existing }: InvoiceFormProps) {
     }
   };
 
+  // Save the invoice (as a draft) then open the send dialog. The invoice only
+  // flips to "sent" once sendInvoice actually dispatches a channel — so an
+  // abandoned send leaves a clean draft, not a phantom "sent" with no delivery.
+  const handleSaveAndSend = async () => {
+    setSavingAs("sent");
+    const locationId = selectedLocationId === "all" ? null : selectedLocationId;
+
+    const input: CreateInvoiceInput = {
+      location_id: locationId,
+      customer_id: selectedCustomer?.id ?? null,
+      status: "draft",
+      payment_due_type: paymentDueType,
+      due_date:
+        paymentDueType === "custom" && dueDate
+          ? format(dueDate, "yyyy-MM-dd")
+          : null,
+      subtotal,
+      discount_amount: discountVal,
+      tax_rate: taxRateVal,
+      tax_amount: taxAmount,
+      total_amount: total,
+      note: note.trim() || null,
+      items: buildItems(),
+    };
+
+    const customerForDialog = selectedCustomer
+      ? {
+          id: selectedCustomer.id,
+          name: selectedCustomer.name ?? null,
+          email: selectedCustomer.email ?? null,
+          phone: selectedCustomer.phone ?? null,
+        }
+      : null;
+
+    try {
+      if (existing) {
+        const result = await updateInvoice.mutateAsync({
+          invoiceId: existing.id,
+          input,
+        });
+        if (result.data || !result.error) {
+          setSendDialogInvoice({
+            id: existing.id,
+            invoice_number: existing.invoice_number,
+            customer: customerForDialog,
+          });
+        }
+      } else {
+        const result = await createInvoice.mutateAsync(input);
+        if (result.data) {
+          setSendDialogInvoice({
+            id: result.data.id,
+            invoice_number: result.data.invoice_number,
+            customer: customerForDialog,
+          });
+        }
+      }
+    } finally {
+      setSavingAs(null);
+    }
+  };
+
   // ── Customer avatar initial ───────────────────────────────────────────────
   const customerInitial = selectedCustomer
     ? (
@@ -275,7 +347,7 @@ export function InvoiceForm({ existing }: InvoiceFormProps) {
         <div className="space-y-5">
 
           {/* ── Invoice Details ──────────────────────────────────── */}
-          <Card>
+          <Card className="shadow-none">
             <CardHeader className="pb-4">
               <div className="flex items-center gap-2.5">
                 <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
@@ -396,7 +468,7 @@ export function InvoiceForm({ existing }: InvoiceFormProps) {
           </Card>
 
           {/* ── Sale Details ─────────────────────────────────────── */}
-          <Card>
+          <Card className="shadow-none">
             <CardHeader className="pb-4">
               <div className="flex items-center justify-between gap-3 flex-wrap">
                 <div className="flex items-center gap-2.5">
@@ -552,7 +624,7 @@ export function InvoiceForm({ existing }: InvoiceFormProps) {
         <div className="space-y-4 lg:sticky lg:top-6">
 
           {/* ── Order Summary ────────────────────────────────────── */}
-          <Card>
+          <Card className="shadow-none">
             <CardHeader className="pb-3">
               <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                 Order Summary
@@ -646,7 +718,7 @@ export function InvoiceForm({ existing }: InvoiceFormProps) {
           </Card>
 
           {/* ── Note ────────────────────────────────────────────── */}
-          <Card>
+          <Card className="shadow-none">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-semibold">
                 Note{" "}
@@ -683,14 +755,14 @@ export function InvoiceForm({ existing }: InvoiceFormProps) {
             <Button
               className="w-full"
               size="lg"
-              onClick={() => handleSave("sent")}
+              onClick={handleSaveAndSend}
               disabled={savingAs !== null}
             >
               {savingAs === "sent" ? (
-                "Sending…"
+                "Saving…"
               ) : (
                 <>
-                  Send Invoice
+                  Save &amp; Send
                   <Send className="h-4 w-4 ml-2" />
                 </>
               )}
@@ -718,6 +790,21 @@ export function InvoiceForm({ existing }: InvoiceFormProps) {
         onOpenChange={setShowAddCustomer}
         onCreated={(customer) => setSelectedCustomer(customer)}
       />
+      {sendDialogInvoice && (
+        <SendInvoiceDialog
+          open={!!sendDialogInvoice}
+          onOpenChange={(open) => {
+            if (!open) {
+              // Dialog closed (sent or cancelled) — the invoice is saved either
+              // way, so land the user on its detail page.
+              const id = sendDialogInvoice.id;
+              setSendDialogInvoice(null);
+              router.push(`/dashboard/invoices/${id}`);
+            }
+          }}
+          invoice={sendDialogInvoice}
+        />
+      )}
     </div>
   );
 }

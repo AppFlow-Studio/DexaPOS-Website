@@ -59,6 +59,7 @@ import { CreateMenuItem } from "@/app/dashboard/actions/menu-items";
 import { useModifierGroups } from "@/app/dashboard/hooks/useModifierGroups";
 import { PriceInputGroup } from "@/components/dashboard/locations/PriceInputGroup";
 import { useEffectivePricing } from "@/app/dashboard/hooks/useEffectivePricing";
+import { useIsSingleLocation } from "@/stores/location-store";
 import { ItemPreviewCard } from "@/components/dashboard/menu/ItemPreviewCard";
 import {
   clearLocalStorageDraft,
@@ -143,6 +144,7 @@ export function CreateItemWizard({
   const queryClient = useQueryClient();
   const { data: userInfo } = useUserInfo();
   const merchantId = userInfo?.members?.[0]?.organizations?.merchants?.id || "";
+  const isSingleLocation = useIsSingleLocation();
   const { pricingStrategy, dualPricingPercentage } = useEffectivePricing();
   const { data: rawModifierGroups = [] } = useModifierGroups(
     clerkOrgId,
@@ -562,13 +564,19 @@ export function CreateItemWizard({
                   <MapPin className="h-4 w-4 text-primary" />
                   <span className="font-medium">Creating for:</span>
                   <Badge variant="outline" className="bg-background">
-                    {isAllLocations ? "All Locations (Global)" : "This Location"}
+                    {isSingleLocation
+                      ? "Your menu"
+                      : isAllLocations
+                        ? "All Locations (Global)"
+                        : "This Location"}
                   </Badge>
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {isAllLocations
-                    ? "This item will be available at all locations."
-                    : "This item will be specific to this location only."}
+                  {isSingleLocation
+                    ? "This item will be added to your menu."
+                    : isAllLocations
+                      ? "This item will be available at all locations."
+                      : "This item will be specific to this location only."}
                 </p>
                 {isDualPricing && !isAllLocations && (
                   <div className="mt-2 text-xs flex items-center gap-1.5 text-blue-700 font-medium">

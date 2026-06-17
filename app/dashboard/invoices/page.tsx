@@ -14,6 +14,7 @@ import {
   Eye,
   CheckCheck,
   Ban,
+  Send,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -34,8 +35,15 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useInvoices, useUpdateInvoiceStatus, useDeleteInvoice } from "./hooks/useInvoices";
+import {
+  useInvoices,
+  useInvoiceKpis,
+  useUpdateInvoiceStatus,
+  useDeleteInvoice,
+} from "./hooks/useInvoices";
 import { InvoiceStatusBadge } from "./components/InvoiceStatusBadge";
+import { SendInvoiceDialog } from "./components/SendInvoiceDialog";
+import { isSendable } from "@/lib/invoices/lifecycle";
 import type { Invoice, InvoiceStatus } from "@/app/dashboard/actions/invoices";
 import {
   AlertDialog,
@@ -75,6 +83,7 @@ export default function InvoicesPage() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<InvoiceStatus | "all">("all");
   const [deleteTarget, setDeleteTarget] = useState<Invoice | null>(null);
+  const [sendTarget, setSendTarget] = useState<Invoice | null>(null);
 
   const { data: invoices = [], isLoading } = useInvoices(
     activeTab === "all" ? null : activeTab
@@ -82,22 +91,14 @@ export default function InvoicesPage() {
   const updateStatus = useUpdateInvoiceStatus();
   const deleteInvoice = useDeleteInvoice();
 
-  // Summary stats (from all invoices, not filtered)
-  const { data: allInvoices = [] } = useInvoices(null);
-  const outstanding = allInvoices
-    .filter((i) => i.status === "sent" || i.status === "viewed")
-    .reduce((sum, i) => sum + i.total_amount, 0);
-  const now = new Date();
-  const paidThisMonth = allInvoices
-    .filter(
-      (i) =>
-        i.status === "paid" &&
-        new Date(i.updated_at).getMonth() === now.getMonth() &&
-        new Date(i.updated_at).getFullYear() === now.getFullYear()
-    )
-    .reduce((sum, i) => sum + i.total_amount, 0);
-  const overdueCount = allInvoices.filter((i) => i.status === "overdue").length;
-  const draftCount = allInvoices.filter((i) => i.status === "draft").length;
+  // DB-authoritative, location-scoped KPIs (§4) — derived server-side from
+  // amount_paid/paid_at/status; overdue is read-time derived. Refetched via
+  // React Query invalidation whenever any invoice mutation runs.
+  const { data: kpi } = useInvoiceKpis();
+  const outstanding = kpi?.outstanding ?? 0;
+  const paidThisMonth = kpi?.paidThisMonth ?? 0;
+  const overdueCount = kpi?.overdueCount ?? 0;
+  const draftCount = kpi?.draftCount ?? 0;
 
   return (
     <div className="space-y-6">
@@ -119,17 +120,17 @@ export default function InvoicesPage() {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card>
+        <Card className="shadow-none">
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
             <CardTitle className="text-sm font-medium">Outstanding</CardTitle>
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{formatCurrency(outstanding)}</div>
-            <p className="text-xs text-muted-foreground">Sent + viewed</p>
+            <p className="text-xs text-muted-foreground">Unpaid balance</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="shadow-none">
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
             <CardTitle className="text-sm font-medium">Paid This Month</CardTitle>
             <CheckCircle2 className="h-4 w-4 text-green-500" />
@@ -139,7 +140,7 @@ export default function InvoicesPage() {
             <p className="text-xs text-muted-foreground">Current month</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="shadow-none">
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
             <CardTitle className="text-sm font-medium">Overdue</CardTitle>
             <AlertCircle className="h-4 w-4 text-red-500" />
@@ -149,7 +150,7 @@ export default function InvoicesPage() {
             <p className="text-xs text-muted-foreground">Needs attention</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="shadow-none">
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
             <CardTitle className="text-sm font-medium">Drafts</CardTitle>
             <Clock className="h-4 w-4 text-muted-foreground" />
@@ -162,7 +163,7 @@ export default function InvoicesPage() {
       </div>
 
       {/* Table with tabs */}
-      <Card>
+      <Card className="shadow-none">
         <CardHeader className="pb-3">
           <Tabs
             value={activeTab}
@@ -271,6 +272,14 @@ export default function InvoicesPage() {
                             <Eye className="mr-2 h-4 w-4" />
                             View
                           </DropdownMenuItem>
+                          {isSendable(invoice.status) && (
+                            <DropdownMenuItem
+                              onClick={() => setSendTarget(invoice)}
+                            >
+                              <Send className="mr-2 h-4 w-4" />
+                              {invoice.status === "draft" ? "Send" : "Resend"}
+                            </DropdownMenuItem>
+                          )}
                           {invoice.status !== "paid" && (
                             <DropdownMenuItem
                               onClick={() =>
@@ -315,6 +324,15 @@ export default function InvoicesPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Send dialog */}
+      {sendTarget && (
+        <SendInvoiceDialog
+          open={!!sendTarget}
+          onOpenChange={(v) => !v && setSendTarget(null)}
+          invoice={sendTarget}
+        />
+      )}
 
       {/* Delete confirmation */}
       <AlertDialog

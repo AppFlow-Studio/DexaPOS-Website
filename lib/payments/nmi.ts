@@ -157,27 +157,87 @@ export async function createNmiSale(
     currency?: string;
     paymentToken: string;
     industry?: "retail" | "restaurant" | "ecommerce" | "moto" | "lodging";
+    orderId?: string;
+    firstName?: string;
+    lastName?: string;
+    email?: string;
+    phone?: string;
+    address1?: string;
+    address2?: string;
+    city?: string;
+    state?: string;
+    zip?: string;
+    country?: string;
   }
 ) {
-  const result = await callNmi(
-    "/api/v5/payments/sale",
-    {
-      method: "POST",
-      body: JSON.stringify({
-        amount: params.amount,
-        currency: params.currency ?? "USD",
-        industry: params.industry ?? "ecommerce",
-        payment_details: {
-          payment_token: params.paymentToken,
+  const classicPayload = {
+    type: "sale",
+    payment: "creditcard",
+    amount: String(params.amount.toFixed(2)),
+    currency: params.currency ?? "USD",
+    payment_token: params.paymentToken,
+    orderid: params.orderId ?? "",
+    first_name: params.firstName ?? "",
+    last_name: params.lastName ?? "",
+    email: params.email ?? "",
+    phone: params.phone ?? "",
+    address1: params.address1 ?? "",
+    address2: params.address2 ?? "",
+    city: params.city ?? "",
+    state: params.state ?? "",
+    zip: params.zip ?? "",
+    country: params.country ?? "US",
+  };
+
+  const shouldPreferClassic =
+    Boolean(params.orderId) ||
+    Boolean(params.firstName) ||
+    Boolean(params.lastName) ||
+    Boolean(params.email) ||
+    Boolean(params.phone) ||
+    Boolean(params.address1) ||
+    Boolean(params.city) ||
+    Boolean(params.state) ||
+    Boolean(params.zip);
+
+  const result = shouldPreferClassic
+    ? await callNmiClassic(classicPayload, config)
+    : await callNmi(
+        "/api/v5/payments/sale",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            amount: params.amount,
+            currency: params.currency ?? "USD",
+            industry: params.industry ?? "ecommerce",
+            payment_details: {
+              payment_token: params.paymentToken,
+            },
+          }),
         },
-      }),
-    },
-    config
-  );
+        config
+      );
+
+  const needsClassicFallback =
+    !shouldPreferClassic &&
+    !result.ok &&
+    (result.status === 400 || result.status === 422) &&
+    (
+      result.details.responseText === "The provided data is invalid." ||
+      result.text.includes("E_INVALID_SUBMISSION")
+    );
+
+  const finalResult = needsClassicFallback
+    ? await callNmiClassic(classicPayload, config)
+    : result;
 
   return {
-    success: result.ok && isApproved(result.details),
-    ...result,
+    success:
+      (finalResult.ok ||
+        finalResult.details.response === "1" ||
+        finalResult.details.responseCode === "100") &&
+      isApproved(finalResult.details),
+    ...finalResult,
   };
 }
 

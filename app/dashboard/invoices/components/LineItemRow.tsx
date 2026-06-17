@@ -3,6 +3,7 @@
 import { X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 
 export interface LineItem {
   id: string; // client-side UUID
@@ -11,6 +12,7 @@ export interface LineItem {
   description?: string | null;
   quantity: number;
   unit_price: number;
+  is_to_go?: boolean;
 }
 
 interface LineItemRowProps {
@@ -25,7 +27,14 @@ export function LineItemRow({ item, onChange, onRemove }: LineItemRowProps) {
   return (
     <div className="grid grid-cols-[1fr_80px_100px_90px_36px] gap-2 items-center py-2 border-b last:border-b-0">
       <div className="flex flex-col gap-0.5 min-w-0">
-        <span className="font-medium truncate text-sm">{item.name}</span>
+        <span className="flex items-center gap-1.5 min-w-0">
+          <span className="font-medium truncate text-sm">{item.name}</span>
+          {item.is_to_go && (
+            <Badge variant="secondary" className="shrink-0 text-[10px] px-1.5 py-0">
+              To Go
+            </Badge>
+          )}
+        </span>
         {item.description && (
           <span className="text-xs text-muted-foreground truncate">
             {item.description}
@@ -35,10 +44,17 @@ export function LineItemRow({ item, onChange, onRemove }: LineItemRowProps) {
 
       <Input
         type="number"
-        min="0.01"
-        step="0.01"
+        min="1"
+        step="1"
         value={item.quantity}
-        onChange={(e) => onChange(item.id, "quantity", parseFloat(e.target.value) || 0)}
+        onChange={(e) => {
+          const v = parseInt(e.target.value, 10);
+          onChange(item.id, "quantity", Number.isNaN(v) ? 0 : v);
+        }}
+        onBlur={(e) => {
+          const v = parseInt(e.target.value, 10);
+          onChange(item.id, "quantity", Number.isNaN(v) || v < 1 ? 1 : v);
+        }}
         className="h-8 text-center text-sm"
         aria-label="Quantity"
       />

@@ -154,6 +154,9 @@ export async function getAdminInvoices(
     `
     )
     .eq('merchant_id', merchantId)
+    // Oversight of the merchant's own customer invoices only — exclude HQ→merchant
+    // platform bills (§5), which surface in the Platform Billing tab instead.
+    .eq('bill_type', 'merchant_to_customer')
     .order('created_at', { ascending: false })
 
   if (locationId && locationId !== 'all') {

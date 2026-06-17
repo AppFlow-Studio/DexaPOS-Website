@@ -30,6 +30,7 @@ import { ReorderMenuItemModifierGroups } from "@/app/dashboard/actions/menu-item
 import {
   useIsAllLocations,
   useSelectedLocation,
+  useIsSingleLocation,
 } from "@/stores/location-store";
 
 type ModifierGroupEntry = {
@@ -106,9 +107,12 @@ function SortableGroupRow({ entry, index }: SortableGroupRowProps) {
 export function ModifiersSection({ item, itemId, globalScope }: SectionRenderCtx) {
   const queryClient = useQueryClient();
   const isAllLocations = useIsAllLocations();
+  const isSingleLocation = useIsSingleLocation();
   const selectedLocation = useSelectedLocation();
+  // Single-location accounts reorder the core groups (omit location_id) even if a
+  // stale per-location selection is still in scope. isSingleLocation drives this.
   const locationId =
-    isAllLocations ? null : (selectedLocation?.id ?? null);
+    isAllLocations || isSingleLocation ? null : (selectedLocation?.id ?? null);
 
   const rawGroups: ModifierGroupEntry[] = item?.menu_item_modifier_groups ?? [];
   const [groups, setGroups] = React.useState<ModifierGroupEntry[]>(() =>
@@ -263,7 +267,9 @@ export function ModifiersSection({ item, itemId, globalScope }: SectionRenderCtx
           </>
         )}
         <p className="text-[11px] text-muted-foreground">
-          Modifier attachment is always Global. Drag to reorder how groups appear on the POS.
+          {isSingleLocation
+            ? "Modifier attachment is shared across your menu. Drag to reorder how groups appear on the POS."
+            : "Modifier attachment is always Global. Drag to reorder how groups appear on the POS."}
         </p>
       </div>
     </div>

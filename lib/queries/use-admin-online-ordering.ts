@@ -141,7 +141,9 @@ export interface OnlineOrderingSettings {
   acceptCardOnDelivery?: boolean
   nmiTokenizationKey?: string
   nmiPrivateApiKey?: string
+  nmiWebhookSecret?: string
   nmiConfigured?: boolean
+  nmiWebhookConfigured?: boolean
   tippingEnabled?: boolean
   tipConfig?: TipConfig
   baseDeliveryFee?: number

@@ -11,7 +11,7 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { MoreVertical, Eye, Trash2, Power, Settings, Copy, ExternalLink, Lock, Globe } from 'lucide-react'
-import { useLocationStore } from '@/stores/location-store'
+import { useLocationStore, useIsSingleLocation } from '@/stores/location-store'
 
 interface MenuActionsDropdownProps {
     menuId: string
@@ -42,6 +42,7 @@ export function MenuActionsDropdown({
 }: MenuActionsDropdownProps) {
     const router = useRouter()
     const { selectedLocationId } = useLocationStore()
+    const isSingleLocation = useIsSingleLocation()
 
     // Determine scope context
     const isViewingAllLocations = selectedLocationId === 'all'
@@ -102,7 +103,7 @@ export function MenuActionsDropdown({
             <DropdownMenuContent align={align} className="w-56">
                 <DropdownMenuLabel className="flex items-center gap-2">
                     Menu Actions
-                    {isGlobalMenu && (
+                    {isGlobalMenu && !isSingleLocation && (
                         <span className="text-xs font-normal text-emerald-600 flex items-center gap-1">
                             <Globe className="h-3 w-3" />
                             Global

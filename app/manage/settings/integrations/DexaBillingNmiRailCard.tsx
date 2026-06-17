@@ -24,6 +24,7 @@ export function DexaBillingNmiRailCard({ config, canEdit }: Props) {
   const [label, setLabel] = useState(config.label)
   const [tokenizationKey, setTokenizationKey] = useState(config.tokenizationKey ?? '')
   const [privateApiKey, setPrivateApiKey] = useState('')
+  const [webhookSecret, setWebhookSecret] = useState('')
 
   const handleSave = () => {
     startTransition(async () => {
@@ -31,6 +32,7 @@ export function DexaBillingNmiRailCard({ config, canEdit }: Props) {
         label,
         tokenizationKey,
         privateApiKey,
+        webhookSecret,
         isActive: true,
       })
 
@@ -41,6 +43,7 @@ export function DexaBillingNmiRailCard({ config, canEdit }: Props) {
 
       toast.success('Dexa Billing NMI config saved.')
       setPrivateApiKey('')
+      setWebhookSecret('')
     })
   }
 
@@ -64,6 +67,11 @@ export function DexaBillingNmiRailCard({ config, canEdit }: Props) {
           <Row label="Status">
             <Badge variant={config.apiKeyConfigured && config.tokenizationKey ? 'default' : 'secondary'}>
               {config.apiKeyConfigured && config.tokenizationKey ? 'Configured' : 'Incomplete'}
+            </Badge>
+          </Row>
+          <Row label="Webhook signing">
+            <Badge variant={config.webhookSecretConfigured ? 'default' : 'secondary'}>
+              {config.webhookSecretConfigured ? 'Configured' : 'Missing'}
             </Badge>
           </Row>
           <Row label="Scope">
@@ -123,6 +131,26 @@ export function DexaBillingNmiRailCard({ config, canEdit }: Props) {
           <p className="text-xs text-muted-foreground inline-flex items-center gap-1.5">
             <KeyRound className="h-3.5 w-3.5" />
             Stored in Supabase Vault. Leave blank when you only want to keep the existing saved private key.
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="dexa-billing-webhook-secret">NMI Webhook Signing Secret</Label>
+          <Input
+            id="dexa-billing-webhook-secret"
+            type="password"
+            value={webhookSecret}
+            onChange={(event) => setWebhookSecret(event.target.value)}
+            placeholder={
+              config.webhookSecretConfigured
+                ? 'Stored securely. Enter a new value only to rotate it.'
+                : 'Webhook signing secret'
+            }
+            disabled={!canEdit}
+          />
+          <p className="text-xs text-muted-foreground inline-flex items-center gap-1.5">
+            <Shield className="h-3.5 w-3.5" />
+            Used to verify NMI invoice-payment webhooks before updating invoice status.
           </p>
         </div>
 

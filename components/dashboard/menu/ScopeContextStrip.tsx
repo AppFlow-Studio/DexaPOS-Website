@@ -1,11 +1,12 @@
 "use client";
 
 import * as React from "react";
-import { Globe, MapPin } from "lucide-react";
+import { Globe, MapPin, Store } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   useIsAllLocations,
   useSelectedLocation,
+  useIsSingleLocation,
 } from "@/stores/location-store";
 import { scopeColor, deriveScopeFromContext } from "@/lib/menu/cascade-labels";
 import { useRoleAwareScopeCopy } from "@/lib/menu/useRoleAwareScope";
@@ -39,6 +40,33 @@ export function ScopeContextStrip({
 }: ScopeContextStripProps) {
   const isAllLocations = useIsAllLocations();
   const selectedLocation = useSelectedLocation();
+  const isSingleLocation = useIsSingleLocation();
+
+  // Single-location accounts manage one menu (the core). No multi-location
+  // framing: a neutral "Menu" strip, no globe, and no pricing-cascade explainer
+  // (there are no overrides to explain).
+  if (isSingleLocation) {
+    return (
+      <div
+        className={cn(
+          "flex items-center gap-3 rounded-lg border bg-muted/40 px-4 py-2.5",
+          className,
+        )}
+        role="region"
+        aria-label="Editing scope"
+      >
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/60 dark:bg-black/20">
+          <Store className="h-4 w-4 text-muted-foreground" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <span className="text-sm font-semibold">Menu</span>
+          <p className="text-[11px] leading-tight text-muted-foreground">
+            Edits update your menu
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   const rawScope = deriveScopeFromContext({
     isAllLocations,

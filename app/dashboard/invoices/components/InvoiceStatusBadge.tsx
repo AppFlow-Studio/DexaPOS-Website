@@ -13,6 +13,7 @@ const CONFIG: Record<
   paid: { label: "Paid", variant: "default" },
   overdue: { label: "Overdue", variant: "destructive" },
   cancelled: { label: "Cancelled", variant: "outline" },
+  payment_failed: { label: "Payment Failed", variant: "destructive" },
 };
 
 const COLOR_CLASSES: Record<InvoiceStatus, string> = {
@@ -22,6 +23,7 @@ const COLOR_CLASSES: Record<InvoiceStatus, string> = {
   paid: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 border-green-200",
   overdue: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-red-200",
   cancelled: "bg-muted text-muted-foreground line-through",
+  payment_failed: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-red-200",
 };
 
 interface InvoiceStatusBadgeProps {
