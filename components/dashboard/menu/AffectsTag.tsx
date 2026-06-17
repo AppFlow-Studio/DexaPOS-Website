@@ -10,6 +10,7 @@ import {
   type ScopeContext,
 } from "@/lib/menu/cascade-labels";
 import { useRoleAwareScopeCopy } from "@/lib/menu/useRoleAwareScope";
+import { useIsSingleLocation } from "@/stores/location-store";
 
 type AffectsTagVariant = "save-button" | "banner" | "inline";
 
@@ -113,6 +114,14 @@ export function AffectsTag({
   prefix,
   roleAware = true,
 }: AffectsTagProps) {
+  // Single-location accounts manage one menu (the core): there is no cascade and
+  // every save affects that one menu, so a blast-radius tag (which would read
+  // "affects all locations" with a globe icon) is meaningless noise. Hide it.
+  const isSingleLocation = useIsSingleLocation();
+  if (isSingleLocation) {
+    return null;
+  }
+
   if (roleAware) {
     return (
       <RoleAwareAffectsTag

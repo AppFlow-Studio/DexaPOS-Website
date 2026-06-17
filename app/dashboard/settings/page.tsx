@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Label } from '@/components/ui/label'
 import { useLocationTaxRates, useUpsertTaxRate, useDeactivateTaxRate } from '../hooks/useTaxRates'
-import { useLocationStore, useIsAllLocations, useSelectedLocation } from '@/stores/location-store'
+import { useGatedLocationId, useGatedLocation } from '@/stores/location-store'
 import { TAX_CATEGORIES, TAX_CATEGORY_LABELS, TAX_CATEGORY_DESCRIPTIONS, TaxCategory } from '@/types/tax'
 import { Plus, Edit, Trash2, AlertCircle, DollarSign, MapPin, CreditCard, Monitor, Flame, MonitorPlay, Receipt, Gift, ChevronRight } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -36,8 +36,11 @@ const SETTINGS_SECTIONS = [
 // ============================================================================
 
 export default function TaxSettingsPage() {
-    const isAllLocations = useIsAllLocations()
-    const selectedLocation = useSelectedLocation()
+    // Resolve to the gated location so single-location accounts (locked to 'all')
+    // skip the "Select a Location" prompt. The tax hooks below resolve the same
+    // way internally (see useTaxRates), so data/mutations target the one location.
+    const isAllLocations = !useGatedLocationId()
+    const selectedLocation = useGatedLocation()
     const { data: taxRatesData, isLoading } = useLocationTaxRates()
     const upsertMutation = useUpsertTaxRate()
     const deactivateMutation = useDeactivateTaxRate()

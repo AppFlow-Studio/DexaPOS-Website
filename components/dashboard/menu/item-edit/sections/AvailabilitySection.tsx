@@ -11,6 +11,7 @@ import { UpdateMenuItem } from "@/app/dashboard/actions/menu-items";
 import {
   useIsAllLocations,
   useLocationStore,
+  useIsSingleLocation,
 } from "@/stores/location-store";
 import { AffectsTag } from "../../AffectsTag";
 import { SectionHeader } from "./OverviewSection";
@@ -19,8 +20,12 @@ import type { SectionRenderCtx } from "@/app/dashboard/menu/items/[itemId]/edit/
 export function AvailabilitySection({ itemId, item, scope }: SectionRenderCtx) {
   const queryClient = useQueryClient();
   const isAllLocations = useIsAllLocations();
+  const isSingleLocation = useIsSingleLocation();
   const { selectedLocationId } = useLocationStore();
-  const locationId = isAllLocations ? null : selectedLocationId;
+  // Single-location accounts write the core directly — omit location_id even if
+  // a stale per-location selection is still in scope (e.g. the first-load window
+  // before the scope-reset effect runs). isSingleLocation drives the omission.
+  const locationId = isAllLocations || isSingleLocation ? null : selectedLocationId;
 
   const initial: boolean =
     item?.location_is_available ?? item?.availability ?? true;

@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import {
   GetInvoices,
   GetInvoice,
+  GetInvoiceKpis,
   CreateInvoice,
   UpdateInvoice,
   UpdateInvoiceStatus,
@@ -14,6 +15,10 @@ import {
   type CreateInvoiceInput,
   type UpdateInvoiceInput,
 } from "@/app/dashboard/actions/invoices";
+import {
+  sendInvoice,
+  type SendInvoiceParams,
+} from "@/app/actions/invoices/send-invoice";
 import { useClerkOrgId } from "@/app/dashboard/hooks/useLocationScoped";
 import { useLocationStore } from "@/stores/location-store";
 
@@ -30,6 +35,19 @@ export function useInvoices(status?: InvoiceStatus | null) {
   return useQuery({
     queryKey: ["invoices", clerkOrgId, effectiveLocationId, status ?? "all"],
     queryFn: () => GetInvoices(clerkOrgId!, effectiveLocationId, status),
+    enabled: !!clerkOrgId,
+  });
+}
+
+export function useInvoiceKpis() {
+  const clerkOrgId = useClerkOrgId();
+  const { selectedLocationId } = useLocationStore();
+  const effectiveLocationId =
+    selectedLocationId === "all" ? null : selectedLocationId;
+
+  return useQuery({
+    queryKey: ["invoice-kpis", clerkOrgId, effectiveLocationId],
+    queryFn: () => GetInvoiceKpis(clerkOrgId!, effectiveLocationId),
     enabled: !!clerkOrgId,
   });
 }
@@ -64,6 +82,7 @@ export function useCreateInvoice() {
         toast.success("Invoice created");
       }
       queryClient.invalidateQueries({ queryKey: ["invoices"] });
+      queryClient.invalidateQueries({ queryKey: ["invoice-kpis"] });
     },
     onError: () => {
       toast.error("Failed to create invoice");
@@ -93,6 +112,7 @@ export function useUpdateInvoice() {
         toast.success("Invoice updated");
       }
       queryClient.invalidateQueries({ queryKey: ["invoices"] });
+      queryClient.invalidateQueries({ queryKey: ["invoice-kpis"] });
       queryClient.invalidateQueries({
         queryKey: ["invoice", variables.invoiceId],
       });
@@ -123,12 +143,44 @@ export function useUpdateInvoiceStatus() {
         variables.status.charAt(0).toUpperCase() + variables.status.slice(1);
       toast.success(`Invoice marked as ${statusLabel}`);
       queryClient.invalidateQueries({ queryKey: ["invoices"] });
+      queryClient.invalidateQueries({ queryKey: ["invoice-kpis"] });
       queryClient.invalidateQueries({
         queryKey: ["invoice", variables.invoiceId],
       });
     },
     onError: () => {
       toast.error("Failed to update invoice status");
+    },
+  });
+}
+
+export function useSendInvoice() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (params: SendInvoiceParams) => sendInvoice(params),
+    onSuccess: (result, variables) => {
+      if (!result.success) {
+        toast.error("Failed to send invoice", { description: result.message });
+        return;
+      }
+      if (result.results.some((r) => !r.success)) {
+        toast.warning(result.message, {
+          description: result.results
+            .map((r) => `${r.channel.toUpperCase()}: ${r.message}`)
+            .join("  ·  "),
+        });
+      } else {
+        toast.success(result.message);
+      }
+      queryClient.invalidateQueries({ queryKey: ["invoices"] });
+      queryClient.invalidateQueries({ queryKey: ["invoice-kpis"] });
+      queryClient.invalidateQueries({
+        queryKey: ["invoice", variables.invoiceId],
+      });
+    },
+    onError: () => {
+      toast.error("Failed to send invoice");
     },
   });
 }
@@ -145,6 +197,7 @@ export function useDeleteInvoice() {
       }
       toast.success("Invoice deleted");
       queryClient.invalidateQueries({ queryKey: ["invoices"] });
+      queryClient.invalidateQueries({ queryKey: ["invoice-kpis"] });
     },
     onError: () => {
       toast.error("Failed to delete invoice");

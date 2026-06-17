@@ -2,10 +2,12 @@
 
 import * as React from "react";
 import { Badge } from "@/components/ui/badge";
+import { useIsSingleLocation } from "@/stores/location-store";
 import { SectionHeader } from "./OverviewSection";
 import type { SectionRenderCtx } from "@/app/dashboard/menu/items/[itemId]/edit/ItemEditLayout";
 
 export function CategoriesSection({ item, globalScope }: SectionRenderCtx) {
+  const isSingleLocation = useIsSingleLocation();
   const categoryItems: Array<{ category?: { id: string; name: string } | null }> =
     item?.category_items ?? [];
 
@@ -28,8 +30,9 @@ export function CategoriesSection({ item, globalScope }: SectionRenderCtx) {
           </div>
         )}
         <p className="text-[11px] text-muted-foreground">
-          Category attachment is always Global. Managing categories happens
-          from the Categories page.
+          {isSingleLocation
+            ? "Category attachment is shared across your menu. Managing categories happens from the Categories page."
+            : "Category attachment is always Global. Managing categories happens from the Categories page."}
         </p>
       </div>
     </div>
