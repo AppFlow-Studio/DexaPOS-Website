@@ -94,6 +94,7 @@ export function InvoiceForm({ existing }: InvoiceFormProps) {
       description: i.description,
       quantity: i.quantity,
       unit_price: i.unit_price,
+      is_to_go: i.is_to_go ?? false,
     })) ?? []
   );
   const [showAddCustomItem, setShowAddCustomItem] = useState(false);
@@ -182,6 +183,7 @@ export function InvoiceForm({ existing }: InvoiceFormProps) {
     description?: string;
     quantity: number;
     unit_price: number;
+    is_to_go: boolean;
   }) => {
     setLineItems((prev) => [
       ...prev,
@@ -192,6 +194,7 @@ export function InvoiceForm({ existing }: InvoiceFormProps) {
         description: item.description,
         quantity: item.quantity,
         unit_price: item.unit_price,
+        is_to_go: item.is_to_go,
       },
     ]);
   };
@@ -213,6 +216,7 @@ export function InvoiceForm({ existing }: InvoiceFormProps) {
       description: item.description,
       quantity: item.quantity,
       unit_price: item.unit_price,
+      is_to_go: item.is_to_go ?? false,
       sort_order: idx,
     }));
   };

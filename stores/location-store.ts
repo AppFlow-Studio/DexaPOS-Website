@@ -190,6 +190,42 @@ export const useSingleLocationName = () => {
   );
 };
 
+// ----------------------------------------------------------------------------
+// Gated-location resolver
+// ----------------------------------------------------------------------------
+// Several pages (Tables, Stations, Tax, Receipt Templates, Tips, Cash Drawers,
+// etc.) are inherently per-location and require a concrete location id to render
+// — when none is resolvable they show a "Select a Location" picker. A
+// single-location account is intentionally locked to the 'all'/core scope (so
+// menu/item edits write the global core, NOT per-location overlays — see
+// useLocationScoped), but for these gated pages there is exactly one place its
+// data can live. These resolvers bridge that gap WITHOUT touching the global
+// scope:
+//   - a specific location is selected -> that UUID
+//   - 'all' + exactly one active location -> that one location (single-loc fix)
+//   - 'all' + multiple locations -> null (picker still shown; unchanged)
+// Multi-location accounts therefore behave exactly as before.
+
+export const useGatedLocationId = (): string | null => {
+  return useLocationStore((state) => {
+    if (state.selectedLocationId !== "all") return state.selectedLocationId;
+    const active = state.locations.filter((l) => l.is_active);
+    return active.length === 1 ? active[0].id : null;
+  });
+};
+
+export const useGatedLocation = (): Location | null => {
+  return useLocationStore((state) => {
+    if (state.selectedLocationId !== "all") {
+      return (
+        state.locations.find((l) => l.id === state.selectedLocationId) ?? null
+      );
+    }
+    const active = state.locations.filter((l) => l.is_active);
+    return active.length === 1 ? active[0] : null;
+  });
+};
+
 // ============================================================================
 // Helper Types
 // ============================================================================

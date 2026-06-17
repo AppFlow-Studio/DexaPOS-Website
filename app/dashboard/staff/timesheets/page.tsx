@@ -5,8 +5,8 @@ import { startOfWeek, endOfWeek } from "date-fns";
 import { useTimesheets, useTimesheetResources } from "@/hooks/useTimesheets";
 import { useAuth } from "@clerk/nextjs";
 import {
-  useIsAllLocations,
-  useSelectedLocation,
+  useGatedLocationId,
+  useGatedLocation,
 } from "@/stores/location-store";
 import { DateRange } from "react-day-picker";
 import { DataTable } from "@/components/ui/data-table";
@@ -29,8 +29,11 @@ import {
 } from "@/components/ui/select";
 
 export default function TimesheetsPage() {
-  const isAllLocations = useIsAllLocations();
-  const selectedLocation = useSelectedLocation();
+  // Resolve to the gated location so single-location accounts (locked to 'all')
+  // skip the "Select a Location" prompt. Multi-location on 'all' -> null.
+  const gatedLocationId = useGatedLocationId();
+  const isAllLocations = !gatedLocationId;
+  const selectedLocation = useGatedLocation();
 
   // Get organization ID directly from Clerk's local session — no network call
   const { orgId } = useAuth();

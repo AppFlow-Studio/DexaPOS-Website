@@ -8,7 +8,7 @@ import { resolveInvoicePaymentRailForPublicToken } from "@/lib/invoices/payment-
 //
 // Best-effort, anonymous-safe (service-role): the payer has no session, so trust
 // comes from the unguessable public token, and only the public tokenization key
-// is ever returned — never secrets.
+// is ever returned ï¿½ never secrets.
 // =============================================================================
 
 export interface InvoicePaymentBootstrap {

@@ -1,16 +1,19 @@
 'use client'
 
 import * as React from 'react'
-import { useLocationStore } from '@/stores/location-store'
+import { useLocationStore, useGatedLocationId } from '@/stores/location-store'
 import { LocationListView } from '@/components/dashboard/tables/LocationListView'
 import { RuntimeTablesView } from '@/components/dashboard/tables/RuntimeTablesView'
 
 export default function TablesPage() {
     const { selectedLocationId, setSelectedLocation } = useLocationStore()
+    const gatedLocationId = useGatedLocationId()
     const [tablesLocationId, setTablesLocationId] = React.useState<string | null>(null)
 
-    // Use a separate state for tables page location to allow "back" functionality
-    const effectiveLocationId = tablesLocationId || (selectedLocationId !== 'all' ? selectedLocationId : null)
+    // Use a separate state for tables page location to allow "back" functionality.
+    // Falls back to the gated location so single-location accounts (locked to 'all')
+    // skip the picker and land straight on their one location's tables.
+    const effectiveLocationId = tablesLocationId || (selectedLocationId !== 'all' ? selectedLocationId : null) || gatedLocationId
 
     const handleLocationSelect = (locationId: string) => {
         setTablesLocationId(locationId)
