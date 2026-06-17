@@ -18,7 +18,7 @@ interface PaymentStatusBadgeProps {
 export function PaymentStatusBadge({ status, className, prefix }: PaymentStatusBadgeProps) {
     const statusConfig: Record<PaymentStatus, { label: string; dotColor: string; textColor: string; bgColor: string }> = {
         pending: {
-            label: 'Pending',
+            label: 'Awaiting Payment',
             dotColor: 'bg-amber-400',
             textColor: 'text-amber-700 dark:text-amber-400',
             bgColor: 'bg-amber-50 dark:bg-amber-900/20',

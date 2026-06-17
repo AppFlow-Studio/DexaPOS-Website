@@ -156,23 +156,22 @@ Single index for active ticket streams and their source trackers.
 - Overlay cleanup is staging-first and split into safe auto-collapse vs manual-review rows.
 - Charcoal cleanup must be sequenced separately.
 
-## Stream L: Invoices Create Send Pay Track + Admin Billing
+## Stream L: QR Dine-In Unified
 
-1. Final NMI/webhook handoff:
-- `docs/HANDOFF-2026-06-16-INVOICE-NMI-WEBHOOK.md`
+1. Plan:
+- `docs/PLAN-2026-05-27-QR-DINE-IN-UNIFIED.md`
 
-2. Continuation state:
+2. Ops runbook:
+- `docs/RUNBOOK-PAYMENT-WHITELIST-SYNC.md`
+
+3. Continuation state:
 - `.planning/.continue-here.md`
 
-3. Scope notes:
-- Website repo only.
-- Covers the invoice NMI integration layer and async webhook tracking.
-- Supports both:
-  - `merchant_to_customer`
-  - `platform_to_merchant`
-- Merchant invoice payments reuse merchant/location NMI devices.
-- Platform invoice payments use the Dexa platform billing NMI rail.
-- Public invoice payment page remains `/invoice/[token]`.
+4. Scope notes:
+- Website repo only for this stream.
+- QR storefront, dashboard QR manager, QR analytics, and guest-alert validation surfaces are implemented here.
+- Remaining open items are primarily deploy, payment-origin registration, POS follow-up, and end-to-end QA.
+- Do not mark QR payment or realtime items complete without staging or hosted-environment verification.
 
 ## Notes
 
