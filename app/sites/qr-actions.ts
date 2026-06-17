@@ -27,6 +27,7 @@ export interface ResolvedQrStorefrontSession {
     qrServiceFeePct: number | null;
   };
   error?: string;
+  reason?: string | null;
   nextOpen?: string | null;
 }
 
@@ -57,6 +58,7 @@ function mapResolvedQrPayload(data: any): ResolvedQrStorefrontSession {
     floorPlanObjectId: null,
     tableQrCodeId: null,
     error: data.error ?? undefined,
+    reason: data.reason ?? null,
     nextOpen: data.next_open ?? null,
     store: data.store
       ? {

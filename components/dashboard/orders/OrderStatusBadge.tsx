@@ -17,7 +17,7 @@ interface OrderStatusBadgeProps {
 }
 
 export function OrderStatusBadge({ status, className, prefix }: OrderStatusBadgeProps) {
-    const statusColors: Record<OrderStatus, { dotColor: string; textColor: string; bgColor: string }> = {
+    const statusColors: Record<OrderStatus, { textColor: string; bgColor: string }> = {
         draft: {
             dotColor: 'bg-gray-400',
             textColor: 'text-gray-600 dark:text-gray-400',
@@ -77,7 +77,6 @@ export function OrderStatusBadge({ status, className, prefix }: OrderStatusBadge
                 className
             )}
         >
-            <span className={cn('h-1.5 w-1.5 rounded-full', config.dotColor)} />
             {prefix ? `${prefix}: ${config.label}` : config.label}
         </span>
     )
