@@ -815,20 +815,6 @@ export function NewEditItemFormSheet({
 }: NewEditItemFormSheetProps) {
   const queryClient = useQueryClient();
 
-  // Dev warning: if the new edit page is enabled, callers should route to it.
-  React.useEffect(() => {
-    if (
-      mode === "full" &&
-      open &&
-      process.env.NEXT_PUBLIC_NEW_ITEM_EDIT === "true" &&
-      process.env.NODE_ENV !== "production"
-    ) {
-      // eslint-disable-next-line no-console
-      console.warn(
-        "[NewEditItemFormSheet] Full-mode sheet opened while NEXT_PUBLIC_NEW_ITEM_EDIT=true. Prefer routing to /dashboard/menu/items/[itemId]/edit.",
-      );
-    }
-  }, [mode, open]);
   const { data: userInfo } = useUserInfo();
   const merchantId =
     userInfo?.members?.[0]?.organizations?.merchants?.id || "";
