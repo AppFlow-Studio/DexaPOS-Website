@@ -71,7 +71,7 @@ export function OrderStatusBadge({ status, className, prefix }: OrderStatusBadge
     return (
         <span
             className={cn(
-                'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium',
+                'inline-flex items-center rounded-full px-2.5 py-0.5 gap-x-1 text-xs font-medium',
                 config.bgColor,
                 config.textColor,
                 className
