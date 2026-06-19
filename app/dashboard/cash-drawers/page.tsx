@@ -17,9 +17,8 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Plus, AlertTriangle, MapPin, Banknote, Loader2 } from 'lucide-react'
 import {
-  useLocationStore,
-  useIsAllLocations,
-  useSelectedLocation,
+  useGatedLocationId,
+  useGatedLocation,
 } from '@/stores/location-store'
 import { useUserInfo } from '@/app/manage/hooks/useUserInfo.'
 import {
@@ -33,9 +32,12 @@ import { OpenSessionDialog } from './components/OpenSessionDialog'
 import { CloseSessionDialog } from './components/CloseSessionDialog'
 
 export default function CashDrawersPage() {
-  const selectedLocationId = useLocationStore((s) => s.selectedLocationId)
-  const isAllLocations = useIsAllLocations()
-  const selectedLocation = useSelectedLocation()
+  // Resolve to the gated location so single-location accounts (locked to 'all')
+  // skip the "Select a Location" prompt. Multi-location on 'all' -> null.
+  const gatedLocationId = useGatedLocationId()
+  const selectedLocationId = gatedLocationId ?? 'all'
+  const isAllLocations = !gatedLocationId
+  const selectedLocation = useGatedLocation()
   const { data: userInfo } = useUserInfo()
   const clerkOrgId: string | undefined = userInfo?.members?.[0]?.organizations?.id
 

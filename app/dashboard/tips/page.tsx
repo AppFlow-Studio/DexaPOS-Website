@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { useClerkOrgId } from "@/app/dashboard/hooks/useLocationScoped";
-import { useLocationStore, useSelectedLocation } from "@/stores/location-store";
+import { useGatedLocationId, useGatedLocation } from "@/stores/location-store";
 import { formatMoney } from "./lib/constants";
 import {
   useLatestSessionCutoff,
@@ -36,8 +36,11 @@ import type { TipDistributionSession } from "@/app/dashboard/actions/tips";
 export default function TipsPage() {
   const router = useRouter();
   const clerkOrgId = useClerkOrgId();
-  const { selectedLocationId } = useLocationStore();
-  const selectedLocation = useSelectedLocation();
+  // Resolve to the gated location so single-location accounts (locked to 'all')
+  // skip the "Select a Location" prompt. The shadowed `selectedLocationId` keeps
+  // every `=== "all"` guard below correct.
+  const selectedLocationId = useGatedLocationId() ?? "all";
+  const selectedLocation = useGatedLocation();
 
   const todayDate = format(new Date(), "yyyy-MM-dd");
   const locationId = selectedLocationId !== "all" ? selectedLocationId : undefined;

@@ -24,6 +24,7 @@ import { cn } from "@/lib/utils";
 import { buildQrTableUrl } from "@/app/sites/lib/store-url";
 import {
   Ban,
+  Copy,
   Download,
   ExternalLink,
   FileImage,
@@ -210,6 +211,23 @@ export function QrTableManager({
 
   function getBrandSubtitle() {
     return brandMode === "dexa" ? "Scan to order" : "Table ordering";
+  }
+
+  async function handleCopyLink(row: QrTableManagerRow) {
+    const qrUrl = getRowQrUrl(row);
+    if (!qrUrl) {
+      toast.error("QR URL is not ready for this table yet.");
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(qrUrl);
+      toast.success(`Guest link copied for ${row.tableLabel}`);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to copy the guest link"
+      );
+    }
   }
 
   async function handleDownloadSvg(row: QrTableManagerRow) {
@@ -422,6 +440,7 @@ export function QrTableManager({
               <button
                 type="button"
                 onClick={() => setBrandMode("merchant")}
+                aria-pressed={brandMode === "merchant"}
                 className={cn(
                   "rounded px-2 py-1 transition-colors",
                   brandMode === "merchant"
@@ -434,6 +453,7 @@ export function QrTableManager({
               <button
                 type="button"
                 onClick={() => setBrandMode("dexa")}
+                aria-pressed={brandMode === "dexa"}
                 className={cn(
                   "rounded px-2 py-1 transition-colors",
                   brandMode === "dexa"
@@ -533,7 +553,11 @@ export function QrTableManager({
 
       <CardContent className="space-y-4">
         {isLoading ? (
-          <div className="flex items-center gap-2 rounded-lg border bg-background px-4 py-8 text-sm text-muted-foreground">
+          <div
+            className="flex items-center gap-2 rounded-lg border bg-background px-4 py-8 text-sm text-muted-foreground"
+            role="status"
+            aria-live="polite"
+          >
             <Loader2 className="h-4 w-4 animate-spin" />
             Loading table QR manager...
           </div>
@@ -668,6 +692,12 @@ export function QrTableManager({
                               >
                                 <ExternalLink className="mr-2 h-4 w-4" />
                                 Preview guest view
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => void handleCopyLink(row)}
+                              >
+                                <Copy className="mr-2 h-4 w-4" />
+                                Copy guest link
                               </DropdownMenuItem>
                               <DropdownMenuItem
                                 onClick={() => void handleDownloadSvg(row)}

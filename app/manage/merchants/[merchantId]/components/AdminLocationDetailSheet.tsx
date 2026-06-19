@@ -173,7 +173,7 @@ export function AdminLocationDetailSheet({
       tax_id: currentLocation.tax_id || '',
       sales_tax_rate:
         currentLocation.sales_tax_rate !== null && currentLocation.sales_tax_rate !== undefined
-          ? String(currentLocation.sales_tax_rate)
+          ? String((currentLocation.sales_tax_rate * 100).toFixed(4).replace(/\.?0+$/, ''))
           : '',
       tax_registration_status: currentLocation.tax_registration_status || 'pending',
     })
@@ -206,6 +206,13 @@ export function AdminLocationDetailSheet({
       toast.error('Name, address, city, and state are required')
       return
     }
+    if (details.sales_tax_rate.trim() !== '') {
+      const parsedRate = Number(details.sales_tax_rate)
+      if (Number.isNaN(parsedRate) || parsedRate < 0 || parsedRate > 100) {
+        toast.error('Sales tax rate must be between 0 and 100')
+        return
+      }
+    }
     setIsSavingDetails(true)
     try {
       const result = await adminUpdateLocation(merchantId, currentLocation.id, {
@@ -225,7 +232,7 @@ export function AdminLocationDetailSheet({
         timezone: details.timezone,
         ein: details.ein.trim() || undefined,
         tax_id: details.tax_id.trim() || undefined,
-        sales_tax_rate: details.sales_tax_rate === '' ? null : Number(details.sales_tax_rate),
+        sales_tax_rate: details.sales_tax_rate.trim() === '' ? null : Number(details.sales_tax_rate) / 100,
         tax_registration_status: details.tax_registration_status,
       })
       if (!result.success || !result.data) {

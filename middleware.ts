@@ -6,6 +6,9 @@ const isInternalTeamRoutes = createRouteMatcher(['/manage(.*)'])
 const isMerchantRoutes = createRouteMatcher(['/dashboard(.*)'])
 const isStorefrontRoutes = createRouteMatcher(['/sites(.*)'])
 const isReceiptRoutes = createRouteMatcher(['/receipts(.*)'])
+// Public customer-facing invoice / pay page — opened by recipients who are NOT
+// Dexa users, so it must never be gated (mirrors /receipts and /sites).
+const isPublicInvoiceRoute = createRouteMatcher(['/invoice(.*)'])
 const isOrgSelectionRoute = createRouteMatcher(['/join-organization(.*)'])
 const isAcceptInvitationRoute = createRouteMatcher(['/accept-invitation(.*)'])
 const isMarketingRoute = createRouteMatcher([
@@ -164,7 +167,12 @@ export default clerkMiddleware(async (auth, req) => {
     return NextResponse.next();
   }
 
-  if (isAcceptInvitationRoute(req) || isStorefrontRoutes(req) || isReceiptRoutes(req)) {
+  if (
+    isAcceptInvitationRoute(req) ||
+    isStorefrontRoutes(req) ||
+    isReceiptRoutes(req) ||
+    isPublicInvoiceRoute(req)
+  ) {
     return NextResponse.next();
   }
 

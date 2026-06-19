@@ -109,6 +109,14 @@ These are the parts that are genuinely implemented in repo or already reported a
   - `app/dashboard/online-ordering/components/QrGuestAlertsPanel.tsx`
   - `app/dashboard/online-ordering/page.tsx`
   - the panel now also subscribes locally to the shared `location:{location_id}:orders` topic for immediate `qr_guest_alert_changed` invalidation, while still keeping its polling fallback
+- [x] QR guest/admin polish pass is now authored locally in:
+  - `app/sites/qr-actions.ts`
+  - `app/sites/[slug]/t/[token]/page.tsx`
+  - `app/sites/components/CallServerCard.tsx`
+  - `app/dashboard/online-ordering/components/QrTableManager.tsx`
+  - `app/dashboard/online-ordering/components/QrGuestAlertsPanel.tsx`
+  - `app/dashboard/online-ordering/components/QrAnalyticsPanel.tsx`
+  - this preserves backend reason codes for the unavailable state, adds staff/guest accessibility feedback, and improves zero-state guidance for merchant-side QR validation
 
 ## What Is Not Safe To Fully Check Off Yet
 
@@ -150,14 +158,14 @@ These are the places where work exists, but the ticket item is not yet defensibl
 | QR-10 | Storefront | `in_progress` | Table-bound scan entry now seeds a QR session, renders a locked `Ordering for Table N` banner across layouts, and suppresses non-QR entry flow locally; still needs staging verification with `resolve_table_qr` live | Deploy app changes and verify scan → locked menu flow on staging |
 | QR-11 | Storefront | `in_progress` | Checkout now detects QR table mode locally, forces the runner-delivery/pickup path, suppresses the standard order-type selector, and blocks cash-in-store; still needs edge deploy and one full QR checkout verification | Deploy app + edge changes and verify one paid QR checkout end to end |
 | QR-12 | Storefront | `in_progress` | Tracking page already had QR polling fallback; it now also subscribes locally to the QR session realtime topic while the existing fallback stays in place | Apply the new QR realtime migration, deploy the app, and verify accepted/preparing/ready transitions update the guest screen live |
-| QR-13 | Storefront | `in_progress` | The QR route now has a friendly unavailable screen and surfaces `next_open` when returned by `resolve_table_qr`; broader closed/blocked polish still remains open | Deploy app changes and verify invalid, rotated, kill-switched, and outside-hours QR states |
-| QR-33 | Storefront | `not_started` | Depends on QR-10 | Do accessibility + i18n pass |
+| QR-13 | Storefront | `in_progress` | The QR route now preserves backend reason codes locally and has a clearer unavailable-state surface; deploy validation of invalid, rotated, kill-switched, and outside-hours states still remains | Deploy app changes and verify invalid, rotated, kill-switched, and outside-hours QR states |
+| QR-33 | Storefront | `in_progress` | QR guest/admin surfaces now have a local accessibility and state-feedback pass, but it is not yet deployed or staging-verified and the broader i18n pass still remains | Deploy app changes and run keyboard / screen-reader smoke tests on staging |
 | QR-12b | Storefront | `in_progress` | Guest `Call your server` card now exists locally on both confirmation and live order surfaces, with optional note input and client cooldown; still needs the QR guest-alert RPC migration applied and an end-to-end staging raise verification | Apply the guest-alert migration, deploy app changes, and verify one tap raises exactly one open alert |
 | QR-14 | Dashboard | `in_progress` | QR settings now exist locally in merchant online-ordering page and the merchant surface respects the local QR billing gate; preview/export and broader QR manager dependencies are still open | Apply the QR gate seed migration, then smoke test locked vs entitled branches |
 | QR-15 | Dashboard | `in_progress` | Merchant QR code manager UI + actions are authored locally, including guest preview through the shared table URL contract; staging validation is still open | Apply shared generate/resolve migration, then smoke test dashboard generate/regenerate/revoke/preview |
 | QR-16 | Dashboard | `in_progress` | Merchant QR manager now has local SVG / PNG / PDF tent export and print scaffolding, but the exact guest route and exported assets still need end-to-end validation | Smoke test generated assets against the live QR route once `resolve_table_qr` is applied |
 | QR-17 | Dashboard | `in_progress` | Orders table/detail surfaces already render QR dine-in distinctly, and the merchant dashboard recent-orders summary now carries an explicit QR/table badge plus floor-plan link; real staging QR orders still need to verify the summary and list surfaces together | Smoke test QR badges and floor-plan jump from real QR orders |
-| QR-34 | Dashboard | `in_progress` | Merchant QR analytics panel is now authored locally, but it still depends on deployed funnel/order data before it is defensibly complete | Deploy app/edge changes and verify QR funnel, AOV, top-table, and top-item cards populate from live staging data |
+| QR-34 | Dashboard | `in_progress` | Merchant QR analytics panel is now authored locally, including clearer zero-state guidance for merchant validation, but it still depends on deployed funnel/order data before it is defensibly complete | Deploy app/edge changes and verify QR funnel, AOV, top-table, and top-item cards populate from live staging data |
 | QR-18 | POS | `blocked` | Depends on QR-2 + QR-5 + QR-15 | POS owner can help test later |
 | QR-18b | POS | `blocked` | Depends on QR-7 | POS owner can help test later |
 | QR-18c | POS | `blocked` | Depends on QR-2b + QR-9c | POS owner can help test later |

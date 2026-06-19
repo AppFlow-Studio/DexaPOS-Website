@@ -14,6 +14,13 @@ import {
   getAdminTipDistributionHistory,
   getAdminTipDistributionSession,
 } from '@/app/manage/actions/admin-merchant/financial'
+import {
+  createPlatformInvoice,
+  getAdminPlatformInvoices,
+  sendPlatformInvoice,
+  type CreatePlatformInvoiceInput,
+  type SendPlatformInvoiceParams,
+} from '@/app/manage/actions/admin-merchant/platform-invoices'
 import type { InvoiceStatus } from '@/app/dashboard/actions/invoices'
 import type { PaymentFilters } from '@/types/payment'
 
@@ -97,6 +104,123 @@ export function useAdminDeleteInvoice(merchantId: string) {
     },
     onError: () => {
       toast.error('Failed to delete invoice')
+    },
+  })
+}
+
+// ============================================================================
+// Platform billing (HQ → merchant, §5)
+// ============================================================================
+
+export function useAdminPlatformInvoices(merchantId: string) {
+  return useQuery({
+    queryKey: adminKeys.merchantPlatformInvoices(merchantId),
+    queryFn: () => getAdminPlatformInvoices(merchantId),
+    enabled: !!merchantId,
+    staleTime: 10_000,
+  })
+}
+
+export function useCreatePlatformInvoice(merchantId: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (input: CreatePlatformInvoiceInput) =>
+      createPlatformInvoice(merchantId, input),
+    onSuccess: (result) => {
+      if (result.error && !result.data) {
+        toast.error('Failed to create bill', { description: result.error })
+        return
+      }
+      if (result.error && result.data) {
+        toast.warning('Bill created with issues', { description: result.error })
+      } else {
+        toast.success('Bill created')
+      }
+      queryClient.invalidateQueries({
+        queryKey: adminKeys.merchantPlatformInvoices(merchantId),
+      })
+    },
+    onError: () => {
+      toast.error('Failed to create bill')
+    },
+  })
+}
+
+export function useSendPlatformInvoice(merchantId: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (params: Omit<SendPlatformInvoiceParams, 'merchantId'>) =>
+      sendPlatformInvoice({ ...params, merchantId }),
+    onSuccess: (result) => {
+      if (!result.success) {
+        toast.error('Failed to send bill', { description: result.message })
+        return
+      }
+      if (result.results.some((r) => !r.success)) {
+        toast.warning(result.message, {
+          description: result.results
+            .map((r) => `${r.channel.toUpperCase()}: ${r.message}`)
+            .join('  ·  '),
+        })
+      } else {
+        toast.success(result.message)
+      }
+      queryClient.invalidateQueries({
+        queryKey: adminKeys.merchantPlatformInvoices(merchantId),
+      })
+    },
+    onError: () => {
+      toast.error('Failed to send bill')
+    },
+  })
+}
+
+export function useAdminUpdatePlatformInvoiceStatus(merchantId: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({
+      invoiceId,
+      status,
+    }: {
+      invoiceId: string
+      status: InvoiceStatus
+    }) => adminUpdateInvoiceStatus(merchantId, invoiceId, status),
+    onSuccess: (result, variables) => {
+      if (!result.success) {
+        toast.error('Failed to update bill status', { description: result.error })
+        return
+      }
+      toast.success(`Bill marked as ${variables.status}`)
+      queryClient.invalidateQueries({
+        queryKey: adminKeys.merchantPlatformInvoices(merchantId),
+      })
+    },
+    onError: () => {
+      toast.error('Failed to update bill status')
+    },
+  })
+}
+
+export function useAdminDeletePlatformInvoice(merchantId: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (invoiceId: string) => adminDeleteInvoice(merchantId, invoiceId),
+    onSuccess: (result) => {
+      if (!result.success) {
+        toast.error('Failed to delete bill', { description: result.error })
+        return
+      }
+      toast.success('Bill deleted')
+      queryClient.invalidateQueries({
+        queryKey: adminKeys.merchantPlatformInvoices(merchantId),
+      })
+    },
+    onError: () => {
+      toast.error('Failed to delete bill')
     },
   })
 }
