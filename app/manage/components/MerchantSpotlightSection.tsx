@@ -20,11 +20,11 @@ export function MerchantSpotlightSection() {
   const hasMore = total > merchants.length
 
   return (
-    <Card className="border-blue-100/50 bg-white/80 backdrop-blur-sm shadow-sm">
+    <Card className="border-blue-100/50 dark:border-border bg-white/80 dark:bg-card/80 backdrop-blur-sm shadow-sm">
       <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between pb-4">
         <div className="space-y-0.5">
           <CardTitle className="text-base font-semibold flex items-center gap-2">
-            <Building2 className="h-4 w-4 text-blue-600" />
+            <Building2 className="h-4 w-4 text-blue-600 dark:text-blue-400" />
             Merchant Spotlight
           </CardTitle>
           <p className="text-xs text-muted-foreground">
@@ -48,8 +48,8 @@ export function MerchantSpotlightSection() {
           </div>
         ) : error || data?.error ? (
           <div className="flex flex-col items-center justify-center py-10 text-center">
-            <div className="h-12 w-12 rounded-xl bg-red-50 flex items-center justify-center mb-3">
-              <AlertTriangle className="h-6 w-6 text-red-500" />
+            <div className="h-12 w-12 rounded-xl bg-red-50 dark:bg-red-950/40 flex items-center justify-center mb-3">
+              <AlertTriangle className="h-6 w-6 text-red-500 dark:text-red-400" />
             </div>
             <p className="text-sm font-medium">Unable to load merchants</p>
             <p className="text-xs text-muted-foreground mt-1 max-w-sm">
@@ -58,8 +58,8 @@ export function MerchantSpotlightSection() {
           </div>
         ) : merchants.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-10 text-center">
-            <div className="h-12 w-12 rounded-xl bg-blue-50 flex items-center justify-center mb-3">
-              <Building2 className="h-6 w-6 text-blue-500" />
+            <div className="h-12 w-12 rounded-xl bg-blue-50 dark:bg-blue-950/40 flex items-center justify-center mb-3">
+              <Building2 className="h-6 w-6 text-blue-500 dark:text-blue-400" />
             </div>
             <p className="text-sm font-medium">No merchants yet</p>
             <p className="text-xs text-muted-foreground mt-1 max-w-sm">

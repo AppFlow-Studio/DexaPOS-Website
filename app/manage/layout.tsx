@@ -483,13 +483,13 @@ export default function ManageLayout({
     ]
 
     return (
-        <SidebarProvider>
+        <SidebarProvider className="dashboard-sidebar-theme">
             <DeviceRegistryCommandPaletteProvider>
                 <Suspense>
                     <DeniedParamHandler />
                 </Suspense>
                 <AppSidebar />
-                <main aria-label="Admin content" className="flex-1 flex flex-col min-w-0">
+                <main aria-label="Admin content" className="flex-1 flex flex-col min-w-0 bg-background">
                     <header className="flex h-16 shrink-0 items-center gap-2 border-b px-3 sm:px-4">
                         <SidebarTrigger className="-ml-1 hidden sm:flex" />
                         <div className="flex items-center gap-2 min-w-0 flex-1">
