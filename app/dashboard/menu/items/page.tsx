@@ -1284,16 +1284,13 @@ export default function MenuItemsPage() {
   }, [itemsList]);
 
   // Handlers
-  // Single-location accounts always use the dedicated edit page (the clean,
-  // single-menu editor that writes the core directly) rather than the legacy
-  // multi-location cascade sheet — even when the rollout flag is off.
-  const useNewEditPage =
-    process.env.NEXT_PUBLIC_NEW_ITEM_EDIT === "true" || isSingleLocation;
+  // The popup item editor is canonical for both single- and multi-location
+  // accounts. It respects the single-vs-multi flow via location scope: a
+  // single-location account is locked to the 'all'/core scope, so edits write
+  // the global core (no per-location overlay rows); a multi-location account can
+  // target a specific location for cascade overrides. The dedicated /edit page
+  // stays reachable by direct URL.
   const handleQuickEdit = async (item: FlatItem) => {
-    if (useNewEditPage) {
-      router.push(`/dashboard/menu/items/${item.id}/edit`);
-      return;
-    }
     // If the RPC didn't return modifier_groups, fetch them directly
     let itemWithModifiers = item;
     if (!item.modifier_groups || item.modifier_groups.length === 0) {

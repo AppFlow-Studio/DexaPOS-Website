@@ -1,6 +1,7 @@
 "use server";
 
 import { auth } from "@clerk/nextjs/server";
+import { headers } from "next/headers";
 import { Resend } from "resend";
 import { sendSMS } from "@/lib/messaging/telnyx";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";

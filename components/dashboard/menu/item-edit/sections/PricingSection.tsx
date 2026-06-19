@@ -5,7 +5,6 @@ import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { UpdateMenuItem } from "@/app/dashboard/actions/menu-items";
 import {
@@ -13,6 +12,8 @@ import {
   useLocationStore,
   useIsSingleLocation,
 } from "@/stores/location-store";
+import { useEffectivePricing } from "@/app/dashboard/hooks/useEffectivePricing";
+import { PriceInputGroup } from "@/components/dashboard/locations/PriceInputGroup";
 import { AffectsTag } from "../../AffectsTag";
 import { CascadeLadder } from "../../CascadeLadder";
 import { SectionHeader } from "./OverviewSection";
@@ -23,42 +24,38 @@ export function PricingSection({ itemId, item, scope }: SectionRenderCtx) {
   const isAllLocations = useIsAllLocations();
   const isSingleLocation = useIsSingleLocation();
   const { selectedLocationId } = useLocationStore();
+  // Same dual-pricing strategy/percentage the popup editor uses, so the page
+  // respects the merchant/location pricing rules (e.g. auto 4% card adjust).
+  const { pricingStrategy, dualPricingPercentage } = useEffectivePricing();
   // Single-location accounts write the core directly — omit location_id even if a
   // stale per-location selection is still in scope (first-load window before the
   // scope-reset effect runs). isSingleLocation drives the omission, not just the UI.
   const locationId = isAllLocations || isSingleLocation ? null : selectedLocationId;
 
-  const initialPrice =
-    item?.effective_price != null ? String(item.effective_price) : "";
-  const initialCash =
-    item?.effective_cash_price != null ? String(item.effective_cash_price) : "";
-
-  const [price, setPrice] = React.useState(initialPrice);
-  const [cashPrice, setCashPrice] = React.useState(initialCash);
+  const [price, setPrice] = React.useState<number>(
+    item?.effective_price != null ? Number(item.effective_price) : 0,
+  );
+  const [cashPrice, setCashPrice] = React.useState<number | null>(
+    item?.effective_cash_price != null ? Number(item.effective_cash_price) : null,
+  );
 
   React.useEffect(() => {
-    setPrice(
-      item?.effective_price != null ? String(item.effective_price) : "",
-    );
+    setPrice(item?.effective_price != null ? Number(item.effective_price) : 0);
     setCashPrice(
-      item?.effective_cash_price != null
-        ? String(item.effective_cash_price)
-        : "",
+      item?.effective_cash_price != null ? Number(item.effective_cash_price) : null,
     );
   }, [item?.id, item?.effective_price, item?.effective_cash_price]);
 
   const mutation = useMutation({
     mutationFn: async () => {
-      const parsed = parseFloat(price);
-      if (Number.isNaN(parsed) || parsed < 0) {
+      if (Number.isNaN(price) || price < 0) {
         throw new Error("Enter a valid price");
       }
-      const parsedCash = cashPrice === "" ? undefined : parseFloat(cashPrice);
       const res = await UpdateMenuItem(
         itemId,
         {
-          price: parsed,
-          ...(parsedCash !== undefined ? { cash_price: parsedCash } : {}),
+          price,
+          ...(cashPrice != null ? { cash_price: cashPrice } : {}),
         },
         locationId ?? undefined,
       );
@@ -95,33 +92,16 @@ export function PricingSection({ itemId, item, scope }: SectionRenderCtx) {
             />
           </div>
         )}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div className="space-y-1.5">
-            <Label htmlFor="pricing-price">Price</Label>
-            <Input
-              id="pricing-price"
-              type="number"
-              step="0.01"
-              min="0"
-              inputMode="decimal"
-              value={price}
-              onChange={(e) => setPrice(e.target.value)}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="pricing-cash">Cash price</Label>
-            <Input
-              id="pricing-cash"
-              type="number"
-              step="0.01"
-              min="0"
-              inputMode="decimal"
-              value={cashPrice}
-              onChange={(e) => setCashPrice(e.target.value)}
-              placeholder="Default"
-            />
-          </div>
-        </div>
+        <PriceInputGroup
+          key={item?.id ?? "new"}
+          price={price}
+          cashPrice={cashPrice}
+          onPriceChange={setPrice}
+          onCashPriceChange={setCashPrice}
+          label="Base Price"
+          pricingStrategy={pricingStrategy}
+          dualPricingPercentage={dualPricingPercentage}
+        />
         <div className="flex items-center justify-end">
           <Button
             type="button"
