@@ -33,6 +33,7 @@ export interface InvoiceItem {
   unit_price: number;
   total_price: number;
   sort_order: number;
+  is_to_go: boolean;
   created_at: string;
 }
 
@@ -69,6 +70,7 @@ export interface CreateInvoiceItemInput {
   description?: string | null;
   quantity: number;
   unit_price: number;
+  is_to_go?: boolean;
   sort_order?: number;
 }
 
@@ -334,6 +336,7 @@ export async function CreateInvoice(
       quantity: item.quantity,
       unit_price: item.unit_price,
       total_price: Math.round(item.quantity * item.unit_price * 100) / 100,
+      is_to_go: item.is_to_go ?? false,
       sort_order: item.sort_order ?? idx,
     }));
 
@@ -444,6 +447,7 @@ export async function UpdateInvoice(
         quantity: item.quantity,
         unit_price: item.unit_price,
         total_price: Math.round(item.quantity * item.unit_price * 100) / 100,
+        is_to_go: item.is_to_go ?? false,
         sort_order: item.sort_order ?? idx,
       }));
 
