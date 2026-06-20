@@ -50,9 +50,8 @@ import {
 } from "lucide-react";
 import { useState, useMemo, useEffect } from "react";
 import {
-  useLocationStore,
-  useIsAllLocations,
-  useSelectedLocation,
+  useGatedLocationId,
+  useGatedLocation,
 } from "@/stores/location-store";
 import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
 
@@ -62,9 +61,12 @@ type SortDirection = "asc" | "desc";
 const ITEMS_PER_PAGE = 10;
 
 export default function StationsPage() {
-  const selectedLocationId = useLocationStore((state) => state.selectedLocationId);
-  const isAllLocations = useIsAllLocations();
-  const selectedLocation = useSelectedLocation();
+  // Resolve to the gated location so single-location accounts (locked to 'all')
+  // skip the "Select a Location" prompt. Multi-location on 'all' -> null.
+  const gatedLocationId = useGatedLocationId();
+  const selectedLocationId = gatedLocationId ?? "all";
+  const isAllLocations = !gatedLocationId;
+  const selectedLocation = useGatedLocation();
   const { data: userInfo } = useUserInfo();
   const clerkOrgId = userInfo?.members?.[0]?.organizations?.id;
 

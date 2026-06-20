@@ -156,8 +156,27 @@ Single index for active ticket streams and their source trackers.
 - Overlay cleanup is staging-first and split into safe auto-collapse vs manual-review rows.
 - Charcoal cleanup must be sequenced separately.
 
+## Stream L: QR Dine-In Unified
+
+1. Plan:
+- `docs/PLAN-2026-05-27-QR-DINE-IN-UNIFIED.md`
+
+2. Ops runbook:
+- `docs/RUNBOOK-PAYMENT-WHITELIST-SYNC.md`
+
+3. Continuation state:
+- `.planning/.continue-here.md`
+
+4. Scope notes:
+- Website repo only for this stream.
+- QR storefront, dashboard QR manager, QR analytics, and guest-alert validation surfaces are implemented here.
+- Remaining open items are primarily deploy, payment-origin registration, POS follow-up, and end-to-end QA.
+- Do not mark QR payment or realtime items complete without staging or hosted-environment verification.
+
 ## Notes
 
 1. Keep this file updated whenever a new ticket stream starts.
 2. Keep links here PR-safe (planning/internal tracker files only).
 3. Keep `.planning/.continue-here.md` as the primary technical handoff state.
+4. Recent senior-review bundle:
+- `docs/HANDOFF-2026-06-10-SENIOR-RECENT-THREE-TICKETS.md`

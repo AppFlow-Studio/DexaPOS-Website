@@ -85,6 +85,7 @@ export async function GetOrderFullHistory(
     discountsRes,
     statusHistoryRes,
     sessionEventsRes,
+    kdsStatusRes,
   ] = await Promise.all([
     supabase
       .from("order_items")
@@ -149,6 +150,23 @@ export async function GetOrderFullHistory(
           .eq("session_id", sessionId)
           .order("occurred_at", { ascending: true })
       : Promise.resolve({ data: [] as any[], error: null }),
+    supabase
+      .from("kds_item_status")
+      .select(
+        `
+        order_item_id,
+        status,
+        started_at,
+        completed_at,
+        bumped_at,
+        bumped_by,
+        acknowledged_at,
+        kds_display:kds_displays(display_name),
+        acknowledger:staff_profiles!kds_item_status_acknowledged_by_fkey(first_name,last_name,display_name),
+        bumper:location_members!kds_item_status_bumped_by_fkey(staff_profile:staff_profiles(first_name,last_name,display_name))
+      `
+      )
+      .eq("order_id", orderId),
   ]);
 
   if (itemsRes.error) console.error("[GetOrderFullHistory] items:", itemsRes.error);
@@ -156,12 +174,24 @@ export async function GetOrderFullHistory(
   if (discountsRes.error) console.error("[GetOrderFullHistory] discounts:", discountsRes.error);
   if (statusHistoryRes.error) console.error("[GetOrderFullHistory] status_history:", statusHistoryRes.error);
   if (sessionEventsRes.error) console.error("[GetOrderFullHistory] session_events:", sessionEventsRes.error);
+  if (kdsStatusRes.error) console.error("[GetOrderFullHistory] kds_item_status:", kdsStatusRes.error);
 
   const items = (itemsRes.data ?? []) as any[];
   const payments = (paymentsRes.data ?? []) as any[];
   const discounts = (discountsRes.data ?? []) as any[];
   const statusHistory = (statusHistoryRes.data ?? []) as any[];
   const sessionEvents = (sessionEventsRes.data ?? []) as any[];
+  const kdsStatusRows = (kdsStatusRes.data ?? []) as any[];
+
+  // Index kds_item_status by order_item_id (one item can fan out to multiple
+  // displays; we keep them all and let downstream dedupe/sort).
+  const kdsByItem = new Map<string, any[]>();
+  for (const k of kdsStatusRows) {
+    if (!k.order_item_id) continue;
+    const list = kdsByItem.get(k.order_item_id) ?? [];
+    list.push(k);
+    kdsByItem.set(k.order_item_id, list);
+  }
 
   // Flatten reversals + chargebacks across all payments.
   const reversalsFlat: any[] = [];
@@ -221,6 +251,102 @@ export async function GetOrderFullHistory(
     internal_notes: order.internal_notes ?? null,
   };
 
+  // Build the per-item kitchen event list once — reused by both the projected
+  // items (KitchenActivitySection reads it) and the unified timeline.
+  const buildKitchenEvents = (it: any): OrderFullHistoryItem["kitchen_events"] => {
+    const out: OrderFullHistoryItem["kitchen_events"] = [];
+    const kdsRows = (kdsByItem.get(it.id) ?? []) as any[];
+
+    const sentAt = it.sent_to_kitchen_at ?? null;
+    const firedAt = it.fire_time ?? null;
+
+    if (sentAt) {
+      out.push({
+        event_type: "kitchen_sent",
+        timestamp: sentAt,
+        actor_name: null,
+        display_name: null,
+      });
+    }
+    // Only emit a separate "fired" event when the merchant actually held + fired
+    // it (fire_time distinct from the original send-to-kitchen moment).
+    if (firedAt && firedAt !== sentAt) {
+      out.push({
+        event_type: "kitchen_fired",
+        timestamp: firedAt,
+        actor_name: null,
+        display_name: null,
+      });
+    }
+
+    // Earliest acknowledgement across all displays this item routed to.
+    const acks = kdsRows
+      .filter((k) => k.acknowledged_at)
+      .sort(
+        (a, b) =>
+          Date.parse(a.acknowledged_at) - Date.parse(b.acknowledged_at)
+      );
+    if (acks.length > 0) {
+      out.push({
+        event_type: "kitchen_acknowledged",
+        timestamp: acks[0].acknowledged_at,
+        actor_name: formatStaffName(acks[0].acknowledger),
+        display_name: acks[0].kds_display?.display_name ?? null,
+      });
+    }
+
+    // "preparing" — prefer the column on order_items, fall back to the earliest
+    // KDS row's started_at if a station picked it up without writing back.
+    const startedAt =
+      it.started_preparing_at ??
+      kdsRows
+        .map((k) => k.started_at)
+        .filter(Boolean)
+        .sort((a, b) => Date.parse(a) - Date.parse(b))[0] ??
+      null;
+    if (startedAt) {
+      out.push({
+        event_type: "kitchen_preparing",
+        timestamp: startedAt,
+        actor_name: null,
+        display_name: null,
+      });
+    }
+
+    // "ready" — order_items.completed_at is the canonical "all stations done"
+    // marker; fall back to the latest per-display completed_at if missing.
+    const readyAt =
+      it.completed_at ??
+      kdsRows
+        .map((k) => k.completed_at)
+        .filter(Boolean)
+        .sort((a, b) => Date.parse(b) - Date.parse(a))[0] ??
+      null;
+    if (readyAt) {
+      out.push({
+        event_type: "kitchen_ready",
+        timestamp: readyAt,
+        actor_name: null,
+        display_name: null,
+      });
+    }
+
+    // Bumps (per display) — appended after the main lifecycle steps.
+    for (const k of kdsRows) {
+      if (k.bumped_at) {
+        out.push({
+          event_type: "kitchen_bumped",
+          timestamp: k.bumped_at,
+          actor_name: formatStaffName(k.bumper?.staff_profile),
+          display_name: k.kds_display?.display_name ?? null,
+        });
+      }
+    }
+
+    out.sort((a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp));
+    return out;
+  };
+
   const projectedItems: OrderFullHistoryItem[] = items.map((it: any) => {
     const { order_item_modifiers: _mods, voider: _vv, ...itemRow } = it;
     return {
@@ -242,10 +368,13 @@ export async function GetOrderFullHistory(
       special_instructions: it.special_instructions ?? it.kitchen_notes ?? null,
       kitchen_status: it.kitchen_status ?? null,
       fire_time: it.fire_time ?? null,
+      sent_to_kitchen_at: it.sent_to_kitchen_at ?? null,
+      started_preparing_at: it.started_preparing_at ?? null,
       // KitchenSection reads preparing_at / ready_at; map from the real columns.
       preparing_at: it.started_preparing_at ?? null,
       ready_at: it.completed_at ?? null,
       completed_at: it.completed_at ?? null,
+      kitchen_events: buildKitchenEvents(it),
       item_status: String(it.item_status ?? ""),
       created_at: it.created_at,
       discount_name: it.discount_name ?? null,
@@ -423,6 +552,15 @@ export async function GetOrderFullHistory(
     });
   }
 
+  const kitchenEventLabel: Record<string, { description: (name: string) => string; severity: OrderFullHistoryTimeline["severity"] }> = {
+    kitchen_sent:         { description: (n) => `Sent to kitchen: ${n}`,            severity: "info" },
+    kitchen_fired:        { description: (n) => `Fired: ${n}`,                       severity: "info" },
+    kitchen_acknowledged: { description: (n) => `Acknowledged at KDS: ${n}`,         severity: "info" },
+    kitchen_preparing:    { description: (n) => `Preparing started: ${n}`,           severity: "info" },
+    kitchen_ready:        { description: (n) => `Ready: ${n}`,                       severity: "success" },
+    kitchen_bumped:       { description: (n) => `Bumped from KDS: ${n}`,             severity: "info" },
+  };
+
   for (const it of items) {
     timeline.push({
       timestamp: it.created_at,
@@ -446,28 +584,25 @@ export async function GetOrderFullHistory(
         severity: "warning",
       });
     }
-    if (it.fire_time) {
+
+    const kitchenEvents = buildKitchenEvents(it);
+    for (const ke of kitchenEvents) {
+      const meta = kitchenEventLabel[ke.event_type] ?? {
+        description: (n: string) => `Kitchen update: ${n}`,
+        severity: "info" as const,
+      };
       timeline.push({
-        timestamp: it.fire_time,
+        timestamp: ke.timestamp,
         category: "kitchen",
-        event_type: "kitchen_fired",
-        description: `Sent to kitchen: ${it.item_name}`,
-        actor_name: null,
+        event_type: ke.event_type,
+        description: meta.description(it.item_name),
+        actor_name: ke.actor_name,
         actor_role: null,
-        details: { item_id: it.id },
-        severity: "info",
-      });
-    }
-    if (it.completed_at) {
-      timeline.push({
-        timestamp: it.completed_at,
-        category: "kitchen",
-        event_type: "kitchen_ready",
-        description: `Ready: ${it.item_name}`,
-        actor_name: null,
-        actor_role: null,
-        details: { item_id: it.id },
-        severity: "success",
+        details: {
+          item_id: it.id,
+          display_name: ke.display_name,
+        },
+        severity: meta.severity,
       });
     }
   }

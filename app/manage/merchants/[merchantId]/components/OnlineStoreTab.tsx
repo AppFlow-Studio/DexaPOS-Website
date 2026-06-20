@@ -1609,6 +1609,20 @@ export function OnlineStoreTab({
                                             <p className="text-xs text-muted-foreground">
                                                 This private key is stored securely and is never shown back in plain text. Enter a new value only when rotating the key.
                                             </p>
+                                            <Label className="pt-2">NMI Webhook Signing Secret</Label>
+                                            <Input
+                                                type="password"
+                                                value={localSettings.nmiWebhookSecret || ''}
+                                                onChange={(e) => updateSettings({ nmiWebhookSecret: e.target.value })}
+                                                placeholder={
+                                                    localSettings.nmiWebhookConfigured
+                                                        ? 'Stored securely. Enter a new value only to rotate it.'
+                                                        : 'Enter NMI webhook signing secret'
+                                                }
+                                            />
+                                            <p className="text-xs text-muted-foreground">
+                                                Used to verify invoice-payment and storefront payment webhooks before updating payment state asynchronously.
+                                            </p>
                                         </div>
                                     )}
                                     <Separator />

@@ -396,13 +396,9 @@ function AppSidebar() {
                                 </Link>
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem>
-                                <button onClick={handleSignOut}>
-                                    <div className='flex items-center gap-2'>
-                                        <LogOut className="mr-2 h-4 w-4" />
-                                        Log out
-                                    </div>
-                                </button>
+                            <DropdownMenuItem onClick={handleSignOut}>
+                                <LogOut className="mr-2 h-4 w-4" />
+                                Log out
                             </DropdownMenuItem>
                         </DropdownMenuContent>
                     </DropdownMenu>

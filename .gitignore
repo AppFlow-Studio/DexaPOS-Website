@@ -57,3 +57,8 @@ tasks/T-21-responsive-layout.md
 
 # Test import files
 *.xlsx
+
+# Playwright MCP test artifacts
+.playwright-mcp/
+
+package-lock.json

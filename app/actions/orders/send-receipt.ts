@@ -1,36 +1,41 @@
 "use server";
 
 import { auth } from "@clerk/nextjs/server";
+import { headers } from "next/headers";
 import { Resend } from "resend";
 import { sendSMS } from "@/lib/messaging/telnyx";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import {
+  getEffectiveMerchantContext,
+  UnauthorizedOrgError,
+} from "@/lib/admin/merchant-context";
+import {
   renderReceiptHtml,
   renderReceiptText,
 } from "@/lib/messaging/receipt-template";
+import { resolveAppUrl } from "@/lib/messaging/app-url";
 
 const RATE_LIMIT_SENDS = 3;
 const RATE_LIMIT_WINDOW_HOURS = 1;
 
 /**
- * Authorizes the Clerk-authenticated caller against an order's merchant.
- * Uses the service-role client to resolve the caller's org → merchant id and
- * compares it to the order's merchant_id (the codebase's standard tenancy
- * check). Returns false when the org is missing or doesn't own the order — we
- * surface that as a generic "Order not found" so order UUIDs can't be probed.
+ * Resolves the effective merchant id for the caller and confirms the order
+ * belongs to that merchant. Routes through getEffectiveMerchantContext so an
+ * active HQ impersonation session is honored — without this, the Clerk session
+ * org (the HQ team's) is compared against the impersonated merchant's
+ * clerk_org_id and never matches, producing a spurious "Order not found".
  */
-async function callerOwnsOrder(
-  supabase: ReturnType<typeof createServiceRoleClient>,
-  orgId: string | null | undefined,
-  merchantId: string | null | undefined
+async function effectiveMerchantOwnsOrder(
+  merchantIdOnOrder: string | null | undefined,
 ): Promise<boolean> {
-  if (!orgId || !merchantId) return false;
-  const { data } = await supabase
-    .from("merchants")
-    .select("id")
-    .eq("clerk_org_id", orgId)
-    .maybeSingle();
-  return !!data && (data as { id: string }).id === merchantId;
+  if (!merchantIdOnOrder) return false;
+  try {
+    const ctx = await getEffectiveMerchantContext(null);
+    return ctx.merchantId === merchantIdOnOrder;
+  } catch (err) {
+    if (err instanceof UnauthorizedOrgError) return false;
+    throw err;
+  }
 }
 
 export interface SendReceiptParams {
@@ -53,7 +58,7 @@ export async function getReceiptPreviewHtml(orderId: string): Promise<{
   html?: string;
   message?: string;
 }> {
-  const { userId, orgId } = await auth();
+  const { userId } = await auth();
   if (!userId) return { success: false, message: "Unauthorized" };
 
   const supabase = createServiceRoleClient();
@@ -73,7 +78,11 @@ export async function getReceiptPreviewHtml(orderId: string): Promise<{
   if (error || !order) {
     return { success: false, message: "Order not found" };
   }
-  if (!(await callerOwnsOrder(supabase, orgId, (order as { merchant_id?: string }).merchant_id))) {
+  if (
+    !(await effectiveMerchantOwnsOrder(
+      (order as { merchant_id?: string }).merchant_id,
+    ))
+  ) {
     return { success: false, message: "Order not found" };
   }
   const location = (order as { location?: unknown }).location ?? null;
@@ -84,7 +93,7 @@ export async function getReceiptPreviewHtml(orderId: string): Promise<{
   // Representative CTA so the preview matches what's actually sent. The link is
   // inert in the modal's sandboxed iframe; the real send uses a valid send_token.
   const receiptToken = (order as { receipt_token?: string | null }).receipt_token;
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? "";
+  const appUrl = await resolveAppUrl();
   const receiptUrl =
     receiptToken && appUrl ? `${appUrl}/receipts/${receiptToken}/preview` : null;
   const html = renderReceiptHtml(
@@ -166,7 +175,7 @@ async function ensureReceiptToken(
 export async function sendReceipt(
   params: SendReceiptParams
 ): Promise<SendReceiptResult> {
-  const { userId, orgId } = await auth();
+  const { userId } = await auth();
   if (!userId) {
     return { success: false, message: "Unauthorized" };
   }
@@ -189,7 +198,11 @@ export async function sendReceipt(
   if (orderError || !order) {
     return { success: false, message: "Order not found" };
   }
-  if (!(await callerOwnsOrder(supabase, orgId, (order as { merchant_id?: string }).merchant_id))) {
+  if (
+    !(await effectiveMerchantOwnsOrder(
+      (order as { merchant_id?: string }).merchant_id,
+    ))
+  ) {
     return { success: false, message: "Order not found" };
   }
 
@@ -258,7 +271,7 @@ export async function sendReceipt(
 
       const receiptToken = await ensureReceiptToken(supabase, params.orderId);
       const sendToken = (pendingRow as { send_token?: string }).send_token;
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? "";
+      const appUrl = await resolveAppUrl();
       const receiptUrl =
         receiptToken && sendToken && appUrl
           ? `${appUrl}/receipts/${receiptToken}/${sendToken}`
@@ -324,7 +337,7 @@ export async function sendReceipt(
 
       const receiptToken = await ensureReceiptToken(supabase, params.orderId);
       const sendToken = (pendingRow as { send_token?: string }).send_token;
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? "";
+      const appUrl = await resolveAppUrl();
       const receiptUrl = receiptToken && sendToken
         ? `${appUrl}/receipts/${receiptToken}/${sendToken}`
         : appUrl;
