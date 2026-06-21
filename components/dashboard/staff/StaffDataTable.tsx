@@ -489,12 +489,12 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
 
           if (staff.overall_is_active) {
             deactivateStaff.mutate({
-              memberId: staff.member_id,
+              staffProfileId: staff.staff_profile_id,
               locationId: primaryLocation.location_id,
             });
           } else {
             reactivateStaff.mutate({
-              memberId: staff.member_id,
+              staffProfileId: staff.staff_profile_id,
               locationId: primaryLocation.location_id,
             });
           }
@@ -574,12 +574,12 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
 
           if (staff.overall_is_active) {
             deactivateStaff.mutate({
-              memberId: staff.member_id,
+              staffProfileId: staff.staff_profile_id,
               locationId: primaryLocation.location_id,
             });
           } else {
             reactivateStaff.mutate({
-              memberId: staff.member_id,
+              staffProfileId: staff.staff_profile_id,
               locationId: primaryLocation.location_id,
             });
           }

@@ -49,6 +49,7 @@ interface LocationAssignmentSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   memberId: string;
+  staffProfileId: string;
   memberName: string;
   isClerkUser: boolean;
   assignment: LocationAssignment;
@@ -59,6 +60,7 @@ export function LocationAssignmentSheet({
   open,
   onOpenChange,
   memberId,
+  staffProfileId,
   memberName,
   isClerkUser,
   assignment,
@@ -126,7 +128,7 @@ export function LocationAssignmentSheet({
       if (editedIsActive) {
         // Reactivate
         reactivateStaff.mutate(
-          { memberId, locationId: assignment.location_id },
+          { staffProfileId, locationId: assignment.location_id },
           {
             onSuccess: () => {
               toast.success(
@@ -138,7 +140,7 @@ export function LocationAssignmentSheet({
       } else {
         // Deactivate
         deactivateStaff.mutate(
-          { memberId, locationId: assignment.location_id },
+          { staffProfileId, locationId: assignment.location_id },
           {
             onSuccess: () => {
               toast.success(

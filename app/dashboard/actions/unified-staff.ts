@@ -1307,94 +1307,117 @@ export async function ResetStaffPIN(
 // ============================================================================
 
 /**
+ * Resolve a staff profile and flip is_active on its location_members rows.
+ *
+ * Keys location_members by EITHER staff_profile_id OR the profile's user_id,
+ * mirroring how get_unified_staff_view normalizes both keyings
+ * (COALESCE(lm.staff_profile_id, sp_map.id)). This covers every cohort:
+ *   - pos_only (keyed by staff_profile_id, with or without a members row)
+ *   - clerk created directly (keyed by both)
+ *   - clerk upgraded from POS (staff_profile_id nulled, keyed by user_id)
+ *
+ * The global staff_profiles.is_active flag is scope-aware:
+ *   - deactivate: only flipped false for a merchant-wide toggle (no locationId),
+ *     so a per-location deactivate never marks the staff inactive everywhere.
+ *   - reactivate: always set true, so a stale global flag can't keep an
+ *     otherwise-active member hidden.
+ */
+async function setStaffActiveState(
+  staffProfileId: string,
+  active: boolean,
+  locationId: string | undefined,
+  logLabel: "DeactivateStaffMember" | "ReactivateStaffMember",
+): Promise<StaffActionResponse<{ success: boolean }>> {
+  const supabase = createServerSupabaseClient();
+
+  const { data: profile } = await supabase
+    .from("staff_profiles")
+    .select("id, user_id, merchant_id, first_name, last_name, display_name")
+    .eq("id", staffProfileId)
+    .maybeSingle();
+
+  if (!profile) {
+    return { error: "Staff member not found" };
+  }
+
+  // Update location_members, matching either identity key.
+  let query = supabase
+    .from("location_members")
+    .update({ is_active: active });
+  query = profile.user_id
+    ? query.or(
+        `staff_profile_id.eq.${staffProfileId},user_id.eq.${profile.user_id}`,
+      )
+    : query.eq("staff_profile_id", staffProfileId);
+  if (locationId) {
+    query = query.eq("location_id", locationId);
+  }
+
+  const { data: updated, error } = await query.select("id");
+
+  if (error) {
+    console.error(`[${logLabel}] location update:`, error);
+    return { error: error.message };
+  }
+
+  if (!updated || updated.length === 0) {
+    return { error: "No location assignments were updated" };
+  }
+
+  // Global flag: reactivate always restores visibility; deactivate only goes
+  // global when no specific location was targeted.
+  if (active || !locationId) {
+    const { error: profileErr } = await supabase
+      .from("staff_profiles")
+      .update({ is_active: active })
+      .eq("id", staffProfileId);
+    if (profileErr) {
+      console.error(`[${logLabel}] profile flag update:`, profileErr);
+      return { error: profileErr.message };
+    }
+  }
+
+  revalidatePath("/dashboard/staff");
+
+  const resourceName =
+    profile.display_name ||
+    `${profile.first_name ?? ""} ${profile.last_name ?? ""}`.trim() ||
+    "Staff Member";
+
+  if (profile.merchant_id) {
+    await LogAuditEvent({
+      merchantId: profile.merchant_id,
+      action: `${active ? "Reactivated" : "Deactivated"} Staff Member: ${resourceName}`,
+      actionCategory: "staff",
+      resourceType: "staff_member",
+      resourceId: staffProfileId,
+      resourceName,
+      locationId,
+      severity: "critical",
+    });
+  }
+
+  return { data: { success: true } };
+}
+
+/**
  * Deactivate staff member (soft delete)
  *
- * @param memberId - UUID of the member
+ * @param staffProfileId - UUID of the staff profile
  * @param locationId - Optional location ID (deactivate at specific location only)
  * @returns Success response or error
  */
 export async function DeactivateStaffMember(
-  memberId: string,
+  staffProfileId: string,
   locationId?: string,
 ): Promise<StaffActionResponse<{ success: boolean }>> {
-  const supabase = createServerSupabaseClient();
-
   try {
-    const { data: member } = await supabase
-      .from("members")
-      .select("user_id, staff_profile_id, organization_id")
-      .eq("id", memberId)
-      .single();
-
-    if (!member) {
-      return { error: "Member not found" };
-    }
-
-    let query = supabase.from("location_members").update({ is_active: false });
-
-    if (member.user_id) {
-      query = query.eq("user_id", member.user_id);
-    } else if (member.staff_profile_id) {
-      query = query.eq("staff_profile_id", member.staff_profile_id);
-    } else {
-      return { error: "Invalid member record: no ID found" };
-    }
-
-    if (locationId) {
-      query = query.eq("location_id", locationId);
-    }
-
-    const { error } = await query;
-
-    if (error) {
-      console.error("[DeactivateStaffMember] Error:", error);
-      return { error: error.message };
-    }
-
-    revalidatePath("/dashboard/staff");
-
-    // Log audit event
-    if (member) {
-      await supabase
-        .rpc("get_unified_staff_view", {
-          p_merchant_id: (member as any).organization_id || "",
-          p_location_id: null,
-        })
-        .eq("member_id", memberId)
-        .single();
-
-      // Fallback to basic fetch if RPC fails or not simple
-      let resourceName = "Staff Member";
-      if (member.staff_profile_id) {
-        const { data: sp } = await supabase
-          .from("staff_profiles")
-          .select("display_name, first_name, last_name")
-          .eq("id", member.staff_profile_id)
-          .single();
-        if (sp)
-          resourceName = sp.display_name || `${sp.first_name} ${sp.last_name}`;
-      }
-
-      // We need merchant ID. Assuming member has org_id which maps to merchant in LogAuditEvent hook or we fetch it.
-      // Actually DeactivateStaffMember doesn't seem to have merchant context easily available unless we fetch it.
-      // The member record has organization_id (clerk). LogAuditEvent can take that.
-      const orgId = (member as any).organization_id;
-
-      if (orgId) {
-        await LogAuditEvent({
-          clerkOrgId: orgId,
-          action: `Deactivated Staff Member: ${resourceName}`,
-          actionCategory: "staff",
-          resourceType: "staff_member",
-          resourceId: memberId,
-          resourceName: resourceName,
-          locationId: locationId,
-          severity: "critical",
-        });
-      }
-    }
-
-    return { data: { success: true } };
+    return await setStaffActiveState(
+      staffProfileId,
+      false,
+      locationId,
+      "DeactivateStaffMember",
+    );
   } catch (error) {
     console.error("[DeactivateStaffMember] Unexpected error:", error);
     return { error: "An unexpected error occurred" };
@@ -1404,80 +1427,21 @@ export async function DeactivateStaffMember(
 /**
  * Reactivate staff member
  *
- * @param memberId - UUID of the member
+ * @param staffProfileId - UUID of the staff profile
  * @param locationId - Optional location ID (reactivate at specific location only)
  * @returns Success response or error
  */
 export async function ReactivateStaffMember(
-  memberId: string,
+  staffProfileId: string,
   locationId?: string,
 ): Promise<StaffActionResponse<{ success: boolean }>> {
-  const supabase = createServerSupabaseClient();
-
   try {
-    const { data: member } = await supabase
-      .from("members")
-      .select("user_id, staff_profile_id, organization_id")
-      .eq("id", memberId)
-      .single();
-
-    if (!member) {
-      return { error: "Member not found" };
-    }
-
-    let query = supabase.from("location_members").update({ is_active: true });
-
-    if (member.user_id) {
-      query = query.eq("user_id", member.user_id);
-    } else if (member.staff_profile_id) {
-      query = query.eq("staff_profile_id", member.staff_profile_id);
-    } else {
-      return { error: "Invalid member record: no ID found" };
-    }
-
-    if (locationId) {
-      query = query.eq("location_id", locationId);
-    }
-
-    const { error } = await query;
-
-    if (error) {
-      console.error("[ReactivateStaffMember] Error:", error);
-      return { error: error.message };
-    }
-
-    revalidatePath("/dashboard/staff");
-
-    // Log audit event
-    if (member) {
-      let resourceName = "Staff Member";
-      if (member.staff_profile_id) {
-        const { data: sp } = await supabase
-          .from("staff_profiles")
-          .select("display_name, first_name, last_name")
-          .eq("id", member.staff_profile_id)
-          .single();
-        if (sp)
-          resourceName = sp.display_name || `${sp.first_name} ${sp.last_name}`;
-      }
-
-      const orgId = (member as any).organization_id;
-
-      if (orgId) {
-        await LogAuditEvent({
-          clerkOrgId: orgId,
-          action: `Reactivated Staff Member: ${resourceName}`,
-          actionCategory: "staff",
-          resourceType: "staff_member",
-          resourceId: memberId,
-          resourceName: resourceName,
-          locationId: locationId,
-          severity: "critical",
-        });
-      }
-    }
-
-    return { data: { success: true } };
+    return await setStaffActiveState(
+      staffProfileId,
+      true,
+      locationId,
+      "ReactivateStaffMember",
+    );
   } catch (error) {
     console.error("[ReactivateStaffMember] Unexpected error:", error);
     return { error: "An unexpected error occurred" };
@@ -2322,7 +2286,11 @@ export async function RemoveStaffFromLocation(
     };
   }
 
-  return DeactivateStaffMember(memberId, locationId);
+  if (!member.staff_profile_id) {
+    return { error: "Invalid member record: no staff profile found" };
+  }
+
+  return DeactivateStaffMember(member.staff_profile_id, locationId);
 }
 
 /**
@@ -2424,11 +2392,32 @@ export async function BulkDeactivateStaff(
 ): Promise<StaffActionResponse<{ deactivated: number; errors: string[] }>> {
   if (!memberIds.length) return { error: "No members provided" };
 
+  const supabase = createServerSupabaseClient();
   const errors: string[] = [];
   let deactivated = 0;
 
+  // The table keys rows by member_id; resolve each to its staff_profile_id
+  // (the identity the toggle now operates on) in one batch.
+  const { data: members, error: lookupError } = await supabase
+    .from("members")
+    .select("id, staff_profile_id")
+    .in("id", memberIds);
+
+  if (lookupError) {
+    return { error: "Failed to resolve staff members" };
+  }
+
+  const profileByMember = new Map(
+    (members ?? []).map((m) => [m.id, m.staff_profile_id]),
+  );
+
   for (const memberId of memberIds) {
-    const result = await DeactivateStaffMember(memberId);
+    const staffProfileId = profileByMember.get(memberId);
+    if (!staffProfileId) {
+      errors.push(`${memberId}: staff profile not found`);
+      continue;
+    }
+    const result = await DeactivateStaffMember(staffProfileId);
     if (result.error) {
       errors.push(`${memberId}: ${result.error}`);
     } else {
