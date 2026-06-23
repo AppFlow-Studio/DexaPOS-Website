@@ -1201,7 +1201,7 @@ export function StaffDetailSheet({
       <div className="divide-y divide-border">
         {displayStaff.location_assignments.map((assignment) => (
           <div
-            key={assignment.location_id + assignment.role_code}
+            key={`${assignment.location_id}:${assignment.role_code}`}
             className={cn(
               "group relative -mx-2 rounded-2xl px-2 py-4 transition-colors hover:bg-muted/40 focus-within:ring-2 focus-within:ring-[#0C4FD1] focus-within:ring-offset-2 focus-within:ring-offset-card",
               !assignment.is_active && "opacity-70"
@@ -1374,7 +1374,7 @@ export function StaffDetailSheet({
                     src={displayStaff.avatar_url || undefined}
                     alt={displayStaff.display_name}
                   />
-                  <AvatarFallback className="bg-slate-100 text-lg font-semibold text-slate-700 dark:bg-muted dark:text-foreground">
+                  <AvatarFallback className="text-lg font-semibold text-foreground">
                     {initials}
                   </AvatarFallback>
                 </Avatar>
@@ -1382,7 +1382,7 @@ export function StaffDetailSheet({
                 <div className="min-w-0 flex-1 space-y-3">
                   <div className="space-y-2">
                     <div className="flex flex-wrap items-center gap-2">
-                      <h2 className="text-2xl font-semibold tracking-tight text-slate-950 dark:text-foreground">
+                      <h2 className="text-2xl font-semibold tracking-tight text-foreground">
                         {displayStaff.first_name} {displayStaff.last_name}
                       </h2>
                       {staff.is_clerk_user ? (
