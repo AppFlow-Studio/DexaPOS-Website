@@ -280,12 +280,12 @@ export function StaffDetailSheet({
 
     if (staff.overall_is_active) {
       deactivateStaff.mutate({
-        memberId: staff.member_id,
+        staffProfileId: staff.staff_profile_id,
         locationId: primaryLocation.location_id,
       });
     } else {
       reactivateStaff.mutate({
-        memberId: staff.member_id,
+        staffProfileId: staff.staff_profile_id,
         locationId: primaryLocation.location_id,
       });
     }
@@ -1469,6 +1469,7 @@ export function StaffDetailSheet({
                 open={isLocationSheetOpen}
                 onOpenChange={setIsLocationSheetOpen}
                 memberId={displayStaff.member_id}
+                staffProfileId={displayStaff.staff_profile_id ?? ""}
                 memberName={`${displayStaff.first_name} ${displayStaff.last_name}`}
                 isClerkUser={displayStaff.is_clerk_user}
                 assignment={selectedAssignment}
