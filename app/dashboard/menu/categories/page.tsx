@@ -97,7 +97,6 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   usePrepStations,
   useCategoryPrepDefaults,
@@ -1591,7 +1590,7 @@ export default function CategoriesPage() {
                                       ).map((i) => i.menu_item_id)}
                                       strategy={verticalListSortingStrategy}
                                     >
-                                      <ScrollArea className="max-h-[500px] [&>div>div]:!block [&>div>div]:min-w-0">
+                                      <div className="max-h-[500px] min-w-0 overflow-y-auto">
                                         {(
                                           reorderedItemsMap.get(category.id) ||
                                           categoryItems
@@ -1619,7 +1618,7 @@ export default function CategoriesPage() {
                                             />
                                           ),
                                         )}
-                                      </ScrollArea>
+                                      </div>
                                     </SortableContext>
                                     <DragOverlay>
                                       {activeId && (

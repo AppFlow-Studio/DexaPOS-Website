@@ -588,7 +588,7 @@ export function StaffDetailSheet({
       />
 
       {isProfileEditMode ? (
-        <div className="space-y-4 rounded-2xl border bg-background/60 p-4">
+        <div className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <Label className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
@@ -729,12 +729,12 @@ export function StaffDetailSheet({
                   </SelectContent>
                 </Select>
               ) : (
-                <div className="rounded-2xl border bg-background/50 px-4 py-3 text-sm font-medium">
+                <p className="text-[15px] text-foreground">
                   {formatRoleLabel(
                     primaryLocation.role_name,
                     primaryLocation.role_code
                   )}
-                </div>
+                </p>
               )}
             </div>
 
@@ -742,9 +742,9 @@ export function StaffDetailSheet({
               <Label className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
                 Primary Location
               </Label>
-              <div className="rounded-2xl border bg-background/50 px-4 py-3 text-sm font-medium">
+              <p className="text-[15px] text-foreground">
                 {primaryLocation.location_name}
-              </div>
+              </p>
             </div>
 
             {!staff.is_clerk_user && (
@@ -768,16 +768,12 @@ export function StaffDetailSheet({
                       <SelectItem value="contractor">Contractor</SelectItem>
                     </SelectContent>
                   </Select>
+                ) : primaryLocation.employment_type ? (
+                  <p className="text-[15px] capitalize text-foreground">
+                    {primaryLocation.employment_type.replace("-", " ")}
+                  </p>
                 ) : (
-                  <div className="rounded-2xl border bg-background/50 px-4 py-3 text-sm">
-                    {primaryLocation.employment_type ? (
-                      <Badge variant="outline" className="capitalize">
-                        {primaryLocation.employment_type.replace("-", " ")}
-                      </Badge>
-                    ) : (
-                      <span className="text-muted-foreground">Not set</span>
-                    )}
-                  </div>
+                  <p className="text-[15px] text-muted-foreground">Not set</p>
                 )}
               </div>
             )}
@@ -800,15 +796,13 @@ export function StaffDetailSheet({
                       className="h-10 pl-9"
                     />
                   </div>
+                ) : primaryLocation.hourly_rate !== null &&
+                  primaryLocation.hourly_rate !== undefined ? (
+                  <p className="text-[15px] text-foreground">
+                    {`$${primaryLocation.hourly_rate.toFixed(2)}/hour`}
+                  </p>
                 ) : (
-                  <div className="rounded-2xl border bg-background/50 px-4 py-3 text-sm">
-                    {primaryLocation.hourly_rate !== null &&
-                    primaryLocation.hourly_rate !== undefined ? (
-                      `$${primaryLocation.hourly_rate.toFixed(2)}/hour`
-                    ) : (
-                      <span className="text-muted-foreground">Not set</span>
-                    )}
-                  </div>
+                  <p className="text-[15px] text-muted-foreground">Not set</p>
                 )}
               </div>
             )}
@@ -1055,8 +1049,7 @@ export function StaffDetailSheet({
 
           {!showUpgradeDialog ? (
             <Button
-              variant="outline"
-              className="w-full gap-2"
+              className="gap-2"
               onClick={() => setShowUpgradeDialog(true)}
               disabled={!primaryLocation}
             >
@@ -1145,7 +1138,7 @@ export function StaffDetailSheet({
       </div>
 
       {showAddLocation && (
-        <div className="mb-4 rounded-2xl border bg-background/60 p-4">
+        <div className="mb-4 border-b border-border pb-4">
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <Label className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
@@ -1205,21 +1198,27 @@ export function StaffDetailSheet({
         </div>
       )}
 
-      <div className="space-y-3">
+      <div className="divide-y divide-border">
         {displayStaff.location_assignments.map((assignment) => (
-          <button
-            key={assignment.location_id + assignment.role_code}
-            type="button"
+          <div
+            key={`${assignment.location_id}:${assignment.role_code}`}
             className={cn(
-              "w-full rounded-2xl border bg-background/70 p-4 text-left transition-colors hover:bg-muted/40",
+              "group relative -mx-2 rounded-2xl px-2 py-4 transition-colors hover:bg-muted/40 focus-within:ring-2 focus-within:ring-[#0C4FD1] focus-within:ring-offset-2 focus-within:ring-offset-card",
               !assignment.is_active && "opacity-70"
             )}
-            onClick={() => {
-              setSelectedAssignmentLocationId(assignment.location_id);
-              setIsLocationSheetOpen(true);
-            }}
           >
-            <div className="flex flex-wrap items-start justify-between gap-3">
+            {/* Full-card click target sits behind the content so the action
+                buttons below remain siblings, not nested <button>s. */}
+            <button
+              type="button"
+              className="absolute inset-0 z-0 rounded-2xl focus:outline-none"
+              aria-label={`Open ${assignment.location_name} assignment`}
+              onClick={() => {
+                setSelectedAssignmentLocationId(assignment.location_id);
+                setIsLocationSheetOpen(true);
+              }}
+            />
+            <div className="pointer-events-none relative z-10 flex flex-wrap items-start justify-between gap-3">
               <div>
                 <div className="flex flex-wrap items-center gap-2">
                   <p className="font-medium">{assignment.location_name}</p>
@@ -1239,7 +1238,7 @@ export function StaffDetailSheet({
                 </p>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="pointer-events-auto flex items-center gap-2">
                 {assignment.is_active && !assignment.is_primary && (
                   <Button
                     variant="ghost"
@@ -1279,7 +1278,7 @@ export function StaffDetailSheet({
               </div>
             </div>
 
-            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="pointer-events-none relative z-10 mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <InfoRow
                 label="Role"
                 value={formatRoleLabel(
@@ -1316,7 +1315,7 @@ export function StaffDetailSheet({
                 }
               />
             </div>
-          </button>
+          </div>
         ))}
       </div>
     </section>
@@ -1353,7 +1352,10 @@ export function StaffDetailSheet({
 
   return (
     <BottomSheet open={open} onOpenChange={onOpenChange}>
-      <BottomSheetContent className="mx-auto w-full max-w-6xl" height="95">
+      <BottomSheetContent
+        className="mx-auto w-full max-w-6xl bottom-[2.5dvh] h-[95dvh] overflow-hidden rounded-b-[20px] border-b data-[state=closed]:duration-[400ms] data-[state=closed]:ease-[cubic-bezier(0.32,0.72,0,1)]"
+        height="95"
+      >
         <BottomSheetHeader className="flex flex-col gap-2">
           <BottomSheetTitle>
             {displayStaff.first_name} {displayStaff.last_name}
@@ -1365,14 +1367,14 @@ export function StaffDetailSheet({
         </BottomSheetHeader>
         <BottomSheetBody className="flex-1 overflow-y-auto">
           <div className="space-y-6 p-1">
-            <section className="rounded-[28px] border bg-gradient-to-br from-slate-50 via-white to-slate-50/70 p-6 shadow-sm">
+            <section className="rounded-[28px] border bg-gradient-to-br from-slate-50 via-white to-slate-50/70 p-6 shadow-sm dark:from-card dark:via-card dark:to-card">
               <div className="flex items-start gap-4">
-                <Avatar className="h-20 w-20 border border-slate-200 shadow-sm">
+                <Avatar className="h-20 w-20 border border-slate-200 shadow-sm dark:border-border">
                   <AvatarImage
                     src={displayStaff.avatar_url || undefined}
                     alt={displayStaff.display_name}
                   />
-                  <AvatarFallback className="bg-slate-100 text-lg font-semibold text-slate-700">
+                  <AvatarFallback className="text-lg font-semibold text-foreground">
                     {initials}
                   </AvatarFallback>
                 </Avatar>
@@ -1380,7 +1382,7 @@ export function StaffDetailSheet({
                 <div className="min-w-0 flex-1 space-y-3">
                   <div className="space-y-2">
                     <div className="flex flex-wrap items-center gap-2">
-                      <h2 className="text-2xl font-semibold tracking-tight text-slate-950">
+                      <h2 className="text-2xl font-semibold tracking-tight text-foreground">
                         {displayStaff.first_name} {displayStaff.last_name}
                       </h2>
                       {staff.is_clerk_user ? (
@@ -1417,31 +1419,27 @@ export function StaffDetailSheet({
             <div className="grid gap-6 xl:grid-cols-[260px_minmax(0,1fr)]">
               <aside className="space-y-4 xl:sticky xl:top-0 xl:self-start">
                 <div className="rounded-3xl border bg-card p-3 shadow-sm">
-                  <div className="mb-3 rounded-2xl border bg-background/60 p-4">
+                  <div className="mb-3 border-b border-border px-2 pb-4 pt-2">
                     <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
                       Staff Overview
                     </p>
                     <div className="mt-3 space-y-3 text-sm">
-                      <div>
-                        <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
-                          Primary Location
-                        </p>
-                        <p className="mt-1 font-medium">
+                      <div className="space-y-1">
+                        <p className="text-xs text-muted-foreground">Primary Location</p>
+                        <p className="text-[15px] text-foreground">
                           {primaryLocation?.location_name || "Not assigned"}
                         </p>
                       </div>
                       <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
-                            Active
+                        <div className="space-y-1">
+                          <p className="text-xs text-muted-foreground">Active</p>
+                          <p className="text-[15px] text-foreground">
+                            {activeLocations.length}
                           </p>
-                          <p className="mt-1 font-medium">{activeLocations.length}</p>
                         </div>
-                        <div>
-                          <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
-                            Access
-                          </p>
-                          <p className="mt-1 font-medium">
+                        <div className="space-y-1">
+                          <p className="text-xs text-muted-foreground">Access</p>
+                          <p className="text-[15px] text-foreground">
                             {staff.is_clerk_user ? "Dashboard" : "POS Only"}
                           </p>
                         </div>
@@ -1449,7 +1447,7 @@ export function StaffDetailSheet({
                     </div>
                   </div>
 
-                  <nav className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
+                  <nav className="grid gap-1 sm:grid-cols-2 xl:grid-cols-1">
                     {panelItems.map((item) => (
                       <SectionNavButton
                         key={item.id}
@@ -1562,23 +1560,33 @@ function SectionNavButton({
       type="button"
       onClick={onClick}
       className={cn(
-        "flex w-full items-start gap-3 rounded-2xl border px-4 py-3 text-left transition-colors",
+        "flex w-full items-start gap-3 rounded-2xl px-4 py-3 text-left transition-colors",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0C4FD1] focus-visible:ring-offset-2 focus-visible:ring-offset-card",
         active
-          ? "border-[#0C4FD1]/30 bg-[#EEF3FE] text-slate-950"
-          : "border-transparent bg-background/60 hover:bg-muted/40"
+          ? "bg-[#EEF3FE] text-[#0C4FD1] dark:bg-[#0C4FD1]/20 dark:text-[#9DBDF5]"
+          : "text-[#475569] hover:bg-[#F1F5F9] dark:text-muted-foreground dark:hover:bg-muted/40"
       )}
     >
-      <div
+      <Icon
         className={cn(
-          "mt-0.5 rounded-full p-2",
-          active ? "bg-white text-[#0C4FD1]" : "bg-slate-100 text-slate-600"
+          "mt-0.5 h-4 w-4 shrink-0",
+          active
+            ? "text-[#0C4FD1] dark:text-[#9DBDF5]"
+            : "text-[#94A3B8] dark:text-muted-foreground"
         )}
-      >
-        <Icon className="h-4 w-4" />
-      </div>
+      />
       <div className="min-w-0">
         <p className="text-sm font-medium">{label}</p>
-        <p className="mt-1 text-xs text-muted-foreground">{description}</p>
+        <p
+          className={cn(
+            "mt-0.5 text-xs",
+            active
+              ? "text-[#0C4FD1]/70 dark:text-[#9DBDF5]/70"
+              : "text-muted-foreground"
+          )}
+        >
+          {description}
+        </p>
       </div>
     </button>
   );
@@ -1594,11 +1602,14 @@ function InfoRow({
   mono?: boolean;
 }) {
   return (
-    <div className="rounded-2xl border bg-background/50 p-3">
-      <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
-        {label}
-      </p>
-      <p className={cn("mt-1 text-sm font-medium break-words", mono && "font-mono text-xs")}>
+    <div className="space-y-1">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p
+        className={cn(
+          "text-[15px] text-foreground break-words",
+          mono && "font-mono text-xs"
+        )}
+      >
         {value}
       </p>
     </div>
@@ -1617,28 +1628,17 @@ function StatusPill({
   inactiveLabel: string;
 }) {
   return (
-    <div className="flex items-center justify-between rounded-xl border bg-background/50 px-4 py-3">
-      <div>
-        <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
-          {label}
-        </p>
-        <p className="mt-1 text-sm font-medium">
+    <div className="space-y-1">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <div className="flex items-center gap-1.5">
+        {active ? (
+          <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-500" />
+        ) : (
+          <Activity className="h-4 w-4 text-muted-foreground" />
+        )}
+        <p className="text-[15px] text-foreground">
           {active ? activeLabel : inactiveLabel}
         </p>
-      </div>
-      <div
-        className={cn(
-          "flex h-9 w-9 items-center justify-center rounded-full",
-          active
-            ? "bg-green-100 text-green-700"
-            : "bg-muted text-muted-foreground"
-        )}
-      >
-        {active ? (
-          <CheckCircle2 className="h-4 w-4" />
-        ) : (
-          <Activity className="h-4 w-4" />
-        )}
       </div>
     </div>
   );
