@@ -1,12 +1,19 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Barlow, Barlow_Condensed } from "next/font/google";
 import "./marketing.css";
 import RevealObserver from "./_components/RevealObserver";
 
-const inter = Inter({
+const barlow = Barlow({
+  subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700"],
+  variable: "--font-barlow",
+  display: "swap",
+});
+
+const barlowCondensed = Barlow_Condensed({
   subsets: ["latin"],
   weight: ["400", "500", "600", "700", "800"],
-  variable: "--font-inter",
+  variable: "--font-barlow-condensed",
   display: "swap",
 });
 
@@ -48,7 +55,7 @@ export default function MarketingLayout({
 }) {
   return (
     <div
-      className={inter.variable}
+      className={`${barlow.variable} ${barlowCondensed.variable}`}
       style={{ fontFamily: "var(--font)" }}
     >
       <RevealObserver />
