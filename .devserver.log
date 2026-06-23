@@ -1,0 +1,1899 @@
+
+> dexapos-website@0.1.0 dev
+> next dev --turbopack
+
+▲ Next.js 16.2.9 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://192.168.1.109:3000
+- Environments: .env
+✓ Ready in 4.2s
+⚠ `eslint` configuration in next.config.ts is no longer supported. See more info here: https://nextjs.org/docs/app/api-reference/cli/next#next-lint-options
+⚠ Invalid next.config.ts options detected: 
+⚠     Unrecognized key(s) in object: 'eslint'
+⚠ See more info here: https://nextjs.org/docs/messages/invalid-next-config
+⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+- Experiments (use with caution):
+  · clientTraceMetadata
+  · serverActions
+
+○ Compiling /sign-in/[[...sign-in]] ...
+ GET /sign-in 200 in 3.0s (proxy.ts: 253ms)
+Attention: Clerk collects telemetry data from its SDKs when connected to development instances.
+The data collected is used to inform Clerk's product roadmap.
+To learn more, including how to opt-out from the telemetry program, visit: https://clerk.com/docs/telemetry.
+
+ GET /sign-in 200 in 8.1s (next.js: 2.7s, proxy.ts: 105ms, application-code: 5.3s)
+ GET /sign-in 200 in 483ms (next.js: 99ms, proxy.ts: 33ms, application-code: 351ms)
+ GET /manage 200 in 3.9s (next.js: 761ms, proxy.ts: 1364ms, application-code: 1742ms)
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://liked-ram-76.clerk.accounts.dev/npm/@clerk/clerk-js@6/dist/clerk.browser.js:12:6092)
+ POST /manage 200 in 5.9s (next.js: 46ms, proxy.ts: 36ms, application-code: 5.8s)
+  └─ ƒ GetUserInfo() in 2429ms app/manage/actions/get-user-info.ts
+ POST /manage 200 in 1096ms (next.js: 25ms, proxy.ts: 27ms, application-code: 1044ms)
+  └─ ƒ GetUnreadTicketCounts() in 1021ms app/manage/actions/support.ts
+ POST /manage 200 in 9.6s (next.js: 36ms, proxy.ts: 31ms, application-code: 9.5s)
+  └─ ƒ getPlatformDashboardKPIs() in 9382ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1894ms (next.js: 196ms, proxy.ts: 304ms, application-code: 1394ms)
+  └─ ƒ GetMerchantSpotlight(10) in 1225ms app/manage/actions/get-merchant-spotlight.ts
+ GET /manage 200 in 1464ms (next.js: 117ms, proxy.ts: 111ms, application-code: 1236ms)
+ POST /manage 200 in 7.4s (next.js: 96ms, proxy.ts: 127ms, application-code: 7.2s)
+  └─ ƒ getPlatformActivityFeed() in 7105ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.9s (next.js: 58ms, proxy.ts: 69ms, application-code: 2.8s)
+  └─ ƒ getPlatformStationFleet() in 2711ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1292ms (next.js: 54ms, proxy.ts: 48ms, application-code: 1190ms)
+  └─ ƒ getPlatformOrdersHeatmap() in 1137ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 12.6s (next.js: 58ms, proxy.ts: 58ms, application-code: 12.5s)
+  └─ ƒ getPlatformAlerts() in 12429ms app/manage/actions/hq-platform/dashboard.ts
+ GET /dashboard 200 in 5.1s (next.js: 769ms, proxy.ts: 1250ms, application-code: 3.1s)
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://liked-ram-76.clerk.accounts.dev/npm/@clerk/clerk-js@6/dist/clerk.browser.js:12:6092)
+ POST /dashboard 200 in 1656ms (next.js: 220ms, proxy.ts: 301ms, application-code: 1135ms)
+  └─ ƒ GetUserInfo() in 931ms app/manage/actions/get-user-info.ts
+[browser] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+[browser] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+[browser] Image with src "https://hifouuofcaytijrkbvcy.supabase.co/storage/v1/object/public/Organizations-Logos/org_34LN9aMJGO4jNllGTvHH4CLB5gq.png" has legacy prop "objectFit". Did you forget to run the codemod?
+Read more: https://nextjs.org/docs/messages/next-image-upgrade-to-13
+ POST /dashboard 200 in 1105ms (next.js: 174ms, proxy.ts: 278ms, application-code: 653ms)
+  └─ ƒ getImpersonationContext() in 270ms lib/admin/impersonation.ts
+ POST /manage 200 in 10.9s (next.js: 153ms, proxy.ts: 327ms, application-code: 10.4s)
+  └─ ƒ getPlatformActivityFeed() in 10102ms app/manage/actions/hq-platform/dashboard.ts
+[browser] Image with src "https://hifouuofcaytijrkbvcy.supabase.co/storage/v1/object/public/Organizations-Logos/org_34LN9aMJGO4jNllGTvHH4CLB5gq.png" has "fill" but is missing "sizes" prop. Please add it to improve page performance. Read more: https://nextjs.org/docs/api-reference/next/image#sizes
+ POST /dashboard 200 in 1707ms (next.js: 239ms, proxy.ts: 475ms, application-code: 993ms)
+  └─ ƒ GetUnreadTicketCounts() in 864ms app/dashboard/actions/support.ts
+ POST /dashboard 200 in 299ms (next.js: 138ms, proxy.ts: 98ms, application-code: 62ms)
+  └─ ƒ getImpersonationContext() in 7ms lib/admin/impersonation.ts
+ POST /dashboard 200 in 2.2s (next.js: 63ms, proxy.ts: 64ms, application-code: 2.1s)
+  └─ ƒ GetMenus("org_34LN9aMJGO4jNllGTvHH4CLB5gq", null) in 1990ms app/dashboard/actions/menus.ts
+ POST /dashboard 200 in 2.5s (next.js: 51ms, proxy.ts: 51ms, application-code: 2.4s)
+  └─ ƒ GetMenuItems("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "all") in 2050ms app/dashboard/actions/menu-items.ts
+ POST /manage 200 in 9.8s (next.js: 54ms, proxy.ts: 106ms, application-code: 9.6s)
+  └─ ƒ getPlatformDashboardKPIs() in 9545ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 3.8s (next.js: 115ms, proxy.ts: 87ms, application-code: 3.6s)
+  └─ ƒ getPlatformStationFleet() in 3520ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1498ms (next.js: 45ms, proxy.ts: 46ms, application-code: 1407ms)
+  └─ ƒ getPlatformOrdersHeatmap() in 1362ms app/manage/actions/hq-platform/dashboard.ts
+ POST /dashboard 200 in 2.3s (next.js: 45ms, proxy.ts: 49ms, application-code: 2.2s)
+  └─ ƒ GetSchedules("org_34LN9aMJGO4jNllGTvHH4CLB5gq") in 2152ms app/dashboard/actions/schedules.ts
+ POST /manage 200 in 3.1s (next.js: 45ms, proxy.ts: 43ms, application-code: 3.0s)
+  └─ ƒ getPlatformActivityFeed() in 2905ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 4.0s (next.js: 58ms, proxy.ts: 61ms, application-code: 3.8s)
+  └─ ƒ getPlatformAlerts() in 3769ms app/manage/actions/hq-platform/dashboard.ts
+ POST /dashboard 200 in 15.4s (next.js: 56ms, proxy.ts: 59ms, application-code: 15.3s)
+  └─ ƒ GetOrders("org_34LN9aMJGO4jNllGTvHH4CLB5gq", null, undefined) in 13766ms app/dashboard/actions/order.ts
+ POST /dashboard 200 in 1027ms (next.js: 62ms, proxy.ts: 67ms, application-code: 899ms)
+  └─ ƒ GetUnifiedStaffView("org_34LN9aMJGO4jNllGTvHH4CLB5gq", null) in 840ms app/dashboard/actions/unified-staff.ts
+ POST /dashboard 200 in 396ms (next.js: 54ms, proxy.ts: 50ms, application-code: 292ms)
+  └─ ƒ GetCurrentUserPinStatus("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "user_36u15MkVGaCOwWexx9cWWlrF1Vw") in 251ms app/dashboard/actions/unified-staff.ts
+ POST /dashboard 200 in 2.7s (next.js: 100ms, proxy.ts: 59ms, application-code: 2.5s)
+  └─ ƒ GetOrderAnalytics("org_34LN9aMJGO4jNllGTvHH4CLB5gq", null, "2026-06-11T21:00:00.000Z", "2026-06-19T15:24:56.639Z") in 2438ms app/dashboard/actions/order-analytics.ts
+[browser] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+[browser] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+ POST /dashboard 200 in 4.8s (next.js: 82ms, proxy.ts: 60ms, application-code: 4.6s)
+  └─ ƒ GetOrderAnalytics("org_34LN9aMJGO4jNllGTvHH4CLB5gq", null, "2026-05-19T21:00:00.000Z", "2026-06-19T15:24:56.639Z") in 4565ms app/dashboard/actions/order-analytics.ts
+ POST /manage 200 in 433ms (next.js: 63ms, proxy.ts: 70ms, application-code: 301ms)
+  └─ ƒ GetUnreadTicketCounts() in 245ms app/manage/actions/support.ts
+ POST /dashboard 200 in 814ms (next.js: 100ms, proxy.ts: 74ms, application-code: 639ms)
+  └─ ƒ GetOrderStats("org_34LN9aMJGO4jNllGTvHH4CLB5gq", null, "2026-06-11T21:00:00.000Z", "2026-06-19T15:24:56.639Z") in 575ms app/dashboard/actions/order-analytics.ts
+ POST /dashboard 200 in 970ms (next.js: 60ms, proxy.ts: 58ms, application-code: 851ms)
+  └─ ƒ GetOrderStats("org_34LN9aMJGO4jNllGTvHH4CLB5gq", null, "2026-05-19T21:00:00.000Z", "2026-06-19T15:24:56.639Z") in 805ms app/dashboard/actions/order-analytics.ts
+ POST /manage 200 in 2.4s (next.js: 32ms, proxy.ts: 30ms, application-code: 2.3s)
+  └─ ƒ getPlatformActivityFeed() in 2281ms app/manage/actions/hq-platform/dashboard.ts
+ POST /dashboard 200 in 606ms (next.js: 39ms, proxy.ts: 29ms, application-code: 539ms)
+  └─ ƒ GetFinancialKPIs("org_34LN9aMJGO4jNllGTvHH4CLB5gq", null, "2026-06-11T21:00:00.000Z", "2026-06-19T15:24:56.639Z") in 503ms app/dashboard/actions/order-analytics.ts
+ POST /dashboard 200 in 1182ms (next.js: 38ms, proxy.ts: 32ms, application-code: 1112ms)
+  └─ ƒ GetFinancialKPIs("org_34LN9aMJGO4jNllGTvHH4CLB5gq", null, "2026-05-19T21:00:00.000Z", "2026-06-19T15:24:56.639Z") in 1083ms app/dashboard/actions/order-analytics.ts
+ POST /manage 200 in 6.9s (next.js: 50ms, proxy.ts: 39ms, application-code: 6.9s)
+  └─ ƒ getPlatformDashboardKPIs() in 6815ms app/manage/actions/hq-platform/dashboard.ts
+ POST /dashboard 200 in 5.1s (next.js: 58ms, proxy.ts: 35ms, application-code: 5.0s)
+  └─ ƒ GetWaterfallReport("org_34LN9aMJGO4jNllGTvHH4CLB5gq", null, "2026-05-19T21:00:00.000Z", "2026-06-19T15:24:56.639Z") in 4964ms app/dashboard/actions/waterfall-report.ts
+ POST /manage 200 in 3.2s (next.js: 37ms, proxy.ts: 30ms, application-code: 3.2s)
+  └─ ƒ getPlatformStationFleet() in 3139ms app/manage/actions/hq-platform/dashboard.ts
+ POST /dashboard 200 in 2.9s (next.js: 36ms, proxy.ts: 33ms, application-code: 2.8s)
+  └─ ƒ GetTransactionVolumeReport("org_34LN9aMJGO4jNllGTvHH4CLB5gq", null, "2026-05-19T21:00:00.000Z", "2026-06-19T15:24:56.639Z") in 2770ms app/dashboard/actions/order-analytics.ts
+ POST /manage 200 in 2.5s (next.js: 25ms, proxy.ts: 23ms, application-code: 2.4s)
+  └─ ƒ getPlatformOrdersHeatmap() in 2420ms app/manage/actions/hq-platform/dashboard.ts
+ POST /dashboard 200 in 5.4s (next.js: 30ms, proxy.ts: 36ms, application-code: 5.3s)
+  └─ ƒ GetNetCollectedBySourceReport("org_34LN9aMJGO4jNllGTvHH4CLB5gq", null, "2026-05-19T21:00:00.000Z", "2026-06-19T15:24:56.639Z") in 5292ms app/dashboard/actions/order-analytics.ts
+ POST /dashboard 200 in 3.9s (next.js: 24ms, proxy.ts: 40ms, application-code: 3.9s)
+  └─ ƒ GetTaxableRevenueByTenderReport("org_34LN9aMJGO4jNllGTvHH4CLB5gq", null, "2026-05-19T21:00:00.000Z", "2026-06-19T15:24:56.639Z") in 3855ms app/dashboard/actions/order-analytics.ts
+ POST /manage 200 in 5.8s (next.js: 29ms, proxy.ts: 23ms, application-code: 5.7s)
+  └─ ƒ getPlatformActivityFeed() in 5688ms app/manage/actions/hq-platform/dashboard.ts
+ POST /dashboard 200 in 6.7s (next.js: 43ms, proxy.ts: 36ms, application-code: 6.6s)
+  └─ ƒ GetRevenueByCategoryReport("org_34LN9aMJGO4jNllGTvHH4CLB5gq", null, "2026-06-11T21:00:00.000Z", "2026-06-19T15:24:56.639Z") in 6603ms app/dashboard/actions/order-analytics.ts
+ POST /dashboard 200 in 2.5s (next.js: 22ms, proxy.ts: 20ms, application-code: 2.5s)
+  └─ ƒ GetLocations("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "user_36u15MkVGaCOwWexx9cWWlrF1Vw") in 2466ms app/dashboard/actions/get-locations.ts
+ POST /manage 200 in 12.2s (next.js: 31ms, proxy.ts: 35ms, application-code: 12.2s)
+  └─ ƒ getPlatformAlerts() in 12130ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 4.0s (next.js: 44ms, proxy.ts: 26ms, application-code: 3.9s)
+  └─ ƒ getPlatformActivityFeed() in 3885ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 8.6s (next.js: 38ms, proxy.ts: 27ms, application-code: 8.5s)
+  └─ ƒ getPlatformDashboardKPIs() in 8492ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1564ms (next.js: 30ms, proxy.ts: 40ms, application-code: 1494ms)
+  └─ ƒ getPlatformStationFleet() in 1470ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1832ms (next.js: 24ms, proxy.ts: 38ms, application-code: 1770ms)
+  └─ ƒ getPlatformOrdersHeatmap() in 1739ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 6.4s (next.js: 34ms, proxy.ts: 26ms, application-code: 6.3s)
+  └─ ƒ getPlatformActivityFeed() in 6319ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 6.5s (next.js: 38ms, proxy.ts: 33ms, application-code: 6.4s)
+  └─ ƒ getPlatformAlerts() in 6388ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 676ms (next.js: 33ms, proxy.ts: 40ms, application-code: 602ms)
+  └─ ƒ GetUnreadTicketCounts() in 577ms app/manage/actions/support.ts
+ POST /manage 200 in 6.3s (next.js: 40ms, proxy.ts: 34ms, application-code: 6.2s)
+  └─ ƒ getPlatformActivityFeed() in 6184ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 8.5s (next.js: 32ms, proxy.ts: 31ms, application-code: 8.4s)
+  └─ ƒ getPlatformDashboardKPIs() in 8417ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 18.3s (next.js: 44ms, proxy.ts: 12.2s, application-code: 6.0s)
+  └─ ƒ getPlatformStationFleet() in 5950ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1455ms (next.js: 33ms, proxy.ts: 35ms, application-code: 1387ms)
+  └─ ƒ getPlatformOrdersHeatmap() in 1361ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 5.7s (next.js: 31ms, proxy.ts: 31ms, application-code: 5.6s)
+  └─ ƒ getPlatformActivityFeed() in 5596ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 4.7s (next.js: 29ms, proxy.ts: 24ms, application-code: 4.7s)
+  └─ ƒ getPlatformAlerts() in 4646ms app/manage/actions/hq-platform/dashboard.ts
+ GET /manage 200 in 646ms (next.js: 28ms, proxy.ts: 41ms, application-code: 577ms)
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://liked-ram-76.clerk.accounts.dev/npm/@clerk/clerk-js@6/dist/clerk.browser.js:12:6092)
+ POST /manage 200 in 3.3s (next.js: 97ms, proxy.ts: 40ms, application-code: 3.2s)
+  └─ ƒ GetUserInfo() in 3144ms app/manage/actions/get-user-info.ts
+ POST /manage 200 in 435ms (next.js: 29ms, proxy.ts: 33ms, application-code: 374ms)
+  └─ ƒ GetUnreadTicketCounts() in 346ms app/manage/actions/support.ts
+ POST /manage 200 in 9.7s (next.js: 49ms, proxy.ts: 34ms, application-code: 9.7s)
+  └─ ƒ getPlatformDashboardKPIs() in 9625ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 555ms (next.js: 56ms, proxy.ts: 67ms, application-code: 432ms)
+  └─ ƒ GetMerchantSpotlight(10) in 364ms app/manage/actions/get-merchant-spotlight.ts
+ POST /manage 200 in 5.8s (next.js: 75ms, proxy.ts: 52ms, application-code: 5.7s)
+  └─ ƒ getPlatformActivityFeed() in 5623ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.3s (next.js: 108ms, proxy.ts: 58ms, application-code: 2.2s)
+  └─ ƒ getPlatformStationFleet() in 2066ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1414ms (next.js: 106ms, proxy.ts: 75ms, application-code: 1233ms)
+  └─ ƒ getPlatformOrdersHeatmap() in 1148ms app/manage/actions/hq-platform/dashboard.ts
+ GET /manage 200 in 1543ms (next.js: 105ms, proxy.ts: 277ms, application-code: 1161ms)
+ POST /manage 200 in 4.0s (next.js: 55ms, proxy.ts: 65ms, application-code: 3.9s)
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://liked-ram-76.clerk.accounts.dev/npm/@clerk/clerk-js@6/dist/clerk.browser.js:12:6092)
+ POST /manage 200 in 1694ms (next.js: 181ms, proxy.ts: 201ms, application-code: 1312ms)
+  └─ ƒ GetUserInfo() in 995ms app/manage/actions/get-user-info.ts
+ POST /manage 200 in 1299ms (next.js: 275ms, proxy.ts: 317ms, application-code: 706ms)
+  └─ ƒ GetUnreadTicketCounts() in 450ms app/manage/actions/support.ts
+ POST /manage 200 in 5.8s (next.js: 245ms, proxy.ts: 257ms, application-code: 5.3s)
+  └─ ƒ getPlatformDashboardKPIs() in 5065ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 997ms (next.js: 168ms, proxy.ts: 233ms, application-code: 596ms)
+  └─ ƒ GetMerchantSpotlight(10) in 475ms app/manage/actions/get-merchant-spotlight.ts
+ POST /manage 200 in 7.8s (next.js: 92ms, proxy.ts: 87ms, application-code: 7.6s)
+  └─ ƒ getPlatformActivityFeed() in 7579ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1918ms (next.js: 61ms, proxy.ts: 48ms, application-code: 1809ms)
+  └─ ƒ getPlatformStationFleet() in 1750ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 3.1s (next.js: 59ms, proxy.ts: 51ms, application-code: 2.9s)
+  └─ ƒ getPlatformOrdersHeatmap() in 2897ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 5.3s (next.js: 106ms, proxy.ts: 60ms, application-code: 5.1s)
+  └─ ƒ getPlatformAlerts() in 5032ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 5.9s (next.js: 63ms, proxy.ts: 63ms, application-code: 5.8s)
+  └─ ƒ getPlatformActivityFeed() in 5767ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 7.8s (next.js: 42ms, proxy.ts: 37ms, application-code: 7.7s)
+  └─ ƒ getPlatformDashboardKPIs() in 7711ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.5s (next.js: 29ms, proxy.ts: 29ms, application-code: 2.4s)
+  └─ ƒ getPlatformStationFleet() in 2364ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1826ms (next.js: 30ms, proxy.ts: 31ms, application-code: 1765ms)
+  └─ ƒ getPlatformOrdersHeatmap() in 1734ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 4.0s (next.js: 72ms, proxy.ts: 43ms, application-code: 3.9s)
+  └─ ƒ getPlatformActivityFeed() in 3879ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 6.8s (next.js: 26ms, proxy.ts: 30ms, application-code: 6.7s)
+  └─ ƒ getPlatformAlerts() in 6688ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 6.0s (next.js: 42ms, proxy.ts: 43ms, application-code: 5.9s)
+  └─ ƒ getPlatformActivityFeed() in 5835ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 405ms (next.js: 32ms, proxy.ts: 30ms, application-code: 343ms)
+  └─ ƒ GetUnreadTicketCounts() in 313ms app/manage/actions/support.ts
+ POST /manage 200 in 4.6s (next.js: 39ms, proxy.ts: 28ms, application-code: 4.6s)
+  └─ ƒ getPlatformDashboardKPIs() in 4523ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1546ms (next.js: 59ms, proxy.ts: 52ms, application-code: 1435ms)
+  └─ ƒ getPlatformStationFleet() in 1370ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1951ms (next.js: 58ms, proxy.ts: 54ms, application-code: 1839ms)
+  └─ ƒ getPlatformOrdersHeatmap() in 1779ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 9.1s (next.js: 45ms, proxy.ts: 27ms, application-code: 9.0s)
+  └─ ƒ getPlatformActivityFeed() in 8974ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 5.8s (next.js: 49ms, proxy.ts: 46ms, application-code: 5.7s)
+  └─ ƒ getPlatformAlerts() in 5707ms app/manage/actions/hq-platform/dashboard.ts
+✓ Compiled in 7.9s
+ POST /manage 200 in 15.3s (next.js: 64ms, proxy.ts: 48ms, application-code: 15.2s)
+  └─ ƒ getPlatformActivityFeed() in 15073ms app/manage/actions/hq-platform/dashboard.ts
+ GET /dashboard 200 in 8.4s (next.js: 2.0s, proxy.ts: 3.8s, application-code: 2.6s)
+ POST /manage 200 in 17.4s (next.js: 4.0s, proxy.ts: 1433ms, application-code: 11.9s)
+  └─ ƒ getPlatformDashboardKPIs() in 11606ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 3.8s (next.js: 144ms, proxy.ts: 109ms, application-code: 3.5s)
+  └─ ƒ getPlatformStationFleet() in 3422ms app/manage/actions/hq-platform/dashboard.ts
+ GET /manage 200 in 1602ms (next.js: 902ms, proxy.ts: 183ms, application-code: 517ms)
+ POST /manage 200 in 15.3s (next.js: 218ms, proxy.ts: 121ms, application-code: 14.9s)
+  └─ ƒ getPlatformOrdersHeatmap() in 14653ms app/manage/actions/hq-platform/dashboard.ts
+ GET /manage 200 in 12.5s (next.js: 123ms, proxy.ts: 212ms, application-code: 12.2s)
+ POST /manage 200 in 19.2s (next.js: 225ms, proxy.ts: 350ms, application-code: 18.6s)
+⨯ Error: aborted
+    at ignore-listed frames
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://liked-ram-76.clerk.accounts.dev/npm/@clerk/clerk-js@6/dist/clerk.browser.js:12:6092)
+ POST /manage 200 in 3.1s (next.js: 193ms, proxy.ts: 124ms, application-code: 2.8s)
+  └─ ƒ GetUserInfo() in 2528ms app/manage/actions/get-user-info.ts
+ POST /manage 200 in 1115ms (next.js: 223ms, proxy.ts: 157ms, application-code: 735ms)
+  └─ ƒ GetUnreadTicketCounts() in 529ms app/manage/actions/support.ts
+ POST /manage 200 in 10.6s (next.js: 92ms, proxy.ts: 156ms, application-code: 10.3s)
+  └─ ƒ getPlatformDashboardKPIs() in 10227ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.1s (next.js: 283ms, proxy.ts: 156ms, application-code: 1695ms)
+  └─ ƒ GetMerchantSpotlight(10) in 1417ms app/manage/actions/get-merchant-spotlight.ts
+ POST /manage 200 in 5.4s (next.js: 124ms, proxy.ts: 72ms, application-code: 5.2s)
+  └─ ƒ getPlatformActivityFeed() in 5114ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.4s (next.js: 107ms, proxy.ts: 62ms, application-code: 2.3s)
+  └─ ƒ getPlatformStationFleet() in 2202ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 4.2s (next.js: 171ms, proxy.ts: 67ms, application-code: 4.0s)
+  └─ ƒ getPlatformOrdersHeatmap() in 3923ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 8.5s (next.js: 65ms, proxy.ts: 91ms, application-code: 8.4s)
+  └─ ƒ getPlatformAlerts() in 8323ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 11.6s (next.js: 48ms, proxy.ts: 34ms, application-code: 11.6s)
+  └─ ƒ getPlatformActivityFeed() in 11518ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 12.3s (next.js: 40ms, proxy.ts: 38ms, application-code: 12.2s)
+  └─ ƒ getPlatformDashboardKPIs() in 12199ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1645ms (next.js: 30ms, proxy.ts: 27ms, application-code: 1588ms)
+  └─ ƒ getPlatformStationFleet() in 1563ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.4s (next.js: 32ms, proxy.ts: 40ms, application-code: 2.4s)
+  └─ ƒ getPlatformOrdersHeatmap() in 2335ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 12.5s (next.js: 26ms, proxy.ts: 25ms, application-code: 12.4s)
+  └─ ƒ getPlatformActivityFeed() in 12419ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 5.3s (next.js: 36ms, proxy.ts: 48ms, application-code: 5.2s)
+  └─ ƒ getPlatformAlerts() in 5150ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 4.6s (next.js: 43ms, proxy.ts: 35ms, application-code: 4.6s)
+  └─ ƒ GetUnreadTicketCounts() in 4532ms app/manage/actions/support.ts
+ POST /manage 200 in 10.7s (next.js: 27ms, proxy.ts: 24ms, application-code: 10.6s)
+  └─ ƒ getPlatformActivityFeed() in 10594ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 12.0s (next.js: 34ms, proxy.ts: 29ms, application-code: 11.9s)
+  └─ ƒ getPlatformDashboardKPIs() in 11865ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 3.8s (next.js: 35ms, proxy.ts: 40ms, application-code: 3.7s)
+  └─ ƒ getPlatformStationFleet() in 3709ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.4s (next.js: 26ms, proxy.ts: 39ms, application-code: 2.3s)
+  └─ ƒ getPlatformOrdersHeatmap() in 2295ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 11.9s (next.js: 34ms, proxy.ts: 29ms, application-code: 11.8s)
+  └─ ƒ getPlatformAlerts() in 11760ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 6.4s (next.js: 26ms, proxy.ts: 26ms, application-code: 6.4s)
+  └─ ƒ getPlatformActivityFeed() in 6335ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 12.5s (next.js: 35ms, proxy.ts: 22ms, application-code: 12.5s)
+  └─ ƒ getPlatformDashboardKPIs() in 12438ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 4.3s (next.js: 22ms, proxy.ts: 22ms, application-code: 4.2s)
+  └─ ƒ getPlatformActivityFeed() in 4211ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.8s (next.js: 33ms, proxy.ts: 22ms, application-code: 2.8s)
+  └─ ƒ getPlatformStationFleet() in 2761ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 5.8s (next.js: 26ms, proxy.ts: 1637ms, application-code: 4.1s)
+  └─ ƒ getPlatformOrdersHeatmap() in 4113ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 9.9s (next.js: 19ms, proxy.ts: 27ms, application-code: 9.8s)
+  └─ ƒ getPlatformAlerts() in 9823ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1159ms (next.js: 43ms, proxy.ts: 38ms, application-code: 1078ms)
+  └─ ƒ GetUnreadTicketCounts() in 1055ms app/manage/actions/support.ts
+ POST /manage 200 in 9.3s (next.js: 26ms, proxy.ts: 35ms, application-code: 9.3s)
+  └─ ƒ getPlatformActivityFeed() in 9243ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 8.3s (next.js: 24ms, proxy.ts: 22ms, application-code: 8.3s)
+  └─ ƒ getPlatformDashboardKPIs() in 8271ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.4s (next.js: 26ms, proxy.ts: 22ms, application-code: 2.3s)
+  └─ ƒ getPlatformStationFleet() in 2311ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.5s (next.js: 23ms, proxy.ts: 24ms, application-code: 2.5s)
+  └─ ƒ getPlatformOrdersHeatmap() in 2441ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 7.1s (next.js: 28ms, proxy.ts: 27ms, application-code: 7.0s)
+  └─ ƒ getPlatformActivityFeed() in 7005ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 5.7s (next.js: 32ms, proxy.ts: 27ms, application-code: 5.6s)
+  └─ ƒ getPlatformAlerts() in 5580ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 7.2s (next.js: 32ms, proxy.ts: 24ms, application-code: 7.1s)
+  └─ ƒ getPlatformActivityFeed() in 7069ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 12.7s (next.js: 33ms, proxy.ts: 24ms, application-code: 12.7s)
+  └─ ƒ getPlatformDashboardKPIs() in 12655ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 4.5s (next.js: 22ms, proxy.ts: 24ms, application-code: 4.4s)
+  └─ ƒ getPlatformStationFleet() in 4374ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 4.0s (next.js: 31ms, proxy.ts: 25ms, application-code: 3.9s)
+  └─ ƒ getPlatformOrdersHeatmap() in 3887ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 716ms (next.js: 25ms, proxy.ts: 23ms, application-code: 668ms)
+  └─ ƒ GetUnreadTicketCounts() in 640ms app/manage/actions/support.ts
+ POST /manage 200 in 9.8s (next.js: 30ms, proxy.ts: 22ms, application-code: 9.7s)
+  └─ ƒ getPlatformAlerts() in 9711ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 6.2s (next.js: 25ms, proxy.ts: 22ms, application-code: 6.2s)
+  └─ ƒ getPlatformActivityFeed() in 6173ms app/manage/actions/hq-platform/dashboard.ts
+ GET /manage 200 in 446ms (next.js: 35ms, proxy.ts: 23ms, application-code: 388ms)
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://liked-ram-76.clerk.accounts.dev/npm/@clerk/clerk-js@6/dist/clerk.browser.js:12:6092)
+ POST /manage 200 in 2.3s (next.js: 46ms, proxy.ts: 28ms, application-code: 2.2s)
+  └─ ƒ GetUserInfo() in 2134ms app/manage/actions/get-user-info.ts
+ POST /manage 200 in 485ms (next.js: 27ms, proxy.ts: 25ms, application-code: 432ms)
+  └─ ƒ GetUnreadTicketCounts() in 411ms app/manage/actions/support.ts
+ POST /manage 200 in 10.7s (next.js: 33ms, proxy.ts: 26ms, application-code: 10.6s)
+  └─ ƒ getPlatformDashboardKPIs() in 10630ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 667ms (next.js: 25ms, proxy.ts: 47ms, application-code: 595ms)
+  └─ ƒ GetMerchantSpotlight(10) in 570ms app/manage/actions/get-merchant-spotlight.ts
+ POST /manage 200 in 7.3s (next.js: 29ms, proxy.ts: 33ms, application-code: 7.2s)
+  └─ ƒ getPlatformActivityFeed() in 7179ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1604ms (next.js: 34ms, proxy.ts: 47ms, application-code: 1523ms)
+  └─ ƒ getPlatformStationFleet() in 1497ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1335ms (next.js: 27ms, proxy.ts: 21ms, application-code: 1287ms)
+  └─ ƒ getPlatformOrdersHeatmap() in 1263ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 6.3s (next.js: 19ms, proxy.ts: 23ms, application-code: 6.3s)
+  └─ ƒ getPlatformAlerts() in 6259ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 7.7s (next.js: 32ms, proxy.ts: 34ms, application-code: 7.7s)
+  └─ ƒ getPlatformActivityFeed() in 7654ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 12.4s (next.js: 23ms, proxy.ts: 22ms, application-code: 12.4s)
+  └─ ƒ getPlatformDashboardKPIs() in 12387ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 3.9s (next.js: 21ms, proxy.ts: 21ms, application-code: 3.8s)
+  └─ ƒ getPlatformStationFleet() in 3811ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 4.9s (next.js: 21ms, proxy.ts: 24ms, application-code: 4.8s)
+  └─ ƒ getPlatformOrdersHeatmap() in 4793ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 5.1s (next.js: 28ms, proxy.ts: 27ms, application-code: 5.1s)
+  └─ ƒ getPlatformActivityFeed() in 5025ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 13.2s (next.js: 27ms, proxy.ts: 34ms, application-code: 13.2s)
+  └─ ƒ getPlatformAlerts() in 13120ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.6s (next.js: 26ms, proxy.ts: 18ms, application-code: 2.5s)
+  └─ ƒ GetUnreadTicketCounts() in 2518ms app/manage/actions/support.ts
+ POST /manage 200 in 8.9s (next.js: 25ms, proxy.ts: 1948ms, application-code: 6.9s)
+  └─ ƒ getPlatformActivityFeed() in 6916ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 10.6s (next.js: 30ms, proxy.ts: 16ms, application-code: 10.5s)
+  └─ ƒ getPlatformDashboardKPIs() in 10496ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 3.9s (next.js: 24ms, proxy.ts: 30ms, application-code: 3.9s)
+  └─ ƒ getPlatformStationFleet() in 3837ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 6.2s (next.js: 28ms, proxy.ts: 29ms, application-code: 6.1s)
+  └─ ƒ getPlatformOrdersHeatmap() in 6069ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 7.4s (next.js: 33ms, proxy.ts: 25ms, application-code: 7.3s)
+  └─ ƒ getPlatformActivityFeed() in 7300ms app/manage/actions/hq-platform/dashboard.ts
+ GET /manage 200 in 323ms (next.js: 30ms, proxy.ts: 30ms, application-code: 263ms)
+ POST /manage 200 in 2.5s (next.js: 27ms, proxy.ts: 37ms, application-code: 2.4s)
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://liked-ram-76.clerk.accounts.dev/npm/@clerk/clerk-js@6/dist/clerk.browser.js:12:6092)
+ POST /manage 200 in 2.7s (next.js: 36ms, proxy.ts: 28ms, application-code: 2.6s)
+  └─ ƒ GetUserInfo() in 2587ms app/manage/actions/get-user-info.ts
+ POST /manage 200 in 2.4s (next.js: 24ms, proxy.ts: 37ms, application-code: 2.3s)
+  └─ ƒ GetUnreadTicketCounts() in 2271ms app/manage/actions/support.ts
+ POST /manage 200 in 9.1s (next.js: 28ms, proxy.ts: 35ms, application-code: 9.0s)
+  └─ ƒ getPlatformDashboardKPIs() in 8978ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 408ms (next.js: 25ms, proxy.ts: 25ms, application-code: 358ms)
+  └─ ƒ GetMerchantSpotlight(10) in 339ms app/manage/actions/get-merchant-spotlight.ts
+ POST /manage 200 in 5.1s (next.js: 26ms, proxy.ts: 25ms, application-code: 5.1s)
+  └─ ƒ getPlatformActivityFeed() in 5065ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1345ms (next.js: 21ms, proxy.ts: 24ms, application-code: 1301ms)
+  └─ ƒ getPlatformStationFleet() in 1272ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.7s (next.js: 28ms, proxy.ts: 65ms, application-code: 2.6s)
+  └─ ƒ getPlatformOrdersHeatmap() in 2600ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 11.1s (next.js: 33ms, proxy.ts: 32ms, application-code: 11.0s)
+  └─ ƒ getPlatformAlerts() in 10963ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 6.2s (next.js: 28ms, proxy.ts: 28ms, application-code: 6.2s)
+  └─ ƒ getPlatformActivityFeed() in 6145ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 6.0s (next.js: 20ms, proxy.ts: 25ms, application-code: 5.9s)
+  └─ ƒ getPlatformDashboardKPIs() in 5925ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1101ms (next.js: 24ms, proxy.ts: 24ms, application-code: 1053ms)
+  └─ ƒ getPlatformStationFleet() in 1034ms app/manage/actions/hq-platform/dashboard.ts
+ GET /manage 200 in 308ms (next.js: 44ms, proxy.ts: 18ms, application-code: 246ms)
+ POST /manage 200 in 1242ms (next.js: 47ms, proxy.ts: 26ms, application-code: 1169ms)
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://liked-ram-76.clerk.accounts.dev/npm/@clerk/clerk-js@6/dist/clerk.browser.js:12:6092)
+ POST /manage 200 in 1398ms (next.js: 25ms, proxy.ts: 27ms, application-code: 1346ms)
+  └─ ƒ GetUserInfo() in 1327ms app/manage/actions/get-user-info.ts
+ POST /manage 200 in 391ms (next.js: 33ms, proxy.ts: 22ms, application-code: 336ms)
+  └─ ƒ GetUnreadTicketCounts() in 313ms app/manage/actions/support.ts
+ POST /manage 200 in 7.2s (next.js: 25ms, proxy.ts: 25ms, application-code: 7.1s)
+  └─ ƒ getPlatformDashboardKPIs() in 7117ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 889ms (next.js: 24ms, proxy.ts: 34ms, application-code: 831ms)
+  └─ ƒ GetMerchantSpotlight(10) in 810ms app/manage/actions/get-merchant-spotlight.ts
+ POST /manage 200 in 4.7s (next.js: 26ms, proxy.ts: 19ms, application-code: 4.6s)
+  └─ ƒ getPlatformActivityFeed() in 4585ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1216ms (next.js: 28ms, proxy.ts: 27ms, application-code: 1160ms)
+  └─ ƒ getPlatformStationFleet() in 1138ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1681ms (next.js: 29ms, proxy.ts: 23ms, application-code: 1629ms)
+  └─ ƒ getPlatformOrdersHeatmap() in 1606ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 3.4s (next.js: 25ms, proxy.ts: 36ms, application-code: 3.4s)
+  └─ ƒ getPlatformAlerts() in 3328ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 4.7s (next.js: 25ms, proxy.ts: 33ms, application-code: 4.6s)
+  └─ ƒ getPlatformActivityFeed() in 4606ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 9.2s (next.js: 24ms, proxy.ts: 23ms, application-code: 9.2s)
+  └─ ƒ getPlatformDashboardKPIs() in 9134ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.3s (next.js: 32ms, proxy.ts: 27ms, application-code: 2.2s)
+  └─ ƒ getPlatformStationFleet() in 2187ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 3.3s (next.js: 26ms, proxy.ts: 26ms, application-code: 3.2s)
+  └─ ƒ getPlatformOrdersHeatmap() in 3180ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 4.5s (next.js: 21ms, proxy.ts: 21ms, application-code: 4.4s)
+  └─ ƒ getPlatformActivityFeed() in 4402ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 6.7s (next.js: 24ms, proxy.ts: 25ms, application-code: 6.6s)
+  └─ ƒ getPlatformAlerts() in 6621ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 4.7s (next.js: 21ms, proxy.ts: 23ms, application-code: 4.7s)
+  └─ ƒ getPlatformActivityFeed() in 4685ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 955ms (next.js: 29ms, proxy.ts: 25ms, application-code: 901ms)
+  └─ ƒ GetUnreadTicketCounts() in 881ms app/manage/actions/support.ts
+ GET /manage 200 in 342ms (next.js: 37ms, proxy.ts: 26ms, application-code: 279ms)
+ POST /manage 200 in 3.0s (next.js: 31ms, proxy.ts: 26ms, application-code: 2.9s)
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://liked-ram-76.clerk.accounts.dev/npm/@clerk/clerk-js@6/dist/clerk.browser.js:12:6092)
+ POST /manage 200 in 720ms (next.js: 34ms, proxy.ts: 25ms, application-code: 661ms)
+  └─ ƒ GetUserInfo() in 628ms app/manage/actions/get-user-info.ts
+ POST /manage 200 in 480ms (next.js: 33ms, proxy.ts: 39ms, application-code: 407ms)
+  └─ ƒ GetUnreadTicketCounts() in 380ms app/manage/actions/support.ts
+ POST /manage 200 in 10.5s (next.js: 29ms, proxy.ts: 33ms, application-code: 10.5s)
+  └─ ƒ getPlatformDashboardKPIs() in 10459ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 440ms (next.js: 26ms, proxy.ts: 35ms, application-code: 379ms)
+  └─ ƒ GetMerchantSpotlight(10) in 359ms app/manage/actions/get-merchant-spotlight.ts
+ POST /manage 200 in 5.2s (next.js: 28ms, proxy.ts: 27ms, application-code: 5.2s)
+  └─ ƒ getPlatformActivityFeed() in 5132ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 3.2s (next.js: 29ms, proxy.ts: 1199ms, application-code: 1996ms)
+  └─ ƒ getPlatformStationFleet() in 1957ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.9s (next.js: 24ms, proxy.ts: 24ms, application-code: 2.8s)
+  └─ ƒ getPlatformOrdersHeatmap() in 2816ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 5.2s (next.js: 33ms, proxy.ts: 27ms, application-code: 5.2s)
+  └─ ƒ getPlatformAlerts() in 5133ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 4.2s (next.js: 29ms, proxy.ts: 26ms, application-code: 4.2s)
+  └─ ƒ getPlatformActivityFeed() in 4163ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 5.9s (next.js: 27ms, proxy.ts: 37ms, application-code: 5.8s)
+  └─ ƒ getPlatformDashboardKPIs() in 5807ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1303ms (next.js: 30ms, proxy.ts: 25ms, application-code: 1248ms)
+  └─ ƒ getPlatformStationFleet() in 1225ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 3.1s (next.js: 31ms, proxy.ts: 25ms, application-code: 3.1s)
+  └─ ƒ getPlatformActivityFeed() in 3031ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.7s (next.js: 22ms, proxy.ts: 23ms, application-code: 2.6s)
+  └─ ƒ getPlatformOrdersHeatmap() in 2611ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 4.4s (next.js: 24ms, proxy.ts: 21ms, application-code: 4.3s)
+  └─ ƒ getPlatformAlerts() in 4296ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 5.2s (next.js: 21ms, proxy.ts: 29ms, application-code: 5.1s)
+  └─ ƒ getPlatformActivityFeed() in 5094ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 422ms (next.js: 20ms, proxy.ts: 22ms, application-code: 381ms)
+  └─ ƒ GetUnreadTicketCounts() in 363ms app/manage/actions/support.ts
+ GET /manage 200 in 305ms (next.js: 27ms, proxy.ts: 16ms, application-code: 261ms)
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://liked-ram-76.clerk.accounts.dev/npm/@clerk/clerk-js@6/dist/clerk.browser.js:12:6092)
+ POST /manage 200 in 855ms (next.js: 26ms, proxy.ts: 34ms, application-code: 795ms)
+  └─ ƒ GetUserInfo() in 776ms app/manage/actions/get-user-info.ts
+ POST /manage 200 in 388ms (next.js: 23ms, proxy.ts: 22ms, application-code: 343ms)
+  └─ ƒ GetUnreadTicketCounts() in 314ms app/manage/actions/support.ts
+ POST /manage 200 in 7.0s (next.js: 61ms, proxy.ts: 24ms, application-code: 6.9s)
+  └─ ƒ getPlatformDashboardKPIs() in 6881ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1156ms (next.js: 23ms, proxy.ts: 25ms, application-code: 1109ms)
+  └─ ƒ GetMerchantSpotlight(10) in 1083ms app/manage/actions/get-merchant-spotlight.ts
+ POST /manage 200 in 4.6s (next.js: 31ms, proxy.ts: 36ms, application-code: 4.5s)
+  └─ ƒ getPlatformActivityFeed() in 4507ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.4s (next.js: 29ms, proxy.ts: 34ms, application-code: 2.3s)
+  └─ ƒ getPlatformStationFleet() in 2266ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.1s (next.js: 27ms, proxy.ts: 23ms, application-code: 2.1s)
+  └─ ƒ getPlatformOrdersHeatmap() in 2071ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 3.8s (next.js: 17ms, proxy.ts: 20ms, application-code: 3.8s)
+  └─ ƒ getPlatformAlerts() in 3764ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.6s (next.js: 19ms, proxy.ts: 33ms, application-code: 2.6s)
+  └─ ƒ getPlatformActivityFeed() in 2531ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 4.9s (next.js: 19ms, proxy.ts: 19ms, application-code: 4.8s)
+  └─ ƒ getPlatformDashboardKPIs() in 4831ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1125ms (next.js: 19ms, proxy.ts: 20ms, application-code: 1086ms)
+  └─ ƒ getPlatformStationFleet() in 1064ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.9s (next.js: 28ms, proxy.ts: 32ms, application-code: 2.8s)
+  └─ ƒ getPlatformActivityFeed() in 2800ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1093ms (next.js: 38ms, proxy.ts: 22ms, application-code: 1034ms)
+  └─ ƒ getPlatformOrdersHeatmap() in 1008ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.5s (next.js: 20ms, proxy.ts: 24ms, application-code: 2.5s)
+  └─ ƒ getPlatformAlerts() in 2446ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.9s (next.js: 25ms, proxy.ts: 23ms, application-code: 2.8s)
+  └─ ƒ getPlatformActivityFeed() in 2830ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 559ms (next.js: 24ms, proxy.ts: 35ms, application-code: 499ms)
+  └─ ƒ GetUnreadTicketCounts() in 479ms app/manage/actions/support.ts
+ POST /manage 200 in 4.9s (next.js: 27ms, proxy.ts: 18ms, application-code: 4.8s)
+  └─ ƒ getPlatformDashboardKPIs() in 4833ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1106ms (next.js: 19ms, proxy.ts: 23ms, application-code: 1064ms)
+  └─ ƒ getPlatformStationFleet() in 1040ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1302ms (next.js: 22ms, proxy.ts: 20ms, application-code: 1259ms)
+  └─ ƒ getPlatformOrdersHeatmap() in 1240ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.6s (next.js: 18ms, proxy.ts: 22ms, application-code: 2.5s)
+  └─ ƒ getPlatformActivityFeed() in 2526ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 3.4s (next.js: 18ms, proxy.ts: 21ms, application-code: 3.4s)
+  └─ ƒ getPlatformAlerts() in 3369ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 3.5s (next.js: 22ms, proxy.ts: 19ms, application-code: 3.5s)
+  └─ ƒ getPlatformActivityFeed() in 3441ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 5.1s (next.js: 21ms, proxy.ts: 891ms, application-code: 4.1s)
+  └─ ƒ getPlatformDashboardKPIs() in 4125ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1185ms (next.js: 23ms, proxy.ts: 28ms, application-code: 1134ms)
+  └─ ƒ getPlatformStationFleet() in 1108ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1478ms (next.js: 17ms, proxy.ts: 18ms, application-code: 1443ms)
+  └─ ƒ getPlatformOrdersHeatmap() in 1428ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 3.1s (next.js: 21ms, proxy.ts: 25ms, application-code: 3.1s)
+  └─ ƒ getPlatformAlerts() in 3047ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.7s (next.js: 22ms, proxy.ts: 35ms, application-code: 2.6s)
+  └─ ƒ getPlatformActivityFeed() in 2614ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 981ms (next.js: 18ms, proxy.ts: 24ms, application-code: 939ms)
+  └─ ƒ GetUnreadTicketCounts() in 925ms app/manage/actions/support.ts
+ POST /manage 200 in 2.6s (next.js: 18ms, proxy.ts: 22ms, application-code: 2.6s)
+  └─ ƒ getPlatformActivityFeed() in 2535ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 8.2s (next.js: 17ms, proxy.ts: 20ms, application-code: 8.2s)
+  └─ ƒ getPlatformDashboardKPIs() in 8144ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.1s (next.js: 19ms, proxy.ts: 17ms, application-code: 2.1s)
+  └─ ƒ getPlatformStationFleet() in 2081ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1833ms (next.js: 23ms, proxy.ts: 37ms, application-code: 1773ms)
+  └─ ƒ getPlatformOrdersHeatmap() in 1754ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 3.0s (next.js: 18ms, proxy.ts: 23ms, application-code: 3.0s)
+  └─ ƒ getPlatformAlerts() in 2930ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.3s (next.js: 20ms, proxy.ts: 19ms, application-code: 2.3s)
+  └─ ƒ getPlatformActivityFeed() in 2259ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 3.0s (next.js: 17ms, proxy.ts: 18ms, application-code: 2.9s)
+  └─ ƒ getPlatformActivityFeed() in 2914ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 4.8s (next.js: 17ms, proxy.ts: 20ms, application-code: 4.8s)
+  └─ ƒ getPlatformDashboardKPIs() in 4792ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1070ms (next.js: 17ms, proxy.ts: 22ms, application-code: 1031ms)
+  └─ ƒ getPlatformStationFleet() in 1016ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1215ms (next.js: 17ms, proxy.ts: 16ms, application-code: 1182ms)
+  └─ ƒ getPlatformOrdersHeatmap() in 1167ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.8s (next.js: 18ms, proxy.ts: 25ms, application-code: 2.7s)
+  └─ ƒ getPlatformAlerts() in 2713ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 3.3s (next.js: 23ms, proxy.ts: 16ms, application-code: 3.3s)
+  └─ ƒ getPlatformActivityFeed() in 3255ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 678ms (next.js: 28ms, proxy.ts: 24ms, application-code: 625ms)
+  └─ ƒ GetUnreadTicketCounts() in 607ms app/manage/actions/support.ts
+ POST /manage 200 in 3.2s (next.js: 21ms, proxy.ts: 18ms, application-code: 3.2s)
+  └─ ƒ getPlatformActivityFeed() in 3167ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 4.5s (next.js: 21ms, proxy.ts: 20ms, application-code: 4.4s)
+  └─ ƒ getPlatformDashboardKPIs() in 4411ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.1s (next.js: 17ms, proxy.ts: 23ms, application-code: 2.0s)
+  └─ ƒ getPlatformStationFleet() in 2023ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1535ms (next.js: 20ms, proxy.ts: 23ms, application-code: 1492ms)
+  └─ ƒ getPlatformOrdersHeatmap() in 1477ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 3.1s (next.js: 21ms, proxy.ts: 21ms, application-code: 3.1s)
+  └─ ƒ getPlatformAlerts() in 3084ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 3.2s (next.js: 21ms, proxy.ts: 23ms, application-code: 3.2s)
+  └─ ƒ getPlatformActivityFeed() in 3175ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 3.1s (next.js: 19ms, proxy.ts: 17ms, application-code: 3.0s)
+  └─ ƒ getPlatformActivityFeed() in 3019ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 4.6s (next.js: 17ms, proxy.ts: 27ms, application-code: 4.5s)
+  └─ ƒ getPlatformDashboardKPIs() in 4496ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 6.7s (next.js: 18ms, proxy.ts: 34ms, application-code: 6.7s)
+  └─ ƒ getPlatformStationFleet() in 6665ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 6.0s (next.js: 25ms, proxy.ts: 19ms, application-code: 6.0s)
+  └─ ƒ getPlatformOrdersHeatmap() in 5987ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 12.4s (next.js: 21ms, proxy.ts: 22ms, application-code: 12.3s)
+  └─ ƒ getPlatformAlerts() in 12291ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 9.8s (next.js: 18ms, proxy.ts: 21ms, application-code: 9.8s)
+  └─ ƒ getPlatformActivityFeed() in 9780ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.7s (next.js: 19ms, proxy.ts: 567ms, application-code: 2.1s)
+  └─ ƒ GetUnreadTicketCounts() in 2064ms app/manage/actions/support.ts
+ POST /manage 200 in 4.8s (next.js: 18ms, proxy.ts: 16ms, application-code: 4.8s)
+  └─ ƒ getPlatformDashboardKPIs() in 4792ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 7.3s (next.js: 19ms, proxy.ts: 29ms, application-code: 7.3s)
+  └─ ƒ getPlatformActivityFeed() in 7238ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 7.3s (next.js: 17ms, proxy.ts: 18ms, application-code: 7.2s)
+  └─ ƒ getPlatformStationFleet() in 7202ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 6.0s (next.js: 19ms, proxy.ts: 22ms, application-code: 6.0s)
+  └─ ƒ getPlatformOrdersHeatmap() in 5970ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 12.3s (next.js: 26ms, proxy.ts: 22ms, application-code: 12.2s)
+  └─ ƒ getPlatformAlerts() in 12200ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.9s (next.js: 18ms, proxy.ts: 17ms, application-code: 2.9s)
+  └─ ƒ getPlatformActivityFeed() in 2862ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 3.7s (next.js: 17ms, proxy.ts: 19ms, application-code: 3.6s)
+  └─ ƒ getPlatformDashboardKPIs() in 3597ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 4.9s (next.js: 28ms, proxy.ts: 32ms, application-code: 4.9s)
+  └─ ƒ getPlatformActivityFeed() in 4822ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1415ms (next.js: 27ms, proxy.ts: 29ms, application-code: 1360ms)
+  └─ ƒ getPlatformStationFleet() in 1344ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1811ms (next.js: 17ms, proxy.ts: 20ms, application-code: 1774ms)
+  └─ ƒ getPlatformOrdersHeatmap() in 1761ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 733ms (next.js: 36ms, proxy.ts: 35ms, application-code: 663ms)
+  └─ ƒ GetUnreadTicketCounts() in 571ms app/manage/actions/support.ts
+ POST /dashboard 200 in 1186ms (next.js: 73ms, proxy.ts: 34ms, application-code: 1079ms)
+  └─ ƒ GetUnreadTicketCounts() in 435ms app/dashboard/actions/support.ts
+ POST /manage 200 in 4.4s (next.js: 60ms, proxy.ts: 37ms, application-code: 4.3s)
+  └─ ƒ getPlatformAlerts() in 4253ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 4.3s (next.js: 64ms, proxy.ts: 31ms, application-code: 4.2s)
+  └─ ƒ getPlatformActivityFeed() in 4154ms app/manage/actions/hq-platform/dashboard.ts
+ GET /manage 200 in 857ms (next.js: 62ms, proxy.ts: 54ms, application-code: 740ms)
+ POST /manage 200 in 4.6s (next.js: 35ms, proxy.ts: 35ms, application-code: 4.5s)
+  └─ ƒ getPlatformDashboardKPIs() in 4309ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1903ms (next.js: 34ms, proxy.ts: 31ms, application-code: 1838ms)
+  └─ ƒ getPlatformStationFleet() in 1809ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.6s (next.js: 31ms, proxy.ts: 32ms, application-code: 2.6s)
+  └─ ƒ getPlatformActivityFeed() in 2532ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1106ms (next.js: 31ms, proxy.ts: 40ms, application-code: 1036ms)
+  └─ ƒ getPlatformOrdersHeatmap() in 1006ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 4.0s (next.js: 29ms, proxy.ts: 32ms, application-code: 3.9s)
+  └─ ƒ getPlatformAlerts() in 3898ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.8s (next.js: 36ms, proxy.ts: 35ms, application-code: 2.7s)
+  └─ ƒ getPlatformActivityFeed() in 2659ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 4.8s (next.js: 26ms, proxy.ts: 19ms, application-code: 4.8s)
+  └─ ƒ getPlatformDashboardKPIs() in 4785ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 3.8s (next.js: 17ms, proxy.ts: 29ms, application-code: 3.7s)
+  └─ ƒ getPlatformStationFleet() in 3702ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 3.0s (next.js: 27ms, proxy.ts: 21ms, application-code: 3.0s)
+  └─ ƒ getPlatformOrdersHeatmap() in 2955ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 5.9s (next.js: 17ms, proxy.ts: 27ms, application-code: 5.9s)
+  └─ ƒ getPlatformActivityFeed() in 5839ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 409ms (next.js: 17ms, proxy.ts: 17ms, application-code: 375ms)
+  └─ ƒ GetUnreadTicketCounts() in 349ms app/manage/actions/support.ts
+ POST /manage 200 in 7.0s (next.js: 20ms, proxy.ts: 19ms, application-code: 7.0s)
+  └─ ƒ getPlatformAlerts() in 6986ms app/manage/actions/hq-platform/dashboard.ts
+ GET /manage 200 in 367ms (next.js: 63ms, proxy.ts: 48ms, application-code: 256ms)
+ POST /manage 200 in 434ms (next.js: 48ms, proxy.ts: 37ms, application-code: 350ms)
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://liked-ram-76.clerk.accounts.dev/npm/@clerk/clerk-js@6/dist/clerk.browser.js:12:6092)
+ POST /manage 200 in 433ms (next.js: 23ms, proxy.ts: 37ms, application-code: 373ms)
+  └─ ƒ GetUserInfo() in 353ms app/manage/actions/get-user-info.ts
+ POST /manage 200 in 408ms (next.js: 22ms, proxy.ts: 24ms, application-code: 362ms)
+  └─ ƒ GetUnreadTicketCounts() in 343ms app/manage/actions/support.ts
+ POST /manage 200 in 8.5s (next.js: 24ms, proxy.ts: 30ms, application-code: 8.5s)
+  └─ ƒ getPlatformDashboardKPIs() in 8465ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1033ms (next.js: 36ms, proxy.ts: 19ms, application-code: 978ms)
+  └─ ƒ GetMerchantSpotlight(10) in 952ms app/manage/actions/get-merchant-spotlight.ts
+ POST /manage 200 in 5.9s (next.js: 20ms, proxy.ts: 28ms, application-code: 5.9s)
+  └─ ƒ getPlatformActivityFeed() in 5850ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1586ms (next.js: 21ms, proxy.ts: 26ms, application-code: 1539ms)
+  └─ ƒ getPlatformStationFleet() in 1521ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.9s (next.js: 17ms, proxy.ts: 34ms, application-code: 2.8s)
+  └─ ƒ getPlatformOrdersHeatmap() in 2809ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 9.5s (next.js: 21ms, proxy.ts: 19ms, application-code: 9.4s)
+  └─ ƒ getPlatformAlerts() in 9429ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 4.4s (next.js: 21ms, proxy.ts: 32ms, application-code: 4.4s)
+  └─ ƒ getPlatformActivityFeed() in 4364ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 16.7s (next.js: 38ms, proxy.ts: 24ms, application-code: 16.7s)
+  └─ ƒ getPlatformDashboardKPIs() in 16625ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 3.6s (next.js: 18ms, proxy.ts: 22ms, application-code: 3.6s)
+  └─ ƒ getPlatformStationFleet() in 3585ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 5.3s (next.js: 22ms, proxy.ts: 28ms, application-code: 5.2s)
+  └─ ƒ getPlatformActivityFeed() in 5201ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.3s (next.js: 20ms, proxy.ts: 37ms, application-code: 2.3s)
+  └─ ƒ getPlatformOrdersHeatmap() in 2224ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 5.5s (next.js: 17ms, proxy.ts: 21ms, application-code: 5.5s)
+  └─ ƒ getPlatformAlerts() in 5429ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 4.0s (next.js: 18ms, proxy.ts: 21ms, application-code: 3.9s)
+  └─ ƒ GetUnreadTicketCounts() in 3905ms app/manage/actions/support.ts
+ POST /manage 200 in 6.7s (next.js: 21ms, proxy.ts: 24ms, application-code: 6.6s)
+  └─ ƒ getPlatformActivityFeed() in 6618ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 11.1s (next.js: 19ms, proxy.ts: 20ms, application-code: 11.0s)
+  └─ ƒ getPlatformDashboardKPIs() in 11010ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1843ms (next.js: 25ms, proxy.ts: 25ms, application-code: 1794ms)
+  └─ ƒ getPlatformStationFleet() in 1772ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.8s (next.js: 18ms, proxy.ts: 23ms, application-code: 2.8s)
+  └─ ƒ getPlatformOrdersHeatmap() in 2777ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.4s (next.js: 26ms, proxy.ts: 31ms, application-code: 2.4s)
+  └─ ƒ getPlatformActivityFeed() in 2364ms app/manage/actions/hq-platform/dashboard.ts
+ GET /manage 200 in 362ms (next.js: 30ms, proxy.ts: 43ms, application-code: 289ms)
+ POST /manage 200 in 3.0s (next.js: 17ms, proxy.ts: 16ms, application-code: 2.9s)
+ POST /manage 200 in 369ms (next.js: 24ms, proxy.ts: 23ms, application-code: 322ms)
+  └─ ƒ GetUserInfo() in 294ms app/manage/actions/get-user-info.ts
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://liked-ram-76.clerk.accounts.dev/npm/@clerk/clerk-js@6/dist/clerk.browser.js:12:6092)
+ POST /manage 200 in 314ms (next.js: 24ms, proxy.ts: 18ms, application-code: 272ms)
+  └─ ƒ GetUnreadTicketCounts() in 249ms app/manage/actions/support.ts
+ POST /manage 200 in 7.5s (next.js: 19ms, proxy.ts: 25ms, application-code: 7.4s)
+  └─ ƒ getPlatformDashboardKPIs() in 7410ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 459ms (next.js: 26ms, proxy.ts: 29ms, application-code: 404ms)
+  └─ ƒ GetMerchantSpotlight(10) in 386ms app/manage/actions/get-merchant-spotlight.ts
+ POST /manage 200 in 5.6s (next.js: 26ms, proxy.ts: 23ms, application-code: 5.6s)
+  └─ ƒ getPlatformActivityFeed() in 5552ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.6s (next.js: 57ms, proxy.ts: 37ms, application-code: 2.5s)
+  └─ ƒ getPlatformStationFleet() in 2475ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 4.0s (next.js: 28ms, proxy.ts: 16ms, application-code: 3.9s)
+  └─ ƒ getPlatformOrdersHeatmap() in 3912ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 7.2s (next.js: 36ms, proxy.ts: 31ms, application-code: 7.1s)
+  └─ ƒ getPlatformAlerts() in 7105ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 7.6s (next.js: 23ms, proxy.ts: 19ms, application-code: 7.6s)
+  └─ ƒ getPlatformActivityFeed() in 7532ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 7.9s (next.js: 24ms, proxy.ts: 20ms, application-code: 7.8s)
+  └─ ƒ getPlatformDashboardKPIs() in 7788ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.8s (next.js: 18ms, proxy.ts: 19ms, application-code: 2.8s)
+  └─ ƒ getPlatformStationFleet() in 2739ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 7.0s (next.js: 31ms, proxy.ts: 27ms, application-code: 6.9s)
+  └─ ƒ getPlatformOrdersHeatmap() in 6891ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 6.2s (next.js: 26ms, proxy.ts: 25ms, application-code: 6.1s)
+  └─ ƒ getPlatformActivityFeed() in 6128ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 6.5s (next.js: 22ms, proxy.ts: 36ms, application-code: 6.4s)
+  └─ ƒ getPlatformAlerts() in 6414ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 723ms (next.js: 23ms, proxy.ts: 35ms, application-code: 665ms)
+  └─ ƒ GetUnreadTicketCounts() in 644ms app/manage/actions/support.ts
+ POST /manage 200 in 5.1s (next.js: 23ms, proxy.ts: 23ms, application-code: 5.0s)
+  └─ ƒ getPlatformActivityFeed() in 5006ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 13.6s (next.js: 26ms, proxy.ts: 22ms, application-code: 13.6s)
+  └─ ƒ getPlatformDashboardKPIs() in 13559ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.2s (next.js: 20ms, proxy.ts: 22ms, application-code: 2.2s)
+  └─ ƒ getPlatformStationFleet() in 2151ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 3.3s (next.js: 21ms, proxy.ts: 30ms, application-code: 3.2s)
+  └─ ƒ getPlatformOrdersHeatmap() in 3219ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 5.8s (next.js: 20ms, proxy.ts: 25ms, application-code: 5.7s)
+  └─ ƒ getPlatformActivityFeed() in 5704ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 10.8s (next.js: 37ms, proxy.ts: 1108ms, application-code: 9.7s)
+  └─ ƒ getPlatformAlerts() in 9650ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 5.3s (next.js: 22ms, proxy.ts: 22ms, application-code: 5.3s)
+  └─ ƒ getPlatformActivityFeed() in 5275ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 9.0s (next.js: 25ms, proxy.ts: 19ms, application-code: 9.0s)
+  └─ ƒ getPlatformDashboardKPIs() in 8974ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 3.0s (next.js: 22ms, proxy.ts: 20ms, application-code: 3.0s)
+  └─ ƒ getPlatformStationFleet() in 2965ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.9s (next.js: 17ms, proxy.ts: 27ms, application-code: 2.8s)
+  └─ ƒ getPlatformOrdersHeatmap() in 2821ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 3.9s (next.js: 29ms, proxy.ts: 17ms, application-code: 3.8s)
+  └─ ƒ getPlatformActivityFeed() in 3797ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 3.2s (next.js: 19ms, proxy.ts: 22ms, application-code: 3.2s)
+  └─ ƒ getPlatformAlerts() in 3157ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 463ms (next.js: 37ms, proxy.ts: 33ms, application-code: 394ms)
+  └─ ƒ GetUnreadTicketCounts() in 377ms app/manage/actions/support.ts
+✓ Compiled in 4.1s
+ GET /dashboard 200 in 3.3s (next.js: 757ms, proxy.ts: 2.0s, application-code: 525ms)
+ GET /manage 200 in 3.7s (next.js: 191ms, proxy.ts: 3.3s, application-code: 213ms)
+ POST /dashboard 200 in 6.5s (next.js: 238ms, proxy.ts: 2.6s, application-code: 3.6s)
+  └─ ƒ GetUserInfo() in 3568ms app/manage/actions/get-user-info.ts
+ POST /dashboard 200 in 2.5s (next.js: 26ms, proxy.ts: 23ms, application-code: 2.4s)
+  └─ ƒ GetLocations("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "user_36u15MkVGaCOwWexx9cWWlrF1Vw") in 2416ms app/dashboard/actions/get-locations.ts
+ POST /manage 200 in 10.1s (next.js: 19ms, proxy.ts: 38ms, application-code: 10.1s)
+  └─ ƒ getPlatformActivityFeed() in 10059ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 7.6s (next.js: 31ms, proxy.ts: 29ms, application-code: 7.5s)
+  └─ ƒ getPlatformDashboardKPIs() in 7481ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1368ms (next.js: 23ms, proxy.ts: 34ms, application-code: 1311ms)
+  └─ ƒ getPlatformStationFleet() in 1294ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1181ms (next.js: 23ms, proxy.ts: 18ms, application-code: 1140ms)
+  └─ ƒ getPlatformOrdersHeatmap() in 1123ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 6.8s (next.js: 18ms, proxy.ts: 16ms, application-code: 6.7s)
+  └─ ƒ getPlatformAlerts() in 6706ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 4.1s (next.js: 17ms, proxy.ts: 18ms, application-code: 4.1s)
+  └─ ƒ getPlatformActivityFeed() in 4051ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 3.0s (next.js: 19ms, proxy.ts: 18ms, application-code: 3.0s)
+  └─ ƒ getPlatformActivityFeed() in 2984ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 6.4s (next.js: 19ms, proxy.ts: 26ms, application-code: 6.4s)
+  └─ ƒ getPlatformDashboardKPIs() in 6349ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.6s (next.js: 20ms, proxy.ts: 26ms, application-code: 2.5s)
+  └─ ƒ getPlatformStationFleet() in 2524ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1887ms (next.js: 17ms, proxy.ts: 24ms, application-code: 1846ms)
+  └─ ƒ getPlatformOrdersHeatmap() in 1805ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1918ms (next.js: 22ms, proxy.ts: 18ms, application-code: 1878ms)
+  └─ ƒ GetUnreadTicketCounts() in 1862ms app/manage/actions/support.ts
+ POST /manage 200 in 5.0s (next.js: 19ms, proxy.ts: 35ms, application-code: 4.9s)
+  └─ ƒ getPlatformAlerts() in 4930ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 5.1s (next.js: 28ms, proxy.ts: 19ms, application-code: 5.0s)
+  └─ ƒ getPlatformActivityFeed() in 5001ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 7.2s (next.js: 18ms, proxy.ts: 19ms, application-code: 7.1s)
+  └─ ƒ getPlatformActivityFeed() in 7123ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 8.7s (next.js: 24ms, proxy.ts: 21ms, application-code: 8.6s)
+  └─ ƒ getPlatformDashboardKPIs() in 8593ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 3.5s (next.js: 24ms, proxy.ts: 27ms, application-code: 3.5s)
+  └─ ƒ getPlatformStationFleet() in 3476ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.9s (next.js: 17ms, proxy.ts: 20ms, application-code: 2.9s)
+  └─ ƒ getPlatformOrdersHeatmap() in 2885ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 4.6s (next.js: 20ms, proxy.ts: 19ms, application-code: 4.6s)
+  └─ ƒ getPlatformAlerts() in 4570ms app/manage/actions/hq-platform/dashboard.ts
+ GET /manage 200 in 1663ms (next.js: 21ms, proxy.ts: 28ms, application-code: 1614ms)
+ POST /manage 200 in 1946ms (next.js: 19ms, proxy.ts: 22ms, application-code: 1905ms)
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://liked-ram-76.clerk.accounts.dev/npm/@clerk/clerk-js@6/dist/clerk.browser.js:12:6092)
+ POST /manage 200 in 364ms (next.js: 34ms, proxy.ts: 26ms, application-code: 304ms)
+  └─ ƒ GetUserInfo() in 279ms app/manage/actions/get-user-info.ts
+ POST /manage 200 in 888ms (next.js: 34ms, proxy.ts: 35ms, application-code: 819ms)
+  └─ ƒ GetUnreadTicketCounts() in 797ms app/manage/actions/support.ts
+ POST /manage 200 in 10.8s (next.js: 26ms, proxy.ts: 30ms, application-code: 10.7s)
+  └─ ƒ getPlatformDashboardKPIs() in 10714ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 497ms (next.js: 28ms, proxy.ts: 63ms, application-code: 405ms)
+  └─ ƒ GetMerchantSpotlight(10) in 387ms app/manage/actions/get-merchant-spotlight.ts
+ POST /manage 200 in 5.3s (next.js: 21ms, proxy.ts: 25ms, application-code: 5.3s)
+  └─ ƒ getPlatformActivityFeed() in 5288ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1458ms (next.js: 21ms, proxy.ts: 19ms, application-code: 1418ms)
+  └─ ƒ getPlatformStationFleet() in 1403ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 3.0s (next.js: 20ms, proxy.ts: 28ms, application-code: 2.9s)
+  └─ ƒ getPlatformOrdersHeatmap() in 2891ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 4.0s (next.js: 22ms, proxy.ts: 23ms, application-code: 3.9s)
+  └─ ƒ getPlatformAlerts() in 3922ms app/manage/actions/hq-platform/dashboard.ts
+ GET /manage 200 in 274ms (next.js: 27ms, proxy.ts: 23ms, application-code: 224ms)
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://liked-ram-76.clerk.accounts.dev/npm/@clerk/clerk-js@6/dist/clerk.browser.js:12:6092)
+ POST /manage 200 in 1433ms (next.js: 36ms, proxy.ts: 26ms, application-code: 1370ms)
+  └─ ƒ GetUserInfo() in 1346ms app/manage/actions/get-user-info.ts
+ POST /manage 200 in 1010ms (next.js: 34ms, proxy.ts: 24ms, application-code: 951ms)
+  └─ ƒ GetUnreadTicketCounts() in 919ms app/manage/actions/support.ts
+ POST /manage 200 in 11.2s (next.js: 19ms, proxy.ts: 25ms, application-code: 11.1s)
+  └─ ƒ getPlatformDashboardKPIs() in 11111ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1258ms (next.js: 37ms, proxy.ts: 40ms, application-code: 1181ms)
+  └─ ƒ GetMerchantSpotlight(10) in 1161ms app/manage/actions/get-merchant-spotlight.ts
+ POST /manage 200 in 6.8s (next.js: 27ms, proxy.ts: 37ms, application-code: 6.7s)
+  └─ ƒ getPlatformActivityFeed() in 6719ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.3s (next.js: 20ms, proxy.ts: 26ms, application-code: 2.2s)
+  └─ ƒ getPlatformStationFleet() in 2199ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 3.2s (next.js: 17ms, proxy.ts: 24ms, application-code: 3.2s)
+  └─ ƒ getPlatformOrdersHeatmap() in 3143ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 6.9s (next.js: 42ms, proxy.ts: 20ms, application-code: 6.9s)
+  └─ ƒ getPlatformAlerts() in 6856ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 7.6s (next.js: 25ms, proxy.ts: 2.3s, application-code: 5.3s)
+  └─ ƒ getPlatformActivityFeed() in 5323ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 7.7s (next.js: 32ms, proxy.ts: 36ms, application-code: 7.7s)
+  └─ ƒ getPlatformDashboardKPIs() in 7628ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 3.8s (next.js: 21ms, proxy.ts: 18ms, application-code: 3.8s)
+  └─ ƒ getPlatformStationFleet() in 3792ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1699ms (next.js: 18ms, proxy.ts: 21ms, application-code: 1661ms)
+  └─ ƒ getPlatformOrdersHeatmap() in 1646ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.3s (next.js: 19ms, proxy.ts: 34ms, application-code: 2.3s)
+  └─ ƒ getPlatformActivityFeed() in 2265ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.6s (next.js: 20ms, proxy.ts: 28ms, application-code: 2.6s)
+  └─ ƒ getPlatformAlerts() in 2544ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 9.7s (next.js: 19ms, proxy.ts: 23ms, application-code: 9.7s)
+  └─ ƒ getPlatformActivityFeed() in 9668ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 987ms (next.js: 21ms, proxy.ts: 32ms, application-code: 933ms)
+  └─ ƒ GetUnreadTicketCounts() in 908ms app/manage/actions/support.ts
+ POST /manage 200 in 7.5s (next.js: 17ms, proxy.ts: 40ms, application-code: 7.5s)
+  └─ ƒ getPlatformDashboardKPIs() in 7433ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.6s (next.js: 19ms, proxy.ts: 31ms, application-code: 2.6s)
+  └─ ƒ getPlatformStationFleet() in 2563ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1925ms (next.js: 26ms, proxy.ts: 27ms, application-code: 1873ms)
+  └─ ƒ getPlatformOrdersHeatmap() in 1845ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 3.2s (next.js: 21ms, proxy.ts: 21ms, application-code: 3.2s)
+  └─ ƒ getPlatformAlerts() in 3158ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 6.8s (next.js: 19ms, proxy.ts: 18ms, application-code: 6.8s)
+  └─ ƒ getPlatformActivityFeed() in 6782ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 4.0s (next.js: 19ms, proxy.ts: 21ms, application-code: 3.9s)
+  └─ ƒ getPlatformActivityFeed() in 3925ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 5.8s (next.js: 18ms, proxy.ts: 19ms, application-code: 5.8s)
+  └─ ƒ getPlatformDashboardKPIs() in 5745ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1119ms (next.js: 29ms, proxy.ts: 24ms, application-code: 1066ms)
+  └─ ƒ getPlatformStationFleet() in 1039ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1184ms (next.js: 16ms, proxy.ts: 24ms, application-code: 1144ms)
+  └─ ƒ getPlatformOrdersHeatmap() in 1128ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 5.1s (next.js: 17ms, proxy.ts: 15ms, application-code: 5.1s)
+  └─ ƒ getPlatformAlerts() in 5044ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 5.5s (next.js: 18ms, proxy.ts: 15ms, application-code: 5.4s)
+  └─ ƒ getPlatformActivityFeed() in 5404ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 603ms (next.js: 18ms, proxy.ts: 17ms, application-code: 569ms)
+  └─ ƒ GetUnreadTicketCounts() in 555ms app/manage/actions/support.ts
+ POST /manage 200 in 5.5s (next.js: 22ms, proxy.ts: 15ms, application-code: 5.5s)
+  └─ ƒ getPlatformActivityFeed() in 5451ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 6.7s (next.js: 18ms, proxy.ts: 18ms, application-code: 6.6s)
+  └─ ƒ getPlatformDashboardKPIs() in 6606ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 6.9s (next.js: 18ms, proxy.ts: 24ms, application-code: 6.9s)
+  └─ ƒ getPlatformStationFleet() in 6846ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 6.0s (next.js: 21ms, proxy.ts: 31ms, application-code: 6.0s)
+  └─ ƒ getPlatformOrdersHeatmap() in 5955ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 12.4s (next.js: 23ms, proxy.ts: 22ms, application-code: 12.3s)
+  └─ ƒ getPlatformAlerts() in 12321ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 9.1s (next.js: 19ms, proxy.ts: 20ms, application-code: 9.0s)
+  └─ ƒ getPlatformActivityFeed() in 9030ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 5.6s (next.js: 17ms, proxy.ts: 21ms, application-code: 5.5s)
+  └─ ƒ getPlatformDashboardKPIs() in 5510ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.5s (next.js: 23ms, proxy.ts: 17ms, application-code: 2.4s)
+  └─ ƒ getPlatformActivityFeed() in 2403ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1093ms (next.js: 15ms, proxy.ts: 25ms, application-code: 1053ms)
+  └─ ƒ getPlatformStationFleet() in 1037ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.4s (next.js: 19ms, proxy.ts: 681ms, application-code: 1698ms)
+  └─ ƒ getPlatformOrdersHeatmap() in 1680ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 3.1s (next.js: 36ms, proxy.ts: 34ms, application-code: 3.0s)
+  └─ ƒ getPlatformAlerts() in 2953ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 379ms (next.js: 53ms, proxy.ts: 27ms, application-code: 300ms)
+  └─ ƒ GetUnreadTicketCounts() in 271ms app/manage/actions/support.ts
+ POST /dashboard 200 in 1739ms (next.js: 41ms, proxy.ts: 32ms, application-code: 1665ms)
+  └─ ƒ GetUnreadTicketCounts() in 1627ms app/dashboard/actions/support.ts
+ POST /manage 200 in 3.4s (next.js: 32ms, proxy.ts: 31ms, application-code: 3.3s)
+  └─ ƒ getPlatformActivityFeed() in 3300ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 4.9s (next.js: 27ms, proxy.ts: 29ms, application-code: 4.8s)
+  └─ ƒ getPlatformDashboardKPIs() in 4821ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1109ms (next.js: 23ms, proxy.ts: 25ms, application-code: 1060ms)
+  └─ ƒ getPlatformStationFleet() in 1038ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.4s (next.js: 17ms, proxy.ts: 19ms, application-code: 2.3s)
+  └─ ƒ getPlatformActivityFeed() in 2309ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1262ms (next.js: 16ms, proxy.ts: 25ms, application-code: 1221ms)
+  └─ ƒ getPlatformOrdersHeatmap() in 1205ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 3.2s (next.js: 27ms, proxy.ts: 21ms, application-code: 3.2s)
+  └─ ƒ getPlatformAlerts() in 3167ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 5.5s (next.js: 17ms, proxy.ts: 21ms, application-code: 5.4s)
+  └─ ƒ getPlatformActivityFeed() in 5423ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 3.9s (next.js: 20ms, proxy.ts: 18ms, application-code: 3.9s)
+  └─ ƒ getPlatformDashboardKPIs() in 3854ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1121ms (next.js: 37ms, proxy.ts: 52ms, application-code: 1032ms)
+  └─ ƒ getPlatformStationFleet() in 1006ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1061ms (next.js: 18ms, proxy.ts: 19ms, application-code: 1025ms)
+  └─ ƒ getPlatformOrdersHeatmap() in 1003ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 3.3s (next.js: 25ms, proxy.ts: 48ms, application-code: 3.3s)
+  └─ ƒ getPlatformActivityFeed() in 3240ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 22.9s (next.js: 23ms, proxy.ts: 18ms, application-code: 22.8s)
+  └─ ƒ getPlatformAlerts() in 22813ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1127ms (next.js: 26ms, proxy.ts: 24ms, application-code: 1078ms)
+  └─ ƒ GetUnreadTicketCounts() in 1063ms app/manage/actions/support.ts
+ POST /manage 200 in 6.3s (next.js: 25ms, proxy.ts: 24ms, application-code: 6.3s)
+  └─ ƒ getPlatformActivityFeed() in 6269ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 4.6s (next.js: 31ms, proxy.ts: 28ms, application-code: 4.6s)
+  └─ ƒ getPlatformDashboardKPIs() in 4534ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1127ms (next.js: 19ms, proxy.ts: 27ms, application-code: 1082ms)
+  └─ ƒ getPlatformStationFleet() in 1059ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1103ms (next.js: 23ms, proxy.ts: 26ms, application-code: 1055ms)
+  └─ ƒ getPlatformOrdersHeatmap() in 1039ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 6.0s (next.js: 22ms, proxy.ts: 24ms, application-code: 5.9s)
+  └─ ƒ getPlatformActivityFeed() in 5902ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 5.4s (next.js: 22ms, proxy.ts: 34ms, application-code: 5.4s)
+  └─ ƒ getPlatformAlerts() in 5352ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 6.0s (next.js: 36ms, proxy.ts: 38ms, application-code: 6.0s)
+  └─ ƒ getPlatformActivityFeed() in 5957ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 8.3s (next.js: 19ms, proxy.ts: 23ms, application-code: 8.3s)
+  └─ ƒ getPlatformDashboardKPIs() in 8258ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.2s (next.js: 28ms, proxy.ts: 36ms, application-code: 2.1s)
+  └─ ƒ getPlatformStationFleet() in 2078ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.9s (next.js: 18ms, proxy.ts: 16ms, application-code: 2.9s)
+  └─ ƒ getPlatformOrdersHeatmap() in 2880ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 5.8s (next.js: 24ms, proxy.ts: 22ms, application-code: 5.7s)
+  └─ ƒ getPlatformActivityFeed() in 5691ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 751ms (next.js: 30ms, proxy.ts: 28ms, application-code: 692ms)
+  └─ ƒ GetUnreadTicketCounts() in 660ms app/manage/actions/support.ts
+ GET /manage 200 in 515ms (next.js: 54ms, proxy.ts: 36ms, application-code: 425ms)
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://liked-ram-76.clerk.accounts.dev/npm/@clerk/clerk-js@6/dist/clerk.browser.js:12:6092)
+ POST /manage 200 in 2.8s (next.js: 61ms, proxy.ts: 98ms, application-code: 2.7s)
+  └─ ƒ GetUserInfo() in 2617ms app/manage/actions/get-user-info.ts
+ POST /manage 200 in 1159ms (next.js: 61ms, proxy.ts: 54ms, application-code: 1044ms)
+  └─ ƒ GetUnreadTicketCounts() in 996ms app/manage/actions/support.ts
+ POST /manage 200 in 8.6s (next.js: 63ms, proxy.ts: 39ms, application-code: 8.5s)
+  └─ ƒ getPlatformDashboardKPIs() in 8465ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.9s (next.js: 33ms, proxy.ts: 1837ms, application-code: 1046ms)
+  └─ ƒ GetMerchantSpotlight(10) in 999ms app/manage/actions/get-merchant-spotlight.ts
+ POST /manage 200 in 5.5s (next.js: 39ms, proxy.ts: 33ms, application-code: 5.4s)
+  └─ ƒ getPlatformActivityFeed() in 5428ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.3s (next.js: 20ms, proxy.ts: 24ms, application-code: 2.3s)
+  └─ ƒ getPlatformStationFleet() in 2277ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 3.0s (next.js: 16ms, proxy.ts: 19ms, application-code: 3.0s)
+  └─ ƒ getPlatformOrdersHeatmap() in 2979ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 4.6s (next.js: 37ms, proxy.ts: 39ms, application-code: 4.5s)
+  └─ ƒ getPlatformAlerts() in 4441ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 6.7s (next.js: 34ms, proxy.ts: 30ms, application-code: 6.6s)
+  └─ ƒ getPlatformActivityFeed() in 6602ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 8.7s (next.js: 30ms, proxy.ts: 29ms, application-code: 8.7s)
+  └─ ƒ getPlatformDashboardKPIs() in 8658ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 3.9s (next.js: 38ms, proxy.ts: 31ms, application-code: 3.9s)
+  └─ ƒ getPlatformStationFleet() in 3845ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 3.4s (next.js: 27ms, proxy.ts: 35ms, application-code: 3.3s)
+  └─ ƒ getPlatformOrdersHeatmap() in 3307ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.9s (next.js: 20ms, proxy.ts: 32ms, application-code: 2.8s)
+  └─ ƒ getPlatformActivityFeed() in 2789ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.5s (next.js: 38ms, proxy.ts: 28ms, application-code: 2.5s)
+  └─ ƒ getPlatformAlerts() in 2430ms app/manage/actions/hq-platform/dashboard.ts
+ GET /manage 200 in 354ms (next.js: 22ms, proxy.ts: 30ms, application-code: 301ms)
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://liked-ram-76.clerk.accounts.dev/npm/@clerk/clerk-js@6/dist/clerk.browser.js:12:6092)
+ POST /manage 200 in 1907ms (next.js: 28ms, proxy.ts: 28ms, application-code: 1851ms)
+  └─ ƒ GetUserInfo() in 1819ms app/manage/actions/get-user-info.ts
+ POST /manage 200 in 585ms (next.js: 85ms, proxy.ts: 51ms, application-code: 448ms)
+  └─ ƒ GetUnreadTicketCounts() in 389ms app/manage/actions/support.ts
+ POST /manage 200 in 9.2s (next.js: 33ms, proxy.ts: 35ms, application-code: 9.1s)
+  └─ ƒ getPlatformDashboardKPIs() in 9104ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1220ms (next.js: 35ms, proxy.ts: 33ms, application-code: 1152ms)
+  └─ ƒ GetMerchantSpotlight(10) in 1127ms app/manage/actions/get-merchant-spotlight.ts
+ POST /manage 200 in 5.8s (next.js: 31ms, proxy.ts: 30ms, application-code: 5.8s)
+  └─ ƒ getPlatformActivityFeed() in 5756ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.4s (next.js: 43ms, proxy.ts: 23ms, application-code: 2.3s)
+  └─ ƒ getPlatformStationFleet() in 2270ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1475ms (next.js: 32ms, proxy.ts: 30ms, application-code: 1413ms)
+  └─ ƒ getPlatformOrdersHeatmap() in 1390ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 5.5s (next.js: 27ms, proxy.ts: 20ms, application-code: 5.4s)
+  └─ ƒ getPlatformAlerts() in 5399ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 5.7s (next.js: 21ms, proxy.ts: 29ms, application-code: 5.7s)
+  └─ ƒ getPlatformActivityFeed() in 5643ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 10.3s (next.js: 25ms, proxy.ts: 22ms, application-code: 10.2s)
+  └─ ƒ getPlatformDashboardKPIs() in 10192ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.9s (next.js: 19ms, proxy.ts: 32ms, application-code: 2.8s)
+  └─ ƒ getPlatformStationFleet() in 2801ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.6s (next.js: 20ms, proxy.ts: 16ms, application-code: 2.6s)
+  └─ ƒ getPlatformOrdersHeatmap() in 2538ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 4.8s (next.js: 19ms, proxy.ts: 29ms, application-code: 4.7s)
+  └─ ƒ getPlatformActivityFeed() in 4702ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 5.1s (next.js: 17ms, proxy.ts: 34ms, application-code: 5.0s)
+  └─ ƒ getPlatformAlerts() in 5013ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 6.6s (next.js: 22ms, proxy.ts: 16ms, application-code: 6.5s)
+  └─ ƒ getPlatformActivityFeed() in 6518ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1450ms (next.js: 20ms, proxy.ts: 23ms, application-code: 1407ms)
+  └─ ƒ GetUnreadTicketCounts() in 1377ms app/manage/actions/support.ts
+ POST /manage 200 in 11.8s (next.js: 20ms, proxy.ts: 15ms, application-code: 11.7s)
+  └─ ƒ getPlatformDashboardKPIs() in 11711ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 3.4s (next.js: 34ms, proxy.ts: 41ms, application-code: 3.3s)
+  └─ ƒ getPlatformStationFleet() in 3300ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 4.3s (next.js: 21ms, proxy.ts: 25ms, application-code: 4.2s)
+  └─ ƒ getPlatformOrdersHeatmap() in 4178ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 6.2s (next.js: 43ms, proxy.ts: 55ms, application-code: 6.1s)
+  └─ ƒ getPlatformAlerts() in 6095ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 4.7s (next.js: 17ms, proxy.ts: 32ms, application-code: 4.7s)
+  └─ ƒ getPlatformActivityFeed() in 4666ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 8.9s (next.js: 36ms, proxy.ts: 28ms, application-code: 8.8s)
+  └─ ƒ getPlatformActivityFeed() in 8768ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 9.0s (next.js: 34ms, proxy.ts: 1173ms, application-code: 7.8s)
+  └─ ƒ getPlatformDashboardKPIs() in 7790ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1900ms (next.js: 26ms, proxy.ts: 25ms, application-code: 1850ms)
+  └─ ƒ getPlatformStationFleet() in 1823ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.3s (next.js: 18ms, proxy.ts: 27ms, application-code: 2.3s)
+  └─ ƒ getPlatformOrdersHeatmap() in 2286ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 5.9s (next.js: 29ms, proxy.ts: 23ms, application-code: 5.8s)
+  └─ ƒ getPlatformAlerts() in 5798ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 5.7s (next.js: 32ms, proxy.ts: 35ms, application-code: 5.7s)
+  └─ ƒ getPlatformActivityFeed() in 5648ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 513ms (next.js: 26ms, proxy.ts: 19ms, application-code: 467ms)
+  └─ ƒ GetUnreadTicketCounts() in 435ms app/manage/actions/support.ts
+ POST /manage 200 in 6.8s (next.js: 25ms, proxy.ts: 19ms, application-code: 6.8s)
+  └─ ƒ getPlatformActivityFeed() in 6751ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 7.9s (next.js: 31ms, proxy.ts: 20ms, application-code: 7.8s)
+  └─ ƒ getPlatformDashboardKPIs() in 7811ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1993ms (next.js: 22ms, proxy.ts: 20ms, application-code: 1950ms)
+  └─ ƒ getPlatformStationFleet() in 1925ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 3.5s (next.js: 29ms, proxy.ts: 53ms, application-code: 3.4s)
+  └─ ƒ getPlatformOrdersHeatmap() in 3412ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 4.9s (next.js: 28ms, proxy.ts: 23ms, application-code: 4.8s)
+  └─ ƒ getPlatformAlerts() in 4781ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 9.6s (next.js: 24ms, proxy.ts: 22ms, application-code: 9.5s)
+  └─ ƒ getPlatformActivityFeed() in 9505ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 10.7s (next.js: 23ms, proxy.ts: 18ms, application-code: 10.6s)
+  └─ ƒ getPlatformDashboardKPIs() in 10623ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 5.1s (next.js: 23ms, proxy.ts: 18ms, application-code: 5.1s)
+  └─ ƒ getPlatformActivityFeed() in 5076ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1687ms (next.js: 27ms, proxy.ts: 23ms, application-code: 1636ms)
+  └─ ƒ getPlatformStationFleet() in 1618ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1555ms (next.js: 33ms, proxy.ts: 28ms, application-code: 1494ms)
+  └─ ƒ getPlatformOrdersHeatmap() in 1461ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 5.2s (next.js: 25ms, proxy.ts: 17ms, application-code: 5.2s)
+  └─ ƒ getPlatformAlerts() in 5155ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 539ms (next.js: 36ms, proxy.ts: 40ms, application-code: 463ms)
+  └─ ƒ GetUnreadTicketCounts() in 432ms app/manage/actions/support.ts
+ POST /manage 200 in 7.2s (next.js: 24ms, proxy.ts: 23ms, application-code: 7.1s)
+  └─ ƒ getPlatformActivityFeed() in 7093ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 7.2s (next.js: 25ms, proxy.ts: 21ms, application-code: 7.2s)
+  └─ ƒ getPlatformDashboardKPIs() in 7178ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1591ms (next.js: 28ms, proxy.ts: 23ms, application-code: 1540ms)
+  └─ ƒ getPlatformStationFleet() in 1521ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1801ms (next.js: 26ms, proxy.ts: 45ms, application-code: 1730ms)
+  └─ ƒ getPlatformOrdersHeatmap() in 1703ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 4.6s (next.js: 27ms, proxy.ts: 22ms, application-code: 4.5s)
+  └─ ƒ getPlatformActivityFeed() in 4519ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 4.3s (next.js: 24ms, proxy.ts: 36ms, application-code: 4.3s)
+  └─ ƒ getPlatformAlerts() in 4247ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 6.6s (next.js: 28ms, proxy.ts: 19ms, application-code: 6.6s)
+  └─ ƒ getPlatformActivityFeed() in 6574ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 12.1s (next.js: 34ms, proxy.ts: 20ms, application-code: 12.1s)
+  └─ ƒ getPlatformDashboardKPIs() in 12058ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.2s (next.js: 26ms, proxy.ts: 27ms, application-code: 2.2s)
+  └─ ƒ getPlatformStationFleet() in 2127ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1730ms (next.js: 19ms, proxy.ts: 26ms, application-code: 1685ms)
+  └─ ƒ getPlatformOrdersHeatmap() in 1667ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1378ms (next.js: 16ms, proxy.ts: 32ms, application-code: 1330ms)
+  └─ ƒ GetUnreadTicketCounts() in 1316ms app/manage/actions/support.ts
+ POST /manage 200 in 5.2s (next.js: 34ms, proxy.ts: 25ms, application-code: 5.2s)
+  └─ ƒ getPlatformAlerts() in 5139ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 4.7s (next.js: 30ms, proxy.ts: 38ms, application-code: 4.6s)
+  └─ ƒ getPlatformActivityFeed() in 4560ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 8.4s (next.js: 19ms, proxy.ts: 1659ms, application-code: 6.7s)
+  └─ ƒ getPlatformActivityFeed() in 6719ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 7.2s (next.js: 28ms, proxy.ts: 32ms, application-code: 7.2s)
+  └─ ƒ getPlatformDashboardKPIs() in 7138ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.3s (next.js: 23ms, proxy.ts: 21ms, application-code: 2.2s)
+  └─ ƒ getPlatformStationFleet() in 2186ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1735ms (next.js: 24ms, proxy.ts: 30ms, application-code: 1682ms)
+  └─ ƒ getPlatformOrdersHeatmap() in 1654ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 4.7s (next.js: 29ms, proxy.ts: 37ms, application-code: 4.6s)
+  └─ ƒ getPlatformAlerts() in 4611ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 5.8s (next.js: 20ms, proxy.ts: 33ms, application-code: 5.7s)
+  └─ ƒ getPlatformActivityFeed() in 5685ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 5.8s (next.js: 23ms, proxy.ts: 25ms, application-code: 5.7s)
+  └─ ƒ getPlatformActivityFeed() in 5722ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 480ms (next.js: 20ms, proxy.ts: 33ms, application-code: 427ms)
+  └─ ƒ GetUnreadTicketCounts() in 409ms app/manage/actions/support.ts
+ POST /manage 200 in 6.3s (next.js: 25ms, proxy.ts: 18ms, application-code: 6.2s)
+  └─ ƒ getPlatformDashboardKPIs() in 6215ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1653ms (next.js: 45ms, proxy.ts: 49ms, application-code: 1559ms)
+  └─ ƒ getPlatformStationFleet() in 1539ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.5s (next.js: 19ms, proxy.ts: 25ms, application-code: 2.5s)
+  └─ ƒ getPlatformOrdersHeatmap() in 2443ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 5.0s (next.js: 20ms, proxy.ts: 26ms, application-code: 4.9s)
+  └─ ƒ getPlatformAlerts() in 4920ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 5.9s (next.js: 26ms, proxy.ts: 31ms, application-code: 5.8s)
+  └─ ƒ getPlatformActivityFeed() in 5774ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 6.2s (next.js: 34ms, proxy.ts: 19ms, application-code: 6.2s)
+  └─ ƒ getPlatformActivityFeed() in 6168ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 5.8s (next.js: 21ms, proxy.ts: 27ms, application-code: 5.7s)
+  └─ ƒ getPlatformDashboardKPIs() in 5724ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1615ms (next.js: 28ms, proxy.ts: 26ms, application-code: 1562ms)
+  └─ ƒ getPlatformStationFleet() in 1542ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 3.0s (next.js: 21ms, proxy.ts: 23ms, application-code: 3.0s)
+  └─ ƒ getPlatformOrdersHeatmap() in 2973ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 3.3s (next.js: 19ms, proxy.ts: 21ms, application-code: 3.3s)
+  └─ ƒ getPlatformAlerts() in 3236ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 5.9s (next.js: 30ms, proxy.ts: 30ms, application-code: 5.8s)
+  └─ ƒ getPlatformActivityFeed() in 5800ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1121ms (next.js: 25ms, proxy.ts: 32ms, application-code: 1063ms)
+  └─ ƒ GetUnreadTicketCounts() in 1044ms app/manage/actions/support.ts
+ POST /manage 200 in 7.6s (next.js: 28ms, proxy.ts: 39ms, application-code: 7.6s)
+  └─ ƒ getPlatformDashboardKPIs() in 7543ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 8.1s (next.js: 19ms, proxy.ts: 28ms, application-code: 8.1s)
+  └─ ƒ getPlatformActivityFeed() in 8066ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 7.2s (next.js: 19ms, proxy.ts: 17ms, application-code: 7.2s)
+  └─ ƒ getPlatformStationFleet() in 7158ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 6.0s (next.js: 21ms, proxy.ts: 31ms, application-code: 6.0s)
+  └─ ƒ getPlatformOrdersHeatmap() in 5945ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 12.2s (next.js: 24ms, proxy.ts: 25ms, application-code: 12.1s)
+  └─ ƒ getPlatformAlerts() in 12126ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 5.4s (next.js: 29ms, proxy.ts: 24ms, application-code: 5.4s)
+  └─ ƒ getPlatformActivityFeed() in 5360ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 7.1s (next.js: 24ms, proxy.ts: 18ms, application-code: 7.1s)
+  └─ ƒ getPlatformDashboardKPIs() in 7051ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 3.6s (next.js: 34ms, proxy.ts: 33ms, application-code: 3.6s)
+  └─ ƒ getPlatformActivityFeed() in 3538ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.5s (next.js: 39ms, proxy.ts: 859ms, application-code: 1561ms)
+  └─ ƒ getPlatformStationFleet() in 1534ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1204ms (next.js: 25ms, proxy.ts: 21ms, application-code: 1158ms)
+  └─ ƒ getPlatformOrdersHeatmap() in 1133ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 4.6s (next.js: 65ms, proxy.ts: 34ms, application-code: 4.5s)
+  └─ ƒ getPlatformAlerts() in 4491ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 518ms (next.js: 12ms, proxy.ts: 14ms, application-code: 492ms)
+  └─ ƒ GetUnreadTicketCounts() in 476ms app/manage/actions/support.ts
+ POST /manage 200 in 3.3s (next.js: 87ms, proxy.ts: 39ms, application-code: 3.1s)
+  └─ ƒ getPlatformActivityFeed() in 3087ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 7.4s (next.js: 45ms, proxy.ts: 36ms, application-code: 7.3s)
+  └─ ƒ getPlatformDashboardKPIs() in 7263ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 4.6s (next.js: 37ms, proxy.ts: 31ms, application-code: 4.5s)
+  └─ ƒ getPlatformStationFleet() in 4463ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.2s (next.js: 26ms, proxy.ts: 24ms, application-code: 2.2s)
+  └─ ƒ getPlatformOrdersHeatmap() in 2153ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 6.2s (next.js: 28ms, proxy.ts: 31ms, application-code: 6.2s)
+  └─ ƒ getPlatformActivityFeed() in 6136ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 14.6s (next.js: 22ms, proxy.ts: 22ms, application-code: 14.6s)
+  └─ ƒ getPlatformAlerts() in 14536ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 8.1s (next.js: 19ms, proxy.ts: 20ms, application-code: 8.1s)
+  └─ ƒ getPlatformActivityFeed() in 8052ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 16.4s (next.js: 26ms, proxy.ts: 31ms, application-code: 16.4s)
+  └─ ƒ getPlatformDashboardKPIs() in 16341ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1622ms (next.js: 23ms, proxy.ts: 21ms, application-code: 1577ms)
+  └─ ƒ getPlatformStationFleet() in 1558ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1601ms (next.js: 18ms, proxy.ts: 24ms, application-code: 1559ms)
+  └─ ƒ getPlatformOrdersHeatmap() in 1543ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 5.8s (next.js: 22ms, proxy.ts: 24ms, application-code: 5.7s)
+  └─ ƒ getPlatformActivityFeed() in 5722ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 443ms (next.js: 20ms, proxy.ts: 28ms, application-code: 394ms)
+  └─ ƒ GetUnreadTicketCounts() in 374ms app/manage/actions/support.ts
+ POST /manage 200 in 8.3s (next.js: 30ms, proxy.ts: 23ms, application-code: 8.3s)
+  └─ ƒ getPlatformAlerts() in 8268ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 5.9s (next.js: 28ms, proxy.ts: 20ms, application-code: 5.8s)
+  └─ ƒ getPlatformActivityFeed() in 5805ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 5.8s (next.js: 24ms, proxy.ts: 24ms, application-code: 5.7s)
+  └─ ƒ getPlatformDashboardKPIs() in 5729ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1456ms (next.js: 23ms, proxy.ts: 26ms, application-code: 1407ms)
+  └─ ƒ getPlatformStationFleet() in 1381ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.2s (next.js: 18ms, proxy.ts: 30ms, application-code: 2.1s)
+  └─ ƒ getPlatformOrdersHeatmap() in 2099ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 8.2s (next.js: 22ms, proxy.ts: 17ms, application-code: 8.1s)
+  └─ ƒ getPlatformActivityFeed() in 8111ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 5.4s (next.js: 21ms, proxy.ts: 16ms, application-code: 5.4s)
+  └─ ƒ getPlatformAlerts() in 5353ms app/manage/actions/hq-platform/dashboard.ts
+✓ Compiled in 4s
+ POST /manage 200 in 8.6s (next.js: 2.5s, proxy.ts: 23ms, application-code: 6.1s)
+  └─ ƒ getPlatformActivityFeed() in 6076ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 5.2s (next.js: 26ms, proxy.ts: 35ms, application-code: 5.1s)
+  └─ ƒ getPlatformDashboardKPIs() in 5090ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.2s (next.js: 21ms, proxy.ts: 20ms, application-code: 2.2s)
+  └─ ƒ getPlatformStationFleet() in 2185ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.8s (next.js: 21ms, proxy.ts: 23ms, application-code: 2.8s)
+  └─ ƒ getPlatformOrdersHeatmap() in 2755ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 507ms (next.js: 25ms, proxy.ts: 20ms, application-code: 462ms)
+  └─ ƒ GetUnreadTicketCounts() in 437ms app/manage/actions/support.ts
+ POST /manage 200 in 15.7s (next.js: 23ms, proxy.ts: 4.2s, application-code: 11.5s)
+  └─ ƒ getPlatformActivityFeed() in 11499ms app/manage/actions/hq-platform/dashboard.ts
+ GET /manage 200 in 454ms (next.js: 23ms, proxy.ts: 33ms, application-code: 398ms)
+ POST /manage 200 in 170ms (next.js: 19ms, proxy.ts: 15ms, application-code: 136ms)
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://liked-ram-76.clerk.accounts.dev/npm/@clerk/clerk-js@6/dist/clerk.browser.js:12:6092)
+ POST /manage 200 in 442ms (next.js: 35ms, proxy.ts: 24ms, application-code: 382ms)
+  └─ ƒ GetUserInfo() in 361ms app/manage/actions/get-user-info.ts
+ POST /manage 200 in 736ms (next.js: 16ms, proxy.ts: 20ms, application-code: 701ms)
+  └─ ƒ GetUnreadTicketCounts() in 682ms app/manage/actions/support.ts
+ POST /manage 200 in 7.7s (next.js: 25ms, proxy.ts: 20ms, application-code: 7.7s)
+  └─ ƒ getPlatformDashboardKPIs() in 7687ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 763ms (next.js: 48ms, proxy.ts: 25ms, application-code: 691ms)
+  └─ ƒ GetMerchantSpotlight(10) in 673ms app/manage/actions/get-merchant-spotlight.ts
+ POST /manage 200 in 4.9s (next.js: 29ms, proxy.ts: 27ms, application-code: 4.9s)
+  └─ ƒ getPlatformActivityFeed() in 4856ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1581ms (next.js: 23ms, proxy.ts: 18ms, application-code: 1539ms)
+  └─ ƒ getPlatformStationFleet() in 1515ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.1s (next.js: 19ms, proxy.ts: 33ms, application-code: 2.0s)
+  └─ ƒ getPlatformOrdersHeatmap() in 2013ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 5.4s (next.js: 36ms, proxy.ts: 29ms, application-code: 5.3s)
+  └─ ƒ getPlatformAlerts() in 5287ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 4.8s (next.js: 30ms, proxy.ts: 21ms, application-code: 4.7s)
+  └─ ƒ getPlatformActivityFeed() in 4705ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 11.8s (next.js: 33ms, proxy.ts: 26ms, application-code: 11.8s)
+  └─ ƒ getPlatformDashboardKPIs() in 11764ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.1s (next.js: 19ms, proxy.ts: 24ms, application-code: 2.0s)
+  └─ ƒ getPlatformStationFleet() in 2026ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.1s (next.js: 26ms, proxy.ts: 30ms, application-code: 2.1s)
+  └─ ƒ getPlatformOrdersHeatmap() in 2051ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 4.1s (next.js: 23ms, proxy.ts: 23ms, application-code: 4.1s)
+  └─ ƒ getPlatformActivityFeed() in 4066ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 5.4s (next.js: 28ms, proxy.ts: 19ms, application-code: 5.4s)
+  └─ ƒ getPlatformAlerts() in 5369ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 9.0s (next.js: 30ms, proxy.ts: 48ms, application-code: 8.9s)
+  └─ ƒ getPlatformActivityFeed() in 8888ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1399ms (next.js: 27ms, proxy.ts: 21ms, application-code: 1351ms)
+  └─ ƒ GetUnreadTicketCounts() in 1329ms app/manage/actions/support.ts
+ POST /dashboard 200 in 3.6s (next.js: 702ms, proxy.ts: 1101ms, application-code: 1807ms)
+  └─ ƒ GetUnreadTicketCounts() in 1736ms app/dashboard/actions/support.ts
+ POST /manage 200 in 13.8s (next.js: 316ms, proxy.ts: 603ms, application-code: 12.9s)
+  └─ ƒ getPlatformDashboardKPIs() in 12817ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.6s (next.js: 54ms, proxy.ts: 47ms, application-code: 2.5s)
+  └─ ƒ getPlatformStationFleet() in 2478ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.8s (next.js: 50ms, proxy.ts: 41ms, application-code: 2.7s)
+  └─ ƒ getPlatformOrdersHeatmap() in 2669ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 4.5s (next.js: 43ms, proxy.ts: 54ms, application-code: 4.4s)
+  └─ ƒ getPlatformAlerts() in 4347ms app/manage/actions/hq-platform/dashboard.ts
+ GET /dashboard 200 in 5.8s (next.js: 618ms, proxy.ts: 766ms, application-code: 4.4s)
+ POST /manage 200 in 12.0s (next.js: 69ms, proxy.ts: 61ms, application-code: 11.8s)
+  └─ ƒ getPlatformActivityFeed() in 11737ms app/manage/actions/hq-platform/dashboard.ts
+ POST /dashboard 200 in 542ms (next.js: 49ms, proxy.ts: 85ms, application-code: 407ms)
+  └─ ƒ GetUserInfo() in 345ms app/manage/actions/get-user-info.ts
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://liked-ram-76.clerk.accounts.dev/npm/@clerk/clerk-js@6/dist/clerk.browser.js:12:6092)
+[browser] Image with src "https://hifouuofcaytijrkbvcy.supabase.co/storage/v1/object/public/Organizations-Logos/org_34LN9aMJGO4jNllGTvHH4CLB5gq.png" has legacy prop "objectFit". Did you forget to run the codemod?
+Read more: https://nextjs.org/docs/messages/next-image-upgrade-to-13
+[browser] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+[browser] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+ POST /dashboard 200 in 1824ms (next.js: 50ms, proxy.ts: 34ms, application-code: 1739ms)
+  └─ ƒ GetLocations("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "user_36u15MkVGaCOwWexx9cWWlrF1Vw") in 1672ms app/dashboard/actions/get-locations.ts
+ POST /dashboard 200 in 150ms (next.js: 55ms, proxy.ts: 45ms, application-code: 50ms)
+  └─ ƒ getImpersonationContext() in 6ms lib/admin/impersonation.ts
+[browser] Image with src "https://hifouuofcaytijrkbvcy.supabase.co/storage/v1/object/public/Organizations-Logos/org_34LN9aMJGO4jNllGTvHH4CLB5gq.png" has "fill" but is missing "sizes" prop. Please add it to improve page performance. Read more: https://nextjs.org/docs/api-reference/next/image#sizes
+ POST /dashboard 200 in 410ms (next.js: 49ms, proxy.ts: 58ms, application-code: 303ms)
+  └─ ƒ GetUnreadTicketCounts() in 263ms app/dashboard/actions/support.ts
+ POST /dashboard 200 in 862ms (next.js: 85ms, proxy.ts: 54ms, application-code: 724ms)
+  └─ ƒ GetMenus("org_34LN9aMJGO4jNllGTvHH4CLB5gq", null) in 655ms app/dashboard/actions/menus.ts
+ POST /dashboard 200 in 1638ms (next.js: 62ms, proxy.ts: 106ms, application-code: 1469ms)
+  └─ ƒ GetMenuItems("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "all") in 1246ms app/dashboard/actions/menu-items.ts
+ POST /dashboard 200 in 1069ms (next.js: 47ms, proxy.ts: 35ms, application-code: 987ms)
+  └─ ƒ GetSchedules("org_34LN9aMJGO4jNllGTvHH4CLB5gq") in 909ms app/dashboard/actions/schedules.ts
+ GET /manage 200 in 1224ms (next.js: 54ms, proxy.ts: 34ms, application-code: 1135ms)
+ POST /manage 200 in 6.3s (next.js: 30ms, proxy.ts: 22ms, application-code: 6.2s)
+  └─ ƒ getPlatformActivityFeed() in 6191ms app/manage/actions/hq-platform/dashboard.ts
+ POST /dashboard 200 in 33.7s (next.js: 78ms, proxy.ts: 75ms, application-code: 33.5s)
+  └─ ƒ GetOrders("org_34LN9aMJGO4jNllGTvHH4CLB5gq", null, undefined) in 32795ms app/dashboard/actions/order.ts
+ POST /dashboard 200 in 726ms (next.js: 35ms, proxy.ts: 34ms, application-code: 657ms)
+  └─ ƒ GetUnifiedStaffView("org_34LN9aMJGO4jNllGTvHH4CLB5gq", null) in 630ms app/dashboard/actions/unified-staff.ts
+ POST /dashboard 200 in 627ms (next.js: 26ms, proxy.ts: 29ms, application-code: 572ms)
+  └─ ƒ GetCurrentUserPinStatus("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "user_36u15MkVGaCOwWexx9cWWlrF1Vw") in 541ms app/dashboard/actions/unified-staff.ts
+ POST /manage 200 in 7.1s (next.js: 20ms, proxy.ts: 23ms, application-code: 7.1s)
+  └─ ƒ getPlatformDashboardKPIs() in 7036ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1634ms (next.js: 52ms, proxy.ts: 38ms, application-code: 1544ms)
+  └─ ƒ getPlatformStationFleet() in 1496ms app/manage/actions/hq-platform/dashboard.ts
+ POST /dashboard 200 in 5.4s (next.js: 27ms, proxy.ts: 33ms, application-code: 5.3s)
+  └─ ƒ GetOrderAnalytics("org_34LN9aMJGO4jNllGTvHH4CLB5gq", null, "2026-06-11T21:00:00.000Z", "2026-06-19T16:50:06.914Z") in 5284ms app/dashboard/actions/order-analytics.ts
+ POST /manage 200 in 3.7s (next.js: 56ms, proxy.ts: 27ms, application-code: 3.7s)
+  └─ ƒ getPlatformOrdersHeatmap() in 3630ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 5.4s (next.js: 39ms, proxy.ts: 44ms, application-code: 5.3s)
+  └─ ƒ getPlatformAlerts() in 5315ms app/manage/actions/hq-platform/dashboard.ts
+ POST /dashboard 200 in 12.2s (next.js: 34ms, proxy.ts: 33ms, application-code: 12.1s)
+  └─ ƒ GetOrderAnalytics("org_34LN9aMJGO4jNllGTvHH4CLB5gq", null, "2026-05-19T21:00:00.000Z", "2026-06-19T16:50:06.914Z") in 12113ms app/dashboard/actions/order-analytics.ts
+ POST /dashboard 200 in 1950ms (next.js: 44ms, proxy.ts: 30ms, application-code: 1876ms)
+  └─ ƒ GetOrderStats("org_34LN9aMJGO4jNllGTvHH4CLB5gq", null, "2026-06-11T21:00:00.000Z", "2026-06-19T16:50:06.914Z") in 1853ms app/dashboard/actions/order-analytics.ts
+ POST /dashboard 200 in 1104ms (next.js: 33ms, proxy.ts: 38ms, application-code: 1033ms)
+  └─ ƒ GetOrderStats("org_34LN9aMJGO4jNllGTvHH4CLB5gq", null, "2026-05-19T21:00:00.000Z", "2026-06-19T16:50:06.914Z") in 1006ms app/dashboard/actions/order-analytics.ts
+ POST /dashboard 200 in 1056ms (next.js: 46ms, proxy.ts: 45ms, application-code: 965ms)
+  └─ ƒ GetFinancialKPIs("org_34LN9aMJGO4jNllGTvHH4CLB5gq", null, "2026-06-11T21:00:00.000Z", "2026-06-19T16:50:06.914Z") in 924ms app/dashboard/actions/order-analytics.ts
+ POST /dashboard 200 in 1188ms (next.js: 40ms, proxy.ts: 32ms, application-code: 1116ms)
+  └─ ƒ GetFinancialKPIs("org_34LN9aMJGO4jNllGTvHH4CLB5gq", null, "2026-05-19T21:00:00.000Z", "2026-06-19T16:50:06.914Z") in 1089ms app/dashboard/actions/order-analytics.ts
+ POST /dashboard 200 in 3.3s (next.js: 30ms, proxy.ts: 30ms, application-code: 3.3s)
+  └─ ƒ GetWaterfallReport("org_34LN9aMJGO4jNllGTvHH4CLB5gq", null, "2026-05-19T21:00:00.000Z", "2026-06-19T16:50:06.914Z") in 3176ms app/dashboard/actions/waterfall-report.ts
+ POST /manage 200 in 3.6s (next.js: 42ms, proxy.ts: 31ms, application-code: 3.6s)
+  └─ ƒ getPlatformActivityFeed() in 3529ms app/manage/actions/hq-platform/dashboard.ts
+ POST /dashboard 200 in 1820ms (next.js: 69ms, proxy.ts: 56ms, application-code: 1695ms)
+  └─ ƒ GetTransactionVolumeReport("org_34LN9aMJGO4jNllGTvHH4CLB5gq", null, "2026-05-19T21:00:00.000Z", "2026-06-19T16:50:06.914Z") in 1655ms app/dashboard/actions/order-analytics.ts
+ POST /dashboard 200 in 1028ms (next.js: 32ms, proxy.ts: 23ms, application-code: 973ms)
+  └─ ƒ GetNetCollectedBySourceReport("org_34LN9aMJGO4jNllGTvHH4CLB5gq", null, "2026-05-19T21:00:00.000Z", "2026-06-19T16:50:06.914Z") in 954ms app/dashboard/actions/order-analytics.ts
+ POST /manage 200 in 670ms (next.js: 72ms, proxy.ts: 81ms, application-code: 517ms)
+  └─ ƒ GetUnreadTicketCounts() in 495ms app/manage/actions/support.ts
+ POST /dashboard 200 in 3.9s (next.js: 69ms, proxy.ts: 47ms, application-code: 3.8s)
+  └─ ƒ GetTaxableRevenueByTenderReport("org_34LN9aMJGO4jNllGTvHH4CLB5gq", null, "2026-05-19T21:00:00.000Z", "2026-06-19T16:50:06.914Z") in 3726ms app/dashboard/actions/order-analytics.ts
+ POST /dashboard 200 in 5.7s (next.js: 52ms, proxy.ts: 36ms, application-code: 5.7s)
+  └─ ƒ GetRevenueByCategoryReport("org_34LN9aMJGO4jNllGTvHH4CLB5gq", null, "2026-06-11T21:00:00.000Z", "2026-06-19T16:50:06.914Z") in 5622ms app/dashboard/actions/order-analytics.ts
+ POST /dashboard 200 in 105ms (next.js: 33ms, proxy.ts: 34ms, application-code: 37ms)
+  └─ ƒ getImpersonationContext() in 12ms lib/admin/impersonation.ts
+ POST /manage 200 in 6.5s (next.js: 25ms, proxy.ts: 19ms, application-code: 6.5s)
+  └─ ƒ getPlatformActivityFeed() in 6439ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 12.1s (next.js: 25ms, proxy.ts: 1981ms, application-code: 10.1s)
+  └─ ƒ getPlatformDashboardKPIs() in 10082ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.6s (next.js: 27ms, proxy.ts: 42ms, application-code: 2.5s)
+  └─ ƒ getPlatformStationFleet() in 2484ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1561ms (next.js: 31ms, proxy.ts: 20ms, application-code: 1510ms)
+  └─ ƒ getPlatformOrdersHeatmap() in 1490ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 5.3s (next.js: 24ms, proxy.ts: 24ms, application-code: 5.2s)
+  └─ ƒ getPlatformAlerts() in 5210ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 6.9s (next.js: 37ms, proxy.ts: 22ms, application-code: 6.9s)
+  └─ ƒ getPlatformActivityFeed() in 6863ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 4.3s (next.js: 36ms, proxy.ts: 25ms, application-code: 4.2s)
+  └─ ƒ getPlatformActivityFeed() in 4162ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 4.6s (next.js: 34ms, proxy.ts: 31ms, application-code: 4.6s)
+  └─ ƒ getPlatformDashboardKPIs() in 4518ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1120ms (next.js: 21ms, proxy.ts: 25ms, application-code: 1075ms)
+  └─ ƒ getPlatformStationFleet() in 1051ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1292ms (next.js: 18ms, proxy.ts: 25ms, application-code: 1249ms)
+  └─ ƒ getPlatformOrdersHeatmap() in 1230ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 3.6s (next.js: 28ms, proxy.ts: 40ms, application-code: 3.5s)
+  └─ ƒ getPlatformAlerts() in 3456ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 375ms (next.js: 36ms, proxy.ts: 15ms, application-code: 323ms)
+  └─ ƒ GetUnreadTicketCounts() in 304ms app/manage/actions/support.ts
+ POST /manage 200 in 3.9s (next.js: 26ms, proxy.ts: 28ms, application-code: 3.9s)
+  └─ ƒ getPlatformActivityFeed() in 3860ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 5.2s (next.js: 36ms, proxy.ts: 20ms, application-code: 5.1s)
+  └─ ƒ getPlatformActivityFeed() in 5098ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 5.5s (next.js: 22ms, proxy.ts: 22ms, application-code: 5.5s)
+  └─ ƒ getPlatformDashboardKPIs() in 5457ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1420ms (next.js: 23ms, proxy.ts: 21ms, application-code: 1375ms)
+  └─ ƒ getPlatformStationFleet() in 1359ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1623ms (next.js: 23ms, proxy.ts: 30ms, application-code: 1570ms)
+  └─ ƒ getPlatformOrdersHeatmap() in 1540ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 4.0s (next.js: 19ms, proxy.ts: 25ms, application-code: 4.0s)
+  └─ ƒ getPlatformAlerts() in 3936ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 5.0s (next.js: 20ms, proxy.ts: 23ms, application-code: 5.0s)
+  └─ ƒ getPlatformActivityFeed() in 4934ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 5.7s (next.js: 25ms, proxy.ts: 22ms, application-code: 5.7s)
+  └─ ƒ getPlatformActivityFeed() in 5634ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 6.0s (next.js: 27ms, proxy.ts: 21ms, application-code: 6.0s)
+  └─ ƒ getPlatformDashboardKPIs() in 5960ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 393ms (next.js: 26ms, proxy.ts: 26ms, application-code: 341ms)
+  └─ ƒ GetUnreadTicketCounts() in 320ms app/manage/actions/support.ts
+ POST /manage 200 in 1528ms (next.js: 60ms, proxy.ts: 69ms, application-code: 1399ms)
+  └─ ƒ getPlatformStationFleet() in 1347ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1715ms (next.js: 23ms, proxy.ts: 36ms, application-code: 1656ms)
+  └─ ƒ getPlatformOrdersHeatmap() in 1630ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 4.3s (next.js: 33ms, proxy.ts: 32ms, application-code: 4.2s)
+  └─ ƒ getPlatformAlerts() in 4202ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 5.5s (next.js: 20ms, proxy.ts: 22ms, application-code: 5.4s)
+  └─ ƒ getPlatformActivityFeed() in 5433ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 7.8s (next.js: 29ms, proxy.ts: 26ms, application-code: 7.7s)
+  └─ ƒ getPlatformActivityFeed() in 7687ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 4.9s (next.js: 22ms, proxy.ts: 23ms, application-code: 4.9s)
+  └─ ƒ getPlatformDashboardKPIs() in 4834ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1232ms (next.js: 22ms, proxy.ts: 27ms, application-code: 1183ms)
+  └─ ƒ getPlatformStationFleet() in 1165ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1519ms (next.js: 21ms, proxy.ts: 35ms, application-code: 1463ms)
+  └─ ƒ getPlatformOrdersHeatmap() in 1443ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 3.5s (next.js: 24ms, proxy.ts: 26ms, application-code: 3.4s)
+  └─ ƒ getPlatformAlerts() in 3393ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 5.0s (next.js: 24ms, proxy.ts: 1206ms, application-code: 3.8s)
+  └─ ƒ getPlatformActivityFeed() in 3754ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 783ms (next.js: 20ms, proxy.ts: 20ms, application-code: 743ms)
+  └─ ƒ GetUnreadTicketCounts() in 728ms app/manage/actions/support.ts
+ POST /manage 200 in 5.9s (next.js: 25ms, proxy.ts: 19ms, application-code: 5.9s)
+  └─ ƒ getPlatformDashboardKPIs() in 5858ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 3.3s (next.js: 22ms, proxy.ts: 29ms, application-code: 3.2s)
+  └─ ƒ getPlatformActivityFeed() in 3189ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1327ms (next.js: 30ms, proxy.ts: 38ms, application-code: 1259ms)
+  └─ ƒ getPlatformStationFleet() in 1242ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1397ms (next.js: 33ms, proxy.ts: 18ms, application-code: 1346ms)
+  └─ ƒ getPlatformOrdersHeatmap() in 1327ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 3.8s (next.js: 31ms, proxy.ts: 21ms, application-code: 3.7s)
+  └─ ƒ getPlatformAlerts() in 3678ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 10.6s (next.js: 32ms, proxy.ts: 38ms, application-code: 10.5s)
+  └─ ƒ getPlatformActivityFeed() in 10481ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 7.3s (next.js: 24ms, proxy.ts: 21ms, application-code: 7.3s)
+  └─ ƒ getPlatformDashboardKPIs() in 7279ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1525ms (next.js: 22ms, proxy.ts: 31ms, application-code: 1471ms)
+  └─ ƒ getPlatformStationFleet() in 1445ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1635ms (next.js: 29ms, proxy.ts: 28ms, application-code: 1577ms)
+  └─ ƒ getPlatformOrdersHeatmap() in 1558ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 5.2s (next.js: 27ms, proxy.ts: 33ms, application-code: 5.1s)
+  └─ ƒ getPlatformAlerts() in 5091ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 3.9s (next.js: 19ms, proxy.ts: 16ms, application-code: 3.8s)
+  └─ ƒ getPlatformActivityFeed() in 3816ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1647ms (next.js: 24ms, proxy.ts: 24ms, application-code: 1599ms)
+  └─ ƒ GetUnreadTicketCounts() in 1582ms app/manage/actions/support.ts
+ POST /manage 200 in 5.7s (next.js: 29ms, proxy.ts: 25ms, application-code: 5.6s)
+  └─ ƒ getPlatformActivityFeed() in 5583ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 5.6s (next.js: 27ms, proxy.ts: 25ms, application-code: 5.5s)
+  └─ ƒ getPlatformDashboardKPIs() in 5526ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1423ms (next.js: 24ms, proxy.ts: 18ms, application-code: 1381ms)
+  └─ ƒ getPlatformStationFleet() in 1356ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1425ms (next.js: 22ms, proxy.ts: 28ms, application-code: 1375ms)
+  └─ ƒ getPlatformOrdersHeatmap() in 1350ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 3.9s (next.js: 25ms, proxy.ts: 30ms, application-code: 3.8s)
+  └─ ƒ getPlatformAlerts() in 3789ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 3.9s (next.js: 33ms, proxy.ts: 22ms, application-code: 3.9s)
+  └─ ƒ getPlatformActivityFeed() in 3856ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 5.3s (next.js: 26ms, proxy.ts: 26ms, application-code: 5.2s)
+  └─ ƒ getPlatformActivityFeed() in 5213ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 5.9s (next.js: 50ms, proxy.ts: 38ms, application-code: 5.8s)
+  └─ ƒ getPlatformDashboardKPIs() in 5821ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1385ms (next.js: 26ms, proxy.ts: 22ms, application-code: 1337ms)
+  └─ ƒ getPlatformStationFleet() in 1312ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1483ms (next.js: 27ms, proxy.ts: 29ms, application-code: 1427ms)
+  └─ ƒ getPlatformOrdersHeatmap() in 1411ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 4.2s (next.js: 23ms, proxy.ts: 18ms, application-code: 4.2s)
+  └─ ƒ getPlatformAlerts() in 4153ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 4.8s (next.js: 24ms, proxy.ts: 22ms, application-code: 4.7s)
+  └─ ƒ getPlatformActivityFeed() in 4727ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1105ms (next.js: 28ms, proxy.ts: 26ms, application-code: 1051ms)
+  └─ ƒ GetUnreadTicketCounts() in 1031ms app/manage/actions/support.ts
+ POST /manage 200 in 4.2s (next.js: 19ms, proxy.ts: 19ms, application-code: 4.1s)
+  └─ ƒ getPlatformActivityFeed() in 4103ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 6.2s (next.js: 27ms, proxy.ts: 23ms, application-code: 6.2s)
+  └─ ƒ getPlatformDashboardKPIs() in 6142ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.1s (next.js: 20ms, proxy.ts: 897ms, application-code: 1216ms)
+  └─ ƒ getPlatformStationFleet() in 1196ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1410ms (next.js: 20ms, proxy.ts: 34ms, application-code: 1357ms)
+  └─ ƒ getPlatformOrdersHeatmap() in 1342ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 3.9s (next.js: 20ms, proxy.ts: 27ms, application-code: 3.8s)
+  └─ ƒ getPlatformAlerts() in 3817ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 4.5s (next.js: 26ms, proxy.ts: 27ms, application-code: 4.4s)
+  └─ ƒ getPlatformActivityFeed() in 4388ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 5.8s (next.js: 28ms, proxy.ts: 25ms, application-code: 5.8s)
+  └─ ƒ getPlatformActivityFeed() in 5749ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 4.7s (next.js: 22ms, proxy.ts: 19ms, application-code: 4.6s)
+  └─ ƒ getPlatformDashboardKPIs() in 4619ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1326ms (next.js: 39ms, proxy.ts: 54ms, application-code: 1233ms)
+  └─ ƒ getPlatformStationFleet() in 1211ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1319ms (next.js: 22ms, proxy.ts: 21ms, application-code: 1276ms)
+  └─ ƒ getPlatformOrdersHeatmap() in 1251ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 3.5s (next.js: 22ms, proxy.ts: 24ms, application-code: 3.4s)
+  └─ ƒ getPlatformAlerts() in 3410ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1105ms (next.js: 44ms, proxy.ts: 22ms, application-code: 1039ms)
+  └─ ƒ GetUnreadTicketCounts() in 1017ms app/manage/actions/support.ts
+ POST /manage 200 in 4.2s (next.js: 23ms, proxy.ts: 22ms, application-code: 4.1s)
+  └─ ƒ getPlatformActivityFeed() in 4094ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 4.3s (next.js: 30ms, proxy.ts: 23ms, application-code: 4.2s)
+  └─ ƒ getPlatformActivityFeed() in 4204ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 4.7s (next.js: 19ms, proxy.ts: 30ms, application-code: 4.6s)
+  └─ ƒ getPlatformDashboardKPIs() in 4629ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1831ms (next.js: 26ms, proxy.ts: 38ms, application-code: 1767ms)
+  └─ ƒ getPlatformStationFleet() in 1744ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1517ms (next.js: 24ms, proxy.ts: 25ms, application-code: 1469ms)
+  └─ ƒ getPlatformOrdersHeatmap() in 1451ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 3.2s (next.js: 24ms, proxy.ts: 28ms, application-code: 3.1s)
+  └─ ƒ getPlatformAlerts() in 3100ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 5.5s (next.js: 25ms, proxy.ts: 25ms, application-code: 5.5s)
+  └─ ƒ getPlatformActivityFeed() in 5435ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 6.1s (next.js: 44ms, proxy.ts: 32ms, application-code: 6.1s)
+  └─ ƒ getPlatformDashboardKPIs() in 6023ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 3.2s (next.js: 23ms, proxy.ts: 19ms, application-code: 3.1s)
+  └─ ƒ getPlatformActivityFeed() in 3094ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1433ms (next.js: 26ms, proxy.ts: 28ms, application-code: 1378ms)
+  └─ ƒ getPlatformStationFleet() in 1363ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1472ms (next.js: 26ms, proxy.ts: 25ms, application-code: 1421ms)
+  └─ ƒ getPlatformOrdersHeatmap() in 1405ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 3.5s (next.js: 23ms, proxy.ts: 42ms, application-code: 3.4s)
+  └─ ƒ getPlatformAlerts() in 3401ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 503ms (next.js: 26ms, proxy.ts: 32ms, application-code: 445ms)
+  └─ ƒ GetUnreadTicketCounts() in 427ms app/manage/actions/support.ts
+ POST /manage 200 in 4.1s (next.js: 20ms, proxy.ts: 24ms, application-code: 4.1s)
+  └─ ƒ getPlatformActivityFeed() in 4039ms app/manage/actions/hq-platform/dashboard.ts
+[browser] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+[browser] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+ POST /dashboard 200 in 864ms (next.js: 46ms, proxy.ts: 50ms, application-code: 768ms)
+  └─ ƒ GetUnreadTicketCounts() in 707ms app/dashboard/actions/support.ts
+ POST /manage 200 in 5.1s (next.js: 67ms, proxy.ts: 36ms, application-code: 5.0s)
+  └─ ƒ getPlatformDashboardKPIs() in 4960ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1202ms (next.js: 32ms, proxy.ts: 23ms, application-code: 1147ms)
+  └─ ƒ getPlatformStationFleet() in 1115ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1128ms (next.js: 29ms, proxy.ts: 40ms, application-code: 1059ms)
+  └─ ƒ getPlatformOrdersHeatmap() in 1026ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 3.2s (next.js: 30ms, proxy.ts: 23ms, application-code: 3.2s)
+  └─ ƒ getPlatformActivityFeed() in 3157ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 3.9s (next.js: 237ms, proxy.ts: 123ms, application-code: 3.5s)
+  └─ ƒ getPlatformAlerts() in 3492ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 4.7s (next.js: 35ms, proxy.ts: 21ms, application-code: 4.7s)
+  └─ ƒ getPlatformActivityFeed() in 4632ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 5.4s (next.js: 24ms, proxy.ts: 899ms, application-code: 4.5s)
+  └─ ƒ getPlatformDashboardKPIs() in 4494ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1193ms (next.js: 20ms, proxy.ts: 21ms, application-code: 1151ms)
+  └─ ƒ getPlatformStationFleet() in 1131ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1261ms (next.js: 23ms, proxy.ts: 25ms, application-code: 1214ms)
+  └─ ƒ getPlatformOrdersHeatmap() in 1197ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 409ms (next.js: 29ms, proxy.ts: 21ms, application-code: 360ms)
+  └─ ƒ GetUnreadTicketCounts() in 339ms app/manage/actions/support.ts
+ POST /manage 200 in 3.2s (next.js: 24ms, proxy.ts: 18ms, application-code: 3.2s)
+  └─ ƒ getPlatformAlerts() in 3164ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.7s (next.js: 24ms, proxy.ts: 19ms, application-code: 2.7s)
+  └─ ƒ getPlatformActivityFeed() in 2689ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 3.4s (next.js: 32ms, proxy.ts: 25ms, application-code: 3.3s)
+  └─ ƒ getPlatformActivityFeed() in 3302ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 5.0s (next.js: 35ms, proxy.ts: 36ms, application-code: 4.9s)
+  └─ ƒ getPlatformDashboardKPIs() in 4848ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 11.0s (next.js: 43ms, proxy.ts: 34ms, application-code: 11.0s)
+  └─ ƒ getMerchantHealthGrid(undefined) in 10923ms app/manage/actions/merchants.ts
+ POST /manage 200 in 11.6s (next.js: 24ms, proxy.ts: 22ms, application-code: 11.5s)
+  └─ ƒ getMerchantHealthGrid(["2add44cb-f498-4653-aca3-a8f0ca258e70","a9aca1d8-730b-4f97-98f7-2230639f64b1"]) in 11470ms app/manage/actions/merchants.ts
+ POST /manage 200 in 7.0s (next.js: 33ms, proxy.ts: 23ms, application-code: 6.9s)
+  └─ ƒ getPlatformGrowthMetrics("2026-05-20T17:08:43.303Z", "2026-06-19T17:08:43.303Z") in 6873ms app/manage/actions/hq-platform/analytics-growth.ts
+ POST /manage 200 in 6.9s (next.js: 81ms, proxy.ts: 101ms, application-code: 6.7s)
+  └─ ƒ getPlatformGrowthMetrics("2026-05-20T17:08:55.120Z", "2026-06-19T17:08:55.120Z") in 6585ms app/manage/actions/hq-platform/analytics-growth.ts
+ POST /manage 200 in 2.8s (next.js: 84ms, proxy.ts: 174ms, application-code: 2.6s)
+  └─ ƒ getPlatformGrowthMetrics("2026-05-20T17:09:42.849Z", "2026-06-19T17:09:42.849Z") in 2541ms app/manage/actions/hq-platform/analytics-growth.ts
+ POST /manage 200 in 412ms (next.js: 51ms, proxy.ts: 37ms, application-code: 324ms)
+  └─ ƒ GetUnreadTicketCounts() in 291ms app/manage/actions/support.ts
+ POST /manage 200 in 1148ms (next.js: 156ms, proxy.ts: 103ms, application-code: 888ms)
+  └─ ƒ GetUnreadTicketCounts() in 835ms app/manage/actions/support.ts
+ POST /manage 200 in 3.9s (next.js: 261ms, proxy.ts: 1054ms, application-code: 2.6s)
+  └─ ƒ getMerchantHealthGrid(["2add44cb-f498-4653-aca3-a8f0ca258e70","a9aca1d8-730b-4f97-98f7-2230639f64b1"]) in 2533ms app/manage/actions/merchants.ts
+ POST /manage 200 in 5.2s (next.js: 53ms, proxy.ts: 73ms, application-code: 5.1s)
+  └─ ƒ getPlatformDashboardKPIs() in 5058ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 556ms (next.js: 40ms, proxy.ts: 30ms, application-code: 486ms)
+  └─ ƒ GetMerchantSpotlight(10) in 443ms app/manage/actions/get-merchant-spotlight.ts
+ POST /manage 200 in 3.6s (next.js: 40ms, proxy.ts: 31ms, application-code: 3.5s)
+  └─ ƒ getPlatformActivityFeed() in 3448ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1281ms (next.js: 29ms, proxy.ts: 18ms, application-code: 1234ms)
+  └─ ƒ getPlatformStationFleet() in 1216ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1260ms (next.js: 105ms, proxy.ts: 18ms, application-code: 1137ms)
+  └─ ƒ getPlatformOrdersHeatmap() in 1113ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 3.4s (next.js: 38ms, proxy.ts: 25ms, application-code: 3.4s)
+  └─ ƒ getPlatformAlerts() in 3326ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 921ms (next.js: 20ms, proxy.ts: 21ms, application-code: 879ms)
+  └─ ƒ GetUnreadTicketCounts() in 857ms app/manage/actions/support.ts
+ POST /manage 200 in 4.5s (next.js: 21ms, proxy.ts: 27ms, application-code: 4.5s)
+  └─ ƒ getPlatformActivityFeed() in 4454ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 7.5s (next.js: 28ms, proxy.ts: 20ms, application-code: 7.5s)
+  └─ ƒ getPlatformDashboardKPIs() in 7457ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1333ms (next.js: 21ms, proxy.ts: 22ms, application-code: 1290ms)
+  └─ ƒ getPlatformStationFleet() in 1272ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.0s (next.js: 17ms, proxy.ts: 22ms, application-code: 1969ms)
+  └─ ƒ getPlatformOrdersHeatmap() in 1954ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 5.7s (next.js: 18ms, proxy.ts: 21ms, application-code: 5.6s)
+  └─ ƒ getPlatformActivityFeed() in 5621ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.9s (next.js: 33ms, proxy.ts: 27ms, application-code: 2.9s)
+  └─ ƒ getPlatformAlerts() in 2840ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 4.3s (next.js: 29ms, proxy.ts: 19ms, application-code: 4.2s)
+  └─ ƒ getPlatformActivityFeed() in 4203ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 5.1s (next.js: 30ms, proxy.ts: 35ms, application-code: 5.0s)
+  └─ ƒ getPlatformDashboardKPIs() in 4966ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1180ms (next.js: 25ms, proxy.ts: 24ms, application-code: 1131ms)
+  └─ ƒ getPlatformStationFleet() in 1112ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1434ms (next.js: 26ms, proxy.ts: 23ms, application-code: 1385ms)
+  └─ ƒ getPlatformOrdersHeatmap() in 1365ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 3.8s (next.js: 27ms, proxy.ts: 19ms, application-code: 3.7s)
+  └─ ƒ getPlatformAlerts() in 3694ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 3.2s (next.js: 25ms, proxy.ts: 29ms, application-code: 3.2s)
+  └─ ƒ getPlatformActivityFeed() in 3157ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 380ms (next.js: 24ms, proxy.ts: 17ms, application-code: 339ms)
+  └─ ƒ GetUnreadTicketCounts() in 320ms app/manage/actions/support.ts
+ POST /manage 200 in 3.7s (next.js: 27ms, proxy.ts: 42ms, application-code: 3.6s)
+  └─ ƒ getPlatformActivityFeed() in 3580ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 6.0s (next.js: 47ms, proxy.ts: 328ms, application-code: 5.6s)
+  └─ ƒ getPlatformDashboardKPIs() in 5488ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.6s (next.js: 47ms, proxy.ts: 136ms, application-code: 2.5s)
+  └─ ƒ getPlatformStationFleet() in 2115ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1628ms (next.js: 48ms, proxy.ts: 156ms, application-code: 1423ms)
+  └─ ƒ getPlatformOrdersHeatmap() in 1308ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 6.6s (next.js: 52ms, proxy.ts: 121ms, application-code: 6.5s)
+  └─ ƒ getPlatformAlerts() in 5905ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 3.6s (next.js: 86ms, proxy.ts: 87ms, application-code: 3.4s)
+  └─ ƒ getPlatformActivityFeed() in 3325ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 8.4s (next.js: 1696ms, proxy.ts: 2.1s, application-code: 4.6s)
+  └─ ƒ getPlatformActivityFeed() in 4513ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 5.9s (next.js: 112ms, proxy.ts: 65ms, application-code: 5.8s)
+  └─ ƒ getPlatformDashboardKPIs() in 5659ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1603ms (next.js: 70ms, proxy.ts: 93ms, application-code: 1440ms)
+  └─ ƒ getPlatformStationFleet() in 1350ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1622ms (next.js: 99ms, proxy.ts: 60ms, application-code: 1463ms)
+  └─ ƒ getPlatformOrdersHeatmap() in 1288ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 4.5s (next.js: 1155ms, proxy.ts: 206ms, application-code: 3.1s)
+  └─ ƒ GetUnreadTicketCounts() in 2209ms app/manage/actions/support.ts
+ POST /manage 200 in 17.0s (next.js: 2.8s, proxy.ts: 1258ms, application-code: 12.9s)
+  └─ ƒ getPlatformAlerts() in 9712ms app/manage/actions/hq-platform/dashboard.ts
+ GET /dashboard 200 in 5.0s (next.js: 308ms, proxy.ts: 1945ms, application-code: 2.7s)
+ POST /manage 200 in 13.5s (next.js: 751ms, proxy.ts: 1704ms, application-code: 11.1s)
+  └─ ƒ getPlatformActivityFeed() in 10562ms app/manage/actions/hq-platform/dashboard.ts
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://liked-ram-76.clerk.accounts.dev/npm/@clerk/clerk-js@6/dist/clerk.browser.js:12:6092)
+[browser] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+[browser] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+ POST /dashboard 200 in 2.1s (next.js: 327ms, proxy.ts: 566ms, application-code: 1205ms)
+  └─ ƒ GetUserInfo() in 1104ms app/manage/actions/get-user-info.ts
+ POST /dashboard 200 in 261ms (next.js: 105ms, proxy.ts: 100ms, application-code: 56ms)
+  └─ ƒ getImpersonationContext() in 3ms lib/admin/impersonation.ts
+[browser] Image with src "https://hifouuofcaytijrkbvcy.supabase.co/storage/v1/object/public/Organizations-Logos/org_34LN9aMJGO4jNllGTvHH4CLB5gq.png" has legacy prop "objectFit". Did you forget to run the codemod?
+Read more: https://nextjs.org/docs/messages/next-image-upgrade-to-13
+[browser] Image with src "https://hifouuofcaytijrkbvcy.supabase.co/storage/v1/object/public/Organizations-Logos/org_34LN9aMJGO4jNllGTvHH4CLB5gq.png" has "fill" but is missing "sizes" prop. Please add it to improve page performance. Read more: https://nextjs.org/docs/api-reference/next/image#sizes
+ POST /dashboard 200 in 513ms (next.js: 101ms, proxy.ts: 70ms, application-code: 342ms)
+  └─ ƒ GetUnreadTicketCounts() in 280ms app/dashboard/actions/support.ts
+ POST /dashboard 200 in 191ms (next.js: 76ms, proxy.ts: 62ms, application-code: 53ms)
+  └─ ƒ getImpersonationContext() in 5ms lib/admin/impersonation.ts
+ POST /dashboard 200 in 1237ms (next.js: 95ms, proxy.ts: 76ms, application-code: 1066ms)
+  └─ ƒ GetMenus("org_34LN9aMJGO4jNllGTvHH4CLB5gq", null) in 1006ms app/dashboard/actions/menus.ts
+ POST /dashboard 200 in 2.1s (next.js: 92ms, proxy.ts: 62ms, application-code: 1932ms)
+  └─ ƒ GetMenuItems("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "all") in 1184ms app/dashboard/actions/menu-items.ts
+ POST /dashboard 200 in 1662ms (next.js: 137ms, proxy.ts: 112ms, application-code: 1413ms)
+  └─ ƒ GetSchedules("org_34LN9aMJGO4jNllGTvHH4CLB5gq") in 1325ms app/dashboard/actions/schedules.ts
+ POST /manage 200 in 6.2s (next.js: 71ms, proxy.ts: 90ms, application-code: 6.1s)
+  └─ ƒ getPlatformDashboardKPIs() in 6010ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.0s (next.js: 334ms, proxy.ts: 90ms, application-code: 1605ms)
+  └─ ƒ getPlatformStationFleet() in 1426ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1585ms (next.js: 85ms, proxy.ts: 60ms, application-code: 1441ms)
+  └─ ƒ getPlatformOrdersHeatmap() in 1281ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 3.6s (next.js: 176ms, proxy.ts: 157ms, application-code: 3.2s)
+  └─ ƒ getPlatformActivityFeed() in 3045ms app/manage/actions/hq-platform/dashboard.ts
+ POST /dashboard 200 in 24.6s (next.js: 174ms, proxy.ts: 177ms, application-code: 24.3s)
+  └─ ƒ GetOrders("org_34LN9aMJGO4jNllGTvHH4CLB5gq", null, undefined) in 19916ms app/dashboard/actions/order.ts
+ POST /dashboard 200 in 2.2s (next.js: 107ms, proxy.ts: 623ms, application-code: 1469ms)
+  └─ ƒ GetUnifiedStaffView("org_34LN9aMJGO4jNllGTvHH4CLB5gq", null) in 854ms app/dashboard/actions/unified-staff.ts
+ POST /dashboard 200 in 871ms (next.js: 174ms, proxy.ts: 254ms, application-code: 443ms)
+  └─ ƒ GetCurrentUserPinStatus("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "user_36u15MkVGaCOwWexx9cWWlrF1Vw") in 342ms app/dashboard/actions/unified-staff.ts
+ POST /manage 200 in 8.4s (next.js: 295ms, proxy.ts: 819ms, application-code: 7.3s)
+  └─ ƒ getPlatformAlerts() in 7135ms app/manage/actions/hq-platform/dashboard.ts
+ POST /dashboard 200 in 7.9s (next.js: 821ms, proxy.ts: 1509ms, application-code: 5.6s)
+  └─ ƒ GetOrderAnalytics("org_34LN9aMJGO4jNllGTvHH4CLB5gq", null, "2026-06-11T21:00:00.000Z", "2026-06-19T17:18:41.518Z") in 5126ms app/dashboard/actions/order-analytics.ts
+[browser] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+[browser] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+ POST /manage 200 in 5.9s (next.js: 84ms, proxy.ts: 65ms, application-code: 5.7s)
+  └─ ƒ getPlatformActivityFeed() in 5675ms app/manage/actions/hq-platform/dashboard.ts
+ POST /dashboard 200 in 16.0s (next.js: 595ms, proxy.ts: 482ms, application-code: 14.9s)
+  └─ ƒ GetOrderAnalytics("org_34LN9aMJGO4jNllGTvHH4CLB5gq", null, "2026-05-19T21:00:00.000Z", "2026-06-19T17:18:41.518Z") in 14692ms app/dashboard/actions/order-analytics.ts
+ POST /dashboard 200 in 3.2s (next.js: 75ms, proxy.ts: 238ms, application-code: 2.8s)
+  └─ ƒ GetOrderStats("org_34LN9aMJGO4jNllGTvHH4CLB5gq", null, "2026-06-11T21:00:00.000Z", "2026-06-19T17:18:41.518Z") in 2687ms app/dashboard/actions/order-analytics.ts
+ POST /dashboard 200 in 1832ms (next.js: 197ms, proxy.ts: 438ms, application-code: 1196ms)
+  └─ ƒ GetOrderStats("org_34LN9aMJGO4jNllGTvHH4CLB5gq", null, "2026-05-19T21:00:00.000Z", "2026-06-19T17:18:41.518Z") in 1072ms app/dashboard/actions/order-analytics.ts
+ POST /dashboard 200 in 2.2s (next.js: 113ms, proxy.ts: 63ms, application-code: 2.0s)
+  └─ ƒ GetFinancialKPIs("org_34LN9aMJGO4jNllGTvHH4CLB5gq", null, "2026-06-11T21:00:00.000Z", "2026-06-19T17:18:41.518Z") in 1932ms app/dashboard/actions/order-analytics.ts
+ POST /dashboard 200 in 955ms (next.js: 56ms, proxy.ts: 46ms, application-code: 853ms)
+  └─ ƒ GetFinancialKPIs("org_34LN9aMJGO4jNllGTvHH4CLB5gq", null, "2026-05-19T21:00:00.000Z", "2026-06-19T17:18:41.518Z") in 797ms app/dashboard/actions/order-analytics.ts
+ POST /dashboard 200 in 3.0s (next.js: 102ms, proxy.ts: 86ms, application-code: 2.8s)
+  └─ ƒ GetWaterfallReport("org_34LN9aMJGO4jNllGTvHH4CLB5gq", null, "2026-05-19T21:00:00.000Z", "2026-06-19T17:18:41.518Z") in 2359ms app/dashboard/actions/waterfall-report.ts
+ POST /dashboard 200 in 1719ms (next.js: 183ms, proxy.ts: 218ms, application-code: 1318ms)
+  └─ ƒ GetTransactionVolumeReport("org_34LN9aMJGO4jNllGTvHH4CLB5gq", null, "2026-05-19T21:00:00.000Z", "2026-06-19T17:18:41.518Z") in 1250ms app/dashboard/actions/order-analytics.ts
+ POST /dashboard 200 in 2.0s (next.js: 137ms, proxy.ts: 65ms, application-code: 1801ms)
+  └─ ƒ GetNetCollectedBySourceReport("org_34LN9aMJGO4jNllGTvHH4CLB5gq", null, "2026-05-19T21:00:00.000Z", "2026-06-19T17:18:41.518Z") in 1746ms app/dashboard/actions/order-analytics.ts
+ POST /manage 200 in 7.6s (next.js: 164ms, proxy.ts: 59ms, application-code: 7.4s)
+  └─ ƒ getPlatformDashboardKPIs() in 6762ms app/manage/actions/hq-platform/dashboard.ts
+ POST /dashboard 200 in 5.7s (next.js: 456ms, proxy.ts: 496ms, application-code: 4.8s)
+  └─ ƒ GetTaxableRevenueByTenderReport("org_34LN9aMJGO4jNllGTvHH4CLB5gq", null, "2026-05-19T21:00:00.000Z", "2026-06-19T17:18:41.518Z") in 4529ms app/dashboard/actions/order-analytics.ts
+ POST /manage 200 in 4.3s (next.js: 893ms, proxy.ts: 441ms, application-code: 3.0s)
+  └─ ƒ getPlatformStationFleet() in 2648ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 965ms (next.js: 103ms, proxy.ts: 31ms, application-code: 831ms)
+  └─ ƒ GetUnreadTicketCounts() in 541ms app/manage/actions/support.ts
+ POST /manage 200 in 3.1s (next.js: 359ms, proxy.ts: 330ms, application-code: 2.4s)
+  └─ ƒ getPlatformOrdersHeatmap() in 2157ms app/manage/actions/hq-platform/dashboard.ts
+ POST /dashboard 200 in 7.5s (next.js: 204ms, proxy.ts: 463ms, application-code: 6.8s)
+  └─ ƒ GetRevenueByCategoryReport("org_34LN9aMJGO4jNllGTvHH4CLB5gq", null, "2026-06-11T21:00:00.000Z", "2026-06-19T17:18:41.518Z") in 6194ms app/dashboard/actions/order-analytics.ts
+ POST /dashboard 200 in 1845ms (next.js: 223ms, proxy.ts: 191ms, application-code: 1431ms)
+  └─ ƒ GetLocations("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "user_36u15MkVGaCOwWexx9cWWlrF1Vw") in 1063ms app/dashboard/actions/get-locations.ts
+ POST /manage 200 in 4.1s (next.js: 244ms, proxy.ts: 123ms, application-code: 3.7s)
+  └─ ƒ getPlatformActivityFeed() in 3536ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 4.7s (next.js: 82ms, proxy.ts: 103ms, application-code: 4.5s)
+  └─ ƒ getPlatformAlerts() in 4441ms app/manage/actions/hq-platform/dashboard.ts
+⨯ Error: Unauthorized: Missing permission hq.merchant.view
+    at assertHQPermission (lib\admin\auth.ts:117:11)
+    at async getPlatformActivityFeed (app\manage\actions\hq-platform\dashboard.ts:649:3)
+  115 |
+  116 |   if (!hasPermission) {
+> 117 |     throw new Error(`Unauthorized: Missing permission ${permission}`)
+      |           ^
+  118 |   }
+  119 |
+  120 |   const { data: roleData } = await supabase.rpc('get_my_hq_role').single() {
+  digest: '3021735384'
+}
+ POST /dashboard 200 in 53s (next.js: 36.3s, proxy.ts: 15.5s, application-code: 1354ms)
+ POST /manage 500 in 60s (next.js: 12.8s, proxy.ts: 2.8s, application-code: 44s)
+  └─ ƒ getPlatformActivityFeed() in 19631ms app/manage/actions/hq-platform/dashboard.ts
+ GET /dashboard 200 in 63s (next.js: 12.5s, proxy.ts: 9.4s, application-code: 41s)
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://liked-ram-76.clerk.accounts.dev/npm/@clerk/clerk-js@6/dist/clerk.browser.js:12:6092)
+[browser] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+[browser] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+ POST /dashboard 200 in 1919ms (next.js: 470ms, proxy.ts: 428ms, application-code: 1020ms)
+  └─ ƒ GetUserInfo() in 683ms app/manage/actions/get-user-info.ts
+[browser] Image with src "https://hifouuofcaytijrkbvcy.supabase.co/storage/v1/object/public/Organizations-Logos/org_34LN9aMJGO4jNllGTvHH4CLB5gq.png" has legacy prop "objectFit". Did you forget to run the codemod?
+Read more: https://nextjs.org/docs/messages/next-image-upgrade-to-13
+ POST /manage 200 in 11.6s (next.js: 384ms, proxy.ts: 1171ms, application-code: 10.1s)
+  └─ ƒ getPlatformDashboardKPIs() in 9384ms app/manage/actions/hq-platform/dashboard.ts
+ POST /dashboard 200 in 1383ms (next.js: 653ms, proxy.ts: 414ms, application-code: 316ms)
+  └─ ƒ getImpersonationContext() in 11ms lib/admin/impersonation.ts
+[browser] Image with src "https://hifouuofcaytijrkbvcy.supabase.co/storage/v1/object/public/Organizations-Logos/org_34LN9aMJGO4jNllGTvHH4CLB5gq.png" has "fill" but is missing "sizes" prop. Please add it to improve page performance. Read more: https://nextjs.org/docs/api-reference/next/image#sizes
+ POST /dashboard 200 in 1751ms (next.js: 520ms, proxy.ts: 469ms, application-code: 762ms)
+  └─ ƒ GetUnreadTicketCounts() in 484ms app/dashboard/actions/support.ts
+ POST /dashboard 200 in 891ms (next.js: 272ms, proxy.ts: 85ms, application-code: 534ms)
+  └─ ƒ getImpersonationContext() in 48ms lib/admin/impersonation.ts
+ POST /manage 200 in 3.7s (next.js: 399ms, proxy.ts: 333ms, application-code: 3.0s)
+  └─ ƒ getPlatformStationFleet() in 2937ms app/manage/actions/hq-platform/dashboard.ts
+ POST /dashboard 200 in 1991ms (next.js: 275ms, proxy.ts: 186ms, application-code: 1530ms)
+  └─ ƒ GetMenus("org_34LN9aMJGO4jNllGTvHH4CLB5gq", null) in 1068ms app/dashboard/actions/menus.ts
+ POST /manage 200 in 2.5s (next.js: 372ms, proxy.ts: 398ms, application-code: 1739ms)
+  └─ ƒ getPlatformOrdersHeatmap() in 1632ms app/manage/actions/hq-platform/dashboard.ts
+ POST /dashboard 200 in 3.4s (next.js: 313ms, proxy.ts: 292ms, application-code: 2.8s)
+  └─ ƒ GetMenuItems("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "all") in 1816ms app/dashboard/actions/menu-items.ts
+ POST /dashboard 200 in 1519ms (next.js: 226ms, proxy.ts: 158ms, application-code: 1135ms)
+  └─ ƒ GetSchedules("org_34LN9aMJGO4jNllGTvHH4CLB5gq") in 793ms app/dashboard/actions/schedules.ts
+ POST /manage 200 in 4.7s (next.js: 559ms, proxy.ts: 90ms, application-code: 4.0s)
+  └─ ƒ getPlatformAlerts() in 3942ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 3.5s (next.js: 431ms, proxy.ts: 82ms, application-code: 3.0s)
+  └─ ƒ getPlatformActivityFeed() in 2825ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 695ms (next.js: 166ms, proxy.ts: 83ms, application-code: 446ms)
+  └─ ƒ GetUnreadTicketCounts() in 333ms app/manage/actions/support.ts
+ POST /dashboard 200 in 30.8s (next.js: 236ms, proxy.ts: 400ms, application-code: 30.1s)
+  └─ ƒ GetOrders("org_34LN9aMJGO4jNllGTvHH4CLB5gq", null, undefined) in 28827ms app/dashboard/actions/order.ts
+ POST /dashboard 200 in 1187ms (next.js: 90ms, proxy.ts: 81ms, application-code: 1016ms)
+  └─ ƒ GetUnifiedStaffView("org_34LN9aMJGO4jNllGTvHH4CLB5gq", null) in 954ms app/dashboard/actions/unified-staff.ts
+ POST /dashboard 200 in 469ms (next.js: 86ms, proxy.ts: 51ms, application-code: 333ms)
+  └─ ƒ GetCurrentUserPinStatus("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "user_36u15MkVGaCOwWexx9cWWlrF1Vw") in 277ms app/dashboard/actions/unified-staff.ts
+ POST /manage 200 in 3.5s (next.js: 77ms, proxy.ts: 67ms, application-code: 3.4s)
+  └─ ƒ getPlatformActivityFeed() in 3275ms app/manage/actions/hq-platform/dashboard.ts
+ POST /dashboard 200 in 7.7s (next.js: 76ms, proxy.ts: 68ms, application-code: 7.5s)
+  └─ ƒ GetOrderAnalytics("org_34LN9aMJGO4jNllGTvHH4CLB5gq", null, "2026-06-11T21:00:00.000Z", "2026-06-19T17:21:50.683Z") in 7475ms app/dashboard/actions/order-analytics.ts
+ POST /dashboard 200 in 36.3s (next.js: 121ms, proxy.ts: 92ms, application-code: 36.1s)
+  └─ ƒ GetOrderAnalytics("org_34LN9aMJGO4jNllGTvHH4CLB5gq", null, "2026-05-19T21:00:00.000Z", "2026-06-19T17:21:50.683Z") in 33429ms app/dashboard/actions/order-analytics.ts
+ POST /dashboard 200 in 12.8s (next.js: 1421ms, proxy.ts: 6.5s, application-code: 4.8s)
+  └─ ƒ GetOrderStats("org_34LN9aMJGO4jNllGTvHH4CLB5gq", null, "2026-06-11T21:00:00.000Z", "2026-06-19T17:21:50.683Z") in 3698ms app/dashboard/actions/order-analytics.ts
+ POST /manage 200 in 44s (next.js: 1186ms, proxy.ts: 1514ms, application-code: 41s)
+  └─ ƒ getPlatformDashboardKPIs() in 36696ms app/manage/actions/hq-platform/dashboard.ts
+ POST /dashboard 200 in 12.7s (next.js: 2.9s, proxy.ts: 1431ms, application-code: 8.4s)
+  └─ ƒ GetOrderStats("org_34LN9aMJGO4jNllGTvHH4CLB5gq", null, "2026-05-19T21:00:00.000Z", "2026-06-19T17:21:50.683Z") in 7260ms app/dashboard/actions/order-analytics.ts
+ POST /dashboard 200 in 1748ms (next.js: 189ms, proxy.ts: 289ms, application-code: 1269ms)
+  └─ ƒ GetFinancialKPIs("org_34LN9aMJGO4jNllGTvHH4CLB5gq", null, "2026-06-11T21:00:00.000Z", "2026-06-19T17:21:50.683Z") in 1186ms app/dashboard/actions/order-analytics.ts
+ POST /manage 200 in 8.5s (next.js: 2.1s, proxy.ts: 1777ms, application-code: 4.6s)
+  └─ ƒ getPlatformStationFleet() in 3963ms app/manage/actions/hq-platform/dashboard.ts
+ POST /dashboard 200 in 1446ms (next.js: 90ms, proxy.ts: 49ms, application-code: 1308ms)
+  └─ ƒ GetFinancialKPIs("org_34LN9aMJGO4jNllGTvHH4CLB5gq", null, "2026-05-19T21:00:00.000Z", "2026-06-19T17:21:50.683Z") in 1257ms app/dashboard/actions/order-analytics.ts
+ POST /manage 200 in 1539ms (next.js: 115ms, proxy.ts: 57ms, application-code: 1367ms)
+  └─ ƒ getPlatformOrdersHeatmap() in 1296ms app/manage/actions/hq-platform/dashboard.ts
+ POST /dashboard 200 in 2.1s (next.js: 48ms, proxy.ts: 56ms, application-code: 2000ms)
+  └─ ƒ GetWaterfallReport("org_34LN9aMJGO4jNllGTvHH4CLB5gq", null, "2026-05-19T21:00:00.000Z", "2026-06-19T17:21:50.683Z") in 1892ms app/dashboard/actions/waterfall-report.ts
+ POST /manage 200 in 4.3s (next.js: 62ms, proxy.ts: 41ms, application-code: 4.2s)
+  └─ ƒ getPlatformAlerts() in 4112ms app/manage/actions/hq-platform/dashboard.ts
+ POST /dashboard 200 in 1355ms (next.js: 282ms, proxy.ts: 110ms, application-code: 963ms)
+  └─ ƒ GetTransactionVolumeReport("org_34LN9aMJGO4jNllGTvHH4CLB5gq", null, "2026-05-19T21:00:00.000Z", "2026-06-19T17:21:50.683Z") in 907ms app/dashboard/actions/order-analytics.ts
+ POST /dashboard 200 in 970ms (next.js: 56ms, proxy.ts: 48ms, application-code: 866ms)
+  └─ ƒ GetNetCollectedBySourceReport("org_34LN9aMJGO4jNllGTvHH4CLB5gq", null, "2026-05-19T21:00:00.000Z", "2026-06-19T17:21:50.683Z") in 815ms app/dashboard/actions/order-analytics.ts
+ POST /manage 200 in 3.3s (next.js: 45ms, proxy.ts: 46ms, application-code: 3.2s)
+  └─ ƒ getPlatformActivityFeed() in 3137ms app/manage/actions/hq-platform/dashboard.ts
+ POST /dashboard 200 in 2.0s (next.js: 71ms, proxy.ts: 57ms, application-code: 1912ms)
+  └─ ƒ GetTaxableRevenueByTenderReport("org_34LN9aMJGO4jNllGTvHH4CLB5gq", null, "2026-05-19T21:00:00.000Z", "2026-06-19T17:21:50.683Z") in 1848ms app/dashboard/actions/order-analytics.ts
+ POST /dashboard 200 in 5.9s (next.js: 61ms, proxy.ts: 41ms, application-code: 5.8s)
+  └─ ƒ GetRevenueByCategoryReport("org_34LN9aMJGO4jNllGTvHH4CLB5gq", null, "2026-06-11T21:00:00.000Z", "2026-06-19T17:21:50.683Z") in 5736ms app/dashboard/actions/order-analytics.ts
+ POST /dashboard 200 in 1813ms (next.js: 104ms, proxy.ts: 43ms, application-code: 1666ms)
+  └─ ƒ GetLocations("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "user_36u15MkVGaCOwWexx9cWWlrF1Vw") in 1570ms app/dashboard/actions/get-locations.ts
+ POST /manage 200 in 1658ms (next.js: 68ms, proxy.ts: 54ms, application-code: 1536ms)
+  └─ ƒ GetUnreadTicketCounts() in 1489ms app/manage/actions/support.ts
+ POST /manage 200 in 4.2s (next.js: 111ms, proxy.ts: 89ms, application-code: 4.0s)
+  └─ ƒ getPlatformActivityFeed() in 3860ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 7.0s (next.js: 92ms, proxy.ts: 152ms, application-code: 6.8s)
+  └─ ƒ getPlatformDashboardKPIs() in 6639ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1955ms (next.js: 130ms, proxy.ts: 87ms, application-code: 1738ms)
+  └─ ƒ getPlatformStationFleet() in 1618ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1829ms (next.js: 186ms, proxy.ts: 152ms, application-code: 1491ms)
+  └─ ƒ getPlatformOrdersHeatmap() in 1356ms app/manage/actions/hq-platform/dashboard.ts
+[browser] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+[browser] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+ POST /manage 200 in 4.0s (next.js: 99ms, proxy.ts: 73ms, application-code: 3.8s)
+  └─ ƒ getPlatformAlerts() in 3730ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 11.0s (next.js: 2.5s, proxy.ts: 291ms, application-code: 8.3s)
+  └─ ƒ getPlatformActivityFeed() in 6846ms app/manage/actions/hq-platform/dashboard.ts
+ GET /dashboard 200 in 9.9s (next.js: 795ms, proxy.ts: 885ms, application-code: 8.2s)
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://liked-ram-76.clerk.accounts.dev/npm/@clerk/clerk-js@6/dist/clerk.browser.js:12:6092)
+ POST /manage 200 in 38.4s (next.js: 2.5s, proxy.ts: 2.6s, application-code: 33.4s)
+  └─ ƒ getPlatformActivityFeed() in 32270ms app/manage/actions/hq-platform/dashboard.ts
+[browser] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+[browser] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+ POST /dashboard 200 in 1131ms (next.js: 94ms, proxy.ts: 142ms, application-code: 895ms)
+  └─ ƒ GetUserInfo() in 769ms app/manage/actions/get-user-info.ts
+ POST /sign-in 200 in 15.4s (next.js: 1589ms, proxy.ts: 12.1s, application-code: 1711ms)
+ POST /dashboard 200 in 445ms (next.js: 150ms, proxy.ts: 117ms, application-code: 178ms)
+  └─ ƒ getImpersonationContext() in 28ms lib/admin/impersonation.ts
+[browser] Image with src "https://hifouuofcaytijrkbvcy.supabase.co/storage/v1/object/public/Organizations-Logos/org_34LN9aMJGO4jNllGTvHH4CLB5gq.png" has legacy prop "objectFit". Did you forget to run the codemod?
+Read more: https://nextjs.org/docs/messages/next-image-upgrade-to-13
+[browser] Image with src "https://hifouuofcaytijrkbvcy.supabase.co/storage/v1/object/public/Organizations-Logos/org_34LN9aMJGO4jNllGTvHH4CLB5gq.png" has "fill" but is missing "sizes" prop. Please add it to improve page performance. Read more: https://nextjs.org/docs/api-reference/next/image#sizes
+ POST /dashboard 200 in 826ms (next.js: 234ms, proxy.ts: 106ms, application-code: 485ms)
+  └─ ƒ GetUnreadTicketCounts() in 364ms app/dashboard/actions/support.ts
+ POST /dashboard 200 in 711ms (next.js: 373ms, proxy.ts: 95ms, application-code: 243ms)
+  └─ ƒ getImpersonationContext() in 60ms lib/admin/impersonation.ts
+ POST /dashboard 200 in 1398ms (next.js: 124ms, proxy.ts: 225ms, application-code: 1050ms)
+  └─ ƒ GetMenus("org_34LN9aMJGO4jNllGTvHH4CLB5gq", null) in 903ms app/dashboard/actions/menus.ts
+ POST /manage 200 in 7.3s (next.js: 787ms, proxy.ts: 143ms, application-code: 6.4s)
+  └─ ƒ getPlatformDashboardKPIs() in 6320ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1469ms (next.js: 130ms, proxy.ts: 79ms, application-code: 1260ms)
+  └─ ƒ getPlatformStationFleet() in 1160ms app/manage/actions/hq-platform/dashboard.ts
+ POST /dashboard 200 in 3.5s (next.js: 411ms, proxy.ts: 121ms, application-code: 3.0s)
+  └─ ƒ GetMenuItems("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "all") in 2509ms app/dashboard/actions/menu-items.ts
+ POST /manage 200 in 2.7s (next.js: 201ms, proxy.ts: 276ms, application-code: 2.3s)
+  └─ ƒ getPlatformOrdersHeatmap() in 2070ms app/manage/actions/hq-platform/dashboard.ts
+ POST /dashboard 200 in 1715ms (next.js: 47ms, proxy.ts: 31ms, application-code: 1637ms)
+  └─ ƒ GetSchedules("org_34LN9aMJGO4jNllGTvHH4CLB5gq") in 1521ms app/dashboard/actions/schedules.ts
+ POST /manage 200 in 4.0s (next.js: 120ms, proxy.ts: 66ms, application-code: 3.8s)
+  └─ ƒ getPlatformAlerts() in 3745ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 818ms (next.js: 245ms, proxy.ts: 136ms, application-code: 437ms)
+  └─ ƒ GetUnreadTicketCounts() in 280ms app/manage/actions/support.ts
+ POST /dashboard 200 in 32.2s (next.js: 85ms, proxy.ts: 157ms, application-code: 31.9s)
+  └─ ƒ GetOrders("org_34LN9aMJGO4jNllGTvHH4CLB5gq", null, undefined) in 25589ms app/dashboard/actions/order.ts
+ POST /manage 200 in 14.7s (next.js: 196ms, proxy.ts: 193ms, application-code: 14.3s)
+  └─ ƒ getPlatformActivityFeed() in 14101ms app/manage/actions/hq-platform/dashboard.ts
+ POST /dashboard 200 in 2.2s (next.js: 317ms, proxy.ts: 151ms, application-code: 1760ms)
+  └─ ƒ GetUnifiedStaffView("org_34LN9aMJGO4jNllGTvHH4CLB5gq", null) in 1378ms app/dashboard/actions/unified-staff.ts
+ POST /dashboard 200 in 691ms (next.js: 74ms, proxy.ts: 80ms, application-code: 537ms)
+  └─ ƒ GetCurrentUserPinStatus("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "user_36u15MkVGaCOwWexx9cWWlrF1Vw") in 466ms app/dashboard/actions/unified-staff.ts
+ POST /dashboard 200 in 3.8s (next.js: 80ms, proxy.ts: 162ms, application-code: 3.5s)
+  └─ ƒ GetOrderAnalytics("org_34LN9aMJGO4jNllGTvHH4CLB5gq", null, "2026-06-11T21:00:00.000Z", "2026-06-19T17:26:19.577Z") in 3469ms app/dashboard/actions/order-analytics.ts
+[browser] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+[browser] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+ POST /dashboard 200 in 11.1s (next.js: 120ms, proxy.ts: 198ms, application-code: 10.8s)
+  └─ ƒ GetOrderAnalytics("org_34LN9aMJGO4jNllGTvHH4CLB5gq", null, "2026-05-19T21:00:00.000Z", "2026-06-19T17:26:19.577Z") in 10694ms app/dashboard/actions/order-analytics.ts
+ POST /dashboard 200 in 1083ms (next.js: 108ms, proxy.ts: 156ms, application-code: 820ms)
+  └─ ƒ GetOrderStats("org_34LN9aMJGO4jNllGTvHH4CLB5gq", null, "2026-06-11T21:00:00.000Z", "2026-06-19T17:26:19.577Z") in 734ms app/dashboard/actions/order-analytics.ts
+ POST /dashboard 200 in 2.1s (next.js: 118ms, proxy.ts: 86ms, application-code: 1885ms)
+  └─ ƒ GetOrderStats("org_34LN9aMJGO4jNllGTvHH4CLB5gq", null, "2026-05-19T21:00:00.000Z", "2026-06-19T17:26:19.577Z") in 1671ms app/dashboard/actions/order-analytics.ts
+ POST /manage 200 in 6.4s (next.js: 105ms, proxy.ts: 107ms, application-code: 6.2s)
+  └─ ƒ getPlatformDashboardKPIs() in 5788ms app/manage/actions/hq-platform/dashboard.ts
+ POST /dashboard 200 in 1185ms (next.js: 228ms, proxy.ts: 135ms, application-code: 822ms)
+  └─ ƒ GetFinancialKPIs("org_34LN9aMJGO4jNllGTvHH4CLB5gq", null, "2026-06-11T21:00:00.000Z", "2026-06-19T17:26:19.577Z") in 644ms app/dashboard/actions/order-analytics.ts
+ POST /manage 200 in 1884ms (next.js: 149ms, proxy.ts: 155ms, application-code: 1581ms)
+  └─ ƒ getPlatformStationFleet() in 1427ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 2.3s (next.js: 149ms, proxy.ts: 191ms, application-code: 1913ms)
+  └─ ƒ getPlatformOrdersHeatmap() in 1499ms app/manage/actions/hq-platform/dashboard.ts
+ POST /dashboard 200 in 1206ms (next.js: 234ms, proxy.ts: 97ms, application-code: 876ms)
+  └─ ƒ GetFinancialKPIs("org_34LN9aMJGO4jNllGTvHH4CLB5gq", null, "2026-05-19T21:00:00.000Z", "2026-06-19T17:26:19.577Z") in 746ms app/dashboard/actions/order-analytics.ts
+ POST /manage 200 in 3.5s (next.js: 125ms, proxy.ts: 362ms, application-code: 3.0s)
+  └─ ƒ getPlatformActivityFeed() in 2968ms app/manage/actions/hq-platform/dashboard.ts
+ POST /dashboard 200 in 2.3s (next.js: 103ms, proxy.ts: 305ms, application-code: 1914ms)
+  └─ ƒ GetWaterfallReport("org_34LN9aMJGO4jNllGTvHH4CLB5gq", null, "2026-05-19T21:00:00.000Z", "2026-06-19T17:26:19.577Z") in 1735ms app/dashboard/actions/waterfall-report.ts
+ POST /manage 200 in 4.1s (next.js: 128ms, proxy.ts: 89ms, application-code: 3.9s)
+  └─ ƒ getPlatformAlerts() in 3742ms app/manage/actions/hq-platform/dashboard.ts
+ POST /dashboard 200 in 1168ms (next.js: 127ms, proxy.ts: 99ms, application-code: 942ms)
+  └─ ƒ GetTransactionVolumeReport("org_34LN9aMJGO4jNllGTvHH4CLB5gq", null, "2026-05-19T21:00:00.000Z", "2026-06-19T17:26:19.577Z") in 863ms app/dashboard/actions/order-analytics.ts
+ POST /dashboard 200 in 1220ms (next.js: 154ms, proxy.ts: 125ms, application-code: 941ms)
+  └─ ƒ GetNetCollectedBySourceReport("org_34LN9aMJGO4jNllGTvHH4CLB5gq", null, "2026-05-19T21:00:00.000Z", "2026-06-19T17:26:19.577Z") in 849ms app/dashboard/actions/order-analytics.ts
+ POST /dashboard 200 in 3.3s (next.js: 199ms, proxy.ts: 94ms, application-code: 3.0s)
+  └─ ƒ GetTaxableRevenueByTenderReport("org_34LN9aMJGO4jNllGTvHH4CLB5gq", null, "2026-05-19T21:00:00.000Z", "2026-06-19T17:26:19.577Z") in 2922ms app/dashboard/actions/order-analytics.ts
+ POST /dashboard 200 in 6.0s (next.js: 115ms, proxy.ts: 82ms, application-code: 5.8s)
+  └─ ƒ GetRevenueByCategoryReport("org_34LN9aMJGO4jNllGTvHH4CLB5gq", null, "2026-06-11T21:00:00.000Z", "2026-06-19T17:26:19.577Z") in 5704ms app/dashboard/actions/order-analytics.ts
+ POST /dashboard 200 in 1815ms (next.js: 148ms, proxy.ts: 96ms, application-code: 1571ms)
+  └─ ƒ GetLocations("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "user_36u15MkVGaCOwWexx9cWWlrF1Vw") in 1485ms app/dashboard/actions/get-locations.ts
+ POST /manage 200 in 4.4s (next.js: 95ms, proxy.ts: 82ms, application-code: 4.2s)
+  └─ ƒ getPlatformActivityFeed() in 4135ms app/manage/actions/hq-platform/dashboard.ts
+ POST /dashboard 200 in 4.0s (next.js: 260ms, proxy.ts: 2.4s, application-code: 1387ms)
+  └─ ƒ GetUnreadTicketCounts() in 1221ms app/dashboard/actions/support.ts
+ POST /manage 200 in 5.6s (next.js: 94ms, proxy.ts: 75ms, application-code: 5.4s)
+  └─ ƒ getPlatformDashboardKPIs() in 5349ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 1865ms (next.js: 77ms, proxy.ts: 124ms, application-code: 1664ms)
+  └─ ƒ getPlatformStationFleet() in 1588ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 517ms (next.js: 62ms, proxy.ts: 60ms, application-code: 394ms)
+  └─ ƒ GetUnreadTicketCounts() in 315ms app/manage/actions/support.ts
+ POST /manage 200 in 1555ms (next.js: 54ms, proxy.ts: 227ms, application-code: 1275ms)
+  └─ ƒ getPlatformOrdersHeatmap() in 1161ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 5.7s (next.js: 135ms, proxy.ts: 171ms, application-code: 5.4s)
+  └─ ƒ getPlatformAlerts() in 5408ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 3.6s (next.js: 62ms, proxy.ts: 51ms, application-code: 3.5s)
+  └─ ƒ getPlatformActivityFeed() in 3380ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 9.2s (next.js: 1872ms, proxy.ts: 2.3s, application-code: 5.0s)
+  └─ ƒ getPlatformActivityFeed() in 4817ms app/manage/actions/hq-platform/dashboard.ts
+ POST /manage 200 in 7.4s (next.js: 109ms, proxy.ts: 77ms, application-code: 7.2s)
+  └─ ƒ getMerchantHealthGrid(undefined) in 4273ms app/manage/actions/merchants.ts
+ GET /manage/organizations 200 in 13.2s (next.js: 4.5s, proxy.ts: 1758ms, application-code: 7.0s)
+ POST /manage/organizations 200 in 1091ms (next.js: 219ms, proxy.ts: 382ms, application-code: 490ms)
+  └─ ƒ GetCarrierOrganizations() in 392ms app/manage/actions/get-organizations.ts
+ POST /manage 200 in 12.2s (next.js: 5.4s, proxy.ts: 698ms, application-code: 6.0s)
+  └─ ƒ getPlatformGrowthMetrics("2026-05-20T17:29:31.856Z", "2026-06-19T17:29:31.856Z") in 5821ms app/manage/actions/hq-platform/analytics-growth.ts
