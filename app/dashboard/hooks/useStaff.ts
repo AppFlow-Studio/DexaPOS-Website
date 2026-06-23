@@ -399,25 +399,20 @@ export function useDeactivateStaff() {
 
   return useMutation({
     mutationFn: ({
-      memberId,
+      staffProfileId,
       locationId,
     }: {
-      memberId: string;
+      staffProfileId: string;
       locationId?: string;
-    }) => DeactivateStaffMember(memberId, locationId),
-    onSuccess: async (result, variables) => {
+    }) => DeactivateStaffMember(staffProfileId, locationId),
+    onSuccess: async (result) => {
       if (result.error) {
         toast.error("Deactivation failed", { description: result.error });
         return;
       }
 
-      await queryClient.refetchQueries({
-        queryKey: ["staff-member", variables.memberId],
-        type: "active",
-        exact: true,
-      });
-
       toast.success("Staff member deactivated");
+      queryClient.invalidateQueries({ queryKey: ["staff-member"] });
       queryClient.invalidateQueries({ queryKey: ["unified-staff"] });
     },
     onError: (error) => {
@@ -437,25 +432,20 @@ export function useReactivateStaff() {
 
   return useMutation({
     mutationFn: ({
-      memberId,
+      staffProfileId,
       locationId,
     }: {
-      memberId: string;
+      staffProfileId: string;
       locationId?: string;
-    }) => ReactivateStaffMember(memberId, locationId),
-    onSuccess: async (result, variables) => {
+    }) => ReactivateStaffMember(staffProfileId, locationId),
+    onSuccess: async (result) => {
       if (result.error) {
         toast.error("Reactivation failed", { description: result.error });
         return;
       }
 
-      await queryClient.refetchQueries({
-        queryKey: ["staff-member", variables.memberId],
-        type: "active",
-        exact: true,
-      });
-
       toast.success("Staff member reactivated");
+      queryClient.invalidateQueries({ queryKey: ["staff-member"] });
       queryClient.invalidateQueries({ queryKey: ["unified-staff"] });
     },
     onError: (error) => {
