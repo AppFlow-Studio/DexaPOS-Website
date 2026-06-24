@@ -1,30 +1,24 @@
-import Image from "next/image";
+import DexaWordmark from "./DexaWordmark";
+
 export default function MarketingFooter() {
   return (
     <footer className="footer">
       <div className="wrap">
         <div className="footer-top">
           <div>
-            <a href="/" className="logo">
-               <Image
-                  src="/dexalogolight.png"
-                  alt="DexaPOS"
-                  width={56}
-                  height={56}
-                  priority
-                  className="h-14 w-14 rounded-xl object-cover"
-                />
-              DEXA POS
+            <a href="/" className="logo" aria-label="DEXA — home">
+              <DexaWordmark />
             </a>
             <p className="footer-tag">
-              The all-in-one point-of-sale platform built for modern
-              restaurants.
+              The operating system for modern restaurants. Built for the rush.
+              Designed for the details.
             </p>
           </div>
           <div className="footer-col">
             <h5>Product</h5>
             <ul>
               <li><a href="/features">Features</a></li>
+              <li><a href="/pricing">Pricing</a></li>
               <li><a href="/hardware">Hardware</a></li>
               <li><a href="/why">Why DEXA</a></li>
               <li><a href="/industries">Industries</a></li>
@@ -51,7 +45,7 @@ export default function MarketingFooter() {
           </div>
         </div>
         <div className="footer-base">
-          <span>© 2026 DEXA POS LLC. All rights reserved.</span>
+          <span>© 2026 DEXA. All rights reserved.</span>
           <span>
             <a href="#">Privacy</a>
             <a href="#">Terms</a>
