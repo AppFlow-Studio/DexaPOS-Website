@@ -136,7 +136,6 @@ export function OrderOutTab({
 }: OrderOutTabProps) {
   const { data: syncedMenusData } = useOrderOutSyncedMenus(clerkOrgId, locationId);
   const { data: recentOrdersData } = useRecentOrderOutOrders(clerkOrgId, locationId);
-  console.log(orderOutStatus)
   const syncedMenus = syncedMenusData?.data || [];
   const recentOrders = recentOrdersData?.data || [];
 
@@ -151,7 +150,6 @@ export function OrderOutTab({
   const channels = Array.from(new Set([...verified, ...confirmed]));
 
   const isOnboarded = !!orderOutStatus?.hasRestaurant;
-  console.log(isOnboarded)
   const dashboardUrl = orderOutStatus?.dashboardUrl || "https://dashboard.orderout.co";
 
   // Determine setup progress
