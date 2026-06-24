@@ -11,7 +11,7 @@ import {
   AssignReservationTablesAction
 } from '@/app/dashboard/actions/floor-plan-actions'
 import { useClerkOrgId } from '@/app/dashboard/hooks/useLocationScoped'
-import { useSelectedLocation } from '@/stores/location-store'
+import { useGatedLocationId } from '@/stores/location-store'
 import type { Reservation } from '@/types/floor-plan'
 
 export const reservationKeys = {
@@ -23,8 +23,10 @@ export const reservationKeys = {
 
 export function useReservations (date: string, _includeHistory = false) {
   const clerkOrgId = useClerkOrgId()
-  const selectedLocation = useSelectedLocation()
-  const locationId = selectedLocation?.id ?? ''
+  // Gated resolver: single-active-location accounts (locked to 'all' scope)
+  // resolve to their one location instead of '' (which would hit the RPC as an
+  // empty uuid). Multi-location on 'all' stays null and callers stay disabled.
+  const locationId = useGatedLocationId() ?? ''
   return useQuery({
     queryKey: reservationKeys.byDate(clerkOrgId ?? '', locationId, date),
     queryFn: async () => {
@@ -39,8 +41,10 @@ export function useReservations (date: string, _includeHistory = false) {
 export function useCreateReservation (date: string) {
   const queryClient = useQueryClient()
   const clerkOrgId = useClerkOrgId()
-  const selectedLocation = useSelectedLocation()
-  const locationId = selectedLocation?.id ?? ''
+  // Gated resolver: single-active-location accounts (locked to 'all' scope)
+  // resolve to their one location instead of '' (which would hit the RPC as an
+  // empty uuid). Multi-location on 'all' stays null and callers stay disabled.
+  const locationId = useGatedLocationId() ?? ''
   return useMutation({
     mutationFn: (params: Parameters<typeof CreateReservationAction>[2]) =>
       CreateReservationAction(clerkOrgId!, locationId, params),
@@ -59,8 +63,10 @@ export function useCreateReservation (date: string) {
 export function useUpdateReservationStatus (date: string) {
   const queryClient = useQueryClient()
   const clerkOrgId = useClerkOrgId()
-  const selectedLocation = useSelectedLocation()
-  const locationId = selectedLocation?.id ?? ''
+  // Gated resolver: single-active-location accounts (locked to 'all' scope)
+  // resolve to their one location instead of '' (which would hit the RPC as an
+  // empty uuid). Multi-location on 'all' stays null and callers stay disabled.
+  const locationId = useGatedLocationId() ?? ''
   return useMutation({
     mutationFn: ({
       reservationId,
@@ -90,8 +96,10 @@ export function useUpdateReservationStatus (date: string) {
 export function useUpdateReservation (_date: string) {
   const queryClient = useQueryClient()
   const clerkOrgId = useClerkOrgId()
-  const selectedLocation = useSelectedLocation()
-  const locationId = selectedLocation?.id ?? ''
+  // Gated resolver: single-active-location accounts (locked to 'all' scope)
+  // resolve to their one location instead of '' (which would hit the RPC as an
+  // empty uuid). Multi-location on 'all' stays null and callers stay disabled.
+  const locationId = useGatedLocationId() ?? ''
   return useMutation({
     mutationFn: ({
       reservationId,
@@ -115,8 +123,10 @@ export function useUpdateReservation (_date: string) {
 export function useCancelReservation (date: string) {
   const queryClient = useQueryClient()
   const clerkOrgId = useClerkOrgId()
-  const selectedLocation = useSelectedLocation()
-  const locationId = selectedLocation?.id ?? ''
+  // Gated resolver: single-active-location accounts (locked to 'all' scope)
+  // resolve to their one location instead of '' (which would hit the RPC as an
+  // empty uuid). Multi-location on 'all' stays null and callers stay disabled.
+  const locationId = useGatedLocationId() ?? ''
   return useMutation({
     mutationFn: ({
       reservationId,
@@ -140,8 +150,10 @@ export function useCancelReservation (date: string) {
 export function useAssignReservationTables (date: string) {
   const queryClient = useQueryClient()
   const clerkOrgId = useClerkOrgId()
-  const selectedLocation = useSelectedLocation()
-  const locationId = selectedLocation?.id ?? ''
+  // Gated resolver: single-active-location accounts (locked to 'all' scope)
+  // resolve to their one location instead of '' (which would hit the RPC as an
+  // empty uuid). Multi-location on 'all' stays null and callers stay disabled.
+  const locationId = useGatedLocationId() ?? ''
   return useMutation({
     mutationFn: ({
       reservationId,
