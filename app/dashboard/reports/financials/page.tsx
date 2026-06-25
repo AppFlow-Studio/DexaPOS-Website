@@ -107,7 +107,7 @@ export default function FinancialsPage() {
 
   return (
     // Fixed height calculated to fit layout (100vh - 64px header - 48px padding - 4px buffer)
-    <div className="flex flex-col xl:flex-row xl:h-[calc(100vh-116px)] w-full max-w-[1920px] mx-auto gap-6 overflow-x-hidden xl:overflow-hidden bg-[#F9FAFB] font-sans pb-4 xl:pb-0">
+    <div className="flex flex-col xl:flex-row h-full w-full max-w-[1920px] mx-auto gap-6 overflow-hidden bg-[#F9FAFB] font-sans">
       {/* LEFT COLUMN: Controls & Summaries (Scrollable) */}
       <div className="xl:w-[440px] shrink-0 flex flex-col gap-6 xl:h-full">
         {/* Fixed Header Section in Left Col */}
@@ -328,7 +328,7 @@ export default function FinancialsPage() {
       </div>
 
       {/* RIGHT COLUMN: Fixed Chart Area */}
-      <div className="flex-1 xl:h-full min-w-0 min-h-[500px]">
+      <div className="flex-1 h-full min-w-0">
         {activeTab === "overview" && (
           <div className="h-full w-full rounded-[32px] overflow-hidden shadow-sm bg-white border border-gray-100 relative">
             <FinancialHeroChart data={chartData} />
@@ -351,19 +351,13 @@ export default function FinancialsPage() {
 
         {activeTab === "transactions" && (
           <Card className="h-full w-full border-none shadow-sm bg-white rounded-[32px] overflow-hidden flex flex-col">
-            <CardHeader className="flex flex-row items-center justify-between pb-2 px-8 pt-6 shrink-0">
-              <div className="space-y-1">
-                <CardTitle className="text-lg font-bold">
-                  Order History
-                </CardTitle>
-              </div>
-            </CardHeader>
-            <CardContent className="p-0 flex-1 overflow-hidden min-h-0">
-              <div className="h-full overflow-y-auto">
+            <CardContent className="p-0 flex-1 overflow-hidden min-h-0 flex flex-col">
+              <div className="flex-1 overflow-auto min-h-0 px-4 pb-4">
                 <OrdersDataTable
                   data={orders || []}
                   isLoading={isLoadingOrders}
                   onOrderClick={handleOrderClick}
+                  hideOrderStatus
                 />
               </div>
             </CardContent>

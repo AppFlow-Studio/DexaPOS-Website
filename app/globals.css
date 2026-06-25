@@ -232,19 +232,51 @@
   --sidebar-ring: #0c4fd1;
 }
 
+/* Dark half of the dashboard nav two-tone — at parity with the shipped light
+   `.dashboard-sidebar-theme` above. The value relationship inverts in dark:
+   the rail is the DEEPEST surface and content sits ELEVATED above it.
+   Scoped to the dashboard layout, so global dark tokens are untouched. */
 .dark .dashboard-sidebar-theme {
-  --sidebar: oklch(0.2471 0.0265 259.8847);
-  --sidebar-foreground: oklch(0.8864 0.0103 257.1169);
+  /* Nav rail = deepest surface */
+  --sidebar: #0f1115;
+  /* Content canvas (body/main) sits raised above the rail */
+  --background: #16181d;
+  /* Cards step up one more above the canvas */
+  --card: #1c1f26;
+  --card-foreground: oklch(0.9288 0.0126 255.5078);
+  /* Inactive text — passes AA on the #0f1115 rail; section labels derive
+     from this at /70 (SidebarGroupLabel uses text-sidebar-foreground/70) */
+  --sidebar-foreground: #9ca3af;
+  /* Brand fill blue stays #0C4FD1 in dark per spec */
   --sidebar-primary: #0c4fd1;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: oklch(0.3204 0.0284 260.1138);
-  --sidebar-accent-foreground: oklch(0.9521 0.0058 264.5313);
-  --sidebar-border: oklch(0.3729 0.0306 259.7328);
-  --sidebar-ring: #0c4fd1;
+  /* Active item bg ≈ 18% brand on dark */
+  --sidebar-accent: #182338;
+  /* Active text + icon = brightened brand for legibility on dark */
+  --sidebar-accent-foreground: #6ca0ff;
+  /* 1px rail ↔ content divider */
+  --sidebar-border: #232730;
+  --sidebar-ring: #6ca0ff;
+}
+
+/* Distinct neutral hover for inactive nav items in dark. The shared
+   SidebarMenuButton collapses hover into --sidebar-accent (the blue active
+   bg); here we override hover to the spec's neutral #1B1E25 so hover reads
+   as "interactive" without looking selected. Active items keep the blue
+   --sidebar-accent. Hex lives here, not in the component. */
+.dark .dashboard-sidebar-theme
+  [data-sidebar="menu-button"]:not([data-active="true"]):hover,
+.dark .dashboard-sidebar-theme
+  [data-sidebar="menu-sub-button"]:not([data-active="true"]):hover {
+  background-color: #1b1e25;
+  color: var(--sidebar-foreground);
 }
 
 .dark {
-  --background: oklch(0.2077 0.0398 265.7549);
+  /* Neutral dark canvas (was a purple-tinted oklch). Matches the dashboard
+     two-tone content surface so the <body> base never flashes purple before
+     the client SidebarProvider mounts the scoped .dashboard-sidebar-theme. */
+  --background: #16181d;
   --foreground: oklch(0.9288 0.0126 255.5078);
   --card: oklch(0.2795 0.0368 260.0310);
   --card-foreground: oklch(0.9288 0.0126 255.5078);
@@ -369,6 +401,7 @@ html:has([data-template]) body {
   background-color: var(--bg);
   color: var(--text);
 }
+
 
 /* Storefront max-width container constraint.
    Constrains all Tailwind `container` elements to 1280px (max-w-7xl) when

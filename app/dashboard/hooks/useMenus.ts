@@ -4,7 +4,6 @@ import { useLocationStore } from "./useLocationScoped"
 import { MenuWithCategories } from "@/types/menu"
 
 export function useMenus(clerkOrgId: string, locationId?: string | null) {
-    console.log('locationId', locationId)
     return useQuery({
         queryKey: ['menus', clerkOrgId, locationId],
         queryFn: () => GetMenus(clerkOrgId, locationId),

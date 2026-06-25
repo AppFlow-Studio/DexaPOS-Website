@@ -91,7 +91,6 @@ export default function MenuPage () {
   const queryClient = useQueryClient()
 
   const selectedLocation = useSelectedLocation()
-  console.log('selectedLocation', selectedLocation)
   const selectedLocationId = selectedLocation?.id || null
   const isAllLocations = selectedLocationId === 'all' || !selectedLocationId
   const isSingleLocation = useIsSingleLocation()

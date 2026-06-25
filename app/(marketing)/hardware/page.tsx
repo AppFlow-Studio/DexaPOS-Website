@@ -1,35 +1,18 @@
 import type { Metadata } from "next";
 import MarketingNav from "../_components/MarketingNav";
 import MarketingFooter from "../_components/MarketingFooter";
+import "../hardware.css";
 
 export const metadata: Metadata = {
   title: "Hardware",
   description:
     "Run DEXA on the gear that fits your floor. iPad, Android, Castles, Dejavoo, Star Micronics, Landi.",
   alternates: { canonical: "/hardware" },
-  openGraph: {
-    type: "website",
-    siteName: "DEXA POS",
-    url: "/hardware",
-    title: "Hardware — DEXA POS",
-    description:
-      "Run DEXA on the gear that fits your floor. iPad, Android, Castles, Dejavoo, Star Micronics, Landi.",
-    images: [
-      { url: "/dexalogolight.png", width: 1200, height: 630, alt: "DEXA POS" },
-    ],
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: "Hardware — DEXA POS",
-    description:
-      "Run DEXA on the gear that fits your floor. iPad, Android, Castles, Dejavoo, Star Micronics, Landi.",
-    images: ["/dexalogolight.png"],
-  },
 };
 
 export default function HardwarePage() {
   return (
-    <>
+    <main className="mk-hardware">
       <MarketingNav current="hardware" />
 
       <section className="page-head">
@@ -40,6 +23,7 @@ export default function HardwarePage() {
         </div>
       </section>
 
+      {/* HARDWARE CATEGORIES */}
       <section className="hw-cats">
         <div className="wrap">
           <div className="section-head reveal in">
@@ -48,30 +32,60 @@ export default function HardwarePage() {
           </div>
 
           <div className="hw-grid reveal-stagger in">
-            <HwCard
-              img="https://images.unsplash.com/photo-1556761175-5973dc0f32e7?auto=format&fit=crop&w=900&q=80"
-              title="POS Terminals"
-              desc="Run DEXA on landscape Android, iPad, or all-in-one terminals. Bring your own gear, or use ours — your data lives in the cloud, not the device."
-              models={["iPad (7th gen+)", "Galaxy Tab A8", "Lenovo M10", "Landi C20Pro"]}
-            />
-            <HwCard
-              img="https://images.unsplash.com/photo-1556742044-3c52d6e88c62?auto=format&fit=crop&w=900&q=80"
-              title="Payment Terminals"
-              desc="EMV chip, NFC tap-to-pay, Apple Pay and Google Pay supported. Wi-Fi primary with USB fallback. No processor lock-in."
-              models={["Castles Saturn1000", "Dejavoo P18", "Dejavoo P8", "DVPayLite"]}
-            />
-            <HwCard
-              img="https://images.unsplash.com/photo-1556742111-a301076d9d18?auto=format&fit=crop&w=900&q=80"
-              title="Receipt & Kitchen Printers"
-              desc="Wi-Fi auto-discovery, per-station routing, ESC/POS standard. Thermal for the front, impact for the kitchen — both work out of the box."
-              models={["Star TSP100III", "Star SP742", "Generic ESC/POS"]}
-            />
-            <HwCard
-              img="https://images.unsplash.com/photo-1556742393-d75f468bfcb0?auto=format&fit=crop&w=900&q=80"
-              title="Cash Drawers & Displays"
-              desc='Standard 12V/24V cash drawers. Customer-Facing Display pairs over QR — any spare Android tablet works. Kitchen Display on any 15-22" screen.'
-              models={["APG Vasario", "MMF Heritage", "Any Android CFD", "Any KDS display"]}
-            />
+            <div className="hw-card">
+              <div className="hw-image" style={{ backgroundImage: "url('/dexa-pos-terminals.png')" }}></div>
+              <div className="hw-body">
+                <h3>POS Terminals</h3>
+                <p>Run DEXA on landscape Android, iPad, or all-in-one terminals. Bring your own gear, or use ours — your data lives in the cloud, not the device.</p>
+                <div className="hw-models">
+                  <span>iPad (7th gen+)</span>
+                  <span>Galaxy Tab A8</span>
+                  <span>Lenovo M10</span>
+                  <span>Landi C20Pro</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="hw-card">
+              <div className="hw-image" style={{ backgroundImage: "url('/dexa-terminal.png')" }}></div>
+              <div className="hw-body">
+                <h3>Payment Terminals</h3>
+                <p>EMV chip, NFC tap-to-pay, Apple Pay and Google Pay supported. Wi-Fi primary with USB fallback. No processor lock-in.</p>
+                <div className="hw-models">
+                  <span>Castles Saturn1000</span>
+                  <span>Dejavoo P18</span>
+                  <span>Dejavoo P8</span>
+                  <span>DVPayLite</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="hw-card">
+              <div className="hw-image" style={{ backgroundImage: "url('/dexa-printers.png')" }}></div>
+              <div className="hw-body">
+                <h3>Receipt &amp; Kitchen Printers</h3>
+                <p>Wi-Fi auto-discovery, per-station routing, ESC/POS standard. Thermal for the front, impact for the kitchen — both work out of the box.</p>
+                <div className="hw-models">
+                  <span>Star TSP100III</span>
+                  <span>Star SP742</span>
+                  <span>Generic ESC/POS</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="hw-card">
+              <div className="hw-image" style={{ backgroundImage: "url('/dexa-cashdrawer.png')" }}></div>
+              <div className="hw-body">
+                <h3>Cash Drawers &amp; Displays</h3>
+                <p>Standard 12V/24V cash drawers. Customer-Facing Display pairs over QR — any spare Android tablet works. Kitchen Display on any 15-22&quot; screen.</p>
+                <div className="hw-models">
+                  <span>APG Vasario</span>
+                  <span>MMF Heritage</span>
+                  <span>Any Android CFD</span>
+                  <span>Any KDS display</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -123,15 +137,28 @@ export default function HardwarePage() {
               </a>
             </div>
             <div className="compat-stats">
-              <CompatStat num="60-80" suffix="%" label="Hardware reusable" />
-              <CompatStat num="0" label="Multi-year leases" />
-              <CompatStat num="4" suffix="+" label="Terminal vendors" />
-              <CompatStat num="1" suffix="day" label="Compat report" />
+              <div className="compat-stat">
+                <div className="compat-stat-num">60-80<span>%</span></div>
+                <div className="compat-stat-label">Hardware reusable</div>
+              </div>
+              <div className="compat-stat">
+                <div className="compat-stat-num">0</div>
+                <div className="compat-stat-label">Multi-year leases</div>
+              </div>
+              <div className="compat-stat">
+                <div className="compat-stat-num">4<span>+</span></div>
+                <div className="compat-stat-label">Terminal vendors</div>
+              </div>
+              <div className="compat-stat">
+                <div className="compat-stat-num">1<span>day</span></div>
+                <div className="compat-stat-label">Compat report</div>
+              </div>
             </div>
           </div>
         </div>
       </section>
 
+      {/* CTA */}
       <section className="cta-strip">
         <div className="wrap">
           <div className="section-eyebrow" style={{ color: "var(--brand-300)", justifyContent: "center" }}>See it on real hardware</div>
@@ -148,53 +175,6 @@ export default function HardwarePage() {
       </section>
 
       <MarketingFooter />
-    </>
-  );
-}
-
-function HwCard({
-  img,
-  title,
-  desc,
-  models,
-}: {
-  img: string;
-  title: string;
-  desc: string;
-  models: string[];
-}) {
-  return (
-    <div className="hw-card">
-      <div className="hw-image" style={{ backgroundImage: `url('${img}')` }}></div>
-      <div className="hw-body">
-        <h3>{title}</h3>
-        <p>{desc}</p>
-        <div className="hw-models">
-          {models.map((m) => (
-            <span key={m}>{m}</span>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function CompatStat({
-  num,
-  suffix,
-  label,
-}: {
-  num: string;
-  suffix?: string;
-  label: string;
-}) {
-  return (
-    <div className="compat-stat">
-      <div className="compat-stat-num">
-        {num}
-        {suffix && <span>{suffix}</span>}
-      </div>
-      <div className="compat-stat-label">{label}</div>
-    </div>
+    </main>
   );
 }

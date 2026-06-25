@@ -79,6 +79,18 @@ export default function RootLayout({
   return (
     <ClerkProvider>
       <html lang="en" suppressHydrationWarning>
+        <head>
+          {/* Anti-FOUC theme bootstrap. Runs before first paint to apply the
+              persisted theme from localStorage (set by AnimatedThemeToggler),
+              falling back to the OS preference. Without this the page always
+              loaded light on reload, dropping a toggled dark theme. Kept inline
+              and blocking so there is no flash. */}
+          <script
+            dangerouslySetInnerHTML={{
+              __html: `(function(){try{var t=localStorage.getItem('theme');var d=t==='dark'||(!t&&window.matchMedia('(prefers-color-scheme:dark)').matches);if(d)document.documentElement.classList.add('dark');}catch(e){}})();`,
+            }}
+          />
+        </head>
         <body
           className={`${geistSans.variable} ${geistMono.variable} antialiased`}
           suppressHydrationWarning
