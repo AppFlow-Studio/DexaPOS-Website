@@ -52,7 +52,7 @@ import {
 } from "@/components/ui/dialog";
 import { ScheduleFormSheet } from "@/components/dashboard/menu/ScheduleFormSheet";
 import { SchedulesModel, ScheduleTimeSlotsModel } from "@/types/db-modles";
-import { useLocationStore } from "@/stores/location-store";
+import { useLocationStore, useGatedLocationId } from "@/stores/location-store";
 import { MenuCategory, MenuCategoryItem } from "@/types/menu";
 import { useCategoriesWithItems } from "../../hooks/useCategories";
 import { useLocations } from "../../hooks/useLocations";
@@ -102,6 +102,11 @@ export default function MenuDetailPage() {
   } = useMenuWithCategories(menuId);
   console.log("menu", menu);
   const { selectedLocationId } = useLocationStore();
+  // OrderOut is genuinely per-location. Resolve a concrete location via the
+  // gated resolver so single-active-location accounts (locked to 'all' for
+  // menu/item core scope) still get a real location id for OrderOut sync —
+  // without changing the 'all'/core scope used by menu/item editing below.
+  const orderOutLocationId = useGatedLocationId() ?? "";
   const { data: userInfo } = useUserInfo();
   const merchantId =
     userInfo?.members?.[0]?.organizations?.merchants?.id || "";
@@ -220,22 +225,23 @@ export default function MenuDetailPage() {
   // OrderOut
   const { data: orderOutStatus } = useOrderOutStatus(
     clerkOrgId,
-    selectedLocationId || ""
+    orderOutLocationId
   );
   const hasOrderOutRestaurant = !!orderOutStatus?.data?.hasRestaurant;
-  // Show the tab whenever a specific location is selected so users get guidance
-  // even before they've connected OrderOut.
-  const showOrderOutTab = !isAllLocations;
+  // Show the tab whenever a concrete location resolves (gated) so users get
+  // guidance even before they've connected OrderOut. Single-location accounts
+  // resolve to their one location; multi-location on 'all' stays hidden.
+  const showOrderOutTab = !!orderOutLocationId;
 
   // Sync status for OrderOut tab indicator
   const { data: syncStatusResult } = useOrderOutMenuSync(
     clerkOrgId,
-    selectedLocationId || "",
+    orderOutLocationId,
     menuId
   );
   const { data: diffResult } = useMenuPayloadDiff(
     clerkOrgId,
-    selectedLocationId || "",
+    orderOutLocationId,
     menuId
   );
   const syncData = syncStatusResult?.data;
@@ -1357,7 +1363,7 @@ export default function MenuDetailPage() {
           <TabsContent value="orderout" className="space-y-4">
             <MenuOrderOutTab
               menuId={menuId}
-              locationId={selectedLocationId || ""}
+              locationId={orderOutLocationId}
               clerkOrgId={clerkOrgId}
               menuName={menu.name}
               isConfigured={hasOrderOutRestaurant}

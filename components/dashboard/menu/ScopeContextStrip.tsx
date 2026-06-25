@@ -42,6 +42,19 @@ export function ScopeContextStrip({
   const selectedLocation = useSelectedLocation();
   const isSingleLocation = useIsSingleLocation();
 
+  // Hooks must run unconditionally on every render. `isSingleLocation` flips
+  // false→true once the persisted location store rehydrates, so any hook placed
+  // AFTER the single-location early return below would change the hook count
+  // between renders → React error #300. Compute scope + role-aware copy here,
+  // before the early return. (deriveScopeFromContext is a plain function.)
+  const rawScope = deriveScopeFromContext({
+    isAllLocations,
+    locationName: selectedLocation?.name,
+    categoryName,
+    menuName,
+  });
+  const vm = useRoleAwareScopeCopy(rawScope);
+
   // Single-location accounts manage one menu (the core). No multi-location
   // framing: a neutral "Menu" strip, no globe, and no pricing-cascade explainer
   // (there are no overrides to explain).
@@ -67,14 +80,6 @@ export function ScopeContextStrip({
       </div>
     );
   }
-
-  const rawScope = deriveScopeFromContext({
-    isAllLocations,
-    locationName: selectedLocation?.name,
-    categoryName,
-    menuName,
-  });
-  const vm = useRoleAwareScopeCopy(rawScope);
 
   const colors = scopeColor(vm.effectiveScope.level);
   const Icon = vm.effectiveScope.level === 1 ? Globe : MapPin;

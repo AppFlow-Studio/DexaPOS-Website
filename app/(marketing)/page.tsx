@@ -2,37 +2,18 @@ import type { Metadata } from "next";
 import MarketingNav from "./_components/MarketingNav";
 import MarketingFooter from "./_components/MarketingFooter";
 import CountUp from "./_components/CountUp";
+import "./home.css";
 
 export const metadata: Metadata = {
-  title: {
-    absolute: "DEXA POS — Restaurant operations, simplified.",
-  },
+  title: "DEXA — Restaurant operations, simplified.",
   description:
     "The all-in-one point-of-sale platform built for modern restaurants. From quick-service to fine dining.",
   alternates: { canonical: "/" },
-  openGraph: {
-    type: "website",
-    siteName: "DEXA POS",
-    url: "/",
-    title: "DEXA POS — Restaurant operations, simplified.",
-    description:
-      "The all-in-one point-of-sale platform built for modern restaurants. From quick-service to fine dining.",
-    images: [
-      { url: "/dexalogolight.png", width: 1200, height: 630, alt: "DEXA POS" },
-    ],
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: "DEXA POS — Restaurant operations, simplified.",
-    description:
-      "The all-in-one point-of-sale platform built for modern restaurants. From quick-service to fine dining.",
-    images: ["/dexalogolight.png"],
-  },
 };
 
-export default function Home() {
+export default function HomePage() {
   return (
-    <>
+    <main className="mk-home">
       <MarketingNav current="home" />
 
       {/* HERO */}
@@ -74,55 +55,10 @@ export default function Home() {
             </div>
 
             <div className="hero-visual reveal in" style={{ transitionDelay: ".15s" }}>
-              <div className="pos-preview">
-                <div className="pos-preview-head">
-                  <div className="pos-preview-brand">
-                    <span className="pos-preview-brand-dot"></span>
-                    <span>Station 01 · Front Counter</span>
-                  </div>
-                  <div className="pos-preview-user">
-                    <div className="pos-preview-avatar">MK</div>
-                    <span className="pos-preview-user-name">Moe</span>
-                  </div>
-                </div>
-                <div className="pos-preview-section-label">Operations</div>
-                <div className="pos-preview-tiles">
-                  <div className="pos-preview-tile">
-                    <div className="pos-preview-tile-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="9" cy="21" r="1" /><circle cx="20" cy="21" r="1" /><path d="M1 1h4l2.7 13.4a2 2 0 002 1.6h9.7a2 2 0 002-1.6L23 6H6" /></svg></div>
-                    <div className="pos-preview-tile-name">Sales</div>
-                  </div>
-                  <div className="pos-preview-tile">
-                    <div className="pos-preview-tile-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /></svg></div>
-                    <div className="pos-preview-tile-name">Tables</div>
-                  </div>
-                  <div className="pos-preview-tile">
-                    <div className="pos-preview-tile-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 12a9 9 0 109-9" /><path d="M3 4v5h5" /><path d="M12 7v5l3 2" /></svg></div>
-                    <div className="pos-preview-tile-name">Previous</div>
-                  </div>
-                  <div className="pos-preview-tile">
-                    <div className="pos-preview-tile-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 11v6a3 3 0 003 3h6a3 3 0 003-3v-6" /><path d="M4 8a4 4 0 014-4 4 4 0 018 0 4 4 0 014 4v3H4z" /></svg></div>
-                    <div className="pos-preview-tile-name">Kitchen</div>
-                  </div>
-                  <div className="pos-preview-tile">
-                    <div className="pos-preview-tile-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="9" r="6" /><path d="M9 14l-2 7 5-3 5 3-2-7" /></svg></div>
-                    <div className="pos-preview-tile-name">Loyalty</div>
-                  </div>
-                </div>
-                <div className="pos-preview-stat-strip">
-                  <div className="pos-stat-mini">
-                    <div className="pos-stat-mini-value">$11,860</div>
-                    <div className="pos-stat-mini-label">Sales today</div>
-                  </div>
-                  <div className="pos-stat-mini">
-                    <div className="pos-stat-mini-value">184</div>
-                    <div className="pos-stat-mini-label">Orders</div>
-                  </div>
-                  <div className="pos-stat-mini">
-                    <div className="pos-stat-mini-value">$64.40</div>
-                    <div className="pos-stat-mini-label">Avg ticket</div>
-                  </div>
-                </div>
-              </div>
+              <figure className="hero-photo">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/dexa-homehero.png" alt="A DEXA POS station in a café, taking an order at the counter" width={1040} height={676} />
+              </figure>
               <div className="hero-floating">
                 <div className="hero-floating-icon">
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M5 12l5 5L20 7" /></svg>
@@ -183,7 +119,7 @@ export default function Home() {
 
           <div className="explore-grid reveal-stagger in">
             <a href="/demo" className="explore-card">
-              <div className="explore-image" style={{ backgroundImage: "url('https://images.unsplash.com/photo-1556742044-3c52d6e88c62?auto=format&fit=crop&w=900&q=80')" }}></div>
+              <div className="explore-image" style={{ backgroundImage: "url('/dexa-og.png')" }}></div>
               <div className="explore-body">
                 <h3>Live Demo</h3>
                 <p>Walk through the actual DEXA point-of-sale interface. See how orders flow from the front counter to the kitchen, how payments process, and how reporting comes together.</p>
@@ -195,7 +131,7 @@ export default function Home() {
             </a>
 
             <a href="/features" className="explore-card">
-              <div className="explore-image" style={{ backgroundImage: "url('https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=900&q=80')" }}></div>
+              <div className="explore-image" style={{ backgroundImage: "url('/dexa-cash.png')" }}></div>
               <div className="explore-body">
                 <h3>Features</h3>
                 <p>Every capability DEXA offers, organized into ten clear categories. Ordering, payments, kitchen operations, staff management, reporting, and more.</p>
@@ -207,7 +143,7 @@ export default function Home() {
             </a>
 
             <a href="/why" className="explore-card">
-              <div className="explore-image" style={{ backgroundImage: "url('https://images.unsplash.com/photo-1554118811-1e0d58224f24?auto=format&fit=crop&w=900&q=80')" }}></div>
+              <div className="explore-image" style={{ backgroundImage: "url('/dexa-cafe.png')" }}></div>
               <div className="explore-body">
                 <h3>Why DEXA</h3>
                 <p>How DEXA compares to Toast, Square, and Clover — including the questions operators actually ask before they switch. Honest answers, no marketing spin.</p>
@@ -219,7 +155,7 @@ export default function Home() {
             </a>
 
             <a href="/hardware" className="explore-card">
-              <div className="explore-image" style={{ backgroundImage: "url('https://images.unsplash.com/photo-1556742393-d75f468bfcb0?auto=format&fit=crop&w=900&q=80')" }}></div>
+              <div className="explore-image" style={{ backgroundImage: "url('/dexa-hw2.png')" }}></div>
               <div className="explore-body">
                 <h3>Hardware</h3>
                 <p>iPad, Android, Castles, Dejavoo, Star Micronics, Landi. Mix and match the gear that fits your floor — no mandatory devices, no multi-year leases.</p>
@@ -332,6 +268,47 @@ export default function Home() {
         </div>
       </section>
 
+      {/* COMPARE */}
+      <section className="compare-section dark">
+        <div className="wrap">
+          <div className="section-head center reveal in">
+            <div className="section-eyebrow">Built Different</div>
+            <h2 className="section-title">No lock-in. <span className="gold">On purpose.</span></h2>
+            <p className="section-sub">No multi-year contracts, no captive hardware, no processor lock-in. Here&apos;s how DEXA compares to the platforms most operators evaluate before they switch.</p>
+          </div>
+          <div className="compare-scroll reveal in">
+            <div className="compare-table">
+              <div className="compare-r compare-head">
+                <div className="compare-c">Capability</div>
+                <div className="compare-c dexa">DEXA</div>
+                <div className="compare-c">Toast</div>
+                <div className="compare-c">Square</div>
+                <div className="compare-c">Clover</div>
+              </div>
+              {[
+                { feat: "Dual pricing", dexa: "Built in", toast: "Add-on", square: "Workaround", clover: "3rd-party" },
+                { feat: "Hardware choice", dexa: "Open", toast: "Toast only", square: "Square only", clover: "Clover only" },
+                { feat: "Payment processor", dexa: "Configurable", toast: "Toast Pay", square: "Square only", clover: "Locked" },
+                { feat: "Offline mode", dexa: "Full", toast: "Limited", square: "Limited", clover: "Locked" },
+                { feat: "Cash audit log", dexa: "Automatic", toast: "Manual", square: "Limited", clover: "Limited" },
+                { feat: "Contract length", dexa: "Month-to-month", toast: "2–3 years", square: "Variable", clover: "Variable" },
+                { feat: "Multi-location", dexa: "Unlimited", toast: "Tier-based", square: "Variable", clover: "Per-device" },
+              ].map((r) => (
+                <div className="compare-r" key={r.feat}>
+                  <div className="compare-c feat">{r.feat}</div>
+                  <div className="compare-c dexa">
+                    <span className="ck"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg></span> {r.dexa}
+                  </div>
+                  <div className="compare-c">{r.toast}</div>
+                  <div className="compare-c">{r.square}</div>
+                  <div className="compare-c">{r.clover}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* CTA */}
       <section className="cta-strip">
         <div className="wrap">
@@ -349,6 +326,6 @@ export default function Home() {
       </section>
 
       <MarketingFooter />
-    </>
+    </main>
   );
 }

@@ -275,14 +275,20 @@ async function getClerkOrgPublicMetadata(organizationId: string | null) {
   }
 }
 
-async function assertMerchantOrgAdmin(organizationId: string | null) {
-  if (!organizationId) throw new Error("Unauthorized");
+/**
+ * Validates the caller is an owner/admin of the merchant they're acting on and
+ * returns the *effective* Clerk org id to gate against. Under HQ impersonation
+ * this resolves to the impersonated merchant's clerk_org_id (not the HQ admin's
+ * org), since getCurrentUserMerchantRole() is impersonation-aware. Callers must
+ * compare merchant.clerk_org_id against this value — never the raw auth() orgId.
+ */
+async function assertMerchantOrgAdmin(): Promise<string> {
   const info = await getCurrentUserMerchantRole();
   if (!info) throw new Error("Unauthorized");
-  if (info.clerkOrgId !== organizationId) throw new Error("Unauthorized");
   if (!info.isOwnerOrAdmin) {
     throw new Error("Only merchant admins can submit an online-store setup request.");
   }
+  return info.clerkOrgId;
 }
 
 async function buildRequestedStoreSlug(
@@ -457,22 +463,26 @@ async function computeOnlineStoreRequestRequirements(
   locationId: string
 ): Promise<OnlineStoreRequestRequirementsResult> {
   const supabase = createServerSupabaseClient();
-  const { userId, orgId } = await auth();
 
   const missing = emptyMissing();
 
-  if (!userId || !orgId) {
-    missing.legalBusinessName = true;
-    return {
-      success: false,
-      complete: false,
-      missing,
-      values: {},
-      error: "Unauthorized",
-    };
+  // Impersonation-aware: resolves to the impersonated merchant's org under HQ impersonation.
+  let effectiveOrgId: string;
+  try {
+    effectiveOrgId = await assertMerchantOrgAdmin();
+  } catch (err) {
+    if (err instanceof Error && err.message === "Unauthorized") {
+      missing.legalBusinessName = true;
+      return {
+        success: false,
+        complete: false,
+        missing,
+        values: {},
+        error: "Unauthorized",
+      };
+    }
+    throw err;
   }
-
-  await assertMerchantOrgAdmin(orgId);
 
   const { data: location, error: locationError } = await supabase
     .from("locations")
@@ -510,7 +520,7 @@ async function computeOnlineStoreRequestRequirements(
     };
   }
 
-  if (merchant.clerk_org_id && merchant.clerk_org_id !== orgId) {
+  if (merchant.clerk_org_id && merchant.clerk_org_id !== effectiveOrgId) {
     missing.legalBusinessName = true;
     return {
       success: false,
@@ -603,17 +613,14 @@ export async function getOnlineStoreRequestRequirements(
 export async function saveOnlineStoreRequestRequirements(formData: FormData) {
   try {
     const supabase = createServerSupabaseClient();
-    const { userId, orgId } = await auth();
     const locationId = readFormText(formData, "locationId");
 
-    if (!userId || !orgId) {
-      return { success: false, error: "Unauthorized" };
-    }
     if (!locationId) {
       return { success: false, error: "locationId is required" };
     }
 
-    await assertMerchantOrgAdmin(orgId);
+    // Impersonation-aware: resolves to the impersonated merchant's org under HQ impersonation.
+    const effectiveOrgId = await assertMerchantOrgAdmin();
 
     const { data: location, error: locationError } = await supabase
       .from("locations")
@@ -636,7 +643,7 @@ export async function saveOnlineStoreRequestRequirements(formData: FormData) {
     }
 
     const organizationId = (merchant.clerk_org_id as string | null) ?? null;
-    if (!organizationId || organizationId !== orgId) {
+    if (!organizationId || organizationId !== effectiveOrgId) {
       return { success: false, error: "Unauthorized" };
     }
 

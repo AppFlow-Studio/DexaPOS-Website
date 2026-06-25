@@ -2,48 +2,39 @@ import type { Metadata } from "next";
 import MarketingNav from "../_components/MarketingNav";
 import MarketingFooter from "../_components/MarketingFooter";
 import DemoFrame from "../_components/DemoFrame";
+import "../demo.css";
 
 export const metadata: Metadata = {
   title: "Live Demo",
   description:
     "See DEXA running. The actual point-of-sale interface, in your browser.",
   alternates: { canonical: "/demo" },
-  openGraph: {
-    type: "website",
-    siteName: "DEXA POS",
-    url: "/demo",
-    title: "Live Demo — DEXA POS",
-    description:
-      "See DEXA running. The actual point-of-sale interface, in your browser.",
-    images: [
-      { url: "/dexalogolight.png", width: 1200, height: 630, alt: "DEXA POS" },
-    ],
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: "Live Demo — DEXA POS",
-    description:
-      "See DEXA running. The actual point-of-sale interface, in your browser.",
-    images: ["/dexalogolight.png"],
-  },
 };
 
 export default function DemoPage() {
   return (
-    <>
+    <main className="mk-demo">
       <MarketingNav current="demo" />
 
       <section className="page-head">
         <div className="wrap">
           <div className="eyebrow reveal in">Live Demo</div>
-          <h1 className="reveal in" style={{ transitionDelay: ".1s" }}>See DEXA. The way your team will.</h1>
-          <p className="lede reveal in" style={{ transitionDelay: ".2s" }}>This is the actual DEXA point-of-sale interface, running below in your browser. Tap any tile — Sales, Tables, Kitchen Display, Inventory, Analytics — to see real screens with real data.</p>
+          <h1 className="reveal in" style={{ transitionDelay: ".1s" }}>
+            See DEXA. The way your team will.
+          </h1>
+          <p className="lede reveal in" style={{ transitionDelay: ".2s" }}>
+            This is the actual DEXA point-of-sale interface, running below in
+            your browser. Tap any tile — Sales, Tables, Kitchen Display,
+            Inventory, Analytics — to see real screens with real data.
+          </p>
         </div>
       </section>
 
+      {/* POS APP — embedded via iframe */}
       <section className="demo-section">
         <div className="wrap">
           <DemoFrame />
+
           <div className="demo-hint">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="9" /><path d="M12 8v4M12 16h.01" /></svg>
             Tip: try Sales (build an order) → Inventory (see stock levels) → Analytics (revenue by day)
@@ -51,6 +42,7 @@ export default function DemoPage() {
         </div>
       </section>
 
+      {/* WHAT YOU'RE SEEING */}
       <section className="annotations">
         <div className="wrap">
           <div className="section-head reveal in">
@@ -84,6 +76,7 @@ export default function DemoPage() {
         </div>
       </section>
 
+      {/* CTA */}
       <section className="cta-strip">
         <div className="wrap">
           <div className="section-eyebrow" style={{ color: "var(--brand-300)", justifyContent: "center" }}>Want the full walkthrough?</div>
@@ -100,6 +93,6 @@ export default function DemoPage() {
       </section>
 
       <MarketingFooter />
-    </>
+    </main>
   );
 }

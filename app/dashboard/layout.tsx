@@ -1294,7 +1294,7 @@ export default function MerchantDashboardLayout({
     <SidebarProvider className="dashboard-sidebar-theme">
       <ImpersonationHydrator />
       <MerchantSidebar />
-      <main aria-label="Dashboard content" className="flex-1 flex flex-col min-w-0">
+      <main aria-label="Dashboard content" className="flex-1 flex flex-col min-w-0 bg-background">
         <ImpersonationBanner />
         <header className="flex h-16 shrink-0 items-center gap-2 border-b px-3 sm:px-4">
           <SidebarTrigger className="-ml-1 hidden sm:flex" />
