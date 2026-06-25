@@ -173,6 +173,22 @@ Single index for active ticket streams and their source trackers.
 - Remaining open items are primarily deploy, payment-origin registration, POS follow-up, and end-to-end QA.
 - Do not mark QR payment or realtime items complete without staging or hosted-environment verification.
 
+## Stream M: Bay Ridge Owner Identity Relink
+
+1. Plan:
+- `docs/PLAN-2026-06-22-BAY-RIDGE-OWNER-IDENTITY-RELINK.md`
+
+2. Continuation state:
+- `.planning/.continue-here.md`
+
+3. Scope notes:
+- Shared identity/data remediation for a live merchant owner account.
+- Website repo is the primary investigation and validation surface.
+- POS repo is affected only through shared Clerk org membership and `members` linkage.
+- No POS UI change is required for the root-cause fix.
+- PIN login is separate from Clerk relinking and may require its own reset after repair.
+- Production completion requires website deploy plus live Clerk/Supabase data repair; it is not a SQL migration-only ticket.
+
 ## Notes
 
 1. Keep this file updated whenever a new ticket stream starts.
