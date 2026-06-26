@@ -61,7 +61,11 @@ import {
   UpdateLocationCategoryOverride,
   RemoveLocationCategoryOverride,
 } from "../../actions/categories";
-import { useLocationStore, useIsSingleLocation } from "@/stores/location-store";
+import {
+  useLocationStore,
+  useIsSingleLocation,
+  useGatedLocationId,
+} from "@/stores/location-store";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -134,10 +138,16 @@ export default function CategoriesPage() {
   const isAllLocations = selectedLocationId === "all" || !selectedLocationId;
   const isSingleLocation = useIsSingleLocation();
 
+  // Prep stations are location-scoped. Single-location accounts are locked to
+  // the 'all' core scope for category/menu editing, so resolve a CONCRETE
+  // location via the gated resolver for the prep-station pieces only (otherwise
+  // "all" disables the queries and prep stations like "Bakery" never show).
+  const prepLocationId = useGatedLocationId();
+
   // Prep station hooks (location-scoped)
-  const { data: prepStations = [] } = usePrepStations(selectedLocationId);
+  const { data: prepStations = [] } = usePrepStations(prepLocationId);
   const { data: categoryPrepDefaults = [] } =
-    useCategoryPrepDefaults(selectedLocationId);
+    useCategoryPrepDefaults(prepLocationId);
   const setCategoryPrepDefaultMutation = useSetCategoryPrepDefault();
   const removeCategoryPrepDefaultMutation = useRemoveCategoryPrepDefault();
 
@@ -1074,8 +1084,10 @@ export default function CategoriesPage() {
                                 </TooltipProvider>
                               )}
 
-                              {/* Prep station quick-assign button - location only */}
-                              {!isAllLocations && (() => {
+                              {/* Prep station quick-assign button — shown whenever
+                                  a concrete location resolves (specific location
+                                  OR single-location account locked to 'all'). */}
+                              {!!prepLocationId && (() => {
                                 const categoryPrepDefault = categoryPrepDefaults.find(
                                   (d) => d.category_id === category.id,
                                 );
@@ -1158,7 +1170,7 @@ export default function CategoriesPage() {
                                             onClick={() => {
                                               if (categoryPrepDefault) {
                                                 removeCategoryPrepDefaultMutation.mutate({
-                                                  locationId: selectedLocationId!,
+                                                  locationId: prepLocationId!,
                                                   categoryId: category.id,
                                                 });
                                               }
@@ -1184,7 +1196,7 @@ export default function CategoriesPage() {
                                                 )}
                                                 onClick={() => {
                                                   setCategoryPrepDefaultMutation.mutate({
-                                                    locationId: selectedLocationId!,
+                                                    locationId: prepLocationId!,
                                                     categoryId: category.id,
                                                     prepStationId: ps.id,
                                                     merchantId: ps.merchant_id,

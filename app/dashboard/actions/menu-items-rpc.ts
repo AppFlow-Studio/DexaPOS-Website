@@ -618,6 +618,10 @@ export interface UpdateItemParams {
 
   // Prep Station (KDS Routing - migration 022)
   prepStationId?: string | null;
+  // Concrete location to persist the prep override to when the main locationId
+  // is null (single-location accounts edit price/availability in core scope but
+  // prep stations are location-only). Defaults to locationId when omitted.
+  prepStationLocationId?: string | null;
 
   // Modifier linking
   modifier_group_ids?: string[];
@@ -1052,6 +1056,36 @@ export async function updateItemOverride(
 
     if (error) {
       console.error("[updateItemOverride] Prep station upsert error:", error);
+    } else {
+      changesLog.prep_station_id = params.prepStationId;
+    }
+  }
+
+  // Single-location accounts: the main locationId is null (core scope) but prep
+  // stations are location-only. When a concrete prep location is supplied, write
+  // the prep override there directly. Isolated from the price cascade above.
+  if (
+    params.prepStationId !== undefined &&
+    !locationId &&
+    params.prepStationLocationId
+  ) {
+    const { error } = await supabase.from("location_item_overrides").upsert(
+      {
+        location_id: params.prepStationLocationId,
+        menu_item_id: params.menuItemId,
+        prep_station_id: params.prepStationId,
+        updated_at: new Date().toISOString(),
+      },
+      {
+        onConflict: "location_id,menu_item_id",
+      },
+    );
+
+    if (error) {
+      console.error(
+        "[updateItemOverride] Single-location prep station upsert error:",
+        error,
+      );
     } else {
       changesLog.prep_station_id = params.prepStationId;
     }

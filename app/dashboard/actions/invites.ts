@@ -130,7 +130,12 @@ export async function ResendStaffInvite(
   // email already accepted elsewhere, etc.), fall back to cancelling the DB
   // row so the user can re-invite manually instead of being stuck.
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
-  const redirectUrl = appUrl ? `${appUrl}/dashboard` : undefined;
+  // New invitees must land on /accept-invitation (which renders the Clerk
+  // CAPTCHA anchor required for custom sign-up). /dashboard has no sign-up
+  // handling, so a brand-new user would be bounced to sign-in.
+  const redirectUrl = appUrl
+    ? `${appUrl}/accept-invitation?email=${encodeURIComponent(invite.email)}&firstName=${encodeURIComponent(invite.first_name ?? "")}&lastName=${encodeURIComponent(invite.last_name ?? "")}`
+    : undefined;
 
   let invitation;
   try {

@@ -295,6 +295,38 @@ export async function adminCreateStaff(
   // Use Service Role client to bypass RLS, since we already verified permissions via assertHQPermission
   const supabase = createServiceRoleClient()
 
+  const { data: role, error: roleError } = await supabase
+    .from('roles')
+    .select('code, name, merchant_id, organization_type, level_type, requires_clerk_account, can_access_dashboard')
+    .eq('code', data.roleCode)
+    .single()
+
+  if (roleError || !role) {
+    console.error('[adminCreateStaff] Role lookup failed:', roleError)
+    return { success: false, error: 'Invalid role' }
+  }
+
+  if (role.organization_type !== 'merchant') {
+    return { success: false, error: 'Role must belong to the merchant organization' }
+  }
+
+  if (role.merchant_id && role.merchant_id !== merchantId) {
+    return { success: false, error: 'Role does not belong to this merchant' }
+  }
+
+  const requiresClerkAccount =
+    role.can_access_dashboard === true ||
+    role.level_type !== 'member' ||
+    (typeof role.requires_clerk_account === 'string' &&
+      role.requires_clerk_account.toLowerCase() !== 'pos_only')
+
+  if (requiresClerkAccount) {
+    return {
+      success: false,
+      error: 'Selected role requires a Clerk dashboard account. Use the dashboard-user flow instead.',
+    }
+  }
+
   // Generate or validate PIN
   let pinCode: string | null = null
   let generatedPin: string | undefined
