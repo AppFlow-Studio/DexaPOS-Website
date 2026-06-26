@@ -52,7 +52,7 @@ import {
   TerminalType,
   ApiEnvironment,
 } from "../../hooks/usePaymentTerminals";
-import { useAuth } from "@clerk/nextjs";
+import { useClerkOrgId } from "@/app/dashboard/hooks/useLocationScoped";
 import {
   CreditCard,
   Plus,
@@ -103,7 +103,8 @@ function CapabilityBadge({
 }
 
 export function PaymentTerminalTab({ station }: PaymentTerminalTabProps) {
-  const { orgId } = useAuth();
+  // Impersonation-aware org id (NOT useAuth().orgId, which stays HQ during impersonation).
+  const orgId = useClerkOrgId();
   const [isLinkDialogOpen, setIsLinkDialogOpen] = useState(false);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isUnlinkDialogOpen, setIsUnlinkDialogOpen] = useState(false);

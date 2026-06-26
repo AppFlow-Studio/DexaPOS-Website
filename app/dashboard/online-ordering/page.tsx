@@ -8,6 +8,7 @@ import {
   type OnlineStoreSetupStatus,
 } from "./hooks/useOnlineOrderingSettings";
 import { useGatedLocationId, useGatedLocation } from "@/stores/location-store";
+import { useClerkOrgId } from "@/app/dashboard/hooks/useLocationScoped";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -228,7 +229,13 @@ function CompletedSetupPanel({
   const qrControlsLocked = isSaving || !qrGate.entitled;
   const qrEnableSwitchDisabled =
     isSaving || (!qrGate.entitled && !settings.acceptsDineIn);
-  const { orgId, orgSlug } = useAuth();
+  const { orgSlug } = useAuth();
+  // Use the impersonation-aware org id, NOT Clerk's active org. During HQ
+  // impersonation the Clerk active org is still the HQ org, so useAuth().orgId
+  // would resolve the wrong (non-merchant) clerk_org_id — getOrderOutStatus
+  // then returns "Merchant not found" and OrderOut falsely renders as "not
+  // connected". useClerkOrgId() returns the impersonated merchant's org.
+  const orgId = useClerkOrgId();
   const { data: orderOutStatusResult } = useOrderOutStatus(orgId || "", selectedLocationId);
   const onboardMutation = useOnboardOrderOut(orgId || "");
   const [showOrderOutForm, setShowOrderOutForm] = useState(false);

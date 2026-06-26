@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { startOfWeek, endOfWeek } from "date-fns";
 import { useTimesheets, useTimesheetResources } from "@/hooks/useTimesheets";
-import { useAuth } from "@clerk/nextjs";
+import { useClerkOrgId } from "@/app/dashboard/hooks/useLocationScoped";
 import {
   useGatedLocationId,
   useGatedLocation,
@@ -35,9 +35,8 @@ export default function TimesheetsPage() {
   const isAllLocations = !gatedLocationId;
   const selectedLocation = useGatedLocation();
 
-  // Get organization ID directly from Clerk's local session — no network call
-  const { orgId } = useAuth();
-  const clerkOrgId = orgId || "";
+  // Impersonation-aware org id (NOT useAuth().orgId, which stays HQ during impersonation).
+  const clerkOrgId = useClerkOrgId();
 
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
     from: startOfWeek(new Date()),

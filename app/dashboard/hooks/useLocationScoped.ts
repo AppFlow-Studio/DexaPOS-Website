@@ -71,9 +71,7 @@ function useEffectiveLocationId() {
 export function useLocationScopedMenus() {
   const clerkOrgId = useClerkOrgId();
   const locationId = useSelectedLocation();
-  console.log("locationId", locationId);
   const effectiveLocationId = locationId?.id || null;
-  console.log("effectiveLocationId", effectiveLocationId);
   return useQuery({
     queryKey: ["menus", clerkOrgId, "scoped"],
     queryFn: () => GetMenus(clerkOrgId, effectiveLocationId),
