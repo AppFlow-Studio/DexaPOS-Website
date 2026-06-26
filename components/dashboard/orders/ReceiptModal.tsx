@@ -354,10 +354,6 @@ export function ReceiptModal({
   const breakdown = getOrderBreakdown(order, payments);
   const lane = breakdown.primary;
   const laneLabel = breakdown.display === "cash" ? "Cash" : "Card";
-  const altLaneTotal =
-    breakdown.display === "cash" ? breakdown.card.total : breakdown.cash.total;
-  const altLaneLabel =
-    breakdown.display === "cash" ? "If paid by card" : "If paid by cash";
 
   // Get completed payments only
   const completedPayments = payments.filter(
@@ -623,12 +619,6 @@ export function ReceiptModal({
                   )}
                 </span>
               </div>
-              {breakdown.dual && !breakdown.isMixed && (
-                <div className="totals-row flex justify-between text-xs text-zinc-500 dark:text-zinc-400">
-                  <span>{altLaneLabel}</span>
-                  <span>{formatCurrency(altLaneTotal)}</span>
-                </div>
-              )}
             </div>
 
             {/* Payments */}
