@@ -414,7 +414,12 @@ export async function CreateLocationInvite(
             inviterUserId: actorUserId,
             emailAddress: normalizedEmail,
             role: 'org:member',
-            ...(appUrl && { redirectUrl: `${appUrl}/dashboard` }),
+            // New invitees must land on /accept-invitation (which renders the
+            // Clerk CAPTCHA anchor required for custom sign-up). /dashboard has
+            // no sign-up handling, so a brand-new user would be bounced.
+            ...(appUrl && {
+                redirectUrl: `${appUrl}/accept-invitation?email=${encodeURIComponent(normalizedEmail)}`,
+            }),
             publicMetadata: {
                 creationType: 'invitation',
                 roleCode: data.role_code,

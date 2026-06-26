@@ -338,6 +338,17 @@ function AcceptInvitationContent() {
                             </div>
                         )}
 
+                        {/* Smart CAPTCHA anchor — REQUIRED for custom sign-up
+                            flows (useSignUp().signUp.create) whenever Clerk bot
+                            protection is enabled on the instance. Without this
+                            element Clerk falls back to an invisible challenge
+                            that silently blocks signUp.create(), which is why
+                            "Create account" appeared to do nothing for new
+                            users. Sign-in is unaffected, so existing-user
+                            invites worked. empty:hidden keeps it gap-free when
+                            no visible challenge is needed. */}
+                        <div id="clerk-captcha" className="empty:hidden" />
+
                         {/* Submit */}
                         <button
                             type="submit"
