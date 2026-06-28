@@ -19,7 +19,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -42,6 +41,11 @@ import {
   ORDER_STATUS_ORDER,
   ORDER_STATUS_LABELS,
 } from "@/lib/constants/order-status";
+import {
+  ORDER_TYPE_ORDER,
+  ORDER_TYPE_LABELS,
+  orderTypeLabel,
+} from "@/lib/constants/order-type";
 import { useSelectedLocation } from "@/stores/location-store";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
@@ -49,6 +53,26 @@ import { cn } from "@/lib/utils";
 interface OrderFiltersProps {
   className?: string;
 }
+
+/**
+ * Payment methods shown in the Payment filter, with display labels. Kept distinct
+ * per processor (unlike EnhancedPayments' label, which collapses card_* to "Card")
+ * because the filter lists them as separate options. Single source for both the
+ * dropdown items and the trigger label so they can't drift.
+ */
+const PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
+  { value: "cash" as PaymentMethod, label: "Cash" },
+  { value: "card_spinapi" as PaymentMethod, label: "Spinapi" },
+  { value: "card_dvpaylite" as PaymentMethod, label: "Dvpaylite" },
+  { value: "card_manual" as PaymentMethod, label: "Manual" },
+  { value: "gift_card" as PaymentMethod, label: "Gift Card" },
+  { value: "house_account" as PaymentMethod, label: "House Account" },
+  { value: "external" as PaymentMethod, label: "External" },
+];
+
+const PAYMENT_METHOD_LABELS: Record<string, string> = Object.fromEntries(
+  PAYMENT_METHODS.map((m) => [m.value, m.label])
+);
 
 export function OrderFilters({ className }: OrderFiltersProps) {
   const router = useRouter();
@@ -129,6 +153,45 @@ export function OrderFilters({ className }: OrderFiltersProps) {
     router.push(window.location.pathname);
   };
 
+  // Each multi-select filter's trigger reflects the selection: the chosen value's
+  // label when exactly one is picked, a count when several are, else the base name.
+  const triggerLabel = (
+    param: string,
+    base: string,
+    labelFor: (value: string) => string
+  ) => {
+    const values = searchParams.get(param)?.split(",").filter(Boolean) ?? [];
+    if (values.length === 0) return base;
+    if (values.length === 1) return labelFor(values[0]);
+    return `${values.length} selected`;
+  };
+
+  const selectedTypes =
+    searchParams.get("type")?.split(",").filter(Boolean) ?? [];
+  const statusTriggerLabel = triggerLabel(
+    "status",
+    "Status",
+    (v) => ORDER_STATUS_LABELS[v as OrderStatus] ?? v
+  );
+  const typeTriggerLabel = triggerLabel("type", "Type", orderTypeLabel);
+  const paymentTriggerLabel = triggerLabel(
+    "payment",
+    "Payment",
+    (v) => PAYMENT_METHOD_LABELS[v] ?? v.replace(/_/g, " ")
+  );
+
+  // Amount is a range, so its trigger shows the bounds rather than a generic badge.
+  const minAmount = searchParams.get("minAmount");
+  const maxAmount = searchParams.get("maxAmount");
+  const amountTriggerLabel =
+    minAmount && maxAmount
+      ? `$${minAmount}–$${maxAmount}`
+      : minAmount
+        ? `≥ $${minAmount}`
+        : maxAmount
+          ? `≤ $${maxAmount}`
+          : "Amount";
+
   const activeFilterCount = Array.from(searchParams.keys()).filter((k) =>
     [
       "from",
@@ -165,15 +228,7 @@ export function OrderFilters({ className }: OrderFiltersProps) {
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="sm" className="border-dashed">
               <Filter className="mr-2 h-4 w-4" />
-              Status
-              {searchParams.get("status") && (
-                <Badge
-                  variant="secondary"
-                  className="ml-2 rounded-sm px-1 font-normal"
-                >
-                  {searchParams.get("status")?.split(",").length}
-                </Badge>
-              )}
+              {statusTriggerLabel}
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-[200px]">
@@ -202,38 +257,24 @@ export function OrderFilters({ className }: OrderFiltersProps) {
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="sm" className="border-dashed">
               <Utensils className="mr-2 h-4 w-4" />
-              Type
-              {searchParams.get("type") && (
-                <Badge
-                  variant="secondary"
-                  className="ml-2 rounded-sm px-1 font-normal"
-                >
-                  {searchParams.get("type")?.split(",").length}
-                </Badge>
-              )}
+              {typeTriggerLabel}
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-[200px]">
             <DropdownMenuLabel>Filter by Type</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            {["dine_in", "qr_dine_in", "takeout", "delivery", "online", "catering"].map(
-              (type) => {
-                const isSelected = searchParams
-                  .get("type")
-                  ?.split(",")
-                  .includes(type);
-                return (
-                  <DropdownMenuCheckboxItem
-                    key={type}
-                    checked={isSelected}
-                    onCheckedChange={() => handleTypeToggle(type as OrderType)}
-                    className="capitalize"
-                  >
-                    {type === "qr_dine_in" ? "qr dine in" : type.replace("_", " ")}
-                  </DropdownMenuCheckboxItem>
-                );
-              }
-            )}
+            {ORDER_TYPE_ORDER.map((type) => {
+              const isSelected = selectedTypes.includes(type);
+              return (
+                <DropdownMenuCheckboxItem
+                  key={type}
+                  checked={isSelected}
+                  onCheckedChange={() => handleTypeToggle(type)}
+                >
+                  {ORDER_TYPE_LABELS[type]}
+                </DropdownMenuCheckboxItem>
+              );
+            })}
           </DropdownMenuContent>
         </DropdownMenu>
 
@@ -242,43 +283,24 @@ export function OrderFilters({ className }: OrderFiltersProps) {
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="sm" className="border-dashed">
               <CreditCard className="mr-2 h-4 w-4" />
-              Payment
-              {searchParams.get("payment") && (
-                <Badge
-                  variant="secondary"
-                  className="ml-2 rounded-sm px-1 font-normal"
-                >
-                  {searchParams.get("payment")?.split(",").length}
-                </Badge>
-              )}
+              {paymentTriggerLabel}
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-[200px]">
             <DropdownMenuLabel>Filter by Payment</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            {[
-              "cash",
-              "card_spinapi",
-              "card_dvpaylite",
-              "card_manual",
-              "gift_card",
-              "house_account",
-              "external",
-            ].map((method) => {
+            {PAYMENT_METHODS.map(({ value, label }) => {
               const isSelected = searchParams
                 .get("payment")
                 ?.split(",")
-                .includes(method);
+                .includes(value);
               return (
                 <DropdownMenuCheckboxItem
-                  key={method}
+                  key={value}
                   checked={isSelected}
-                  onCheckedChange={() =>
-                    handlePaymentToggle(method as PaymentMethod)
-                  }
-                  className="capitalize"
+                  onCheckedChange={() => handlePaymentToggle(value)}
                 >
-                  {method.replace(/_/g, " ").replace("card ", "")}
+                  {label}
                 </DropdownMenuCheckboxItem>
               );
             })}
@@ -309,16 +331,7 @@ export function OrderFilters({ className }: OrderFiltersProps) {
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="sm" className="border-dashed">
               <DollarSign className="mr-2 h-4 w-4" />
-              Amount
-              {(searchParams.get("minAmount") ||
-                searchParams.get("maxAmount")) && (
-                <Badge
-                  variant="secondary"
-                  className="ml-2 rounded-sm px-1 font-normal"
-                >
-                  Filtered
-                </Badge>
-              )}
+              {amountTriggerLabel}
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent className="w-80 p-4" align="start">
