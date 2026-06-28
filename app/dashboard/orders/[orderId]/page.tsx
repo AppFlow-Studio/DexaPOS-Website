@@ -368,10 +368,6 @@ export default function OrderDetailPage() {
   const breakdown = getOrderBreakdown(order, payments);
   const primaryLane = breakdown.primary;
   const laneLabel = breakdown.display === "cash" ? "Cash" : "Card";
-  const altLaneTotal =
-    breakdown.display === "cash" ? breakdown.card.total : breakdown.cash.total;
-  const altLaneLabel =
-    breakdown.display === "cash" ? "If paid by card" : "If paid by cash";
   const cashSavings = breakdown.card.total - breakdown.cash.total;
   const isMixedPayment =
     order.payment_pricing_mode === "mixed" || breakdown.charged === "mixed";
@@ -1043,14 +1039,6 @@ export default function OrderDetailPage() {
                 </span>
               </div>
 
-              {breakdown.dual && !isMixedPayment && (
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">{altLaneLabel}</span>
-                  <span className="text-muted-foreground">
-                    {formatCurrency(altLaneTotal)}
-                  </span>
-                </div>
-              )}
               {breakdown.dual && !isMixedPayment && cashSavings > 0 && (
                 <div className="flex justify-between text-sm">
                   <span className="text-green-600 dark:text-green-400 font-medium">
