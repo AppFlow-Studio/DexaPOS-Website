@@ -23,6 +23,7 @@ import { OrderStatusTimeline } from "@/components/dashboard/orders/OrderStatusTi
 import { RichTimeline } from "@/components/dashboard/orders/RichTimeline";
 import { KitchenActivitySection } from "@/components/dashboard/orders/KitchenActivitySection";
 import { cn } from "@/lib/utils";
+import { orderTypeLabel } from "@/lib/constants/order-type";
 import {
   ArrowLeft,
   Calendar,
@@ -460,8 +461,8 @@ export default function OrderDetailPage() {
                     {getOrderTypeIcon(order.order_type)}
                   </div>
                   <div>
-                    <p className="font-semibold capitalize">
-                      {order.order_type.replace("_", " ")}
+                    <p className="font-semibold">
+                      {orderTypeLabel(order.order_type)}
                     </p>
                     <p className="text-sm text-muted-foreground">Order Type</p>
                   </div>
