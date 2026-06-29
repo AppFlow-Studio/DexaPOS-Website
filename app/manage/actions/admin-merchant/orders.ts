@@ -2,6 +2,7 @@
 
 import { assertHQPermission } from '@/lib/admin/auth'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { isOrderReportable } from '@/lib/reporting/recognized-order'
 
 // ============================================================================
 // TYPES
@@ -345,9 +346,12 @@ export async function getAdminOrderStats(
 
   const supabase = createServerSupabaseClient()
 
+  // This is a status-breakdown view, so it intentionally fetches ALL orders
+  // (pending/cancelled/void counts are part of the output). Only revenue is
+  // gated to the recognized set, applied in-memory below.
   let query = supabase
     .from('orders')
-    .select('status, total_amount')
+    .select('status, payment_status, total_amount')
     .eq('merchant_id', merchantId)
 
   if (locationId && locationId !== 'all') {
@@ -386,13 +390,15 @@ export async function getAdminOrderStats(
     (o) => o.status === 'cancelled' || o.status === 'void'
   ).length
 
-  const completedOrdersList = ordersList.filter((o) => o.status === 'completed')
-  const totalRevenue = completedOrdersList.reduce(
+  // Revenue from recognized orders (payment collected), not the manual
+  // `completed` tap.
+  const recognizedOrders = ordersList.filter((o) => isOrderReportable(o))
+  const totalRevenue = recognizedOrders.reduce(
     (sum, o) => sum + Number(o.total_amount || 0),
     0
   )
   const avgOrderValue =
-    completedOrdersList.length > 0 ? totalRevenue / completedOrdersList.length : 0
+    recognizedOrders.length > 0 ? totalRevenue / recognizedOrders.length : 0
 
   return {
     totalOrders,

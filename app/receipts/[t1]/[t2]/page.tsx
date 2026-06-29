@@ -141,10 +141,6 @@ export default async function ReceiptPage({ params }: PageProps) {
   const breakdown = getOrderBreakdown(order, payments as unknown as OrderPayment[]);
   const lane = breakdown.primary;
   const laneLabel = breakdown.display === "cash" ? "Cash" : "Card";
-  const altLaneTotal =
-    breakdown.display === "cash" ? breakdown.card.total : breakdown.cash.total;
-  const altLaneLabel =
-    breakdown.display === "cash" ? "If paid by card" : "If paid by cash";
   const grandTotal =
     breakdown.isMixed && lane.amountPaid > 0 ? lane.amountPaid : lane.total + lane.tip;
 
@@ -264,12 +260,6 @@ export default async function ReceiptPage({ params }: PageProps) {
               </span>
               <span className="text-[15px] font-bold tabular-nums">{fmt(grandTotal)}</span>
             </div>
-            {breakdown.dual && !breakdown.isMixed && (
-              <div className="flex justify-between items-baseline text-[12px] text-neutral-500">
-                <span>{altLaneLabel}</span>
-                <span className="tabular-nums">{fmt(altLaneTotal)}</span>
-              </div>
-            )}
           </div>
 
           {/* ── Payments ────────────────────────────────────────── */}

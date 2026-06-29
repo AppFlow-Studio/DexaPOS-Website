@@ -59,9 +59,23 @@ export function OverviewTab({ merchantInfo }: OverviewTabProps) {
     const { data: financialKPIs, isLoading: kpisLoading } = useAdminFinancialKPIs(merchantId)
     const { data: salesByDate, isLoading: salesLoading } = useAdminSalesByDate(merchantId)
     const { data: recentOrders, isLoading: ordersLoading } = useAdminRecentOrders(merchantId)
-    const { data: transactionSummary, isLoading: summaryLoading } = useAdminTransactionSummary(merchantId)
+    // "Today's Snapshot" tiles need an actual today range — the default hook
+    // window is the last 30 days, which previously made these tiles show 30-day
+    // figures under a "today" label.
+    const { todayStart, todayEnd } = useMemo(() => {
+        const start = new Date()
+        start.setHours(0, 0, 0, 0)
+        const end = new Date()
+        end.setHours(23, 59, 59, 999)
+        return { todayStart: start, todayEnd: end }
+    }, [])
+    const { data: todaySummary, isLoading: todayLoading } = useAdminTransactionSummary(
+        merchantId,
+        todayStart,
+        todayEnd
+    )
 
-    const isLoading = analyticsLoading || kpisLoading || salesLoading || ordersLoading || summaryLoading
+    const isLoading = analyticsLoading || kpisLoading || salesLoading || ordersLoading || todayLoading
 
     // Derivatives
     const totalRevenue = financialKPIs?.summary?.net_sales ?? orderAnalytics?.totalRevenue ?? 0
@@ -159,7 +173,7 @@ export function OverviewTab({ merchantInfo }: OverviewTabProps) {
                         <Activity className="h-4 w-4 text-muted-foreground shrink-0" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">${(transactionSummary?.netSales || 0).toLocaleString()}</div>
+                        <div className="text-2xl font-bold">${(todaySummary?.netSales || 0).toLocaleString()}</div>
                          <p className="text-xs text-muted-foreground">Net sales for today</p>
                     </CardContent>
                 </Card>
@@ -169,7 +183,7 @@ export function OverviewTab({ merchantInfo }: OverviewTabProps) {
                         <TrendingUp className="h-4 w-4 text-muted-foreground shrink-0" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">${(transactionSummary?.totalTips || 0).toLocaleString()}</div>
+                        <div className="text-2xl font-bold">${(todaySummary?.totalTips || 0).toLocaleString()}</div>
                         <p className="text-xs text-muted-foreground">Tips for today</p>
                     </CardContent>
                 </Card>
@@ -179,7 +193,7 @@ export function OverviewTab({ merchantInfo }: OverviewTabProps) {
                         <DollarSign className="h-4 w-4 text-muted-foreground shrink-0" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">${(transactionSummary?.totalTax || 0).toLocaleString()}</div>
+                        <div className="text-2xl font-bold">${(todaySummary?.totalTax || 0).toLocaleString()}</div>
                         <p className="text-xs text-muted-foreground">Tax for today</p>
                     </CardContent>
                 </Card>

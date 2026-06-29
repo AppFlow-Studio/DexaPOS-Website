@@ -6,6 +6,7 @@ import {
   useSelectedLocation,
 } from "@/stores/location-store";
 import { useOrders } from "../hooks/useOrder";
+import { isOrderReportable } from "@/lib/reporting/recognized-order";
 import {
   Card,
   CardContent,
@@ -171,10 +172,10 @@ export default function OrdersPage() {
     const completed = statsList.filter(
       (o) => o.status === "completed"
     ).length;
+    // Revenue = recognized orders only (payment collected AND not
+    // draft/cancelled/void/refunded), matching every other reporting surface.
     const revenue = statsList
-      .filter(
-        (o) => o.payment_status === "captured" || o.payment_status === "paid"
-      )
+      .filter((o) => isOrderReportable(o))
       .reduce((sum, o) => sum + o.total_amount, 0);
     const qrTableOrders = statsList.filter(
       (o) => o.order_type === "qr_dine_in"
@@ -270,7 +271,7 @@ export default function OrdersPage() {
         label: dayLabel,
         orders: dayOrders.length,
         revenue: dayOrders
-          .filter((o) => o.payment_status === "captured" || o.payment_status === "paid")
+          .filter((o) => isOrderReportable(o))
           .reduce((sum, o) => sum + o.total_amount, 0),
         completed: dayOrders.filter((o) => o.status === "completed").length,
         open: dayOrders.filter((o) => OPEN_STATUSES.includes(o.status)).length,

@@ -90,7 +90,11 @@ import {
   ModifierGroupsModel,
   ModifierGroupItemsModel,
 } from "@/types/db-modles";
-import { useLocationStore, useIsAllLocations } from "@/stores/location-store";
+import {
+  useLocationStore,
+  useIsAllLocations,
+  useGatedLocationId,
+} from "@/stores/location-store";
 import {
   DndContext,
   closestCenter,
@@ -820,6 +824,12 @@ export function NewEditItemFormSheet({
     userInfo?.members?.[0]?.organizations?.merchants?.id || "";
   const { selectedLocationId, locations } = useLocationStore();
   const isAllLocations = useIsAllLocations();
+  // Single-location accounts edit menu/item price/availability/structure in
+  // CORE ('all') scope — that stays untouched. But genuinely location-only
+  // features (prep-station Kitchen Routing, Popular/New badges) target the one
+  // physical location, so resolve a concrete id via the gated resolver for
+  // those pieces ONLY. Null for multi-location on 'all'.
+  const gatedLocationId = useGatedLocationId();
   const { pricingStrategy: effectivePricingStrategy, dualPricingPercentage: effectiveDualPercentage } = useEffectivePricing();
 
   // Tax rates for current location
@@ -827,36 +837,35 @@ export function NewEditItemFormSheet({
   const taxRates = taxRatesData?.data || [];
 
   // Prep stations for current location (KDS routing)
-  const { data: prepStations = [] } = usePrepStations(
-    isAllLocations ? null : selectedLocationId,
-  );
-  const { data: categoryPrepDefaults = [] } = useCategoryPrepDefaults(
-    isAllLocations ? null : selectedLocationId,
-  );
+  const { data: prepStations = [] } = usePrepStations(gatedLocationId);
+  const { data: categoryPrepDefaults = [] } =
+    useCategoryPrepDefaults(gatedLocationId);
 
-  // Popular / New badge toggles (location-scoped, edit-only)
+  // Popular / New badge toggles (location-only, edit-only). Use the gated
+  // location so single-location accounts (locked to 'all') still toggle badges
+  // against their one location instead of being disabled.
   const { data: isPopular = false } = useQuery({
-    queryKey: ["item-popular", editItem?.id, selectedLocationId],
-    queryFn: () => GetItemIsPopular(editItem!.id, selectedLocationId!),
-    enabled: !!editItem?.id && !isAllLocations && !!selectedLocationId,
+    queryKey: ["item-popular", editItem?.id, gatedLocationId],
+    queryFn: () => GetItemIsPopular(editItem!.id, gatedLocationId!),
+    enabled: !!editItem?.id && !!gatedLocationId,
   });
   const popularMutation = useMutation({
-    mutationFn: (value: boolean) => SetItemPopular(editItem!.id, selectedLocationId!, value),
+    mutationFn: (value: boolean) => SetItemPopular(editItem!.id, gatedLocationId!, value),
     onSuccess: (_, value) => {
-      queryClient.setQueryData(["item-popular", editItem?.id, selectedLocationId], value);
+      queryClient.setQueryData(["item-popular", editItem?.id, gatedLocationId], value);
       toast.success(value ? "Marked as Popular" : "Removed Popular badge");
     },
     onError: () => toast.error("Failed to update popular flag"),
   });
   const { data: isNew = false } = useQuery({
-    queryKey: ["item-new", editItem?.id, selectedLocationId],
-    queryFn: () => GetItemIsNew(editItem!.id, selectedLocationId!),
-    enabled: !!editItem?.id && !isAllLocations && !!selectedLocationId,
+    queryKey: ["item-new", editItem?.id, gatedLocationId],
+    queryFn: () => GetItemIsNew(editItem!.id, gatedLocationId!),
+    enabled: !!editItem?.id && !!gatedLocationId,
   });
   const newMutation = useMutation({
-    mutationFn: (value: boolean) => SetItemNew(editItem!.id, selectedLocationId!, value),
+    mutationFn: (value: boolean) => SetItemNew(editItem!.id, gatedLocationId!, value),
     onSuccess: (_, value) => {
-      queryClient.setQueryData(["item-new", editItem?.id, selectedLocationId], value);
+      queryClient.setQueryData(["item-new", editItem?.id, gatedLocationId], value);
       toast.success(value ? "Marked as New" : "Removed New badge");
     },
     onError: () => toast.error("Failed to update new flag"),
@@ -1418,9 +1427,12 @@ export function NewEditItemFormSheet({
           updateParams.availableChannels = values.available_channels;
         }
 
-        // Prep Station — only include when a location is selected (location-only field)
-        if (!isAllLocations && values.prep_station_id !== undefined) {
+        // Prep Station — location-only field. Include whenever a concrete
+        // location resolves (specific location OR single-location account in
+        // core scope) and route the override there via prepStationLocationId.
+        if (gatedLocationId && values.prep_station_id !== undefined) {
           updateParams.prepStationId = values.prep_station_id;
+          updateParams.prepStationLocationId = gatedLocationId;
         }
 
         // Modifier groups are structure updates; only include when allowed
@@ -2995,8 +3007,10 @@ export function NewEditItemFormSheet({
                         )}
                       />
 
-                      {/* Kitchen Routing (Prep Station) Section - Location only */}
-                      {!isAllLocations ? (
+                      {/* Kitchen Routing (Prep Station) Section — shown whenever a
+                          concrete location resolves (specific location OR
+                          single-location account locked to 'all'). */}
+                      {gatedLocationId ? (
                         <FormField
                           control={form.control}
                           name="prep_station_id"
@@ -3079,8 +3093,10 @@ export function NewEditItemFormSheet({
                       </CollapsibleContent>
                     </Collapsible>
 
-                    {/* SECTION 7: LOCATION BADGES (collapsible, edit-only, location-scoped) */}
-                    {editItem && !isAllLocations && (
+                    {/* SECTION 7: LOCATION BADGES (collapsible, edit-only, location-only).
+                        Shown whenever a concrete location resolves (specific location
+                        OR single-location account locked to 'all'). */}
+                    {editItem && gatedLocationId && (
                     <Collapsible
                       open={expandedSections.locationBadges}
                       onOpenChange={() => toggleSection("locationBadges")}

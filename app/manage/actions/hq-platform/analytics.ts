@@ -3,6 +3,10 @@
 import { assertHQPermission } from '@/lib/admin/auth'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
+import {
+  applyReportablePredicate,
+  isOrderReportable,
+} from '@/lib/reporting/recognized-order'
 
 // ============================================================================
 // TYPES
@@ -329,31 +333,26 @@ export async function getPlatformKPIs(): Promise<PlatformKPIs> {
     onboardingRes,
     paymentMethodsRes,
   ] = await Promise.all([
-    // Current 30d completed orders (for GPV + order count + avg value)
-    supabase
-      .from('orders')
-      .select('total_amount')
-      .not('status', 'in', '(draft,cancelled,void)')
-      .gte('created_at', thirtyDaysAgo.toISOString()),
-    // Prior 30d completed orders (for period-over-period change)
-    supabase
-      .from('orders')
-      .select('total_amount')
-      .not('status', 'in', '(draft,cancelled,void)')
+    // Current 30d recognized orders (for GPV + order count + avg value)
+    applyReportablePredicate(
+      supabase.from('orders').select('total_amount')
+    ).gte('created_at', thirtyDaysAgo.toISOString()),
+    // Prior 30d recognized orders (for period-over-period change)
+    applyReportablePredicate(
+      supabase.from('orders').select('total_amount')
+    )
       .gte('created_at', sixtyDaysAgo.toISOString())
       .lt('created_at', thirtyDaysAgo.toISOString()),
-    // All 30d orders including voided — for void rate
+    // All 30d orders including voided — for void rate (NOT recognized-gated)
     supabase
       .from('orders')
       .select('status')
       .not('status', 'in', '(draft,cancelled)')
       .gte('created_at', thirtyDaysAgo.toISOString()),
-    // Active merchant IDs (≥1 txn in last 7d)
-    supabase
-      .from('orders')
-      .select('merchant_id')
-      .not('status', 'in', '(draft,cancelled,void)')
-      .gte('created_at', sevenDaysAgo.toISOString()),
+    // Active merchant IDs (≥1 recognized txn in last 7d)
+    applyReportablePredicate(
+      supabase.from('orders').select('merchant_id')
+    ).gte('created_at', sevenDaysAgo.toISOString()),
     // Total merchants count
     supabase
       .from('merchants')
@@ -482,15 +481,12 @@ export async function getPlatformSalesTrend(): Promise<PlatformSalesTrend[]> {
   sixtyDaysAgo.setDate(now.getDate() - 60)
 
   const [currentRes, prevRes] = await Promise.all([
-    supabase
-      .from('orders')
-      .select('created_at, total_amount, merchant_id')
-      .not('status', 'in', '(draft,cancelled,void)')
-      .gte('created_at', thirtyDaysAgo.toISOString()),
-    supabase
-      .from('orders')
-      .select('created_at, total_amount')
-      .not('status', 'in', '(draft,cancelled,void)')
+    applyReportablePredicate(
+      supabase.from('orders').select('created_at, total_amount, merchant_id')
+    ).gte('created_at', thirtyDaysAgo.toISOString()),
+    applyReportablePredicate(
+      supabase.from('orders').select('created_at, total_amount')
+    )
       .gte('created_at', sixtyDaysAgo.toISOString())
       .lt('created_at', thirtyDaysAgo.toISOString()),
   ])
@@ -562,11 +558,9 @@ export async function getTopMerchants(limit: number = 5): Promise<PlatformTopMer
   const thirtyDaysAgo = new Date()
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
 
-  let ordersQuery = supabase
-    .from('orders')
-    .select('merchant_id, total_amount')
-    .not('status', 'in', '(draft,cancelled,void)')
-    .gte('created_at', thirtyDaysAgo.toISOString())
+  let ordersQuery = applyReportablePredicate(
+    supabase.from('orders').select('merchant_id, total_amount')
+  ).gte('created_at', thirtyDaysAgo.toISOString())
 
   if (merchantScope !== null) {
     ordersQuery = ordersQuery.in('merchant_id', merchantScope)
@@ -801,18 +795,15 @@ export async function getGPVConcentration(days: number = 30): Promise<GPVConcent
     periodDays: days,
   }
 
-  const { data: orders, error } = await supabase
-    .from('orders')
-    .select('merchant_id, total_amount')
-    .not('status', 'in', '(draft,cancelled,void)')
-    .gte('created_at', periodStart.toISOString())
+  const { data: orders, error } = await applyReportablePredicate(
+    supabase.from('orders').select('merchant_id, total_amount')
+  ).gte('created_at', periodStart.toISOString())
 
   if (error || !orders || orders.length === 0) return emptyResult
 
-  const { data: prevOrders } = await supabase
-    .from('orders')
-    .select('merchant_id, total_amount')
-    .not('status', 'in', '(draft,cancelled,void)')
+  const { data: prevOrders } = await applyReportablePredicate(
+    supabase.from('orders').select('merchant_id, total_amount')
+  )
     .gte('created_at', prevPeriodStart.toISOString())
     .lt('created_at', periodStart.toISOString())
 
@@ -954,11 +945,9 @@ export async function getChurnWarnings(): Promise<ChurnWarningData> {
   }
 
   // Fetch orders for last 14 days
-  const { data: orders, error } = await supabase
-    .from('orders')
-    .select('merchant_id, total_amount, created_at')
-    .not('status', 'in', '(draft,cancelled,void)')
-    .gte('created_at', prev7DaysStart.toISOString())
+  const { data: orders, error } = await applyReportablePredicate(
+    supabase.from('orders').select('merchant_id, total_amount, created_at')
+  ).gte('created_at', prev7DaysStart.toISOString())
 
   if (error || !orders || orders.length === 0) return emptyResult
 
@@ -1583,8 +1572,7 @@ export async function getTerminalUtilization(days: number = 30): Promise<Termina
     created_at: string
     merchant_id: string
   }>(supabase, 'orders', 'station_id, created_at, merchant_id', (q) =>
-    q
-      .not('status', 'in', '(draft,cancelled,void)')
+    applyReportablePredicate(q)
       .not('station_id', 'is', null)
       .gte('created_at', periodStart.toISOString())
   )
@@ -2102,10 +2090,9 @@ export async function getMerchantActivationTimeline(): Promise<MerchantActivatio
 
   const [merchantsRes, firstOrdersRes] = await Promise.all([
     supabase.from('merchants').select('id, name, created_at'),
-    supabase.from('orders')
-      .select('merchant_id, created_at')
-      .in('status', ['completed', 'paid'])
-      .order('created_at', { ascending: true }),
+    applyReportablePredicate(
+      supabase.from('orders').select('merchant_id, created_at')
+    ).order('created_at', { ascending: true }),
   ])
 
   const merchants = merchantsRes.data || []
@@ -2620,8 +2607,9 @@ export async function getDiscountUsageAnalysis(days: number = 30): Promise<Disco
     supabase.from('discount_usage_log')
       .select('order_id, discount_amount, applied_by_staff_profiles_id, discount_id')
       .gte('applied_at', periodStart.toISOString()),
-    supabase.from('orders').select('id, merchant_id, total_amount')
-      .not('status', 'in', '(draft,cancelled,void)').gte('created_at', periodStart.toISOString()),
+    applyReportablePredicate(
+      supabase.from('orders').select('id, merchant_id, total_amount')
+    ).gte('created_at', periodStart.toISOString()),
   ])
 
   const discountLogs = discountLogsRes.data || []
@@ -2823,11 +2811,9 @@ export async function getStaffLaborAnalytics(days: number = 30): Promise<StaffLa
       .select('staff_profile_id, merchant_id, clock_in_time, clock_out_time, status')
       .gte('clock_in_time', periodStart.toISOString())
       .neq('status', 'cancelled'),
-    supabase
-      .from('orders')
-      .select('id, merchant_id')
-      .in('status', ['completed', 'paid'])
-      .gte('created_at', periodStart.toISOString()),
+    applyReportablePredicate(
+      supabase.from('orders').select('id, merchant_id')
+    ).gte('created_at', periodStart.toISOString()),
     supabase
       .from('merchants')
       .select('id, name'),
@@ -3040,11 +3026,9 @@ export async function getOrderTypeIntelligence(days: number = 30): Promise<Order
     breakdown: [], totalOrders: 0, totalGPV: 0, weeklyTrend: [], merchantBreakdown: [], periodDays: days,
   }
 
-  const { data: orders, error } = await supabase
-    .from('orders')
-    .select('id, order_type, total_amount, merchant_id, created_at')
-    .not('status', 'in', '(draft,cancelled,void)')
-    .gte('created_at', periodStart.toISOString())
+  const { data: orders, error } = await applyReportablePredicate(
+    supabase.from('orders').select('id, order_type, total_amount, merchant_id, created_at')
+  ).gte('created_at', periodStart.toISOString())
 
   if (error || !orders || orders.length === 0) return empty
 
@@ -3189,14 +3173,15 @@ export async function getMultiLocationComparison(days: number = 30): Promise<Mul
   }
 
   const [currentRes, prevRes, locationsRes] = await Promise.all([
+    // Ungated: this pass computes BOTH recognized GPV and voidCount, so it
+    // needs void rows. Revenue is gated in-memory via isOrderReportable below.
     supabase
       .from('orders')
-      .select('location_id, merchant_id, total_amount, status, created_at')
+      .select('location_id, merchant_id, total_amount, status, payment_status, created_at')
       .gte('created_at', periodStart.toISOString()),
-    supabase
-      .from('orders')
-      .select('location_id, total_amount')
-      .not('status', 'in', '(draft,cancelled,void)')
+    applyReportablePredicate(
+      supabase.from('orders').select('location_id, total_amount')
+    )
       .gte('created_at', prevPeriodStart.toISOString())
       .lt('created_at', periodStart.toISOString()),
     supabase.from('locations').select('id, name, merchant_id').eq('is_active', true),
@@ -3245,7 +3230,8 @@ export async function getMultiLocationComparison(days: number = 30): Promise<Mul
     if (!locMap.has(lid)) locMap.set(lid, { gpv: 0, orderCount: 0, voidCount: 0, merchantId: o.merchant_id })
     const e = locMap.get(lid)!
     if (o.status === 'void') { e.voidCount++; return }
-    if (['draft', 'cancelled'].includes(o.status)) return
+    // GPV/order count = recognized orders only (payment collected).
+    if (!isOrderReportable(o)) return
     e.gpv += Number(o.total_amount); e.orderCount++
 
     // Build sparkline for last 7 days
@@ -4072,11 +4058,9 @@ export async function getLocationDensity(): Promise<LocationDensityData> {
       .from('locations')
       .select('id, city, state, merchant_id')
       .eq('is_active', true),
-    supabase
-      .from('orders')
-      .select('location_id, total_amount')
-      .in('status', ['completed', 'paid'])
-      .gte('created_at', thirtyDaysAgo.toISOString()),
+    applyReportablePredicate(
+      supabase.from('orders').select('location_id, total_amount')
+    ).gte('created_at', thirtyDaysAgo.toISOString()),
   ])
 
   const locations = locationsRes.data || []

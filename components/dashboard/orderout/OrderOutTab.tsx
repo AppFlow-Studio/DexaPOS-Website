@@ -44,6 +44,7 @@ import { PushChannelsRowAction } from "./PushChannelsRowAction";
 import { PushChannelsCard } from "./PushChannelsCard";
 import { PushChannelsHistoryCard } from "./PushChannelsHistoryCard";
 import { ChannelSelfConfirmCard } from "./ChannelSelfConfirmCard";
+import { TestOrderCard } from "./TestOrderCard";
 
 // ============================================================================
 // Types
@@ -517,6 +518,11 @@ export function OrderOutTab({
           )}
         </CardContent>
       </Card>
+
+      {/* E. DEV-only: synthetic OrderOut webhook tester */}
+      {process.env.NODE_ENV === "development" && (
+        <TestOrderCard locationId={locationId} hasRestaurant={hasRestaurant} />
+      )}
     </div>
   );
 }
