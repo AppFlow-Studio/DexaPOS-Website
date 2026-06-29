@@ -277,15 +277,20 @@ export function StaffDetailSheet({
       toast.error("No primary location found");
       return;
     }
+    if (!staff.staff_profile_id) {
+      toast.error("No staff profile found");
+      return;
+    }
+    const staffProfileId = staff.staff_profile_id;
 
     if (staff.overall_is_active) {
       deactivateStaff.mutate({
-        staffProfileId: staff.staff_profile_id,
+        staffProfileId,
         locationId: primaryLocation.location_id,
       });
     } else {
       reactivateStaff.mutate({
-        staffProfileId: staff.staff_profile_id,
+        staffProfileId,
         locationId: primaryLocation.location_id,
       });
     }

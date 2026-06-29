@@ -36,6 +36,7 @@ import {
   useLocationScopedSchedules,
 } from "./hooks/useLocationScoped";
 import { useOrders } from "./hooks/useOrder";
+import { isOrderReportable } from "@/lib/reporting/recognized-order";
 import {
   useOrderAnalytics,
   useOrderStats,
@@ -94,12 +95,6 @@ export default function MerchantDashboardPage() {
   const [pinBannerDismissed, setPinBannerDismissed] = useState(false);
 
   // Date ranges for analytics
-  const today = useMemo(() => {
-    const date = new Date();
-    date.setHours(0, 0, 0, 0);
-    return date;
-  }, []);
-
   const last7Days = useMemo(() => {
     const date = new Date();
     date.setDate(date.getDate() - 7);
@@ -180,10 +175,18 @@ export default function MerchantDashboardPage() {
 
   // Calculate today's stats - use KPIs if available for consistency
   const todayStats = useMemo(() => {
+    // Local calendar "today" (e.g. "2026-06-29"), computed fresh on every
+    // recompute — never a frozen mount-time value. get_financial_kpis buckets
+    // daily_stats by the location-local calendar day, so we match on a local
+    // date string (not the UTC `toISOString()` date, which drifts across the
+    // UTC/local midnight boundary and would select the wrong day).
+    const todayKey = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD, local
+
     if (kpis7Days?.daily_stats) {
-      const todayStr = today.toISOString().split("T")[0];
+      // No bucket for today => 0 recognized orders today (NOT the latest
+      // historical day — the previous code fell through to yesterday's count).
       const todayMatch = kpis7Days.daily_stats.find((d) =>
-        d.date.startsWith(todayStr)
+        d.date.startsWith(todayKey)
       );
 
       return {
@@ -193,18 +196,14 @@ export default function MerchantDashboardPage() {
       };
     }
 
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-    const todayEnd = new Date();
-    todayEnd.setHours(23, 59, 59, 999);
-
+    // Fallback (KPIs unavailable): recognized orders created today, locally.
+    // Both revenue and count derive from the same set so they agree.
     const todayOrders = ordersList.filter((order) => {
-      const orderDate = new Date(order.created_at);
-      return orderDate >= todayStart && orderDate <= todayEnd;
+      const orderKey = new Date(order.created_at).toLocaleDateString("en-CA");
+      return orderKey === todayKey && isOrderReportable(order);
     });
 
-    const completedToday = todayOrders.filter((o) => o.status === "completed");
-    const revenueToday = completedToday.reduce(
+    const revenueToday = todayOrders.reduce(
       (sum, o) => sum + Number(o.total_amount || 0),
       0
     );
@@ -213,9 +212,9 @@ export default function MerchantDashboardPage() {
     return {
       revenue: revenueToday,
       orders: ordersToday,
-      completed: completedToday.length,
+      completed: ordersToday,
     };
-  }, [ordersList, kpis7Days, today]);
+  }, [ordersList, kpis7Days]);
 
   // Calculate growth (comparing last 7 days to previous 7 days)
   const growth = useMemo(() => {

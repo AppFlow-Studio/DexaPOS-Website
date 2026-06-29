@@ -235,7 +235,8 @@
 /* Dark half of the dashboard nav two-tone — at parity with the shipped light
    `.dashboard-sidebar-theme` above. The value relationship inverts in dark:
    the rail is the DEEPEST surface and content sits ELEVATED above it.
-   Scoped to the dashboard layout, so global dark tokens are untouched. */
+   These sidebar tokens are scoped to dashboard layouts; the global dark
+   `--background` is adjusted separately below to prevent FOUC. */
 .dark .dashboard-sidebar-theme {
   /* Nav rail = deepest surface */
   --sidebar: #0f1115;
