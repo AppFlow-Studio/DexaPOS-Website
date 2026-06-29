@@ -44,6 +44,7 @@ import { PushChannelsRowAction } from "./PushChannelsRowAction";
 import { PushChannelsCard } from "./PushChannelsCard";
 import { PushChannelsHistoryCard } from "./PushChannelsHistoryCard";
 import { ChannelSelfConfirmCard } from "./ChannelSelfConfirmCard";
+import { TestOrderCard } from "./TestOrderCard";
 
 // ============================================================================
 // Types
@@ -136,7 +137,6 @@ export function OrderOutTab({
 }: OrderOutTabProps) {
   const { data: syncedMenusData } = useOrderOutSyncedMenus(clerkOrgId, locationId);
   const { data: recentOrdersData } = useRecentOrderOutOrders(clerkOrgId, locationId);
-  console.log(orderOutStatus)
   const syncedMenus = syncedMenusData?.data || [];
   const recentOrders = recentOrdersData?.data || [];
 
@@ -151,7 +151,6 @@ export function OrderOutTab({
   const channels = Array.from(new Set([...verified, ...confirmed]));
 
   const isOnboarded = !!orderOutStatus?.hasRestaurant;
-  console.log(isOnboarded)
   const dashboardUrl = orderOutStatus?.dashboardUrl || "https://dashboard.orderout.co";
 
   // Determine setup progress
@@ -519,6 +518,11 @@ export function OrderOutTab({
           )}
         </CardContent>
       </Card>
+
+      {/* E. DEV-only: synthetic OrderOut webhook tester */}
+      {process.env.NODE_ENV === "development" && (
+        <TestOrderCard locationId={locationId} hasRestaurant={hasRestaurant} />
+      )}
     </div>
   );
 }

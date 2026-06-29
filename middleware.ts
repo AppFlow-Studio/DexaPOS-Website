@@ -15,6 +15,7 @@ const isMarketingRoute = createRouteMatcher([
   '/',
   '/demo',
   '/features',
+  '/pricing',
   '/why',
   '/hardware',
   '/industries',

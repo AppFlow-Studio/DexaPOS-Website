@@ -52,8 +52,11 @@ export function transformMenuToOrderOut(
     for (const catItem of menuCategory.items) {
       const mi = catItem.menu_item;
 
-      // Skip unavailable items
-      if (!mi.effective_availability) continue;
+      // Skip only items explicitly marked unavailable. Treat a missing/
+      // undefined value as available so a dropped RPC field can never again
+      // silently zero out the entire menu (see migration
+      // 20260625000000_restore_effective_availability_in_get_menu_with_categories).
+      if (mi.effective_availability === false) continue;
 
       // Deduplicate regular items by menu_item.id
       if (!itemMap.has(mi.id)) {

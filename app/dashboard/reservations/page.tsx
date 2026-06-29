@@ -8,7 +8,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { useReservations } from "@/app/dashboard/hooks/useReservations";
-import { useSelectedLocation, useIsAllLocations } from "@/stores/location-store";
+import { useGatedLocationId } from "@/stores/location-store";
 import ReservationCard from "./components/ReservationCard";
 import CreateReservationDialog from "./components/CreateReservationDialog";
 import ReservationDetailSheet from "./components/ReservationDetailSheet";
@@ -44,9 +44,10 @@ export default function ReservationsPage() {
     useState<Reservation | null>(null);
   const [detailSheetOpen, setDetailSheetOpen] = useState(false);
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const _location = useSelectedLocation();
-  const isAllLocations = useIsAllLocations();
+  // Gated resolver: single-active-location accounts (locked to 'all' scope)
+  // resolve to their one location. Only treat as "all locations" when no
+  // concrete location is resolvable (multi-location on 'all').
+  const isAllLocations = !useGatedLocationId();
 
   const { data: reservations, isLoading, error } =
     useReservations(selectedDate);
@@ -83,6 +84,7 @@ export default function ReservationsPage() {
           size="lg"
           className="rounded-2xl px-5"
           onClick={() => setCreateDialogOpen(true)}
+          disabled={isAllLocations}
         >
           <Plus className="h-4 w-4" />
           New Reservation

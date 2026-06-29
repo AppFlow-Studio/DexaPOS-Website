@@ -47,7 +47,7 @@ import {
   useDeleteStation,
 } from "../hooks/useStations";
 
-import { useAuth } from "@clerk/nextjs";
+import { useClerkOrgId } from "@/app/dashboard/hooks/useLocationScoped";
 import { AddStationDialog } from "../components/AddStationDialog";
 
 // Tab components
@@ -84,7 +84,8 @@ export default function StationDetailPage() {
   const params = useParams();
   const router = useRouter();
   const stationId = params.stationId as string;
-  const { orgId } = useAuth();
+  // Impersonation-aware org id (NOT useAuth().orgId, which stays HQ during impersonation).
+  const orgId = useClerkOrgId();
 
   const [activeTab, setActiveTab] = useState("overview");
   const [isRefreshing, setIsRefreshing] = useState(false);

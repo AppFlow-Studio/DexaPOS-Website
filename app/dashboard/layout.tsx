@@ -1126,26 +1126,43 @@ export default function MerchantDashboardLayout({
   const isOnboardingRoute = pathname?.startsWith("/dashboard/onboarding") ?? false;
   const clerkOrgId = userInfo?.members?.[0]?.organizations?.id;
   const userRole = userInfo?.members?.[0]?.role;
-  const { data: locations, isLoading: locationsLoading } = useLocations(
-    clerkOrgId || "",
-    userInfo?.id || ""
-  );
+  const {
+    data: locations,
+    isLoading: locationsLoading,
+    isFetching: locationsFetching,
+  } = useLocations(clerkOrgId || "", userInfo?.id || "");
 
-  // First-location gate: any merchant with zero locations is forced into the
-  // onboarding wizard before they can access the rest of the dashboard.
+  // First-location gate (bidirectional):
+  //  • A merchant with zero locations is forced into the onboarding wizard.
+  //  • A merchant that already has a location is kept OUT of the wizard — so
+  //    landing on (or manually re-visiting) the onboarding route after
+  //    completing it redirects to the dashboard instead of resetting to Step 1.
   useEffect(() => {
     if (
       !clerkOrgId ||
       locationsLoading ||
-      !Array.isArray(locations) ||
-      isOnboardingRoute
+      // Never act on an in-flight refetch: right after a merchant completes the
+      // onboarding wizard the locations query is being refetched, and the cache
+      // still holds the stale empty list. Acting on that stale read bounces the
+      // user back to Step 1 (the onboarding loop). Wait for fresh data.
+      locationsFetching ||
+      !Array.isArray(locations)
     ) {
       return;
     }
-    if (locations.length === 0) {
+    if (!isOnboardingRoute && locations.length === 0) {
       router.replace("/dashboard/onboarding/first-location");
+    } else if (isOnboardingRoute && locations.length > 0) {
+      router.replace("/dashboard");
     }
-  }, [clerkOrgId, locations, locationsLoading, isOnboardingRoute, router]);
+  }, [
+    clerkOrgId,
+    locations,
+    locationsLoading,
+    locationsFetching,
+    isOnboardingRoute,
+    router,
+  ]);
 
   // Zustand store
   const {
@@ -1294,7 +1311,7 @@ export default function MerchantDashboardLayout({
     <SidebarProvider className="dashboard-sidebar-theme">
       <ImpersonationHydrator />
       <MerchantSidebar />
-      <main aria-label="Dashboard content" className="flex-1 flex flex-col min-w-0">
+      <main aria-label="Dashboard content" className="flex-1 flex flex-col min-w-0 bg-background">
         <ImpersonationBanner />
         <header className="flex h-16 shrink-0 items-center gap-2 border-b px-3 sm:px-4">
           <SidebarTrigger className="-ml-1 hidden sm:flex" />

@@ -1,9 +1,13 @@
-import MobileNavToggle from "./MobileNavToggle";
-import Image from "next/image";
+"use client";
+
+import { useState } from "react";
+import DexaWordmark from "./DexaWordmark";
+
 export type MarketingNavKey =
   | "home"
   | "demo"
   | "features"
+  | "pricing"
   | "why"
   | "hardware"
   | "industries"
@@ -12,6 +16,7 @@ export type MarketingNavKey =
 const NAV_ITEMS: { href: string; label: string; key: MarketingNavKey }[] = [
   { href: "/demo", label: "Live Demo", key: "demo" },
   { href: "/features", label: "Features", key: "features" },
+  { href: "/pricing", label: "Pricing", key: "pricing" },
   { href: "/why", label: "Why DEXA", key: "why" },
   { href: "/hardware", label: "Hardware", key: "hardware" },
   { href: "/industries", label: "Industries", key: "industries" },
@@ -22,50 +27,50 @@ export default function MarketingNav({
 }: {
   current?: MarketingNavKey;
 }) {
-  const items = NAV_ITEMS.map((it) => ({
-    href: it.href,
-    label: it.label,
-    current: it.key === current,
-  }));
+  const [open, setOpen] = useState(false);
 
   return (
     <nav className="nav">
       <div className="wrap nav-inner">
-        <a href="/" className="logo">
-           <Image
-              src="/dexalogolight.png"
-              alt="DexaPOS"
-              width={56}
-              height={56}
-              priority
-              className="h-14 w-14 rounded-xl object-cover"
-            />
-          DEXA POS
+        <a href="/" className="logo" aria-label="DEXA — home">
+          <DexaWordmark />
         </a>
-        <MobileNavToggle items={items} />
-        <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
-          <a
-            href="/sign-in"
-            style={{
-              fontSize: 14.5,
-              fontWeight: 500,
-              color: "var(--slate-600)",
-              transition: "color 0.2s",
-            }}
-          >
-            Sign In
-          </a>
-          <a
-            href="/contact"
-            className="nav-cta"
-            style={
-              current === "contact"
-                ? { background: "var(--brand-500)" }
-                : undefined
-            }
-          >
+
+        <ul className={`nav-links${open ? " open" : ""}`}>
+          {NAV_ITEMS.map((it) => (
+            <li key={it.href}>
+              <a
+                href={it.href}
+                className={it.key === current ? "current" : undefined}
+                onClick={() => setOpen(false)}
+              >
+                {it.label}
+              </a>
+            </li>
+          ))}
+        </ul>
+
+        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          <a href="/contact" className="nav-cta">
             Request a Demo
           </a>
+          <button
+            className="menu-toggle"
+            type="button"
+            aria-label="Menu"
+            onClick={() => setOpen((v) => !v)}
+          >
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+            >
+              <path d="M3 6h18M3 12h18M3 18h18" />
+            </svg>
+          </button>
         </div>
       </div>
     </nav>

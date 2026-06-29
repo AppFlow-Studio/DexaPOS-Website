@@ -402,19 +402,26 @@ export function CreateLocationWizard({ clerkOrgId, actorUserId, mode = 'standard
                 description: `"${formData.name}" has been added to your locations.`
             })
 
-            // Invalidate locations query to refresh the list
-            queryClient.invalidateQueries({ queryKey: ['locations'] })
-            queryClient.invalidateQueries({ queryKey: ['menus'] })
-
             // Reset unsaved changes flag
             setHasUnsavedChanges(false)
 
+            queryClient.invalidateQueries({ queryKey: ['menus'] })
+
             if (isOnboarding) {
+                // The dashboard layout's first-location gate redirects any merchant
+                // with zero locations back into this wizard. We must AWAIT the
+                // locations refetch so the cache holds the freshly-created location
+                // before we navigate — otherwise the gate re-reads the stale empty
+                // list and bounces the user back to Step 1 (the onboarding loop).
+                await queryClient.refetchQueries({ queryKey: ['locations'] })
                 router.replace('/dashboard')
-            } else if (result.data?.id) {
-                router.push(`/dashboard/locations?open=${result.data.id}`)
             } else {
-                router.push('/dashboard/locations')
+                queryClient.invalidateQueries({ queryKey: ['locations'] })
+                if (result.data?.id) {
+                    router.push(`/dashboard/locations?open=${result.data.id}`)
+                } else {
+                    router.push('/dashboard/locations')
+                }
             }
         } catch (error) {
             toast.error('Creation Failed', {

@@ -66,6 +66,7 @@ interface OrdersDataTableProps {
     showLocationColumn?: boolean
     locationsMap?: Map<string, string>
     pageSize?: number
+    hideOrderStatus?: boolean
 }
 
 // Format date to "Today at 9:53 pm" or "Dec 15 at 2:30 pm"
@@ -134,7 +135,7 @@ function getOrderTypeConfig(type: OrderType) {
     return configs[type] || configs.dine_in
 }
 
-export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showLocationColumn, locationsMap, pageSize = 50 }: OrdersDataTableProps) {
+export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showLocationColumn, locationsMap, pageSize = 50, hideOrderStatus = false }: OrdersDataTableProps) {
     const [sorting, setSorting] = React.useState<SortingState>([
         { id: 'created_at', desc: true },
     ])
@@ -419,9 +420,13 @@ export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showL
         },
     ]
 
+    const visibleColumns = hideOrderStatus
+        ? columns.filter((c) => (c as { accessorKey?: string }).accessorKey !== 'status')
+        : columns
+
     const table = useReactTable({
         data,
-        columns,
+        columns: visibleColumns,
         getCoreRowModel: getCoreRowModel(),
         getSortedRowModel: getSortedRowModel(),
         getFilteredRowModel: getFilteredRowModel(),
@@ -484,7 +489,7 @@ export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showL
                     <TableBody>
                         {isLoading ? (
                             <TableRow>
-                                <TableCell colSpan={columns.length} className="h-24 text-center">
+                                <TableCell colSpan={visibleColumns.length} className="h-24 text-center">
                                     <div className="flex items-center justify-center">
                                         <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary" />
                                     </div>
@@ -510,7 +515,7 @@ export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showL
                             ))
                         ) : (
                             <TableRow>
-                                <TableCell colSpan={columns.length} className="h-24 text-center">
+                                <TableCell colSpan={visibleColumns.length} className="h-24 text-center">
                                     <div className="flex flex-col items-center gap-2 text-muted-foreground">
                                         <ShoppingBag className="h-8 w-8" />
                                         <p>No orders found</p>
