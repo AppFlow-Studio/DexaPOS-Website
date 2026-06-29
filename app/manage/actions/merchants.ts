@@ -3,6 +3,7 @@
 import { assertHQPermission } from '@/lib/admin/auth'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
+import { applyReportablePredicate } from '@/lib/reporting/recognized-order'
 import { revalidatePath } from 'next/cache'
 import { logAdminAction } from '@/lib/admin/log-admin-action'
 import type {
@@ -329,13 +330,12 @@ export async function getMerchantDetails(
       // draft/cancelled/void/refunded. One gate drives BOTH order count and
       // revenue so the two figures agree (previously orders_today counted
       // unpaid/void while revenue_today gated on the manual 'completed' tap).
-      const { data: orderData } = await supabase
-        .from('orders')
-        .select('total_amount')
-        .eq('location_id', location.id)
-        .gte('created_at', today.toISOString())
-        .in('payment_status', ['paid', 'captured'])
-        .not('status', 'in', '(draft,cancelled,void,refunded)')
+      const { data: orderData } = await applyReportablePredicate(
+        supabase
+          .from('orders')
+          .select('total_amount')
+          .eq('location_id', location.id)
+      ).gte('created_at', today.toISOString())
 
       const orders = orderData || []
 
