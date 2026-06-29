@@ -2,7 +2,7 @@
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
-import { StaffShift } from "@/types/staff";
+import { ShiftBreakLog, StaffShift } from "@/types/staff";
 import { startOfDay, endOfDay } from "date-fns";
 import { LogAuditEvent } from "./audit-logs";
 
@@ -31,6 +31,14 @@ interface TimesheetResources {
   locations: { id: string; name: string }[];
 }
 
+interface AdjustShiftTimesInput {
+  shiftId: string;
+  clockInTime: string;
+  clockOutTime: string | null;
+  breakLogs: ShiftBreakLog[];
+  reason: string;
+}
+
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
@@ -53,6 +61,37 @@ async function getMerchantIdFromClerkOrg(clerkOrgId: string): Promise<string> {
   }
 
   return merchant.id;
+}
+
+function mapShiftAdjustmentError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+
+  const messages: Record<string, string> = {
+    SHIFT_REQUIRED: "Shift is required.",
+    CLOCK_IN_REQUIRED: "Clock-in time is required.",
+    REASON_REQUIRED: "A correction reason is required.",
+    SHIFT_NOT_FOUND: "Shift not found.",
+    PERMISSION_DENIED: "You do not have permission to adjust this shift.",
+    FUTURE_SHIFT_TIME: "Shift times cannot be in the future.",
+    INVALID_RANGE: "Clock-out must be after clock-in.",
+    INVALID_BREAK_LOGS: "Break logs must be a valid list.",
+    INVALID_BREAK_TYPE: "Break type must be paid or unpaid.",
+    BREAK_TIME_REQUIRED: "Each break needs a start and end time.",
+    INVALID_BREAK_TIME: "One or more break times are invalid.",
+    INVALID_BREAK_RANGE: "Break end must be after break start.",
+    BREAK_OUT_OF_BOUNDS: "Breaks must be inside the shift window.",
+    FUTURE_BREAK_TIME: "Break times cannot be in the future.",
+    BREAKS_OVERLAP: "Breaks cannot overlap.",
+    BREAK_EXCEEDS_SHIFT: "Unpaid break time cannot exceed the shift duration.",
+  };
+
+  for (const [code, friendlyMessage] of Object.entries(messages)) {
+    if (message.includes(code)) {
+      return friendlyMessage;
+    }
+  }
+
+  return message || "Failed to adjust shift times";
 }
 
 // ============================================================================
@@ -80,7 +119,10 @@ export async function GetTimesheets(
                 clock_out_time,
                 break_logs,
                 hourly_rate_snapshot,
+                notes,
+                is_verified,
                 created_at,
+                updated_at,
                 merchant_id,
                 location_id,
                 staff_profile_id,
@@ -244,7 +286,10 @@ export async function UpdateShiftStatus(
                 clock_out_time,
                 break_logs,
                 hourly_rate_snapshot,
+                notes,
+                is_verified,
                 created_at,
+                updated_at,
                 merchant_id,
                 location_id,
                 staff_profile_id,
@@ -297,51 +342,59 @@ export async function UpdateShiftStatus(
 
 export async function AdjustShiftTimes(
   clerkOrgId: string,
-  shiftId: string,
-  clockInTime: string,
-  clockOutTime: string | null,
+  input: AdjustShiftTimesInput,
 ): Promise<MutationResult<StaffShift>> {
   try {
-    const supabase = createServiceRoleClient();
+    const serviceSupabase = createServiceRoleClient();
+    const supabase = createServerSupabaseClient();
     const merchantId = await getMerchantIdFromClerkOrg(clerkOrgId);
 
     // Fetch before state
-    const { data: beforeShift } = await supabase
+    const { data: beforeShift } = await serviceSupabase
       .from("staff_shifts")
-      .select("*")
-      .eq("id", shiftId)
-      .single();
-
-    const { data: updatedData, error } = await supabase
-      .from("staff_shifts")
-      .update({
-        clock_in_time: clockInTime,
-        clock_out_time: clockOutTime,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", shiftId)
-      .eq("merchant_id", merchantId)
       .select(
         `
-                id,
-                status,
-                clock_in_time,
-                clock_out_time,
-                break_logs,
-                hourly_rate_snapshot,
-                created_at,
-                merchant_id,
-                location_id,
-                staff_profile_id,
-                staff_profile:staff_profiles(first_name, last_name, avatar_url),
-                location:locations(name)
-            `,
+        id,
+        status,
+        clock_in_time,
+        clock_out_time,
+        break_logs,
+        hourly_rate_snapshot,
+        notes,
+        is_verified,
+        merchant_id,
+        location_id,
+        staff_profile_id,
+        staff_profile:staff_profiles(first_name, last_name, avatar_url),
+        location:locations(name)
+      `,
       )
+      .eq("id", input.shiftId)
+      .eq("merchant_id", merchantId)
       .single();
 
-    if (error || !updatedData) {
-      throw error || new Error("Failed to adjust shift times");
+    if (!beforeShift) {
+      throw new Error("Shift not found");
     }
+
+    const { error } = await (supabase as any).rpc("admin_adjust_staff_shift", {
+      p_shift_id: input.shiftId,
+      p_clock_in_time: input.clockInTime,
+      p_clock_out_time: input.clockOutTime,
+      p_break_logs: input.breakLogs ?? [],
+      p_reason: input.reason,
+    });
+
+    if (error) {
+      throw new Error(mapShiftAdjustmentError(error));
+    }
+
+    const updatedResult = await GetShiftById(clerkOrgId, input.shiftId);
+    if (!updatedResult.success) {
+      throw new Error(updatedResult.error);
+    }
+
+    const updatedData = updatedResult.data;
 
     // Log audit event
     if (beforeShift) {
@@ -352,32 +405,45 @@ export async function AdjustShiftTimes(
 
       await LogAuditEvent({
         merchantId: updatedData.merchant_id,
-        action: `Adjusted Shift Times: ${staffName}`,
+        action: "shift_adjusted",
         actionCategory: "staff_shifts",
         resourceType: "staff_shift",
-        resourceId: shiftId,
+        resourceId: input.shiftId,
         resourceName: staffName,
         locationId: updatedData.location_id,
         changes: {
           before: {
             clock_in_time: beforeShift.clock_in_time,
             clock_out_time: beforeShift.clock_out_time,
+            break_logs: beforeShift.break_logs,
+            status: beforeShift.status,
+            is_verified: beforeShift.is_verified,
           },
           after: {
-            clock_in_time: clockInTime,
-            clock_out_time: clockOutTime,
+            clock_in_time: updatedData.clock_in_time,
+            clock_out_time: updatedData.clock_out_time,
+            break_logs: updatedData.break_logs,
+            status: updatedData.status,
+            is_verified: updatedData.is_verified,
           },
+          reason: input.reason,
+        },
+        metadata: {
+          adjustment_type: "manual",
+          staff_name: staffName,
         },
       });
     }
 
-    return { success: true, data: updatedData as unknown as StaffShift };
+    return { success: true, data: updatedData };
   } catch (error) {
     console.error("[AdjustShiftTimes] error", error);
     return {
       success: false,
       error:
-        error instanceof Error ? error.message : "Failed to adjust shift times",
+        error instanceof Error
+          ? mapShiftAdjustmentError(error)
+          : "Failed to adjust shift times",
     };
   }
 }

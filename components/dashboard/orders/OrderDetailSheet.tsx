@@ -23,6 +23,7 @@ import {
 } from "@/types/order-management";
 import { OrderStatusBadge } from "./OrderStatusBadge";
 import { PaymentStatusBadge } from "./PaymentStatusBadge";
+import { DeliveryPlatformBadge } from "./DeliveryPlatformBadge";
 import { cn } from "@/lib/utils";
 import {
   Calendar,
@@ -1135,6 +1136,7 @@ export function OrderDetailSheet({
                         {getOrderTypeIcon(displayOrder.order_type)}
                         {formatOrderType(displayOrder.order_type)}
                       </span>
+                      <DeliveryPlatformBadge order={displayOrder} />
                       {locationOrChannel && (
                         <span className="flex items-center gap-1.5">
                           <MapPin className="h-3.5 w-3.5" />

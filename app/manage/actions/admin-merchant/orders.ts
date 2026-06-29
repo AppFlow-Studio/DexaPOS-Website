@@ -38,6 +38,10 @@ export interface AdminOrder {
   staff_name?: string
   customer_name: string | null
   customer_phone: string | null
+  delivery_platform: string | null
+  order_source: string | null
+  platform_order_number: string | null
+  metadata: Record<string, unknown> | null
   items_count: number
 }
 
@@ -110,6 +114,10 @@ export async function getAdminOrders(
       created_by_staff_id,
       customer_name,
       customer_phone,
+      delivery_platform,
+      order_source,
+      platform_order_number,
+      metadata,
       locations!inner(name),
       order_items(id),
       order_payments(payment_method),
@@ -203,6 +211,10 @@ export async function getAdminOrders(
       staff_name: staffName || undefined,
       customer_name: order.customer_name,
       customer_phone: order.customer_phone,
+      delivery_platform: order.delivery_platform ?? null,
+      order_source: order.order_source ?? null,
+      platform_order_number: order.platform_order_number ?? null,
+      metadata: (order.metadata as Record<string, unknown> | null) ?? null,
       items_count: order.order_items?.length || 0,
     }
   })
@@ -297,6 +309,10 @@ export async function getAdminOrderDetails(
       : undefined,
     customer_name: order.customer_name,
     customer_phone: order.customer_phone,
+    delivery_platform: order.delivery_platform ?? null,
+    order_source: order.order_source ?? null,
+    platform_order_number: order.platform_order_number ?? null,
+    metadata: (order.metadata as Record<string, unknown> | null) ?? null,
     items_count: order.order_items?.length || 0,
     order_items: order.order_items || [],
     payments: mappedPayments,
@@ -421,6 +437,10 @@ export async function getAdminRecentOrders(
       created_by_staff_id,
       customer_name,
       customer_phone,
+      delivery_platform,
+      order_source,
+      platform_order_number,
+      metadata,
       locations(name),
       order_items(id),
       order_payments(payment_method)
@@ -461,6 +481,10 @@ export async function getAdminRecentOrders(
       staff_id: order.created_by_staff_id,
       customer_name: order.customer_name,
       customer_phone: order.customer_phone,
+      delivery_platform: order.delivery_platform ?? null,
+      order_source: order.order_source ?? null,
+      platform_order_number: order.platform_order_number ?? null,
+      metadata: (order.metadata as Record<string, unknown> | null) ?? null,
       items_count: order.order_items?.length || 0,
     }
   })

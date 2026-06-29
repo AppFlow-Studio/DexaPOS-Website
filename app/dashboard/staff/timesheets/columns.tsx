@@ -6,8 +6,8 @@ import { calculateShiftDuration } from "@/utils/exportTimesheets";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { MoreHorizontal } from "lucide-react";
-import { format } from "date-fns";
+import { MoreHorizontal, Pencil } from "lucide-react";
+import { differenceInMinutes, format } from "date-fns";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -16,7 +16,31 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-export const columns: ColumnDef<StaffShift>[] = [
+interface TimesheetColumnsOptions {
+  onAdjustShift?: (shift: StaffShift) => void;
+}
+
+function getBreakDurationMinutes(breakLog: NonNullable<StaffShift["break_logs"]>[number]) {
+  if (typeof breakLog.duration_minutes === "number") {
+    return breakLog.duration_minutes;
+  }
+
+  if (!breakLog.start_at || !breakLog.end_at) {
+    return 0;
+  }
+
+  const minutes = differenceInMinutes(
+    new Date(breakLog.end_at),
+    new Date(breakLog.start_at)
+  );
+
+  return minutes > 0 ? minutes : 0;
+}
+
+export function createColumns({
+  onAdjustShift,
+}: TimesheetColumnsOptions = {}): ColumnDef<StaffShift>[] {
+  return [
   {
     accessorFn: (row) =>
       `${row.staff_profile?.first_name} ${row.staff_profile?.last_name}`,
@@ -79,7 +103,7 @@ export const columns: ColumnDef<StaffShift>[] = [
     cell: ({ row }) => {
       const breaks = row.original.break_logs || [];
       const totalMinutes = breaks.reduce(
-        (acc, b) => acc + b.duration_minutes,
+        (acc, b) => acc + getBreakDurationMinutes(b),
         0
       );
       return totalMinutes > 0 ? `${totalMinutes}m` : "-";
@@ -114,6 +138,7 @@ export const columns: ColumnDef<StaffShift>[] = [
     header: "Status",
     cell: ({ row }) => {
       const status = row.original.status as string;
+      const isAdjusted = Boolean(row.original.is_verified && row.original.notes);
       const variant =
         status === "approved"
           ? "default"
@@ -121,9 +146,20 @@ export const columns: ColumnDef<StaffShift>[] = [
           ? "secondary"
           : "outline";
       return (
-        <Badge variant={variant} className="capitalize">
-          {status}
-        </Badge>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Badge variant={variant} className="capitalize">
+            {status}
+          </Badge>
+          {isAdjusted ? (
+            <Badge
+              variant="outline"
+              className="border-amber-300 bg-amber-50 text-amber-700"
+              title={row.original.notes ?? "Manual adjustment"}
+            >
+              ADJUSTED
+            </Badge>
+          ) : null}
+        </div>
       );
     },
   },
@@ -147,10 +183,17 @@ export const columns: ColumnDef<StaffShift>[] = [
             >
               Copy Shift ID
             </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onAdjustShift?.(shift)}>
+              <Pencil className="mr-2 h-4 w-4" />
+              Adjust shift
+            </DropdownMenuItem>
             <DropdownMenuItem>View Details</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       );
     },
   },
-];
+  ];
+}
+
+export const columns = createColumns();

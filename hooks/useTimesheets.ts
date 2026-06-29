@@ -10,7 +10,7 @@ import {
   DeleteShift,
   BulkApproveShifts,
 } from "@/app/dashboard/actions/timesheets";
-import { StaffShift } from "@/types/staff";
+import { ShiftBreakLog, StaffShift } from "@/types/staff";
 import { DateRange } from "react-day-picker";
 import { toast } from "sonner";
 
@@ -150,13 +150,23 @@ export function useAdjustShiftTimes() {
       shiftId,
       clockInTime,
       clockOutTime,
+      breakLogs,
+      reason,
     }: {
       clerkOrgId: string;
       shiftId: string;
       clockInTime: string;
       clockOutTime: string | null;
+      breakLogs: ShiftBreakLog[];
+      reason: string;
     }) => {
-      return AdjustShiftTimes(clerkOrgId, shiftId, clockInTime, clockOutTime);
+      return AdjustShiftTimes(clerkOrgId, {
+        shiftId,
+        clockInTime,
+        clockOutTime,
+        breakLogs,
+        reason,
+      });
     },
     onSuccess: (result) => {
       if (result.success) {
