@@ -1,6 +1,12 @@
 "use server";
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { applyReportablePredicate } from "@/lib/reporting/recognized-order";
+
+// Synthetic platform key for first-party online orders (placed on the
+// merchant's own storefront, i.e. public.orders.order_type = 'online'), as
+// opposed to third-party OrderOut platforms (DoorDash, Uber Eats, …).
+const DIRECT_PLATFORM = "direct";
 
 // ============================================================================
 // Online Ordering Channel Analytics
@@ -71,26 +77,28 @@ export async function GetOnlineOrderingAnalytics(
     restaurantQuery = restaurantQuery.eq("location_id", locationId);
   }
 
-  const { data: restaurants, error: restError } = await restaurantQuery;
-  if (restError || !restaurants || restaurants.length === 0) {
-    return { platforms: [], dailyTrends: {}, totalOnlineRevenue: 0, totalOnlineOrders: 0 };
-  }
+  const { data: restaurants } = await restaurantQuery;
+  const restaurantIds = (restaurants ?? []).map((r) => r.id);
 
-  const restaurantIds = restaurants.map((r) => r.id);
+  // Get all third-party OrderOut orders for these restaurants in the range.
+  // (Merchants with no OrderOut integration simply have none — first-party
+  // online orders below still surface.)
+  let orders: any[] = [];
+  if (restaurantIds.length > 0) {
+    const { data: orderoutOrders, error: ordersError } = await supabase
+      .from("orderout_orders")
+      .select(
+        "id, delivery_platform, order_type, accept_status, platform_subtotal, platform_tax, platform_delivery_fee, platform_service_fee, platform_discount, platform_tip, platform_total, placed_on, created_at, cancel_source, cancelled_at"
+      )
+      .in("orderout_restaurant_id", restaurantIds)
+      .gte("created_at", dateFrom.toISOString())
+      .lte("created_at", dateTo.toISOString());
 
-  // Get all orderout orders for these restaurants in the date range
-  const { data: orders, error: ordersError } = await supabase
-    .from("orderout_orders")
-    .select(
-      "id, delivery_platform, order_type, accept_status, platform_subtotal, platform_tax, platform_delivery_fee, platform_service_fee, platform_discount, platform_tip, platform_total, placed_on, created_at, cancel_source, cancelled_at"
-    )
-    .in("orderout_restaurant_id", restaurantIds)
-    .gte("created_at", dateFrom.toISOString())
-    .lte("created_at", dateTo.toISOString());
-
-  if (ordersError || !orders) {
-    console.error("[OnlineOrderingAnalytics] Error fetching orders:", ordersError);
-    return { platforms: [], dailyTrends: {}, totalOnlineRevenue: 0, totalOnlineOrders: 0 };
+    if (ordersError) {
+      console.error("[OnlineOrderingAnalytics] Error fetching orderout orders:", ordersError);
+    } else {
+      orders = orderoutOrders ?? [];
+    }
   }
 
   // Aggregate by platform
@@ -147,6 +155,66 @@ export async function GetOnlineOrderingAnalytics(
       trendsMap.set(platform, new Map());
     }
     const dailyMap = trendsMap.get(platform)!;
+    if (!dailyMap.has(dateStr)) {
+      dailyMap.set(dateStr, { orders: 0, revenue: 0 });
+    }
+    const day = dailyMap.get(dateStr)!;
+    day.orders += 1;
+    day.revenue += total;
+  }
+
+  // First-party online orders: placed on the merchant's own storefront
+  // (public.orders.order_type = 'online'), gated by the canonical
+  // recognized-order predicate so only paid orders count. These have no
+  // third-party platform fees, so the fee/accept/reject fields stay zero.
+  let directQuery = applyReportablePredicate(
+    supabase
+      .from("orders")
+      .select("total_amount, tip_amount, discount_amount, created_at")
+      .eq("merchant_id", merchantId)
+      .eq("order_type", "online")
+  )
+    .gte("created_at", dateFrom.toISOString())
+    .lte("created_at", dateTo.toISOString());
+
+  if (locationId && locationId !== "all") {
+    directQuery = directQuery.eq("location_id", locationId);
+  }
+
+  const { data: directOrders, error: directError } = await directQuery;
+  if (directError) {
+    console.error("[OnlineOrderingAnalytics] Error fetching first-party online orders:", directError);
+  }
+
+  for (const order of directOrders ?? []) {
+    const total = Number(order.total_amount || 0);
+    const dateStr = String(order.created_at).slice(0, 10);
+
+    if (!platformMap.has(DIRECT_PLATFORM)) {
+      platformMap.set(DIRECT_PLATFORM, {
+        totalOrders: 0,
+        totalRevenue: 0,
+        totalDeliveryFees: 0,
+        totalServiceFees: 0,
+        totalTips: 0,
+        totalDiscounts: 0,
+        acceptedOrders: 0,
+        rejectedOrders: 0,
+        cancelledOrders: 0,
+      });
+    }
+    const p = platformMap.get(DIRECT_PLATFORM)!;
+    p.totalOrders += 1;
+    p.totalRevenue += total;
+    p.totalTips += Number(order.tip_amount || 0);
+    p.totalDiscounts += Number(order.discount_amount || 0);
+    // All counted orders are recognized (paid), so they are "accepted".
+    p.acceptedOrders += 1;
+
+    if (!trendsMap.has(DIRECT_PLATFORM)) {
+      trendsMap.set(DIRECT_PLATFORM, new Map());
+    }
+    const dailyMap = trendsMap.get(DIRECT_PLATFORM)!;
     if (!dailyMap.has(dateStr)) {
       dailyMap.set(dateStr, { orders: 0, revenue: 0 });
     }

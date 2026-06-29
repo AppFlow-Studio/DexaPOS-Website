@@ -36,6 +36,7 @@ import {
   useLocationScopedSchedules,
 } from "./hooks/useLocationScoped";
 import { useOrders } from "./hooks/useOrder";
+import { isOrderReportable } from "@/lib/reporting/recognized-order";
 import {
   useOrderAnalytics,
   useOrderStats,
@@ -198,13 +199,18 @@ export default function MerchantDashboardPage() {
     const todayEnd = new Date();
     todayEnd.setHours(23, 59, 59, 999);
 
+    // Recognized orders only (payment collected) — both revenue and count
+    // derive from the same set so they agree with get_financial_kpis above.
     const todayOrders = ordersList.filter((order) => {
       const orderDate = new Date(order.created_at);
-      return orderDate >= todayStart && orderDate <= todayEnd;
+      return (
+        orderDate >= todayStart &&
+        orderDate <= todayEnd &&
+        isOrderReportable(order)
+      );
     });
 
-    const completedToday = todayOrders.filter((o) => o.status === "completed");
-    const revenueToday = completedToday.reduce(
+    const revenueToday = todayOrders.reduce(
       (sum, o) => sum + Number(o.total_amount || 0),
       0
     );
@@ -213,7 +219,7 @@ export default function MerchantDashboardPage() {
     return {
       revenue: revenueToday,
       orders: ordersToday,
-      completed: completedToday.length,
+      completed: ordersToday,
     };
   }, [ordersList, kpis7Days, today]);
 

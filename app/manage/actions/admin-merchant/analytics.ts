@@ -2,6 +2,7 @@
 
 import { assertHQPermission } from '@/lib/admin/auth'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { applyReportablePredicate } from '@/lib/reporting/recognized-order'
 
 // ============================================================================
 // TYPES
@@ -89,11 +90,12 @@ export async function getAdminOrderAnalytics(
   const supabase = createServerSupabaseClient()
 
   // Build base query
-  let query = supabase
-    .from('orders')
-    .select('*, order_items(*)')
-    .eq('merchant_id', merchantId)
-    .not('status', 'in', '(draft,cancelled,void)')
+  let query = applyReportablePredicate(
+    supabase
+      .from('orders')
+      .select('*, order_items(*)')
+      .eq('merchant_id', merchantId)
+  )
     .gte('created_at', dateFrom.toISOString())
     .lte('created_at', dateTo.toISOString())
 
@@ -109,6 +111,35 @@ export async function getAdminOrderAnalytics(
   }
 
   const ordersList = orders || []
+
+  // Refunds come from the dedicated refunds source (order_payments), NOT from
+  // the recognized-order gate (which excludes `refunded` orders).
+  let refundQuery = supabase
+    .from('orders')
+    .select('order_payments(refunded_amount, status)')
+    .eq('merchant_id', merchantId)
+    .gte('created_at', dateFrom.toISOString())
+    .lte('created_at', dateTo.toISOString())
+  if (locationId && locationId !== 'all') {
+    refundQuery = refundQuery.eq('location_id', locationId)
+  }
+  const { data: refundOrders } = await refundQuery
+  const refunds = (refundOrders || []).reduce((sum, o: any) => {
+    const ps = (o.order_payments || []) as Array<{
+      refunded_amount: number | null
+      status: string | null
+    }>
+    return (
+      sum +
+      ps.reduce(
+        (s, p) =>
+          p.status === 'refunded' || p.status === 'partially_refunded'
+            ? s + Number(p.refunded_amount || 0)
+            : s,
+        0
+      )
+    )
+  }, 0)
 
   // Calculate today's sales
   const today = new Date()
@@ -143,11 +174,8 @@ export async function getAdminOrderAnalytics(
   )
   const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0
 
-  // Tips and refunds
+  // Tips (refunds computed above from order_payments)
   const tips = ordersList.reduce((sum, o) => sum + Number(o.tip_amount || 0), 0)
-  const refunds = ordersList
-    .filter((o) => o.status === 'refunded')
-    .reduce((sum, o) => sum + Number(o.total_amount || 0), 0)
 
   // Best selling items
   const itemMap = new Map<string, { quantity: number; revenue: number }>()
@@ -230,11 +258,12 @@ export async function getAdminOrderAnalytics(
   previousDateFrom.setDate(previousDateFrom.getDate() - periodDays)
   const previousDateTo = new Date(dateFrom)
 
-  let previousPeriodQuery = supabase
-    .from('orders')
-    .select('total_amount')
-    .eq('merchant_id', merchantId)
-    .eq('status', 'completed')
+  let previousPeriodQuery = applyReportablePredicate(
+    supabase
+      .from('orders')
+      .select('total_amount')
+      .eq('merchant_id', merchantId)
+  )
     .gte('created_at', previousDateFrom.toISOString())
     .lt('created_at', previousDateTo.toISOString())
 
@@ -295,12 +324,13 @@ export async function getAdminFinancialKPIs(
     return kpis as AdminFinancialKPIs
   }
 
-  // Fallback to manual calculation
-  let query = supabase
-    .from('orders')
-    .select('*')
-    .eq('merchant_id', merchantId)
-    .not('status', 'in', '(draft,cancelled)')
+  // Fallback to manual calculation (recognized orders only)
+  let query = applyReportablePredicate(
+    supabase
+      .from('orders')
+      .select('*')
+      .eq('merchant_id', merchantId)
+  )
     .gte('created_at', dateFrom.toISOString())
     .lte('created_at', dateTo.toISOString())
 
@@ -315,8 +345,10 @@ export async function getAdminFinancialKPIs(
     return null
   }
 
+  // Every returned row is a recognized order — no longer gated on the manual
+  // `completed` tap. Refunds are sourced separately from order_payments below.
   const ordersList = orders || []
-  const completedOrders = ordersList.filter((o) => o.status === 'completed')
+  const completedOrders = ordersList
 
   const gross_sales = completedOrders.reduce(
     (sum, o) => sum + Number(o.subtotal || 0),
@@ -326,9 +358,32 @@ export async function getAdminFinancialKPIs(
     (sum, o) => sum + Number(o.discount_amount || 0),
     0
   )
-  const refunds_total = ordersList
-    .filter((o) => o.status === 'refunded')
-    .reduce((sum, o) => sum + Number(o.total_amount || 0), 0)
+  let refundQuery = supabase
+    .from('orders')
+    .select('order_payments(refunded_amount, status)')
+    .eq('merchant_id', merchantId)
+    .gte('created_at', dateFrom.toISOString())
+    .lte('created_at', dateTo.toISOString())
+  if (locationId && locationId !== 'all') {
+    refundQuery = refundQuery.eq('location_id', locationId)
+  }
+  const { data: refundOrders } = await refundQuery
+  const refunds_total = (refundOrders || []).reduce((sum, o: any) => {
+    const ps = (o.order_payments || []) as Array<{
+      refunded_amount: number | null
+      status: string | null
+    }>
+    return (
+      sum +
+      ps.reduce(
+        (s, p) =>
+          p.status === 'refunded' || p.status === 'partially_refunded'
+            ? s + Number(p.refunded_amount || 0)
+            : s,
+        0
+      )
+    )
+  }, 0)
   const tax_total = completedOrders.reduce(
     (sum, o) => sum + Number(o.tax_amount || 0),
     0
@@ -442,11 +497,12 @@ export async function getAdminSalesByDate(
 
   const supabase = createServerSupabaseClient()
 
-  let query = supabase
-    .from('orders')
-    .select('created_at, total_amount')
-    .eq('merchant_id', merchantId)
-    .not('status', 'in', '(draft,cancelled,void)')
+  let query = applyReportablePredicate(
+    supabase
+      .from('orders')
+      .select('created_at, total_amount')
+      .eq('merchant_id', merchantId)
+  )
     .gte('created_at', dateFrom.toISOString())
     .lte('created_at', dateTo.toISOString())
 
@@ -501,11 +557,12 @@ export async function getAdminBestSellingItems(
 
   const supabase = createServerSupabaseClient()
 
-  let query = supabase
-    .from('orders')
-    .select('order_items(item_name, quantity, subtotal)')
-    .eq('merchant_id', merchantId)
-    .not('status', 'in', '(draft,cancelled,void)')
+  let query = applyReportablePredicate(
+    supabase
+      .from('orders')
+      .select('order_items(item_name, quantity, subtotal)')
+      .eq('merchant_id', merchantId)
+  )
     .gte('created_at', dateFrom.toISOString())
     .lte('created_at', dateTo.toISOString())
 

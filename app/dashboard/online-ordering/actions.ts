@@ -3,6 +3,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
+import { applyReportablePredicate } from "@/lib/reporting/recognized-order";
 import {
   OnlineOrderingSettings,
   WeeklySchedule,
@@ -1672,13 +1673,13 @@ export async function getQrAnalyticsSnapshot(
       .from("online_store_config")
       .select("id")
       .eq("location_id", locationId),
-    db
-      .from("orders")
-      .select("id, total_amount")
-      .eq("location_id", locationId)
-      .eq("order_type", "dine_in")
-      .not("status", "in", "(draft,cancelled,void)")
-      .gte("created_at", sinceIso),
+    applyReportablePredicate(
+      db
+        .from("orders")
+        .select("id, total_amount")
+        .eq("location_id", locationId)
+        .eq("order_type", "dine_in")
+    ).gte("created_at", sinceIso),
   ]);
 
   if (eventsResult.error) {
@@ -1736,14 +1737,15 @@ export async function getQrAnalyticsSnapshot(
 
   const qrOrdersResult =
     qrOrderIds.length > 0
-      ? await db
-          .from("orders")
-          .select(
-            "id, total_amount, customer_phone, table_number, created_at, order_items(item_name, quantity, subtotal)"
-          )
-          .in("id", qrOrderIds)
-          .eq("location_id", locationId)
-          .not("status", "in", "(draft,cancelled,void)")
+      ? await applyReportablePredicate(
+          db
+            .from("orders")
+            .select(
+              "id, total_amount, customer_phone, table_number, created_at, order_items(item_name, quantity, subtotal)"
+            )
+            .in("id", qrOrderIds)
+            .eq("location_id", locationId)
+        )
       : { data: [], error: null };
 
   if (qrOrdersResult.error) {

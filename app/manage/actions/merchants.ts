@@ -325,20 +325,24 @@ export async function getMerchantDetails(
   // Get orders for each location today (parallel per location)
   const locationsWithMetrics: LocationSummary[] = await Promise.all(
     (locations || []).map(async (location) => {
+      // Recognized orders only — payment collected and not
+      // draft/cancelled/void/refunded. One gate drives BOTH order count and
+      // revenue so the two figures agree (previously orders_today counted
+      // unpaid/void while revenue_today gated on the manual 'completed' tap).
       const { data: orderData } = await supabase
         .from('orders')
-        .select('total_amount, status')
+        .select('total_amount')
         .eq('location_id', location.id)
         .gte('created_at', today.toISOString())
-        .not('status', 'in', '("cancelled","draft")')
+        .in('payment_status', ['paid', 'captured'])
+        .not('status', 'in', '(draft,cancelled,void,refunded)')
 
       const orders = orderData || []
-      const completedOrders = orders.filter((o) => o.status === 'completed')
 
       return {
         ...location,
         orders_today: orders.length,
-        revenue_today: completedOrders.reduce(
+        revenue_today: orders.reduce(
           (sum, o) => sum + Number(o.total_amount || 0),
           0
         ),
