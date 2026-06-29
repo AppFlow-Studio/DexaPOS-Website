@@ -61,5 +61,3 @@ tasks/T-21-responsive-layout.md
 
 # Playwright MCP test artifacts
 .playwright-mcp/
-
-package-lock.json
