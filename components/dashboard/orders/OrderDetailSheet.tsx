@@ -66,6 +66,7 @@ import {
 import { ArrowRight, ChevronDown, ChevronUp } from "lucide-react";
 import { OrderFullTimeline } from "./OrderFullTimeline";
 import { useLocationStore, useSelectedLocation } from "@/stores/location-store";
+import { orderTypeLabel } from "@/lib/constants/order-type";
 import type { OrderFullHistory } from "@/types/order-full-history";
 import {
   EnhancedPaymentsList,
@@ -141,15 +142,7 @@ function formatDateShort(dateString: string) {
 }
 
 function formatOrderType(type: string) {
-  const labels: Record<string, string> = {
-    dine_in: "Dine-In",
-    qr_dine_in: "QR Dine-In",
-    takeout: "Takeout",
-    delivery: "Delivery",
-    online: "Online",
-    catering: "Catering",
-  };
-  return labels[type] || type.replace("_", " ");
+  return orderTypeLabel(type);
 }
 
 function getChannelLabel(orderType: string) {
