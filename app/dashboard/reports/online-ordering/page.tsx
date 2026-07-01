@@ -51,6 +51,7 @@ const PLATFORM_COLORS: Record<string, string> = {
 };
 
 const PLATFORM_LABELS: Record<string, string> = {
+  direct: "Online Store (Direct)",
   doordash: "DoorDash",
   ubereats: "Uber Eats",
   uber_eats: "Uber Eats",

@@ -318,7 +318,7 @@ export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showL
         {
             accessorKey: 'payment_status',
             id: 'payment_method',
-            header: 'Payment method',
+            header: hideOrderStatus ? 'Payment status' : 'Payment method',
             cell: ({ row }) => {
                 const order = row.original
                 const payments = order.order_payments || []
@@ -346,6 +346,20 @@ export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showL
                 }).filter(Boolean)
 
                 const summary = methodLabels.length > 0 ? methodLabels.join(', ') : null
+                // In Financials/Transactions (hideOrderStatus), payment status is the
+                // only status surfaced — so always show the badge, with the method text
+                // beneath it when available. Elsewhere, fall back to the badge only when
+                // no payment method is present.
+                if (hideOrderStatus) {
+                    return (
+                        <div className="flex flex-col gap-0.5">
+                            <PaymentStatusBadge status={order.payment_status} />
+                            {summary && (
+                                <span className="text-sm text-muted-foreground">{summary}</span>
+                            )}
+                        </div>
+                    )
+                }
                 return (
                     <div className="flex flex-col gap-0.5">
                         {summary ? (
