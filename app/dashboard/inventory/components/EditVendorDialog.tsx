@@ -18,6 +18,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { AddressAutocomplete } from "@/components/ui/address-autocomplete";
 import { Truck, Loader2, Globe, MapPin } from "lucide-react";
+import { useIsSingleLocation } from "@/stores/location-store";
 import {
   useUpdateVendor,
   VendorWithStats,
@@ -50,6 +51,7 @@ export function EditVendorDialog({
   vendor,
 }: EditVendorDialogProps) {
   const updateVendor = useUpdateVendor();
+  const isSingleLocation = useIsSingleLocation();
 
   const isGlobal = !vendor?.location_id;
 
@@ -119,7 +121,7 @@ export function EditVendorDialog({
               <DialogTitle>Edit Vendor</DialogTitle>
               <DialogDescription>Update vendor details</DialogDescription>
             </div>
-            {isGlobal ? (
+            {isSingleLocation ? null : isGlobal ? (
               <Badge
                 variant="outline"
                 className="gap-1 text-emerald-600 border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30"

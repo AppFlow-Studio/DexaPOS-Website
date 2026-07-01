@@ -42,6 +42,7 @@ import Link from "next/link";
 import { useLocations } from "@/app/dashboard/hooks/useLocations";
 import { useClerkOrgId } from "@/app/dashboard/hooks/useLocationScoped";
 import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
+import { useIsSingleLocation } from "@/stores/location-store";
 
 export default function DiscountDetailPage() {
   const params = useParams();
@@ -87,6 +88,7 @@ export default function DiscountDetailPage() {
   const clerkOrgId = useClerkOrgId() || "";
   const { data: userInfo } = useUserInfo();
   const { data: locationsData = [] } = useLocations(clerkOrgId, userInfo?.id || "");
+  const isSingleLocation = useIsSingleLocation();
   const locationName = useMemo(() => {
     if (!discount?.location_id) return null;
     return locationsData.find((l) => l.id === discount.location_id)?.name ?? null;
@@ -197,7 +199,7 @@ export default function DiscountDetailPage() {
         </div>
       </div>
 
-      <DiscountCard discount={discount} locationName={locationName} />
+      <DiscountCard discount={discount} locationName={locationName} isSingleLocation={isSingleLocation} />
 
       <div className="grid gap-4 md:grid-cols-2">
         <Card>

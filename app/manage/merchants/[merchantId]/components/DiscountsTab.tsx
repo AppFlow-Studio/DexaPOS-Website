@@ -35,6 +35,8 @@ import {
 } from '@/components/ui/sheet'
 import { DiscountForm } from '@/components/discounts/discount-form'
 import { DiscountCard } from '@/components/discounts/discount-card'
+import { useAdminMerchantDetails } from '@/lib/queries/use-admin-merchant'
+import { isSingleLocationList } from '@/stores/location-store'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
@@ -71,6 +73,11 @@ export function DiscountsTab({ merchantId }: DiscountsTabProps) {
   const { data, isLoading } = useAdminDiscounts(merchantId, filters)
   const { data: categoryData } = useAdminDiscountCategories(merchantId)
   const { data: menuItemData } = useAdminDiscountMenuItems(merchantId)
+
+  // Single-location gating uses the MANAGED merchant's active-location count
+  // (not the HQ user's own locations) — same resolver as merchant web.
+  const { data: merchantDetails } = useAdminMerchantDetails(merchantId)
+  const isSingleLocation = isSingleLocationList(merchantDetails?.locations ?? [])
   
   // Mutations
   const createMutation = useAdminCreateDiscount(merchantId)
@@ -137,6 +144,7 @@ export function DiscountsTab({ merchantId }: DiscountsTabProps) {
       <DiscountTable
         discounts={discounts}
         isLoading={isLoading}
+        isSingleLocation={isSingleLocation}
         onToggleStatus={(id, isActive) => toggleMutation.mutate({ id, isActive })}
         onBulkStatus={(ids, isActive) => bulkStatusMutation.mutate({ ids, isActive })}
         onBulkDelete={(ids) => bulkDeleteMutation.mutate({ ids })}
@@ -159,6 +167,7 @@ export function DiscountsTab({ merchantId }: DiscountsTabProps) {
             submitting={createMutation.isPending}
             categories={categories}
             menuItems={menuItems}
+            isSingleLocation={isSingleLocation}
             onCancel={() => setIsCreateSheetOpen(false)}
             submitLabel="Create Discount"
           />
@@ -173,6 +182,7 @@ export function DiscountsTab({ merchantId }: DiscountsTabProps) {
           onClose={() => setEditingDiscountId(null)}
           categories={categories}
           menuItems={menuItems}
+          isSingleLocation={isSingleLocation}
         />
       )}
 
@@ -182,6 +192,7 @@ export function DiscountsTab({ merchantId }: DiscountsTabProps) {
           merchantId={merchantId}
           discountId={viewingDiscountId}
           onClose={() => setViewingDiscountId(null)}
+          isSingleLocation={isSingleLocation}
         />
       )}
 
@@ -219,12 +230,14 @@ function EditDiscountSheet({
   onClose,
   categories,
   menuItems,
+  isSingleLocation,
 }: {
   merchantId: string
   discountId: string
   onClose: () => void
   categories: CategoryOption[]
   menuItems: MenuItemOption[]
+  isSingleLocation: boolean
 }) {
   const { data, isLoading } = useAdminDiscount(merchantId, discountId)
   const updateMutation = useAdminUpdateDiscount(merchantId, discountId)
@@ -257,6 +270,7 @@ function EditDiscountSheet({
             submitting={updateMutation.isPending}
             categories={categories}
             menuItems={menuItems}
+            isSingleLocation={isSingleLocation}
             onCancel={onClose}
             submitLabel="Update Discount"
           />
@@ -272,10 +286,12 @@ function ViewDiscountSheet({
   merchantId,
   discountId,
   onClose,
+  isSingleLocation,
 }: {
   merchantId: string
   discountId: string
   onClose: () => void
+  isSingleLocation: boolean
 }) {
   const { data, isLoading } = useAdminDiscount(merchantId, discountId)
   const { data: usageData, isLoading: usageLoading } = useAdminDiscountUsage(merchantId, discountId)
@@ -297,7 +313,7 @@ function ViewDiscountSheet({
           </div>
         ) : discount ? (
           <div className="space-y-6">
-            <DiscountCard discount={discount as Discount} />
+            <DiscountCard discount={discount as Discount} isSingleLocation={isSingleLocation} />
             
             <Card>
               <CardHeader className="pb-3">

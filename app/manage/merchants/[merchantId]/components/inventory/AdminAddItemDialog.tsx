@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Package, Loader2, Globe, MapPin } from "lucide-react";
+import { isSingleLocationList } from "@/stores/location-store";
 import { useAdminCreateInventoryItem } from "../../hooks/use-admin-inventory-management";
 import { cn } from "@/lib/utils";
 import { StockMode } from "@/types/inventory";
@@ -107,6 +108,7 @@ export function AdminAddItemDialog({
 }: AdminAddItemDialogProps) {
   const createItem = useAdminCreateInventoryItem(clerkOrgId);
   const isGlobalView = !selectedLocationId || selectedLocationId === "all";
+  const isSingleLocation = isSingleLocationList(locations);
   const selectedLocation = locations.find((l) => l.id === selectedLocationId);
 
   const form = useForm<FormValues>({
@@ -153,7 +155,7 @@ export function AdminAddItemDialog({
                 Add a new ingredient or supply to your inventory catalog
               </DialogDescription>
             </div>
-            {isGlobalView ? (
+            {isSingleLocation ? null : isGlobalView ? (
               <Badge
                 variant="outline"
                 className="gap-1 text-emerald-600 border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30"

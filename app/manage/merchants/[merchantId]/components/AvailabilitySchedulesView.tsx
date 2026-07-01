@@ -53,6 +53,7 @@ import {
   useAdminToggleScheduleStatus,
 } from '@/lib/queries/use-admin-schedules'
 import { AdminScheduleFormSheet } from './AdminScheduleFormSheet'
+import { isSingleLocationList } from '@/stores/location-store'
 
 const DAYS_OF_WEEK = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
@@ -62,6 +63,7 @@ interface AvailabilitySchedulesViewProps {
 }
 
 export function AvailabilitySchedulesView({ merchantId, locations }: AvailabilitySchedulesViewProps) {
+  const isSingleLocation = isSingleLocationList(locations)
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedLocationId, setSelectedLocationId] = useState<string>('all')
   
@@ -122,6 +124,7 @@ export function AvailabilitySchedulesView({ merchantId, locations }: Availabilit
         <div>
           {/* Title removed as it acts as a sub-header now */}
           <div className="flex items-center gap-3">
+           {!isSingleLocation && (
            <Select value={selectedLocationId} onValueChange={setSelectedLocationId}>
             <SelectTrigger className="w-[200px]">
               <MapPin className="h-4 w-4 mr-2" />
@@ -136,6 +139,7 @@ export function AvailabilitySchedulesView({ merchantId, locations }: Availabilit
               ))}
             </SelectContent>
           </Select>
+           )}
           <Button onClick={() => { setEditingSchedule(null); setIsFormOpen(true); }}>
             <Plus className="h-4 w-4 mr-2" />
             New Schedule
@@ -154,7 +158,9 @@ export function AvailabilitySchedulesView({ merchantId, locations }: Availabilit
           <CardContent>
             <div className="text-2xl font-bold">{stats.total}</div>
             <p className="text-xs text-muted-foreground mt-1">
-              {stats.global} global schedules
+              {isSingleLocation
+                ? 'Menu availability windows'
+                : `${stats.global} global schedules`}
             </p>
           </CardContent>
         </Card>
@@ -238,7 +244,7 @@ export function AvailabilitySchedulesView({ merchantId, locations }: Availabilit
                         >
                           {schedule.is_active ? 'Active' : 'Inactive'}
                         </Badge>
-                        {!schedule.location_id ? (
+                        {!isSingleLocation && (!schedule.location_id ? (
                           <Badge variant="outline" className="text-[10px] px-1.5 h-4 bg-emerald-50 text-emerald-700 border-emerald-100 uppercase tracking-tight">
                             <Globe className="h-2.5 w-2.5 mr-1" /> Global
                           </Badge>
@@ -246,7 +252,7 @@ export function AvailabilitySchedulesView({ merchantId, locations }: Availabilit
                           <Badge variant="outline" className="text-[10px] px-1.5 h-4 bg-purple-50 text-purple-700 border-purple-100 uppercase tracking-tight">
                             <MapPin className="h-2.5 w-2.5 mr-1" /> {getLocationName(schedule.location_id)}
                           </Badge>
-                        )}
+                        ))}
                       </div>
                       {schedule.description && (
                         <p className="text-sm text-muted-foreground mb-3 truncate max-w-2xl">
