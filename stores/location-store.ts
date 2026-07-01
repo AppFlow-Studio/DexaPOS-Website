@@ -172,6 +172,18 @@ export const useHasLocations = () => {
 // locations only, so an inactive location never inflates the count and an
 // account with one active store collapses to the single-location experience.
 
+/**
+ * Pure single-location predicate over an arbitrary location list. The canonical
+ * definition ("exactly one ACTIVE location") lives here so every surface — the
+ * merchant-web store hooks below AND HQ super-admin surfaces that hold a managed
+ * merchant's locations rather than the logged-in user's — consumes ONE resolver
+ * instead of reinventing a competing count. HQ passes `merchantDetails.locations`;
+ * the store hooks pass their own `state.locations`.
+ */
+export const isSingleLocationList = (
+  locations: Array<{ is_active?: boolean | null }>,
+): boolean => locations.filter((l) => l.is_active).length === 1;
+
 export const useActiveLocations = () => {
   return useLocationStore((state) =>
     state.locations.filter((l) => l.is_active),
@@ -179,9 +191,7 @@ export const useActiveLocations = () => {
 };
 
 export const useIsSingleLocation = () => {
-  return useLocationStore(
-    (state) => state.locations.filter((l) => l.is_active).length === 1,
-  );
+  return useLocationStore((state) => isSingleLocationList(state.locations));
 };
 
 export const useSingleLocationName = () => {

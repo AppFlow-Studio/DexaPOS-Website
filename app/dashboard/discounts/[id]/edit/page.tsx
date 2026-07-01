@@ -17,6 +17,7 @@ import { DiscountFormInput } from "@/types/discount";
 import { useLocations } from "@/app/dashboard/hooks/useLocations";
 import { useClerkOrgId } from "@/app/dashboard/hooks/useLocationScoped";
 import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
+import { useIsSingleLocation } from "@/stores/location-store";
 
 export default function EditDiscountPage() {
     const params = useParams();
@@ -32,6 +33,7 @@ export default function EditDiscountPage() {
     const clerkOrgId = useClerkOrgId() || "";
     const { data: userInfo } = useUserInfo();
     const { data: locationsData = [] } = useLocations(clerkOrgId, userInfo?.id || "");
+    const isSingleLocation = useIsSingleLocation();
 
     const categories = useMemo(
         () => (categoryData?.success ? categoryData.data : []),
@@ -94,6 +96,7 @@ export default function EditDiscountPage() {
                             categories={categories}
                             menuItems={menuItems}
                             locations={locations}
+                            isSingleLocation={isSingleLocation}
                             onCancel={() => router.push(`/dashboard/discounts/${discountId}`)}
                             submitLabel="Save changes"
                         />

@@ -34,6 +34,7 @@ import { SetLocationStock } from '@/app/dashboard/actions/location-stock'
 import { UpdateItemStock } from '@/app/dashboard/actions/inventory'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { isSingleLocationList } from '@/stores/location-store'
 import { Loader2 as Spinner } from 'lucide-react'
 import { AdminAddItemDialog } from './inventory/AdminAddItemDialog'
 import { AdminEditItemDialog } from './inventory/AdminEditItemDialog'
@@ -53,7 +54,8 @@ export function ProductsTab({ merchantInfo }: ProductsTabProps) {
 
     const clerkOrgId = merchantInfo?.clerk_org_id || ''
     const locations = merchantInfo?.locations || []
-    
+    const isSingleLocation = isSingleLocationList(locations)
+
     // Determine location_id for query (null for all/global)
     const queryLocationId = selectedLocationId === 'all' ? null : selectedLocationId
     const isAllLocations = selectedLocationId === 'all'
@@ -149,11 +151,13 @@ export function ProductsTab({ merchantInfo }: ProductsTabProps) {
                         Inventory & Products
                     </h3>
                     <p className="text-sm text-muted-foreground mt-1">
-                        Viewing inventory for {selectedLocationId === 'all' ? 'all locations' : locations.find(l => l.id === selectedLocationId)?.name || 'selected location'}
+                        {isSingleLocation
+                            ? 'Manage this merchant’s inventory catalog and vendors'
+                            : `Viewing inventory for ${selectedLocationId === 'all' ? 'all locations' : locations.find(l => l.id === selectedLocationId)?.name || 'selected location'}`}
                     </p>
                 </div>
                 <div className="flex items-center gap-4">
-                    {locations.length > 0 && (
+                    {!isSingleLocation && locations.length > 0 && (
                         <div className="flex items-center gap-2">
                             <MapPin className="h-4 w-4 text-muted-foreground" />
                             <Select
@@ -190,7 +194,7 @@ export function ProductsTab({ merchantInfo }: ProductsTabProps) {
                     </CardHeader>
                     <CardContent>
                         {isLoadingStats ? <Skeleton className="h-8 w-16" /> : <div className="text-2xl font-bold">{stats?.totalItems || 0}</div>}
-                        <p className="text-xs text-muted-foreground">{isAllLocations ? "Global catalog items" : "Items at this location"}</p>
+                        <p className="text-xs text-muted-foreground">{isSingleLocation ? "Catalog items" : isAllLocations ? "Global catalog items" : "Items at this location"}</p>
                     </CardContent>
                 </Card>
                 <Card>
@@ -409,11 +413,11 @@ export function ProductsTab({ merchantInfo }: ProductsTabProps) {
                                         <div key={vendor.id} className="grid grid-cols-12 gap-4 px-6 py-4 items-center hover:bg-muted/50">
                                             <div className="col-span-4">
                                                 <div className="font-medium">{vendor.name}</div>
-                                                {vendor.location_id ? (
+                                                {!isSingleLocation && (vendor.location_id ? (
                                                     <Badge variant="outline" className="mt-1 text-xs">Local: {locations.find(l => l.id === vendor.location_id)?.name || 'Unknown'}</Badge>
                                                 ) : (
                                                     <Badge variant="outline" className="mt-1 text-xs border-blue-200 bg-blue-50 text-blue-700">Global</Badge>
-                                                )}
+                                                ))}
                                             </div>
                                             <div className="col-span-3 text-sm">
                                                 <div>{vendor.contact_name}</div>

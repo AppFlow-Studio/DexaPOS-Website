@@ -30,7 +30,7 @@ import {
   useUpdateInventoryItem,
   useVendors,
 } from "../hooks/useInventoryManagement";
-import { useLocationStore } from "@/stores/location-store";
+import { useLocationStore, useIsSingleLocation } from "@/stores/location-store";
 import {
   SetLocationStockWithThreshold,
   UpsertLocationInventoryOverride,
@@ -128,6 +128,7 @@ export function EditItemDialog({
   const updateItem = useUpdateInventoryItem();
   const { data: vendors = [] } = useVendors();
   const { selectedLocationId } = useLocationStore();
+  const isSingleLocation = useIsSingleLocation();
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [initialStock, setInitialStock] = useState<number>(0);
@@ -542,7 +543,7 @@ export function EditItemDialog({
                 Update the details for this inventory item
               </DialogDescription>
             </div>
-            {isGlobalItem ? (
+            {isSingleLocation ? null : isGlobalItem ? (
               <Badge
                 variant="outline"
                 className="gap-1 text-emerald-600 border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30"
