@@ -28,6 +28,8 @@ import {
   useAdminCreateSchedule,
   useAdminUpdateSchedule,
 } from '@/lib/queries/use-admin-schedules'
+import { useAdminMerchantDetails } from '@/lib/queries/use-admin-merchant'
+import { isSingleLocationList } from '@/stores/location-store'
 
 const DAYS_OF_WEEK = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
 const DAYS_FULL = [
@@ -87,7 +89,11 @@ export function AdminScheduleFormSheet({
 }: AdminScheduleFormSheetProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
-  
+
+  // Single-location gating uses the MANAGED merchant's active-location count.
+  const { data: merchantDetails } = useAdminMerchantDetails(merchantId)
+  const isSingleLocation = isSingleLocationList(merchantDetails?.locations ?? [])
+
   const createMutation = useAdminCreateSchedule(merchantId)
   const updateMutation = useAdminUpdateSchedule(merchantId, editSchedule?.id)
 
@@ -274,6 +280,7 @@ export function AdminScheduleFormSheet({
                 Control when menus and categories are available to customers
               </DialogDescription>
               
+              {!isSingleLocation && (
               <div
                 className={cn(
                   'mt-3 p-3 rounded-lg border flex items-center gap-2',
@@ -300,6 +307,7 @@ export function AdminScheduleFormSheet({
                   </>
                 )}
               </div>
+              )}
             </DialogHeader>
 
             <Separator />
