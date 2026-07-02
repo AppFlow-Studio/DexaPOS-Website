@@ -44,7 +44,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
-import { useLocationStore, useSelectedLocation } from "@/stores/location-store";
+import { useLocationStore, useSelectedLocation, useIsSingleLocation } from "@/stores/location-store";
 import {
   useInventoryItems,
   useVendors,
@@ -443,6 +443,9 @@ export default function InventoryPage() {
   const { selectedLocationId } = useLocationStore();
   const selectedLocation = useSelectedLocation();
   const isAllLocations = selectedLocationId === "all" || !selectedLocationId;
+  // Single-location accounts have exactly one active store, so the global-vs-
+  // location framing (badges, scope filter, "all locations" copy) is noise.
+  const isSingleLocation = useIsSingleLocation();
 
   // Data hooks
   const { data: items = [], isLoading: isLoadingItems } = useInventoryItems();
@@ -662,7 +665,9 @@ export default function InventoryPage() {
             Inventory Management
           </h1>
           <p className="text-muted-foreground mt-1">
-            {isAllLocations
+            {isSingleLocation
+              ? "Managing your inventory catalog and vendors"
+              : isAllLocations
               ? "Managing global inventory catalog and vendors"
               : `Managing inventory for ${
                   selectedLocation?.name || "selected location"
@@ -716,7 +721,9 @@ export default function InventoryPage() {
           title="Total Items"
           value={stats?.totalItems || 0}
           subtitle={
-            isAllLocations
+            isSingleLocation
+              ? "Catalog items"
+              : isAllLocations
               ? "Global catalog items"
               : "Available at this location"
           }
@@ -727,7 +734,9 @@ export default function InventoryPage() {
           title="Low Stock"
           value={stats?.lowStock || 0}
           subtitle={
-            isAllLocations
+            isSingleLocation
+              ? "Low stock alerts"
+              : isAllLocations
               ? `Location${
                   (stats?.lowStock || 0) !== 1 ? "s" : ""
                 } with low stock`
@@ -741,7 +750,9 @@ export default function InventoryPage() {
           title="Out of Stock"
           value={stats?.outOfStock || 0}
           subtitle={
-            isAllLocations
+            isSingleLocation
+              ? "Out of stock alerts"
+              : isAllLocations
               ? `Location${
                   (stats?.outOfStock || 0) !== 1 ? "s" : ""
                 } with out of stock`
@@ -758,7 +769,9 @@ export default function InventoryPage() {
             maximumFractionDigits: 2,
           })}`}
           subtitle={
-            isAllLocations
+            isSingleLocation
+              ? "Total inventory value"
+              : isAllLocations
               ? "Total across all locations"
               : "Current location value"
           }
@@ -936,28 +949,32 @@ export default function InventoryPage() {
                         </div>
                       </div>
 
-                      <Separator />
-
-                      {/* Scope */}
-                      <div className="space-y-2">
-                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Scope</p>
-                        <div className="flex gap-2">
-                          {(["all", "global", "local"] as const).map((s) => (
-                            <button
-                              key={s}
-                              onClick={() => setPendingScope(s)}
-                              className={cn(
-                                "flex-1 py-1.5 text-xs rounded-md border transition-colors capitalize",
-                                pendingScope === s
-                                  ? "bg-primary text-primary-foreground border-primary"
-                                  : "border-border hover:bg-muted"
-                              )}
-                            >
-                              {s}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
+                      {/* Scope — hidden for single-location accounts; every
+                          item is global, so global-vs-local filtering is noise. */}
+                      {!isSingleLocation && (
+                        <>
+                          <Separator />
+                          <div className="space-y-2">
+                            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Scope</p>
+                            <div className="flex gap-2">
+                              {(["all", "global", "local"] as const).map((s) => (
+                                <button
+                                  key={s}
+                                  onClick={() => setPendingScope(s)}
+                                  className={cn(
+                                    "flex-1 py-1.5 text-xs rounded-md border transition-colors capitalize",
+                                    pendingScope === s
+                                      ? "bg-primary text-primary-foreground border-primary"
+                                      : "border-border hover:bg-muted"
+                                  )}
+                                >
+                                  {s}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        </>
+                      )}
                     </div>
 
                     {/* Apply / Cancel */}
@@ -1042,7 +1059,7 @@ export default function InventoryPage() {
                         { label: "Stock", field: "stock" as const, span: "col-span-2" },
                         { label: "Status", field: null, span: "col-span-2" },
                         { label: "Cost", field: "cost" as const, span: "col-span-2" },
-                        { label: "Scope", field: null, span: "col-span-2" },
+                        { label: isSingleLocation ? "" : "Scope", field: null, span: "col-span-2" },
                       ] as { label: string; field: SortField | null; span: string }[]
                     ).map(({ label, field, span }) =>
                       field ? (
@@ -1138,7 +1155,7 @@ export default function InventoryPage() {
                       </div>
 
                       <div className="col-span-2 flex items-center justify-between">
-                        <ScopeBadge locationId={item.location_id} />
+                        {isSingleLocation ? <span /> : <ScopeBadge locationId={item.location_id} />}
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button
@@ -1232,7 +1249,7 @@ export default function InventoryPage() {
                             <Truck className="h-5 w-5 text-blue-500" />
                           </div>
                           <div className="flex items-center gap-2">
-                            <ScopeBadge locationId={vendor.location_id} />
+                            {!isSingleLocation && <ScopeBadge locationId={vendor.location_id} />}
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
                                 <Button

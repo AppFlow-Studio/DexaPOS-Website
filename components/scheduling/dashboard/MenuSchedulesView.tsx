@@ -39,7 +39,7 @@ import {
   useDeleteScheduleMutation,
   useToggleScheduleActiveMutation,
 } from "@/app/dashboard/hooks/useLocationScopedSchedules";
-import { useLocationStore } from "@/stores/location-store";
+import { useLocationStore, useIsSingleLocation } from "@/stores/location-store";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { SchedulesModel, ScheduleTimeSlotsModel } from "@/types/db-modles";
@@ -53,6 +53,7 @@ type ScheduleWithSlots = SchedulesModel & {
 
 export function MenuSchedulesView() {
   const { selectedLocationId } = useLocationStore();
+  const isSingleLocation = useIsSingleLocation();
 
   const { data: schedules, isLoading } =
     useLocationScopedSchedulesWithTimeSlots();
@@ -159,7 +160,7 @@ export function MenuSchedulesView() {
       </div>
 
       {/* Stats */}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className={cn("grid gap-4", isSingleLocation ? "md:grid-cols-3" : "md:grid-cols-4")}>
         <Card className="transition-all hover:shadow-md">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
@@ -170,8 +171,9 @@ export function MenuSchedulesView() {
           <CardContent>
             <div className="text-2xl font-bold">{stats.total}</div>
             <p className="text-xs text-muted-foreground">
-              {stats.global} global, {stats.total - stats.global}{" "}
-              location-specific
+              {isSingleLocation
+                ? "Menu availability windows"
+                : `${stats.global} global, ${stats.total - stats.global} location-specific`}
             </p>
           </CardContent>
         </Card>
@@ -201,20 +203,22 @@ export function MenuSchedulesView() {
             </p>
           </CardContent>
         </Card>
-        <Card className="transition-all hover:shadow-md">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Global</CardTitle>
-            <Globe className="h-4 w-4 text-primary" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-primary">
-              {stats.global}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Available everywhere
-            </p>
-          </CardContent>
-        </Card>
+        {!isSingleLocation && (
+          <Card className="transition-all hover:shadow-md">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Global</CardTitle>
+              <Globe className="h-4 w-4 text-primary" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-primary">
+                {stats.global}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Available everywhere
+              </p>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       {/* Schedules List */}
@@ -305,7 +309,7 @@ export function MenuSchedulesView() {
                           <h4 className="font-semibold truncate">
                             {schedule.name}
                           </h4>
-                          {schedule.location_id ? (
+                          {!isSingleLocation && (schedule.location_id ? (
                             <Badge
                               variant="outline"
                               className="text-xs bg-purple-50 text-purple-600 border-purple-200"
@@ -321,7 +325,7 @@ export function MenuSchedulesView() {
                               <Globe className="h-2.5 w-2.5 mr-1" />
                               Global
                             </Badge>
-                          )}
+                          ))}
                           <Badge
                             variant={
                               schedule.is_active ? "default" : "secondary"

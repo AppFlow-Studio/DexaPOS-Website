@@ -29,6 +29,8 @@ interface DiscountTableProps {
     discounts: Discount[]
     isLoading?: boolean
     locationNameById?: Record<string, string>
+    /** Hide the global-vs-location Scope column for single-location accounts. */
+    isSingleLocation?: boolean
     onToggleStatus?: (id: string, isActive: boolean) => void
     onBulkStatus?: (ids: string[], isActive: boolean) => void
     onBulkDelete?: (ids: string[], mode?: 'soft' | 'hard') => void
@@ -41,6 +43,7 @@ export function DiscountTable({
     discounts,
     isLoading,
     locationNameById,
+    isSingleLocation = false,
     onToggleStatus,
     onBulkStatus,
     onBulkDelete,
@@ -104,7 +107,7 @@ export function DiscountTable({
         if (isLoading) {
             return Array.from({ length: 4 }).map((_, idx) => (
                 <TableRow key={idx}>
-                    <TableCell colSpan={8}>
+                    <TableCell colSpan={isSingleLocation ? 7 : 8}>
                         <Skeleton className="h-10 w-full" />
                     </TableCell>
                 </TableRow>
@@ -131,7 +134,9 @@ export function DiscountTable({
                 <TableCell className="font-medium">{discount.name}</TableCell>
                 <TableCell className="hidden sm:table-cell capitalize">{discount.discount_type}</TableCell>
                 <TableCell className="hidden sm:table-cell">{formatValue(discount)}</TableCell>
-                <TableCell className="hidden md:table-cell">{renderScope(discount)}</TableCell>
+                {!isSingleLocation && (
+                    <TableCell className="hidden md:table-cell">{renderScope(discount)}</TableCell>
+                )}
                 <TableCell>
                     <div className="flex items-center gap-2">
                         <Switch
@@ -226,7 +231,9 @@ export function DiscountTable({
                             <TableHead>Name</TableHead>
                             <TableHead className="hidden sm:table-cell">Type</TableHead>
                             <TableHead className="hidden sm:table-cell">Value</TableHead>
-                            <TableHead className="hidden md:table-cell">Scope</TableHead>
+                            {!isSingleLocation && (
+                                <TableHead className="hidden md:table-cell">Scope</TableHead>
+                            )}
                             <TableHead>Status</TableHead>
                             <TableHead className="hidden md:table-cell">Date range</TableHead>
                             <TableHead className="text-right">Actions</TableHead>

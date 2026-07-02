@@ -37,6 +37,7 @@ import { cn } from "@/lib/utils";
 import { formatPhoneForDisplay } from "@/lib/phone";
 import { toast } from "sonner";
 import { VendorWithStats } from "../hooks/useInventoryManagement";
+import { useIsSingleLocation } from "@/stores/location-store";
 import {
   VendorItemWithDetails,
   LocationVendorWithDetails,
@@ -68,6 +69,7 @@ export function VendorDetailSheet({
   clerkOrgId,
 }: VendorDetailSheetProps) {
   const queryClient = useQueryClient();
+  const isSingleLocation = useIsSingleLocation();
   const [activeTab, setActiveTab] = useState("catalog");
   const [isAddItemOpen, setIsAddItemOpen] = useState(false);
   const [isLinkLocationOpen, setIsLinkLocationOpen] = useState(false);
@@ -157,22 +159,24 @@ export function VendorDetailSheet({
                 <SheetDescription className="mt-1">
                   {vendor.contact_name || "No contact info"}
                 </SheetDescription>
-                <div className="flex items-center gap-2 mt-2">
-                  {vendor.location_id ? (
-                    <Badge variant="outline" className="gap-1">
-                      <MapPin className="h-3 w-3" />
-                      Local Vendor
-                    </Badge>
-                  ) : (
-                    <Badge
-                      variant="outline"
-                      className="gap-1 text-emerald-600 border-emerald-200 bg-emerald-50"
-                    >
-                      <Building2 className="h-3 w-3" />
-                      Global Vendor
-                    </Badge>
-                  )}
-                </div>
+                {!isSingleLocation && (
+                  <div className="flex items-center gap-2 mt-2">
+                    {vendor.location_id ? (
+                      <Badge variant="outline" className="gap-1">
+                        <MapPin className="h-3 w-3" />
+                        Local Vendor
+                      </Badge>
+                    ) : (
+                      <Badge
+                        variant="outline"
+                        className="gap-1 text-emerald-600 border-emerald-200 bg-emerald-50"
+                      >
+                        <Building2 className="h-3 w-3" />
+                        Global Vendor
+                      </Badge>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </div>

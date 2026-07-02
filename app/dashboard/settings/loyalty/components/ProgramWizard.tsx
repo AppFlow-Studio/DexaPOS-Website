@@ -30,6 +30,7 @@ import { useMenuItems } from '../../../hooks/useMenuItems';
 import { useCategories } from '../../../hooks/useCategories';
 import { useLocations } from '../../../hooks/useLocations';
 import { useUserInfo } from '@/app/manage/hooks/useUserInfo.';
+import { useIsSingleLocation } from '@/stores/location-store';
 import type { LoyaltyProgram, LoyaltyProgramInsert } from '../../../actions/loyalty-programs';
 
 interface ProgramWizardProps {
@@ -142,6 +143,7 @@ export function ProgramWizard({
   const { data: menuItems = [], isLoading: itemsLoading } = useMenuItems(clerkOrgId || '');
   const { data: categories = [], isLoading: categoriesLoading } = useCategories(clerkOrgId || '');
   const { data: locations = [], isLoading: locationsLoading } = useLocations(clerkOrgId || '', userInfo?.id || '');
+  const isSingleLocation = useIsSingleLocation();
 
   const isEditing = !!program;
   const menusLoading = itemsLoading || categoriesLoading;
@@ -298,8 +300,14 @@ export function ProgramWizard({
   const renderStep2 = () => (
     <div className="space-y-4">
       <div className="rounded-lg border border-blue-200 dark:border-blue-900/40 bg-blue-50 dark:bg-blue-900/20 p-3 text-sm text-blue-900 dark:text-blue-300">
-        <p className="font-medium mb-1">📢 Merchant-Wide Program</p>
-        <p>This program will be created for your entire merchant. You can optionally limit it to specific locations in <span className="font-semibold">Advanced Settings → Schedule</span>.</p>
+        <p className="font-medium mb-1">📢 {isSingleLocation ? "Loyalty Program" : "Merchant-Wide Program"}</p>
+        <p>
+          {isSingleLocation
+            ? "This program will be created for your business."
+            : (
+              <>This program will be created for your entire merchant. You can optionally limit it to specific locations in <span className="font-semibold">Advanced Settings → Schedule</span>.</>
+            )}
+        </p>
       </div>
 
       <div className="space-y-2">
@@ -881,6 +889,9 @@ export function ProgramWizard({
           </div>
         </div>
 
+        {/* Location targeting — hidden for single-location accounts; the
+            program silently applies to the one location (location_ids = null). */}
+        {!isSingleLocation && (
         <div className="space-y-3">
           <div>
             <Label>Locations (optional)</Label>
@@ -926,6 +937,7 @@ export function ProgramWizard({
             )}
           </div>
         </div>
+        )}
       </TabsContent>
 
       {/* Display Tab */}

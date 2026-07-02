@@ -46,6 +46,7 @@ import {
 import {
   useIsAllLocations,
   useSelectedLocation,
+  useIsSingleLocation,
 } from "@/stores/location-store";
 
 interface TimeSlotInput {
@@ -84,6 +85,7 @@ export function ScheduleFormSheet({
   // Location context
   const isAllLocations = useIsAllLocations();
   const selectedLocation = useSelectedLocation();
+  const isSingleLocation = useIsSingleLocation();
 
   // Form state
   const [name, setName] = useState("");
@@ -471,7 +473,9 @@ export function ScheduleFormSheet({
               <DialogDescription className="max-w-[60ch] text-sm leading-6">
                 Control when menus and categories are available to customers
               </DialogDescription>
-              {/* Location Context Banner */}
+              {/* Location Context Banner — hidden for single-location accounts
+                  (the global-vs-location distinction is meaningless). */}
+              {!isSingleLocation && (
               <div
                 className={cn(
                   "mt-3 p-3 rounded-lg border flex items-center gap-2",
@@ -507,6 +511,7 @@ export function ScheduleFormSheet({
                   </>
                 )}
               </div>
+              )}
             </DialogHeader>
 
             <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6">
