@@ -16818,6 +16818,7 @@ export type Database = {
           network_ssid: string | null
           network_type: string | null
           os_version: string | null
+          pos_config_overrides: Json
           ram_free_mb: number | null
           screen_density: number | null
           screen_height: number | null
@@ -16867,6 +16868,7 @@ export type Database = {
           network_ssid?: string | null
           network_type?: string | null
           os_version?: string | null
+          pos_config_overrides?: Json
           ram_free_mb?: number | null
           screen_density?: number | null
           screen_height?: number | null
@@ -16916,6 +16918,7 @@ export type Database = {
           network_ssid?: string | null
           network_type?: string | null
           os_version?: string | null
+          pos_config_overrides?: Json
           ram_free_mb?: number | null
           screen_density?: number | null
           screen_height?: number | null
@@ -21047,6 +21050,34 @@ export type Database = {
           p_phone: string
           p_vendor_id: string
         }
+        Returns: Json
+      }
+      can_manage_pos_config_for_location: {
+        Args: { p_location_id: string }
+        Returns: boolean
+      }
+      can_view_pos_config_for_location: {
+        Args: { p_location_id: string }
+        Returns: boolean
+      }
+      default_pos_config_v1: {
+        Args: never
+        Returns: Json
+      }
+      get_effective_pos_config: {
+        Args: { p_station_id: string }
+        Returns: Json
+      }
+      pos_config_deep_merge: {
+        Args: { p_base: Json; p_overlay: Json }
+        Returns: Json
+      }
+      set_location_pos_config_v1: {
+        Args: { p_location_id: string; p_pos_config: Json }
+        Returns: Json
+      }
+      set_station_pos_config_overrides_v1: {
+        Args: { p_overrides: Json; p_station_id: string }
         Returns: Json
       }
       apply_order_discount_to_item: {

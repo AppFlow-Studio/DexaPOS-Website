@@ -25,6 +25,42 @@ interface TimesheetFilters {
   employeeIds: string[];
 }
 
+function getMutationErrorMessage(error: unknown, fallback: string): string {
+  if (!error) {
+    return fallback;
+  }
+
+  if (typeof error === "string") {
+    return error;
+  }
+
+  if (error instanceof Error) {
+    return error.message || fallback;
+  }
+
+  if (typeof error === "object") {
+    const record = error as Record<string, unknown>;
+    const message = ["message", "error", "details", "hint", "code"]
+      .map((key) => record[key])
+      .find(
+        (value): value is string =>
+          typeof value === "string" && value.trim().length > 0,
+      );
+
+    if (message) {
+      return message;
+    }
+
+    try {
+      return JSON.stringify(error);
+    } catch {
+      return fallback;
+    }
+  }
+
+  return String(error) || fallback;
+}
+
 // ============================================================================
 // GET TIMESHEETS
 // ============================================================================
@@ -128,7 +164,12 @@ export function useUpdateShiftStatus() {
         queryClient.invalidateQueries({ queryKey: ["timesheets"] });
         queryClient.invalidateQueries({ queryKey: ["shift", result.data.id] });
       } else {
-        toast.error(result.error || "Failed to update shift status");
+        toast.error(
+          getMutationErrorMessage(
+            result.error,
+            "Failed to update shift status",
+          ),
+        );
       }
     },
     onError: () => {
@@ -174,7 +215,9 @@ export function useAdjustShiftTimes() {
         queryClient.invalidateQueries({ queryKey: ["timesheets"] });
         queryClient.invalidateQueries({ queryKey: ["shift", result.data.id] });
       } else {
-        toast.error(result.error || "Failed to adjust shift times");
+        toast.error(
+          getMutationErrorMessage(result.error, "Failed to adjust shift times"),
+        );
       }
     },
     onError: () => {
@@ -205,7 +248,9 @@ export function useDeleteShift() {
         toast.success("Shift deleted");
         queryClient.invalidateQueries({ queryKey: ["timesheets"] });
       } else {
-        toast.error(result.error || "Failed to delete shift");
+        toast.error(
+          getMutationErrorMessage(result.error, "Failed to delete shift"),
+        );
       }
     },
     onError: () => {
@@ -236,7 +281,9 @@ export function useBulkApproveShifts() {
         toast.success(`${result.data} shift(s) approved`);
         queryClient.invalidateQueries({ queryKey: ["timesheets"] });
       } else {
-        toast.error(result.error || "Failed to approve shifts");
+        toast.error(
+          getMutationErrorMessage(result.error, "Failed to approve shifts"),
+        );
       }
     },
     onError: () => {

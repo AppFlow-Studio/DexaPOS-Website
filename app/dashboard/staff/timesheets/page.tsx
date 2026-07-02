@@ -4,10 +4,7 @@ import { useMemo, useState } from "react";
 import { startOfWeek, endOfWeek } from "date-fns";
 import { useTimesheets, useTimesheetResources } from "@/hooks/useTimesheets";
 import { useClerkOrgId } from "@/app/dashboard/hooks/useLocationScoped";
-import {
-  useGatedLocationId,
-  useGatedLocation,
-} from "@/stores/location-store";
+import { useGatedLocationId, useGatedLocation } from "@/stores/location-store";
 import { DateRange } from "react-day-picker";
 import { DataTable } from "@/components/ui/data-table";
 import { createColumns } from "./columns";
@@ -22,6 +19,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StaffShift } from "@/types/staff";
 import { ShiftAdjustmentDialog } from "./ShiftAdjustmentDialog";
+import { ShiftDetailsDialog } from "./ShiftDetailsDialog";
 import {
   Select,
   SelectContent,
@@ -48,6 +46,7 @@ export default function TimesheetsPage() {
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>("all");
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
   const [shiftToAdjust, setShiftToAdjust] = useState<StaffShift | null>(null);
+  const [shiftToView, setShiftToView] = useState<StaffShift | null>(null);
 
   // Fetch resources (staff) - must be called before any conditional returns
   const { data: resources } = useTimesheetResources(clerkOrgId);
@@ -97,10 +96,10 @@ export default function TimesheetsPage() {
 
   const totalHours = filteredShifts.reduce(
     (acc, s) => acc + calculateShiftDuration(s),
-    0
+    0,
   );
   const activeShiftsCount = filteredShifts.filter(
-    (s) => !s.clock_out_time
+    (s) => !s.clock_out_time,
   ).length;
   const estLaborCost = filteredShifts.reduce((acc, s) => {
     const hours = calculateShiftDuration(s);
@@ -111,8 +110,9 @@ export default function TimesheetsPage() {
     () =>
       createColumns({
         onAdjustShift: setShiftToAdjust,
+        onViewShift: setShiftToView,
       }),
-    []
+    [],
   );
 
   return (
@@ -237,6 +237,13 @@ export default function TimesheetsPage() {
         open={Boolean(shiftToAdjust)}
         onOpenChange={(open) => {
           if (!open) setShiftToAdjust(null);
+        }}
+      />
+      <ShiftDetailsDialog
+        shift={shiftToView}
+        open={Boolean(shiftToView)}
+        onOpenChange={(open) => {
+          if (!open) setShiftToView(null);
         }}
       />
     </div>

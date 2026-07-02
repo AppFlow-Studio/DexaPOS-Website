@@ -31,6 +31,8 @@ This implements the web/dashboard and database contract for setting a location's
   - `app/dashboard/settings/pos/page.tsx`
 - Added Settings hub entry:
   - `/dashboard/settings` now links to `/dashboard/settings/pos`.
+- Added Settings sidebar and global-search entries for `/dashboard/settings/pos`.
+- Updated generated Supabase type metadata for `stations.pos_config_overrides` and the new POS config RPCs.
 
 ## Web Controls
 
@@ -101,7 +103,7 @@ Those remain in existing station settings surfaces or the POS repo.
 1. Apply migration on staging.
 2. Open merchant dashboard.
 3. Select one concrete location in the dashboard location picker.
-4. Go to `Settings > POS Settings`.
+4. Go to `Settings > POS Settings` from the left sidebar, the Settings hub card, or global search.
 5. Toggle location defaults and save.
 6. Confirm `locations.pos_config` changes and `_version` increments.
 7. Select a station.

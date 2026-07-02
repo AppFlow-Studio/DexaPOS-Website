@@ -226,10 +226,22 @@ Single index for active ticket streams and their source trackers.
 - Website repo / web dashboard scope only.
 - Adds `stations.pos_config_overrides` and `get_effective_pos_config(p_station_id)`.
 - Location defaults are edited at `/dashboard/settings/pos`.
+- `/dashboard/settings/pos` is linked from the Settings hub, Settings sidebar, and global search.
 - Station overrides are limited to UI scale, app theme, notification sounds, and notification volume for v1.
 - Existing `update_location_pos_config(p_location_id, p_namespace, p_config)` RPC is preserved.
 - POS tablet consumption remains a separate POS repo pass.
 - KDS config and hardware assignment are out of scope for this v1 web pass.
+
+## Stream Q: In-Progress Ticket QA Closure Matrix
+
+1. QA matrix:
+- `docs/QA-2026-07-02-IN-PROGRESS-TICKETS-CLOSURE-MATRIX.md`
+
+2. Scope notes:
+- Built from the July 2 board screenshots.
+- Covers the 13 visible in-progress tickets only.
+- Separates website/dashboard work, POS work, Supabase/data repair, and tickets not ready to claim done.
+- Use this before moving those tickets from In Progress to Done.
 
 ## Notes
 

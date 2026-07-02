@@ -11,8 +11,7 @@ import { LogAuditEvent } from "./audit-logs";
 // ============================================================================
 
 type MutationResult<T> =
-  | { success: true; data: T }
-  | { success: false; error: string };
+  { success: true; data: T } | { success: false; error: string };
 
 interface TimesheetFilters {
   dateFrom: string; // ISO date string
@@ -63,8 +62,38 @@ async function getMerchantIdFromClerkOrg(clerkOrgId: string): Promise<string> {
   return merchant.id;
 }
 
+function getErrorText(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (typeof error === "string") {
+    return error;
+  }
+
+  if (error && typeof error === "object") {
+    const record = error as Record<string, unknown>;
+    return ["code", "message", "details", "hint"]
+      .map((key) => record[key])
+      .filter(
+        (value): value is string =>
+          typeof value === "string" && value.trim().length > 0,
+      )
+      .join(" ");
+  }
+
+  return String(error ?? "");
+}
+
 function mapShiftAdjustmentError(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error);
+  const message = getErrorText(error);
+
+  if (
+    message.includes("PGRST202") ||
+    message.includes("admin_adjust_staff_shift")
+  ) {
+    return "Timesheet adjustment database function is missing. Apply the latest timesheet migration, then retry.";
+  }
 
   const messages: Record<string, string> = {
     SHIFT_REQUIRED: "Shift is required.",
@@ -175,7 +204,9 @@ export async function GetTimesheetResources(
     const [staffRes, locRes] = await Promise.all([
       supabase
         .from("staff_profiles")
-        .select("id, first_name, last_name, avatar_url, merchants!inner(clerk_org_id)")
+        .select(
+          "id, first_name, last_name, avatar_url, merchants!inner(clerk_org_id)",
+        )
         .eq("merchants.clerk_org_id", clerkOrgId)
         .order("first_name", { ascending: true }),
       supabase
@@ -191,8 +222,12 @@ export async function GetTimesheetResources(
     return {
       success: true,
       data: {
-        staff: (staffRes.data || []).map(({ merchants: _, ...s }) => s) as TimesheetResources["staff"],
-        locations: (locRes.data || []).map(({ merchants: _, ...l }) => l) as TimesheetResources["locations"],
+        staff: (staffRes.data || []).map(
+          ({ merchants: _, ...s }) => s,
+        ) as TimesheetResources["staff"],
+        locations: (locRes.data || []).map(
+          ({ merchants: _, ...l }) => l,
+        ) as TimesheetResources["locations"],
       },
     };
   } catch (error) {

@@ -47,6 +47,8 @@ Implemented:
 - Added dashboard page:
   - `app/dashboard/settings/pos/page.tsx`
 - Linked Settings hub to `/dashboard/settings/pos`.
+- Linked Settings sidebar and global search to `/dashboard/settings/pos`.
+- Synced generated DB type metadata for `stations.pos_config_overrides` and the new POS config RPCs.
 
 Important scope boundary:
 
@@ -93,7 +95,7 @@ Needs before close:
 - Confirm Grubhub/DoorDash/Uber Eats badges render on live/staging data.
 - Confirm first-party website/app orders use fallback/no broken image.
 
-## 3. Timesheets " manual hour adjustment + configurable auto clock-out
+## 3. Timesheets - manual hour adjustment + configurable auto clock-out
 
 Plan doc:
 
