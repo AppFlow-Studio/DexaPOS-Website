@@ -8,6 +8,7 @@ import { useAdminDeviceInventory, useAdminDeviceSummary } from '@/app/manage/hoo
 import { useDeviceCatalog } from '@/app/manage/hooks/useDeviceCatalog'
 import { DeviceRegistryMetricCard } from '@/app/manage/devices/components/DeviceRegistryMetricCard'
 import { DeviceRegistryPageHeader } from '@/app/manage/devices/components/DeviceRegistryPageHeader'
+import { ManageInLandiConnectButton } from '@/app/manage/devices/components/ManageInLandiConnectButton'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -363,12 +364,19 @@ export default function ManageDevicesPage() {
                         </div>
                       </TableCell>
                       <TableCell className="pr-6 text-right align-top">
-                        <Button asChild variant="ghost" size="sm">
-                          <Link href={`/manage/devices/${device.id}`}>
-                            View
-                            <ArrowRight className="h-4 w-4" />
-                          </Link>
-                        </Button>
+                        <div className="flex items-center justify-end gap-1">
+                          <ManageInLandiConnectButton
+                            serialNumber={device.serial_number}
+                            variant="ghost"
+                            iconOnly
+                          />
+                          <Button asChild variant="ghost" size="sm">
+                            <Link href={`/manage/devices/${device.id}`}>
+                              View
+                              <ArrowRight className="h-4 w-4" />
+                            </Link>
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   )

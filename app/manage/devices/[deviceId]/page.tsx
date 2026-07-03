@@ -8,6 +8,7 @@ import { useAdminDeviceActivity, useAdminDeviceDetail } from '@/app/manage/hooks
 import { DeviceRegistryCommandPaletteTrigger } from '@/app/manage/devices/components/DeviceRegistryCommandPalette'
 import { DeviceRegistrySectionNav } from '@/app/manage/devices/components/DeviceRegistrySectionNav'
 import { DeviceStatusTransitionDialog } from '@/app/manage/devices/components/DeviceStatusTransitionDialog'
+import { ManageInLandiConnectButton } from '@/app/manage/devices/components/ManageInLandiConnectButton'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -130,7 +131,8 @@ export default function DeviceDetailPage() {
             <div>Merchant: <span className="font-medium text-foreground">{device.merchant_name ?? 'DEXA HQ'}</span></div>
             <div>Location: <span className="font-medium text-foreground">{device.location_name ?? 'N/A'}</span></div>
             <div>Updated: <span className="font-medium text-foreground">{formatDateTime(device.updated_at)}</span></div>
-            <div className="pt-2">
+            <div className="flex flex-col gap-2 pt-2">
+              <ManageInLandiConnectButton serialNumber={device.serial_number} />
               <DeviceStatusTransitionDialog device={device} />
             </div>
           </div>
