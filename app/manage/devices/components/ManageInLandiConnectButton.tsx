@@ -35,15 +35,25 @@ export function ManageInLandiConnectButton({
   const label = `Manage ${serial} in Landi Connect`
 
   const handleClick = async () => {
+    const showManualHint = () =>
+      toast.info('Opening Landi Connect', {
+        description: `Search for serial ${serial} to find this device.`,
+      })
+
+    // Optional chaining alone would let a missing clipboard API resolve to
+    // `undefined` and wrongly show "Serial copied", so guard explicitly.
+    if (!navigator.clipboard?.writeText) {
+      showManualHint()
+      return
+    }
+
     try {
-      await navigator.clipboard?.writeText(serial)
+      await navigator.clipboard.writeText(serial)
       toast.success('Serial copied', {
         description: `Paste ${serial} into Landi Connect's search to find this device.`,
       })
     } catch {
-      toast.info('Opening Landi Connect', {
-        description: `Search for serial ${serial} to find this device.`,
-      })
+      showManualHint()
     }
   }
 
