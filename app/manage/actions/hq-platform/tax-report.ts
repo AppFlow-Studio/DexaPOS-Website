@@ -2,6 +2,7 @@
 
 import { assertHQPermission } from "@/lib/admin/auth";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
+import { applyReportablePredicate } from "@/lib/reporting/recognized-order";
 import type {
   TaxSummary,
   TaxBreakdownRow,
@@ -103,11 +104,12 @@ export async function GetHQTaxSummary(
 
   const supabase = createServiceRoleClient();
 
-  let ordersQuery = supabase
-    .from("orders")
-    .select("id, tax_amount, cash_tax_amount, payment_pricing_mode, subtotal")
-    .eq("merchant_id", merchantId)
-    .eq("status", "completed")
+  let ordersQuery = applyReportablePredicate(
+    supabase
+      .from("orders")
+      .select("id, tax_amount, cash_tax_amount, payment_pricing_mode, subtotal")
+      .eq("merchant_id", merchantId)
+  )
     .is("voided_at", null)
     .gte("created_at", dateFrom.toISOString())
     .lte("created_at", dateTo.toISOString());
@@ -194,14 +196,15 @@ export async function GetHQTaxBreakdown(
 
   const supabase = createServiceRoleClient();
 
-  let query = supabase
-    .from("orders")
-    .select(
-      "id, order_number, created_at, order_type, subtotal, tax_amount, cash_tax_amount, payment_pricing_mode, location_id",
-      { count: "exact" }
-    )
-    .eq("merchant_id", merchantId)
-    .eq("status", "completed")
+  let query = applyReportablePredicate(
+    supabase
+      .from("orders")
+      .select(
+        "id, order_number, created_at, order_type, subtotal, tax_amount, cash_tax_amount, payment_pricing_mode, location_id",
+        { count: "exact" }
+      )
+      .eq("merchant_id", merchantId)
+  )
     .is("voided_at", null)
     .gte("created_at", dateFrom.toISOString())
     .lte("created_at", dateTo.toISOString())
@@ -286,11 +289,12 @@ export async function GetHQTaxByCategory(
 
   const supabase = createServiceRoleClient();
 
-  let ordersQuery = supabase
-    .from("orders")
-    .select("id")
-    .eq("merchant_id", merchantId)
-    .eq("status", "completed")
+  let ordersQuery = applyReportablePredicate(
+    supabase
+      .from("orders")
+      .select("id")
+      .eq("merchant_id", merchantId)
+  )
     .is("voided_at", null)
     .gte("created_at", dateFrom.toISOString())
     .lte("created_at", dateTo.toISOString());
@@ -372,13 +376,14 @@ export async function GetHQTaxByLocation(
       .from("locations")
       .select("id, name, sales_tax_rate")
       .eq("merchant_id", merchantId),
-    supabase
-      .from("orders")
-      .select(
-        "id, location_id, tax_amount, cash_tax_amount, payment_pricing_mode, subtotal"
-      )
-      .eq("merchant_id", merchantId)
-      .eq("status", "completed")
+    applyReportablePredicate(
+      supabase
+        .from("orders")
+        .select(
+          "id, location_id, tax_amount, cash_tax_amount, payment_pricing_mode, subtotal"
+        )
+        .eq("merchant_id", merchantId)
+    )
       .is("voided_at", null)
       .gte("created_at", dateFrom.toISOString())
       .lte("created_at", dateTo.toISOString()),

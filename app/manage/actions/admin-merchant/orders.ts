@@ -2,6 +2,7 @@
 
 import { assertHQPermission } from '@/lib/admin/auth'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { isOrderReportable } from '@/lib/reporting/recognized-order'
 
 // ============================================================================
 // TYPES
@@ -38,6 +39,10 @@ export interface AdminOrder {
   staff_name?: string
   customer_name: string | null
   customer_phone: string | null
+  delivery_platform: string | null
+  order_source: string | null
+  platform_order_number: string | null
+  metadata: Record<string, unknown> | null
   items_count: number
 }
 
@@ -110,6 +115,10 @@ export async function getAdminOrders(
       created_by_staff_id,
       customer_name,
       customer_phone,
+      delivery_platform,
+      order_source,
+      platform_order_number,
+      metadata,
       locations!inner(name),
       order_items(id),
       order_payments(payment_method),
@@ -203,6 +212,10 @@ export async function getAdminOrders(
       staff_name: staffName || undefined,
       customer_name: order.customer_name,
       customer_phone: order.customer_phone,
+      delivery_platform: order.delivery_platform ?? null,
+      order_source: order.order_source ?? null,
+      platform_order_number: order.platform_order_number ?? null,
+      metadata: (order.metadata as Record<string, unknown> | null) ?? null,
       items_count: order.order_items?.length || 0,
     }
   })
@@ -297,6 +310,10 @@ export async function getAdminOrderDetails(
       : undefined,
     customer_name: order.customer_name,
     customer_phone: order.customer_phone,
+    delivery_platform: order.delivery_platform ?? null,
+    order_source: order.order_source ?? null,
+    platform_order_number: order.platform_order_number ?? null,
+    metadata: (order.metadata as Record<string, unknown> | null) ?? null,
     items_count: order.order_items?.length || 0,
     order_items: order.order_items || [],
     payments: mappedPayments,
@@ -329,9 +346,12 @@ export async function getAdminOrderStats(
 
   const supabase = createServerSupabaseClient()
 
+  // This is a status-breakdown view, so it intentionally fetches ALL orders
+  // (pending/cancelled/void counts are part of the output). Only revenue is
+  // gated to the recognized set, applied in-memory below.
   let query = supabase
     .from('orders')
-    .select('status, total_amount')
+    .select('status, payment_status, total_amount')
     .eq('merchant_id', merchantId)
 
   if (locationId && locationId !== 'all') {
@@ -370,13 +390,15 @@ export async function getAdminOrderStats(
     (o) => o.status === 'cancelled' || o.status === 'void'
   ).length
 
-  const completedOrdersList = ordersList.filter((o) => o.status === 'completed')
-  const totalRevenue = completedOrdersList.reduce(
+  // Revenue from recognized orders (payment collected), not the manual
+  // `completed` tap.
+  const recognizedOrders = ordersList.filter((o) => isOrderReportable(o))
+  const totalRevenue = recognizedOrders.reduce(
     (sum, o) => sum + Number(o.total_amount || 0),
     0
   )
   const avgOrderValue =
-    completedOrdersList.length > 0 ? totalRevenue / completedOrdersList.length : 0
+    recognizedOrders.length > 0 ? totalRevenue / recognizedOrders.length : 0
 
   return {
     totalOrders,
@@ -421,6 +443,10 @@ export async function getAdminRecentOrders(
       created_by_staff_id,
       customer_name,
       customer_phone,
+      delivery_platform,
+      order_source,
+      platform_order_number,
+      metadata,
       locations(name),
       order_items(id),
       order_payments(payment_method)
@@ -461,6 +487,10 @@ export async function getAdminRecentOrders(
       staff_id: order.created_by_staff_id,
       customer_name: order.customer_name,
       customer_phone: order.customer_phone,
+      delivery_platform: order.delivery_platform ?? null,
+      order_source: order.order_source ?? null,
+      platform_order_number: order.platform_order_number ?? null,
+      metadata: (order.metadata as Record<string, unknown> | null) ?? null,
       items_count: order.order_items?.length || 0,
     }
   })

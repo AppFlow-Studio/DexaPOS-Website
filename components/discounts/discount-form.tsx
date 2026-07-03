@@ -64,6 +64,12 @@ interface DiscountFormProps {
   categories?: CategoryOption[];
   menuItems?: MenuItemOption[];
   locations?: LocationOption[];
+  /**
+   * When the account has exactly one active location, the global-vs-location
+   * scope picker is meaningless — the discount silently defaults to global
+   * (location_id = null, unchanged stored data). Hide the field entirely.
+   */
+  isSingleLocation?: boolean;
   onCancel?: () => void;
 }
 
@@ -80,6 +86,7 @@ export function DiscountForm({
   categories = [],
   menuItems = [],
   locations = [],
+  isSingleLocation = false,
   onCancel,
 }: DiscountFormProps) {
   const [scheduleOpen, setScheduleOpen] = useState(false);
@@ -283,7 +290,9 @@ export function DiscountForm({
                   )}
                 />
 
-                {/* Location scope */}
+                {/* Location scope — hidden for single-location accounts
+                    (silently defaults to global; location_id stays null). */}
+                {!isSingleLocation && (
                 <FormField
                   control={form.control}
                   name="location_id"
@@ -322,6 +331,7 @@ export function DiscountForm({
                     </FormItem>
                   )}
                 />
+                )}
               </CardContent>
             </Card>
 

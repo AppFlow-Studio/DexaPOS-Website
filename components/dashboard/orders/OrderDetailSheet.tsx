@@ -23,6 +23,7 @@ import {
 } from "@/types/order-management";
 import { OrderStatusBadge } from "./OrderStatusBadge";
 import { PaymentStatusBadge } from "./PaymentStatusBadge";
+import { DeliveryPlatformBadge } from "./DeliveryPlatformBadge";
 import { cn } from "@/lib/utils";
 import {
   Calendar,
@@ -66,6 +67,7 @@ import {
 import { ArrowRight, ChevronDown, ChevronUp } from "lucide-react";
 import { OrderFullTimeline } from "./OrderFullTimeline";
 import { useLocationStore, useSelectedLocation } from "@/stores/location-store";
+import { orderTypeLabel } from "@/lib/constants/order-type";
 import type { OrderFullHistory } from "@/types/order-full-history";
 import {
   EnhancedPaymentsList,
@@ -141,15 +143,7 @@ function formatDateShort(dateString: string) {
 }
 
 function formatOrderType(type: string) {
-  const labels: Record<string, string> = {
-    dine_in: "Dine-In",
-    qr_dine_in: "QR Dine-In",
-    takeout: "Takeout",
-    delivery: "Delivery",
-    online: "Online",
-    catering: "Catering",
-  };
-  return labels[type] || type.replace("_", " ");
+  return orderTypeLabel(type);
 }
 
 function getChannelLabel(orderType: string) {
@@ -1135,6 +1129,7 @@ export function OrderDetailSheet({
                         {getOrderTypeIcon(displayOrder.order_type)}
                         {formatOrderType(displayOrder.order_type)}
                       </span>
+                      <DeliveryPlatformBadge order={displayOrder} />
                       {locationOrChannel && (
                         <span className="flex items-center gap-1.5">
                           <MapPin className="h-3.5 w-3.5" />
@@ -1351,10 +1346,6 @@ export function OrderDetailSheet({
                     displayOrder.payment_pricing_mode === "mixed" ||
                     b.charged === "mixed";
                   const laneLabel = b.display === "cash" ? "Cash" : "Card";
-                  const altTotal =
-                    b.display === "cash" ? b.card.total : b.cash.total;
-                  const altLabel =
-                    b.display === "cash" ? "If paid by card" : "If paid by cash";
                   const cashSavings = b.card.total - b.cash.total;
 
                   const paidPayments = payments.filter(
@@ -1433,13 +1424,6 @@ export function OrderDetailSheet({
                         />
                       </div>
 
-                      {b.dual && !isMixedPayment && (
-                        <PriceRow
-                          label={altLabel}
-                          value={formatCurrency(altTotal)}
-                          valueClassName="text-muted-foreground"
-                        />
-                      )}
                       {b.dual && !isMixedPayment && cashSavings > 0 && (
                         <PriceRow
                           label="Cash savings"

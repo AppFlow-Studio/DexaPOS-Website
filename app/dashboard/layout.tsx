@@ -67,6 +67,7 @@ import {
   Monitor,
   MonitorPlay,
   Flame,
+  Settings2,
   Mail,
   Gift,
   DollarSign,
@@ -663,6 +664,19 @@ function MerchantSidebar() {
                     <SidebarMenuSubButton
                       asChild
                       isActive={pathname.startsWith(
+                        "/dashboard/settings/pos"
+                      )}
+                    >
+                      <Link href="/dashboard/settings/pos">
+                        <Settings2 className="h-3 w-3" />
+                        <span>POS Settings</span>
+                      </Link>
+                    </SidebarMenuSubButton>
+                  </SidebarMenuSubItem>
+                  <SidebarMenuSubItem>
+                    <SidebarMenuSubButton
+                      asChild
+                      isActive={pathname.startsWith(
                         "/dashboard/settings/prep-stations"
                       )}
                     >
@@ -1126,26 +1140,43 @@ export default function MerchantDashboardLayout({
   const isOnboardingRoute = pathname?.startsWith("/dashboard/onboarding") ?? false;
   const clerkOrgId = userInfo?.members?.[0]?.organizations?.id;
   const userRole = userInfo?.members?.[0]?.role;
-  const { data: locations, isLoading: locationsLoading } = useLocations(
-    clerkOrgId || "",
-    userInfo?.id || ""
-  );
+  const {
+    data: locations,
+    isLoading: locationsLoading,
+    isFetching: locationsFetching,
+  } = useLocations(clerkOrgId || "", userInfo?.id || "");
 
-  // First-location gate: any merchant with zero locations is forced into the
-  // onboarding wizard before they can access the rest of the dashboard.
+  // First-location gate (bidirectional):
+  //  • A merchant with zero locations is forced into the onboarding wizard.
+  //  • A merchant that already has a location is kept OUT of the wizard — so
+  //    landing on (or manually re-visiting) the onboarding route after
+  //    completing it redirects to the dashboard instead of resetting to Step 1.
   useEffect(() => {
     if (
       !clerkOrgId ||
       locationsLoading ||
-      !Array.isArray(locations) ||
-      isOnboardingRoute
+      // Never act on an in-flight refetch: right after a merchant completes the
+      // onboarding wizard the locations query is being refetched, and the cache
+      // still holds the stale empty list. Acting on that stale read bounces the
+      // user back to Step 1 (the onboarding loop). Wait for fresh data.
+      locationsFetching ||
+      !Array.isArray(locations)
     ) {
       return;
     }
-    if (locations.length === 0) {
+    if (!isOnboardingRoute && locations.length === 0) {
       router.replace("/dashboard/onboarding/first-location");
+    } else if (isOnboardingRoute && locations.length > 0) {
+      router.replace("/dashboard");
     }
-  }, [clerkOrgId, locations, locationsLoading, isOnboardingRoute, router]);
+  }, [
+    clerkOrgId,
+    locations,
+    locationsLoading,
+    locationsFetching,
+    isOnboardingRoute,
+    router,
+  ]);
 
   // Zustand store
   const {

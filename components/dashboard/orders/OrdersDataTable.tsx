@@ -55,6 +55,7 @@ import {
 import { Order, OrderResponse, OrderType } from '@/types/order-management'
 import { OrderStatusBadge } from './OrderStatusBadge'
 import { PaymentStatusBadge } from './PaymentStatusBadge'
+import { DeliveryPlatformBadge } from './DeliveryPlatformBadge'
 import { useIsAllLocations, useLocationStore } from '@/stores/location-store'
 import { useRouter } from 'next/navigation'
 
@@ -226,12 +227,16 @@ export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showL
             accessorKey: 'order_type',
             header: 'Order Type',
             cell: ({ row }) => {
-                const typeConfig = getOrderTypeConfig(row.original.order_type)
+                const order = row.original
+                const typeConfig = getOrderTypeConfig(order.order_type)
                 return (
-                    <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-                        {typeConfig.icon}
-                        <span className="font-medium text-foreground/80">{typeConfig.label}</span>
-                    </span>
+                    <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                        <span className="inline-flex items-center gap-1.5">
+                            {typeConfig.icon}
+                            <span className="font-medium text-foreground/80">{typeConfig.label}</span>
+                        </span>
+                        <DeliveryPlatformBadge order={order} />
+                    </div>
                 )
             },
         },
@@ -318,7 +323,7 @@ export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showL
         {
             accessorKey: 'payment_status',
             id: 'payment_method',
-            header: 'Payment method',
+            header: hideOrderStatus ? 'Payment status' : 'Payment method',
             cell: ({ row }) => {
                 const order = row.original
                 const payments = order.order_payments || []
@@ -346,6 +351,20 @@ export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showL
                 }).filter(Boolean)
 
                 const summary = methodLabels.length > 0 ? methodLabels.join(', ') : null
+                // In Financials/Transactions (hideOrderStatus), payment status is the
+                // only status surfaced — so always show the badge, with the method text
+                // beneath it when available. Elsewhere, fall back to the badge only when
+                // no payment method is present.
+                if (hideOrderStatus) {
+                    return (
+                        <div className="flex flex-col gap-0.5">
+                            <PaymentStatusBadge status={order.payment_status} />
+                            {summary && (
+                                <span className="text-sm text-muted-foreground">{summary}</span>
+                            )}
+                        </div>
+                    )
+                }
                 return (
                     <div className="flex flex-col gap-0.5">
                         {summary ? (

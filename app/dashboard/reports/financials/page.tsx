@@ -106,8 +106,8 @@ export default function FinancialsPage() {
   const totalAmount = summary.net_sales + summary.tax_total + summary.tip_total;
 
   return (
-    // Fixed height calculated to fit layout (100vh - 64px header - 48px padding - 4px buffer)
-    <div className="flex flex-col xl:flex-row h-full w-full max-w-[1920px] mx-auto gap-6 overflow-hidden bg-[#F9FAFB] font-sans">
+    // Desktop (xl): height-constrained so inner panels scroll. Mobile/tablet: natural height, page scrolls.
+    <div className="flex flex-col xl:flex-row xl:h-[calc(100vh-116px)] w-full max-w-[1920px] mx-auto gap-6 overflow-x-hidden xl:overflow-hidden bg-[#F9FAFB] font-sans pb-4 xl:pb-0">
       {/* LEFT COLUMN: Controls & Summaries (Scrollable) */}
       <div className="xl:w-[440px] shrink-0 flex flex-col gap-6 xl:h-full">
         {/* Fixed Header Section in Left Col */}

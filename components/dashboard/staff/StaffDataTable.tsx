@@ -485,16 +485,17 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
           staff.location_assignments[0];
 
         const handleToggle = async () => {
-          if (!primaryLocation) return;
+          if (!primaryLocation || !staff.staff_profile_id) return;
+          const staffProfileId = staff.staff_profile_id;
 
           if (staff.overall_is_active) {
             deactivateStaff.mutate({
-              staffProfileId: staff.staff_profile_id,
+              staffProfileId,
               locationId: primaryLocation.location_id,
             });
           } else {
             reactivateStaff.mutate({
-              staffProfileId: staff.staff_profile_id,
+              staffProfileId,
               locationId: primaryLocation.location_id,
             });
           }
@@ -571,15 +572,20 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
             toast.error("No primary location found");
             return;
           }
+          if (!staff.staff_profile_id) {
+            toast.error("No staff profile found");
+            return;
+          }
+          const staffProfileId = staff.staff_profile_id;
 
           if (staff.overall_is_active) {
             deactivateStaff.mutate({
-              staffProfileId: staff.staff_profile_id,
+              staffProfileId,
               locationId: primaryLocation.location_id,
             });
           } else {
             reactivateStaff.mutate({
-              staffProfileId: staff.staff_profile_id,
+              staffProfileId,
               locationId: primaryLocation.location_id,
             });
           }
