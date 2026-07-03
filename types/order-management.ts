@@ -54,6 +54,15 @@ export interface Order {
   location_id: string;
   order_type: OrderType;
   status: OrderStatus;
+  // Order channel / origin. order_source is the canonical taxonomy
+  // (pos | orderout | online_store | phone); delivery_platform is the specific
+  // marketplace for orderout orders (e.g. "Grubhub"); platform_order_number is the
+  // provider's order id. See lib/orderout/platform.ts for display vocabulary.
+  order_source?: string | null;
+  delivery_platform?: string | null;
+  platform_order_number?: string | null;
+  metadata?: Record<string, any> | null;
+  delivery_address?: Record<string, any> | null;
   customer_name?: string;
   customer_phone?: string;
   table_number?: string;
@@ -93,6 +102,8 @@ export interface OrderFilters {
   status?: OrderStatus[];
   orderType?: OrderType[];
   paymentMethod?: PaymentMethod[];
+  orderSource?: string[];
+  deliveryPlatform?: string[];
   staffId?: string;
   amountRange?: {
     min?: number;
@@ -280,6 +291,13 @@ export interface OrderResponse {
   table_number?: string;
   device_id?: string;
   internal_notes?: string;
+  // Order channel / origin (see Order interface + lib/orderout/platform.ts).
+  order_source?: string | null;
+  delivery_platform?: string | null;
+  platform_order_number?: string | null;
+  metadata?: Record<string, any> | null;
+  delivery_address?: Record<string, any> | null;
+  estimated_delivery_time?: string | null;
   payment_pricing_mode?: "card" | "cash" | "mixed";
   cash_discount_applied?: boolean;
   cash_discount_amount?: number;

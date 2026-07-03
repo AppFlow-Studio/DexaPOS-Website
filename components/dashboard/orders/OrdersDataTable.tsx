@@ -24,6 +24,7 @@ import {
 } from '@/components/ui/table'
 import {
     DropdownMenu,
+    DropdownMenuCheckboxItem,
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuLabel,
@@ -51,12 +52,21 @@ import {
     ChevronsLeft,
     ChevronRight,
     ChevronsRight,
+    Store,
+    Phone,
+    SlidersHorizontal,
 } from 'lucide-react'
 import { Order, OrderResponse, OrderType } from '@/types/order-management'
 import { OrderStatusBadge } from './OrderStatusBadge'
 import { PaymentStatusBadge } from './PaymentStatusBadge'
 import { useIsAllLocations, useLocationStore } from '@/stores/location-store'
 import { useRouter } from 'next/navigation'
+import {
+    orderSourceLabel,
+    platformLabel,
+} from '@/lib/orderout/platform'
+import { PlatformBadge } from './PlatformBadge'
+import { useColumnPreferences } from '@/app/dashboard/hooks/useColumnPreferences'
 
 interface OrdersDataTableProps {
     data: OrderResponse[]
@@ -135,12 +145,52 @@ function getOrderTypeConfig(type: OrderType) {
     return configs[type] || configs.dine_in
 }
 
+// Icon for each order_source channel (mirrors ORDER_SOURCE_META.iconKey in
+// lib/orderout/platform.ts, kept here so the helper stays framework-agnostic).
+function getChannelIcon(source: string | null | undefined) {
+    switch (source) {
+        case 'orderout':
+            return <Truck className="h-3 w-3" />
+        case 'online_store':
+        case 'online': // legacy pre-backfill value
+            return <Globe className="h-3 w-3" />
+        case 'phone':
+            return <Phone className="h-3 w-3" />
+        case 'pos':
+        default:
+            return <Store className="h-3 w-3" />
+    }
+}
+
+// localStorage key for persisted column visibility on the Orders list.
+const ORDERS_COLUMN_VIS_KEY = 'orders-table-columns-v1'
+
+// Human labels for the Columns show/hide menu (TanStack column ids → label).
+const COLUMN_LABELS: Record<string, string> = {
+    order_display: '#ID',
+    created_at: 'Date',
+    order_type: 'Order Type',
+    channel: 'Channel',
+    table: 'Table',
+    status: 'Order Status',
+    item_count: 'Items',
+    total_amount: 'Total',
+    payment_method: 'Payment',
+    created_by: 'Staff',
+}
+
 export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showLocationColumn, locationsMap, pageSize = 50, hideOrderStatus = false }: OrdersDataTableProps) {
     const [sorting, setSorting] = React.useState<SortingState>([
         { id: 'created_at', desc: true },
     ])
     const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
-    const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({})
+    // Column visibility persists per-user in Supabase (user_ui_preferences) so it
+    // follows the user across devices; localStorage backs it as an instant-paint
+    // cache + offline fallback. See useColumnPreferences.
+    const { columnVisibility, setColumnVisibility } = useColumnPreferences(
+        'orders.columns',
+        ORDERS_COLUMN_VIS_KEY,
+    )
     const [globalFilter, setGlobalFilter] = React.useState('')
     const router = useRouter()
     const isAllLocations = useIsAllLocations()
@@ -180,6 +230,7 @@ export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showL
         {
             accessorKey: 'display_number',
             id: 'order_display',
+            enableHiding: false, // #ID is always visible (ticket requirement)
             header: ({ column }) => (
                 <Button
                     variant="ghost"
@@ -231,6 +282,47 @@ export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showL
                     <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
                         {typeConfig.icon}
                         <span className="font-medium text-foreground/80">{typeConfig.label}</span>
+                    </span>
+                )
+            },
+        },
+        {
+            id: 'channel',
+            header: 'Channel',
+            // Order origin: the canonical order_source, plus the delivery marketplace
+            // (logo/name) for OrderOut orders. Falls back to metadata.delivery_company
+            // so pre-backfill rows still render the platform. accessorFn feeds global
+            // search + keeps the value sortable/filterable.
+            accessorFn: (row) => {
+                const r = row as OrderResponse & { metadata?: Record<string, any> | null }
+                const platform =
+                    r.delivery_platform || (r.metadata?.delivery_company as string | undefined) || ''
+                return `${orderSourceLabel(r.order_source)} ${platformLabel(platform)}`.trim()
+            },
+            cell: ({ row }) => {
+                const order = row.original as OrderResponse & {
+                    metadata?: Record<string, any> | null
+                }
+                const source = order.order_source
+                // No channel recorded (older POS rows): show a muted dash.
+                if (!source) {
+                    return <span className="text-sm text-muted-foreground/50">—</span>
+                }
+                const isOrderOut = source === 'orderout'
+                const rawPlatform =
+                    order.delivery_platform ||
+                    (order.metadata?.delivery_company as string | undefined) ||
+                    ''
+                if (isOrderOut && rawPlatform) {
+                    // Marketplace-branded: real logo (or brand dot fallback) + name.
+                    return <PlatformBadge platform={rawPlatform} className="text-xs" />
+                }
+                return (
+                    <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                        {getChannelIcon(source)}
+                        <span className="font-medium text-foreground/80">
+                            {orderSourceLabel(source)}
+                        </span>
                     </span>
                 )
             },
@@ -383,6 +475,7 @@ export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showL
         },
         {
             id: 'actions',
+            enableHiding: false,
             cell: ({ row }) => {
                 const order = row.original
 
@@ -466,7 +559,7 @@ export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showL
 
     return (
         <div className="space-y-4">
-            {/* Search */}
+            {/* Search + column visibility */}
             <div className="flex items-center gap-2">
                 <div className="relative flex-1 max-w-sm">
                     <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
@@ -477,6 +570,33 @@ export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showL
                         className="pl-9 border-border/60"
                     />
                 </div>
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <Button variant="outline" size="sm" className="ml-auto border-border/60">
+                            <SlidersHorizontal className="mr-2 h-4 w-4" />
+                            Columns
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-[180px]">
+                        <DropdownMenuLabel>Toggle columns</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        {table
+                            .getAllColumns()
+                            .filter((column) => column.getCanHide())
+                            .map((column) => (
+                                <DropdownMenuCheckboxItem
+                                    key={column.id}
+                                    checked={column.getIsVisible()}
+                                    onCheckedChange={(value) =>
+                                        column.toggleVisibility(!!value)
+                                    }
+                                    onSelect={(e) => e.preventDefault()}
+                                >
+                                    {COLUMN_LABELS[column.id] ?? column.id}
+                                </DropdownMenuCheckboxItem>
+                            ))}
+                    </DropdownMenuContent>
+                </DropdownMenu>
             </div>
 
             {/* Table */}
