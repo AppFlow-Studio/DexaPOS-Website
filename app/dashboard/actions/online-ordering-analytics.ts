@@ -152,6 +152,10 @@ export async function GetOnlineOrderingAnalytics(
       deliveryPlatform: order.delivery_platform,
       deliveryCompany: link?.delivery_company,
       provider: link?.provider,
+      // order_source='online' with no third-party signal → first_party, so
+      // legacy/direct storefront orders (no online_orders link, null
+      // delivery_platform) don't inflate the Other bucket.
+      orderSource: order.order_source,
     });
 
     const total = Number(order.total_amount || 0);

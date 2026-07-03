@@ -35,10 +35,17 @@ describe("canonicalizePlatform", () => {
   it("buckets first-party providers (website/app) as first_party", () => {
     expect(canonicalizePlatform({ provider: "website" })).toBe(FIRST_PARTY_SLUG);
     expect(canonicalizePlatform({ provider: "app" })).toBe(FIRST_PARTY_SLUG);
-    // First-party wins even if a stray delivery_company is present.
+  });
+
+  it("lets a real third-party signal win over a first-party provider (precedence)", () => {
+    // A backfilled delivery_platform / delivery_company must NOT be silently
+    // misbucketed as First-party just because provider says website/app.
+    expect(
+      canonicalizePlatform({ provider: "website", deliveryPlatform: "doordash" })
+    ).toBe("doordash");
     expect(
       canonicalizePlatform({ provider: "website", deliveryCompany: "grubhub" })
-    ).toBe(FIRST_PARTY_SLUG);
+    ).toBe("grubhub");
   });
 
   it("prefers orders.delivery_platform when populated (origin-ticket backfill)", () => {
@@ -51,13 +58,28 @@ describe("canonicalizePlatform", () => {
     ).toBe("doordash");
   });
 
-  it("falls back to Other for unresolved / naked orderout rows", () => {
+  it("buckets an online order with no third-party signal as first_party", () => {
+    // Legacy/direct storefront order: no online_orders link, null
+    // delivery_platform — order_source='online' is the fallback signal.
+    expect(canonicalizePlatform({ orderSource: "online" })).toBe(FIRST_PARTY_SLUG);
+    expect(
+      canonicalizePlatform({ orderSource: "online", provider: null, deliveryPlatform: null })
+    ).toBe(FIRST_PARTY_SLUG);
+    // But a third-party signal still wins over the order_source fallback.
+    expect(
+      canonicalizePlatform({ orderSource: "online", deliveryCompany: "UBEREATS" })
+    ).toBe("ubereats");
+  });
+
+  it("falls back to Other for unresolved rows without an online source", () => {
     expect(canonicalizePlatform({ provider: "orderout" })).toBe(OTHER_SLUG);
     expect(canonicalizePlatform({ deliveryCompany: "Foodpanda" })).toBe(OTHER_SLUG);
     expect(canonicalizePlatform({})).toBe(OTHER_SLUG);
     expect(canonicalizePlatform({ provider: null, deliveryCompany: "" })).toBe(
       OTHER_SLUG
     );
+    // A non-online order with no signal stays Other (not first_party).
+    expect(canonicalizePlatform({ orderSource: "pos" })).toBe(OTHER_SLUG);
   });
 });
 

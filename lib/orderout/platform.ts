@@ -62,42 +62,63 @@ export interface CanonicalizeInput {
   deliveryCompany?: string | null;
   /** online_orders.provider enum — aggregator vs first-party. */
   provider?: OnlineOrderProvider | string | null;
+  /**
+   * orders.order_source (e.g. 'online' | 'pos'). Used only as the final
+   * first-party signal: an 'online' order carrying NO third-party signal is a
+   * storefront order, even when it has no online_orders link and no
+   * delivery_platform (legacy/direct rows).
+   */
+  orderSource?: string | null;
 }
 
 /**
  * Resolve fragmented platform columns to one canonical slug.
  *
- * Precedence (mirrors the ticket's COALESCE):
- *   1. delivery_platform (once populated by the origin ticket)
- *   2. delivery_company  (decomposes provider='orderout' into the real platform)
- *   3. provider          (final fallback)
+ * Precedence (delivery_platform is authoritative — mirrors the ticket's
+ * COALESCE, and does NOT let provider override it):
+ *   1. delivery_platform  (once populated by the origin ticket)
+ *   2. delivery_company   (decomposes provider='orderout' into the real platform)
+ *   3. provider           (only when it already names a real third-party platform)
+ * If any of the above resolves to a real third-party platform, that wins.
  *
- * `provider IN ('website','app')` → first_party regardless of the above, since
- * those are the merchant's own channels. Unresolved tokens → other.
+ * Otherwise fall back to first-party:
+ *   4. provider IN ('website','app')  → first_party
+ *   5. order_source === 'online' with no third-party signal → first_party
+ *      (covers legacy/direct storefront orders lacking an online_orders link)
+ *
+ * Anything still unresolved → other.
  */
 export function canonicalizePlatform(input: CanonicalizeInput): PlatformSlug {
   const providerRaw = (input.provider ?? "").toString().trim().toLowerCase();
 
-  // First-party short-circuits: the storefront is never a third-party channel.
-  if (FIRST_PARTY_PROVIDERS.has(providerRaw)) {
-    return FIRST_PARTY_SLUG;
-  }
-
-  const candidates = [
+  // 1–3: third-party resolution wins over any first-party provider signal, so a
+  // backfilled delivery_platform is never silently misbucketed as First-party.
+  const thirdPartyCandidates = [
     input.deliveryPlatform,
     input.deliveryCompany,
     // provider is only useful here if it already names a real platform
     // (e.g. provider='doordash'); 'orderout' resolves to nothing and falls
-    // through to Other unless delivery_company decomposed it above.
+    // through unless delivery_company decomposed it above.
     providerRaw === "orderout" ? null : input.provider,
   ];
 
-  for (const raw of candidates) {
+  for (const raw of thirdPartyCandidates) {
     if (raw == null) continue;
     const token = raw.toString().trim().toLowerCase();
     if (!token) continue;
     const slug = THIRD_PARTY_ALIASES[token];
     if (slug) return slug;
+  }
+
+  // 4: explicit first-party provider (the merchant's own storefront/app).
+  if (FIRST_PARTY_PROVIDERS.has(providerRaw)) {
+    return FIRST_PARTY_SLUG;
+  }
+
+  // 5: an online order with no resolvable third-party signal is first-party —
+  // catches legacy/direct storefront orders that predate the online_orders link.
+  if ((input.orderSource ?? "").toString().trim().toLowerCase() === "online") {
+    return FIRST_PARTY_SLUG;
   }
 
   return OTHER_SLUG;
