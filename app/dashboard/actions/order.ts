@@ -11,6 +11,7 @@ import {
   OrderResponse,
   OrderFilters,
 } from "@/types/order-management";
+import { deliveryPlatformMatchValues } from "@/lib/orderout/platform";
 
 export async function GetOrders(
   clerkOrgId: string,
@@ -77,6 +78,30 @@ export async function GetOrders(
     // Order Type
     if (filters.orderType && filters.orderType.length > 0) {
       query = query.in("order_type", filters.orderType);
+    }
+
+    // Channel (order_source). Tolerate the legacy 'online' value alongside the
+    // canonical 'online_store' so pre-backfill rows still match that filter.
+    if (filters.orderSource && filters.orderSource.length > 0) {
+      const sources = [...filters.orderSource];
+      if (sources.includes("online_store") && !sources.includes("online")) {
+        sources.push("online");
+      }
+      query = query.in("order_source", sources);
+    }
+
+    // Delivery platform (marketplace). Stored raw (e.g. "Grubhub", "Uber Eats")
+    // while filter values are normalized slugs, so expand each slug to its candidate
+    // raw values (label + slug) and match case-insensitively via an OR of ILIKE.
+    if (filters.deliveryPlatform && filters.deliveryPlatform.length > 0) {
+      const patterns = filters.deliveryPlatform.flatMap((slug) =>
+        deliveryPlatformMatchValues(slug).map(
+          (val) => `delivery_platform.ilike.${val}`
+        )
+      );
+      if (patterns.length > 0) {
+        query = query.or(patterns.join(","));
+      }
     }
 
     // Staff

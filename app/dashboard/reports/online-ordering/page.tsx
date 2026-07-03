@@ -41,32 +41,16 @@ import {
   Ban,
 } from "lucide-react";
 import type { PlatformSummary } from "../../actions/online-ordering-analytics";
+import { platformLabel, platformColor } from "@/lib/orderout/platform";
 
-const PLATFORM_COLORS: Record<string, string> = {
-  doordash: "hsl(0, 80%, 55%)",
-  ubereats: "hsl(140, 70%, 40%)",
-  grubhub: "hsl(25, 90%, 50%)",
-  postmates: "hsl(210, 80%, 55%)",
-  default: "hsl(var(--primary))",
-};
-
-const PLATFORM_LABELS: Record<string, string> = {
-  direct: "Online Store (Direct)",
-  doordash: "DoorDash",
-  ubereats: "Uber Eats",
-  uber_eats: "Uber Eats",
-  grubhub: "Grubhub",
-  postmates: "Postmates",
-  seamless: "Seamless",
-  caviar: "Caviar",
-};
-
+// Thin aliases over the shared platform vocabulary (lib/orderout/platform.ts) so
+// this report and the Orders list/detail/filters can't drift apart.
 function getPlatformLabel(platform: string): string {
-  return PLATFORM_LABELS[platform.toLowerCase()] || platform.charAt(0).toUpperCase() + platform.slice(1);
+  return platformLabel(platform);
 }
 
 function getPlatformColor(platform: string): string {
-  return PLATFORM_COLORS[platform.toLowerCase()] || PLATFORM_COLORS.default;
+  return platformColor(platform);
 }
 
 function formatCurrency(value: number): string {
