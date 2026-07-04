@@ -17,12 +17,13 @@ import { Label } from '@/components/ui/label'
 import { useLocationTaxRates, useUpsertTaxRate, useDeactivateTaxRate } from '../hooks/useTaxRates'
 import { useGatedLocationId, useGatedLocation } from '@/stores/location-store'
 import { TAX_CATEGORIES, TAX_CATEGORY_LABELS, TAX_CATEGORY_DESCRIPTIONS, TaxCategory } from '@/types/tax'
-import { Plus, Edit, Trash2, AlertCircle, DollarSign, MapPin, CreditCard, Monitor, Flame, MonitorPlay, Receipt, Gift, ChevronRight } from 'lucide-react'
+import { Plus, Edit, Trash2, AlertCircle, DollarSign, MapPin, CreditCard, Monitor, Flame, MonitorPlay, Receipt, Gift, ChevronRight, Settings2 } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
 import Link from 'next/link'
 
 const SETTINGS_SECTIONS = [
     { title: 'Stations', description: 'POS stations, printers & terminals', href: '/dashboard/settings/stations', icon: Monitor },
+    { title: 'POS Settings', description: 'Location runtime POS defaults', href: '/dashboard/settings/pos', icon: Settings2 },
     { title: 'Prep Stations', description: 'Kitchen & prep station config', href: '/dashboard/settings/prep-stations', icon: Flame },
     { title: 'Customer Display', description: 'Customer-facing display settings', href: '/dashboard/settings/customer-display', icon: MonitorPlay },
     { title: 'Receipt Templates', description: 'Receipt and ticket design', href: '/dashboard/settings/receipt-templates', icon: Receipt },

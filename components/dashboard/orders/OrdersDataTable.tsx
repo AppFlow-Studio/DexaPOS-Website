@@ -59,6 +59,7 @@ import {
 import { Order, OrderResponse, OrderType } from '@/types/order-management'
 import { OrderStatusBadge } from './OrderStatusBadge'
 import { PaymentStatusBadge } from './PaymentStatusBadge'
+import { DeliveryPlatformBadge } from './DeliveryPlatformBadge'
 import { useIsAllLocations, useLocationStore } from '@/stores/location-store'
 import { useRouter } from 'next/navigation'
 import {
@@ -278,12 +279,16 @@ export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showL
             accessorKey: 'order_type',
             header: 'Order Type',
             cell: ({ row }) => {
-                const typeConfig = getOrderTypeConfig(row.original.order_type)
+                const order = row.original
+                const typeConfig = getOrderTypeConfig(order.order_type)
                 return (
-                    <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-                        {typeConfig.icon}
-                        <span className="font-medium text-foreground/80">{typeConfig.label}</span>
-                    </span>
+                    <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                        <span className="inline-flex items-center gap-1.5">
+                            {typeConfig.icon}
+                            <span className="font-medium text-foreground/80">{typeConfig.label}</span>
+                        </span>
+                        <DeliveryPlatformBadge order={order} />
+                    </div>
                 )
             },
         },

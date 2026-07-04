@@ -189,6 +189,60 @@ Single index for active ticket streams and their source trackers.
 - PIN login is separate from Clerk relinking and may require its own reset after repair.
 - Production completion requires website deploy plus live Clerk/Supabase data repair; it is not a SQL migration-only ticket.
 
+## Stream N: Timesheets Manual Adjustment + Auto Clock-Out
+
+1. Plan:
+- `docs/PLAN-2026-06-29-TIMESHEETS-MANUAL-ADJUSTMENT-AUTO-CLOCKOUT.md`
+
+2. Continuation state:
+- `.planning/.continue-here.md`
+
+3. Scope notes:
+- Website repo merchant dashboard scope.
+- Manual shift correction is implemented for `/dashboard/staff/timesheets`.
+- Backend write path uses `admin_adjust_staff_shift(...)`.
+- Scheduled/configurable auto clock-out remains gated pending scheduling/POS force-clock-out ownership confirmation.
+- Do not ship a cron/worker auto-close path until that overlap is resolved.
+
+## Stream O: Delivery Platform Logos - Web Scope
+
+1. Plan:
+- `docs/PLAN-2026-06-29-DELIVERY-PLATFORM-LOGOS-WEB.md`
+
+2. Scope notes:
+- Website repo only.
+- Parent ticket also includes POS/KDS, but this stream implements web surfaces only.
+- Shared resolver lives at `lib/orders/delivery-platform.ts`.
+- Merchant dashboard and HQ merchant order list/detail surfaces render the same platform badge.
+- Existing public logo assets are used for Grubhub, DoorDash, and Uber Eats.
+- POS/KDS state rendering still belongs in the POS repo.
+
+## Stream P: [POS/Web] Location-level POS Settings surface + per-station overrides
+
+1. Plan:
+- `docs/PLAN-2026-06-30-LOCATION-POS-CONFIG-STATION-OVERRIDES-WEB.md`
+
+2. Scope notes:
+- Website repo / web dashboard scope only.
+- Adds `stations.pos_config_overrides` and `get_effective_pos_config(p_station_id)`.
+- Location defaults are edited at `/dashboard/settings/pos`.
+- `/dashboard/settings/pos` is linked from the Settings hub, Settings sidebar, and global search.
+- Station overrides are limited to UI scale, app theme, notification sounds, and notification volume for v1.
+- Existing `update_location_pos_config(p_location_id, p_namespace, p_config)` RPC is preserved.
+- POS tablet consumption remains a separate POS repo pass.
+- KDS config and hardware assignment are out of scope for this v1 web pass.
+
+## Stream Q: In-Progress Ticket QA Closure Matrix
+
+1. QA matrix:
+- `docs/QA-2026-07-02-IN-PROGRESS-TICKETS-CLOSURE-MATRIX.md`
+
+2. Scope notes:
+- Built from the July 2 board screenshots.
+- Covers the 13 visible in-progress tickets only.
+- Separates website/dashboard work, POS work, Supabase/data repair, and tickets not ready to claim done.
+- Use this before moving those tickets from In Progress to Done.
+
 ## Notes
 
 1. Keep this file updated whenever a new ticket stream starts.
@@ -196,3 +250,6 @@ Single index for active ticket streams and their source trackers.
 3. Keep `.planning/.continue-here.md` as the primary technical handoff state.
 4. Recent senior-review bundle:
 - `docs/HANDOFF-2026-06-10-SENIOR-RECENT-THREE-TICKETS.md`
+
+5. Latest senior handoff:
+- `docs/HANDOFF-2026-06-30-LATEST-TICKETS-SENIOR-REVIEW.md`

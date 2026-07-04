@@ -67,6 +67,7 @@ import {
   Monitor,
   MonitorPlay,
   Flame,
+  Settings2,
   Mail,
   Gift,
   DollarSign,
@@ -656,6 +657,19 @@ function MerchantSidebar() {
                       <Link href="/dashboard/settings/stations">
                         <Monitor className="h-3 w-3" />
                         <span>Stations</span>
+                      </Link>
+                    </SidebarMenuSubButton>
+                  </SidebarMenuSubItem>
+                  <SidebarMenuSubItem>
+                    <SidebarMenuSubButton
+                      asChild
+                      isActive={pathname.startsWith(
+                        "/dashboard/settings/pos"
+                      )}
+                    >
+                      <Link href="/dashboard/settings/pos">
+                        <Settings2 className="h-3 w-3" />
+                        <span>POS Settings</span>
                       </Link>
                     </SidebarMenuSubButton>
                   </SidebarMenuSubItem>

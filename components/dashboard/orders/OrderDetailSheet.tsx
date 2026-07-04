@@ -23,6 +23,7 @@ import {
 } from "@/types/order-management";
 import { OrderStatusBadge } from "./OrderStatusBadge";
 import { PaymentStatusBadge } from "./PaymentStatusBadge";
+import { DeliveryPlatformBadge } from "./DeliveryPlatformBadge";
 import { cn } from "@/lib/utils";
 import {
   Calendar,
@@ -1177,11 +1178,10 @@ export function OrderDetailSheet({
                         {getOrderTypeIcon(displayOrder.order_type)}
                         {formatOrderType(displayOrder.order_type)}
                       </span>
-                      {hasKnownPlatform && (
-                        <span className="flex items-center rounded-full border border-border/60 bg-background/80 px-3 py-1 text-xs font-medium text-foreground shadow-sm">
-                          <PlatformBadge platform={deliveryPlatformRaw} size={14} />
-                        </span>
-                      )}
+                      {/* Delivery-marketplace chip. Uses the shared resolver
+                          (lib/orders/delivery-platform) which self-gates: returns
+                          null for POS / no-platform orders, so no extra guard needed. */}
+                      <DeliveryPlatformBadge order={displayOrder} />
                       {locationOrChannel && (
                         <span className="flex items-center gap-1.5">
                           <MapPin className="h-3.5 w-3.5" />

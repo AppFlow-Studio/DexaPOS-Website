@@ -66,6 +66,12 @@ export interface Order {
   customer_name?: string;
   customer_phone?: string;
   table_number?: string;
+  delivery_platform?: string | null;
+  order_source?: string | null;
+  platform_order_number?: string | null;
+  metadata?: Record<string, any> | null;
+  online_order_provider?: string | null;
+  delivery_company?: string | null;
   subtotal: number;
   tax_amount: number;
   tip_amount: number;
@@ -289,6 +295,12 @@ export interface OrderResponse {
   customer_phone?: string;
   customer_email?: string;
   table_number?: string;
+  delivery_platform?: string | null;
+  order_source?: string | null;
+  platform_order_number?: string | null;
+  metadata?: Record<string, any> | null;
+  online_order_provider?: string | null;
+  delivery_company?: string | null;
   device_id?: string;
   internal_notes?: string;
   // Order channel / origin (see Order interface + lib/orderout/platform.ts).

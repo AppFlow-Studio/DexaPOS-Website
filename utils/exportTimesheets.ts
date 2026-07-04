@@ -1,6 +1,25 @@
 import { StaffShift } from "@/types/staff";
 import { format, differenceInMinutes } from "date-fns";
 
+function getBreakDurationMinutes(
+  breakLog: NonNullable<StaffShift["break_logs"]>[number]
+) {
+  if (typeof breakLog.duration_minutes === "number") {
+    return breakLog.duration_minutes;
+  }
+
+  if (!breakLog.start_at || !breakLog.end_at) {
+    return 0;
+  }
+
+  const minutes = differenceInMinutes(
+    new Date(breakLog.end_at),
+    new Date(breakLog.start_at)
+  );
+
+  return minutes > 0 ? minutes : 0;
+}
+
 export const calculateShiftDuration = (shift: StaffShift): number => {
   if (!shift.clock_out_time) return 0;
 
@@ -12,7 +31,7 @@ export const calculateShiftDuration = (shift: StaffShift): number => {
   const breaks = shift.break_logs || [];
   const unpaidBreakMinutes = breaks
     .filter((b) => b.type === "unpaid")
-    .reduce((acc, b) => acc + b.duration_minutes, 0);
+    .reduce((acc, b) => acc + getBreakDurationMinutes(b), 0);
 
   const netMinutes = totalDiff - unpaidBreakMinutes;
   return netMinutes > 0 ? netMinutes / 60 : 0;
@@ -45,7 +64,7 @@ export const downloadTimesheetCSV = (shifts: StaffShift[]) => {
       format(new Date(s.clock_in_time), "yyyy-MM-dd"),
       format(new Date(s.clock_in_time), "HH:mm"),
       s.clock_out_time ? format(new Date(s.clock_out_time), "HH:mm") : "Active",
-      (s.break_logs || []).reduce((acc, b) => acc + b.duration_minutes, 0),
+      (s.break_logs || []).reduce((acc, b) => acc + getBreakDurationMinutes(b), 0),
       hours.toFixed(2),
       `$${pay}`,
       s.status,

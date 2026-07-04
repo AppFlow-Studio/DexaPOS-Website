@@ -69,6 +69,7 @@ export interface Station {
   can_apply_discounts: boolean;
   can_update_kitchen_status: boolean;
   view_scope: ViewScope;
+  pos_config_overrides?: Record<string, unknown>;
 
   // Status
   is_active: boolean;
