@@ -40,6 +40,7 @@ import {
   Flame,
   MonitorPlay,
   Gift,
+  Settings2,
   type LucideIcon,
 } from "lucide-react";
 
@@ -108,6 +109,7 @@ export const NAV_INDEX: NavSearchItem[] = [
   // ── Settings (footer submenu) ───────────────────────────────────────────
   { label: "Settings", path: "/dashboard/settings", section: "Settings", icon: Settings, keywords: ["preferences", "configuration", "general"] },
   { label: "Stations", path: "/dashboard/settings/stations", section: "Settings", icon: Monitor },
+  { label: "POS Settings", path: "/dashboard/settings/pos", section: "Settings", icon: Settings2, keywords: ["runtime settings", "pos config", "printing settings", "split payments"] },
   { label: "Prep Stations", path: "/dashboard/settings/prep-stations", section: "Settings", icon: Flame, keywords: ["kitchen stations", "expo"] },
   { label: "Customer Display", path: "/dashboard/settings/customer-display", section: "Settings", icon: MonitorPlay, keywords: ["cfd", "customer facing display"] },
   { label: "Receipt Templates", path: "/dashboard/settings/receipt-templates", section: "Settings", icon: Receipt },
