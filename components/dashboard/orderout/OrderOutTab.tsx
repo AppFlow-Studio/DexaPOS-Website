@@ -40,6 +40,7 @@ import {
   extractConnectedPlatforms,
   formatRelativeTime,
 } from "@/lib/orderout/helpers";
+import { getChannelLabel, getChannelLogo } from "@/lib/orderout/platform";
 import { PushChannelsRowAction } from "./PushChannelsRowAction";
 import { PushChannelsCard } from "./PushChannelsCard";
 import { PushChannelsHistoryCard } from "./PushChannelsHistoryCard";
@@ -68,14 +69,9 @@ interface OrderOutTabProps {
 
 const KNOWN_PLATFORMS = ["UberEats", "DoorDash", "GrubHub"] as const;
 
-const PLATFORM_LOGOS: Record<string, string> = {
-  ubereats: "/uber-eats.png",
-  doordash: "/doordash.png",
-  grubhub: "/grubhub.png",
-};
-
+// Logo comes from the single platform vocabulary (lib/orderout/platform.ts).
 function PlatformLogo({ platform, className = "h-6 w-6" }: { platform: string; className?: string }) {
-  const src = PLATFORM_LOGOS[platform.toLowerCase()];
+  const src = getChannelLogo(platform);
   if (!src) return <UtensilsCrossed className={`${className} text-muted-foreground`} />;
   return <Image src={src} alt={platform} width={24} height={24} className={`${className} object-contain`} />;
 }
@@ -328,7 +324,7 @@ export function OrderOutTab({
                 >
                   <PlatformLogo platform={platform} className={`h-6 w-6 shrink-0 ${!isActive ? "opacity-40 grayscale" : ""}`} />
                   <p className={`text-sm font-medium shrink-0 ${isActive ? "" : "text-muted-foreground"}`}>
-                    {platform}
+                    {getChannelLabel(platform)}
                   </p>
                   {/* Spacer keeps status right-aligned, lets it wrap below on ≤320px. */}
                   <span className="flex-1" />
