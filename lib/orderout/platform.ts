@@ -63,10 +63,10 @@ export interface CanonicalizeInput {
   /** online_orders.provider enum — aggregator vs first-party. */
   provider?: OnlineOrderProvider | string | null;
   /**
-   * orders.order_source (e.g. 'online' | 'pos'). Used only as the final
-   * first-party signal: an 'online' order carrying NO third-party signal is a
-   * storefront order, even when it has no online_orders link and no
-   * delivery_platform (legacy/direct rows).
+   * orders.order_source (e.g. 'online' | 'online_store' | 'orderout' | 'pos').
+   * Used only as the final first-party signal: an online storefront order
+   * ('online' / 'online_store') carrying NO third-party signal is a storefront
+   * order, even when it has no online_orders link and no delivery_platform.
    */
   orderSource?: string | null;
 }
@@ -115,9 +115,12 @@ export function canonicalizePlatform(input: CanonicalizeInput): PlatformSlug {
     return FIRST_PARTY_SLUG;
   }
 
-  // 5: an online order with no resolvable third-party signal is first-party —
-  // catches legacy/direct storefront orders that predate the online_orders link.
-  if ((input.orderSource ?? "").toString().trim().toLowerCase() === "online") {
+  // 5: an online storefront order with no resolvable third-party signal is
+  // first-party — catches direct storefront orders that have no online_orders
+  // link / delivery_platform. The source is written as 'online' or
+  // 'online_store' depending on ingestion version.
+  const source = (input.orderSource ?? "").toString().trim().toLowerCase();
+  if (source === "online" || source === "online_store") {
     return FIRST_PARTY_SLUG;
   }
 

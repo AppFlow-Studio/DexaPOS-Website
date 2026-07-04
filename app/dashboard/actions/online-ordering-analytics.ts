@@ -12,10 +12,17 @@ import {
 // Online Ordering Channel Analytics
 // ============================================================================
 //
-// Data source: public.orders (order_source = 'online'), left-joined to
+// Data source: public.orders placed through an online channel, left-joined to
 // public.online_orders for the provider/delivery_company that identifies the
-// platform. This is the LIVE ingestion path (process_online_order) — the older
-// orderout_orders table is written only by the disabled legacy webhook.
+// platform. This is the LIVE ingestion path (process_online_order /
+// create-online-order) — the older orderout_orders table is written only by the
+// disabled legacy webhook.
+//
+// The online channel is identified by order_source. The value has drifted over
+// time across ingestion versions — first-party storefront orders have been
+// written as both 'online' and 'online_store', and aggregator orders as
+// 'orderout' — so we match ALL known online sources, not just 'online', to
+// avoid silently missing rows on newer ingestion.
 //
 // Every row is gated by the canonical recognized-order predicate
 // (is_order_reportable) so only paid, non-cancelled orders count — the same set
@@ -23,7 +30,12 @@ import {
 //
 // Platform identity is normalized via lib/orderout/platform.ts: OrderOut is
 // decomposed into the real platform, casing is collapsed, first-party channels
-// (website/app) bucket into "first_party", and anything unresolved → "other".
+// (storefront/app) bucket into "first_party", and anything unresolved → "other".
+
+// order_source values that denote an online (non-POS) order. Kept broad on
+// purpose: staging carries 'online', 'online_store', and 'orderout' for online
+// orders depending on when/how they were ingested.
+const ONLINE_ORDER_SOURCES = ["online", "online_store", "orderout"] as const;
 
 export interface PlatformSummary {
   /** Canonical platform slug (grubhub | doordash | ubereats | first_party | other). */
@@ -116,7 +128,7 @@ export async function GetOnlineOrderingAnalytics(
          online_orders ( provider, delivery_company, provider_status )`
       )
       .eq("merchant_id", merchantId)
-      .eq("order_source", "online")
+      .in("order_source", ONLINE_ORDER_SOURCES as unknown as string[])
   )
     .gte("created_at", dateFrom.toISOString())
     .lte("created_at", dateTo.toISOString());

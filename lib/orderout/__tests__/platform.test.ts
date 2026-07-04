@@ -58,16 +58,18 @@ describe("canonicalizePlatform", () => {
     ).toBe("doordash");
   });
 
-  it("buckets an online order with no third-party signal as first_party", () => {
-    // Legacy/direct storefront order: no online_orders link, null
-    // delivery_platform — order_source='online' is the fallback signal.
+  it("buckets an online storefront order with no third-party signal as first_party", () => {
+    // Direct storefront order: no online_orders link, null delivery_platform —
+    // order_source is the fallback signal. Both 'online' and 'online_store' are
+    // in use across ingestion versions.
     expect(canonicalizePlatform({ orderSource: "online" })).toBe(FIRST_PARTY_SLUG);
+    expect(canonicalizePlatform({ orderSource: "online_store" })).toBe(FIRST_PARTY_SLUG);
     expect(
-      canonicalizePlatform({ orderSource: "online", provider: null, deliveryPlatform: null })
+      canonicalizePlatform({ orderSource: "online_store", provider: null, deliveryPlatform: null })
     ).toBe(FIRST_PARTY_SLUG);
     // But a third-party signal still wins over the order_source fallback.
     expect(
-      canonicalizePlatform({ orderSource: "online", deliveryCompany: "UBEREATS" })
+      canonicalizePlatform({ orderSource: "online_store", deliveryCompany: "UBEREATS" })
     ).toBe("ubereats");
   });
 
