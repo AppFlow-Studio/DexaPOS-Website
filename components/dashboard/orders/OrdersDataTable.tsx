@@ -64,6 +64,7 @@ import { useRouter } from 'next/navigation'
 import {
     orderSourceLabel,
     platformLabel,
+    isKnownPlatform,
 } from '@/lib/orderout/platform'
 import { PlatformBadge } from './PlatformBadge'
 import { useColumnPreferences } from '@/app/dashboard/hooks/useColumnPreferences'
@@ -308,20 +309,25 @@ export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showL
                 if (!source) {
                     return <span className="text-sm text-muted-foreground/50">—</span>
                 }
-                const isOrderOut = source === 'orderout'
+                // Treat legacy pre-backfill rows (order_source 'online' but
+                // metadata.provider 'orderout') as OrderOut so they still brand.
+                const isOrderOut =
+                    source === 'orderout' || order.metadata?.provider === 'orderout'
                 const rawPlatform =
                     order.delivery_platform ||
                     (order.metadata?.delivery_company as string | undefined) ||
                     ''
-                if (isOrderOut && rawPlatform) {
-                    // Marketplace-branded: real logo (or brand dot fallback) + name.
+                // Only brand with a logo when there's a real marketplace name.
+                // OrderOut rows with a missing/placeholder platform ('orderout')
+                // show the generic "Delivery App" channel instead of echoing it.
+                if (isOrderOut && isKnownPlatform(rawPlatform)) {
                     return <PlatformBadge platform={rawPlatform} className="text-xs" />
                 }
                 return (
                     <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-                        {getChannelIcon(source)}
+                        {getChannelIcon(isOrderOut ? 'orderout' : source)}
                         <span className="font-medium text-foreground/80">
-                            {orderSourceLabel(source)}
+                            {isOrderOut ? orderSourceLabel('orderout') : orderSourceLabel(source)}
                         </span>
                     </span>
                 )

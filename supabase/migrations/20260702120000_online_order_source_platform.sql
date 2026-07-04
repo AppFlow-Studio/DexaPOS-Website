@@ -575,30 +575,7 @@ EXCEPTION WHEN OTHERS THEN
   );
 END;$function$;
 
--- ============================================================================
--- BACKFILL — existing online orders written before this fix
--- ----------------------------------------------------------------------------
--- Idempotent: the WHERE predicates make re-runs no-ops. `orders` is
--- payment-adjacent — this UPDATE only touches source-taxonomy / channel columns,
--- never money columns.
--- ============================================================================
-
--- OrderOut aggregator orders (mis-tagged 'online', platform fields NULL).
-UPDATE public.orders o
-SET order_source          = 'orderout',
-    delivery_platform     = COALESCE(o.delivery_platform, o.metadata->>'delivery_company'),
-    platform_order_number = COALESCE(o.platform_order_number, o.metadata->>'provider_order_id')
-WHERE (o.metadata->>'provider' = 'orderout' OR o.external_id LIKE 'orderout:%')
-  AND o.order_source IS DISTINCT FROM 'orderout';
-
--- First-party storefront/app orders currently mis-tagged 'online'.
-UPDATE public.orders o
-SET order_source = 'online_store'
-WHERE o.order_source = 'online'
-  AND (o.metadata->>'provider' IN ('website', 'app') OR o.external_id LIKE 'website:%');
-
--- ============================================================================
--- INDEX — supports Channel + Platform filtering on the Orders list.
--- ============================================================================
-CREATE INDEX IF NOT EXISTS idx_orders_source_platform
-  ON public.orders (merchant_id, location_id, order_source, delivery_platform);
+-- NOTE: the data backfill + filter index that used to live here have been split into
+-- 20260702130000_online_order_source_backfill.sql. This migration is now function-only
+-- so that a backfill failure (enforce_order_math P0005 on a pre-existing bad row) can
+-- never roll back this forward RPC fix.

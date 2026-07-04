@@ -54,6 +54,18 @@ export function platformLogo(raw: string | null | undefined): string | null {
 }
 
 /**
+ * Whether `raw` is a real, nameable delivery marketplace (Grubhub, DoorDash, …) as
+ * opposed to missing or a placeholder that just echoes the aggregator ('orderout').
+ * OrderOut rows whose delivery_company was never set can carry 'orderout' (or null)
+ * here; those should render as the generic "Delivery App" channel, not "Orderout".
+ */
+export function isKnownPlatform(raw: string | null | undefined): boolean {
+  const slug = normalizePlatformSlug(raw);
+  if (!slug || slug === "orderout") return false;
+  return true;
+}
+
+/**
  * Normalize a raw platform value ("Uber Eats", "uber_eats", "GRUBHUB") to a stable
  * lookup slug ("ubereats", "grubhub"). Lowercases and strips spaces/underscores so
  * all label/color/logo lookups share one key space.

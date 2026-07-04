@@ -79,7 +79,11 @@ import { AssignCustomerModal } from "./AssignCustomerModal";
 import { AdjustTipModal } from "./AdjustTipModal";
 import { assignCustomerToOrder } from "@/app/actions/orders/assign-customer";
 import { getOrderBreakdown } from "@/lib/orders/order-breakdown";
-import { orderSourceLabel, platformLabel } from "@/lib/orderout/platform";
+import {
+  orderSourceLabel,
+  platformLabel,
+  isKnownPlatform,
+} from "@/lib/orderout/platform";
 import { PlatformBadge } from "./PlatformBadge";
 import { toast } from "sonner";
 
@@ -1014,6 +1018,8 @@ export function OrderDetailSheet({
     displayOrder.delivery_platform ??
     (orderMeta.delivery_company as string | undefined) ??
     null;
+  // True only when a real marketplace name is present (not a placeholder 'orderout').
+  const hasKnownPlatform = isOrderOut && isKnownPlatform(deliveryPlatformRaw);
   const platformOrderNumber =
     displayOrder.platform_order_number ??
     (orderMeta.provider_order_id as string | undefined) ??
@@ -1171,7 +1177,7 @@ export function OrderDetailSheet({
                         {getOrderTypeIcon(displayOrder.order_type)}
                         {formatOrderType(displayOrder.order_type)}
                       </span>
-                      {isOrderOut && deliveryPlatformRaw && (
+                      {hasKnownPlatform && (
                         <span className="flex items-center rounded-full border border-border/60 bg-background/80 px-3 py-1 text-xs font-medium text-foreground shadow-sm">
                           <PlatformBadge platform={deliveryPlatformRaw} size={14} />
                         </span>
@@ -1370,7 +1376,7 @@ export function OrderDetailSheet({
                         label="Source"
                         value={orderSourceLabel(orderSource) || "—"}
                       />
-                      {isOrderOut && deliveryPlatformRaw && (
+                      {hasKnownPlatform && (
                         <MetaChip
                           icon={
                             <PlatformBadge
