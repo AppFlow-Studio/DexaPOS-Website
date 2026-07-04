@@ -63,6 +63,8 @@ export default function OrdersPage() {
     const status = searchParams.get("status")?.split(",") as OrderStatus[];
     const type = searchParams.get("type")?.split(",") as OrderType[];
     const payment = searchParams.get("payment")?.split(",") as PaymentMethod[];
+    const source = searchParams.get("source")?.split(",").filter(Boolean);
+    const platform = searchParams.get("platform")?.split(",").filter(Boolean);
     const staff = searchParams.get("staff");
     const minAmount = searchParams.get("minAmount");
     const maxAmount = searchParams.get("maxAmount");
@@ -78,6 +80,8 @@ export default function OrdersPage() {
       status: status?.length ? status : undefined,
       orderType: type?.length ? type : undefined,
       paymentMethod: payment?.length ? payment : undefined,
+      orderSource: source?.length ? source : undefined,
+      deliveryPlatform: platform?.length ? platform : undefined,
       staffId: staff || undefined,
       amountRange:
         minAmount || maxAmount

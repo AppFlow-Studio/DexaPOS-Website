@@ -34,24 +34,16 @@ import { useOnlineOrderingAnalytics } from "../../hooks/useOrderAnalytics";
 import { useReportingQueryRange } from "@/app/dashboard/hooks/useReportingDateRange";
 import { DollarSign, ShoppingCart, TrendingUp, Truck, Ban } from "lucide-react";
 import type { PlatformSummary } from "../../actions/online-ordering-analytics";
-import {
-  getPlatformLabel,
-  getPlatformColor,
-  PLATFORM_DISPLAY_ORDER,
-  type PlatformSlug,
-} from "@/lib/orderout/platform";
+import { platformLabel, platformColor } from "@/lib/orderout/platform";
 
-function formatCurrency(value: number): string {
-  return `$${value.toFixed(2)}`;
+// Thin aliases over the shared platform vocabulary (lib/orderout/platform.ts) so
+// this report and the Orders list/detail/filters can't drift apart.
+function getPlatformLabel(platform: string): string {
+  return platformLabel(platform);
 }
 
-// Date <-> URL param helpers. Dates persist as local `YYYY-MM-DD` (no time /
-// timezone noise in the query string); parsed back at local midnight.
-function formatDateParam(date: Date): string {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
+function getPlatformColor(platform: string): string {
+  return platformColor(platform);
 }
 
 function parseDateParam(value: string | null): Date | null {
