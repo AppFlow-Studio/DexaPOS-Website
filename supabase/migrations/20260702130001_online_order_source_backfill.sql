@@ -43,6 +43,9 @@ WHERE o.order_source = 'online'
     COALESCE(o.amount_paid, 0) < -0.01 OR COALESCE(o.amount_due, 0) < -0.01
   );
 
--- Index supporting Channel + Platform filtering on the Orders list.
-CREATE INDEX IF NOT EXISTS idx_orders_source_platform
-  ON public.orders (merchant_id, location_id, order_source, delivery_platform);
+-- NOTE: the supporting index (idx_orders_source_platform) lives in its own
+-- migration (20260702130002). It CANNOT be created in this file: the UPDATEs
+-- above queue deferred-constraint trigger events on `orders`, and Postgres
+-- refuses to build an index on a table with pending trigger events in the same
+-- transaction (SQLSTATE 55006). A separate migration = separate transaction,
+-- by which point those triggers have already fired and committed.
