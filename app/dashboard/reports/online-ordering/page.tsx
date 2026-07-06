@@ -34,7 +34,13 @@ import { useOnlineOrderingAnalytics } from "../../hooks/useOrderAnalytics";
 import { useReportingQueryRange } from "@/app/dashboard/hooks/useReportingDateRange";
 import { DollarSign, ShoppingCart, TrendingUp, Truck, Ban } from "lucide-react";
 import type { PlatformSummary } from "../../actions/online-ordering-analytics";
-import { platformLabel, platformColor } from "@/lib/orderout/platform";
+import {
+  platformLabel,
+  platformColor,
+  PLATFORM_DISPLAY_ORDER,
+  type PlatformSlug,
+} from "@/lib/orderout/platform";
+import { formatCurrency } from "@/lib/utils";
 
 // Thin aliases over the shared platform vocabulary (lib/orderout/platform.ts) so
 // this report and the Orders list/detail/filters can't drift apart.
@@ -53,6 +59,15 @@ function parseDateParam(value: string | null): Date | null {
   const [, y, m, d] = match;
   const date = new Date(Number(y), Number(m) - 1, Number(d));
   return Number.isNaN(date.getTime()) ? null : date;
+}
+
+// Inverse of parseDateParam: serialize a Date to a local "YYYY-MM-DD" string
+// (local components, not UTC, so the day never shifts across timezones).
+function formatDateParam(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
 }
 
 // Synthetic tab value for the "All platforms" view (real slugs never collide).
