@@ -7,6 +7,7 @@ import {
   TooltipProvider,
 } from "@/components/ui/tooltip";
 import type { PlatformChannelStatus } from "@/lib/orderout/helpers";
+import { getChannelLabel } from "@/lib/orderout/platform";
 
 // ============================================================================
 // ChannelStatusPills — tiny, reusable per-channel status indicator.
@@ -136,13 +137,13 @@ export function ChannelStatusPills({
                   className={`inline-block h-2 w-2 rounded-full ${stateClass(state)}`}
                 />
                 <span className="text-xs text-muted-foreground">
-                  {platform}
+                  {getChannelLabel(platform)}
                 </span>
               </div>
             </TooltipTrigger>
             <TooltipContent>
               <span className="text-xs">
-                {platform}: {stateLabel(state, error)}
+                {getChannelLabel(platform)}: {stateLabel(state, error)}
               </span>
             </TooltipContent>
           </Tooltip>
