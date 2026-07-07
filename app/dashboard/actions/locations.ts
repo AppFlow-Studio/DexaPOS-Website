@@ -421,6 +421,118 @@ export async function ToggleLocationOrders(locationId: string) {
 }
 
 // ============================================================================
+// BATCH-OUT SUMMARY EMAIL SETTINGS
+// ============================================================================
+
+export interface BatchSummaryEmailSettings {
+  enabled: boolean;
+  recipient: string | null;
+  /** locations.email — the fallback recipient shown as the input placeholder. */
+  locationEmail: string | null;
+}
+
+/**
+ * Updates the per-location auto-email toggle + recipient override consumed by
+ * the `email-batch-summary` Edge Function. An empty recipient is stored as NULL
+ * (falls back to locations.email at send time).
+ */
+export async function UpdateBatchSummaryEmailSettings(
+  clerkOrgId: string,
+  locationId: string,
+  input: { enabled: boolean; recipient: string | null }
+): Promise<{
+  success: boolean;
+  data?: BatchSummaryEmailSettings;
+  error?: string;
+}> {
+  if (!clerkOrgId || !locationId) {
+    return { success: false, error: "Missing required parameters" };
+  }
+
+  const recipientRaw = (input.recipient ?? "").trim();
+  if (recipientRaw && !isValidEmail(recipientRaw)) {
+    return { success: false, error: "Enter a valid recipient email address." };
+  }
+  const recipient = recipientRaw ? normalizeEmail(recipientRaw) : null;
+
+  const supabase = createServerSupabaseClient();
+
+  // Scope the location to the caller's merchant.
+  const { data: merchant, error: merchantError } = await supabase
+    .from("merchants")
+    .select("id")
+    .eq("clerk_org_id", clerkOrgId)
+    .single();
+
+  if (merchantError || !merchant) {
+    console.error("[UpdateBatchSummaryEmailSettings] merchant lookup:", merchantError);
+    return { success: false, error: "Merchant not found" };
+  }
+
+  const { data: current, error: fetchError } = await supabase
+    .from("locations")
+    .select(
+      "name, email, merchant_id, batch_summary_email_enabled, batch_summary_email_recipient"
+    )
+    .eq("id", locationId)
+    .eq("merchant_id", merchant.id)
+    .single();
+
+  if (fetchError || !current) {
+    console.error("[UpdateBatchSummaryEmailSettings] location lookup:", fetchError);
+    return { success: false, error: "Location not found" };
+  }
+
+  const { data: updated, error } = await supabase
+    .from("locations")
+    .update({
+      batch_summary_email_enabled: input.enabled,
+      batch_summary_email_recipient: recipient,
+    })
+    .eq("id", locationId)
+    .select(
+      "name, email, batch_summary_email_enabled, batch_summary_email_recipient"
+    )
+    .single();
+
+  if (error || !updated) {
+    console.error("[UpdateBatchSummaryEmailSettings] update:", error);
+    return { success: false, error: error?.message || "Failed to save settings" };
+  }
+
+  await LogAuditEvent({
+    clerkOrgId,
+    locationId,
+    action: `Batch-out summary email ${
+      updated.batch_summary_email_enabled ? "enabled" : "disabled"
+    }: ${updated.name}`,
+    actionCategory: "settings",
+    resourceType: "location",
+    resourceId: locationId,
+    resourceName: updated.name,
+    changes: {
+      before: {
+        batch_summary_email_enabled: current.batch_summary_email_enabled,
+        batch_summary_email_recipient: current.batch_summary_email_recipient,
+      },
+      after: {
+        batch_summary_email_enabled: updated.batch_summary_email_enabled,
+        batch_summary_email_recipient: updated.batch_summary_email_recipient,
+      },
+    },
+  });
+
+  return {
+    success: true,
+    data: {
+      enabled: !!updated.batch_summary_email_enabled,
+      recipient: updated.batch_summary_email_recipient ?? null,
+      locationEmail: updated.email ?? null,
+    },
+  };
+}
+
+// ============================================================================
 // ARCHIVE / RESTORE OPERATIONS  (replaces hard-delete)
 // ============================================================================
 
