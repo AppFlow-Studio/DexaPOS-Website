@@ -40,19 +40,7 @@ import {
   PLATFORM_DISPLAY_ORDER,
   type PlatformSlug,
 } from "@/lib/orderout/platform";
-
-function formatCurrency(value: number): string {
-  return `$${value.toFixed(2)}`;
-}
-
-// Date <-> URL param helpers. Dates persist as local `YYYY-MM-DD` (no time /
-// timezone noise in the query string); parsed back at local midnight.
-function formatDateParam(date: Date): string {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
-}
+import { formatCurrency } from "@/lib/utils";
 
 function parseDateParam(value: string | null): Date | null {
   if (!value) return null;
@@ -61,6 +49,15 @@ function parseDateParam(value: string | null): Date | null {
   const [, y, m, d] = match;
   const date = new Date(Number(y), Number(m) - 1, Number(d));
   return Number.isNaN(date.getTime()) ? null : date;
+}
+
+// Inverse of parseDateParam: serialize a Date to a local "YYYY-MM-DD" string
+// (local components, not UTC, so the day never shifts across timezones).
+function formatDateParam(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
 }
 
 // Synthetic tab value for the "All platforms" view (real slugs never collide).

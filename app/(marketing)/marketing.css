@@ -173,6 +173,16 @@ p, li, .hero-lede, .section-sub {
 .nav-cta:hover {
   background: transparent; color: var(--matte-black);
 }
+.nav-signin {
+  display: inline-flex; align-items: center;
+  color: var(--graphite);
+  font-family: var(--font-display);
+  font-size: 12px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.16em;
+  padding: 12px 8px;
+  transition: color 0.2s;
+}
+.nav-signin:hover { color: var(--ink); }
 .menu-toggle { display: none; }
 
 /* ───── BUTTONS ───── */
