@@ -36,6 +36,7 @@ import {
     X,
 } from 'lucide-react'
 import { getAdminOrders } from '@/app/manage/actions/admin-merchant/orders'
+import { isOrderReportable } from '@/lib/reporting/recognized-order'
 import { OrdersDataTable } from '@/components/dashboard/orders/OrdersDataTable'
 import { OrderDetailSheet } from '@/components/dashboard/orders/OrderDetailSheet'
 import { DateRangePicker, type DatePreset } from '@/components/dashboard/orders/DateRangePicker'
@@ -164,6 +165,10 @@ export function OrdersTab({ merchantInfo }: OrdersTabProps) {
             status: o.status as OrderResponse['status'],
             customer_name: o.customer_name ?? undefined,
             customer_phone: o.customer_phone ?? undefined,
+            delivery_platform: o.delivery_platform ?? null,
+            order_source: o.order_source ?? null,
+            platform_order_number: o.platform_order_number ?? null,
+            metadata: o.metadata ?? null,
             table_number: undefined,
             subtotal: o.subtotal,
             tax_amount: o.tax_amount,
@@ -193,13 +198,11 @@ export function OrdersTab({ merchantInfo }: OrdersTabProps) {
 
     const stats = useMemo(() => {
         const total = ordersList.length
-        const revenue = ordersList
-            .filter(
-                (o) =>
-                    o.payment_status === 'captured' || o.payment_status === 'paid'
-            )
-            .reduce((sum, o) => sum + o.total_amount, 0)
-        const avg = total > 0 ? revenue / total : 0
+        // Recognized orders (payment collected, not draft/cancelled/void/refunded)
+        // drive revenue and AOV so they match every other reporting surface.
+        const recognized = ordersList.filter((o) => isOrderReportable(o))
+        const revenue = recognized.reduce((sum, o) => sum + o.total_amount, 0)
+        const avg = recognized.length > 0 ? revenue / recognized.length : 0
         const voided = ordersList.filter(
             (o) => o.status === 'void' || o.status === 'cancelled'
         ).length

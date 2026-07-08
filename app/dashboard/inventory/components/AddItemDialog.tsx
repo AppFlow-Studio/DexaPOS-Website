@@ -28,7 +28,7 @@ import {
   useCreateInventoryItem,
   useVendors,
 } from "../hooks/useInventoryManagement";
-import { useLocationStore, useSelectedLocation } from "@/stores/location-store";
+import { useLocationStore, useSelectedLocation, useIsSingleLocation } from "@/stores/location-store";
 import { cn } from "@/lib/utils";
 import { StockMode } from "@/types/inventory";
 
@@ -103,6 +103,7 @@ export function AddItemDialog({ open, onOpenChange }: AddItemDialogProps) {
   const { data: vendors = [] } = useVendors();
   const { selectedLocationId } = useLocationStore();
   const selectedLocation = useSelectedLocation();
+  const isSingleLocation = useIsSingleLocation();
 
   // Determine if we're in global or location view
   const isGlobalView = selectedLocationId === "all" || !selectedLocationId;
@@ -171,8 +172,9 @@ export function AddItemDialog({ open, onOpenChange }: AddItemDialogProps) {
                 Add a new ingredient or supply to your inventory catalog
               </DialogDescription>
             </div>
-            {/* Scope badge - show where this item will be created */}
-            {isGlobalView ? (
+            {/* Scope badge - show where this item will be created.
+                Hidden for single-location accounts (always global). */}
+            {isSingleLocation ? null : isGlobalView ? (
               <Badge
                 variant="outline"
                 className="gap-1 text-emerald-600 border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30"

@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { subDays, format } from "date-fns";
+import { useMemo, useCallback, useRef, Suspense } from "react";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
+import { subDays } from "date-fns";
 import {
   Bar,
   BarChart,
@@ -31,45 +32,59 @@ import {
 } from "@/components/dashboard/orders/DateRangePicker";
 import { useOnlineOrderingAnalytics } from "../../hooks/useOrderAnalytics";
 import { useReportingQueryRange } from "@/app/dashboard/hooks/useReportingDateRange";
-import {
-  DollarSign,
-  ShoppingCart,
-  TrendingUp,
-  Truck,
-  CheckCircle,
-  XCircle,
-  Ban,
-} from "lucide-react";
+import { DollarSign, ShoppingCart, TrendingUp, Truck, Ban } from "lucide-react";
 import type { PlatformSummary } from "../../actions/online-ordering-analytics";
+import {
+  platformLabel,
+  platformColor,
+  PLATFORM_DISPLAY_ORDER,
+  type PlatformSlug,
+} from "@/lib/orderout/platform";
+import { formatCurrency } from "@/lib/utils";
 
-const PLATFORM_COLORS: Record<string, string> = {
-  doordash: "hsl(0, 80%, 55%)",
-  ubereats: "hsl(140, 70%, 40%)",
-  grubhub: "hsl(25, 90%, 50%)",
-  postmates: "hsl(210, 80%, 55%)",
-  default: "hsl(var(--primary))",
-};
-
-const PLATFORM_LABELS: Record<string, string> = {
-  doordash: "DoorDash",
-  ubereats: "Uber Eats",
-  uber_eats: "Uber Eats",
-  grubhub: "Grubhub",
-  postmates: "Postmates",
-  seamless: "Seamless",
-  caviar: "Caviar",
-};
-
+// Thin aliases over the shared platform vocabulary (lib/orderout/platform.ts) so
+// this report and the Orders list/detail/filters can't drift apart.
 function getPlatformLabel(platform: string): string {
-  return PLATFORM_LABELS[platform.toLowerCase()] || platform.charAt(0).toUpperCase() + platform.slice(1);
+  return platformLabel(platform);
 }
 
 function getPlatformColor(platform: string): string {
-  return PLATFORM_COLORS[platform.toLowerCase()] || PLATFORM_COLORS.default;
+  return platformColor(platform);
 }
 
-function formatCurrency(value: number): string {
-  return `$${value.toFixed(2)}`;
+function parseDateParam(value: string | null): Date | null {
+  if (!value) return null;
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return null;
+  const [, y, m, d] = match;
+  const date = new Date(Number(y), Number(m) - 1, Number(d));
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+// Inverse of parseDateParam: serialize a Date to a local "YYYY-MM-DD" string
+// (local components, not UTC, so the day never shifts across timezones).
+function formatDateParam(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+// Synthetic tab value for the "All platforms" view (real slugs never collide).
+const ALL_PLATFORMS = "__all__";
+
+// Zero-filled summary so a fixed tab can render even with no orders in range.
+function emptyPlatformSummary(platform: PlatformSlug): PlatformSummary {
+  return {
+    platform,
+    totalOrders: 0,
+    totalRevenue: 0,
+    avgOrderValue: 0,
+    totalServiceCharges: 0,
+    totalTips: 0,
+    totalDiscounts: 0,
+    cancelledOrders: 0,
+  };
 }
 
 // ============================================================================
@@ -114,7 +129,9 @@ function PlatformOverviewCards({
   }
 
   const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
-  const topPlatform = platforms[0];
+  const topPlatform = platforms
+    .slice()
+    .sort((a, b) => b.totalRevenue - a.totalRevenue)[0];
 
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -130,7 +147,7 @@ function PlatformOverviewCards({
             {formatCurrency(totalRevenue)}
           </div>
           <p className="text-xs text-muted-foreground">
-            Across all platforms
+            Across selected platforms
           </p>
         </CardContent>
       </Card>
@@ -237,10 +254,7 @@ function PlatformComparisonChart({
               axisLine={false}
               tickFormatter={(v) => `$${v}`}
             />
-            <ChartTooltip
-              cursor={false}
-              content={<ChartTooltipContent />}
-            />
+            <ChartTooltip cursor={false} content={<ChartTooltipContent />} />
             <Bar dataKey="revenue" radius={[4, 4, 0, 0]} />
           </BarChart>
         </ChartContainer>
@@ -280,20 +294,14 @@ function PlatformDetailCard({
               {formatCurrency(summary.totalRevenue)} total revenue
             </CardDescription>
           </div>
-          <div className="flex gap-3 text-sm text-muted-foreground">
-            <span className="flex items-center gap-1">
-              <CheckCircle className="h-3.5 w-3.5 text-green-500" />
-              {summary.acceptedOrders}
-            </span>
-            <span className="flex items-center gap-1">
-              <XCircle className="h-3.5 w-3.5 text-red-500" />
-              {summary.rejectedOrders}
-            </span>
-            <span className="flex items-center gap-1">
-              <Ban className="h-3.5 w-3.5 text-yellow-500" />
-              {summary.cancelledOrders}
-            </span>
-          </div>
+          {summary.cancelledOrders > 0 && (
+            <div className="flex gap-3 text-sm text-muted-foreground">
+              <span className="flex items-center gap-1">
+                <Ban className="h-3.5 w-3.5 text-yellow-500" />
+                {summary.cancelledOrders} cancelled
+              </span>
+            </div>
+          )}
         </div>
       </CardHeader>
       <CardContent>
@@ -305,21 +313,21 @@ function PlatformDetailCard({
             </p>
           </div>
           <div>
-            <p className="text-xs text-muted-foreground">Delivery Fees</p>
+            <p className="text-xs text-muted-foreground">Service Charges</p>
             <p className="text-lg font-semibold">
-              {formatCurrency(summary.totalDeliveryFees)}
-            </p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Service Fees</p>
-            <p className="text-lg font-semibold">
-              {formatCurrency(summary.totalServiceFees)}
+              {formatCurrency(summary.totalServiceCharges)}
             </p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Tips Received</p>
             <p className="text-lg font-semibold">
               {formatCurrency(summary.totalTips)}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Discounts</p>
+            <p className="text-lg font-semibold">
+              {formatCurrency(summary.totalDiscounts)}
             </p>
           </div>
         </div>
@@ -348,10 +356,7 @@ function PlatformDetailCard({
                 axisLine={false}
                 tickFormatter={(v) => `$${v}`}
               />
-              <ChartTooltip
-                cursor={false}
-                content={<ChartTooltipContent />}
-              />
+              <ChartTooltip cursor={false} content={<ChartTooltipContent />} />
               <defs>
                 <linearGradient
                   id={`fill-${summary.platform}`}
@@ -383,12 +388,73 @@ function PlatformDetailCard({
 // Main Page
 // ============================================================================
 
-export default function OnlineOrderingReportsPage() {
-  const [dateRange, setDateRange] = useState<{ from: Date; to: Date }>({
-    from: subDays(new Date(), 30),
-    to: new Date(),
-  });
-  const [preset, setPreset] = useState<DatePreset>("last_30_days");
+function OnlineOrderingReportsContent() {
+  // The platform tab, date range, and preset all persist across the report via
+  // the URL (?platform=grubhub&from=2026-03-01&to=2026-07-01&preset=custom) so
+  // they survive reloads and are shareable/bookmarkable. Absent params fall
+  // back to the defaults (last 30 days / All).
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  // ---- Platform tab (absence of param === "All") ----
+  const platformParam = searchParams.get("platform");
+  const selectedPlatform: string =
+    platformParam && (PLATFORM_DISPLAY_ORDER as string[]).includes(platformParam)
+      ? platformParam
+      : ALL_PLATFORMS;
+
+  // ---- Date range + preset ----
+  const dateRange = useMemo(() => {
+    const from = parseDateParam(searchParams.get("from"));
+    const to = parseDateParam(searchParams.get("to"));
+    if (from && to) return { from, to };
+    return { from: subDays(new Date(), 30), to: new Date() };
+  }, [searchParams]);
+
+  const preset = (searchParams.get("preset") as DatePreset) || "last_30_days";
+
+  // Single helper so platform and date writes share one param set and don't
+  // clobber each other. Multiple mutations in the same tick — e.g. the picker's
+  // Apply calls onDateRangeChange AND onPresetChange synchronously — are
+  // buffered onto one URLSearchParams and flushed once on a microtask, so they
+  // compose into a single router.replace instead of overwriting each other.
+  const pendingParamsRef = useRef<URLSearchParams | null>(null);
+  const updateParams = useCallback(
+    (mutate: (p: URLSearchParams) => void) => {
+      if (!pendingParamsRef.current) {
+        pendingParamsRef.current = new URLSearchParams(searchParams.toString());
+        queueMicrotask(() => {
+          const params = pendingParamsRef.current!;
+          pendingParamsRef.current = null;
+          const query = params.toString();
+          router.replace(query ? `${pathname}?${query}` : pathname, {
+            scroll: false,
+          });
+        });
+      }
+      mutate(pendingParamsRef.current);
+    },
+    [router, pathname, searchParams]
+  );
+
+  const setSelectedPlatform = useCallback(
+    (next: string) => {
+      updateParams((p) => {
+        if (next === ALL_PLATFORMS) p.delete("platform");
+        else p.set("platform", next);
+      });
+    },
+    [updateParams]
+  );
+
+  const setPreset = useCallback(
+    (next: DatePreset) => {
+      updateParams((p) => p.set("preset", next));
+    },
+    [updateParams]
+  );
+
   const queryDateRange = useReportingQueryRange(dateRange);
 
   const { data, isLoading, isError } = useOnlineOrderingAnalytics(
@@ -396,12 +462,43 @@ export default function OnlineOrderingReportsPage() {
     queryDateRange.to
   );
 
-  const platforms = data?.platforms || [];
+  const allPlatforms = useMemo(() => data?.platforms ?? [], [data]);
   const dailyTrends = data?.dailyTrends || {};
+
+  // Lookup of the platforms that actually have data this range.
+  const platformsBySlug = useMemo(
+    () => new Map(allPlatforms.map((p) => [p.platform, p])),
+    [allPlatforms]
+  );
+  const hasAnyData = allPlatforms.length > 0;
+
+  // A platform filter selection re-scopes EVERY figure on the report. Because
+  // all platforms are fetched in one query, filtering is a client-side slice —
+  // instant, and the "All" view still reconciles to the headline total.
+  //
+  // For a specific platform we render even when it has no orders in range
+  // (zero-filled), so the fixed tab set stays consistent and never dead-ends.
+  const scopedPlatforms = useMemo(() => {
+    if (selectedPlatform === ALL_PLATFORMS) return allPlatforms;
+    const slug = selectedPlatform as PlatformSlug;
+    return [platformsBySlug.get(slug) ?? emptyPlatformSummary(slug)];
+  }, [allPlatforms, platformsBySlug, selectedPlatform]);
+
+  const scopedRevenue = useMemo(
+    () => scopedPlatforms.reduce((sum, p) => sum + p.totalRevenue, 0),
+    [scopedPlatforms]
+  );
+  const scopedOrders = useMemo(
+    () => scopedPlatforms.reduce((sum, p) => sum + p.totalOrders, 0),
+    [scopedPlatforms]
+  );
 
   const handleDateRangeChange = (from: Date | null, to: Date | null) => {
     if (from && to) {
-      setDateRange({ from, to });
+      updateParams((p) => {
+        p.set("from", formatDateParam(from));
+        p.set("to", formatDateParam(to));
+      });
     }
   };
 
@@ -428,53 +525,75 @@ export default function OnlineOrderingReportsPage() {
         </div>
       </div>
 
+      {/* Platform filter — fixed canonical tab set, re-scopes all figures
+          below. Always rendered (once past the initial load) even with zero
+          orders this range, so the control is stable and a platform-scoped
+          view — e.g. arrived via ?platform=grubhub — always has a way back to
+          "All". Matches the AC's fixed All / DoorDash / Uber Eats / Grubhub /
+          First-party / Other set. */}
+      {!isLoading && (
+        <Tabs
+          value={selectedPlatform}
+          onValueChange={setSelectedPlatform}
+          className="w-full"
+        >
+          <TabsList className="flex-wrap h-auto">
+            <TabsTrigger value={ALL_PLATFORMS}>All</TabsTrigger>
+            {PLATFORM_DISPLAY_ORDER.map((slug) => (
+              <TabsTrigger key={slug} value={slug}>
+                {getPlatformLabel(slug)}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
+      )}
+
       <PlatformOverviewCards
-        totalRevenue={data?.totalOnlineRevenue || 0}
-        totalOrders={data?.totalOnlineOrders || 0}
-        platforms={platforms}
+        totalRevenue={scopedRevenue}
+        totalOrders={scopedOrders}
+        platforms={scopedPlatforms}
         isLoading={isLoading}
         isError={isError}
       />
 
-      {/* Tabs: Overview vs per-platform detail */}
-      <Tabs defaultValue="overview" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          {platforms.map((p) => (
-            <TabsTrigger key={p.platform} value={p.platform}>
-              {getPlatformLabel(p.platform)}
-            </TabsTrigger>
-          ))}
-        </TabsList>
+      {/* Overview comparison + per-platform detail for the scoped set. */}
+      <div className="space-y-4">
+        {selectedPlatform === ALL_PLATFORMS && (
+          <PlatformComparisonChart platforms={scopedPlatforms} />
+        )}
 
-        <TabsContent value="overview" className="space-y-4">
-          <PlatformComparisonChart platforms={platforms} />
-
-          {platforms.length === 0 && !isLoading && (
-            <Card>
-              <CardContent className="flex flex-col items-center justify-center py-12">
-                <Truck className="h-12 w-12 text-muted-foreground mb-4" />
-                <h3 className="text-lg font-semibold">
-                  No Online Orders Yet
-                </h3>
-                <p className="text-sm text-muted-foreground text-center max-w-md mt-1">
-                  Once you connect delivery platforms through OrderOut,
-                  per-platform revenue and order data will appear here.
-                </p>
-              </CardContent>
-            </Card>
-          )}
-        </TabsContent>
-
-        {platforms.map((p) => (
-          <TabsContent key={p.platform} value={p.platform}>
-            <PlatformDetailCard
-              summary={p}
-              dailyTrends={dailyTrends[p.platform] || []}
-            />
-          </TabsContent>
+        {scopedPlatforms.map((p) => (
+          <PlatformDetailCard
+            key={p.platform}
+            summary={p}
+            dailyTrends={dailyTrends[p.platform] || []}
+          />
         ))}
-      </Tabs>
+
+        {!hasAnyData && !isLoading && (
+          <Card>
+            <CardContent className="flex flex-col items-center justify-center py-12">
+              <Truck className="h-12 w-12 text-muted-foreground mb-4" />
+              <h3 className="text-lg font-semibold">No Online Orders Yet</h3>
+              <p className="text-sm text-muted-foreground text-center max-w-md mt-1">
+                Once you receive online orders — through your storefront or a
+                connected delivery platform — per-platform revenue and order
+                data will appear here.
+              </p>
+            </CardContent>
+          </Card>
+        )}
+      </div>
     </div>
+  );
+}
+
+// useSearchParams() requires a Suspense boundary so the route isn't de-opted to
+// fully client-side rendering at build time.
+export default function OnlineOrderingReportsPage() {
+  return (
+    <Suspense fallback={null}>
+      <OnlineOrderingReportsContent />
+    </Suspense>
   );
 }

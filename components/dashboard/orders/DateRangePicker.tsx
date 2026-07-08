@@ -250,7 +250,11 @@ export function DateRangePicker({
                                     root: "p-0",
                                     months: "flex flex-col",
                                     month: "flex flex-col gap-4",
-                                    month_caption: "flex justify-center pt-1 relative items-center gap-1 h-8",
+                                    // Caption holds the month/year dropdowns on
+                                    // the left and leaves room on the right for
+                                    // the (absolutely-positioned) nav arrows so
+                                    // the two never overlap and steal clicks.
+                                    month_caption: "flex justify-start pt-1 relative items-center gap-1 h-8 pr-16",
                                     caption_label: "hidden",
                                     dropdowns: "flex gap-1 items-center",
                                     dropdown: cn(
@@ -260,7 +264,11 @@ export function DateRangePicker({
                                         "focus:outline-none focus:ring-1 focus:ring-ring"
                                     ),
                                     dropdown_root: "relative",
-                                    nav: "flex items-center justify-between absolute left-3 right-3 top-3 h-8",
+                                    // Both arrows grouped at the top-right. z-10
+                                    // lifts them above the (normal-flow) caption
+                                    // div, whose full-width box otherwise covers
+                                    // the arrows and swallows the click.
+                                    nav: "flex items-center gap-1 absolute right-3 top-3 h-8 z-10",
                                     button_previous: cn(
                                         buttonVariants({ variant: "outline" }),
                                         "h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100"

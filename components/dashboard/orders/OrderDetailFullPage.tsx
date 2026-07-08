@@ -49,6 +49,7 @@ import type {
 import type { OrderFullHistory } from "@/types/order-full-history";
 import { OrderStatusBadge } from "@/components/dashboard/orders/OrderStatusBadge";
 import { PaymentStatusBadge } from "@/components/dashboard/orders/PaymentStatusBadge";
+import { DeliveryPlatformBadge } from "@/components/dashboard/orders/DeliveryPlatformBadge";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -1506,6 +1507,7 @@ export function OrderDetailFullPage({
                 <p className="text-sm font-medium">
                   {formatOrderType(order.order_type)}
                 </p>
+                <DeliveryPlatformBadge order={order} className="mt-1" />
                 <p className="text-xs text-muted-foreground">
                   Channel: {orderChannelLabel(order.order_type)}
                 </p>

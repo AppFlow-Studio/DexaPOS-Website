@@ -23,6 +23,7 @@ import {
 } from "@/types/order-management";
 import { OrderStatusBadge } from "./OrderStatusBadge";
 import { PaymentStatusBadge } from "./PaymentStatusBadge";
+import { DeliveryPlatformBadge } from "./DeliveryPlatformBadge";
 import { cn } from "@/lib/utils";
 import {
   Calendar,
@@ -79,6 +80,12 @@ import { AssignCustomerModal } from "./AssignCustomerModal";
 import { AdjustTipModal } from "./AdjustTipModal";
 import { assignCustomerToOrder } from "@/app/actions/orders/assign-customer";
 import { getOrderBreakdown } from "@/lib/orders/order-breakdown";
+import {
+  orderSourceLabel,
+  platformLabel,
+  isKnownPlatform,
+} from "@/lib/orderout/platform";
+import { PlatformBadge } from "./PlatformBadge";
 import { toast } from "sonner";
 
 interface OrderDetailSheetProps {
@@ -998,6 +1005,49 @@ export function OrderDetailSheet({
   const notes =
     fullHistory?.order?.internal_notes ?? displayOrder.internal_notes ?? null;
 
+  // ─── Channel / delivery origin ───
+  // order_source is the canonical taxonomy; delivery_platform is the marketplace
+  // for orderout orders. Fall back to metadata.* so rows created before the
+  // backfill migration still render the platform/order-number.
+  const orderMeta = (displayOrder.metadata ?? {}) as Record<string, any>;
+  const orderSource = displayOrder.order_source ?? null;
+  const isOrderOut =
+    orderSource === "orderout" || orderMeta.provider === "orderout";
+  // Show the channel section for anything that isn't plain in-store POS.
+  const showChannelSection = !!orderSource && orderSource !== "pos";
+  const deliveryPlatformRaw =
+    displayOrder.delivery_platform ??
+    (orderMeta.delivery_company as string | undefined) ??
+    null;
+  // True only when a real marketplace name is present (not a placeholder 'orderout').
+  const hasKnownPlatform = isOrderOut && isKnownPlatform(deliveryPlatformRaw);
+  const platformOrderNumber =
+    displayOrder.platform_order_number ??
+    (orderMeta.provider_order_id as string | undefined) ??
+    null;
+  const platformExternalRef =
+    (orderMeta.external_reference as string | undefined) ?? null;
+  const deliveryAddress = (displayOrder.delivery_address ?? null) as {
+    street?: string | null;
+    unit?: string | null;
+    city?: string | null;
+    state?: string | null;
+    zip?: string | null;
+    delivery_notes?: string | null;
+  } | null;
+  const deliveryAddressLine = deliveryAddress
+    ? [
+        [deliveryAddress.street, deliveryAddress.unit].filter(Boolean).join(" "),
+        deliveryAddress.city,
+        [deliveryAddress.state, deliveryAddress.zip].filter(Boolean).join(" "),
+      ]
+        .filter((s) => s && String(s).trim())
+        .join(", ")
+    : null;
+  const deliveryNotes = deliveryAddress?.delivery_notes ?? null;
+  const estimatedTime =
+    displayOrder.estimated_delivery_time ?? null;
+
   const itemCount = items.reduce(
     (sum, i) => sum + (i.is_voided ? 0 : Number(i.quantity) || 1),
     0
@@ -1128,6 +1178,10 @@ export function OrderDetailSheet({
                         {getOrderTypeIcon(displayOrder.order_type)}
                         {formatOrderType(displayOrder.order_type)}
                       </span>
+                      {/* Delivery-marketplace chip. Uses the shared resolver
+                          (lib/orders/delivery-platform) which self-gates: returns
+                          null for POS / no-platform orders, so no extra guard needed. */}
+                      <DeliveryPlatformBadge order={displayOrder} />
                       {locationOrChannel && (
                         <span className="flex items-center gap-1.5">
                           <MapPin className="h-3.5 w-3.5" />
@@ -1308,6 +1362,78 @@ export function OrderDetailSheet({
                   </div>
                 )}
               </SectionCard>
+
+              {/* ─── Delivery / Channel (online + delivery-app orders) ─── */}
+              {showChannelSection && (
+                <SectionCard
+                  title={isOrderOut ? "Delivery / Channel" : "Channel"}
+                  icon={isOrderOut ? <Truck className="h-4 w-4" /> : <Globe className="h-4 w-4" />}
+                >
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                      <MetaChip
+                        icon={<Globe className="h-3.5 w-3.5" />}
+                        label="Source"
+                        value={orderSourceLabel(orderSource) || "—"}
+                      />
+                      {hasKnownPlatform && (
+                        <MetaChip
+                          icon={
+                            <PlatformBadge
+                              platform={deliveryPlatformRaw}
+                              size={18}
+                              iconOnly
+                            />
+                          }
+                          label="Platform"
+                          value={platformLabel(deliveryPlatformRaw)}
+                        />
+                      )}
+                      {platformOrderNumber && (
+                        <MetaChip
+                          icon={<Receipt className="h-3.5 w-3.5" />}
+                          label="Platform order #"
+                          value={platformOrderNumber}
+                        />
+                      )}
+                      {platformExternalRef && (
+                        <MetaChip
+                          icon={<Receipt className="h-3.5 w-3.5" />}
+                          label="External reference"
+                          value={platformExternalRef}
+                        />
+                      )}
+                      {estimatedTime && (
+                        <MetaChip
+                          icon={<Clock className="h-3.5 w-3.5" />}
+                          label="Estimated ready / delivery"
+                          value={formatDate(estimatedTime)}
+                        />
+                      )}
+                    </div>
+
+                    {(deliveryAddressLine || deliveryNotes) && (
+                      <div className="rounded-2xl border border-border/60 bg-background/80 px-4 py-3 shadow-sm">
+                        <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                          Delivery
+                        </p>
+                        {deliveryAddressLine && (
+                          <div className="flex items-start gap-2 text-sm">
+                            <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                            <span>{deliveryAddressLine}</span>
+                          </div>
+                        )}
+                        {deliveryNotes && (
+                          <div className="mt-2 flex items-start gap-2 text-sm text-muted-foreground">
+                            <MessageSquare className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                            <span className="italic">&ldquo;{deliveryNotes}&rdquo;</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </SectionCard>
+              )}
 
               {/* ─── Order Items (Enhanced) ─── */}
               <EnhancedItemsSection

@@ -34,6 +34,7 @@ import {
   formatRelativeTime,
   normalizeDeliveryChannels,
 } from "@/lib/orderout/helpers";
+import { getChannelLabel, getChannelLogo } from "@/lib/orderout/platform";
 import { useSetOrderOutChannelsConfirmed } from "@/app/dashboard/online-ordering/hooks/useOrderOutStatus";
 
 interface ChannelSelfConfirmCardProps {
@@ -45,14 +46,11 @@ interface ChannelSelfConfirmCardProps {
   confirmedAt: string | null;
 }
 
-const PLATFORM_LOGOS: Record<string, string> = {
-  UBEREATS: "/uber-eats.png",
-  DOORDASH: "/doordash.png",
-  GRUBHUB: "/grubhub.png",
-};
-
+// Label + logo come from the single platform vocabulary in
+// lib/orderout/platform.ts (shared with the Online Ordering report). Only the
+// Tailwind color styling below stays local to this config card.
 function PlatformLogo({ channel, active }: { channel: string; active: boolean }) {
-  const src = PLATFORM_LOGOS[channel];
+  const src = getChannelLogo(channel);
   if (!src) return <UtensilsCrossed className={`h-5 w-5 ${active ? "" : "text-muted-foreground"}`} />;
   return (
     <Image
@@ -66,16 +64,7 @@ function PlatformLogo({ channel, active }: { channel: string; active: boolean })
 }
 
 function platformLabel(channel: string): string {
-  switch (channel) {
-    case "UBEREATS":
-      return "UberEats";
-    case "DOORDASH":
-      return "DoorDash";
-    case "GRUBHUB":
-      return "GrubHub";
-    default:
-      return channel;
-  }
+  return getChannelLabel(channel);
 }
 
 function platformStyle(channel: string): { color: string; bg: string } {

@@ -83,12 +83,19 @@ URL format is now known. The remaining unknown is the **SN→`p` ID mapping**:
 
 Source from the Landi Connect rep / Sam (MTech) / Temur.
 
-## Acceptance criteria (revised)
+## Acceptance criteria — Option B (shipped in this PR)
 
-- [ ] A "Manage in Landi Connect" action appears on the relevant admin device rows / device detail.
-- [ ] Clicking opens `/posDetail?p={landiId}` in a new tab (`target="_blank" rel="noopener"`) for the correct device.
+- [x] A "Manage in Landi Connect" action appears on the relevant admin device rows / device detail.
+- [x] Clicking opens the Landi device list (`/assetsManagement`) in a new tab (`target="_blank" rel="noopener noreferrer"`) and copies the device serial to the clipboard so the admin can paste it into Landi's on-page search.
+- [x] No credentials embedded in the URL or committed to the repo; the region host is env-configurable (`NEXT_PUBLIC_LANDI_CONNECT_URL`, APAC default).
+- [x] Graceful state when a device has no serial (the action is hidden).
+- [x] When the clipboard API is unavailable, the action falls back to an info toast instead of falsely reporting "Serial copied".
+- [x] Proof: Playwright MCP run — button copies the serial and opens the authenticated Landi list; pasting the serial into Landi's search filters to the exact device.
+
+## Acceptance criteria — Option A (follow-up: deep link)
+
+- [ ] Clicking opens `/posDetail?p={landiId}` in a new tab for the correct device.
 - [ ] `landiId` is sourced from a stored SN→ID mapping (per Option A); document where it's populated from.
-- [ ] No credentials embedded in the URL or committed to the repo.
 - [ ] Graceful state when a device has no Landi ID on file (hide / disable the action).
 - [ ] Proof: screen recording opening Landi Connect on the exact device from an admin device row.
 

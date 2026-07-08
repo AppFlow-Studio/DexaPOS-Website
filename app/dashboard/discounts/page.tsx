@@ -18,7 +18,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useLocations } from "@/app/dashboard/hooks/useLocations";
 import { useClerkOrgId } from "@/app/dashboard/hooks/useLocationScoped";
 import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
-import { useSelectedLocation, useIsAllLocations } from "@/stores/location-store";
+import { useSelectedLocation, useIsAllLocations, useIsSingleLocation } from "@/stores/location-store";
 
 export default function DiscountsPage() {
     const router = useRouter();
@@ -41,6 +41,7 @@ export default function DiscountsPage() {
     const { data: locations = [] } = useLocations(clerkOrgId, userInfo?.id || "");
     const selectedLocation = useSelectedLocation();
     const isAllLocations = useIsAllLocations();
+    const isSingleLocation = useIsSingleLocation();
 
     const locationNameById = useMemo(() => {
         const map: Record<string, string> = {};
@@ -90,7 +91,7 @@ export default function DiscountsPage() {
                 </Button>
             </div>
 
-            {!isAllLocations && selectedLocation && (
+            {!isSingleLocation && !isAllLocations && selectedLocation && (
                 <p className="text-sm text-muted-foreground">
                     Showing discounts for <span className="font-medium">{selectedLocation.name}</span> plus all global discounts.
                 </p>
@@ -105,6 +106,7 @@ export default function DiscountsPage() {
                     discounts={discounts}
                     isLoading={isLoading}
                     locationNameById={locationNameById}
+                    isSingleLocation={isSingleLocation}
                     onToggleStatus={(id, isActive) => toggleStatus.mutate({ id, isActive })}
                     onBulkStatus={(ids, isActive) => bulkStatus.mutate({ ids, isActive })}
                     onBulkDelete={(ids) => bulkDelete.mutate({ ids })}
