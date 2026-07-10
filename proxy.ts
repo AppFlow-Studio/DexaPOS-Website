@@ -1,5 +1,5 @@
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
-import { NextRequest, NextResponse } from 'next/server'
+import { NextFetchEvent, NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
 const isInternalTeamRoutes = createRouteMatcher(['/manage(.*)'])
@@ -117,7 +117,7 @@ async function lookupCustomDomain(hostname: string): Promise<StoreMatch | null> 
   }
 }
 
-export default clerkMiddleware(async (auth, req) => {
+const clerkProxy = clerkMiddleware(async (auth, req) => {
   // ── Subdomain routing (before any Clerk auth) ──────────────────────
   const hostname = req.headers.get('host') || '';
   const extractedSlug = extractStoreSlug(hostname);
@@ -218,6 +218,10 @@ export default clerkMiddleware(async (auth, req) => {
 
   return NextResponse.next();
 });
+
+export default function proxy(req: NextRequest, event: NextFetchEvent) {
+  return clerkProxy(req, event);
+}
 
 export const config = {
   matcher: [
