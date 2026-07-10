@@ -107,6 +107,8 @@ export function MenuBrowser({
   const [headerHeight, setHeaderHeight] = useState(56);
   const suggestionsRef = useRef<HTMLDivElement>(null);
   const desktopSuggestionsRef = useRef<HTMLDivElement>(null);
+  const mobilePillsRef = useRef<HTMLDivElement>(null);
+  const desktopPillsRef = useRef<HTMLDivElement>(null);
 
 
   const { pendingModalItem, clearPendingModalItem } = useCart();
@@ -264,23 +266,72 @@ export function MenuBrowser({
   useEffect(() => {
     const cats = searchQuery.trim() || dietaryFilter ? filteredCategories : (activeMenu?.categories ?? []);
     if (cats.length === 0) return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const e of entries) {
-          if (e.isIntersecting) {
-            const id = e.target.getAttribute("id")?.replace("category-", "");
-            if (id) setActiveCategory(id);
-          }
+
+    // Detection line just below the sticky header + category nav.
+    const getBoundary = () => headerHeight + navHeight + 8;
+
+    // Pick the last section whose top has scrolled above the boundary line —
+    // i.e. the section currently filling the viewport. Deterministic and works
+    // whether scrolling up or down (unlike an isIntersecting-only observer,
+    // which never re-selects when scrolling back up).
+    const updateActiveCategory = () => {
+      // Once scrolled to the bottom, force the last category — trailing sections
+      // may be too short to ever push their top past the boundary line.
+      const atBottom =
+        window.innerHeight + window.scrollY >=
+        document.documentElement.scrollHeight - 2;
+      if (atBottom) {
+        setActiveCategory(cats[cats.length - 1].id);
+        return;
+      }
+      const boundary = getBoundary();
+      let current = cats[0].id;
+      for (const c of cats) {
+        const el = document.getElementById(`category-${c.id}`);
+        if (!el) continue;
+        if (el.getBoundingClientRect().top - boundary <= 1) {
+          current = c.id;
+        } else {
+          break;
         }
-      },
-      { rootMargin: `-${headerHeight + navHeight + 8}px 0px -50% 0px`, threshold: 0 }
-    );
-    cats.forEach((c) => {
-      const el = document.getElementById(`category-${c.id}`);
-      if (el) observer.observe(el);
-    });
-    return () => observer.disconnect();
+      }
+      setActiveCategory(current);
+    };
+
+    updateActiveCategory();
+    let ticking = false;
+    const onScroll = () => {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        updateActiveCategory();
+        ticking = false;
+      });
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+    };
   }, [filteredCategories, activeMenu?.categories, searchQuery, dietaryFilter, navHeight, headerHeight]);
+
+  // Keep the active category pill visible within its horizontal scroll strip
+  // (both mobile and desktop rows), so scroll-spy never highlights an off-screen pill.
+  useEffect(() => {
+    if (!activeCategory) return;
+    for (const container of [mobilePillsRef.current, desktopPillsRef.current]) {
+      if (!container) continue;
+      const pill = container.querySelector<HTMLElement>(`[data-category-pill="${activeCategory}"]`);
+      if (!pill) continue;
+      const cRect = container.getBoundingClientRect();
+      const pRect = pill.getBoundingClientRect();
+      if (pRect.left < cRect.left || pRect.right > cRect.right) {
+        const delta = pRect.left - cRect.left - (cRect.width - pRect.width) / 2;
+        container.scrollBy({ left: delta, behavior: "smooth" });
+      }
+    }
+  }, [activeCategory]);
 
   const popularItems = useMemo(() => {
     if (!activeMenu || searchQuery.trim() || dietaryFilter) return [];
@@ -328,7 +379,7 @@ export function MenuBrowser({
       <nav
         id="sticky-category-nav"
         aria-label="Menu categories"
-        className={`${searchQuery ? "sticky" : ""} lg:sticky z-40 -mx-4 px-4`}
+        className="sticky z-40 -mx-4 px-4"
         style={{
           top: headerHeight,
           backgroundColor: "#FFFFFF",
@@ -514,11 +565,11 @@ export function MenuBrowser({
           )}
 
           {/* Category pills — mobile */}
-          <div className="flex overflow-x-auto no-scrollbar gap-2 pb-1">
+          <div ref={mobilePillsRef} className="flex overflow-x-auto no-scrollbar gap-2 pb-1">
             {categories.map((cat) => {
               const isActive = activeCategory === cat.id;
               return (
-                <button key={cat.id} onClick={() => scrollToCategory(cat.id)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-all duration-200 shrink-0 rounded-full" style={{ backgroundColor: isActive ? "var(--primary)" : "#FFFFFF", color: isActive ? "var(--primary-text)" : "#6B7280", border: `1px solid ${isActive ? "var(--primary)" : "#E5E7EB"}` }}>
+                <button key={cat.id} data-category-pill={cat.id} onClick={() => scrollToCategory(cat.id)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-all duration-200 shrink-0 rounded-full" style={{ backgroundColor: isActive ? "var(--primary)" : "#FFFFFF", color: isActive ? "var(--primary-text)" : "#6B7280", border: `1px solid ${isActive ? "var(--primary)" : "#E5E7EB"}` }}>
                   {cat.name}
                 </button>
               );
@@ -543,11 +594,11 @@ export function MenuBrowser({
               })}
             </div>
           )}
-          <div className="flex overflow-x-auto no-scrollbar gap-2 pb-2">
+          <div ref={desktopPillsRef} className="flex overflow-x-auto no-scrollbar gap-2 pb-2">
             {categories.map((cat) => {
               const isActive = activeCategory === cat.id;
               return (
-                <button key={cat.id} onClick={() => scrollToCategory(cat.id)} className="px-3.5 py-1.5 text-xs font-medium whitespace-nowrap transition-all duration-200 shrink-0 rounded-full" style={{ backgroundColor: isActive ? "var(--primary)" : "#FFFFFF", color: isActive ? "var(--primary-text)" : "#6B7280", border: `1px solid ${isActive ? "var(--primary)" : "#E5E7EB"}` }}>
+                <button key={cat.id} data-category-pill={cat.id} onClick={() => scrollToCategory(cat.id)} className="px-3.5 py-1.5 text-xs font-medium whitespace-nowrap transition-all duration-200 shrink-0 rounded-full" style={{ backgroundColor: isActive ? "var(--primary)" : "#FFFFFF", color: isActive ? "var(--primary-text)" : "#6B7280", border: `1px solid ${isActive ? "var(--primary)" : "#E5E7EB"}` }}>
                   {cat.name}
                 </button>
               );

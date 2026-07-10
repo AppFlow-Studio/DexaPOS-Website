@@ -31,6 +31,7 @@ import {
   getSavedAddresses,
   addSavedAddress,
   deleteSavedAddress,
+  setDefaultAddress,
   getLoyaltyStatus,
   type CustomerProfile,
   type SavedAddress,
@@ -41,9 +42,22 @@ import {
   type OrderHistoryEntry,
 } from "../order-actions";
 import { AuthDialog } from "./AuthDialog";
+import { ConfirmDialog } from "./ConfirmDialog";
 import { formatPhoneForDisplay } from "@/lib/phone";
 
 type Section = "main" | "orders" | "addresses" | "loyalty" | "profile";
+
+function useIsDesktop() {
+  const [isDesktop, setIsDesktop] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 1024px)");
+    setIsDesktop(mq.matches);
+    const handler = (e: MediaQueryListEvent) => setIsDesktop(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
+  return isDesktop;
+}
 
 interface AccountDrawerProps {
   isOpen: boolean;
@@ -60,6 +74,7 @@ export function AccountDrawer({
   showWelcomeOnMount,
   onWelcomeShown,
 }: AccountDrawerProps) {
+  const isDesktop = useIsDesktop();
   const {
     isAuthenticated,
     customer,
@@ -86,6 +101,7 @@ export function AccountDrawer({
   // Addresses
   const [addresses, setAddresses] = useState<SavedAddress[]>([]);
   const [showAddAddress, setShowAddAddress] = useState(false);
+  const [addressError, setAddressError] = useState<string | null>(null);
   const [newAddr, setNewAddr] = useState({
     label: "Home",
     addressLine1: "",
@@ -167,6 +183,7 @@ export function AccountDrawer({
   const handleAddAddress = async () => {
     if (!sessionToken || !newAddr.addressLine1 || !newAddr.city) return;
     setLoading(true);
+    setAddressError(null);
     const result = await addSavedAddress(sessionToken, {
       ...newAddr,
       addressLine2: null,
@@ -184,6 +201,8 @@ export function AccountDrawer({
         postalCode: "",
         deliveryNotes: "",
       });
+    } else {
+      setAddressError(result.error || "Failed to save address.");
     }
     setLoading(false);
   };
@@ -194,6 +213,18 @@ export function AccountDrawer({
     setAddresses((prev) => prev.filter((a) => a.id !== id));
   };
 
+  const handleSetDefaultAddress = async (id: string) => {
+    if (!sessionToken) return;
+    // Optimistic: flip default locally so the UI updates instantly.
+    setAddresses((prev) => prev.map((a) => ({ ...a, isDefault: a.id === id })));
+    const result = await setDefaultAddress(sessionToken, id);
+    if (!result.success) {
+      // Re-sync from server on failure.
+      const { data } = await getSavedAddresses(sessionToken);
+      setAddresses(data);
+    }
+  };
+
   const handleSignOut = async () => {
     if (sessionToken) {
       await clearSession(sessionToken);
@@ -201,6 +232,7 @@ export function AccountDrawer({
     logout();
     onOpenChange(false);
   };
+  const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
 
   const menuItems = [
     { id: "profile" as Section, icon: User, label: "Profile" },
@@ -315,7 +347,7 @@ export function AccountDrawer({
 
           {/* Sign out */}
           <button
-            onClick={handleSignOut}
+            onClick={() => setShowSignOutConfirm(true)}
             className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl mt-4 transition-colors"
             style={{
               border: "1px solid var(--border)",
@@ -565,7 +597,7 @@ export function AccountDrawer({
             </h3>
             <Button
               size="sm"
-              onClick={() => setShowAddAddress(true)}
+              onClick={() => { setAddressError(null); setShowAddAddress(true); }}
               style={{
                 backgroundColor: "var(--primary)",
                 color: "#fff",
@@ -620,7 +652,7 @@ export function AccountDrawer({
                     placeholder="Street address"
                     style={{ borderColor: "var(--border)", backgroundColor: "var(--bg)" }}
                   />
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                     <Input
                       value={newAddr.city}
                       onChange={(e) =>
@@ -657,6 +689,11 @@ export function AccountDrawer({
                     placeholder="Delivery notes"
                     style={{ borderColor: "var(--border)", backgroundColor: "var(--bg)" }}
                   />
+                  {addressError && (
+                    <p className="text-xs" style={{ color: "#ef4444" }}>
+                      {addressError}
+                    </p>
+                  )}
                   <div className="flex gap-2">
                     <Button
                       onClick={handleAddAddress}
@@ -673,7 +710,7 @@ export function AccountDrawer({
                     </Button>
                     <Button
                       variant="outline"
-                      onClick={() => setShowAddAddress(false)}
+                      onClick={() => { setAddressError(null); setShowAddAddress(false); }}
                       style={{ borderColor: "var(--border)", borderRadius: "var(--radius)" }}
                     >
                       Cancel
@@ -692,40 +729,54 @@ export function AccountDrawer({
                   {addresses.map((addr) => (
                     <div
                       key={addr.id}
-                      className="flex items-start justify-between p-3 rounded-xl"
+                      className="p-3 rounded-xl"
                       style={{
                         backgroundColor: "var(--card)",
                         border: "1px solid var(--border)",
                       }}
                     >
-                      <div className="flex items-start gap-2">
-                        <MapPin className="h-4 w-4 mt-0.5 shrink-0" style={{ color: "var(--primary)" }} />
-                        <div>
-                          <p className="text-sm font-medium" style={{ color: "var(--text)" }}>
-                            {addr.label}
-                            {addr.isDefault && (
-                              <span
-                                className="ml-2 text-xs px-1.5 py-0.5 rounded"
-                                style={{
-                                  backgroundColor: "color-mix(in srgb, var(--primary) 15%, transparent)",
-                                  color: "var(--primary)",
-                                }}
-                              >
-                                Default
-                              </span>
-                            )}
-                          </p>
-                          <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
-                            {addr.addressLine1}, {addr.city}, {addr.state} {addr.postalCode}
-                          </p>
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-start gap-2">
+                          <MapPin className="h-4 w-4 mt-0.5 shrink-0" style={{ color: "var(--primary)" }} />
+                          <div>
+                            <p className="text-sm font-medium" style={{ color: "var(--text)" }}>
+                              {addr.label}
+                              {addr.isDefault && (
+                                <span
+                                  className="ml-2 text-xs px-1.5 py-0.5 rounded"
+                                  style={{
+                                    backgroundColor: "color-mix(in srgb, var(--primary) 15%, transparent)",
+                                    color: "var(--primary)",
+                                  }}
+                                >
+                                  Default
+                                </span>
+                              )}
+                            </p>
+                            <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
+                              {addr.addressLine1}, {addr.city}, {addr.state} {addr.postalCode}
+                            </p>
+                          </div>
                         </div>
+                        <button
+                          onClick={() => handleDeleteAddress(addr.id)}
+                          className="p-1 rounded-md transition-colors hover:bg-red-50"
+                          aria-label="Delete address"
+                        >
+                          <Trash2 className="h-4 w-4 text-red-400" />
+                        </button>
                       </div>
-                      <button
-                        onClick={() => handleDeleteAddress(addr.id)}
-                        className="p-1 rounded-md transition-colors hover:bg-red-50"
-                      >
-                        <Trash2 className="h-4 w-4 text-red-400" />
-                      </button>
+
+                      {!addr.isDefault && (
+                        <button
+                          onClick={() => handleSetDefaultAddress(addr.id)}
+                          className="mt-2 ml-6 flex items-center gap-1.5 text-xs font-medium transition-opacity hover:opacity-80"
+                          style={{ color: "var(--primary)" }}
+                        >
+                          <Check className="h-3.5 w-3.5" />
+                          Set as default
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -862,26 +913,54 @@ export function AccountDrawer({
     <>
       <SheetPrimitive.Root open={isOpen} onOpenChange={onOpenChange}>
         <SheetPrimitive.Portal>
-          {/* Backdrop */}
+          {/* Backdrop — dimmed on mobile, subtle on desktop */}
           <SheetPrimitive.Overlay
             className="fixed inset-0 z-[60] transition-opacity duration-200 data-[state=open]:opacity-100 data-[state=closed]:opacity-0"
-            style={{ backgroundColor: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }}
+            style={{
+              backgroundColor: isDesktop ? "rgba(0,0,0,0.2)" : "rgba(0,0,0,0.5)",
+              backdropFilter: isDesktop ? "none" : "blur(4px)",
+            }}
           />
 
-          {/* Bottom Sheet */}
+          {/* Bottom sheet on mobile, right-side drawer on desktop.
+              Keyframe-based slide (shared with CartSidebar) so the entrance
+              always animates from off-screen regardless of mount timing. */}
           <SheetPrimitive.Content
             aria-label="Account"
-            className="fixed bottom-0 left-0 right-0 z-[70] flex flex-col transition-transform duration-[280ms] [transition-timing-function:cubic-bezier(0.32,0.72,0,1)] data-[state=open]:translate-y-0 data-[state=closed]:translate-y-full"
-            style={{
-              maxHeight: "85vh",
-              backgroundColor: "var(--bg)",
-              borderRadius: "20px 20px 0 0",
-              fontFamily: "var(--font)",
-              boxShadow: "0 -8px 40px rgba(0,0,0,0.15)",
-            }}
+            className={
+              "fixed z-[70] flex flex-col " +
+              (isDesktop ? "cart-slide-right" : "cart-slide-bottom")
+            }
+            style={
+              isDesktop
+                ? {
+                    top: 0,
+                    right: 0,
+                    bottom: 0,
+                    left: "auto",
+                    width: "420px",
+                    maxWidth: "90vw",
+                    maxHeight: "100vh",
+                    backgroundColor: "var(--card)",
+                    borderRadius: "16px 0 0 16px",
+                    fontFamily: "var(--font)",
+                    boxShadow: "-8px 0 40px rgba(0,0,0,0.15)",
+                  }
+                : {
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    top: "auto",
+                    height: "85vh",
+                    backgroundColor: "var(--card)",
+                    borderRadius: "20px 20px 0 0",
+                    fontFamily: "var(--font)",
+                    boxShadow: "0 -8px 40px rgba(0,0,0,0.15)",
+                  }
+            }
           >
-              {/* Drag Handle */}
-              <div className="flex justify-center pt-3 pb-1 shrink-0">
+              {/* Drag Handle — mobile only */}
+              <div className="flex justify-center pt-3 pb-1 shrink-0 lg:hidden">
                 <div
                   className="w-10 h-1 rounded-full"
                   style={{ backgroundColor: "var(--border)" }}
@@ -931,6 +1010,16 @@ export function AccountDrawer({
           setShowAuth(false);
           setJustLoggedIn(true);
         }}
+      />
+
+      <ConfirmDialog
+        open={showSignOutConfirm}
+        onOpenChange={setShowSignOutConfirm}
+        title="Sign out?"
+        description="Are you sure you want to sign out of your account?"
+        confirmLabel="Sign Out"
+        cancelLabel="Cancel"
+        onConfirm={handleSignOut}
       />
     </>
   );

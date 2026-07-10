@@ -20,6 +20,7 @@ interface AddressAutocompleteProps {
   error?: boolean
   disabled?: boolean
   id?: string
+  inputStyle?: React.CSSProperties
 }
 
 // Singleton loader so we only ever load the script once per page.
@@ -128,6 +129,7 @@ function FallbackInput({
   error,
   disabled,
   id,
+  inputStyle,
 }: AddressAutocompleteProps) {
   return (
     <Input
@@ -137,6 +139,7 @@ function FallbackInput({
       placeholder={placeholder}
       disabled={disabled}
       className={cn(error && 'border-destructive')}
+      style={inputStyle}
     />
   )
 }
@@ -158,6 +161,7 @@ function AddressAutocompleteInner({
   error,
   disabled,
   id,
+  inputStyle,
 }: AddressAutocompleteProps) {
   const [suggestions, setSuggestions] = React.useState<LocalSuggestion[]>([])
   const [open, setOpen] = React.useState(false)
@@ -313,6 +317,7 @@ function AddressAutocompleteInner({
         aria-autocomplete="list"
         aria-expanded={open}
         className={cn(error && 'border-destructive')}
+        style={inputStyle}
       />
       {open && suggestions.length > 0 && (
         <div

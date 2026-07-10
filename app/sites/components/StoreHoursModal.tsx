@@ -87,8 +87,8 @@ export function StoreHoursModal({
           data-slot="dialog-content"
           className="fixed left-1/2 top-1/2 z-[81] w-full max-w-sm -translate-x-1/2 -translate-y-1/2 overflow-hidden shadow-xl"
           style={{
-            backgroundColor: "var(--bg, #ffffff)",
-            borderRadius: "8px",
+            backgroundColor: "var(--card, #ffffff)",
+            borderRadius: "var(--radius, 16px)",
           }}
         >
           {/* Header */}
