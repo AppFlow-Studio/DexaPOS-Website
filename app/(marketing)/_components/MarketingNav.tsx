@@ -51,6 +51,9 @@ export default function MarketingNav({
         </ul>
 
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          <a href="/sign-in" className="nav-signin">
+            Sign In
+          </a>
           <a href="/contact" className="nav-cta">
             Request a Demo
           </a>

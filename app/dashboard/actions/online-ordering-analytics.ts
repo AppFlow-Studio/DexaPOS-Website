@@ -2,27 +2,50 @@
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { applyReportablePredicate } from "@/lib/reporting/recognized-order";
-
-// Synthetic platform key for first-party online orders (placed on the
-// merchant's own storefront, i.e. public.orders.order_type = 'online'), as
-// opposed to third-party OrderOut platforms (DoorDash, Uber Eats, …).
-const DIRECT_PLATFORM = "direct";
+import {
+  canonicalizePlatform,
+  sortPlatformSlugs,
+  type PlatformSlug,
+} from "@/lib/orderout/platform";
 
 // ============================================================================
 // Online Ordering Channel Analytics
 // ============================================================================
+//
+// Data source: public.orders placed through an online channel, left-joined to
+// public.online_orders for the provider/delivery_company that identifies the
+// platform. This is the LIVE ingestion path (process_online_order /
+// create-online-order) — the older orderout_orders table is written only by the
+// disabled legacy webhook.
+//
+// The online channel is identified by order_source. The value has drifted over
+// time across ingestion versions — first-party storefront orders have been
+// written as both 'online' and 'online_store', and aggregator orders as
+// 'orderout' — so we match ALL known online sources, not just 'online', to
+// avoid silently missing rows on newer ingestion.
+//
+// Every row is gated by the canonical recognized-order predicate
+// (is_order_reportable) so only paid, non-cancelled orders count — the same set
+// the headline Online Revenue reconciles to.
+//
+// Platform identity is normalized via lib/orderout/platform.ts: OrderOut is
+// decomposed into the real platform, casing is collapsed, first-party channels
+// (storefront/app) bucket into "first_party", and anything unresolved → "other".
+
+// order_source values that denote an online (non-POS) order. Kept broad on
+// purpose: staging carries 'online', 'online_store', and 'orderout' for online
+// orders depending on when/how they were ingested.
+const ONLINE_ORDER_SOURCES = ["online", "online_store", "orderout"] as const;
 
 export interface PlatformSummary {
-  platform: string;
+  /** Canonical platform slug (grubhub | doordash | ubereats | first_party | other). */
+  platform: PlatformSlug;
   totalOrders: number;
   totalRevenue: number;
   avgOrderValue: number;
-  totalDeliveryFees: number;
-  totalServiceFees: number;
+  totalServiceCharges: number;
   totalTips: number;
   totalDiscounts: number;
-  acceptedOrders: number;
-  rejectedOrders: number;
   cancelledOrders: number;
 }
 
@@ -39,6 +62,26 @@ export interface OnlineOrderingAnalytics {
   totalOnlineOrders: number;
 }
 
+interface PlatformAccumulator {
+  totalOrders: number;
+  totalRevenue: number;
+  totalServiceCharges: number;
+  totalTips: number;
+  totalDiscounts: number;
+  cancelledOrders: number;
+}
+
+function emptyAccumulator(): PlatformAccumulator {
+  return {
+    totalOrders: 0,
+    totalRevenue: 0,
+    totalServiceCharges: 0,
+    totalTips: 0,
+    totalDiscounts: 0,
+    cancelledOrders: 0,
+  };
+}
+
 async function getMerchantId(clerkOrgId: string) {
   const supabase = createServerSupabaseClient();
   const { data: merchant, error } = await supabase
@@ -52,7 +95,7 @@ async function getMerchantId(clerkOrgId: string) {
 }
 
 /**
- * Get online ordering analytics broken down by delivery platform
+ * Get online ordering analytics broken down by delivery platform.
  */
 export async function GetOnlineOrderingAnalytics(
   clerkOrgId: string,
@@ -62,95 +105,85 @@ export async function GetOnlineOrderingAnalytics(
 ): Promise<OnlineOrderingAnalytics> {
   const merchantId = await getMerchantId(clerkOrgId);
   if (!merchantId) {
-    return { platforms: [], dailyTrends: {}, totalOnlineRevenue: 0, totalOnlineOrders: 0 };
+    return {
+      platforms: [],
+      dailyTrends: {},
+      totalOnlineRevenue: 0,
+      totalOnlineOrders: 0,
+    };
   }
 
   const supabase = createServerSupabaseClient();
 
-  // Get orderout_restaurants for this merchant (to filter by location if needed)
-  let restaurantQuery = supabase
-    .from("orderout_restaurants")
-    .select("id, location_id")
-    .eq("merchant_id", merchantId);
+  // All recognized online orders for the merchant in range, with the linked
+  // online_orders row (may be null for first-party storefront orders that
+  // predate the online_orders link — those still bucket as first_party via
+  // order_source). The recognized-order predicate applies to the base
+  // `orders` table so only paid, non-cancelled orders count.
+  let query = applyReportablePredicate(
+    supabase
+      .from("orders")
+      .select(
+        `total_amount, tip_amount, discount_amount, service_charge, delivery_platform, order_source, status, created_at,
+         online_orders ( provider, delivery_company, provider_status )`
+      )
+      .eq("merchant_id", merchantId)
+      .in("order_source", ONLINE_ORDER_SOURCES as unknown as string[])
+  )
+    .gte("created_at", dateFrom.toISOString())
+    .lte("created_at", dateTo.toISOString());
 
   if (locationId && locationId !== "all") {
-    restaurantQuery = restaurantQuery.eq("location_id", locationId);
+    query = query.eq("location_id", locationId);
   }
 
-  const { data: restaurants } = await restaurantQuery;
-  const restaurantIds = (restaurants ?? []).map((r) => r.id);
-
-  // Get all third-party OrderOut orders for these restaurants in the range.
-  // (Merchants with no OrderOut integration simply have none — first-party
-  // online orders below still surface.)
-  let orders: any[] = [];
-  if (restaurantIds.length > 0) {
-    const { data: orderoutOrders, error: ordersError } = await supabase
-      .from("orderout_orders")
-      .select(
-        "id, delivery_platform, order_type, accept_status, platform_subtotal, platform_tax, platform_delivery_fee, platform_service_fee, platform_discount, platform_tip, platform_total, placed_on, created_at, cancel_source, cancelled_at"
-      )
-      .in("orderout_restaurant_id", restaurantIds)
-      .gte("created_at", dateFrom.toISOString())
-      .lte("created_at", dateTo.toISOString());
-
-    if (ordersError) {
-      console.error("[OnlineOrderingAnalytics] Error fetching orderout orders:", ordersError);
-    } else {
-      orders = orderoutOrders ?? [];
-    }
+  const { data: rows, error } = await query;
+  if (error) {
+    console.error("[OnlineOrderingAnalytics] Error fetching online orders:", error);
+    return {
+      platforms: [],
+      dailyTrends: {},
+      totalOnlineRevenue: 0,
+      totalOnlineOrders: 0,
+    };
   }
 
-  // Aggregate by platform
-  const platformMap = new Map<string, {
-    totalOrders: number;
-    totalRevenue: number;
-    totalDeliveryFees: number;
-    totalServiceFees: number;
-    totalTips: number;
-    totalDiscounts: number;
-    acceptedOrders: number;
-    rejectedOrders: number;
-    cancelledOrders: number;
-  }>();
+  const platformMap = new Map<PlatformSlug, PlatformAccumulator>();
+  const trendsMap = new Map<PlatformSlug, Map<string, { orders: number; revenue: number }>>();
 
-  // Daily trends by platform
-  const trendsMap = new Map<string, Map<string, { orders: number; revenue: number }>>();
+  for (const order of rows ?? []) {
+    // The embedded relation comes back as an array (0..1 rows) or an object
+    // depending on PostgREST cardinality inference — normalize to one row.
+    const linkRaw = (order as { online_orders?: unknown }).online_orders;
+    const link = (Array.isArray(linkRaw) ? linkRaw[0] : linkRaw) as
+      | { provider?: string | null; delivery_company?: string | null; provider_status?: string | null }
+      | null
+      | undefined;
 
-  for (const order of orders) {
-    const platform = (order.delivery_platform || "unknown").toLowerCase();
-    const total = Number(order.platform_total || 0);
-    const dateStr = (order.placed_on || order.created_at).slice(0, 10);
+    const platform = canonicalizePlatform({
+      deliveryPlatform: order.delivery_platform,
+      deliveryCompany: link?.delivery_company,
+      provider: link?.provider,
+      // order_source='online' with no third-party signal → first_party, so
+      // legacy/direct storefront orders (no online_orders link, null
+      // delivery_platform) don't inflate the Other bucket.
+      orderSource: order.order_source,
+    });
 
-    // Platform aggregation
+    const total = Number(order.total_amount || 0);
+    const dateStr = String(order.created_at).slice(0, 10);
+
     if (!platformMap.has(platform)) {
-      platformMap.set(platform, {
-        totalOrders: 0,
-        totalRevenue: 0,
-        totalDeliveryFees: 0,
-        totalServiceFees: 0,
-        totalTips: 0,
-        totalDiscounts: 0,
-        acceptedOrders: 0,
-        rejectedOrders: 0,
-        cancelledOrders: 0,
-      });
+      platformMap.set(platform, emptyAccumulator());
     }
+    const acc = platformMap.get(platform)!;
+    acc.totalOrders += 1;
+    acc.totalRevenue += total;
+    acc.totalTips += Number(order.tip_amount || 0);
+    acc.totalDiscounts += Number(order.discount_amount || 0);
+    acc.totalServiceCharges += Number(order.service_charge || 0);
+    if (link?.provider_status === "cancelled") acc.cancelledOrders += 1;
 
-    const p = platformMap.get(platform)!;
-    p.totalOrders += 1;
-    p.totalRevenue += total;
-    p.totalDeliveryFees += Number(order.platform_delivery_fee || 0);
-    p.totalServiceFees += Number(order.platform_service_fee || 0);
-    p.totalTips += Number(order.platform_tip || 0);
-    p.totalDiscounts += Number(order.platform_discount || 0);
-
-    if (order.accept_status === "accepted") p.acceptedOrders += 1;
-    else if (order.accept_status === "rejected") p.rejectedOrders += 1;
-
-    if (order.cancelled_at) p.cancelledOrders += 1;
-
-    // Daily trends
     if (!trendsMap.has(platform)) {
       trendsMap.set(platform, new Map());
     }
@@ -163,76 +196,17 @@ export async function GetOnlineOrderingAnalytics(
     day.revenue += total;
   }
 
-  // First-party online orders: placed on the merchant's own storefront
-  // (public.orders.order_type = 'online'), gated by the canonical
-  // recognized-order predicate so only paid orders count. These have no
-  // third-party platform fees, so the fee/accept/reject fields stay zero.
-  let directQuery = applyReportablePredicate(
-    supabase
-      .from("orders")
-      .select("total_amount, tip_amount, discount_amount, created_at")
-      .eq("merchant_id", merchantId)
-      .eq("order_type", "online")
-  )
-    .gte("created_at", dateFrom.toISOString())
-    .lte("created_at", dateTo.toISOString());
-
-  if (locationId && locationId !== "all") {
-    directQuery = directQuery.eq("location_id", locationId);
-  }
-
-  const { data: directOrders, error: directError } = await directQuery;
-  if (directError) {
-    console.error("[OnlineOrderingAnalytics] Error fetching first-party online orders:", directError);
-  }
-
-  for (const order of directOrders ?? []) {
-    const total = Number(order.total_amount || 0);
-    const dateStr = String(order.created_at).slice(0, 10);
-
-    if (!platformMap.has(DIRECT_PLATFORM)) {
-      platformMap.set(DIRECT_PLATFORM, {
-        totalOrders: 0,
-        totalRevenue: 0,
-        totalDeliveryFees: 0,
-        totalServiceFees: 0,
-        totalTips: 0,
-        totalDiscounts: 0,
-        acceptedOrders: 0,
-        rejectedOrders: 0,
-        cancelledOrders: 0,
-      });
-    }
-    const p = platformMap.get(DIRECT_PLATFORM)!;
-    p.totalOrders += 1;
-    p.totalRevenue += total;
-    p.totalTips += Number(order.tip_amount || 0);
-    p.totalDiscounts += Number(order.discount_amount || 0);
-    // All counted orders are recognized (paid), so they are "accepted".
-    p.acceptedOrders += 1;
-
-    if (!trendsMap.has(DIRECT_PLATFORM)) {
-      trendsMap.set(DIRECT_PLATFORM, new Map());
-    }
-    const dailyMap = trendsMap.get(DIRECT_PLATFORM)!;
-    if (!dailyMap.has(dateStr)) {
-      dailyMap.set(dateStr, { orders: 0, revenue: 0 });
-    }
-    const day = dailyMap.get(dateStr)!;
-    day.orders += 1;
-    day.revenue += total;
-  }
-
-  // Build platform summaries
-  const platforms: PlatformSummary[] = Array.from(platformMap.entries())
-    .map(([platform, data]) => ({
-      platform,
+  // Order platforms by canonical display order, then build summaries.
+  const orderedSlugs = sortPlatformSlugs(platformMap.keys());
+  const platforms: PlatformSummary[] = orderedSlugs.map((slug) => {
+    const data = platformMap.get(slug)!;
+    return {
+      platform: slug,
       ...data,
       avgOrderValue: data.totalOrders > 0 ? data.totalRevenue / data.totalOrders : 0,
-    }))
-    .sort((a, b) => b.totalRevenue - a.totalRevenue);
+    };
+  });
 
-  // Build daily trends
   const dailyTrends: Record<string, PlatformDailyTrend[]> = {};
   for (const [platform, dayMap] of trendsMap.entries()) {
     dailyTrends[platform] = Array.from(dayMap.entries())

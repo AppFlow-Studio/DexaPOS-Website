@@ -30,6 +30,8 @@ import {
   CreditCard,
   Utensils,
   Calendar,
+  Radio,
+  Truck,
 } from "lucide-react";
 import {
   OrderStatus,
@@ -49,6 +51,12 @@ import {
 import { useSelectedLocation } from "@/stores/location-store";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
+import {
+  ORDER_SOURCE_OPTIONS,
+  DELIVERY_PLATFORM_OPTIONS,
+  orderSourceLabel,
+  platformLabel,
+} from "@/lib/orderout/platform";
 
 interface OrderFiltersProps {
   className?: string;
@@ -138,6 +146,31 @@ export function OrderFilters({ className }: OrderFiltersProps) {
     updateParams({ payment: next.length ? next.join(",") : null });
   };
 
+  const handleSourceToggle = (source: string) => {
+    const current = searchParams.get("source")?.split(",").filter(Boolean) || [];
+    const next = current.includes(source)
+      ? current.filter((s) => s !== source)
+      : [...current, source];
+    // Platform only applies to OrderOut. If the resulting channel selection excludes
+    // orderout (and isn't empty/unscoped), drop any platform filter so a stale
+    // marketplace filter can't silently hide rows.
+    const platformStillApplies =
+      next.length === 0 || next.includes("orderout");
+    updateParams({
+      source: next.length ? next.join(",") : null,
+      ...(platformStillApplies ? {} : { platform: null }),
+    });
+  };
+
+  const handlePlatformToggle = (platform: string) => {
+    const current =
+      searchParams.get("platform")?.split(",").filter(Boolean) || [];
+    const next = current.includes(platform)
+      ? current.filter((p) => p !== platform)
+      : [...current, platform];
+    updateParams({ platform: next.length ? next.join(",") : null });
+  };
+
   const handleStaffChange = (staffId: string) => {
     updateParams({ staff: staffId === "all" ? null : staffId });
   };
@@ -168,12 +201,28 @@ export function OrderFilters({ className }: OrderFiltersProps) {
 
   const selectedTypes =
     searchParams.get("type")?.split(",").filter(Boolean) ?? [];
+  const selectedSources =
+    searchParams.get("source")?.split(",").filter(Boolean) ?? [];
+  // Platform (marketplace) only applies to OrderOut orders. Enable the control when
+  // no channel is chosen (unscoped) or when 'orderout' is among the selected channels.
+  const platformFilterEnabled =
+    selectedSources.length === 0 || selectedSources.includes("orderout");
   const statusTriggerLabel = triggerLabel(
     "status",
     "Status",
     (v) => ORDER_STATUS_LABELS[v as OrderStatus] ?? v
   );
   const typeTriggerLabel = triggerLabel("type", "Type", orderTypeLabel);
+  const sourceTriggerLabel = triggerLabel(
+    "source",
+    "Channel",
+    (v) => orderSourceLabel(v) || v
+  );
+  const platformTriggerLabel = triggerLabel(
+    "platform",
+    "Platform",
+    (v) => platformLabel(v) || v
+  );
   const paymentTriggerLabel = triggerLabel(
     "payment",
     "Payment",
@@ -198,6 +247,8 @@ export function OrderFilters({ className }: OrderFiltersProps) {
       "to",
       "status",
       "type",
+      "source",
+      "platform",
       "payment",
       "staff",
       "minAmount",
@@ -272,6 +323,74 @@ export function OrderFilters({ className }: OrderFiltersProps) {
                   onCheckedChange={() => handleTypeToggle(type)}
                 >
                   {ORDER_TYPE_LABELS[type]}
+                </DropdownMenuCheckboxItem>
+              );
+            })}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        {/* Channel (order_source) Filter */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm" className="border-dashed">
+              <Radio className="mr-2 h-4 w-4" />
+              {sourceTriggerLabel}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-[200px]">
+            <DropdownMenuLabel>Filter by Channel</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {ORDER_SOURCE_OPTIONS.map(({ value, label }) => {
+              const isSelected = searchParams
+                .get("source")
+                ?.split(",")
+                .includes(value);
+              return (
+                <DropdownMenuCheckboxItem
+                  key={value}
+                  checked={isSelected}
+                  onCheckedChange={() => handleSourceToggle(value)}
+                >
+                  {label}
+                </DropdownMenuCheckboxItem>
+              );
+            })}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        {/* Delivery Platform Filter — only applies to OrderOut orders */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild disabled={!platformFilterEnabled}>
+            <Button
+              variant="outline"
+              size="sm"
+              className="border-dashed disabled:opacity-50"
+              disabled={!platformFilterEnabled}
+              title={
+                platformFilterEnabled
+                  ? undefined
+                  : "Select the OrderOut channel to filter by platform"
+              }
+            >
+              <Truck className="mr-2 h-4 w-4" />
+              {platformTriggerLabel}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-[200px]">
+            <DropdownMenuLabel>Filter by Platform</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {DELIVERY_PLATFORM_OPTIONS.map(({ value, label }) => {
+              const isSelected = searchParams
+                .get("platform")
+                ?.split(",")
+                .includes(value);
+              return (
+                <DropdownMenuCheckboxItem
+                  key={value}
+                  checked={isSelected}
+                  onCheckedChange={() => handlePlatformToggle(value)}
+                >
+                  {label}
                 </DropdownMenuCheckboxItem>
               );
             })}

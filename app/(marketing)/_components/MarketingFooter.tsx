@@ -41,6 +41,7 @@ export default function MarketingFooter() {
               <li><a href="#">Documentation</a></li>
               <li><a href="#">Status</a></li>
               <li><a href="#">Contact</a></li>
+              <li><a href="/sign-in">Sign In</a></li>
             </ul>
           </div>
         </div>
