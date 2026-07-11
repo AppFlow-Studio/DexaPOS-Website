@@ -225,8 +225,8 @@ export default function LocationsPage() {
     // A one-active-location account gets a focused view of that store (matching
     // the singular "Location" nav) instead of the list-with-add. No Add Location,
     // no list/search/multi-stats. Multi-location accounts fall through unchanged.
-    if (!isLoading && isSingleLocation && activeStores.length === 1) {
-        const store = activeStores[0]
+    if (!isLoading && isSingleLocation && activeLocations.length === 1) {
+        const store = activeLocations[0]
         return (
             <div className="space-y-6 animate-in fade-in duration-500 w-full min-w-0">
                 <div>
