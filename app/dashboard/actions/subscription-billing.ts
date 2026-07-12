@@ -2,6 +2,7 @@
 
 import { auth } from '@clerk/nextjs/server'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
+import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { getEffectiveMerchantContext } from '@/lib/admin/merchant-context'
 import {
   formatLongDate,
@@ -554,6 +555,143 @@ export async function getMerchantTierPlansForCurrentMerchant(): Promise<Merchant
       display_order: number | null
     }>,
   )
+}
+
+// ---------------------------------------------------------------------------
+// Add-Location gate — single-location UX ticket
+// ---------------------------------------------------------------------------
+// The merchant-web Add-Location paywall reads the resolved tier (Basic default
+// when no merchant_plan_subscriptions row), whether the tier still has location
+// headroom, and the next tier up (to price the gate). All prices are NUMERIC
+// dollars from subscription_plans.base_price_monthly so HQ edits reflect with
+// zero deploy — never hardcoded here.
+
+export interface MerchantLocationGateTier {
+  code: string
+  name: string
+  minLocations: number | null
+  maxLocations: number | null
+  basePriceMonthly: number
+  displayOrder: number
+  description: string | null
+}
+
+export interface MerchantLocationGateUpgradeTarget {
+  code: string
+  name: string
+  maxLocations: number | null
+  basePriceMonthly: number
+}
+
+export interface MerchantLocationGateStatus {
+  activeLocationCount: number
+  canAddLocation: boolean
+  resolvedTier: MerchantLocationGateTier | null
+  upgradeTarget: MerchantLocationGateUpgradeTarget | null
+}
+
+export async function getMerchantLocationGateStatus(): Promise<MerchantLocationGateStatus> {
+  const { merchantId, serviceRole } = await resolveMerchantForCurrentOrg()
+
+  const { data, error } = await serviceRole.rpc('get_merchant_subscription_status', {
+    p_merchant_id: merchantId,
+  })
+
+  if (error) {
+    console.error('[getMerchantLocationGateStatus] error:', error)
+    throw new Error('Failed to load location plan status.')
+  }
+
+  const raw = (data ?? {}) as Record<string, any>
+  const rt = raw.resolved_tier as Record<string, any> | null | undefined
+  const ut = raw.upgrade_target as Record<string, any> | null | undefined
+
+  return {
+    activeLocationCount: toNumber(raw.active_location_count),
+    canAddLocation: Boolean(raw.can_add_location),
+    resolvedTier: rt
+      ? {
+          code: String(rt.code),
+          name: String(rt.name),
+          minLocations: rt.min_locations === null ? null : toNumber(rt.min_locations),
+          maxLocations: rt.max_locations === null ? null : toNumber(rt.max_locations),
+          basePriceMonthly: toNumber(rt.base_price_monthly),
+          displayOrder: toNumber(rt.display_order),
+          description: typeof rt.description === 'string' ? rt.description : null,
+        }
+      : null,
+    upgradeTarget: ut
+      ? {
+          code: String(ut.code),
+          name: String(ut.name),
+          maxLocations: ut.max_locations === null ? null : toNumber(ut.max_locations),
+          basePriceMonthly: toNumber(ut.base_price_monthly),
+        }
+      : null,
+  }
+}
+
+/**
+ * File a merchant-initiated request to unlock multi-location. Writes a pending
+ * `upgrade_request` billing event to audit_logs (action_category='billing'),
+ * which surfaces in the HQ plan-change feed. Uses the authenticated client so
+ * current_user_id() records the requesting user.
+ */
+export async function RequestLocationUpgrade(): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { userId } = await auth()
+    if (!userId) {
+      return { success: false, error: 'Unauthorized' }
+    }
+
+    const { merchantId, serviceRole } = await resolveMerchantForCurrentOrg()
+
+    const { data, error } = await serviceRole.rpc('get_merchant_subscription_status', {
+      p_merchant_id: merchantId,
+    })
+
+    if (error) {
+      console.error('[RequestLocationUpgrade] plan status error:', error)
+      return { success: false, error: 'Failed to resolve plan status.' }
+    }
+
+    const raw = (data ?? {}) as Record<string, any>
+    const resolved = raw.resolved_tier as Record<string, any> | null | undefined
+    const target = raw.upgrade_target as Record<string, any> | null | undefined
+
+    if (!target) {
+      return { success: false, error: 'No higher plan is available to request.' }
+    }
+
+    const supabase = createServerSupabaseClient()
+    const { error: rpcError } = await supabase.rpc('log_subscription_billing_event', {
+      p_action: 'upgrade_request',
+      p_merchant_id: merchantId,
+      p_resource_type: 'subscription_plan',
+      p_resource_name: String(target.name ?? target.code),
+      p_changes: {
+        from_plan: resolved ? { code: resolved.code, name: resolved.name } : null,
+        to_plan: {
+          code: target.code,
+          name: target.name,
+          base_price_monthly: target.base_price_monthly,
+        },
+        active_location_count: raw.active_location_count ?? null,
+        reason: 'add_location_gate',
+      },
+      p_status: 'pending',
+    })
+
+    if (rpcError) {
+      console.error('[RequestLocationUpgrade] log event error:', rpcError)
+      return { success: false, error: 'Failed to submit upgrade request.' }
+    }
+
+    return { success: true }
+  } catch (error: any) {
+    console.error('[RequestLocationUpgrade] exception:', error)
+    return { success: false, error: error?.message || 'Failed to submit upgrade request.' }
+  }
 }
 
 export async function getMerchantSubscriptionInvoiceDocument(
