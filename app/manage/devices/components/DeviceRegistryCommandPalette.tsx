@@ -188,6 +188,7 @@ export function DeviceRegistryCommandPaletteProvider({
                       device.manufacturer,
                       device.model_name,
                       device.model_sku,
+                      device.pos_id,
                       device.merchant_name,
                       device.location_name,
                     ]
@@ -214,6 +215,7 @@ export function DeviceRegistryCommandPaletteProvider({
                       <div className="truncate text-xs text-muted-foreground">
                         {device.manufacturer} {device.model_name}
                         {device.model_sku ? ` | ${device.model_sku}` : ''}
+                        {device.pos_id ? ` | POS ID ${device.pos_id}` : ''}
                       </div>
                       <div className="truncate text-xs text-muted-foreground">
                         {formatDeviceCategory(device.device_category)}

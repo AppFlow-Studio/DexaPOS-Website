@@ -320,6 +320,7 @@ export default function ManageDevicesPage() {
                             </div>
                             <div className="text-xs text-muted-foreground">
                               {formatDeviceCategory(device.device_category)}
+                              {device.pos_id ? ` | POS ID ${device.pos_id}` : ''}
                             </div>
                           </div>
                         </div>
