@@ -243,6 +243,27 @@ Single index for active ticket streams and their source trackers.
 - Separates website/dashboard work, POS work, Supabase/data repair, and tickets not ready to claim done.
 - Use this before moving those tickets from In Progress to Done.
 
+## Stream R: [BILLING][HIGH] DEXA HQ Self-Service Billing Control
+
+1. Plan:
+- `docs/PLAN-2026-07-12-HQ-SELF-SERVICE-BILLING-CONTROL.md`
+
+2. Scope notes:
+- Follow-up to Device Inventory & Registry and NMI SaaS Subscription Billing.
+- Backend-first billing/device automation stream with HQ UI completion required before Done unless explicitly split.
+- Existing repo has billing foundation, subscription workspace, service catalog, device catalog, and NMI billing rail.
+- 2026-07-12 website/backend phase added:
+  - `supabase/migrations/20260712120000_hq_self_service_billing_control_phase1.sql`
+  - audited HQ pricing/catalog RPCs,
+  - unified subscription calculator,
+  - subscription recalculation helper,
+  - invoice generation alignment,
+  - POS ID generation/exposure,
+  - website POS ID display/search,
+  - device catalog deactivate-instead-of-delete behavior.
+- Still needed: staging migration apply, SQL/RLS QA, live calculator parity, device-to-billing bridge, station quota enforcement, non-payment suspend/restore gating, and any remaining visible HQ UI for add-on editing/live calculator.
+- Do not mark Done until calculator parity, next-invoice cascade, device-driven billing, quota blocking, suspension/restore, RLS checks, and proof video pass.
+
 ## Notes
 
 1. Keep this file updated whenever a new ticket stream starts.

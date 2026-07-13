@@ -559,7 +559,9 @@ export function MerchantSubscriptionOverviewCard({
             </>
           )}
 
-          {merchantPlanStatus.is_over_limit && merchantPlanStatus.plan?.max_locations !== null ? (
+          {merchantPlanStatus.is_over_limit &&
+          merchantPlanStatus.plan &&
+          merchantPlanStatus.plan.max_locations !== null ? (
             <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
               <div className="flex items-start gap-3">
                 <AlertTriangle className="mt-0.5 h-4 w-4 flex-none" />
@@ -715,6 +717,7 @@ export function MerchantSubscriptionOverviewCard({
                                 <TableRow>
                                   <TableHead>Model</TableHead>
                                   <TableHead>Serial</TableHead>
+                                  <TableHead>POS ID</TableHead>
                                   <TableHead>Status</TableHead>
                                   <TableHead>Linked Station</TableHead>
                                 </TableRow>
@@ -729,6 +732,7 @@ export function MerchantSubscriptionOverviewCard({
                                       </div>
                                     </TableCell>
                                     <TableCell>{device.serial_number}</TableCell>
+                                    <TableCell>{device.pos_id || 'Not assigned'}</TableCell>
                                     <TableCell>
                                       <Badge variant="outline">{device.status.replace(/_/g, ' ')}</Badge>
                                     </TableCell>

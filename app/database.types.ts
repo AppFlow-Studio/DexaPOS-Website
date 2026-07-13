@@ -2527,6 +2527,7 @@ export type Database = {
           mac_address: string | null
           merchant_id: string | null
           notes: string | null
+          pos_id: string | null
           purchase_order_number: string | null
           purchased_at: string | null
           serial_number: string
@@ -19842,6 +19843,7 @@ export type Database = {
           model_sku: string | null
           monthly_fee: number | null
           monthly_fee_cents: number | null
+          pos_id: string | null
           purchase_order_number: string | null
           purchased_at: string | null
           serial_number: string | null
