@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
-    "build": "NODE_OPTIONS='--max-old-space-size=8192' next build",
+    "build": "NODE_OPTIONS='--max-old-space-size=8192' next build --turbopack --experimental-debug-memory-usage",
     "start": "next start",
     "test": "vitest --config vitest.config.mts",
     "test:a11y": "vitest run --config vitest.a11y.config.mts",
