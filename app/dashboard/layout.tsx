@@ -193,6 +193,11 @@ const navMain = [
         icon: Globe,
       },
       {
+        title: "Kiosk",
+        url: "/dashboard/kiosk",
+        icon: MonitorPlay,
+      },
+      {
         title: "Customers",
         url: "/dashboard/customers",
         icon: User,
