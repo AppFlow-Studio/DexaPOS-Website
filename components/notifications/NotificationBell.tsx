@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useSession } from "@clerk/nextjs";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@supabase/supabase-js";
-import { Bell } from "lucide-react";
+import { LifeBuoy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { UnreadTicketCounts } from "@/app/dashboard/actions/support";
 
@@ -22,9 +22,11 @@ interface NotificationBellProps {
 }
 
 /**
- * Support-ticket notification bell. The badge count is RPC-backed (survives a
- * hard refresh) and kept live by a realtime subscription on the support tables:
- * any insert/update invalidates the count so it re-fetches within seconds.
+ * Support affordance (lifebuoy glyph — deliberately NOT a bell, which reads as
+ * notifications). Links to the support inbox; the badge count is RPC-backed
+ * (survives a hard refresh) and kept live by a realtime subscription on the
+ * support tables: any insert/update invalidates the count so it re-fetches
+ * within seconds.
  *
  * We build a single authenticated Supabase client for the component lifetime so
  * postgres_changes pass RLS (the merchant sees their own tickets, HQ sees all).
@@ -85,8 +87,8 @@ export function NotificationBell({ fetchCounts, href, queryKey }: NotificationBe
 
   return (
     <Button asChild variant="ghost" size="icon" className="relative">
-      <Link href={href} aria-label={total > 0 ? `${total} unread support messages` : "Support"}>
-        <Bell className="h-4 w-4" />
+      <Link href={href} aria-label={total > 0 ? `${total} unread support messages` : "Support"} title="Support">
+        <LifeBuoy className="h-4 w-4" />
         {total > 0 && (
           <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-semibold leading-none text-white">
             {badge}

@@ -73,7 +73,7 @@ export function isKnownPlatform(raw: string | null | undefined): boolean {
  * all label/color/logo lookups share one key space.
  */
 export function normalizePlatformSlug(raw: string | null | undefined): string {
-  return (raw ?? "").toLowerCase().replace(/[\s_]+/g, "");
+  return (raw ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
 /** Human label for a delivery marketplace. Accepts raw or slugged input. */
@@ -233,7 +233,7 @@ export function canonicalizePlatform(input: CanonicalizeInput): PlatformSlug {
 
   for (const raw of thirdPartyCandidates) {
     if (raw == null) continue;
-    const token = raw.toString().trim().toLowerCase();
+    const token = normalizePlatformSlug(raw.toString());
     if (!token) continue;
     const slug = THIRD_PARTY_ALIASES[token];
     if (slug) return slug;

@@ -155,7 +155,7 @@ export async function getDeviceCatalogItem(id: string) {
 export async function createDeviceCatalogItem(input: CreateDeviceCatalogInput) {
   try {
     await assertHQPermission('system.config.manage')
-    const supabase = createServerSupabaseClient()
+    const supabase = createServerSupabaseClient() as any
 
     if (input.model_sku) {
       const { data: existing } = await supabase
@@ -173,25 +173,29 @@ export async function createDeviceCatalogItem(input: CreateDeviceCatalogInput) {
       }
     }
 
-    const { data, error } = await supabase
-      .from('device_catalog')
-      .insert({
-        device_category: input.device_category,
-        manufacturer: input.manufacturer,
-        model_name: input.model_name,
-        model_sku: input.model_sku || null,
-        hardware_revision: input.hardware_revision || null,
-        specs: input.specs || {},
-        unit_cost_cents: input.unit_cost_cents ?? null,
-        monthly_fee_cents: input.monthly_fee_cents ?? null,
-        unit_cost: input.unit_cost ?? null,
-        monthly_fee: input.monthly_fee ?? null,
-        is_active: input.is_active ?? true,
-        image_url: input.image_url || null,
-        notes: input.notes || null,
-      })
-      .select()
-      .single()
+    const unitCost =
+      input.unit_cost ?? (input.unit_cost_cents !== undefined && input.unit_cost_cents !== null
+        ? input.unit_cost_cents / 100
+        : null)
+    const monthlyFee =
+      input.monthly_fee ?? (input.monthly_fee_cents !== undefined && input.monthly_fee_cents !== null
+        ? input.monthly_fee_cents / 100
+        : null)
+
+    const { data: createdId, error } = await supabase.rpc('upsert_device_catalog', {
+      p_device_id: null,
+      p_device_category: input.device_category,
+      p_manufacturer: input.manufacturer,
+      p_model_name: input.model_name,
+      p_model_sku: input.model_sku || null,
+      p_hardware_revision: input.hardware_revision || null,
+      p_specs: input.specs || {},
+      p_unit_cost: unitCost,
+      p_monthly_fee: monthlyFee,
+      p_is_active: input.is_active ?? true,
+      p_image_url: input.image_url || null,
+      p_notes: input.notes || null,
+    })
 
     if (error) {
       console.error('[createDeviceCatalogItem] Error:', error)
@@ -199,6 +203,20 @@ export async function createDeviceCatalogItem(input: CreateDeviceCatalogInput) {
         return { success: false, error: 'A device with that SKU already exists', data: null }
       }
       return { success: false, error: error.message, data: null }
+    }
+
+    const { data, error: fetchError } = await supabase
+      .from('device_catalog')
+      .select('*')
+      .eq('id', createdId)
+      .single()
+
+    if (fetchError) {
+      console.error('[createDeviceCatalogItem] Fetch error:', fetchError)
+      if (fetchError.code === '23505') {
+        return { success: false, error: 'A device with that SKU already exists', data: null }
+      }
+      return { success: false, error: fetchError.message, data: null }
     }
 
     return { success: true, data: data as DeviceCatalogItem, error: null }
@@ -222,11 +240,11 @@ export async function updateDeviceCatalogItem(
 ) {
   try {
     await assertHQPermission('system.config.manage')
-    const supabase = createServerSupabaseClient()
+    const supabase = createServerSupabaseClient() as any
 
     const { data: current, error: fetchError } = await supabase
       .from('device_catalog')
-      .select('model_sku')
+      .select('*')
       .eq('id', id)
       .single()
 
@@ -255,27 +273,37 @@ export async function updateDeviceCatalogItem(
       }
     }
 
-    const updateData: Record<string, unknown> = {}
-    if (input.device_category !== undefined) updateData.device_category = input.device_category
-    if (input.manufacturer !== undefined) updateData.manufacturer = input.manufacturer
-    if (input.model_name !== undefined) updateData.model_name = input.model_name
-    if (input.model_sku !== undefined) updateData.model_sku = input.model_sku || null
-    if (input.hardware_revision !== undefined) updateData.hardware_revision = input.hardware_revision || null
-    if (input.specs !== undefined) updateData.specs = input.specs
-    if (input.unit_cost_cents !== undefined) updateData.unit_cost_cents = input.unit_cost_cents
-    if (input.monthly_fee_cents !== undefined) updateData.monthly_fee_cents = input.monthly_fee_cents
-    if (input.unit_cost !== undefined) updateData.unit_cost = input.unit_cost
-    if (input.monthly_fee !== undefined) updateData.monthly_fee = input.monthly_fee
-    if (input.is_active !== undefined) updateData.is_active = input.is_active
-    if (input.image_url !== undefined) updateData.image_url = input.image_url || null
-    if (input.notes !== undefined) updateData.notes = input.notes || null
+    const currentDevice = current as DeviceCatalogItem
+    const unitCost =
+      input.unit_cost !== undefined
+        ? input.unit_cost
+        : input.unit_cost_cents !== undefined && input.unit_cost_cents !== null
+          ? input.unit_cost_cents / 100
+          : currentDevice.unit_cost
+    const monthlyFee =
+      input.monthly_fee !== undefined
+        ? input.monthly_fee
+        : input.monthly_fee_cents !== undefined && input.monthly_fee_cents !== null
+          ? input.monthly_fee_cents / 100
+          : currentDevice.monthly_fee
 
-    const { data, error } = await supabase
-      .from('device_catalog')
-      .update(updateData)
-      .eq('id', id)
-      .select()
-      .single()
+    const { data: updatedId, error } = await supabase.rpc('upsert_device_catalog', {
+      p_device_id: id,
+      p_device_category: input.device_category ?? currentDevice.device_category,
+      p_manufacturer: input.manufacturer ?? currentDevice.manufacturer,
+      p_model_name: input.model_name ?? currentDevice.model_name,
+      p_model_sku: input.model_sku !== undefined ? input.model_sku || null : currentDevice.model_sku,
+      p_hardware_revision:
+        input.hardware_revision !== undefined
+          ? input.hardware_revision || null
+          : currentDevice.hardware_revision,
+      p_specs: input.specs ?? currentDevice.specs ?? {},
+      p_unit_cost: unitCost,
+      p_monthly_fee: monthlyFee,
+      p_is_active: input.is_active ?? currentDevice.is_active,
+      p_image_url: input.image_url !== undefined ? input.image_url || null : currentDevice.image_url,
+      p_notes: input.notes !== undefined ? input.notes || null : currentDevice.notes,
+    })
 
     if (error) {
       console.error('[updateDeviceCatalogItem] Error:', error)
@@ -283,6 +311,20 @@ export async function updateDeviceCatalogItem(
         return { success: false, error: 'A device with that SKU already exists', data: null }
       }
       return { success: false, error: error.message, data: null }
+    }
+
+    const { data, error: refetchError } = await supabase
+      .from('device_catalog')
+      .select('*')
+      .eq('id', updatedId)
+      .single()
+
+    if (refetchError) {
+      console.error('[updateDeviceCatalogItem] Refetch error:', refetchError)
+      if (refetchError.code === '23505') {
+        return { success: false, error: 'A device with that SKU already exists', data: null }
+      }
+      return { success: false, error: refetchError.message, data: null }
     }
 
     return { success: true, data: data as DeviceCatalogItem, error: null }
@@ -303,11 +345,11 @@ export async function updateDeviceCatalogItem(
 export async function toggleDeviceCatalogItemStatus(id: string) {
   try {
     await assertHQPermission('system.config.manage')
-    const supabase = createServerSupabaseClient()
+    const supabase = createServerSupabaseClient() as any
 
     const { data: current, error: fetchError } = await supabase
       .from('device_catalog')
-      .select('is_active')
+      .select('*')
       .eq('id', id)
       .single()
 
@@ -315,22 +357,38 @@ export async function toggleDeviceCatalogItemStatus(id: string) {
       return { success: false, error: 'Device not found', data: null }
     }
 
-    const newActive = !current.is_active
-    const updateData: Record<string, unknown> = {
-      is_active: newActive,
-      discontinued_at: newActive ? null : new Date().toISOString(),
-    }
+    const currentDevice = current as DeviceCatalogItem
+    const newActive = !currentDevice.is_active
 
-    const { data, error } = await supabase
-      .from('device_catalog')
-      .update(updateData)
-      .eq('id', id)
-      .select()
-      .single()
+    const { data: updatedId, error } = await supabase.rpc('upsert_device_catalog', {
+      p_device_id: id,
+      p_device_category: currentDevice.device_category,
+      p_manufacturer: currentDevice.manufacturer,
+      p_model_name: currentDevice.model_name,
+      p_model_sku: currentDevice.model_sku,
+      p_hardware_revision: currentDevice.hardware_revision,
+      p_specs: currentDevice.specs ?? {},
+      p_unit_cost: currentDevice.unit_cost,
+      p_monthly_fee: currentDevice.monthly_fee,
+      p_is_active: newActive,
+      p_image_url: currentDevice.image_url,
+      p_notes: currentDevice.notes,
+    })
 
     if (error) {
       console.error('[toggleDeviceCatalogItemStatus] Error:', error)
       return { success: false, error: error.message, data: null }
+    }
+
+    const { data, error: refetchError } = await supabase
+      .from('device_catalog')
+      .select('*')
+      .eq('id', updatedId)
+      .single()
+
+    if (refetchError) {
+      console.error('[toggleDeviceCatalogItemStatus] Refetch error:', refetchError)
+      return { success: false, error: refetchError.message, data: null }
     }
 
     return { success: true, data: data as DeviceCatalogItem, error: null }
@@ -351,15 +409,37 @@ export async function toggleDeviceCatalogItemStatus(id: string) {
 export async function deleteDeviceCatalogItem(id: string) {
   try {
     await assertHQPermission('system.config.manage')
-    const supabase = createServerSupabaseClient()
+    const supabase = createServerSupabaseClient() as any
 
-    const { error } = await supabase
+    const { data: current, error: fetchError } = await supabase
       .from('device_catalog')
-      .delete()
+      .select('*')
       .eq('id', id)
+      .single()
+
+    if (fetchError || !current) {
+      console.error('[deleteDeviceCatalogItem] Fetch error:', fetchError)
+      return { success: false, error: fetchError?.message || 'Device catalog item not found' }
+    }
+
+    const currentDevice = current as DeviceCatalogItem
+    const { error } = await supabase.rpc('upsert_device_catalog', {
+      p_device_id: id,
+      p_device_category: currentDevice.device_category,
+      p_manufacturer: currentDevice.manufacturer,
+      p_model_name: currentDevice.model_name,
+      p_model_sku: currentDevice.model_sku,
+      p_hardware_revision: currentDevice.hardware_revision,
+      p_specs: currentDevice.specs ?? {},
+      p_unit_cost: currentDevice.unit_cost,
+      p_monthly_fee: currentDevice.monthly_fee,
+      p_is_active: false,
+      p_image_url: currentDevice.image_url,
+      p_notes: currentDevice.notes,
+    })
 
     if (error) {
-      console.error('[deleteDeviceCatalogItem] Error:', error)
+      console.error('[deleteDeviceCatalogItem] Deactivate error:', error)
       return { success: false, error: error.message }
     }
 
