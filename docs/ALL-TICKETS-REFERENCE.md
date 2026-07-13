@@ -272,9 +272,9 @@ Single index for active ticket streams and their source trackers.
   - station quota enforcement,
   - suspended-subscription station/payment-terminal access gate,
   - HQ suspended/past-due billing status messaging.
-- Website/backend code is locally complete, but still needs staging migration apply, SQL/RLS QA, live calculator parity, invoice parity, device billing sync QA, quota QA, and suspend/restore QA.
-- Remaining POS repo items: suspended login/session refusal, clean POS error handling for quota/suspended states, local device/station state sync after suspend/restore, and POS proof video.
-- Do not mark Done until calculator parity, next-invoice cascade, device-driven billing, quota blocking, suspension/restore, RLS checks, POS enforcement, and proof video pass.
+- Website/backend code is locally complete and POS implementation is complete; remaining work is staging migration apply, SQL/RLS QA, live calculator parity, invoice parity, device billing sync QA, quota QA, suspend/restore QA, and proof attachment.
+- POS repo implementation completed: suspended login/session refusal, clean quota/suspended error handling, and local device/station state sync after suspend/restore.
+- Do not mark Done until calculator parity, next-invoice cascade, device-driven billing, quota blocking, suspension/restore, RLS checks, combined POS verification, and proof video pass.
 
 ## Notes
 
@@ -288,7 +288,7 @@ Single index for active ticket streams and their source trackers.
 - `docs/HANDOFF-2026-06-30-LATEST-TICKETS-SENIOR-REVIEW.md`
 
 6. Latest billing-control handoff:
-- `docs/HANDOFF-2026-07-13-HQ-BILLING-CONTROL-PHASE1.md`
+- `docs/HANDOFF-2026-07-13-HQ-BILLING-CONTROL-FINAL.md`
 - `docs/HANDOFF-2026-07-13-BILLING-CONTROL-REMAINING-POS-ITEMS.md`
 
 7. Next 16 upgrade handoff:

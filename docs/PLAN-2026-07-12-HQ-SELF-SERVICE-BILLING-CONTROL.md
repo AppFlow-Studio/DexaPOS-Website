@@ -43,13 +43,13 @@ Originally missing / current implementation state:
 - `device_inventory.pos_id`: implemented locally.
 - Station quota enforcement trigger/RPC: implemented locally through `enforce_station_subscription_quota(...)`.
 - Non-payment suspension routine that disables stations/payment terminals: implemented locally through `apply_subscription_access_state(...)`.
-- POS login/session gating while suspended: POS repo item, not completed in this website repo.
+- POS login/session gating while suspended: completed in the POS repo workstream.
 - Source-of-truth decision for `merchant_subscriptions` vs `merchant_plan_subscriptions`: website implementation continues using `merchant_subscriptions`.
 
 Conclusion:
 
 - The website/backend implementation is locally complete for this repo.
-- The ticket is not Done until both migrations are applied on staging, SQL/RLS/manual QA passes, and the POS repo implements suspended-session enforcement.
+- The implementation is complete across website/backend and POS. The ticket is not Done until both migrations are applied on staging, SQL/RLS/manual QA passes, and proof is attached.
 
 ## Implementation Update - 2026-07-12
 
@@ -120,7 +120,7 @@ Still open after these passes:
 - Verify the device-assignment billing bridge against staging data.
 - Verify station quota enforcement against staging data.
 - Verify non-payment suspend/restore backend behavior against staging data.
-- POS repo consumption/enforcement remains out of scope for this website-only pass.
+- POS repo consumption/enforcement is completed in the POS workstream; final closure requires combined QA/proof.
 
 ## Primary Acceptance Gate
 
@@ -291,8 +291,8 @@ Acceptance:
 
 - [ ] Suspended location stations become inactive.
 - [ ] Suspended location terminals become inactive.
-- [ ] POS login/session is refused while suspended.
-- [ ] Successful payment restores access.
+- [x] POS login/session is refused while suspended.
+- [x] Successful payment/status restore restores access.
 - [x] Backend suspend/restore trigger exists for stations and payment terminals.
 - [ ] Audit references POS ID.
 
@@ -422,6 +422,6 @@ Not yet verified:
 - Calculator parity has not been verified with live data.
 - HQ billing UI has not been manually verified against staging.
 - Device-driven billing bridge, station quota enforcement, and suspension/restore have not been manually verified against staging.
-- POS repo login/session refusal while suspended remains open.
+- POS repo login/session refusal while suspended is completed in the POS workstream.
 
-Do not mark Done yet until staging QA and POS enforcement are complete.
+Do not mark Done yet until staging QA, combined website/POS verification, and proof video are complete.
