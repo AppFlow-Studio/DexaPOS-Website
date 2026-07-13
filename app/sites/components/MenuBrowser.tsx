@@ -109,6 +109,12 @@ export function MenuBrowser({
   const desktopSuggestionsRef = useRef<HTMLDivElement>(null);
   const mobilePillsRef = useRef<HTMLDivElement>(null);
   const desktopPillsRef = useRef<HTMLDivElement>(null);
+  // While a pill click is smooth-scrolling, lock the highlight to the target so
+  // the scroll-spy doesn't flicker through sections passed en route. Released
+  // when the user next scrolls meaningfully away from where the scroll settles.
+  const scrollLockRef = useRef<string | null>(null);
+  const scrollLockTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scrollLockSettleYRef = useRef<number | null>(null);
 
 
   const { pendingModalItem, clearPendingModalItem } = useCart();
@@ -225,6 +231,11 @@ export function MenuBrowser({
     setActiveCategory(categoryId);
     const element = document.getElementById(`category-${categoryId}`);
     if (element) {
+      // Lock the highlight to this target; released when the user next scrolls
+      // meaningfully away from where this scroll settles (see scroll handler).
+      scrollLockRef.current = categoryId;
+      scrollLockSettleYRef.current = null;
+      if (scrollLockTimerRef.current) clearTimeout(scrollLockTimerRef.current);
       const offset = headerHeight + navHeight + 8;
       const elementPosition = element.getBoundingClientRect().top;
       const offsetPosition = elementPosition + window.pageYOffset - offset;
@@ -275,6 +286,12 @@ export function MenuBrowser({
     // whether scrolling up or down (unlike an isIntersecting-only observer,
     // which never re-selects when scrolling back up).
     const updateActiveCategory = () => {
+      // A click-lock wins over the scroll position until it's released, so the
+      // clicked pill never flickers to a section passed during the smooth scroll.
+      if (scrollLockRef.current) {
+        setActiveCategory(scrollLockRef.current);
+        return;
+      }
       // Once scrolled to the bottom, force the last category — trailing sections
       // may be too short to ever push their top past the boundary line.
       const atBottom =
@@ -301,6 +318,21 @@ export function MenuBrowser({
     updateActiveCategory();
     let ticking = false;
     const onScroll = () => {
+      if (scrollLockRef.current) {
+        if (scrollLockSettleYRef.current === null) {
+          // Still animating toward the target: once it stops moving, record the
+          // settle position rather than releasing (the target may sit at the page
+          // bottom and never reach the boundary line).
+          if (scrollLockTimerRef.current) clearTimeout(scrollLockTimerRef.current);
+          scrollLockTimerRef.current = setTimeout(() => {
+            scrollLockSettleYRef.current = window.scrollY;
+          }, 120);
+        } else if (Math.abs(window.scrollY - scrollLockSettleYRef.current) > 40) {
+          // User scrolled away from the settled target — release the lock.
+          scrollLockRef.current = null;
+          scrollLockSettleYRef.current = null;
+        }
+      }
       if (ticking) return;
       ticking = true;
       requestAnimationFrame(() => {
@@ -313,6 +345,7 @@ export function MenuBrowser({
     return () => {
       window.removeEventListener("scroll", onScroll);
       window.removeEventListener("resize", onScroll);
+      if (scrollLockTimerRef.current) clearTimeout(scrollLockTimerRef.current);
     };
   }, [filteredCategories, activeMenu?.categories, searchQuery, dietaryFilter, navHeight, headerHeight]);
 
