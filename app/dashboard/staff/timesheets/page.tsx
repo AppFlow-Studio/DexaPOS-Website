@@ -1,24 +1,25 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { startOfWeek, endOfWeek } from "date-fns";
 import { useTimesheets, useTimesheetResources } from "@/hooks/useTimesheets";
-import { useAuth } from "@clerk/nextjs";
-import {
-  useIsAllLocations,
-  useSelectedLocation,
-} from "@/stores/location-store";
+import { useClerkOrgId } from "@/app/dashboard/hooks/useLocationScoped";
+import { useGatedLocationId, useGatedLocation } from "@/stores/location-store";
 import { DateRange } from "react-day-picker";
 import { DataTable } from "@/components/ui/data-table";
-import { columns } from "./columns";
+import { createColumns } from "./columns";
 import { Button } from "@/components/ui/button";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
-import { Download, Plus, Store } from "lucide-react";
+import { ArrowLeft, Download, Store } from "lucide-react";
+import Link from "next/link";
 import {
   downloadTimesheetCSV,
   calculateShiftDuration,
 } from "@/utils/exportTimesheets";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { StaffShift } from "@/types/staff";
+import { ShiftAdjustmentDialog } from "./ShiftAdjustmentDialog";
+import { ShiftDetailsDialog } from "./ShiftDetailsDialog";
 import {
   Select,
   SelectContent,
@@ -28,12 +29,14 @@ import {
 } from "@/components/ui/select";
 
 export default function TimesheetsPage() {
-  const isAllLocations = useIsAllLocations();
-  const selectedLocation = useSelectedLocation();
+  // Resolve to the gated location so single-location accounts (locked to 'all')
+  // skip the "Select a Location" prompt. Multi-location on 'all' -> null.
+  const gatedLocationId = useGatedLocationId();
+  const isAllLocations = !gatedLocationId;
+  const selectedLocation = useGatedLocation();
 
-  // Get organization ID directly from Clerk's local session — no network call
-  const { orgId } = useAuth();
-  const clerkOrgId = orgId || "";
+  // Impersonation-aware org id (NOT useAuth().orgId, which stays HQ during impersonation).
+  const clerkOrgId = useClerkOrgId();
 
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
     from: startOfWeek(new Date()),
@@ -42,6 +45,8 @@ export default function TimesheetsPage() {
 
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>("all");
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
+  const [shiftToAdjust, setShiftToAdjust] = useState<StaffShift | null>(null);
+  const [shiftToView, setShiftToView] = useState<StaffShift | null>(null);
 
   // Fetch resources (staff) - must be called before any conditional returns
   const { data: resources } = useTimesheetResources(clerkOrgId);
@@ -91,18 +96,40 @@ export default function TimesheetsPage() {
 
   const totalHours = filteredShifts.reduce(
     (acc, s) => acc + calculateShiftDuration(s),
-    0
+    0,
   );
   const activeShiftsCount = filteredShifts.filter(
-    (s) => !s.clock_out_time
+    (s) => !s.clock_out_time,
   ).length;
   const estLaborCost = filteredShifts.reduce((acc, s) => {
     const hours = calculateShiftDuration(s);
     return acc + hours * (s.hourly_rate_snapshot || 0);
   }, 0);
 
+  const tableColumns = useMemo(
+    () =>
+      createColumns({
+        onAdjustShift: setShiftToAdjust,
+        onViewShift: setShiftToView,
+      }),
+    [],
+  );
+
   return (
     <div className="space-y-6 p-6">
+      {/* Back to Staff */}
+      <Button
+        variant="ghost"
+        size="sm"
+        className="-ml-2 h-8 gap-1.5 text-muted-foreground"
+        asChild
+      >
+        <Link href="/dashboard/staff">
+          <ArrowLeft className="h-4 w-4" />
+          Back to Staff
+        </Link>
+      </Button>
+
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Timesheets</h1>
@@ -122,17 +149,14 @@ export default function TimesheetsPage() {
           >
             <Download className="mr-2 h-4 w-4" /> Export
           </Button>
-          <Button>
-            <Plus className="mr-2 h-4 w-4" /> Add Shift
-          </Button>
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-4 p-4 bg-card border rounded-lg shadow-sm items-center">
+      <div className="flex flex-wrap gap-3 p-4 bg-card border rounded-lg shadow-sm items-center">
         <DateRangePicker
           date={dateRange}
           setDate={setDateRange}
-          className="w-[260px]"
+          className="w-full sm:w-[260px]"
         />
 
         {/* Location Select Removed - Using Global Context */}
@@ -141,7 +165,7 @@ export default function TimesheetsPage() {
           value={selectedEmployeeId}
           onValueChange={setSelectedEmployeeId}
         >
-          <SelectTrigger className="w-[200px]">
+          <SelectTrigger className="flex-1 min-w-[140px] sm:w-[200px] sm:flex-none">
             <SelectValue placeholder="All Employees" />
           </SelectTrigger>
           <SelectContent>
@@ -155,7 +179,7 @@ export default function TimesheetsPage() {
         </Select>
 
         <Select value={selectedStatus} onValueChange={setSelectedStatus}>
-          <SelectTrigger className="w-[150px]">
+          <SelectTrigger className="flex-1 min-w-[120px] sm:w-[150px] sm:flex-none">
             <SelectValue placeholder="All Status" />
           </SelectTrigger>
           <SelectContent>
@@ -167,7 +191,7 @@ export default function TimesheetsPage() {
         </Select>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Hours</CardTitle>
@@ -201,11 +225,27 @@ export default function TimesheetsPage() {
 
       <div className="rounded-md border bg-card">
         <DataTable
-          columns={columns}
+          columns={tableColumns}
           data={filteredShifts}
           loading={isLoading}
+          tableClassName="min-w-[900px]"
         />
       </div>
+      <ShiftAdjustmentDialog
+        clerkOrgId={clerkOrgId}
+        shift={shiftToAdjust}
+        open={Boolean(shiftToAdjust)}
+        onOpenChange={(open) => {
+          if (!open) setShiftToAdjust(null);
+        }}
+      />
+      <ShiftDetailsDialog
+        shift={shiftToView}
+        open={Boolean(shiftToView)}
+        onOpenChange={(open) => {
+          if (!open) setShiftToView(null);
+        }}
+      />
     </div>
   );
 }

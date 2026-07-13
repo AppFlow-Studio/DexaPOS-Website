@@ -37,6 +37,7 @@ import {
   Layers,
   Plus,
   ChevronDown,
+  ChevronUp,
   ChevronRight,
   GripVertical,
   Settings2,
@@ -59,6 +60,7 @@ import {
   CreateModifierGroupItem,
   UpdateModifierGroupItem,
   DeleteModifierGroupItem,
+  ReorderModifierGroupItems,
 } from "@/app/dashboard/actions/modifier-groups";
 import { UpsertLocationModifierGroupOverride } from "@/app/dashboard/actions/location-modifier-overrides";
 import {
@@ -118,6 +120,32 @@ interface TempOption {
   isNew: boolean;
 }
 
+function normalizeOptionOrder(options: TempOption[]) {
+  return options.map((option, index) => ({
+    ...option,
+    display_order: index,
+  }));
+}
+
+function sortTempOptions(options: TempOption[]) {
+  return [...options].sort((a, b) => {
+    const aOrder =
+      typeof a.display_order === "number"
+        ? a.display_order
+        : Number.MAX_SAFE_INTEGER;
+    const bOrder =
+      typeof b.display_order === "number"
+        ? b.display_order
+        : Number.MAX_SAFE_INTEGER;
+
+    if (aOrder !== bOrder) {
+      return aOrder - bOrder;
+    }
+
+    return a.name.localeCompare(b.name);
+  });
+}
+
 interface ModifierGroupFormSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -164,6 +192,8 @@ export function ModifierGroupFormSheet({
   const isGlobalGroup = editGroup && !editGroup.location_id;
   const isLocationView = !isAllLocations;
   const canEditStructure = !isGlobalGroup || !isLocationView;
+  const canSaveOptionOrder = canEditStructure || (!!editGroup && isLocationView);
+  const canReorderOptions = canSaveOptionOrder;
 
   const form = useForm<ModifierGroupFormValues>({
     resolver: zodResolver(modifierGroupSchema),
@@ -203,16 +233,20 @@ export function ModifierGroupFormSheet({
       // Initialize options from editGroup
       if (editGroup.modifier_group_items) {
         setOptions(
-          editGroup.modifier_group_items.map((item) => ({
-            id: item.id,
-            name: item.name,
-            description: item.description || undefined,
-            price_modifier: item.price_modifier,
-            display_order: item.display_order ?? undefined,
-            is_active: item.is_active ?? true,
-            is_default: (item as any).is_default ?? false,
-            isNew: false,
-          })),
+          normalizeOptionOrder(
+            sortTempOptions(
+              editGroup.modifier_group_items.map((item) => ({
+                id: item.id,
+                name: item.name,
+                description: item.description || undefined,
+                price_modifier: item.price_modifier,
+                display_order: item.display_order ?? undefined,
+                is_active: item.is_active ?? true,
+                is_default: (item as any).is_default ?? false,
+                isNew: false,
+              })),
+            ),
+          ),
         );
       }
       // Initialize location status
@@ -249,18 +283,20 @@ export function ModifierGroupFormSheet({
 
     if (editingOption) {
       setOptions((prev) =>
-        prev.map((opt) =>
-          opt.id === editingOption.id
-            ? {
-                ...opt,
-                name: values.name,
-                description: values.description,
-                price_modifier: values.price_modifier,
-                display_order: values.display_order ?? null,
-                is_active: values.is_active,
-                is_default: values.is_default,
-              }
-            : opt,
+        normalizeOptionOrder(
+          prev.map((opt) =>
+            opt.id === editingOption.id
+              ? {
+                  ...opt,
+                  name: values.name,
+                  description: values.description,
+                  price_modifier: values.price_modifier,
+                  display_order: values.display_order ?? opt.display_order ?? null,
+                  is_active: values.is_active,
+                  is_default: values.is_default,
+                }
+              : opt,
+          ),
         ),
       );
       setEditingOption(null);
@@ -275,7 +311,7 @@ export function ModifierGroupFormSheet({
         is_default: values.is_default,
         isNew: true,
       };
-      setOptions((prev) => [...prev, newOption]);
+      setOptions((prev) => normalizeOptionOrder([...prev, newOption]));
     }
     optionForm.reset();
     setIsAddOptionSheetOpen(false);
@@ -292,6 +328,29 @@ export function ModifierGroupFormSheet({
       is_default: option.is_default,
     });
     setIsAddOptionSheetOpen(true);
+  };
+
+  const moveOption = (optionId: string, direction: "up" | "down") => {
+    if (!canReorderOptions) return;
+
+    setOptions((prev) => {
+      const currentIndex = prev.findIndex((opt) => opt.id === optionId);
+      if (currentIndex === -1) return prev;
+
+      const targetIndex =
+        direction === "up" ? currentIndex - 1 : currentIndex + 1;
+
+      if (targetIndex < 0 || targetIndex >= prev.length) {
+        return prev;
+      }
+
+      const next = [...prev];
+      [next[currentIndex], next[targetIndex]] = [
+        next[targetIndex],
+        next[currentIndex],
+      ];
+      return normalizeOptionOrder(next);
+    });
   };
 
   const handleToggleDefault = (optionId: string) => {
@@ -336,7 +395,9 @@ export function ModifierGroupFormSheet({
   };
 
   const handleDeleteOption = (optionId: string) => {
-    setOptions((prev) => prev.filter((opt) => opt.id !== optionId));
+    setOptions((prev) =>
+      normalizeOptionOrder(prev.filter((opt) => opt.id !== optionId)),
+    );
   };
 
   const onSubmit = async (values: ModifierGroupFormValues) => {
@@ -349,6 +410,8 @@ export function ModifierGroupFormSheet({
 
     setIsSubmitting(true);
     try {
+      const orderedOptions = normalizeOptionOrder(options);
+
       if (editGroup) {
         // Update existing group (only if allowed to edit structure)
         if (canEditStructure) {
@@ -373,7 +436,7 @@ export function ModifierGroupFormSheet({
           }
 
           // Handle options updates (only if allowed)
-          for (const option of options) {
+          for (const option of orderedOptions) {
             if (option.isNew) {
               // Create new option
               await CreateModifierGroupItem(
@@ -407,7 +470,7 @@ export function ModifierGroupFormSheet({
           }
 
           // Delete removed options
-          const currentOptionIds = options
+          const currentOptionIds = orderedOptions
             .filter((o) => !o.isNew)
             .map((o) => o.id);
           const originalOptionIds =
@@ -422,14 +485,37 @@ export function ModifierGroupFormSheet({
 
           toast.success("Modifier Group Updated", {
             description: `"${values.name}" has been updated with ${
-              options.length
-            } option${options.length !== 1 ? "s" : ""}.`,
+              orderedOptions.length
+            } option${orderedOptions.length !== 1 ? "s" : ""}.`,
           });
         } else {
-          // At location level viewing global group - overrides are handled via ModifierItemOverrideDialog
-          toast.info("Location View", {
-            description:
-              'Use "Edit State" buttons to customize options at this location.',
+          if (!selectedLocation?.id) {
+            toast.error("Location not found", {
+              description: "Select a location before saving option order overrides.",
+            });
+            return;
+          }
+
+          const reorderResult = await ReorderModifierGroupItems(
+            editGroup.id,
+            orderedOptions.map((option, index) => ({
+              modifierGroupItemId: option.id,
+              displayOrder: option.display_order ?? index,
+            })),
+            selectedLocation.id,
+          );
+
+          if (reorderResult.error) {
+            toast.error("Save Failed", {
+              description: reorderResult.error,
+            });
+            return;
+          }
+
+          toast.success("Location option order updated", {
+            description: `Saved ${orderedOptions.length} option${
+              orderedOptions.length !== 1 ? "s" : ""
+            } for ${selectedLocation.name}.`,
           });
         }
       } else {
@@ -443,7 +529,7 @@ export function ModifierGroupFormSheet({
           display_order: values.display_order ?? undefined,
           location_id:
             selectedLocation?.id == "all" ? null : selectedLocation?.id,
-          options: options.map((opt, index) => ({
+          options: orderedOptions.map((opt, index) => ({
             name: opt.name,
             description: opt.description,
             price_modifier: opt.price_modifier,
@@ -462,8 +548,8 @@ export function ModifierGroupFormSheet({
 
         toast.success("Modifier Group Created", {
           description: `"${values.name}" has been created with ${
-            options.length
-          } option${options.length !== 1 ? "s" : ""}.`,
+            orderedOptions.length
+          } option${orderedOptions.length !== 1 ? "s" : ""}.`,
         });
       }
 
@@ -497,10 +583,10 @@ export function ModifierGroupFormSheet({
       <Dialog open={open} onOpenChange={(isOpen) => !isOpen && handleClose()}>
         <DialogContent
           overlayClassName="bg-slate-950/40 backdrop-blur-md"
-          className="w-full max-w-[calc(100vw-1rem)] gap-0 overflow-hidden rounded-[28px] border border-slate-200/80 bg-background/95 p-0 shadow-[0_30px_100px_rgba(15,23,42,0.26)] sm:max-w-5xl xl:max-w-6xl"
+          className="w-full max-w-[calc(100vw-1rem)] gap-0 overflow-x-hidden overflow-y-auto max-h-[92vh] rounded-[28px] border border-slate-200/80 bg-background/95 p-0 shadow-[0_30px_100px_rgba(15,23,42,0.26)] sm:max-w-5xl xl:max-w-6xl"
         >
-          <div className="flex max-h-[min(92vh,960px)] flex-col">
-          <DialogHeader className="border-b border-border/70 bg-background/95 px-6 py-5 pr-14 text-left sm:text-left">
+          <div className="flex flex-col">
+          <DialogHeader className="sticky top-0 z-10 border-b border-border/70 bg-background/95 px-4 sm:px-6 py-5 pr-14 text-left sm:text-left">
             <DialogTitle className="flex items-center gap-2 text-[1.625rem] font-semibold tracking-tight">
               <Layers className="h-5 w-5 text-purple-500" />
               {!canEditStructure ? (
@@ -707,7 +793,7 @@ export function ModifierGroupFormSheet({
                           )}
                         />
 
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                           <FormField
                             control={form.control}
                             name="min_selections"
@@ -830,7 +916,12 @@ export function ModifierGroupFormSheet({
                               )}
                               style={{ animationDelay: `${index * 50}ms` }}
                             >
-                              <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab" />
+                              <div className="flex items-center gap-2">
+                                <span className="w-5 text-center text-xs font-medium text-muted-foreground">
+                                  {index + 1}
+                                </span>
+                                <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab" />
+                              </div>
 
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2">
@@ -887,6 +978,26 @@ export function ModifierGroupFormSheet({
 
                               {canEditStructure ? (
                                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => moveOption(option.id, "up")}
+                                    disabled={index === 0}
+                                    aria-label={`Move ${option.name} up`}
+                                  >
+                                    <ChevronUp className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => moveOption(option.id, "down")}
+                                    disabled={index === options.length - 1}
+                                    aria-label={`Move ${option.name} down`}
+                                  >
+                                    <ChevronDown className="h-4 w-4" />
+                                  </Button>
                                   {/* Set Default Toggle */}
                                   <TooltipProvider>
                                     <Tooltip>
@@ -943,6 +1054,26 @@ export function ModifierGroupFormSheet({
                                 </div>
                               ) : (
                                 <div className="flex items-center gap-1">
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => moveOption(option.id, "up")}
+                                    disabled={index === 0}
+                                    aria-label={`Move ${option.name} up`}
+                                  >
+                                    <ChevronUp className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => moveOption(option.id, "down")}
+                                    disabled={index === options.length - 1}
+                                    aria-label={`Move ${option.name} down`}
+                                  >
+                                    <ChevronDown className="h-4 w-4" />
+                                  </Button>
                                   <Button
                                     type="button"
                                     variant="outline"
@@ -1066,7 +1197,7 @@ export function ModifierGroupFormSheet({
                 </div>
               </div>
             </div>
-          <DialogFooter className="border-t border-border/70 bg-background/95 px-6 py-4">
+          <DialogFooter className="sticky bottom-0 z-10 border-t border-border/70 bg-background/95 px-4 sm:px-6 py-4">
             <div className="flex w-full flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
               <Button
                 type="button"
@@ -1074,9 +1205,9 @@ export function ModifierGroupFormSheet({
                 onClick={handleClose}
                 className="sm:min-w-[140px]"
               >
-                {canEditStructure ? "Cancel" : "Close"}
+                Cancel
               </Button>
-              {canEditStructure && (
+              {canSaveOptionOrder && (
                 <Button
                   type="submit"
                   form="modifier-group-form"
@@ -1108,7 +1239,11 @@ export function ModifierGroupFormSheet({
                     </>
                   ) : (
                     <>
-                      {editGroup ? "Save Changes" : "Create Group"}
+                      {editGroup
+                        ? canEditStructure
+                          ? "Save Changes"
+                          : "Save Option Order"
+                        : "Create Group"}
                       <AffectsTag ctx={{ level: 1 }} variant="save-button" />
                     </>
                   )}
@@ -1329,7 +1464,7 @@ export function ModifierGroupFormSheet({
             </div>
           </div>
 
-          <DialogFooter className="border-t border-border/70 bg-background/95 px-6 py-4">
+          <DialogFooter className="sticky bottom-0 z-10 border-t border-border/70 bg-background/95 px-4 sm:px-6 py-4">
             <div className="flex w-full flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
               <Button
                 type="button"

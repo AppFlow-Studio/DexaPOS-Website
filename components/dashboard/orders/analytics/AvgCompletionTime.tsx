@@ -1,15 +1,6 @@
 'use client'
 
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-} from 'recharts'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts'
 import { ChartContainer, ChartTooltip, type ChartConfig } from '@/components/ui/chart'
 import { ChartCard } from './ChartCard'
 import { DataTable } from '@/components/ui/data-table'
@@ -98,8 +89,7 @@ export function AvgCompletionTime({ data, isLoading }: AvgCompletionTimeProps) {
       <div className="space-y-6">
         {/* Grouped Bar Chart */}
         {chartData.length > 0 && (
-          <ChartContainer config={chartConfig} className="h-[300px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
+          <ChartContainer config={chartConfig} className="aspect-auto h-[300px] w-full">
               <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="name" />
@@ -151,7 +141,6 @@ export function AvgCompletionTime({ data, isLoading }: AvgCompletionTimeProps) {
                   barSize={20}
                 />
               </BarChart>
-            </ResponsiveContainer>
           </ChartContainer>
         )}
 
@@ -167,7 +156,7 @@ export function AvgCompletionTime({ data, isLoading }: AvgCompletionTimeProps) {
         {data?.completion_times && (
           <div>
             <h3 className="text-sm font-semibold mb-4">Completion Time Details</h3>
-            <DataTable columns={columns} data={data.completion_times} />
+            <DataTable columns={columns} data={data.completion_times} tableClassName="min-w-[560px]" />
           </div>
         )}
       </div>

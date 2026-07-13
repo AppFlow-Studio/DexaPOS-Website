@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
@@ -172,7 +172,10 @@ export function MenuPreviewModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[1280px] w-[95vw] h-[90vh] p-0 border-none bg-[#0f172a] flex flex-col overflow-hidden rounded-2xl shadow-2xl ring-1 ring-white/5 my-auto focus:outline-none font-sans">
+      <DialogContent className="sm:max-w-[1280px] w-[95vw] max-sm:w-screen max-sm:h-dvh h-[90vh] p-0 border-none bg-[#0f172a] flex flex-col overflow-hidden rounded-2xl max-sm:rounded-none shadow-2xl ring-1 ring-white/5 my-auto focus:outline-none font-sans">
+        <DialogTitle className="sr-only">
+          {menu?.name ? `${menu.name} preview` : "Menu preview"}
+        </DialogTitle>
         {/* Top Status Bar */}
         <div className="h-12 bg-[#0f172a] border-b border-[#1e293b] flex items-center justify-between px-5 shrink-0 z-50">
           <div className="flex items-center gap-3">
@@ -199,9 +202,9 @@ export function MenuPreviewModal({
           </div>
         </div>
 
-        <div className="flex-1 flex overflow-hidden">
+        <div className="flex-1 flex overflow-x-auto overflow-y-hidden">
           {/* LEFT PANEL: Cart / Bill */}
-          <div className="w-[340px] bg-[#0b1120] flex flex-col shrink-0 border-r border-[#1e293b]">
+          <div className="w-[300px] sm:w-[340px] bg-[#0b1120] flex flex-col shrink-0 border-r border-[#1e293b]">
             {/* Customer & Order Type */}
             <div className="p-4 space-y-3">
               <div className="flex gap-3">
@@ -270,7 +273,7 @@ export function MenuPreviewModal({
           </div>
 
           {/* RIGHT PANEL: Menu Section */}
-          <div className="flex-1 flex flex-col bg-[#0f172a] overflow-hidden">
+          <div className="flex-1 min-w-[480px] flex flex-col bg-[#0f172a] overflow-hidden">
             {/* Order Line Header + Tickets */}
             <div className="px-5 pt-4 pb-3 space-y-3">
               <div className="flex items-center justify-between">

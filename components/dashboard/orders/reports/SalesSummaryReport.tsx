@@ -167,7 +167,7 @@ export function SalesSummaryReport({ dateFrom, dateTo, merchantName, locationNam
       />
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <SummaryCard
           label="Total Net Sales"
           value={formatCurrency(totalNetSales)}

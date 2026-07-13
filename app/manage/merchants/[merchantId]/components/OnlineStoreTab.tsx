@@ -63,18 +63,9 @@ import { extractConnectedPlatforms } from '@/lib/orderout/helpers'
 import { MissingDataForm } from '@/components/online-store/MissingDataForm'
 import { HoursConfigModal } from '@/app/dashboard/online-ordering/components/HoursConfigModal'
 import { FONT_GOOGLE_URLS } from '@/app/sites/lib/theme-utils'
+import { buildStoreUrl } from '@/app/sites/lib/store-url'
 import { useAdminNmiMerchantStatus } from '@/lib/queries/use-admin-online-ordering'
 import { NmiCreateMerchantDialog } from './NmiCreateMerchantDialog'
-
-const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'localhost:3000'
-
-function getStoreUrl(slug: string): string {
-    if (!slug) return ''
-
-    const isDev = ROOT_DOMAIN.includes('localhost')
-    if (isDev) return `http://${slug}.localhost:3000`
-    return `https://${slug}.dexaposai.com`
-}
 
 function getRequestStatusLabel(status: LocationOnlineStoreOverview['setupRequestStatus']) {
     switch (status) {
@@ -144,6 +135,23 @@ function createDefaultWeeklySchedule() {
         saturday: createDefaultDaySchedule(true),
         sunday: createDefaultDaySchedule(false),
     }
+}
+
+// The stored operatingHours may be null, empty, or missing some day keys.
+// Normalize it so every weekday is guaranteed a complete DaySchedule before
+// handing it to the hours modal (which indexes localSchedule[day].enabled).
+function normalizeWeeklySchedule(stored: unknown) {
+    const base = createDefaultWeeklySchedule()
+    if (!stored || typeof stored !== 'object') return base
+    const source = stored as Record<string, Partial<ReturnType<typeof createDefaultDaySchedule>>>
+    const result = { ...base } as Record<string, ReturnType<typeof createDefaultDaySchedule>>
+    for (const day of Object.keys(base) as Array<keyof typeof base>) {
+        const day_value = source[day]
+        if (day_value && typeof day_value === 'object') {
+            result[day] = { ...base[day], ...day_value }
+        }
+    }
+    return result
 }
 
 interface OnlineStoreTabProps {
@@ -230,7 +238,13 @@ export function OnlineStoreTab({
             })
 
             if (result.success) {
-                toast.success('Settings saved successfully')
+                if (result.domainWhitelistError) {
+                    toast.warning(`Settings saved, but payment-domain sync needs attention: ${result.domainWhitelistError}`)
+                } else if (result.domainWhitelistSkipped) {
+                    toast.warning('Settings saved. Payment-domain sync was skipped because no active online-ordering payment device is ready yet.')
+                } else {
+                    toast.success('Settings saved successfully')
+                }
                 setIsDirty(false)
                 refetchSettings()
             } else {
@@ -369,12 +383,12 @@ export function OnlineStoreTab({
                                     return (
                                         <div
                                             key={location.id}
-                                            className="flex items-center justify-between p-4 border rounded-lg"
+                                            className="flex flex-col gap-3 p-4 border rounded-lg sm:flex-row sm:items-center sm:justify-between"
                                         >
-                                            <div className="flex items-center gap-4">
+                                            <div className="flex items-center gap-4 min-w-0">
                                                 <div
                                                     className={cn(
-                                                        'h-12 w-12 rounded-lg flex items-center justify-center',
+                                                        'h-12 w-12 shrink-0 rounded-lg flex items-center justify-center',
                                                         requestStatus === 'setup_completed' && isEnabled
                                                             ? 'bg-green-100 text-green-600 dark:bg-green-900/30'
                                                             : requestStatus === 'pending_review' || requestStatus === 'approved'
@@ -386,8 +400,8 @@ export function OnlineStoreTab({
                                                 >
                                                     <Globe className="h-6 w-6" />
                                                 </div>
-                                                <div>
-                                                    <h4 className="font-medium">
+                                                <div className="min-w-0">
+                                                    <h4 className="font-medium truncate">
                                                         {location.name}
                                                         {ooRest?.hasRestaurant && (
                                                             <Badge variant="outline" className="ml-2 text-xs">
@@ -406,7 +420,7 @@ export function OnlineStoreTab({
                                                     ) : null}
                                                 </div>
                                             </div>
-                                            <div className="flex items-center gap-3">
+                                            <div className="flex items-center gap-3 flex-wrap shrink-0">
                                                 <Badge
                                                     variant={getRequestStatusBadgeVariant(requestStatus)}
                                                     className={
@@ -470,7 +484,10 @@ export function OnlineStoreTab({
 
     // Find location name
     const selectedLocation = locations.find((l) => l.id === selectedLocationId)
-    const storeUrl = localSettings?.storeSlug ? getStoreUrl(localSettings.storeSlug) : ''
+    const storeUrl = buildStoreUrl({
+        slug: localSettings?.storeSlug,
+        customDomain: localSettings?.customDomain,
+    })
     const requestStatus = localSettings?.setupRequestStatus ?? 'not_requested'
     const canEditStoreSetup =
         requestStatus === 'approved' || requestStatus === 'setup_completed'
@@ -496,16 +513,16 @@ export function OnlineStoreTab({
             </Dialog>
 
             {/* Header */}
-            <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                    <Button variant="ghost" size="sm" onClick={() => setSelectedLocationId(null)}>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex flex-col gap-3 min-w-0 sm:flex-row sm:items-center sm:gap-4">
+                    <Button variant="ghost" size="sm" onClick={() => setSelectedLocationId(null)} className="shrink-0 self-start">
                         <ArrowLeft className="h-4 w-4 mr-2" />
                         Back to Locations
                     </Button>
-                    <Separator orientation="vertical" className="h-6" />
-                    <div>
-                        <h3 className="font-semibold">{selectedLocation?.name || 'Location'}</h3>
-                        <div className="flex items-center gap-2">
+                    <Separator orientation="vertical" className="hidden h-6 shrink-0 sm:block" />
+                    <div className="min-w-0">
+                        <h3 className="font-semibold truncate">{selectedLocation?.name || 'Location'}</h3>
+                        <div className="flex items-center gap-2 flex-wrap">
                             <p className="text-sm text-muted-foreground">Online Store Configuration</p>
                             <Badge variant={getRequestStatusBadgeVariant(requestStatus)}>
                                 {getRequestStatusLabel(requestStatus)}
@@ -513,7 +530,7 @@ export function OnlineStoreTab({
                         </div>
                     </div>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 flex-wrap shrink-0">
                     {isDirty && canEditStoreSetup && (
                         <>
                             <Button variant="ghost" size="sm" onClick={handleDiscard} disabled={saveMutation.isPending}>
@@ -615,7 +632,7 @@ export function OnlineStoreTab({
                         </Card>
                     )}
 
-                    <div className="grid gap-4 lg:grid-cols-2">
+                    <div className="grid gap-4 xl:grid-cols-2">
                         <Card>
                             <CardHeader>
                                 <CardTitle>Merchant Review Packet</CardTitle>
@@ -712,7 +729,7 @@ export function OnlineStoreTab({
                                 Required packet items before HQ should approve setup.
                             </CardDescription>
                         </CardHeader>
-                        <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                        <CardContent className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                             {([
                                 ['Legal Business Name', localSettings.reviewChecklist?.legalBusinessName],
                                 ['DBA Name', localSettings.reviewChecklist?.dbaName],
@@ -811,7 +828,7 @@ export function OnlineStoreTab({
                                         )}
                                     </div>
                                 </div>
-                                <Switch
+                                <Switch className="shrink-0"
                                     checked={localSettings.enabled}
                                     onCheckedChange={(enabled) => updateSettings({ enabled })}
                                 />
@@ -1045,8 +1062,8 @@ export function OnlineStoreTab({
                                     </div>
 
                                     <div className="rounded-lg border p-4">
-                                        <div className="flex items-start justify-between gap-4">
-                                            <div>
+                                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                            <div className="min-w-0">
                                                 <p className="font-medium">Operating Hours</p>
                                                 <p className="text-sm text-muted-foreground">
                                                     Storefront ordering hours (defaults to location business hours if unchanged).
@@ -1056,6 +1073,7 @@ export function OnlineStoreTab({
                                                 type="button"
                                                 variant="outline"
                                                 size="sm"
+                                                className="shrink-0 self-start"
                                                 onClick={() => setHoursModalOpen(true)}
                                             >
                                                 Edit Hours
@@ -1137,7 +1155,7 @@ export function OnlineStoreTab({
                                     <div className="grid gap-6 sm:grid-cols-2">
                                         <div className="space-y-3">
                                             <Label>Primary Color</Label>
-                                            <div className="flex items-center gap-3">
+                                            <div className="flex items-center gap-3 min-w-0">
                                                 <input
                                                     type="color"
                                                     value={localSettings.primaryColor || '#3b82f6'}
@@ -1153,7 +1171,7 @@ export function OnlineStoreTab({
                                         </div>
                                         <div className="space-y-3">
                                             <Label>Secondary Color</Label>
-                                            <div className="flex items-center gap-3">
+                                            <div className="flex items-center gap-3 min-w-0">
                                                 <input
                                                     type="color"
                                                     value={localSettings.secondaryColor || '#10b981'}
@@ -1172,7 +1190,7 @@ export function OnlineStoreTab({
                                     <div className="grid gap-6 sm:grid-cols-3">
                                         <div className="space-y-3">
                                             <Label>Accent Color</Label>
-                                            <div className="flex items-center gap-3">
+                                            <div className="flex items-center gap-3 min-w-0">
                                                 <input
                                                     type="color"
                                                     value={(localSettings.accentColor as any) || localSettings.primaryColor || '#3b82f6'}
@@ -1189,7 +1207,7 @@ export function OnlineStoreTab({
                                         </div>
                                         <div className="space-y-3">
                                             <Label>Background</Label>
-                                            <div className="flex items-center gap-3">
+                                            <div className="flex items-center gap-3 min-w-0">
                                                 <input
                                                     type="color"
                                                     value={(localSettings.backgroundColor as any) || '#FFFFFF'}
@@ -1205,7 +1223,7 @@ export function OnlineStoreTab({
                                         </div>
                                         <div className="space-y-3">
                                             <Label>Text</Label>
-                                            <div className="flex items-center gap-3">
+                                            <div className="flex items-center gap-3 min-w-0">
                                                 <input
                                                     type="color"
                                                     value={(localSettings.textColor as any) || '#111827'}
@@ -1224,7 +1242,7 @@ export function OnlineStoreTab({
                                     <div className="grid gap-6 sm:grid-cols-3">
                                         <div className="space-y-3">
                                             <Label>Border (Optional)</Label>
-                                            <div className="flex items-center gap-3">
+                                            <div className="flex items-center gap-3 min-w-0">
                                                 <input
                                                     type="color"
                                                     value={(localSettings.borderColor as any) || '#E5E7EB'}
@@ -1241,7 +1259,7 @@ export function OnlineStoreTab({
                                         </div>
                                         <div className="space-y-3">
                                             <Label>Card (Optional)</Label>
-                                            <div className="flex items-center gap-3">
+                                            <div className="flex items-center gap-3 min-w-0">
                                                 <input
                                                     type="color"
                                                     value={(localSettings.cardColor as any) || '#FFFFFF'}
@@ -1258,7 +1276,7 @@ export function OnlineStoreTab({
                                         </div>
                                         <div className="space-y-3">
                                             <Label>Header Text (Optional)</Label>
-                                            <div className="flex items-center gap-3">
+                                            <div className="flex items-center gap-3 min-w-0">
                                                 <input
                                                     type="color"
                                                     value={(localSettings.headerTextColor as any) || (localSettings.textColor as any) || '#111827'}
@@ -1298,20 +1316,20 @@ export function OnlineStoreTab({
                             onOpenChange={setHoursModalOpen}
                             title="Operating Hours"
                             description="These hours are used to determine when the storefront accepts new orders."
-                            schedule={(localSettings?.operatingHours as any) || createDefaultWeeklySchedule()}
+                            schedule={normalizeWeeklySchedule(localSettings?.operatingHours) as any}
                             onSave={(schedule) => updateSettings({ operatingHours: schedule as any })}
                         />
 
                         {/* Pickup & Delivery */}
                         <TabsContent value="ordering" className="space-y-6">
-                            <div className="grid gap-6 lg:grid-cols-2">
+                            <div className="grid gap-6 xl:grid-cols-2">
                                 <Card>
                                     <CardHeader>
-                                        <div className="flex items-center justify-between">
-                                            <div className="flex items-center gap-3">
+                                        <div className="flex items-center justify-between gap-3">
+                                            <div className="flex items-center gap-3 min-w-0">
                                                 <div
                                                     className={cn(
-                                                        'flex h-10 w-10 items-center justify-center rounded-lg',
+                                                        'flex h-10 w-10 shrink-0 items-center justify-center rounded-lg',
                                                         localSettings.pickupEnabled
                                                             ? 'bg-primary/10 text-primary'
                                                             : 'bg-muted text-muted-foreground'
@@ -1319,12 +1337,12 @@ export function OnlineStoreTab({
                                                 >
                                                     <Store className="h-5 w-5" />
                                                 </div>
-                                                <div>
+                                                <div className="min-w-0">
                                                     <CardTitle className="text-base">Pickup Orders</CardTitle>
                                                     <CardDescription>Allow customers to pick up orders</CardDescription>
                                                 </div>
                                             </div>
-                                            <Switch
+                                            <Switch className="shrink-0"
                                                 checked={localSettings.pickupEnabled ?? true}
                                                 onCheckedChange={(pickupEnabled) => updateSettings({ pickupEnabled })}
                                             />
@@ -1334,11 +1352,11 @@ export function OnlineStoreTab({
 
                                 <Card>
                                     <CardHeader>
-                                        <div className="flex items-center justify-between">
-                                            <div className="flex items-center gap-3">
+                                        <div className="flex items-center justify-between gap-3">
+                                            <div className="flex items-center gap-3 min-w-0">
                                                 <div
                                                     className={cn(
-                                                        'flex h-10 w-10 items-center justify-center rounded-lg',
+                                                        'flex h-10 w-10 shrink-0 items-center justify-center rounded-lg',
                                                         localSettings.deliveryEnabled
                                                             ? 'bg-primary/10 text-primary'
                                                             : 'bg-muted text-muted-foreground'
@@ -1346,12 +1364,12 @@ export function OnlineStoreTab({
                                                 >
                                                     <Truck className="h-5 w-5" />
                                                 </div>
-                                                <div>
+                                                <div className="min-w-0">
                                                     <CardTitle className="text-base">Delivery Orders</CardTitle>
                                                     <CardDescription>Offer delivery to customers</CardDescription>
                                                 </div>
                                             </div>
-                                            <Switch
+                                            <Switch className="shrink-0"
                                                 checked={localSettings.deliveryEnabled ?? false}
                                                 onCheckedChange={(deliveryEnabled) => updateSettings({ deliveryEnabled })}
                                             />
@@ -1467,33 +1485,33 @@ export function OnlineStoreTab({
                                     <CardDescription>Automate order handling to match the merchant dashboard flow</CardDescription>
                                 </CardHeader>
                                 <CardContent className="space-y-4">
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-3">
-                                            <Zap className="h-5 w-5 text-yellow-500" />
-                                            <div>
+                                    <div className="flex items-center justify-between gap-3">
+                                        <div className="flex items-center gap-3 min-w-0">
+                                            <Zap className="h-5 w-5 text-yellow-500 shrink-0" />
+                                            <div className="min-w-0">
                                                 <Label>Automatically Accept All Orders</Label>
                                                 <p className="text-sm text-muted-foreground">
                                                     New orders will be accepted without manual confirmation
                                                 </p>
                                             </div>
                                         </div>
-                                        <Switch
+                                        <Switch className="shrink-0"
                                             checked={localSettings.autoAcceptOrders ?? false}
                                             onCheckedChange={(autoAcceptOrders) => updateSettings({ autoAcceptOrders })}
                                         />
                                     </div>
                                     <Separator />
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-3">
-                                            <Check className="h-5 w-5 text-green-500" />
-                                            <div>
+                                    <div className="flex items-center justify-between gap-3">
+                                        <div className="flex items-center gap-3 min-w-0">
+                                            <Check className="h-5 w-5 text-green-500 shrink-0" />
+                                            <div className="min-w-0">
                                                 <Label>Auto-Close Paid Orders</Label>
                                                 <p className="text-sm text-muted-foreground">
                                                     Automatically close orders that are paid upon acceptance
                                                 </p>
                                             </div>
                                         </div>
-                                        <Switch
+                                        <Switch className="shrink-0"
                                             checked={localSettings.autoClosePaidOrders ?? false}
                                             onCheckedChange={(autoClosePaidOrders) =>
                                                 updateSettings({ autoClosePaidOrders })
@@ -1509,17 +1527,17 @@ export function OnlineStoreTab({
                                     <CardDescription>Get notified about new orders</CardDescription>
                                 </CardHeader>
                                 <CardContent className="space-y-4">
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-3">
-                                            <Bell className="h-5 w-5 text-muted-foreground" />
-                                            <div>
+                                    <div className="flex items-center justify-between gap-3">
+                                        <div className="flex items-center gap-3 min-w-0">
+                                            <Bell className="h-5 w-5 text-muted-foreground shrink-0" />
+                                            <div className="min-w-0">
                                                 <Label>Email on New Order</Label>
                                                 <p className="text-sm text-muted-foreground">
                                                     Send an email notification for every new order
                                                 </p>
                                             </div>
                                         </div>
-                                        <Switch
+                                        <Switch className="shrink-0"
                                             checked={localSettings.sendEmailOnNewOrder ?? true}
                                             onCheckedChange={(sendEmailOnNewOrder) =>
                                                 updateSettings({ sendEmailOnNewOrder })
@@ -1549,17 +1567,17 @@ export function OnlineStoreTab({
                                     <CardDescription>Choose which payment methods to accept</CardDescription>
                                 </CardHeader>
                                 <CardContent className="space-y-4">
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-3">
-                                            <CreditCard className="h-5 w-5 text-muted-foreground" />
-                                            <div>
+                                    <div className="flex items-center justify-between gap-3">
+                                        <div className="flex items-center gap-3 min-w-0">
+                                            <CreditCard className="h-5 w-5 text-muted-foreground shrink-0" />
+                                            <div className="min-w-0">
                                                 <Label>Accept Online Card Payments</Label>
                                                 <p className="text-sm text-muted-foreground">
                                                     Process payments via integrated payment processor
                                                 </p>
                                             </div>
                                         </div>
-                                        <Switch
+                                        <Switch className="shrink-0"
                                             checked={localSettings.acceptOnlinePayments ?? true}
                                             onCheckedChange={(acceptOnlinePayments) =>
                                                 updateSettings({ acceptOnlinePayments })
@@ -1591,20 +1609,34 @@ export function OnlineStoreTab({
                                             <p className="text-xs text-muted-foreground">
                                                 This private key is stored securely and is never shown back in plain text. Enter a new value only when rotating the key.
                                             </p>
+                                            <Label className="pt-2">NMI Webhook Signing Secret</Label>
+                                            <Input
+                                                type="password"
+                                                value={localSettings.nmiWebhookSecret || ''}
+                                                onChange={(e) => updateSettings({ nmiWebhookSecret: e.target.value })}
+                                                placeholder={
+                                                    localSettings.nmiWebhookConfigured
+                                                        ? 'Stored securely. Enter a new value only to rotate it.'
+                                                        : 'Enter NMI webhook signing secret'
+                                                }
+                                            />
+                                            <p className="text-xs text-muted-foreground">
+                                                Used to verify invoice-payment and storefront payment webhooks before updating payment state asynchronously.
+                                            </p>
                                         </div>
                                     )}
                                     <Separator />
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-3">
-                                            <DollarSign className="h-5 w-5 text-muted-foreground" />
-                                            <div>
+                                    <div className="flex items-center justify-between gap-3">
+                                        <div className="flex items-center gap-3 min-w-0">
+                                            <DollarSign className="h-5 w-5 text-muted-foreground shrink-0" />
+                                            <div className="min-w-0">
                                                 <Label>Accept Cash on Delivery</Label>
                                                 <p className="text-sm text-muted-foreground">
                                                     Allow customers to pay cash at the door
                                                 </p>
                                             </div>
                                         </div>
-                                        <Switch
+                                        <Switch className="shrink-0"
                                             checked={localSettings.acceptCashOnDelivery ?? false}
                                             onCheckedChange={(acceptCashOnDelivery) =>
                                                 updateSettings({ acceptCashOnDelivery })
@@ -1616,12 +1648,12 @@ export function OnlineStoreTab({
 
                             <Card>
                                 <CardHeader>
-                                    <div className="flex items-center justify-between">
+                                    <div className="flex items-center justify-between gap-3">
                                         <div>
                                             <CardTitle>Tipping</CardTitle>
                                             <CardDescription>Configure tipping options for customers</CardDescription>
                                         </div>
-                                        <Switch
+                                        <Switch className="shrink-0"
                                             checked={localSettings.tippingEnabled ?? true}
                                             onCheckedChange={(tippingEnabled) => updateSettings({ tippingEnabled })}
                                         />
@@ -1631,7 +1663,7 @@ export function OnlineStoreTab({
                                     <CardContent className="space-y-6">
                                         <div className="space-y-3">
                                             <Label>Preset Tip Percentages</Label>
-                                            <div className="flex gap-2">
+                                            <div className="flex gap-2 flex-wrap">
                                                 {(localSettings.tipConfig?.presetPercentages || [15, 18, 20]).map(
                                                     (percent, index) => (
                                                         <div key={index} className="relative">
@@ -1673,12 +1705,12 @@ export function OnlineStoreTab({
 
                             <Card>
                                 <CardHeader>
-                                    <div className="flex items-center justify-between">
+                                    <div className="flex items-center justify-between gap-3">
                                         <div>
                                             <CardTitle>Convenience Fee</CardTitle>
                                             <CardDescription>Add a fee for online ordering</CardDescription>
                                         </div>
-                                        <Switch
+                                        <Switch className="shrink-0"
                                             checked={localSettings.convenienceFeeEnabled ?? false}
                                             onCheckedChange={(convenienceFeeEnabled) =>
                                                 updateSettings({ convenienceFeeEnabled })
@@ -1732,7 +1764,7 @@ export function OnlineStoreTab({
                         <TabsContent value="orderout" className="space-y-6">
                             <Card>
                                 <CardHeader>
-                                    <div className="flex items-center justify-between">
+                                    <div className="flex items-center justify-between gap-3">
                                         <div>
                                             <CardTitle className="flex items-center gap-2">
                                                 <Plug className="h-5 w-5" />

@@ -3,6 +3,7 @@
 import { assertHQPermission } from '@/lib/admin/auth'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
+import { applyReportablePredicate } from '@/lib/reporting/recognized-order'
 
 // ============================================================================
 // TYPES
@@ -140,40 +141,42 @@ export async function getPlatformDashboardKPIs(): Promise<PlatformDashboardKPIs>
   const lastWeekSameDayEnd = new Date(lastWeekSameDay)
   lastWeekSameDayEnd.setDate(lastWeekSameDayEnd.getDate() + 1)
 
+  // Recognized orders only. Revenue and order count both key off `created_at`
+  // and the same gate so they describe the same set (previously revenue keyed
+  // off `completed_at` — the manual tap — while order count had no gate at all).
+
   // 1. Revenue Today
-  const { data: revenueDataToday } = await supabase
-    .from('orders')
-    .select('total_amount')
-    .not('status', 'in', '(draft,cancelled,void)')
-    .gte('completed_at', today.toISOString())
-    .lt('completed_at', tomorrow.toISOString())
+  const { data: revenueDataToday } = await applyReportablePredicate(
+    supabase.from('orders').select('total_amount')
+  )
+    .gte('created_at', today.toISOString())
+    .lt('created_at', tomorrow.toISOString())
 
   const revenueToday = revenueDataToday?.reduce((sum, o) => sum + Number(o.total_amount || 0), 0) || 0
 
   // 2. Revenue Last Week Same Day
-  const { data: revenueDataLastWeek } = await supabase
-    .from('orders')
-    .select('total_amount')
-    .not('status', 'in', '(draft,cancelled,void)')
-    .gte('completed_at', lastWeekSameDay.toISOString())
-    .lt('completed_at', lastWeekSameDayEnd.toISOString())
+  const { data: revenueDataLastWeek } = await applyReportablePredicate(
+    supabase.from('orders').select('total_amount')
+  )
+    .gte('created_at', lastWeekSameDay.toISOString())
+    .lt('created_at', lastWeekSameDayEnd.toISOString())
 
   const revenueLastWeekSameDay =
     revenueDataLastWeek?.reduce((sum, o) => sum + Number(o.total_amount || 0), 0) || 0
 
   // 3. Orders Today
-  const { data: ordersDataToday } = await supabase
-    .from('orders')
-    .select('id')
+  const { data: ordersDataToday } = await applyReportablePredicate(
+    supabase.from('orders').select('id')
+  )
     .gte('created_at', today.toISOString())
     .lt('created_at', tomorrow.toISOString())
 
   const ordersToday = ordersDataToday?.length || 0
 
   // 4. Orders Last Week Same Day
-  const { data: ordersDataLastWeek } = await supabase
-    .from('orders')
-    .select('id')
+  const { data: ordersDataLastWeek } = await applyReportablePredicate(
+    supabase.from('orders').select('id')
+  )
     .gte('created_at', lastWeekSameDay.toISOString())
     .lt('created_at', lastWeekSameDayEnd.toISOString())
 
@@ -231,8 +234,11 @@ export async function getPlatformDashboardKPIs(): Promise<PlatformDashboardKPIs>
     paymentSuccessRate = (successCount / paymentsDataToday.length) * 100
   }
 
-  // 10. Open Support Tickets (table doesn't exist yet, hardcoded to 0)
-  const openSupportTickets = 0
+  // 10. Open Support Tickets — bound to get_support_dashboard_stats() (the
+  // support-tickets feature shipped after this dashboard; the old hardcoded 0
+  // was a stale data-binding gap). SECURITY DEFINER RPC, service-role invoked.
+  const { data: supportStats } = await serviceRole.rpc('get_support_dashboard_stats')
+  const openSupportTickets = Number((supportStats as { open_count?: number })?.open_count ?? 0)
 
   return {
     revenueToday,

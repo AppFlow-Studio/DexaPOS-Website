@@ -1,14 +1,16 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { format, parseISO } from 'date-fns'
-import { AlertTriangle, Download, RefreshCcwDot } from 'lucide-react'
+import { format, parse, parseISO } from 'date-fns'
+import { AlertTriangle, CalendarIcon, Download, RefreshCcwDot } from 'lucide-react'
 import { InfoIcon } from '@/components/ui/info-icon'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Calendar } from '@/components/ui/calendar'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Skeleton } from '@/components/ui/skeleton'
+import { cn } from '@/lib/utils'
 import {
   Table,
   TableBody,
@@ -141,6 +143,48 @@ function downloadCsv(content: string, filename: string) {
   URL.revokeObjectURL(url)
 }
 
+// Date filter using Popover + Calendar instead of a native <input type="date">.
+// The native picker's calendar popup renders off-screen on narrow viewports;
+// the Radix popover keeps itself inside the viewport via collision detection.
+// Value is the same `yyyy-MM-dd` string the rest of the filter logic expects.
+function DateField({
+  value,
+  onChange,
+  placeholder = 'dd/mm/yyyy',
+}: {
+  value: string
+  onChange: (value: string) => void
+  placeholder?: string
+}) {
+  const selected = value ? parse(value, 'yyyy-MM-dd', new Date()) : undefined
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          className={cn(
+            'h-9 w-full justify-start px-3 text-left font-normal',
+            !value && 'text-muted-foreground'
+          )}
+        >
+          <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
+          <span className="truncate">
+            {selected ? format(selected, 'MMM d, yyyy') : placeholder}
+          </span>
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto min-w-[280px] p-0" align="start">
+        <Calendar
+          mode="single"
+          initialFocus
+          selected={selected}
+          onSelect={(date) => onChange(date ? format(date, 'yyyy-MM-dd') : '')}
+        />
+      </PopoverContent>
+    </Popover>
+  )
+}
+
 export function BatchReconciliationSection({
   scopedMerchantId,
   renderBatchPayments,
@@ -270,21 +314,21 @@ export function BatchReconciliationSection({
               Compare settlement batches against linked order payments and flag mismatches.
             </CardDescription>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button variant="outline" onClick={() => void handleRefresh()} disabled={batchesFetching || batchPaymentsFetching}>
               <RefreshCcwDot className="mr-2 h-4 w-4" />
               Refresh
             </Button>
             <Button variant="outline" onClick={handleBatchExport} disabled={!selectedBatch}>
               <Download className="mr-2 h-4 w-4" />
-              Export Selected Batch
+              Export Selected
             </Button>
           </div>
         </div>
       </CardHeader>
 
       <CardContent className="space-y-4">
-        <div className={scopedMerchantId ? 'grid gap-3 md:grid-cols-4' : 'grid gap-3 md:grid-cols-5'}>
+        <div className={scopedMerchantId ? 'grid gap-3 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4' : 'grid gap-3 grid-cols-1 sm:grid-cols-2 xl:grid-cols-5'}>
           {!scopedMerchantId && (
             <label className="flex flex-col gap-1 text-sm">
               <span className="text-muted-foreground">Merchant</span>
@@ -320,15 +364,15 @@ export function BatchReconciliationSection({
             </select>
           </label>
 
-          <label className="flex flex-col gap-1 text-sm">
+          <div className="flex flex-col gap-1 text-sm">
             <span className="text-muted-foreground">Date From</span>
-            <Input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} />
-          </label>
+            <DateField value={dateFrom} onChange={setDateFrom} />
+          </div>
 
-          <label className="flex flex-col gap-1 text-sm">
+          <div className="flex flex-col gap-1 text-sm">
             <span className="text-muted-foreground">Date To</span>
-            <Input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} />
-          </label>
+            <DateField value={dateTo} onChange={setDateTo} />
+          </div>
 
           <div className="flex items-end">
             <Button variant="ghost" onClick={clearFilters} className="w-full">
@@ -369,7 +413,7 @@ export function BatchReconciliationSection({
                 <span className="inline-flex items-center justify-end gap-1">Refund <InfoIcon tip="Total refunds processed within this batch." side="bottom" /></span>
               </TableHead>
               <TableHead className="text-right">
-                <span className="inline-flex items-center justify-end gap-1">Net Deposit <InfoIcon tip="Amount deposited into the merchant's bank account. Formula: Gross − refunds − net fees (the 4% bank fee). Reconciles line-for-line with Lucra." side="bottom" /></span>
+                <span className="inline-flex items-center justify-end gap-1">Net Deposit <InfoIcon tip="Amount deposited into the merchant's bank account. Formula: Gross − refunds − net fees (the 4% bank fee). Reconciles line-for-line with TSYS." side="bottom" /></span>
               </TableHead>
               <TableHead>
                 <span className="inline-flex items-center gap-1">Status <InfoIcon tip="Open: batch is still collecting payments. Closed: submitted to processor. Settled: processor confirmed receipt. Funded: money deposited to merchant bank." side="bottom" /></span>

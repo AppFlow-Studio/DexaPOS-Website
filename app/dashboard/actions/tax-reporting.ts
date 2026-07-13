@@ -1,6 +1,7 @@
 "use server";
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { applyReportablePredicate } from "@/lib/reporting/recognized-order";
 import type {
   TaxSummary,
   TaxBreakdownRow,
@@ -87,14 +88,15 @@ export async function GetTaxSummary(
   const dateToEOD = new Date(dateTo);
   dateToEOD.setHours(23, 59, 59, 999);
 
-  let ordersQuery = supabase
-    .from("orders")
-    .select("id, tax_amount, cash_tax_amount, payment_pricing_mode, subtotal")
-    .eq("merchant_id", merchantId)
-    // Include all paid/active statuses — tax is collected at payment time,
-    // not when the kitchen workflow finishes. Exclude only orders that were
-    // never paid (draft) or fully reversed (cancelled, void).
-    .not("status", "in", "(draft,cancelled,void)")
+  // Tax is collected at payment time, so only recognized (paid) orders count —
+  // the canonical predicate excludes unpaid open checks as well as
+  // draft/cancelled/void/refunded.
+  let ordersQuery = applyReportablePredicate(
+    supabase
+      .from("orders")
+      .select("id, tax_amount, cash_tax_amount, payment_pricing_mode, subtotal")
+      .eq("merchant_id", merchantId)
+  )
     .is("voided_at", null)
     .gte("created_at", dateFrom.toISOString())
     .lte("created_at", dateToEOD.toISOString());
@@ -225,14 +227,15 @@ export async function GetTaxBreakdown(
   const dbSortCol = DB_SORT_COLS[sortBy] ?? "created_at";
   const dbSortAsc = sortDir === "asc";
 
-  let query = supabase
-    .from("orders")
-    .select(
-      "id, order_number, created_at, order_type, subtotal, tax_amount, cash_tax_amount, payment_pricing_mode, location_id",
-      { count: "exact" }
-    )
-    .eq("merchant_id", merchantId)
-    .not("status", "in", "(draft,cancelled,void)")
+  let query = applyReportablePredicate(
+    supabase
+      .from("orders")
+      .select(
+        "id, order_number, created_at, order_type, subtotal, tax_amount, cash_tax_amount, payment_pricing_mode, location_id",
+        { count: "exact" }
+      )
+      .eq("merchant_id", merchantId)
+  )
     .is("voided_at", null)
     .gte("created_at", dateFrom.toISOString())
     .lte("created_at", dateToEOD.toISOString())
@@ -320,11 +323,12 @@ export async function GetTaxByCategory(
   // Fix: fetch pricing mode fields so we can resolve cash vs regular tax
   // at the item level — previously item.tax_amount was used directly for
   // all orders, which disagreed with the summary's resolveTaxAmount logic.
-  let ordersQuery = supabase
-    .from("orders")
-    .select("id, payment_pricing_mode, tax_amount, cash_tax_amount")
-    .eq("merchant_id", merchantId)
-    .not("status", "in", "(draft,cancelled,void)")
+  let ordersQuery = applyReportablePredicate(
+    supabase
+      .from("orders")
+      .select("id, payment_pricing_mode, tax_amount, cash_tax_amount")
+      .eq("merchant_id", merchantId)
+  )
     .is("voided_at", null)
     .gte("created_at", dateFrom.toISOString())
     .lte("created_at", dateToEOD.toISOString());
@@ -432,13 +436,14 @@ export async function GetTaxByLocation(
         .from("locations")
         .select("id, name, sales_tax_rate")
         .eq("merchant_id", merchantId),
-      supabase
-        .from("orders")
-        .select(
-          "id, location_id, tax_amount, cash_tax_amount, payment_pricing_mode, subtotal"
-        )
-        .eq("merchant_id", merchantId)
-        .not("status", "in", "(draft,cancelled,void)")
+      applyReportablePredicate(
+        supabase
+          .from("orders")
+          .select(
+            "id, location_id, tax_amount, cash_tax_amount, payment_pricing_mode, subtotal"
+          )
+          .eq("merchant_id", merchantId)
+      )
         .is("voided_at", null)
         .gte("created_at", dateFrom.toISOString())
         .lte("created_at", dateToEOD.toISOString()),

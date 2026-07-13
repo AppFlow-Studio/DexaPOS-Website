@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { useVoidsReport, useOrderAnalytics } from "../../hooks/useOrderAnalytics";
+import { useVoidsReport, useFinancialKPIs } from "../../hooks/useOrderAnalytics";
 import {
   DateRangePicker,
   DatePreset,
@@ -42,6 +42,7 @@ import { cn } from "@/lib/utils";
 import { useSelectedLocation } from "@/stores/location-store";
 import { exportToCsv } from "@/utils/export";
 import { Download } from "lucide-react";
+import { useReportingQueryRange } from "@/app/dashboard/hooks/useReportingDateRange";
 
 // A "discrepancy" combines both void and refund events into one unified timeline
 type DiscrepancyType = "void" | "refund";
@@ -95,10 +96,12 @@ export default function DiscrepancyReportPage() {
   const [sortDir, setSortDir] = useState<SortDir>("desc");
 
   const selectedLocation = useSelectedLocation();
-  const { data: voidsData, isLoading: voidsLoading } = useVoidsReport(dateRange.from, dateRange.to);
-  const { data: analytics, isLoading: analyticsLoading } = useOrderAnalytics(dateRange.from, dateRange.to);
+  const queryDateRange = useReportingQueryRange(dateRange);
+  const { data: voidsData, isLoading: voidsLoading, isError: voidsError } = useVoidsReport(queryDateRange.from, queryDateRange.to);
+  const { data: financialKPIs, isLoading: analyticsLoading, isError: analyticsError } = useFinancialKPIs(queryDateRange.from, queryDateRange.to);
 
   const isLoading = voidsLoading || analyticsLoading;
+  const isError = voidsError || analyticsError;
 
   // Merge voids + refunds into unified discrepancy rows
   const allRows: DiscrepancyRow[] = useMemo(() => {
@@ -187,40 +190,42 @@ export default function DiscrepancyReportPage() {
   const totalRefunds = allRows.filter(r => r.type === "refund");
   const totalVoidAmt = totalVoids.reduce((s, r) => s + r.amount, 0);
   const totalRefundAmt = totalRefunds.reduce((s, r) => s + r.amount, 0);
-  const totalOrders = analytics?.totalOrders ?? 0;
+  // Count distinct affected orders (not raw event rows) to avoid >100% rates
+  const affectedOrderIds = new Set(allRows.map(r => r.order_id));
+  const totalOrders = financialKPIs?.summary.order_count ?? 0;
   const discrepancyRate = totalOrders > 0
-    ? (((totalVoids.length + totalRefunds.length) / totalOrders) * 100).toFixed(1)
+    ? ((affectedOrderIds.size / totalOrders) * 100).toFixed(1)
     : "0.0";
 
-  const kpis = [
+  const kpiCards = [
     {
       label: "Total Discrepancies",
-      value: isLoading ? null : allRows.length.toLocaleString(),
-      sub: `${discrepancyRate}% of all orders`,
+      value: isLoading ? null : isError ? "—" : allRows.length.toLocaleString(),
+      sub: isError ? "Failed to load" : `${discrepancyRate}% of all orders`,
       icon: ShieldAlert,
       iconColor: "text-rose-500",
       iconBg: "bg-rose-50",
     },
     {
       label: "Void Events",
-      value: isLoading ? null : totalVoids.length.toLocaleString(),
-      sub: `-$${totalVoidAmt.toFixed(2)} impact`,
+      value: isLoading ? null : isError ? "—" : totalVoids.length.toLocaleString(),
+      sub: isError ? "Failed to load" : `-$${totalVoidAmt.toFixed(2)} impact`,
       icon: AlertTriangle,
       iconColor: "text-rose-500",
       iconBg: "bg-rose-50",
     },
     {
       label: "Refund Events",
-      value: isLoading ? null : totalRefunds.length.toLocaleString(),
-      sub: `-$${totalRefundAmt.toFixed(2)} returned`,
+      value: isLoading ? null : isError ? "—" : totalRefunds.length.toLocaleString(),
+      sub: isError ? "Failed to load" : `-$${totalRefundAmt.toFixed(2)} returned`,
       icon: RefreshCcw,
       iconColor: "text-amber-500",
       iconBg: "bg-amber-50",
     },
     {
       label: "Total Financial Impact",
-      value: isLoading ? null : `-$${(totalVoidAmt + totalRefundAmt).toFixed(2)}`,
-      sub: "Revenue lost to discrepancies",
+      value: isLoading ? null : isError ? "—" : `-$${(totalVoidAmt + totalRefundAmt).toFixed(2)}`,
+      sub: isError ? "Failed to load" : "Revenue lost to discrepancies",
       icon: DollarSign,
       iconColor: "text-indigo-500",
       iconBg: "bg-indigo-50",
@@ -255,7 +260,7 @@ export default function DiscrepancyReportPage() {
 
       {/* KPI Cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {kpis.map((kpi) => (
+        {kpiCards.map((kpi) => (
           <Card key={kpi.label} className="border-none shadow-[0_2px_12px_rgba(0,0,0,0.06)] bg-card rounded-2xl overflow-hidden">
             <CardContent className="p-5">
               <div className="flex items-center justify-between mb-4">
@@ -287,6 +292,8 @@ export default function DiscrepancyReportPage() {
               Array.from({ length: 4 }).map((_, i) => (
                 <div key={i} className="h-8 bg-muted animate-pulse rounded-lg" />
               ))
+            ) : isError ? (
+              <p className="text-sm text-muted-foreground text-center py-4">Failed to load</p>
             ) : topStaff.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-4">No data</p>
             ) : topStaff.map(([name, stats]) => (
@@ -322,6 +329,8 @@ export default function DiscrepancyReportPage() {
               Array.from({ length: 4 }).map((_, i) => (
                 <div key={i} className="h-8 bg-muted animate-pulse rounded-lg" />
               ))
+            ) : isError ? (
+              <p className="text-sm text-muted-foreground text-center py-4">Failed to load</p>
             ) : topReasons.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-4">No data</p>
             ) : topReasons.map(([reason, count]) => (
@@ -419,6 +428,16 @@ export default function DiscrepancyReportPage() {
                     ))}
                   </TableRow>
                 ))
+              ) : isError ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="h-40 text-center">
+                    <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                      <AlertTriangle className="h-8 w-8 opacity-30" />
+                      <p className="text-sm font-medium">Failed to load discrepancy data</p>
+                      <p className="text-xs">Try refreshing the page or selecting a different date range.</p>
+                    </div>
+                  </TableCell>
+                </TableRow>
               ) : processed.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={7} className="h-40 text-center">

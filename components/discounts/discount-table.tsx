@@ -29,6 +29,8 @@ interface DiscountTableProps {
     discounts: Discount[]
     isLoading?: boolean
     locationNameById?: Record<string, string>
+    /** Hide the global-vs-location Scope column for single-location accounts. */
+    isSingleLocation?: boolean
     onToggleStatus?: (id: string, isActive: boolean) => void
     onBulkStatus?: (ids: string[], isActive: boolean) => void
     onBulkDelete?: (ids: string[], mode?: 'soft' | 'hard') => void
@@ -41,6 +43,7 @@ export function DiscountTable({
     discounts,
     isLoading,
     locationNameById,
+    isSingleLocation = false,
     onToggleStatus,
     onBulkStatus,
     onBulkDelete,
@@ -104,7 +107,7 @@ export function DiscountTable({
         if (isLoading) {
             return Array.from({ length: 4 }).map((_, idx) => (
                 <TableRow key={idx}>
-                    <TableCell colSpan={8}>
+                    <TableCell colSpan={isSingleLocation ? 7 : 8}>
                         <Skeleton className="h-10 w-full" />
                     </TableCell>
                 </TableRow>
@@ -129,9 +132,11 @@ export function DiscountTable({
                     <Checkbox checked={selectedIds.includes(discount.id)} onCheckedChange={() => toggleSelection(discount.id)} />
                 </TableCell>
                 <TableCell className="font-medium">{discount.name}</TableCell>
-                <TableCell className="capitalize">{discount.discount_type}</TableCell>
-                <TableCell>{formatValue(discount)}</TableCell>
-                <TableCell>{renderScope(discount)}</TableCell>
+                <TableCell className="hidden sm:table-cell capitalize">{discount.discount_type}</TableCell>
+                <TableCell className="hidden sm:table-cell">{formatValue(discount)}</TableCell>
+                {!isSingleLocation && (
+                    <TableCell className="hidden md:table-cell">{renderScope(discount)}</TableCell>
+                )}
                 <TableCell>
                     <div className="flex items-center gap-2">
                         <Switch
@@ -146,7 +151,7 @@ export function DiscountTable({
                         )}
                     </div>
                 </TableCell>
-                <TableCell>
+                <TableCell className="hidden md:table-cell">
                     <span className={cn(expired && 'line-through text-muted-foreground')}>
                         {formatDateRange(discount)}
                     </span>
@@ -184,7 +189,7 @@ export function DiscountTable({
 
     return (
         <div className="space-y-3">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center gap-2 justify-between">
                 <div className="flex items-center gap-2">
                     <Checkbox checked={allSelected} onCheckedChange={toggleAll} />
                     <span className="text-sm text-muted-foreground">
@@ -224,11 +229,13 @@ export function DiscountTable({
                         <TableRow>
                             <TableHead className="w-10" />
                             <TableHead>Name</TableHead>
-                            <TableHead>Type</TableHead>
-                            <TableHead>Value</TableHead>
-                            <TableHead>Scope</TableHead>
+                            <TableHead className="hidden sm:table-cell">Type</TableHead>
+                            <TableHead className="hidden sm:table-cell">Value</TableHead>
+                            {!isSingleLocation && (
+                                <TableHead className="hidden md:table-cell">Scope</TableHead>
+                            )}
                             <TableHead>Status</TableHead>
-                            <TableHead>Date range</TableHead>
+                            <TableHead className="hidden md:table-cell">Date range</TableHead>
                             <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
                     </TableHeader>

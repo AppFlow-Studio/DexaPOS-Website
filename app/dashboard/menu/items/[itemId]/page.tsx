@@ -186,15 +186,17 @@ function EditingContextIndicator({
         <TooltipTrigger asChild>
           <div
             className={cn(
-              "flex items-center gap-2 px-3 py-2 rounded-lg border transition-all cursor-help hover:shadow-sm",
+              "flex min-w-0 max-w-full items-center gap-2 px-3 py-2 rounded-lg border transition-all cursor-help hover:shadow-sm",
               levelInfo.bgColor,
               levelInfo.borderColor,
               levelInfo.color
             )}
           >
-            <Icon className="h-4 w-4" />
-            <span className="text-sm font-medium">{levelInfo.name}</span>
-            <Info className="h-3.5 w-3.5 opacity-60" />
+            <Icon className="h-4 w-4 shrink-0" />
+            <span className="min-w-0 text-sm font-medium">
+              {levelInfo.name}
+            </span>
+            <Info className="h-3.5 w-3.5 opacity-60 shrink-0" />
           </div>
         </TooltipTrigger>
         <TooltipContent
@@ -319,20 +321,20 @@ function PriceBreakdown({
         {/* Level 1 - Global Base */}
         <div
           className={cn(
-            "flex items-center justify-between p-3 rounded-lg border",
+            "flex flex-wrap items-center justify-between gap-x-2 gap-y-1 p-3 rounded-lg border",
             isAllLocations ? "bg-emerald-50 border-emerald-200" : "bg-muted/30"
           )}
         >
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 min-w-0 flex-1 basis-40">
             <div
               className={cn(
-                "w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium",
+                "w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium shrink-0",
                 isAllLocations ? "bg-emerald-500 text-white" : "bg-muted"
               )}
             >
               1
             </div>
-            <Globe className="h-4 w-4 text-emerald-600" />
+            <Globe className="h-4 w-4 text-emerald-600 shrink-0" />
             <span className="text-sm font-medium">Global Base</span>
             {isAllLocations && (
               <Badge variant="secondary" className="text-xs">
@@ -340,7 +342,7 @@ function PriceBreakdown({
               </Badge>
             )}
           </div>
-          <div className="text-right">
+          <div className="text-right shrink-0 ml-auto">
             <div
               className={cn(
                 "font-semibold",
@@ -361,24 +363,24 @@ function PriceBreakdown({
         {!isAllLocations && (
           <div
             className={cn(
-              "flex items-center justify-between p-3 rounded-lg border",
+              "flex flex-wrap items-center justify-between gap-x-2 gap-y-1 p-3 rounded-lg border",
               hasLocationOverride
                 ? "bg-blue-50 border-blue-200"
                 : "bg-muted/30 border-dashed"
             )}
           >
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 min-w-0 flex-1 basis-40">
               <div
                 className={cn(
-                  "w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium",
+                  "w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium shrink-0",
                   hasLocationOverride ? "bg-blue-500 text-white" : "bg-muted"
                 )}
               >
                 2
               </div>
-              <Building2 className="h-4 w-4 text-blue-600" />
-              <div>
-                <div className="flex items-center gap-2">
+              <Building2 className="h-4 w-4 text-blue-600 shrink-0" />
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                   <span className="text-sm font-medium">Location Override</span>
                   {hasLocationOverride && (
                     <Badge
@@ -389,12 +391,12 @@ function PriceBreakdown({
                     </Badge>
                   )}
                 </div>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-muted-foreground truncate">
                   {currentLocationName}
                 </p>
               </div>
             </div>
-            <div className="text-right">
+            <div className="text-right shrink-0 ml-auto">
               {hasLocationOverride ? (
                 <>
                   <div className="font-semibold text-blue-600">
@@ -627,75 +629,62 @@ export default function MenuItemDetailPage() {
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
+    <div className="space-y-6 animate-in fade-in duration-500 w-full min-w-0">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Button
-            variant="ghost"
-            size="icon"
+      <div className="w-full min-w-0 space-y-2">
+        {/* Breadcrumb + actions row */}
+        <div className="flex items-center justify-between gap-2 min-w-0">
+          <button
+            type="button"
+            className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground shrink-0"
             onClick={() => router.push("/dashboard/menu/items")}
           >
             <ArrowLeft className="h-4 w-4" />
-          </Button>
-          <div>
-            <div className="text-sm text-muted-foreground flex items-center gap-1">
-              <button
-                type="button"
-                className="hover:underline"
-                onClick={() => router.push("/dashboard/menu/items")}
+            Items
+          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            <Button size="sm" onClick={() => setIsEditSheetOpen(true)}>
+              <Edit3 className="h-4 w-4 mr-1.5" />
+              Edit Item
+            </Button>
+            {isAllLocations && (
+              <Button
+                variant="destructive"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => setIsDeleteDialogOpen(true)}
               >
-                Items
-              </button>
-              <span>/</span>
-              <span className="text-foreground font-medium">
-                {menuItem.name}
-              </span>
-            </div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-bold">{menuItem.name}</h1>
-              <Badge
-                variant={menuItem.effective_availability ? "default" : "secondary"}
-                className="h-7"
-              >
-                {menuItem.effective_availability ? (
-                  <>
-                    <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Available
-                  </>
-                ) : (
-                  <>
-                    <XCircle className="h-3.5 w-3.5 mr-1" /> Unavailable
-                  </>
-                )}
-              </Badge>
-              <EditingContextIndicator
-                context={editingContext}
-                locationName={currentLocationName}
-              />
-            </div>
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            )}
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Button onClick={() => setIsEditSheetOpen(true)}>
-            <Edit3 className="h-4 w-4 mr-2" />
-            Edit Item
-          </Button>
-          {isAllLocations && (
-            <Button
-              variant="destructive"
-              size="icon"
-              onClick={() => setIsDeleteDialogOpen(true)}
+        {/* Title + badges */}
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold truncate">{menuItem.name}</h1>
+          <div className="mt-1 flex w-full min-w-0 flex-col items-start gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+            <Badge
+              variant={menuItem.effective_availability ? "default" : "secondary"}
+              className="h-6 text-xs shrink-0"
             >
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          )}
+              {menuItem.effective_availability ? (
+                <><CheckCircle2 className="h-3 w-3 mr-1" />Available</>
+              ) : (
+                <><XCircle className="h-3 w-3 mr-1" />Unavailable</>
+              )}
+            </Badge>
+            <EditingContextIndicator
+              context={editingContext}
+              locationName={currentLocationName}
+            />
+          </div>
         </div>
       </div>
 
       {/* Main Content Grid */}
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid gap-6 lg:grid-cols-3 min-w-0">
         {/* Left Column - Details */}
-        <div className="lg:col-span-2 space-y-6">
+        <div className="lg:col-span-2 space-y-6 min-w-0">
           {/* Basic Info Card */}
           <Card>
             <CardHeader>
@@ -705,9 +694,9 @@ export default function MenuItemDetailPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="grid gap-6 md:grid-cols-2">
+              <div className="flex gap-4 sm:grid sm:gap-6 sm:grid-cols-2">
                 {/* Image */}
-                <div className="aspect-square rounded-lg bg-muted/30 overflow-hidden border">
+                <div className="w-24 h-24 sm:w-auto sm:aspect-square rounded-lg bg-muted/30 overflow-hidden border shrink-0 sm:max-h-none">
                   {isValidImageUrl(menuItem.image) ? (
                     <img
                       src={menuItem.image}
@@ -869,18 +858,20 @@ export default function MenuItemDetailPage() {
                         >
                           <CollapsibleTrigger asChild>
                             <CardContent className="p-4 cursor-pointer">
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-4 flex-1">
+                              <div className="flex items-center justify-between gap-3 min-w-0">
+                                <div className="flex items-center gap-4 flex-1 min-w-0">
                                   <div className="h-10 w-10 rounded-lg bg-purple-500/10 flex items-center justify-center shrink-0">
                                     <Layers className="h-5 w-5 text-purple-500" />
                                   </div>
                                   <div className="flex-1 min-w-0">
-                                    <div className="font-semibold flex items-center gap-2 flex-wrap">
+                                    <div className="font-semibold break-words">
                                       {group.name}
+                                    </div>
+                                    <div className="flex flex-wrap items-center gap-1.5 mt-1">
                                       {group.is_required && (
                                         <Badge
                                           variant="destructive"
-                                          className="text-xs"
+                                          className="text-xs max-w-full"
                                         >
                                           Required
                                         </Badge>
@@ -888,17 +879,17 @@ export default function MenuItemDetailPage() {
                                       {(group as any).source === "location" ? (
                                         <Badge
                                           variant="outline"
-                                          className="text-[10px] gap-1 bg-blue-50 text-blue-700 border-blue-200"
+                                          className="text-[10px] gap-1 bg-blue-50 text-blue-700 border-blue-200 max-w-full"
                                         >
-                                          <MapPin className="h-2.5 w-2.5" />
+                                          <MapPin className="h-2.5 w-2.5 shrink-0" />
                                           This Location
                                         </Badge>
                                       ) : (
                                         <Badge
                                           variant="outline"
-                                          className="text-[10px] gap-1 bg-emerald-50 text-emerald-700 border-emerald-200"
+                                          className="text-[10px] gap-1 bg-emerald-50 text-emerald-700 border-emerald-200 max-w-full"
                                         >
-                                          <Globe className="h-2.5 w-2.5" />
+                                          <Globe className="h-2.5 w-2.5 shrink-0" />
                                           All Locations
                                         </Badge>
                                       )}
@@ -913,11 +904,11 @@ export default function MenuItemDetailPage() {
                                         <Badge
                                           key={opt.id}
                                           variant="outline"
-                                          className="text-xs"
+                                          className="text-xs max-w-full"
                                         >
-                                          {opt.name}
+                                          <span className="truncate">{opt.name}</span>
                                           {opt.price_modifier > 0 && (
-                                            <span className="text-green-600 ml-1">
+                                            <span className="text-green-600 ml-1 shrink-0">
                                               +${opt.price_modifier}
                                             </span>
                                           )}
@@ -934,13 +925,13 @@ export default function MenuItemDetailPage() {
                                     </div>
                                   </div>
                                 </div>
-                                <div className="flex items-center gap-3 shrink-0">
-                                  <div className="text-right text-sm text-muted-foreground">
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <div className="hidden sm:block text-right text-sm text-muted-foreground whitespace-nowrap">
                                     {group.items?.length || 0} options
                                   </div>
                                   <ChevronDown
                                     className={cn(
-                                      "h-5 w-5 text-muted-foreground transition-transform duration-200",
+                                      "h-5 w-5 text-muted-foreground transition-transform duration-200 shrink-0",
                                       expandedModifiers[mg.id] && "rotate-180"
                                     )}
                                   />
@@ -1101,7 +1092,7 @@ export default function MenuItemDetailPage() {
         </div>
 
         {/* Right Column - Preview & Quick Info */}
-        <div className="space-y-6">
+        <div className="space-y-6 min-w-0">
           {/* Price Breakdown */}
           <PriceBreakdown
             item={menuItem}

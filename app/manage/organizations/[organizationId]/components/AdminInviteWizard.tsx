@@ -372,8 +372,8 @@ export function AdminInviteWizard({
       {children && <BottomSheetTrigger asChild>{children}</BottomSheetTrigger>}
       <BottomSheetContent className="w-full" height="95">
         <div className="flex h-full">
-          {/* Left Sidebar - Steps */}
-          <div className="w-64 border-r bg-muted/30 p-6 flex flex-col">
+          {/* Left Sidebar - Steps (hidden on mobile, shown md+) */}
+          <div className="hidden md:flex w-64 border-r bg-muted/30 p-6 flex-col">
             <div className="space-y-1">
               {flowSteps.map((step, index) => {
                 const isActive = step.key === currentStep;
@@ -445,6 +445,35 @@ export function AdminInviteWizard({
                 {currentStep === "merchants" && "Select which merchants this admin can access."}
                 {currentStep === "review" && "Review all details before completing this action."}
               </BottomSheetDescription>
+
+              {/* Compact step indicator — mobile only (sidebar hidden below md) */}
+              <div className="mt-3 flex items-center gap-1.5 overflow-x-auto md:hidden">
+                {flowSteps.map((step, index) => {
+                  const isActive = step.key === currentStep;
+                  const isCompleted = index < currentStepIndex;
+                  const isAccessible = index <= currentStepIndex;
+                  return (
+                    <button
+                      key={step.key}
+                      type="button"
+                      onClick={() => isAccessible && setCurrentStep(step.key)}
+                      disabled={!isAccessible}
+                      className={cn(
+                        "flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium transition-colors",
+                        isActive && "bg-primary text-primary-foreground",
+                        isCompleted && !isActive && "bg-primary/10 text-primary",
+                        !isActive && !isCompleted && "bg-muted text-muted-foreground",
+                        !isAccessible && "opacity-50"
+                      )}
+                    >
+                      <span className="flex h-4 w-4 items-center justify-center rounded-full border text-[10px]">
+                        {isCompleted && !isActive ? "✓" : index + 1}
+                      </span>
+                      {step.label}
+                    </button>
+                  );
+                })}
+              </div>
             </BottomSheetHeader>
 
             <BottomSheetBody className="flex-1 overflow-y-auto max-h-[calc(98vh-200px)]">
@@ -497,7 +526,7 @@ export function AdminInviteWizard({
                       </div>
 
                       <>
-                          <div className="grid grid-cols-2 gap-4">
+                          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                             <div className="space-y-2">
                               <Label htmlFor="firstName">First name *</Label>
                               <Input
@@ -799,7 +828,7 @@ export function AdminInviteWizard({
               )}
             </BottomSheetBody>
 
-            <BottomSheetFooter className="border-t flex flex-col items-center justify-between">
+            <BottomSheetFooter className="border-t flex flex-col items-center justify-between pb-6 sm:pb-4">
               <div className="flex items-center justify-between w-full">
                 <Button
                   variant="ghost"

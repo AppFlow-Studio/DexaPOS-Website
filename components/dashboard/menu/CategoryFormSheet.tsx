@@ -55,6 +55,8 @@ import { MenusModel, SchedulesModel } from "@/types/db-modles";
 import {
   useSelectedLocation,
   useIsAllLocations,
+  useGatedLocation,
+  useGatedLocationId,
 } from "@/stores/location-store";
 import {
   useCategorySchedules,
@@ -124,14 +126,17 @@ export function CategoryFormSheet({
   );
   const selectedLocation = useSelectedLocation();
   const isAllLocations = useIsAllLocations();
+  // Gated location for prep-station (Kitchen Routing) only. Single-location
+  // accounts are locked to 'all' (selectedLocation is null), but their one
+  // location still has prep stations — resolve it concretely so Kitchen Routing
+  // works. Multi-location on 'all' stays null (prompt to pick a location).
+  const gatedLocation = useGatedLocation();
+  const gatedLocationId = useGatedLocationId();
 
   // Prep stations for current location
-  const { data: prepStations = [] } = usePrepStations(
-    isAllLocations ? null : selectedLocation?.id,
-  );
-  const { data: categoryPrepDefaults = [] } = useCategoryPrepDefaults(
-    isAllLocations ? null : selectedLocation?.id,
-  );
+  const { data: prepStations = [] } = usePrepStations(gatedLocationId);
+  const { data: categoryPrepDefaults = [] } =
+    useCategoryPrepDefaults(gatedLocationId);
   const setCategoryPrepDefaultMutation = useSetCategoryPrepDefault();
   const removeCategoryPrepDefaultMutation = useRemoveCategoryPrepDefault();
 
@@ -645,7 +650,7 @@ export function CategoryFormSheet({
                   </Collapsible>
 
                   {/* Kitchen Routing (Prep Station Default) */}
-                  {editCategory && !isAllLocations && selectedLocation && (
+                  {editCategory && gatedLocation && (
                     <div className="space-y-3 animate-in fade-in slide-in-from-bottom-4 duration-300">
                       <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
                         <Flame className="h-4 w-4 text-orange-500" />
@@ -672,18 +677,18 @@ export function CategoryFormSheet({
                             )?.prep_station_id || "__none__"
                           }
                           onValueChange={async (val) => {
-                            if (!clerkOrgId || !selectedLocation) return;
+                            if (!clerkOrgId || !gatedLocation) return;
                             // Get merchant_id from the prep station data or from defaults
                             const merchantIdFromStation =
                               prepStations[0]?.merchant_id;
                             if (val === "__none__") {
                               removeCategoryPrepDefaultMutation.mutate({
-                                locationId: selectedLocation.id,
+                                locationId: gatedLocation.id,
                                 categoryId: editCategory.id,
                               });
                             } else {
                               setCategoryPrepDefaultMutation.mutate({
-                                locationId: selectedLocation.id,
+                                locationId: gatedLocation.id,
                                 categoryId: editCategory.id,
                                 prepStationId: val,
                                 merchantId:
@@ -717,7 +722,7 @@ export function CategoryFormSheet({
                       )}
                     </div>
                   )}
-                  {editCategory && isAllLocations && (
+                  {editCategory && !gatedLocationId && (
                     <div className="flex items-start gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm dark:bg-blue-950/30 dark:border-blue-900">
                       <Info className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0 dark:text-blue-400" />
                       <p className="text-blue-800 dark:text-blue-300">

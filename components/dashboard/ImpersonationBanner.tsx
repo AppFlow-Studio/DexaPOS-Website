@@ -23,6 +23,7 @@ import {
   useImpersonationStore,
 } from "@/stores/impersonation-store";
 import { endImpersonation } from "@/lib/admin/impersonation";
+import { IMPERSONATION_TTL_HOURS } from "@/lib/admin/impersonation-config";
 import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
 import { useAdminAuth } from "@/lib/hooks/useAdminAuth";
 import { cn } from "@/lib/utils";
@@ -147,15 +148,11 @@ export function ImpersonationBanner() {
         role="status"
         aria-live="polite"
         className={cn(
-          "sticky top-0 z-50 border-b-2 transition-colors",
+          "sticky top-0 z-50 border-b-2 bg-white shadow-sm transition-colors dark:bg-zinc-900",
           isUrgent
-            ? "border-red-500 bg-gradient-to-r from-red-100 to-red-50 text-red-950 dark:border-red-700 dark:from-red-950/60 dark:to-red-900/30 dark:text-red-100"
-            : "border-amber-500 bg-gradient-to-r from-amber-100 to-amber-50 text-amber-950 dark:border-amber-700 dark:from-amber-950/60 dark:to-amber-900/30 dark:text-amber-100",
+            ? "border-red-500 text-red-950 dark:border-red-700 dark:text-red-100"
+            : "border-amber-500 text-amber-950 dark:border-amber-700 dark:text-amber-100",
         )}
-        style={{
-          backgroundImage:
-            "repeating-linear-gradient(45deg, rgba(0,0,0,0.025) 0 8px, transparent 8px 16px)",
-        }}
       >
         <div className="flex flex-col gap-3 px-4 py-3 md:flex-row md:items-center">
           {/* Identity cluster */}
@@ -190,7 +187,7 @@ export function ImpersonationBanner() {
                       <li>Every action you take is audit-logged under your HQ account.</li>
                       <li>RLS still applies — you only see what the merchant owner sees.</li>
                       <li>Refunds and voids remain POS-only and aren't available here.</li>
-                      <li>The session auto-expires after 24 hours of inactivity.</li>
+                      <li>The session auto-expires after {IMPERSONATION_TTL_HOURS} hours of inactivity.</li>
                     </ul>
                   </PopoverContent>
                 </Popover>

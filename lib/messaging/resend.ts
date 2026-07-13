@@ -17,11 +17,12 @@ const resend = apiKey ? new Resend(apiKey) : null;
 export function buildEmailTemplate(
   merchantName: string,
   subject: string,
-  body: string
+  body: string,
+  unsubscribeUrl?: string
 ): string {
-  // Simple branded HTML template
   const escapedBody = body.replace(/\n/g, "<br />");
   const escapedMerchant = merchantName.replace(/[<>]/g, "");
+  const unsubscribeHref = unsubscribeUrl || "#";
 
   return `
 <!DOCTYPE html>
@@ -84,7 +85,7 @@ export function buildEmailTemplate(
     </div>
     <div class="footer">
       <p>This is a message from ${escapedMerchant}</p>
-      <p><a href="[UNSUBSCRIBE_LINK]">Manage your preferences or unsubscribe</a></p>
+      <p><a href="${unsubscribeHref}">Manage your preferences or unsubscribe</a></p>
     </div>
   </div>
 </body>
@@ -98,7 +99,8 @@ export function buildEmailTemplate(
 export async function sendEmail(
   to: string,
   subject: string,
-  html: string
+  html: string,
+  headers?: Record<string, string>
 ): Promise<{ id: string } | { error: string }> {
   console.log("[sendEmail] Starting email send:", { to, subject, fromEmail, hasApiKey: !!apiKey });
 
@@ -134,6 +136,7 @@ export async function sendEmail(
       to,
       subject,
       html,
+      ...(headers ? { headers } : {}),
     });
 
     console.log("[sendEmail] Resend response:", { success: !result.error, error: result.error?.message });

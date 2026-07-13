@@ -297,14 +297,19 @@ export async function updateModifierItem(params: UpdateModifierItemParams) {
   }
 
   // Global update
+  if (stockTrackingMode !== undefined || currentStock !== undefined) {
+    return {
+      success: false,
+      error:
+        "Global modifier edits cannot set stock fields. Use a location override.",
+    };
+  }
+
   const updateData: Record<string, any> = {
     updated_at: new Date().toISOString(),
   };
   if (priceModifier !== undefined) updateData.price_modifier = priceModifier;
   if (isActive !== undefined) updateData.is_active = isActive;
-  if (stockTrackingMode !== undefined)
-    updateData.stock_tracking_mode = stockTrackingMode;
-  if (currentStock !== undefined) updateData.current_stock = currentStock;
 
   const { error } = await supabase
     .from("modifier_group_items")
@@ -424,29 +429,74 @@ export async function getItemModifierGroups(
   try {
     const supabase = createServiceRoleClient();
 
+    const sortAssignments = (
+      rows: any[],
+      source: "global" | "location",
+      relationKey = "modifier_groups",
+    ) =>
+      (rows || [])
+        .filter((row) => row?.[relationKey])
+        .sort((a, b) => {
+          const aOrder =
+            typeof a.display_order === "number"
+              ? a.display_order
+              : typeof a[relationKey]?.display_order === "number"
+                ? a[relationKey].display_order
+                : Number.MAX_SAFE_INTEGER;
+          const bOrder =
+            typeof b.display_order === "number"
+              ? b.display_order
+              : typeof b[relationKey]?.display_order === "number"
+                ? b[relationKey].display_order
+                : Number.MAX_SAFE_INTEGER;
+
+          if (aOrder !== bOrder) {
+            return aOrder - bOrder;
+          }
+
+          return (a[relationKey]?.name || "").localeCompare(
+            b[relationKey]?.name || "",
+          );
+        })
+        .map((row) => ({ ...row[relationKey], source }));
+
     // 1. Global assignments
     const { data: globalData } = await supabase
       .from("menu_item_modifier_groups")
-      .select("modifier_group_id, modifier_groups(id, name, description)")
+      .select(
+        "modifier_group_id, display_order, modifier_groups(id, name, description, display_order)",
+      )
       .eq("menu_item_id", menuItemId);
 
-    const globalGroups = (globalData as any[] || [])
-      .map((row) => row.modifier_groups)
-      .filter(Boolean)
-      .map((g: any) => ({ ...g, source: "global" as const }));
+    const globalGroups = sortAssignments(
+      globalData as any[] || [],
+      "global",
+    ) as Array<{
+      id: string;
+      name: string;
+      description: string | null;
+      source: "global";
+    }>;
 
     // 2. Location-specific assignments (if location provided)
     if (locationId && locationId !== "all") {
       const { data: locationData } = await supabase
         .from("location_item_modifier_groups")
-        .select("modifier_group_id, modifier_groups:modifier_groups(id, name, description)")
+        .select(
+          "modifier_group_id, display_order, modifier_groups:modifier_groups(id, name, description, display_order)",
+        )
         .eq("menu_item_id", menuItemId)
         .eq("location_id", locationId);
 
-      const locationGroups = (locationData as any[] || [])
-        .map((row) => row.modifier_groups)
-        .filter(Boolean)
-        .map((g: any) => ({ ...g, source: "location" as const }));
+      const locationGroups = sortAssignments(
+        locationData as any[] || [],
+        "location",
+      ) as Array<{
+        id: string;
+        name: string;
+        description: string | null;
+        source: "location";
+      }>;
 
       // Merge and deduplicate (global takes precedence)
       const globalIds = new Set(globalGroups.map((g: any) => g.id));
@@ -454,6 +504,49 @@ export async function getItemModifierGroups(
         ...globalGroups,
         ...locationGroups.filter((g: any) => !globalIds.has(g.id)),
       ];
+
+      // 3. Per-location order override. reorder_item_modifier_groups upserts
+      // location_modifier_group_overrides(location_id, modifier_group_id,
+      // display_order) when called with a location_id, so that table is the
+      // source of truth for per-location ordering. The assignment tables only
+      // track membership/global order.
+      if (combined.length > 0) {
+        const { data: overrideRows } = await supabase
+          .from("location_modifier_group_overrides")
+          .select("modifier_group_id, display_order")
+          .eq("location_id", locationId)
+          .in(
+            "modifier_group_id",
+            combined.map((g) => g.id),
+          );
+
+        const overrideOrder = new Map<string, number>();
+        for (const row of (overrideRows ?? []) as Array<{
+          modifier_group_id: string;
+          display_order: number | null;
+        }>) {
+          if (typeof row.display_order === "number") {
+            overrideOrder.set(row.modifier_group_id, row.display_order);
+          }
+        }
+
+        if (overrideOrder.size > 0) {
+          // Stable sort: groups with a location override use it; groups without
+          // fall back to their current relative position (which already encodes
+          // the global order from sortAssignments above).
+          const withIdx = combined.map((g, idx) => ({ g, idx }));
+          withIdx.sort((a, b) => {
+            const aO = overrideOrder.get(a.g.id);
+            const bO = overrideOrder.get(b.g.id);
+            if (aO != null && bO != null) return aO - bO;
+            if (aO != null) return -1;
+            if (bO != null) return 1;
+            return a.idx - b.idx;
+          });
+          return withIdx.map((x) => x.g);
+        }
+      }
+
       return combined;
     }
 
@@ -525,6 +618,10 @@ export interface UpdateItemParams {
 
   // Prep Station (KDS Routing - migration 022)
   prepStationId?: string | null;
+  // Concrete location to persist the prep override to when the main locationId
+  // is null (single-location accounts edit price/availability in core scope but
+  // prep stations are location-only). Defaults to locationId when omitted.
+  prepStationLocationId?: string | null;
 
   // Modifier linking
   modifier_group_ids?: string[];
@@ -547,7 +644,7 @@ export interface UpdateResult {
 // ============================================================================
 
 export async function upsertModifierOverride(
-  locationId: string,
+  locationId: string | null,
   modifierId: string,
   price: number,
   isActive: boolean,
@@ -556,7 +653,7 @@ export async function upsertModifierOverride(
 ) {
   const supabase = createServerSupabaseClient();
   const { data, error } = await supabase.rpc("upsert_modifier_override", {
-    p_location_id: locationId,
+    p_location_id: locationId ?? null,
     p_modifier_item_id: modifierId,
     p_price_modifier: price,
     p_is_active: isActive,
@@ -649,9 +746,10 @@ export async function updateItemOverride(
         return { success: false, error: "Could not retrieve item details" };
       }
 
-      const modifierInserts = params.modifier_group_ids.map((groupId) => ({
+      const modifierInserts = params.modifier_group_ids.map((groupId, index) => ({
         menu_item_id: params.menuItemId,
         modifier_group_id: groupId,
+        display_order: index,
         merchant_id: menuItemDetails.merchant_id,
       }));
 
@@ -673,9 +771,16 @@ export async function updateItemOverride(
       const removedGroupIds = oldModifierGroupIds.filter(
         (id) => !params.modifier_group_ids!.includes(id),
       );
+      const orderChanged =
+        addedGroupIds.length === 0 &&
+        removedGroupIds.length === 0 &&
+        oldModifierGroupIds.length === params.modifier_group_ids.length &&
+        oldModifierGroupIds.some(
+          (id, index) => id !== params.modifier_group_ids![index],
+        );
 
       // Only log if there was an actual change
-      if (addedGroupIds.length > 0 || removedGroupIds.length > 0) {
+      if (addedGroupIds.length > 0 || removedGroupIds.length > 0 || orderChanged) {
         // Fetch modifier group names for user-friendly display
         const allGroupIds = [
           ...new Set([
@@ -722,6 +827,7 @@ export async function updateItemOverride(
           metadata: {
             added_modifier_groups: addedGroupNames,
             removed_modifier_groups: removedGroupNames,
+            modifier_order_changed: orderChanged,
           },
         });
       }
@@ -950,6 +1056,36 @@ export async function updateItemOverride(
 
     if (error) {
       console.error("[updateItemOverride] Prep station upsert error:", error);
+    } else {
+      changesLog.prep_station_id = params.prepStationId;
+    }
+  }
+
+  // Single-location accounts: the main locationId is null (core scope) but prep
+  // stations are location-only. When a concrete prep location is supplied, write
+  // the prep override there directly. Isolated from the price cascade above.
+  if (
+    params.prepStationId !== undefined &&
+    !locationId &&
+    params.prepStationLocationId
+  ) {
+    const { error } = await supabase.from("location_item_overrides").upsert(
+      {
+        location_id: params.prepStationLocationId,
+        menu_item_id: params.menuItemId,
+        prep_station_id: params.prepStationId,
+        updated_at: new Date().toISOString(),
+      },
+      {
+        onConflict: "location_id,menu_item_id",
+      },
+    );
+
+    if (error) {
+      console.error(
+        "[updateItemOverride] Single-location prep station upsert error:",
+        error,
+      );
     } else {
       changesLog.prep_station_id = params.prepStationId;
     }

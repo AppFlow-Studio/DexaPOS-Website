@@ -99,6 +99,11 @@ export async function createInvitationAdmin(
       organizationId: normalizedParams.organizationId,
       emailAddress: normalizedParams.email.trim(),
       role: 'org:admin', // Clerk organization role
+      // Route new invitees to /accept-invitation, which renders the Clerk
+      // CAPTCHA anchor required for custom sign-up flows. Previously baseUrl
+      // was computed but never passed, so invites fell back to Clerk's default
+      // redirect. Middleware re-routes HQ admins from /dashboard to /manage.
+      redirectUrl: `${baseUrl}/accept-invitation?email=${encodeURIComponent(normalizedParams.email.trim())}&firstName=${encodeURIComponent(normalizedParams.firstName)}&lastName=${encodeURIComponent(normalizedParams.lastName)}`,
       publicMetadata: {
         role: normalizedParams.roleCode, // Our custom role (hq.super_admin, etc.)
         level_type: normalizedParams.levelType,

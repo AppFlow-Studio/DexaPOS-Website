@@ -89,7 +89,7 @@ export default function ComparisonDashboardPage() {
   }, [locations, selectedLocationIds]);
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-700">
+    <div className="space-y-6 animate-in fade-in duration-700 w-full min-w-0">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
@@ -106,7 +106,7 @@ export default function ComparisonDashboardPage() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button
             variant="outline"
             size="sm"
@@ -122,7 +122,7 @@ export default function ComparisonDashboardPage() {
           <Button
             variant="outline"
             size="sm"
-            className="hidden sm:flex gap-2 bg-background/50 border-muted/30 hover:bg-muted/50 transition-colors"
+            className="flex gap-2 bg-background/50 border-muted/30 hover:bg-muted/50 transition-colors"
           >
             <Share2 className="h-4 w-4" />
             Share
@@ -130,7 +130,7 @@ export default function ComparisonDashboardPage() {
           <Button
             variant="outline"
             size="sm"
-            className="hidden sm:flex gap-2 bg-background/50 border-muted/30 hover:bg-muted/50 transition-colors"
+            className="flex gap-2 bg-background/50 border-muted/30 hover:bg-muted/50 transition-colors"
           >
             <Download className="h-4 w-4" />
             Export
@@ -139,7 +139,7 @@ export default function ComparisonDashboardPage() {
       </div>
 
       {/* Main Controls Card */}
-      <Card className="border-none shadow-sm bg-card/30 backdrop-blur-md overflow-hidden ring-1 ring-white/5">
+      <Card className="border-none shadow-sm bg-card/30 backdrop-blur-md ring-1 ring-white/5">
         <CardContent className="p-6 space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             {/* Left: Location Selection */}
@@ -215,9 +215,9 @@ export default function ComparisonDashboardPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-6 lg:grid-cols-2">
+        <div className="grid gap-6 lg:grid-cols-2 min-w-0">
           {/* Chart 1: Revenue Comparison Line Chart */}
-          <div className="lg:col-span-2">
+          <div className="lg:col-span-2 min-w-0">
             <RevenueComparisonChart
               data={comparisonData}
               locationNames={selectedLocationNames}
@@ -241,7 +241,7 @@ export default function ComparisonDashboardPage() {
           />
 
           {/* Chart 4: Sales Heatmap */}
-          <div className="lg:col-span-2">
+          <div className="lg:col-span-2 min-w-0">
             <SalesHeatMap
               data={hourlyData}
               locations={selectedLocations}
@@ -250,7 +250,7 @@ export default function ComparisonDashboardPage() {
           </div>
 
           {/* Leaderboard Table */}
-          <div className="lg:col-span-2">
+          <div className="lg:col-span-2 min-w-0">
             <LocationLeaderboard
               rankings={rankingsData}
               isLoading={isLoading}

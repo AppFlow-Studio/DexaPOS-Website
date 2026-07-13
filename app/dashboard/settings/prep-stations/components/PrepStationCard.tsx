@@ -14,6 +14,7 @@ import { type PrepStationWithCount } from "@/app/dashboard/hooks/usePrepStations
 
 interface PrepStationCardProps {
   station: PrepStationWithCount;
+  assignedCategories: string[];
   onEdit: (station: PrepStationWithCount) => void;
   onDelete: (station: PrepStationWithCount) => void;
   onToggleActive: (station: PrepStationWithCount) => void;
@@ -21,21 +22,22 @@ interface PrepStationCardProps {
 
 export function PrepStationCard({
   station,
+  assignedCategories,
   onEdit,
   onDelete,
   onToggleActive,
 }: PrepStationCardProps) {
   return (
-    <div className="flex items-center justify-between p-4 border rounded-lg bg-card">
-      <div className="flex items-center gap-3">
+    <div className="flex items-start justify-between p-4 border rounded-lg bg-card gap-4">
+      <div className="flex items-start gap-3 min-w-0 flex-1">
         {/* Color swatch */}
         <div
-          className="h-8 w-8 rounded-full border-2 border-background shadow-sm flex-shrink-0"
+          className="h-8 w-8 rounded-full border-2 border-background shadow-sm flex-shrink-0 mt-0.5"
           style={{ backgroundColor: station.color }}
         />
 
-        <div>
-          <div className="flex items-center gap-2">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className="font-medium">{station.name}</span>
             {station.item_count > 0 && (
               <Badge variant="secondary" className="text-xs">
@@ -46,6 +48,20 @@ export function PrepStationCard({
               <Badge variant="outline" className="text-xs text-muted-foreground">
                 Inactive
               </Badge>
+            )}
+          </div>
+          <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
+            <span className="text-xs text-muted-foreground">Categories:</span>
+            {assignedCategories.length === 0 ? (
+              <span className="text-xs text-muted-foreground italic">
+                None assigned
+              </span>
+            ) : (
+              assignedCategories.map((name) => (
+                <Badge key={name} variant="outline" className="text-xs">
+                  {name}
+                </Badge>
+              ))
             )}
           </div>
         </div>

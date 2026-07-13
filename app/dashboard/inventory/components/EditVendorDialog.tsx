@@ -18,6 +18,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { AddressAutocomplete } from "@/components/ui/address-autocomplete";
 import { Truck, Loader2, Globe, MapPin } from "lucide-react";
+import { useIsSingleLocation } from "@/stores/location-store";
 import {
   useUpdateVendor,
   VendorWithStats,
@@ -50,6 +51,7 @@ export function EditVendorDialog({
   vendor,
 }: EditVendorDialogProps) {
   const updateVendor = useUpdateVendor();
+  const isSingleLocation = useIsSingleLocation();
 
   const isGlobal = !vendor?.location_id;
 
@@ -91,7 +93,7 @@ export function EditVendorDialog({
       data: {
         name: values.name,
         contact_name: values.contact_name || undefined,
-        phone: normalizePhone(values.phone) ?? values.phone || undefined,
+        phone: (normalizePhone(values.phone) ?? values.phone) || undefined,
         email: values.email || undefined,
         address_line1: values.address_line1 || undefined,
         city: values.city || undefined,
@@ -109,7 +111,7 @@ export function EditVendorDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[500px]" elevation="above-sheet">
         <DialogHeader>
           <div className="flex items-center gap-3">
             <div className="p-2.5 rounded-xl bg-gradient-to-br from-blue-500/20 to-blue-500/5 border border-blue-500/10">
@@ -119,7 +121,7 @@ export function EditVendorDialog({
               <DialogTitle>Edit Vendor</DialogTitle>
               <DialogDescription>Update vendor details</DialogDescription>
             </div>
-            {isGlobal ? (
+            {isSingleLocation ? null : isGlobal ? (
               <Badge
                 variant="outline"
                 className="gap-1 text-emerald-600 border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30"
@@ -153,7 +155,7 @@ export function EditVendorDialog({
           </div>
 
           {/* Contact Row */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 xs:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="contact_name">Contact Person</Label>
               <Input

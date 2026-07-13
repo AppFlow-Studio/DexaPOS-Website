@@ -2,12 +2,14 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { ShoppingBag } from "lucide-react";
 import { useCart, resolveCartUnitPrice } from "../../hooks/useCart";
 import { useSession } from "../../hooks/useSession";
 import { useSessionInit } from "../../hooks/useSessionInit";
 import { useCartSync } from "../../hooks/useCartSync";
+import { useQrFunnelTracking } from "../../hooks/useQrFunnelTracking";
 import { useStorefrontPath } from "../../lib/use-storefront-path";
 import { AuthDialog } from "../AuthDialog";
 import { CheckoutHeader } from "./CheckoutHeader";
@@ -17,6 +19,7 @@ import { OrderDetailsSection } from "./OrderDetailsSection";
 import { TipSection } from "./TipSection";
 import { OrderSummarySection } from "./OrderSummarySection";
 import { PromoCodeSection } from "./PromoCodeSection";
+import { QrTableBanner } from "../QrTableBanner";
 import { isValidPhone, normalizePhone } from "@/lib/phone";
 import { PlaceOrderButton } from "./PlaceOrderButton";
 import { OrderConfirmation } from "./OrderConfirmation";
@@ -90,10 +93,26 @@ export function CheckoutPage({
 }: CheckoutPageProps) {
   useSessionInit(storeConfigId);
   useCartSync();
+  useQrFunnelTracking({ trackCheckout: true });
 
   const { items, clearCart, updateQuantity, removeItem, getSubtotal } = useCart();
-  const { isAuthenticated, customer } = useSession();
+  const { isAuthenticated, customer, qrTableLabel } = useSession();
   const storePath = useStorefrontPath(slug);
+  const router = useRouter();
+  const isQrTableMode = Boolean(qrTableLabel);
+
+  // Compute store-open status early so we can gate entry before rendering the form.
+  const _storeOpenEarly = isStoreOpenNow(
+    config?.operatingHours ?? (location as any).business_hours,
+    location.timezone ?? null,
+  );
+  // Redirect to menu immediately if the store is confirmed closed.
+  // null means "no hours configured" → allow through.
+  useEffect(() => {
+    if (_storeOpenEarly === false) {
+      router.replace(storePath());
+    }
+  }, [_storeOpenEarly, router, storePath]);
 
   // Hydration guard — cart is in localStorage
   const [hydrated, setHydrated] = useState(false);
@@ -182,6 +201,12 @@ export function CheckoutPage({
   const [tokenizationKey, setTokenizationKey] = useState<string | null>(null);
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [payCashInStore, setPayCashInStore] = useState(false);
+
+  useEffect(() => {
+    if (!isQrTableMode) return;
+    setOrderType("pickup");
+    setPayCashInStore(false);
+  }, [isQrTableMode]);
 
   // Calculated values.
   // Subtotal must use the SAME pricing rule the server charges (order type +
@@ -391,7 +416,8 @@ export function CheckoutPage({
         const addr = savedAddresses.find((a) => a.id === selectedAddressId);
         if (addr) {
           deliveryAddress = {
-            street: addr.addressLine1 + (addr.addressLine2 ? ` ${addr.addressLine2}` : ""),
+            street: addr.addressLine1,
+            unit: addr.addressLine2 ?? undefined,
             city: addr.city,
             state: addr.state,
             zip: addr.postalCode,
@@ -540,10 +566,6 @@ export function CheckoutPage({
         });
         if (result.order_id) {
           useSession.getState().setActiveOrderId(result.order_id);
-          // Fire transactional receipt email + confirmation SMS.
-          import("@/app/sites/notification-actions")
-            .then(({ notifyOrderPlaced }) => notifyOrderPlaced(result.order_id))
-            .catch((err) => console.error("[checkout] notifyOrderPlaced:", err));
         }
         // Save delivery address if requested
         if (saveNewAddress && isAuthenticated && orderType === "delivery" && selectedAddressId === "new" && newAddress.street) {
@@ -678,9 +700,8 @@ export function CheckoutPage({
       : newAddress.street.trim().length > 0 && newAddress.city.trim().length > 0);
   const minOrder = config?.minimumOrderAmount ?? 0;
   const meetsMinOrder = subtotal >= minOrder;
-  // null = no hours configured → allow ordering; false = closed; true = open
-  const storeOpen = isStoreOpenNow(config?.operatingHours ?? (location as any).business_hours);
-  const storeIsClosed = storeOpen === false;
+  // Reuse the early-computed value (same inputs, avoids double call).
+  const storeIsClosed = _storeOpenEarly === false;
   const zoneBlocked = orderType === "delivery" && selectedAddressId === "new" && zoneCheckState === "invalid";
   const paymentMethodReady =
     !config?.acceptOnlinePayments || payCashInStore || Boolean(tokenizationKey);
@@ -696,14 +717,16 @@ export function CheckoutPage({
     items.length > 0;
 
   const prepTimeMins = config?.preparationLeadTime ?? 20;
-  const summaryLine = formatCheckoutSummaryLine(
-    orderType,
-    pickupTime,
-    scheduledDate,
-    scheduledTime,
-    prepTimeMins,
-    storeAddress
-  );
+  const summaryLine = isQrTableMode
+    ? `Runner delivery · Table ${qrTableLabel}`
+    : formatCheckoutSummaryLine(
+        orderType,
+        pickupTime,
+        scheduledDate,
+        scheduledTime,
+        prepTimeMins,
+        storeAddress
+      );
   const displayStoreName = site?.title || location.name;
 
   return (
@@ -711,33 +734,18 @@ export function CheckoutPage({
       <CheckoutHeader slug={slug} storeName={displayStoreName} logoUrl={site?.logo_url} />
 
       <main className="max-w-6xl mx-auto p-4 pb-32 lg:pb-10">
-        <div className="flex items-center justify-between">
-          <div className="flex justify-end w-full">
-            <Link
-              href={storePath()}
-              className="inline-flex items-center justify-center px-4 py-2 text-xs font-semibold border rounded-full transition-colors"
-              style={{
-                borderColor: "var(--primary)",
-                color: "var(--primary)",
-                borderRadius: "9999px",
-              }}
-            >
-              Back to menu
-            </Link>
-          </div>
-        </div>
 
         {/* Store closed banner */}
         {storeIsClosed && (
           <div
-            className="p-4 rounded-lg text-sm font-medium text-center"
+            className="flex items-center gap-3 px-4 py-3 mb-4 text-sm"
             style={{
-              backgroundColor: "color-mix(in srgb, #ef4444 10%, var(--bg))",
-              color: "#ef4444",
-              border: "1px solid color-mix(in srgb, #ef4444 40%, transparent)",
-              borderRadius: "var(--radius)",
+              backgroundColor: "#fff2f2",
+              borderLeft: "4px solid #ef4444",
+              color: "#7f1d1d",
             }}
           >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
             This store is currently closed and not accepting orders.
           </div>
         )}
@@ -746,6 +754,12 @@ export function CheckoutPage({
         <div className="mt-6 flex flex-col lg:grid lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:gap-8 lg:items-start">
           {/* Left: express → contact → order type → payment → notes */}
           <div className="min-w-0 space-y-6 lg:pr-8 lg:border-r lg:border-[var(--border)] order-1">
+            {isQrTableMode && (
+              <>
+                <QrTableBanner tableLabel={qrTableLabel} />
+                <div style={{ borderTop: "1px solid var(--border)" }} />
+              </>
+            )}
             <ContactSection
               isAuthenticated={isAuthenticated}
               customerPhone={customer?.phone}
@@ -767,42 +781,66 @@ export function CheckoutPage({
 
             <div style={{ borderTop: "1px solid var(--border)" }} />
 
-            <OrderTypeSection
-              orderType={orderType}
-              onOrderTypeChange={(type) => { setOrderType(type); if (type === "delivery") setPayCashInStore(false); }}
-              pickupEnabled={pickupEnabled}
-              deliveryEnabled={deliveryEnabled}
-              pickupTime={pickupTime}
-              onPickupTimeChange={setPickupTime}
-              scheduledDate={scheduledDate}
-              onScheduledDateChange={setScheduledDate}
-              scheduledTime={scheduledTime}
-              onScheduledTimeChange={setScheduledTime}
-              maxFutureDays={config?.futureOrderMaxDays || 30}
-              prepTime={prepTimeMins}
-              operatingHours={config?.operatingHours}
-              curbside={curbside}
-              onCurbsideChange={setCurbside}
-              storeAddress={storeAddress}
-              storeLat={storeLat}
-              storeLng={storeLng}
-              savedAddresses={savedAddresses}
-              selectedAddressId={selectedAddressId}
-              onSelectedAddressChange={setSelectedAddressId}
-              newAddress={newAddress}
-              onNewAddressChange={setNewAddress}
-              isAuthenticated={isAuthenticated}
-              saveNewAddress={saveNewAddress}
-              onSaveNewAddressChange={setSaveNewAddress}
-              zoneCheckState={zoneCheckState}
-              zoneCheckMessage={zoneCheckMessage}
-            />
+            {isQrTableMode ? (
+              <div
+                className="rounded-lg border px-4 py-3"
+                style={{
+                  borderColor: "var(--border)",
+                  backgroundColor: "var(--card)",
+                  borderRadius: "var(--radius)",
+                }}
+              >
+                <p
+                  className="text-sm font-semibold"
+                  style={{ color: "var(--text)" }}
+                >
+                  Fulfillment
+                </p>
+                <p
+                  className="mt-1 text-sm"
+                  style={{ color: "var(--text-secondary)" }}
+                >
+                  This order is runner-delivered to Table {qrTableLabel} after payment.
+                </p>
+              </div>
+            ) : (
+              <OrderTypeSection
+                orderType={orderType}
+                onOrderTypeChange={(type) => { setOrderType(type); if (type === "delivery") setPayCashInStore(false); }}
+                pickupEnabled={pickupEnabled}
+                deliveryEnabled={deliveryEnabled}
+                pickupTime={pickupTime}
+                onPickupTimeChange={setPickupTime}
+                scheduledDate={scheduledDate}
+                onScheduledDateChange={setScheduledDate}
+                scheduledTime={scheduledTime}
+                onScheduledTimeChange={setScheduledTime}
+                maxFutureDays={config?.futureOrderMaxDays || 30}
+                prepTime={prepTimeMins}
+                operatingHours={config?.operatingHours}
+                curbside={curbside}
+                onCurbsideChange={setCurbside}
+                storeAddress={storeAddress}
+                storeLat={storeLat}
+                storeLng={storeLng}
+                savedAddresses={savedAddresses}
+                selectedAddressId={selectedAddressId}
+                onSelectedAddressChange={setSelectedAddressId}
+                newAddress={newAddress}
+                onNewAddressChange={setNewAddress}
+                isAuthenticated={isAuthenticated}
+                saveNewAddress={saveNewAddress}
+                onSaveNewAddressChange={setSaveNewAddress}
+                zoneCheckState={zoneCheckState}
+                zoneCheckMessage={zoneCheckMessage}
+              />
+            )}
 
             <div style={{ borderTop: "1px solid var(--border)" }} />
 
             {config?.acceptOnlinePayments && (
               <>
-                {orderType === "pickup" && (
+                {orderType === "pickup" && !isQrTableMode && (
                   <div
                     className="flex items-center justify-between px-4 py-3 rounded-lg"
                     style={{

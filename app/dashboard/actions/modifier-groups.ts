@@ -8,6 +8,87 @@ import {
 import { LogAuditEvent } from "./audit-logs";
 import { getCurrentUserMerchantRole } from "./role-check";
 
+function sortByDisplayOrder<T extends { display_order?: number | null; name?: string | null }>(
+  items: T[],
+) {
+  return [...items].sort((a, b) => {
+    const aOrder =
+      typeof a.display_order === "number" ? a.display_order : Number.MAX_SAFE_INTEGER;
+    const bOrder =
+      typeof b.display_order === "number" ? b.display_order : Number.MAX_SAFE_INTEGER;
+
+    if (aOrder !== bOrder) {
+      return aOrder - bOrder;
+    }
+
+    return (a.name || "").localeCompare(b.name || "");
+  });
+}
+
+function sortGroupsWithLocationOverride<T extends {
+  display_order?: number | null;
+  name?: string | null;
+  location_override?: Array<{ display_order?: number | null }> | null;
+}>(
+  items: T[],
+) {
+  return [...items].sort((a, b) => {
+    const aOverrideOrder = a.location_override?.[0]?.display_order;
+    const bOverrideOrder = b.location_override?.[0]?.display_order;
+
+    const aOrder =
+      typeof aOverrideOrder === "number"
+        ? aOverrideOrder
+        : typeof a.display_order === "number"
+          ? a.display_order
+          : Number.MAX_SAFE_INTEGER;
+    const bOrder =
+      typeof bOverrideOrder === "number"
+        ? bOverrideOrder
+        : typeof b.display_order === "number"
+          ? b.display_order
+          : Number.MAX_SAFE_INTEGER;
+
+    if (aOrder !== bOrder) {
+      return aOrder - bOrder;
+    }
+
+    return (a.name || "").localeCompare(b.name || "");
+  });
+}
+
+function sortModifierItems(
+  items: Array<
+    ModifierGroupItemsModel & {
+      location_override?: Array<{ display_order?: number | null }> | null;
+    }
+  >,
+) {
+  return [...items].sort((a, b) => {
+    const aOverrideOrder = a.location_override?.[0]?.display_order;
+    const bOverrideOrder = b.location_override?.[0]?.display_order;
+
+    const aOrder =
+      typeof aOverrideOrder === "number"
+        ? aOverrideOrder
+        : typeof a.display_order === "number"
+          ? a.display_order
+          : Number.MAX_SAFE_INTEGER;
+    const bOrder =
+      typeof bOverrideOrder === "number"
+        ? bOverrideOrder
+        : typeof b.display_order === "number"
+          ? b.display_order
+          : Number.MAX_SAFE_INTEGER;
+
+    if (aOrder !== bOrder) {
+      return aOrder - bOrder;
+    }
+
+    return (a.name || "").localeCompare(b.name || "");
+  });
+}
+
 // ============================================================================
 // GET OPERATIONS - MODIFIER GROUPS
 // ============================================================================
@@ -45,6 +126,7 @@ export async function GetModifierGroups(
                 *,
                 location_override:location_modifier_item_overrides!left(
                     id,
+                    display_order,
                     price_modifier,
                     is_active,
                     location_id,
@@ -70,6 +152,7 @@ export async function GetModifierGroups(
             location_override:location_modifier_group_overrides!left(
                 id,
                 is_active,
+                display_order,
                 location_id
             )
         `,
@@ -99,6 +182,16 @@ export async function GetModifierGroups(
       `location_id.is.null,location_id.eq.${locationId}`,
       { referencedTable: "category_modifier_groups" },
     );
+  } else {
+    // All Locations: exclude location overrides so global display_order is used for sorting
+    query = query.eq(
+      "modifier_group_items.location_modifier_item_overrides.location_id",
+      "00000000-0000-0000-0000-000000000000",
+    );
+    query = query.eq(
+      "location_modifier_group_overrides.location_id",
+      "00000000-0000-0000-0000-000000000000",
+    );
   }
 
   query = query
@@ -112,7 +205,12 @@ export async function GetModifierGroups(
     return [];
   }
 
-  return data as (ModifierGroupsModel & {
+  return sortGroupsWithLocationOverride(
+    (data || []).map((group: any) => ({
+      ...group,
+      modifier_group_items: sortModifierItems(group.modifier_group_items || []),
+    })),
+  ) as (ModifierGroupsModel & {
     modifier_group_items: ModifierGroupItemsModel[];
     location_name: {
       name: string;
@@ -128,6 +226,7 @@ export async function GetModifierGroups(
     location_override?: Array<{
       id: string;
       is_active: boolean;
+      display_order?: number | null;
       location_id: string;
     }>;
   })[];
@@ -156,7 +255,10 @@ export async function GetModifierGroup(modifierGroupId: string) {
     return null;
   }
 
-  return data as ModifierGroupsModel & {
+  return {
+    ...data,
+    modifier_group_items: sortByDisplayOrder(data.modifier_group_items || []),
+  } as ModifierGroupsModel & {
     modifier_group_items: ModifierGroupItemsModel[];
   };
 }
@@ -903,4 +1005,70 @@ export async function DeleteModifierGroupItem(
   }
 
   return { success: true, softDeleted: false };
+}
+
+// ============================================================================
+// REORDER OPERATIONS
+// ============================================================================
+
+export async function ReorderModifierGroups(
+  clerkOrgId: string,
+  groupOrders: Array<{ modifierGroupId: string; displayOrder: number }>,
+) {
+  if (!clerkOrgId) {
+    return { error: "Organization ID is required" };
+  }
+
+  const supabase = createServerSupabaseClient();
+  const { data: merchant, error: merchantError } = await supabase
+    .from("merchants")
+    .select("id")
+    .eq("clerk_org_id", clerkOrgId)
+    .single();
+
+  if (merchantError || !merchant) {
+    return { error: "Merchant not found" };
+  }
+
+  const { data, error } = await supabase.rpc("reorder_modifier_groups", {
+    p_merchant_id: merchant.id,
+    p_group_orders: groupOrders.map(({ modifierGroupId, displayOrder }) => ({
+      modifier_group_id: modifierGroupId,
+      display_order: displayOrder,
+    })),
+  });
+
+  if (error) {
+    console.error("Error reordering modifier groups:", error);
+    return { error: error.message };
+  }
+
+  return { success: true, data };
+}
+
+export async function ReorderModifierGroupItems(
+  modifierGroupId: string,
+  itemOrders: Array<{ modifierGroupItemId: string; displayOrder: number }>,
+  locationId?: string | null,
+) {
+  if (!modifierGroupId) {
+    return { error: "Modifier Group ID is required" };
+  }
+
+  const supabase = createServerSupabaseClient();
+  const { data, error } = await supabase.rpc("reorder_modifier_group_items", {
+    p_location_id: locationId && locationId !== "all" ? locationId : null,
+    p_modifier_group_id: modifierGroupId,
+    p_item_orders: itemOrders.map(({ modifierGroupItemId, displayOrder }) => ({
+      modifier_group_item_id: modifierGroupItemId,
+      display_order: displayOrder,
+    })),
+  });
+
+  if (error) {
+    console.error("Error reordering modifier group items:", error);
+    return { error: error.message };
+  }
+
+  return { success: true, data };
 }

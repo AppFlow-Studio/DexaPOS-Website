@@ -160,9 +160,14 @@ export function buildThemeVars(theme: SiteThemeConfig | null | undefined) {
   const surfaceText = "#111827";
 
   // Use merchant's custom font if set, otherwise template default.
+  // When overridden, apply to both --font (body) and --font-display (headings)
+  // so the selection takes effect everywhere without per-component overrides.
   const font = theme?.fontFamily
     ? `'${theme.fontFamily}', sans-serif`
     : defaults.font;
+  const fontDisplay = theme?.fontFamily
+    ? `'${theme.fontFamily}', sans-serif`
+    : defaults.fontDisplay;
 
   return {
     // --- Storefront-custom vars ---
@@ -179,7 +184,7 @@ export function buildThemeVars(theme: SiteThemeConfig | null | undefined) {
     "--border": border,
     "--radius": defaults.radius,
     "--font": font,
-    "--font-display": defaults.fontDisplay,
+    "--font-display": fontDisplay,
     "--template": templateId,
     "--primary-text": primaryText,
     "--header-bg": headerBg,

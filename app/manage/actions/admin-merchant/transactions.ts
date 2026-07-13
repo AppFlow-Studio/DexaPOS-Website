@@ -3,6 +3,10 @@
 import { assertHQPermission } from '@/lib/admin/auth'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { LogAuditEvent } from '@/app/dashboard/actions/audit-logs'
+import {
+  applyReportablePredicate,
+  isOrderReportable,
+} from '@/lib/reporting/recognized-order'
 
 // ============================================================================
 // DATABASE TYPES
@@ -394,10 +398,11 @@ export async function getAdminTransactionSummary(
   const ordersList = orders || []
   const paymentsList = payments || []
 
-  // Calculate order-based metrics
-  const completedOrders = ordersList.filter(
-    (o) => o.status === 'completed' || o.status === 'ready' || o.payment_status === 'paid'
-  )
+  // Recognized orders (payment collected, not draft/cancelled/void/refunded)
+  // drive revenue/tax/tips. Refunded orders are tracked separately below — the
+  // query above keeps fetching them (NOT IN draft,cancelled) so they remain
+  // visible for the refunds total.
+  const completedOrders = ordersList.filter((o) => isOrderReportable(o))
   const refundedOrders = ordersList.filter((o) => o.status === 'refunded' || o.payment_status === 'refunded')
 
   const totalRevenue = completedOrders.reduce(
@@ -572,11 +577,12 @@ export async function getAdminDailyRevenue(
 
   const supabase = createServerSupabaseClient()
 
-  let query = supabase
-    .from('orders')
-    .select('created_at, total_amount, tip_amount')
-    .eq('merchant_id', merchantId)
-    .in('status', ['completed', 'ready'])
+  let query = applyReportablePredicate(
+    supabase
+      .from('orders')
+      .select('created_at, total_amount, tip_amount')
+      .eq('merchant_id', merchantId)
+  )
     .gte('created_at', dateFrom.toISOString())
     .lte('created_at', dateTo.toISOString())
 

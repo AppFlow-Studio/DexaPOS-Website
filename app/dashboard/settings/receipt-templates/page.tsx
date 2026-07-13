@@ -16,9 +16,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { AlertTriangle, Loader2, MapPin, Receipt, Save, Settings2, Check } from "lucide-react";
 import {
-  useLocationStore,
-  useIsAllLocations,
-  useSelectedLocation,
+  useGatedLocationId,
+  useGatedLocation,
 } from "@/stores/location-store";
 import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
 import {
@@ -60,11 +59,13 @@ function formDataFromTemplate(
 }
 
 export default function ReceiptTemplatesPage() {
-  const selectedLocationId = useLocationStore(
-    (state) => state.selectedLocationId,
-  );
-  const isAllLocations = useIsAllLocations();
-  const selectedLocation = useSelectedLocation();
+  // Resolve to the gated location so single-location accounts (locked to 'all')
+  // skip the "Select a Location" prompt. Multi-location on 'all' -> null. The
+  // shadowed `selectedLocationId` keeps the `=== "all"` save-guards correct.
+  const gatedLocationId = useGatedLocationId();
+  const selectedLocationId = gatedLocationId ?? "all";
+  const isAllLocations = !gatedLocationId;
+  const selectedLocation = useGatedLocation();
   const { data: userInfo } = useUserInfo();
   const clerkOrgId = userInfo?.members?.[0]?.organizations?.id;
 
@@ -339,7 +340,11 @@ export default function ReceiptTemplatesPage() {
               <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
                 Preview
               </h3>
-              <ReceiptPreview templateType={activeTab} formState={formState} />
+              <ReceiptPreview
+                templateType={activeTab}
+                formState={formState}
+                locationIdentity={selectedLocation ?? undefined}
+              />
             </div>
           </div>
 

@@ -471,7 +471,7 @@ export default function AuditLogsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 min-w-0 overflow-x-hidden">
       {/* Header */}
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
@@ -530,8 +530,8 @@ export default function AuditLogsPage() {
         </CardHeader>
         <CardContent className="space-y-3">
           {/* Row 1: Search + Actor + Resource Type */}
-          <div className="grid gap-3 md:grid-cols-4">
-            <label className="flex flex-col gap-1 text-sm md:col-span-2">
+          <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 md:grid-cols-4">
+            <label className="flex flex-col gap-1 text-sm sm:col-span-2 md:col-span-2">
               <span className="text-muted-foreground">Search</span>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -551,7 +551,7 @@ export default function AuditLogsPage() {
           </div>
 
           {/* Row 2: Category + Severity + Status + Merchant + Clear */}
-          <div className="grid gap-3 md:grid-cols-6">
+          <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 md:grid-cols-6">
             <label className="flex flex-col gap-1 text-sm">
               <span className="text-muted-foreground">Category</span>
               <select className="h-9 rounded-md border bg-background px-2 text-sm"
@@ -582,7 +582,7 @@ export default function AuditLogsPage() {
                 <option value="failed">Failed</option>
               </select>
             </label>
-            <label className="flex flex-col gap-1 text-sm md:col-span-2">
+            <label className="flex flex-col gap-1 text-sm sm:col-span-2 md:col-span-2">
               <span className="text-muted-foreground">Merchant</span>
               <MerchantSearchSelect
                 value={merchantId}
@@ -596,7 +596,7 @@ export default function AuditLogsPage() {
           </div>
 
           {/* Row 3: Dates + PII Access + Has Error toggle */}
-          <div className="grid gap-3 md:grid-cols-4 items-end">
+          <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 md:grid-cols-4 items-end">
             <label className="flex flex-col gap-1 text-sm">
               <span className="text-muted-foreground">Date From</span>
               <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
@@ -655,7 +655,7 @@ export default function AuditLogsPage() {
           )}
 
           {(activeTab === 'all' || rows.length > 0) && (
-            <div className="max-h-[62vh] overflow-auto rounded-md border">
+            <div className="max-h-[62vh] overflow-x-auto overflow-y-auto rounded-md border">
               <Table>
                 <TableHeader className="sticky top-0 z-20 bg-card">
                   <TableRow>

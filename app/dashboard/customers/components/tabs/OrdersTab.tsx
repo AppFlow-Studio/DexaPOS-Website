@@ -399,6 +399,7 @@ export function OrdersTab({ customer }: OrdersTabProps) {
           order={selectedOrder}
           open={isDetailOpen}
           onOpenChange={setIsDetailOpen}
+          elevated
         />
       )}
     </div>

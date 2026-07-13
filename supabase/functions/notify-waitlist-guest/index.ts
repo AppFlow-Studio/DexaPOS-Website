@@ -1,19 +1,19 @@
-// Lane D: notify-waitlist-guest hardening
+// notify-waitlist-guest
 //
-// Before:
-//   - CORS = '*'
-//   - No JWT verification (verify_jwt now true in config.toml)
-//   - Trusted caller-supplied phone, message, waitlist_id (Twilio/Telnyx cost vector)
-//   - Used SUPABASE_SERVICE_ROLE_KEY to read waitlist (RLS bypass)
-//   - No rate limit
+// Hardened path (Lane D) + server-side template registry.
 //
-// After:
-//   - CORS allowlist: *.dexapos.com, localhost
-//   - verify_jwt = true (Supabase platform validates JWT before invoke)
-//   - Caller supplies only `waitlist_id`
-//   - User-scoped client reads waitlist (waitlist_tenant_scope RLS gates access)
-//   - Phone read from waitlist row, message rendered from server-side template
-//   - Atomic rate-limit via claim_waitlist_sms_slot RPC (10 SMS/merchant/hour)
+// Security guarantees:
+//   - verify_jwt = true (caller must be authenticated)
+//   - User-scoped supabase client reads waitlist + location via RLS
+//   - Template registry is server-side: caller picks a `template_key`, never
+//     supplies the rendered SMS body (except for the explicit 'custom' key)
+//   - Rate-limited per-merchant via claim_waitlist_sms_slot RPC
+//   - CORS allowlist: *.dexapos.com, localhost, 127.0.0.1
+//
+// Request shape:
+//   { waitlist_id: string, template_key?: string, message?: string }
+//   - template_key defaults to 'waitlist.tableReady' for back-compat
+//   - message is only honored when template_key === 'custom'
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
@@ -39,9 +39,54 @@ function corsHeadersFor(origin: string | null): Record<string, string> {
 
 const SMS_RATE_LIMIT_PER_HOUR = 10
 
-function renderReadyMessage(partyName: string | null): string {
-  const name = (partyName ?? '').trim() || 'Guest'
-  return `Hi ${name}! Your table is ready. Please return to the host stand.`
+type TemplateContext = {
+  partyName: string
+  storeName: string
+  storeAddress: string
+  quotedWaitMinutes: number | null
+}
+
+function formatStoreAddress(loc: any): string {
+  if (!loc) return ''
+  const street = [loc.address_line1, loc.address_line2].filter(Boolean).join(', ')
+  const cityStateZip = [loc.city, loc.state, loc.postal_code]
+    .filter(Boolean)
+    .join(' ')
+  return [street, cityStateZip].filter(Boolean).join(', ')
+}
+
+function renderTemplate(
+  key: string,
+  ctx: TemplateContext,
+  customMessage?: string | null
+): string | null {
+  const { partyName, storeName, storeAddress, quotedWaitMinutes } = ctx
+  const addressClause = storeAddress ? ` (${storeAddress})` : ''
+  const waitClause =
+    quotedWaitMinutes != null && quotedWaitMinutes > 0
+      ? `in ${quotedWaitMinutes} min`
+      : 'soon'
+
+  switch (key) {
+    case 'waitlist.added':
+      return `Hi ${partyName}, you're on the waitlist at ${storeName}${addressClause}. Your seat should be ready ${waitClause}. We'll text you when it's ready.`
+    case 'waitlist.tableReady':
+      return `Hi ${partyName}! Your table at ${storeName} is ready. Please check in with the host within 10 minutes.`
+    case 'waitlist.almostReady':
+      return `Hi ${partyName}! Your table at ${storeName} will be ready in about 5 minutes. Please head back to the host stand.`
+    case 'waitlist.runningLate':
+      return `Hi ${partyName}, we're running a few more minutes behind at ${storeName}. Thanks for your patience — we'll have your table ready soon.`
+    case 'waitlist.updateConfirmed':
+      return `Hi ${partyName}, just a quick update on your wait at ${storeName}. We'll have your table ready as soon as possible.`
+    case 'waitlist.cancelled':
+      return `Hi ${partyName}, you've been removed from the waitlist at ${storeName}. Please contact us if this was a mistake.`
+    case 'custom':
+      return customMessage && customMessage.trim().length > 0
+        ? customMessage.trim().slice(0, 500)
+        : null
+    default:
+      return null
+  }
 }
 
 function normalizeToE164(rawPhone: string | null | undefined): string | null {
@@ -54,6 +99,8 @@ function normalizeToE164(rawPhone: string | null | undefined): string | null {
 
 interface NotifyRequest {
   waitlist_id?: string
+  template_key?: string
+  message?: string
 }
 
 serve(async (req: Request) => {
@@ -72,9 +119,6 @@ serve(async (req: Request) => {
     )
   }
 
-  // verify_jwt = true means the platform already validated the JWT before
-  // invoking us. We still need the Authorization header to construct a
-  // user-scoped supabase client for RLS-gated reads.
   const authHeader = req.headers.get('Authorization')
   if (!authHeader) {
     return new Response(
@@ -101,7 +145,14 @@ serve(async (req: Request) => {
 
   try {
     const body = (await req.json().catch(() => ({}))) as NotifyRequest
-    const waitlistId = typeof body.waitlist_id === 'string' ? body.waitlist_id : null
+    const waitlistId =
+      typeof body.waitlist_id === 'string' ? body.waitlist_id : null
+    const templateKey =
+      typeof body.template_key === 'string' && body.template_key.length > 0
+        ? body.template_key
+        : 'waitlist.tableReady'
+    const customMessage =
+      typeof body.message === 'string' ? body.message : null
 
     if (!waitlistId) {
       return new Response(
@@ -114,11 +165,12 @@ serve(async (req: Request) => {
       )
     }
 
-    // Read waitlist via user-scoped client. RLS policy `waitlist_tenant_scope`
-    // returns no rows if the caller doesn't belong to the merchant/location.
+    // Read waitlist via user-scoped client. RLS gates access.
     const { data: waitlist, error: waitlistErr } = await userClient
       .from('waitlist')
-      .select('id, merchant_id, location_id, party_name, phone, status')
+      .select(
+        'id, merchant_id, location_id, party_name, phone, status, quoted_wait_minutes'
+      )
       .eq('id', waitlistId)
       .maybeSingle()
 
@@ -131,13 +183,19 @@ serve(async (req: Request) => {
     }
 
     if (!waitlist) {
-      // RLS rejected access OR row doesn't exist — same response either way
-      // so we don't leak existence.
       return new Response(
         JSON.stringify({ success: false, error: 'not_found' }),
         { status: 404, headers: jsonHeaders }
       )
     }
+
+    // Fetch location for store name + address. Service role is OK here — the
+    // RLS check above proved the caller has access to the merchant/location.
+    const { data: location } = await adminClient
+      .from('locations')
+      .select('name, address_line1, address_line2, city, state, postal_code')
+      .eq('id', waitlist.location_id)
+      .maybeSingle()
 
     const e164Phone = normalizeToE164(waitlist.phone)
 
@@ -148,8 +206,27 @@ serve(async (req: Request) => {
       )
     }
 
-    // Atomic rate-limit claim. Service-role required — table is locked down
-    // and the RPC pg_advisory_xact_lock-serializes concurrent claims.
+    // Render template server-side. Caller picks the key; for 'custom' we accept
+    // a caller-supplied message (slice-capped at 500 chars).
+    const ctx: TemplateContext = {
+      partyName: (waitlist.party_name ?? '').trim() || 'Guest',
+      storeName: location?.name ?? 'our restaurant',
+      storeAddress: formatStoreAddress(location),
+      quotedWaitMinutes: waitlist.quoted_wait_minutes ?? null
+    }
+    const message = renderTemplate(templateKey, ctx, customMessage)
+    if (!message) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'bad_template',
+          message: `Unknown template_key '${templateKey}'`
+        }),
+        { status: 400, headers: jsonHeaders }
+      )
+    }
+
+    // Atomic rate-limit claim.
     const { data: claim, error: claimErr } = await adminClient.rpc(
       'claim_waitlist_sms_slot',
       {
@@ -177,9 +254,6 @@ serve(async (req: Request) => {
         { status: 429, headers: jsonHeaders }
       )
     }
-
-    // Server-side template — caller cannot inject SMS body.
-    const message = renderReadyMessage(waitlist.party_name)
 
     const apiKey = Deno.env.get('TELNYX_API_KEY')
     const fromNumber = Deno.env.get('TELNYX_FROM_NUMBER') ?? '+18556810275'

@@ -1,6 +1,7 @@
 'use client'
 import { Input } from '@/components/ui/input'
 import React, { useState, useCallback, useEffect } from 'react'
+import { cn } from '@/lib/utils'
 import { useQueryClient } from '@tanstack/react-query'
 import { FloorPlanEditorSidebar } from './FloorPlanToolbar'
 import { RuntimeFloorPlanView } from './RuntimeFloorPlanView'
@@ -104,6 +105,7 @@ export function FloorPlanCanvasView({ locationId, initialFloorPlanId, onBack, re
         }
     }, [availableFloorPlans, activeFloorPlanId, effectiveActiveFloorPlanId, setActiveFloorPlan])
 
+    const [mobilePanel, setMobilePanel] = useState<'canvas' | 'library' | 'properties'>('canvas')
     const [isSaving, setIsSaving] = useState(false)
     const [hasInitialized, setHasInitialized] = useState(false)
     const [lastActiveFloorPlanId, setLastActiveFloorPlanId] = useState<string | null>(null)
@@ -691,19 +693,19 @@ export function FloorPlanCanvasView({ locationId, initialFloorPlanId, onBack, re
     return (
         <div className="flex flex-col max-h-screen h-[90vh] bg-background shadow-xl rounded-lg overflow-hidden">
             {/* Top Bar - Edit Mode Specific */}
-            <header className="h-14 border-b bg-background px-4 flex items-center justify-between shrink-0 z-10">
-                <div className="flex items-center gap-2">
-                    <Button variant="ghost" size="sm" onClick={onBack}>
-                        <Undo2 className="w-4 h-4 mr-2" />
-                        Cancel
+            <header className="min-h-12 border-b bg-background px-3 flex items-center justify-between gap-2 shrink-0 z-10 flex-wrap py-2">
+                <div className="flex items-center gap-1.5 min-w-0">
+                    <Button variant="ghost" size="sm" onClick={onBack} className="h-8 px-2 shrink-0">
+                        <Undo2 className="w-4 h-4 mr-1" />
+                        <span className="hidden sm:inline">Cancel</span>
                     </Button>
-                    <span className="text-sm font-semibold text-muted-foreground">Editing:</span>
+                    <span className="text-xs font-semibold text-muted-foreground hidden sm:inline shrink-0">Editing:</span>
                     {availableFloorPlans && availableFloorPlans.length > 0 && (
                         <Select
                             value={effectiveActiveFloorPlanId || ''}
                             onValueChange={handleFloorPlanChange}
                         >
-                            <SelectTrigger className="w-[280px]">
+                            <SelectTrigger className="w-[140px] sm:w-[220px] h-8 text-xs">
                                 <SelectValue placeholder="Select floor plan" />
                             </SelectTrigger>
                             <SelectContent>
@@ -722,23 +724,24 @@ export function FloorPlanCanvasView({ locationId, initialFloorPlanId, onBack, re
                         </Select>
                     )}
                     {(!availableFloorPlans || availableFloorPlans.length === 0) && activeFloorPlan && (
-                        <span className="text-sm font-semibold text-slate-900">{activeFloorPlan.name}</span>
+                        <span className="text-xs font-semibold text-slate-900 truncate">{activeFloorPlan.name}</span>
                     )}
-                    <Button variant="outline" size="sm" onClick={() => setShowManageDialog(true)}>
-                        <Settings2 className="w-4 h-4 mr-1" />
-                        Manage
+                    <Button variant="outline" size="sm" onClick={() => setShowManageDialog(true)} className="h-8 px-2 shrink-0">
+                        <Settings2 className="w-3.5 h-3.5 sm:mr-1" />
+                        <span className="hidden sm:inline text-xs">Manage</span>
                     </Button>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 shrink-0">
                     <Button
                         variant="outline"
                         size="sm"
                         onClick={handleUndo}
                         disabled={!canUndo}
                         title="Undo (Ctrl/Cmd+Z)"
+                        className="h-8 px-2"
                     >
-                        <Undo className="w-4 h-4 mr-2" />
-                        Undo
+                        <Undo className="w-3.5 h-3.5 sm:mr-1" />
+                        <span className="hidden sm:inline text-xs">Undo</span>
                     </Button>
                     <Button
                         variant="outline"
@@ -746,32 +749,57 @@ export function FloorPlanCanvasView({ locationId, initialFloorPlanId, onBack, re
                         onClick={handleRedo}
                         disabled={!canRedo}
                         title="Redo (Ctrl/Cmd+Shift+Z)"
+                        className="h-8 px-2"
                     >
-                        <Redo className="w-4 h-4 mr-2" />
-                        Redo
+                        <Redo className="w-3.5 h-3.5 sm:mr-1" />
+                        <span className="hidden sm:inline text-xs">Redo</span>
                     </Button>
                     <Button
                         size="sm"
                         onClick={handleSave}
                         disabled={isSaving || !hasChanges}
-                        className="bg-blue-600 hover:bg-blue-700"
+                        className="bg-blue-600 hover:bg-blue-700 h-8 px-2 sm:px-3"
                     >
-                        {isSaving ? 'Saving...' : 'Save Changes'}
-                        <Save className="w-4 h-4 ml-2" />
+                        <Save className="w-3.5 h-3.5 sm:mr-1.5" />
+                        <span className="hidden sm:inline text-xs">{isSaving ? 'Saving...' : 'Save'}</span>
                     </Button>
                 </div>
             </header>
 
+            {/* Mobile panel switcher tabs */}
+            <div className="lg:hidden flex border-b bg-background shrink-0">
+                {([
+                    { id: 'library', label: 'Library' },
+                    { id: 'canvas', label: 'Canvas' },
+                    { id: 'properties', label: 'Properties' },
+                ] as const).map(tab => (
+                    <button
+                        key={tab.id}
+                        onClick={() => setMobilePanel(tab.id)}
+                        className={cn(
+                            'flex-1 py-2 text-xs font-medium border-b-2 transition-colors',
+                            mobilePanel === tab.id
+                                ? 'border-primary text-primary'
+                                : 'border-transparent text-muted-foreground hover:text-foreground'
+                        )}
+                    >
+                        {tab.label}
+                    </button>
+                ))}
+            </div>
+
             <div className="flex overflow-hidden relative h-full">
                 {/* 1. LEFT SIDEBAR (Shape Library) */}
-                <FloorPlanEditorSidebar
-                    onAddShape={handleAddShapeFromLibrary}
-                    onOpenShapePicker={() => setShowShapePickerDialog(true)}
-                    onOpenQuickSetup={() => setShowQuickSetupDialog(true)}
-                />
+                <div className={cn('h-full shrink-0', mobilePanel === 'library' ? 'block w-full' : 'hidden lg:block')}>
+                    <FloorPlanEditorSidebar
+                        onAddShape={handleAddShapeFromLibrary}
+                        onOpenShapePicker={() => setShowShapePickerDialog(true)}
+                        onOpenQuickSetup={() => setShowQuickSetupDialog(true)}
+                    />
+                </div>
 
-                {/* 2. MAIN CANVAS (Reused Runtime Component) */}
-                <div className="flex-1 relative h-full bg-slate-900">
+                {/* 2. MAIN CANVAS */}
+                <div className={cn('relative h-full bg-slate-900', mobilePanel === 'canvas' ? 'flex-1 block' : 'hidden lg:flex lg:flex-1')}>
                     <RuntimeFloorPlanView
                         floorPlan={activeFloorPlan}
                         tables={draftTables}
@@ -793,11 +821,13 @@ export function FloorPlanCanvasView({ locationId, initialFloorPlanId, onBack, re
                 </div>
 
                 {/* 3. RIGHT SIDEBAR (Properties Panel) */}
-                <FloorPlanPropertiesPanel
-                    selectedTableId={selectedTableId || null}
-                    draftTables={draftTables}
-                    onClose={clearSelection}
-                />
+                <div className={cn('h-full shrink-0', mobilePanel === 'properties' ? 'block w-full' : 'hidden lg:block')}>
+                    <FloorPlanPropertiesPanel
+                        selectedTableId={selectedTableId || null}
+                        draftTables={draftTables}
+                        onClose={clearSelection}
+                    />
+                </div>
             </div>
 
             <TableShapePickerDialog

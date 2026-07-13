@@ -70,6 +70,10 @@ export function CustomerSearch({ value, onSelect, onAddNew }: CustomerSearchProp
 
   return (
     <div className="flex items-center gap-2">
+      {/* Wrapper is the flex child (a plain div has no shrink-0 like Button does),
+          so flex-1 + min-w-0 lets the trigger shrink and the "Clear" button stays
+          inside the column instead of overflowing/clipping. */}
+      <div className="flex-1 min-w-0">
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <Button
@@ -161,12 +165,13 @@ export function CustomerSearch({ value, onSelect, onAddNew }: CustomerSearchProp
           </Command>
         </PopoverContent>
       </Popover>
+      </div>
       {value && (
         <Button
           variant="ghost"
           size="sm"
           onClick={handleClear}
-          className="text-muted-foreground hover:text-foreground"
+          className="shrink-0 text-muted-foreground hover:text-foreground"
         >
           Clear
         </Button>

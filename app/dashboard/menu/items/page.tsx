@@ -93,6 +93,7 @@ import {
   useLocationStore,
   useIsAllLocations,
   useSelectedLocation,
+  useIsSingleLocation,
 } from "@/stores/location-store";
 import { PriceSourcePopover } from "@/components/dashboard/menu/PriceSourcePopover";
 import {
@@ -229,6 +230,7 @@ function ItemCard({
     PRICE_SOURCE_COLORS[item.price_source] || PRICE_SOURCE_COLORS.base;
 
   const isAllLocations = useIsAllLocations();
+  const isSingleLocation = useIsSingleLocation();
   const { selectedLocationId } = useLocationStore();
   const selectedLocation = useSelectedLocation();
   const locationName = selectedLocation?.name ?? null;
@@ -241,6 +243,7 @@ function ItemCard({
     taxRate && !item.effective_is_tax_exempt
       ? ((item.effective_price * taxRate.percentage) / 100).toFixed(2)
       : "0.00";
+  const modifierGroupCount = item.modifier_groups?.length ?? 0;
 
   return (
     <div
@@ -415,7 +418,7 @@ function ItemCard({
                   itemId={item.id}
                   currentPrice={item.effective_price}
                   sourceLevel={priceSourceToLevel(item.price_source)}
-                  locationId={isAllLocations ? null : selectedLocationId}
+                  locationId={isAllLocations || isSingleLocation ? null : selectedLocationId}
                   canRemoveOverride={
                     item.price_source === "location_item" && !isAllLocations
                   }
@@ -446,6 +449,17 @@ function ItemCard({
 
             {/* Tax & Channel Badges */}
             <div className="flex flex-wrap gap-1.5 pt-3 border-t mt-3">
+              {modifierGroupCount > 0 && (
+                <Badge
+                  variant="secondary"
+                  className="text-[10px] px-1.5 py-0.5"
+                >
+                  <Layers className="h-2.5 w-2.5 mr-0.5" />
+                  {modifierGroupCount} modifier
+                  {modifierGroupCount === 1 ? " group" : " groups"}
+                </Badge>
+              )}
+
               {/* Tax Badge */}
               <TooltipProvider>
                 <Tooltip>
@@ -581,6 +595,7 @@ function ItemRow({
     taxRate && !item.effective_is_tax_exempt
       ? ((item.effective_price * taxRate.percentage) / 100).toFixed(2)
       : "0.00";
+  const modifierGroupCount = item.modifier_groups?.length ?? 0;
 
   return (
     <div
@@ -640,6 +655,17 @@ function ItemRow({
               )}
               {/* Category, Tax & Channel tags */}
               <div className="flex flex-wrap gap-1 mt-2">
+                {modifierGroupCount > 0 && (
+                  <Badge
+                    variant="secondary"
+                    className="text-[10px] px-1.5 py-0"
+                  >
+                    <Layers className="h-2.5 w-2.5 mr-0.5" />
+                    {modifierGroupCount} modifier
+                    {modifierGroupCount === 1 ? " group" : " groups"}
+                  </Badge>
+                )}
+
                 {/* Category tags */}
                 {item.categories.slice(0, 3).map((cat) => (
                   <Badge
@@ -906,20 +932,20 @@ function CategoryGroup({
               isSelectionMode && selectedCount > 0 && "bg-primary/5",
             )}
           >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
+            <div className="flex items-center justify-between gap-2 min-w-0">
+              <div className="flex items-center gap-3 min-w-0 overflow-hidden">
                 {isExpanded ? (
-                  <ChevronDown className="h-5 w-5 text-muted-foreground" />
+                  <ChevronDown className="h-5 w-5 text-muted-foreground shrink-0" />
                 ) : (
-                  <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                  <ChevronRight className="h-5 w-5 text-muted-foreground shrink-0" />
                 )}
-                <div className="flex items-center gap-2">
-                  <Tag className="h-5 w-5 text-primary" />
-                  <CardTitle className="text-lg">{category.name}</CardTitle>
+                <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                  <Tag className="h-5 w-5 text-primary shrink-0" />
+                  <CardTitle className="text-lg truncate">{category.name}</CardTitle>
                   {category.is_global ? (
                     <Badge
                       variant="outline"
-                      className="text-xs bg-emerald-50 text-emerald-600 border-emerald-200"
+                      className="text-xs bg-emerald-50 text-emerald-600 border-emerald-200 shrink-0"
                     >
                       <Globe className="h-3 w-3 mr-1" />
                       Global
@@ -927,7 +953,7 @@ function CategoryGroup({
                   ) : (
                     <Badge
                       variant="outline"
-                      className="text-xs bg-purple-50 text-purple-600 border-purple-200"
+                      className="text-xs bg-purple-50 text-purple-600 border-purple-200 shrink-0"
                     >
                       <MapPin className="h-3 w-3 mr-1" />
                       {category.location_name || "Location"}
@@ -935,7 +961,7 @@ function CategoryGroup({
                   )}
                 </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 shrink-0">
                 {isSelectionMode && (
                   <>
                     {selectedCount > 0 && (
@@ -1049,6 +1075,7 @@ export default function MenuItemsPage() {
 
   // Location context
   const { isAllLocations, locationName } = useLocationContext();
+  const isSingleLocation = useIsSingleLocation();
 
   // Gate the "Create Item" trigger on role + current location context.
   // Owners can always create. Managers at "all" need exactly 1 assigned
@@ -1257,13 +1284,13 @@ export default function MenuItemsPage() {
   }, [itemsList]);
 
   // Handlers
-  const useNewEditPage =
-    process.env.NEXT_PUBLIC_NEW_ITEM_EDIT === "true";
+  // The popup item editor is canonical for both single- and multi-location
+  // accounts. It respects the single-vs-multi flow via location scope: a
+  // single-location account is locked to the 'all'/core scope, so edits write
+  // the global core (no per-location overlay rows); a multi-location account can
+  // target a specific location for cascade overrides. The dedicated /edit page
+  // stays reachable by direct URL.
   const handleQuickEdit = async (item: FlatItem) => {
-    if (useNewEditPage) {
-      router.push(`/dashboard/menu/items/${item.id}/edit`);
-      return;
-    }
     // If the RPC didn't return modifier_groups, fetch them directly
     let itemWithModifiers = item;
     if (!item.modifier_groups || item.modifier_groups.length === 0) {
@@ -1442,26 +1469,28 @@ export default function MenuItemsPage() {
     <div className="space-y-6 animate-in fade-in duration-500">
       <ScopeContextStrip />
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between w-full min-w-0">
         <div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             <h2 className="text-2xl font-bold tracking-tight">Item Library</h2>
-            <Badge
-              variant={isAllLocations ? "secondary" : "default"}
-              className={cn(
-                "gap-1.5 animate-in fade-in slide-in-from-left-2 duration-300",
-                !isAllLocations &&
-                  "bg-blue-500/10 text-blue-600 border-blue-200",
-              )}
-            >
-              {isAllLocations ? (
-                <Globe className="h-3 w-3" />
-              ) : (
-                <MapPin className="h-3 w-3" />
-              )}
-              {locationName}
-            </Badge>
-            {!isAllLocations && stats.withOverrides > 0 && (
+            {!isSingleLocation && (
+              <Badge
+                variant={isAllLocations ? "secondary" : "default"}
+                className={cn(
+                  "gap-1.5 animate-in fade-in slide-in-from-left-2 duration-300",
+                  !isAllLocations &&
+                    "bg-blue-500/10 text-blue-600 border-blue-200",
+                )}
+              >
+                {isAllLocations ? (
+                  <Globe className="h-3 w-3" />
+                ) : (
+                  <MapPin className="h-3 w-3" />
+                )}
+                {locationName}
+              </Badge>
+            )}
+            {!isSingleLocation && !isAllLocations && stats.withOverrides > 0 && (
               <Badge
                 variant="outline"
                 className="gap-1 bg-amber-500/10 text-amber-600 border-amber-200"
@@ -1472,12 +1501,14 @@ export default function MenuItemsPage() {
             )}
           </div>
           <p className="text-muted-foreground mt-1">
-            {isAllLocations
-              ? "All items across your organization. Items live within categories."
-              : `Viewing items for ${locationName} with location-specific pricing.`}
+            {isSingleLocation
+              ? "All items on your menu. Items live within categories."
+              : isAllLocations
+                ? "All items across your organization. Items live within categories."
+                : `Viewing items for ${locationName} with location-specific pricing.`}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
           {canCreateItem ? (
             <Button
               onClick={() => setIsCreateWizardOpen(true)}
@@ -1517,7 +1548,7 @@ export default function MenuItemsPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4">
         <Card className="transition-all hover:shadow-md">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Items</CardTitle>
@@ -2159,7 +2190,7 @@ export default function MenuItemsPage() {
         open={bulkPriceDialogOpen}
         onOpenChange={setBulkPriceDialogOpen}
         clerkOrgId={clerkOrgId}
-        currentLocationId={isAllLocations ? null : selectedLocationId}
+        currentLocationId={isAllLocations || isSingleLocation ? null : selectedLocationId}
         isAllLocations={isAllLocations}
         selectedItems={filteredItems
           .filter((it) => selectedItemIds.has(it.id))
@@ -2185,7 +2216,7 @@ export default function MenuItemsPage() {
         open={bulkDeliveryDialogOpen}
         onOpenChange={setBulkDeliveryDialogOpen}
         clerkOrgId={clerkOrgId}
-        currentLocationId={isAllLocations ? null : selectedLocationId}
+        currentLocationId={isAllLocations || isSingleLocation ? null : selectedLocationId}
         isAllLocations={isAllLocations}
         selectedItems={filteredItems
           .filter((it) => selectedItemIds.has(it.id))

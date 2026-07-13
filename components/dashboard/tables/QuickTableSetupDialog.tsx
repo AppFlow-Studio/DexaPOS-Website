@@ -12,7 +12,6 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { TABLE_SHAPES } from '@/utils/tables/table-shapes'
 
 interface QuickTableSetupDialogProps {
@@ -68,15 +67,15 @@ export function QuickTableSetupDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-3xl gap-0 overflow-hidden border border-border bg-background p-0 text-foreground">
-                <DialogHeader className="border-b border-border px-5 py-4">
+            <DialogContent className="max-w-3xl gap-0 overflow-hidden border border-border bg-background p-0 text-foreground flex flex-col max-h-[90vh]">
+                <DialogHeader className="border-b border-border px-5 py-4 shrink-0">
                     <DialogTitle className="text-lg font-semibold text-foreground">Quick Floor Setup</DialogTitle>
                     <DialogDescription className="text-sm text-muted-foreground">
                         Add multiple tables and booths in one pass using the shared SVG shape registry.
                     </DialogDescription>
                 </DialogHeader>
 
-                <ScrollArea className="max-h-[460px]">
+                <div className="flex-1 min-h-0 overflow-y-auto">
                     <div className="space-y-2.5 px-5 py-4">
                         {seatingShapes.map((shape) => {
                             const ShapeIcon = shape.component
@@ -123,23 +122,27 @@ export function QuickTableSetupDialog({
                             )
                         })}
                     </div>
-                </ScrollArea>
+                </div>
 
-                <DialogFooter className="border-t border-border bg-muted/20 px-5 py-3">
-                    <div className="mr-auto text-sm text-muted-foreground">
+                <DialogFooter className="border-t border-border bg-muted/20 px-4 py-3 flex-col sm:flex-row gap-2 shrink-0">
+                    <div className="text-sm text-muted-foreground sm:mr-auto">
                         {selectedCount > 0 ? `${selectedCount} objects will be added` : 'No objects selected'}
                     </div>
-                    <Button
-                        variant="outline"
-                        onClick={() => onOpenChange(false)}
-                    >
-                        Start with Blank Canvas
-                    </Button>
-                    <Button
-                        onClick={handleApply}
-                    >
-                        Add Objects
-                    </Button>
+                    <div className="flex gap-2 w-full sm:w-auto">
+                        <Button
+                            variant="outline"
+                            onClick={() => onOpenChange(false)}
+                            className="flex-1 sm:flex-none"
+                        >
+                            Blank Canvas
+                        </Button>
+                        <Button
+                            onClick={handleApply}
+                            className="flex-1 sm:flex-none"
+                        >
+                            Add Objects
+                        </Button>
+                    </div>
                 </DialogFooter>
             </DialogContent>
         </Dialog>

@@ -15,7 +15,7 @@ import { ArrowLeft } from "lucide-react";
 import { useLocations } from "@/app/dashboard/hooks/useLocations";
 import { useClerkOrgId } from "@/app/dashboard/hooks/useLocationScoped";
 import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
-import { useLocationStore, useIsAllLocations } from "@/stores/location-store";
+import { useLocationStore, useIsAllLocations, useIsSingleLocation } from "@/stores/location-store";
 
 export default function NewDiscountPage() {
     const router = useRouter();
@@ -28,6 +28,7 @@ export default function NewDiscountPage() {
     const { data: locationsData = [] } = useLocations(clerkOrgId, userInfo?.id || "");
     const { selectedLocationId } = useLocationStore();
     const isAllLocations = useIsAllLocations();
+    const isSingleLocation = useIsSingleLocation();
 
     const categories = useMemo(
         () => (categoryData?.success ? categoryData.data : []),
@@ -53,7 +54,7 @@ export default function NewDiscountPage() {
     const loading = categoriesLoading || menuItemsLoading;
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 w-full min-w-0">
             <div className="flex items-center gap-3">
                 <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => router.back()}>
                     <ArrowLeft className="h-4 w-4" />
@@ -95,6 +96,7 @@ export default function NewDiscountPage() {
                     categories={categories}
                     menuItems={menuItems}
                     locations={locations}
+                    isSingleLocation={isSingleLocation}
                     onCancel={() => router.push("/dashboard/discounts")}
                     submitLabel="Create discount"
                 />

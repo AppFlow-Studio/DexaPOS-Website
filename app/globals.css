@@ -145,6 +145,8 @@
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
 
+  --breakpoint-xs: 25rem;
+
   --font-sans: var(--font-sans);
   --font-mono: var(--font-mono);
   --font-serif: var(--font-serif);
@@ -219,8 +221,63 @@
   --spacing: 0.25rem;
 }
 
+.dashboard-sidebar-theme {
+  --sidebar: #f8fafc;
+  --sidebar-foreground: #475569;
+  --sidebar-primary: #0c4fd1;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #eef3fe;
+  --sidebar-accent-foreground: #0c4fd1;
+  --sidebar-border: #e2e8f0;
+  --sidebar-ring: #0c4fd1;
+}
+
+/* Dark half of the dashboard nav two-tone — at parity with the shipped light
+   `.dashboard-sidebar-theme` above. The value relationship inverts in dark:
+   the rail is the DEEPEST surface and content sits ELEVATED above it.
+   These sidebar tokens are scoped to dashboard layouts; the global dark
+   `--background` is adjusted separately below to prevent FOUC. */
+.dark .dashboard-sidebar-theme {
+  /* Nav rail = deepest surface */
+  --sidebar: #0f1115;
+  /* Content canvas (body/main) sits raised above the rail */
+  --background: #16181d;
+  /* Cards step up one more above the canvas */
+  --card: #1c1f26;
+  --card-foreground: oklch(0.9288 0.0126 255.5078);
+  /* Inactive text — passes AA on the #0f1115 rail; section labels derive
+     from this at /70 (SidebarGroupLabel uses text-sidebar-foreground/70) */
+  --sidebar-foreground: #9ca3af;
+  /* Brand fill blue stays #0C4FD1 in dark per spec */
+  --sidebar-primary: #0c4fd1;
+  --sidebar-primary-foreground: #ffffff;
+  /* Active item bg ≈ 18% brand on dark */
+  --sidebar-accent: #182338;
+  /* Active text + icon = brightened brand for legibility on dark */
+  --sidebar-accent-foreground: #6ca0ff;
+  /* 1px rail ↔ content divider */
+  --sidebar-border: #232730;
+  --sidebar-ring: #6ca0ff;
+}
+
+/* Distinct neutral hover for inactive nav items in dark. The shared
+   SidebarMenuButton collapses hover into --sidebar-accent (the blue active
+   bg); here we override hover to the spec's neutral #1B1E25 so hover reads
+   as "interactive" without looking selected. Active items keep the blue
+   --sidebar-accent. Hex lives here, not in the component. */
+.dark .dashboard-sidebar-theme
+  [data-sidebar="menu-button"]:not([data-active="true"]):hover,
+.dark .dashboard-sidebar-theme
+  [data-sidebar="menu-sub-button"]:not([data-active="true"]):hover {
+  background-color: #1b1e25;
+  color: var(--sidebar-foreground);
+}
+
 .dark {
-  --background: oklch(0.2077 0.0398 265.7549);
+  /* Neutral dark canvas (was a purple-tinted oklch). Matches the dashboard
+     two-tone content surface so the <body> base never flashes purple before
+     the client SidebarProvider mounts the scoped .dashboard-sidebar-theme. */
+  --background: #16181d;
   --foreground: oklch(0.9288 0.0126 255.5078);
   --card: oklch(0.2795 0.0368 260.0310);
   --card-foreground: oklch(0.9288 0.0126 255.5078);
@@ -306,6 +363,8 @@
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
 
+  --breakpoint-xs: 25rem;
+
   --font-sans: var(--font-sans);
   --font-mono: var(--font-mono);
   --font-serif: var(--font-serif);
@@ -344,6 +403,31 @@ html:has([data-template]) body {
   color: var(--text);
 }
 
+
+/* Storefront max-width container constraint.
+   Constrains all Tailwind `container` elements to 1280px (max-w-7xl) when
+   inside a storefront page, centered with consistent responsive padding.
+   Scoped to [data-template] so the dashboard layout is unaffected. */
+[data-template] .container {
+  max-width: 1280px;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+@media (min-width: 640px) {
+  [data-template] .container {
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
+}
+@media (min-width: 1024px) {
+  [data-template] .container {
+    padding-left: 2rem;
+    padding-right: 2rem;
+  }
+}
+
 /* Utility to hide horizontal scrollbars while keeping content scrollable */
 .no-scrollbar {
   -ms-overflow-style: none; /* IE and Edge */
@@ -360,6 +444,85 @@ html:has([data-template]) body {
 html:has([data-template]) body[data-scroll-locked] {
   overflow-y: auto !important;
   margin-right: 0 !important;
+}
+
+/* Storefront panel animations — smooth slide-up like premium ordering sites */
+@keyframes panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes panel-out {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(12px) scale(0.99);
+  }
+}
+
+@keyframes slide-in-from-right {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+
+@keyframes slide-out-to-right {
+  from { transform: translateX(0); }
+  to   { transform: translateX(100%); }
+}
+
+@keyframes slide-in-from-bottom {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+
+@keyframes slide-out-to-bottom {
+  from { transform: translateY(0); }
+  to   { transform: translateY(100%); }
+}
+
+.cart-slide-right[data-state="open"]  { animation: slide-in-from-right 0.32s cubic-bezier(0.32,0.72,0,1) both; }
+.cart-slide-right[data-state="closed"] { animation: slide-out-to-right 0.22s cubic-bezier(0.32,0.72,0,1) both; }
+
+.cart-slide-bottom[data-state="open"]  { animation: slide-in-from-bottom 0.32s cubic-bezier(0.32,0.72,0,1) both; }
+.cart-slide-bottom[data-state="closed"] { animation: slide-out-to-bottom 0.22s cubic-bezier(0.32,0.72,0,1) both; }
+
+@keyframes overlay-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes overlay-out {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+
+/* Applied directly via data-[state] on Radix Dialog/Sheet elements */
+[data-slot="dialog-content"][data-state="open"],
+[data-slot="dialog-content"][data-state="open"] {
+  animation: panel-in 0.32s cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+
+[data-slot="dialog-content"][data-state="closed"] {
+  animation: panel-out 0.2s cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+
+[data-slot="dialog-overlay"][data-state="open"],
+[data-slot="sheet-overlay"][data-state="open"] {
+  animation: overlay-in 0.25s ease both;
+}
+
+[data-slot="dialog-overlay"][data-state="closed"],
+[data-slot="sheet-overlay"][data-state="closed"] {
+  animation: overlay-out 0.2s ease both;
 }
 
 ::view-transition-old(root),

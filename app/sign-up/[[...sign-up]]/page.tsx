@@ -1,4 +1,4 @@
-import { SignUp, SignedIn, SignedOut } from '@clerk/nextjs'
+import { SignUp, Show } from '@clerk/nextjs'
 import { Shield, MailCheck } from 'lucide-react'
 import Link from 'next/link'
 
@@ -26,7 +26,7 @@ export default async function SignUpPage({
                         <span className="text-xl font-semibold text-foreground">DexaPOS</span>
                     </div>
 
-                    <SignedOut>
+                    <Show when="signed-out">
                         {hasInvitationTicket ? (
                             <>
                                 <div className="mb-8">
@@ -70,7 +70,7 @@ export default async function SignUpPage({
                                 <div className="text-center">
                                     <p className="text-muted-foreground text-sm">
                                         Already have an account?{' '}
-                                        <Link href="/" className="text-primary hover:text-primary/80 font-medium">
+                                        <Link href="/sign-in" className="text-primary hover:text-primary/80 font-medium">
                                             Sign in
                                         </Link>
                                     </p>
@@ -88,16 +88,16 @@ export default async function SignUpPage({
                                     DexaPOS accounts are created by your administrator. If you&apos;re expecting an invite, check your email for the link.
                                 </p>
                                 <Link
-                                    href="/"
+                                    href="/sign-in"
                                     className="inline-flex items-center justify-center px-4 py-2 bg-foreground text-background rounded-lg font-medium hover:bg-foreground/90 transition-colors"
                                 >
                                     Back to sign in
                                 </Link>
                             </div>
                         )}
-                    </SignedOut>
+                    </Show>
 
-                    <SignedIn>
+                    <Show when="signed-in">
                         <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
                             <h2 className="text-xl font-semibold text-card-foreground mb-2">
                                 You&apos;re already signed in.
@@ -106,13 +106,13 @@ export default async function SignUpPage({
                                 Head over to your dashboard to continue.
                             </p>
                             <Link
-                                href="/"
+                                href="/sign-in"
                                 className="inline-flex items-center justify-center px-4 py-2 bg-foreground text-background rounded-lg font-medium hover:bg-foreground/90 transition-colors"
                             >
                                 Continue
                             </Link>
                         </div>
-                    </SignedIn>
+                    </Show>
                 </div>
             </div>
         </div>

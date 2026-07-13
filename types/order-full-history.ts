@@ -1,220 +1,180 @@
-import type { OrderStatus, OrderType, PaymentMethod, PaymentStatus } from "./order-management";
+/**
+ * TICKET DM-011-01: Unified Order History Response Types
+ * Types for the get_order_full_history() RPC function
+ */
 
-export type TimelineCategory =
-  | "status"
-  | "item"
-  | "payment"
-  | "refund"
-  | "discount"
-  | "kitchen"
-  | "session"
-  | "chargeback"
-  | "system";
-
-export type TimelineSeverity = "info" | "success" | "warning" | "error";
-
-export interface OrderFullHistoryTimelineEvent {
+export interface OrderFullHistoryTimeline {
   timestamp: string;
-  category: TimelineCategory;
+  category: "status" | "item" | "payment" | "refund" | "discount" | "kitchen" | "session" | "chargeback" | "system";
   event_type: string;
-  description: string;
-  actor_name: string | null;
-  actor_role: string | null;
-  details: Record<string, unknown> | null;
-  severity: TimelineSeverity;
+  description: string; // Human-readable: "Item added: 1x Mocha Latte ($9.00)"
+  actor_name: string | null; // "Sam K." or "System"
+  actor_role: string | null; // "Server", "Manager", "System"
+  details: Record<string, unknown> | null; // Extra context for expandable view
+  severity: "info" | "success" | "warning" | "error"; // For color coding
+}
+
+export interface OrderFullHistoryItem {
+  id: string;
+  item_name: string;
+  quantity: number;
+  unit_price: number;
+  subtotal: number;
+  cash_price: number | null;
+  category_name: string | null;
+  course_number: number | null;
+  is_voided: boolean;
+  void_reason: string | null;
+  voided_at: string | null;
+  voided_by_name: string | null;
+  special_instructions: string | null;
+  kitchen_status: string | null;
+  fire_time: string | null;
+  sent_to_kitchen_at: string | null;
+  started_preparing_at: string | null;
+  completed_at: string | null;
+  kitchen_events: Array<{
+    event_type:
+      | "kitchen_sent"
+      | "kitchen_fired"
+      | "kitchen_acknowledged"
+      | "kitchen_preparing"
+      | "kitchen_ready"
+      | "kitchen_bumped";
+    timestamp: string;
+    actor_name: string | null;
+    display_name: string | null;
+  }>;
+  item_status: string;
+  created_at: string;
+  discount_name: string | null;
+  discount_amount: number | null;
+  modifiers: Array<{
+    modified_group_name: string;
+    modifier_name: string;
+    price_modifier: number;
+    quantity: number;
+  }>;
+  refund_info: Array<{
+    quantity_refunded: number;
+    total_refunded: number;
+    refund_reason: string;
+    refund_reason_detail: string | null;
+    refunded_at: string;
+  }> | null;
+}
+
+export interface OrderFullHistoryPayment {
+  id: string;
+  payment_method: string;
+  amount: number;
+  tip_amount: number;
+  total_amount: number;
+  status: string;
+  card_type: string | null;
+  card_last_four: string | null;
+  auth_code: string | null;
+  terminal_type: string | null;
+  terminal_id: string | null;
+  batch_number: string | null;
+  psp_reference: string | null;
+  captured_at: string | null;
+  voided_at: string | null;
+  voided_by_name: string | null;
+  void_reason: string | null;
+  created_at: string;
+  processed_by_name: string | null;
+  payment_items: Array<{
+    item_name: string;
+    quantity_paid: number;
+    subtotal_paid: number;
+    tax_paid: number;
+  }> | null;
+}
+
+export interface OrderFullHistoryReversal {
+  id: string;
+  reversal_type: "void" | "refund" | "partial_refund" | "item_return";
+  amount: number;
+  status: string;
+  reason_code: string;
+  reason_description: string | null;
+  completed_at: string | null;
+  initiated_by_name: string | null;
+  approved_by_name: string | null;
+  reversal_reference_id: string;
+  original_payment_method: string;
+  original_card_last_four: string | null;
+  refund_items: Array<{
+    item_name: string;
+    quantity_refunded: number;
+    subtotal_refunded: number;
+    tax_refunded: number;
+    total_refunded: number;
+    refund_reason: string;
+    refund_reason_detail: string | null;
+    return_to_inventory: boolean;
+  }>;
+}
+
+export interface OrderFullHistoryDiscount {
+  discount_name: string;
+  discount_amount: number;
+  applied_at: string;
+  applied_by_name: string | null;
+  voided: boolean;
+  voided_at: string | null;
+  target: "order" | "item";
+  target_item_name: string | null;
+}
+
+export interface OrderFullHistoryChargeback {
+  id: string;
+  amount: number;
+  reason_code: string;
+  reason_description: string | null;
+  status: string;
+  received_at: string;
+  defense_deadline: string | null;
+  resolution: string | null;
+  resolved_at: string | null;
+}
+
+export interface OrderFullHistoryHeader {
+  id: string;
+  display_number: string;
+  status: string;
+  order_type: string;
+  order_channel: string;
+  pricing_mode: string;
+  created_at: string;
+  completed_at: string | null;
+  cancelled_at: string | null;
+  cancellation_reason: string | null;
+  created_by_staff_name: string | null;
+  device_id: string | null;
+  station_name: string | null;
+  location_name: string;
+  table_name: string | null;
+  server_name: string | null;
+  party_size: number | null;
+  card_subtotal: number;
+  cash_subtotal: number;
+  cash_discount_amount: number;
+  tax_amount: number;
+  discount_amount: number;
+  amount_paid: number;
+  amount_due: number;
+  effective_total: number;
+  internal_notes: string | null;
 }
 
 export interface OrderFullHistory {
-  order: {
-    id: string;
-    display_number: string | null;
-    order_number: string;
-    status: OrderStatus;
-    order_type: OrderType;
-    pricing_mode: string | null;
-    created_at: string;
-    completed_at: string | null;
-    cancelled_at: string | null;
-    cancellation_reason: string | null;
-    created_by_staff_name: string | null;
-    created_by_user_name: string | null;
-    device_id: string | null;
-    station_name: string | null;
-    location_name: string | null;
-    table_session_id: string | null;
-    table_name: string | null;
-    server_name: string | null;
-    party_size: number | null;
-    customer_name: string | null;
-    customer_phone: string | null;
-    card_subtotal: number | null;
-    cash_subtotal: number | null;
-    cash_discount_amount: number | null;
-    tax_amount: number;
-    discount_amount: number;
-    amount_paid: number;
-    amount_due: number;
-    effective_total: number | null;
-    internal_notes: string | null;
-    voided_at: string | null;
-    voided_by_name: string | null;
-    voided_by: string | null;
-    void_reason: string | null;
-  };
-
-  items: Array<{
-    id: string;
-    item_name: string;
-    quantity: number;
-    unit_price: number;
-    subtotal: number;
-    cash_unit_price: number | null;
-    category_name: string | null;
-    course_number: number | null;
-    is_voided: boolean;
-    void_reason: string | null;
-    voided_at: string | null;
-    voided_by_name: string | null;
-    is_open_item: boolean;
-    is_tax_exempt: boolean;
-    special_instructions: string | null;
-    kitchen_status: string | null;
-    kitchen_notes: string | null;
-    fire_time: string | null;
-    preparing_at: string | null;
-    ready_at: string | null;
-    completed_at: string | null;
-    item_status: string;
-    created_at: string;
-    discount_name: string | null;
-    discount_amount: number | null;
-    discount_type: string | null;
-    modifiers: Array<{
-      modifier_group_name: string;
-      modifier_name: string;
-      price_modifier: number;
-      quantity: number;
-    }>;
-  }>;
-
-  payments: Array<{
-    id: string;
-    payment_method: PaymentMethod;
-    amount: number;
-    tip_amount: number;
-    total_amount: number;
-    status: PaymentStatus;
-    card_type: string | null;
-    card_last_four: string | null;
-    auth_code: string | null;
-    authorization_code: string | null;
-    terminal_type: string | null;
-    terminal_id: string | null;
-    batch_number: string | null;
-    dejavoo_batch_number: string | null;
-    dejavoo_invoice_number: string | null;
-    psp_reference: string | null;
-    transaction_id: string | null;
-    captured_at: string | null;
-    authorized_at: string | null;
-    approved_at: string | null;
-    created_at: string;
-    processed_by_name: string | null;
-    amount_tendered: number | null;
-    change_given: number | null;
-    voided_at: string | null;
-    voided_by_name: string | null;
-    voided_by: string | null;
-    void_reason: string | null;
-    tip_adjusted_at: string | null;
-    original_tip_amount: number | null;
-    tip_adjusted_by_name: string | null;
-    subtotal_portion?: number | null;
-    tax_portion?: number | null;
-    dual_pricing_fee?: number | null;
-    tip_fee?: number | null;
-    refunded_dual_pricing_fee?: number | null;
-    refunded_tip_fee?: number | null;
-    original_tip_fee?: number | null;
-    dual_pricing_percentage_snapshot?: number | null;
-    tip_surcharge_percentage_snapshot?: number | null;
-    result_code: string | null;
-    response_message: string | null;
-    split_count: number | null;
-    split_portion_index: number | null;
-    covers_items: string[] | null;
-    payment_items: Array<{
-      item_name: string;
-      quantity_paid: number;
-      subtotal_paid: number;
-      tax_paid: number | null;
-    }> | null;
-    events: Array<{
-      event_type: string;
-      timestamp: string;
-      previous_status: string | null;
-      new_status: string | null;
-      amount: number | null;
-      tip_amount?: number | null;
-      auth_code: string | null;
-      result_code: string | null;
-      response_message: string | null;
-      reason: string | null;
-      terminal_id: string | null;
-      staff_name: string | null;
-    }>;
-  }>;
-
-  reversals: Array<{
-    id: string;
-    reversal_type: string;
-    amount: number;
-    status: string;
-    reason_code: string | null;
-    reason_description: string | null;
-    requested_at: string;
-    completed_at: string | null;
-    initiated_by_name: string | null;
-    approved_by_name: string | null;
-    reversal_reference_id: string;
-    original_payment_method: string;
-    original_card_last_four: string | null;
-    result_code: string | null;
-    response_message: string | null;
-    refund_items: Array<{
-      order_item_id: string;
-      item_name: string;
-      quantity_refunded: number;
-      amount: number;
-      tax_refunded: number | null;
-      reason: string | null;
-      returned_to_inventory: boolean;
-    }>;
-  }>;
-
-  discounts: Array<{
-    discount_name: string;
-    discount_amount: number;
-    applied_at: string;
-    applied_by_name: string | null;
-    voided: boolean;
-    voided_at: string | null;
-    target: "order" | "item";
-    target_item_name: string | null;
-  }>;
-
-  chargebacks: Array<{
-    id: string;
-    amount: number;
-    reason_code: string;
-    reason_description: string | null;
-    status: string;
-    received_at: string;
-    defense_deadline: string | null;
-    resolution: string | null;
-    resolved_at: string | null;
-  }>;
-
-  timeline: OrderFullHistoryTimelineEvent[];
+  order: OrderFullHistoryHeader;
+  items: OrderFullHistoryItem[];
+  payments: OrderFullHistoryPayment[];
+  reversals: OrderFullHistoryReversal[];
+  discounts: OrderFullHistoryDiscount[];
+  chargebacks: OrderFullHistoryChargeback[];
+  timeline: OrderFullHistoryTimeline[];
 }
-

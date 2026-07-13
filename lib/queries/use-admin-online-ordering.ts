@@ -99,6 +99,7 @@ export interface OnlineOrderingSettings {
   storeSlug: string
   description?: string
   storeUrl?: string
+  customDomain?: string | null
   phone: string
   email: string
   address: string
@@ -140,7 +141,9 @@ export interface OnlineOrderingSettings {
   acceptCardOnDelivery?: boolean
   nmiTokenizationKey?: string
   nmiPrivateApiKey?: string
+  nmiWebhookSecret?: string
   nmiConfigured?: boolean
+  nmiWebhookConfigured?: boolean
   tippingEnabled?: boolean
   tipConfig?: TipConfig
   baseDeliveryFee?: number

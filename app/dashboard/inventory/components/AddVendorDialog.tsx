@@ -20,7 +20,7 @@ import { Truck, Loader2, Globe, MapPin } from "lucide-react";
 import { useCreateVendor } from "../hooks/useInventoryManagement";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { isValidPhone, normalizePhone } from "@/lib/phone";
-import { useLocationStore, useSelectedLocation } from "@/stores/location-store";
+import { useLocationStore, useSelectedLocation, useIsSingleLocation } from "@/stores/location-store";
 
 const formSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
@@ -44,6 +44,7 @@ export function AddVendorDialog({ open, onOpenChange }: AddVendorDialogProps) {
   const createVendor = useCreateVendor();
   const { selectedLocationId } = useLocationStore();
   const selectedLocation = useSelectedLocation();
+  const isSingleLocation = useIsSingleLocation();
 
   // Determine if we're in global or location view
   const isGlobalView = selectedLocationId === "all" || !selectedLocationId;
@@ -66,7 +67,7 @@ export function AddVendorDialog({ open, onOpenChange }: AddVendorDialogProps) {
     await createVendor.mutateAsync({
       name: values.name,
       contact_name: values.contact_name || undefined,
-      phone: normalizePhone(values.phone) ?? values.phone || undefined,
+      phone: (normalizePhone(values.phone) ?? values.phone) || undefined,
       email: values.email || undefined,
       address_line1: values.address_line1 || undefined,
       city: values.city || undefined,
@@ -98,8 +99,9 @@ export function AddVendorDialog({ open, onOpenChange }: AddVendorDialogProps) {
                 Add a new supplier to your vendor list
               </DialogDescription>
             </div>
-            {/* Scope badge - show where this vendor will be created */}
-            {isGlobalView ? (
+            {/* Scope badge - show where this vendor will be created.
+                Hidden for single-location accounts (always global). */}
+            {isSingleLocation ? null : isGlobalView ? (
               <Badge
                 variant="outline"
                 className="gap-1 text-emerald-600 border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30"
@@ -117,21 +119,23 @@ export function AddVendorDialog({ open, onOpenChange }: AddVendorDialogProps) {
         </DialogHeader>
 
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 mt-4">
-          {/* Info banner explaining scope */}
-          <div className="p-3 rounded-lg bg-muted/50 border text-sm text-muted-foreground">
-            {isGlobalView ? (
-              <>
-                <Globe className="h-4 w-4 inline mr-2 text-emerald-600" />
-                This vendor will be available to <strong>all locations</strong>.
-              </>
-            ) : (
-              <>
-                <MapPin className="h-4 w-4 inline mr-2" />
-                This vendor will only be available at{" "}
-                <strong>{selectedLocation?.name}</strong>.
-              </>
-            )}
-          </div>
+          {/* Info banner explaining scope — hidden for single-location accounts. */}
+          {!isSingleLocation && (
+            <div className="p-3 rounded-lg bg-muted/50 border text-sm text-muted-foreground">
+              {isGlobalView ? (
+                <>
+                  <Globe className="h-4 w-4 inline mr-2 text-emerald-600" />
+                  This vendor will be available to <strong>all locations</strong>.
+                </>
+              ) : (
+                <>
+                  <MapPin className="h-4 w-4 inline mr-2" />
+                  This vendor will only be available at{" "}
+                  <strong>{selectedLocation?.name}</strong>.
+                </>
+              )}
+            </div>
+          )}
 
           {/* Name */}
           <div className="space-y-2">

@@ -40,10 +40,12 @@ import {
   extractConnectedPlatforms,
   formatRelativeTime,
 } from "@/lib/orderout/helpers";
+import { getChannelLabel, getChannelLogo } from "@/lib/orderout/platform";
 import { PushChannelsRowAction } from "./PushChannelsRowAction";
 import { PushChannelsCard } from "./PushChannelsCard";
 import { PushChannelsHistoryCard } from "./PushChannelsHistoryCard";
 import { ChannelSelfConfirmCard } from "./ChannelSelfConfirmCard";
+import { TestOrderCard } from "./TestOrderCard";
 
 // ============================================================================
 // Types
@@ -67,14 +69,9 @@ interface OrderOutTabProps {
 
 const KNOWN_PLATFORMS = ["UberEats", "DoorDash", "GrubHub"] as const;
 
-const PLATFORM_LOGOS: Record<string, string> = {
-  ubereats: "/uber-eats.png",
-  doordash: "/doordash.png",
-  grubhub: "/grubhub.png",
-};
-
+// Logo comes from the single platform vocabulary (lib/orderout/platform.ts).
 function PlatformLogo({ platform, className = "h-6 w-6" }: { platform: string; className?: string }) {
-  const src = PLATFORM_LOGOS[platform.toLowerCase()];
+  const src = getChannelLogo(platform);
   if (!src) return <UtensilsCrossed className={`${className} text-muted-foreground`} />;
   return <Image src={src} alt={platform} width={24} height={24} className={`${className} object-contain`} />;
 }
@@ -136,7 +133,6 @@ export function OrderOutTab({
 }: OrderOutTabProps) {
   const { data: syncedMenusData } = useOrderOutSyncedMenus(clerkOrgId, locationId);
   const { data: recentOrdersData } = useRecentOrderOutOrders(clerkOrgId, locationId);
-  console.log(orderOutStatus)
   const syncedMenus = syncedMenusData?.data || [];
   const recentOrders = recentOrdersData?.data || [];
 
@@ -151,7 +147,6 @@ export function OrderOutTab({
   const channels = Array.from(new Set([...verified, ...confirmed]));
 
   const isOnboarded = !!orderOutStatus?.hasRestaurant;
-  console.log(isOnboarded)
   const dashboardUrl = orderOutStatus?.dashboardUrl || "https://dashboard.orderout.co";
 
   // Determine setup progress
@@ -243,14 +238,14 @@ export function OrderOutTab({
       {/* A. Setup Progress */}
       {allSetupDone ? (
         <Card className="border-green-200 dark:border-green-900 bg-green-50/50 dark:bg-green-950/20">
-          <CardContent className="flex items-center justify-between py-4">
+          <CardContent className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 py-4">
             <div className="flex items-center gap-3">
-              <CheckCircle2 className="h-5 w-5 text-green-600" />
+              <CheckCircle2 className="h-5 w-5 text-green-600 shrink-0" />
               <span className="text-sm font-medium text-green-700 dark:text-green-400">
                 All set! Your location is connected to delivery platforms.
               </span>
             </div>
-            <Button variant="outline" size="sm" asChild>
+            <Button variant="outline" size="sm" asChild className="shrink-0 self-start sm:self-auto">
               <a href={dashboardUrl} target="_blank" rel="noopener noreferrer">
                 Open Dashboard
                 <ExternalLink className="h-3 w-3 ml-1" />
@@ -295,12 +290,12 @@ export function OrderOutTab({
       {/* B. Connected Channels */}
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <CardTitle className="text-base">Connected Channels</CardTitle>
               <CardDescription>Delivery platforms linked to this location</CardDescription>
             </div>
-            <Button variant="outline" size="sm" asChild>
+            <Button variant="outline" size="sm" asChild className="shrink-0 self-start">
               <a href={dashboardUrl} target="_blank" rel="noopener noreferrer">
                 Manage
                 <ExternalLink className="h-3 w-3 ml-1" />
@@ -323,27 +318,27 @@ export function OrderOutTab({
               return (
                 <div
                   key={platform}
-                  className={`flex items-center gap-3 rounded-lg border p-3 ${
+                  className={`flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border p-3 ${
                     isActive ? style.bg : "bg-muted/30"
                   }`}
                 >
-                  <PlatformLogo platform={platform} className={`h-6 w-6 ${!isActive ? "opacity-40 grayscale" : ""}`} />
-                  <div className="flex-1 min-w-0">
-                    <p className={`text-sm font-medium ${isActive ? "" : "text-muted-foreground"}`}>
-                      {platform}
-                    </p>
-                  </div>
+                  <PlatformLogo platform={platform} className={`h-6 w-6 shrink-0 ${!isActive ? "opacity-40 grayscale" : ""}`} />
+                  <p className={`text-sm font-medium shrink-0 ${isActive ? "" : "text-muted-foreground"}`}>
+                    {getChannelLabel(platform)}
+                  </p>
+                  {/* Spacer keeps status right-aligned, lets it wrap below on ≤320px. */}
+                  <span className="flex-1" />
                   {isVerified ? (
-                    <Badge variant="default" className="bg-green-600 text-xs">Connected</Badge>
+                    <Badge variant="default" className="bg-green-600 text-xs shrink-0">Connected</Badge>
                   ) : isSelfConfirmed ? (
                     <Badge
                       variant="outline"
-                      className="text-xs border-amber-500 text-amber-700 dark:text-amber-400"
+                      className="text-xs border-amber-500 text-amber-700 dark:text-amber-400 shrink-0"
                     >
                       Self-confirmed
                     </Badge>
                   ) : (
-                    <span className="text-xs text-muted-foreground">Not Connected</span>
+                    <span className="text-xs text-muted-foreground shrink-0">Not Connected</span>
                   )}
                 </div>
               );
@@ -359,16 +354,17 @@ export function OrderOutTab({
               return (
                 <div
                   key={channel}
-                  className="flex items-center gap-3 rounded-lg border p-3 mt-3 bg-blue-50 dark:bg-blue-950/20"
+                  className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border p-3 mt-3 bg-blue-50 dark:bg-blue-950/20"
                 >
-                  <Plug className="h-5 w-5 text-blue-600" />
-                  <p className="text-sm font-medium flex-1">{channel}</p>
+                  <Plug className="h-5 w-5 text-blue-600 shrink-0" />
+                  <p className="text-sm font-medium shrink-0">{channel}</p>
+                  <span className="flex-1" />
                   {isVerified ? (
-                    <Badge variant="default" className="bg-green-600 text-xs">Connected</Badge>
+                    <Badge variant="default" className="bg-green-600 text-xs shrink-0">Connected</Badge>
                   ) : (
                     <Badge
                       variant="outline"
-                      className="text-xs border-amber-500 text-amber-700 dark:text-amber-400"
+                      className="text-xs border-amber-500 text-amber-700 dark:text-amber-400 shrink-0"
                     >
                       Self-confirmed
                     </Badge>
@@ -518,6 +514,11 @@ export function OrderOutTab({
           )}
         </CardContent>
       </Card>
+
+      {/* E. DEV-only: synthetic OrderOut webhook tester */}
+      {process.env.NODE_ENV === "development" && (
+        <TestOrderCard locationId={locationId} hasRestaurant={hasRestaurant} />
+      )}
     </div>
   );
 }
@@ -540,14 +541,14 @@ function SetupStep({
   actionUrl?: string;
 }) {
   return (
-    <div className="flex items-center justify-between">
-      <div className="flex items-center gap-3">
+    <div className="flex items-center justify-between gap-2 flex-wrap">
+      <div className="flex items-center gap-3 min-w-0">
         {completed ? (
           <CheckCircle2 className="h-5 w-5 text-green-500 shrink-0" />
         ) : (
           <Circle className="h-5 w-5 text-muted-foreground shrink-0" />
         )}
-        <div>
+        <div className="min-w-0">
           <span className={completed ? "text-foreground" : "text-muted-foreground"}>
             {label}
           </span>
@@ -557,7 +558,7 @@ function SetupStep({
         </div>
       </div>
       {actionUrl && !completed && (
-        <Button variant="ghost" size="sm" asChild>
+        <Button variant="ghost" size="sm" asChild className="shrink-0">
           <a href={actionUrl} target="_blank" rel="noopener noreferrer">
             {actionLabel || "Open"}
             <ExternalLink className="h-3 w-3 ml-1" />

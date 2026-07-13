@@ -34,6 +34,7 @@ import {
   formatRelativeTime,
   normalizeDeliveryChannels,
 } from "@/lib/orderout/helpers";
+import { getChannelLabel, getChannelLogo } from "@/lib/orderout/platform";
 import { useSetOrderOutChannelsConfirmed } from "@/app/dashboard/online-ordering/hooks/useOrderOutStatus";
 
 interface ChannelSelfConfirmCardProps {
@@ -45,14 +46,11 @@ interface ChannelSelfConfirmCardProps {
   confirmedAt: string | null;
 }
 
-const PLATFORM_LOGOS: Record<string, string> = {
-  UBEREATS: "/uber-eats.png",
-  DOORDASH: "/doordash.png",
-  GRUBHUB: "/grubhub.png",
-};
-
+// Label + logo come from the single platform vocabulary in
+// lib/orderout/platform.ts (shared with the Online Ordering report). Only the
+// Tailwind color styling below stays local to this config card.
 function PlatformLogo({ channel, active }: { channel: string; active: boolean }) {
-  const src = PLATFORM_LOGOS[channel];
+  const src = getChannelLogo(channel);
   if (!src) return <UtensilsCrossed className={`h-5 w-5 ${active ? "" : "text-muted-foreground"}`} />;
   return (
     <Image
@@ -66,16 +64,7 @@ function PlatformLogo({ channel, active }: { channel: string; active: boolean })
 }
 
 function platformLabel(channel: string): string {
-  switch (channel) {
-    case "UBEREATS":
-      return "UberEats";
-    case "DOORDASH":
-      return "DoorDash";
-    case "GRUBHUB":
-      return "GrubHub";
-    default:
-      return channel;
-  }
+  return getChannelLabel(channel);
 }
 
 function platformStyle(channel: string): { color: string; bg: string } {
@@ -157,7 +146,7 @@ export function ChannelSelfConfirmCard({
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
           <div>
             <CardTitle className="text-base flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4" />
@@ -169,7 +158,7 @@ export function ChannelSelfConfirmCard({
               push menus to them.
             </CardDescription>
           </div>
-          <Button variant="outline" size="sm" asChild>
+          <Button variant="outline" size="sm" asChild className="shrink-0 self-start">
             <a href={dashboardUrl} target="_blank" rel="noopener noreferrer">
               Open OrderOut
               <ExternalLink className="h-3 w-3 ml-1" />
@@ -190,7 +179,7 @@ export function ChannelSelfConfirmCard({
               <label
                 key={channel}
                 htmlFor={inputId}
-                className={`flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors ${
+                className={`flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border p-3 cursor-pointer transition-colors ${
                   checked ? style.bg : "bg-muted/20 hover:bg-muted/30"
                 }`}
               >
@@ -199,22 +188,26 @@ export function ChannelSelfConfirmCard({
                   checked={checked}
                   onCheckedChange={() => toggle(channel)}
                   disabled={mutation.isPending}
+                  className="shrink-0"
                 />
                 <PlatformLogo channel={channel} active={checked} />
-                <span className="text-sm font-medium flex-1">
+                <span className="text-sm font-medium shrink-0">
                   {platformLabel(channel)}
                 </span>
+                {/* Spacer: keeps the badge right-aligned on wide rows, and lets
+                    it wrap below the name on narrow (≤320px) rows. */}
+                <span className="flex-1" />
                 {isVerified ? (
                   <Badge
                     variant="default"
-                    className="bg-green-600 text-xs"
+                    className="bg-green-600 text-xs shrink-0"
                   >
-                    Verified by webhook
+                    Verified
                   </Badge>
                 ) : isServerConfirmed ? (
                   <Badge
                     variant="outline"
-                    className="text-xs border-amber-500 text-amber-700 dark:text-amber-400"
+                    className="text-xs border-amber-500 text-amber-700 dark:text-amber-400 shrink-0"
                   >
                     Awaiting verification
                   </Badge>

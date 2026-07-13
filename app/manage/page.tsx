@@ -21,11 +21,11 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState('dashboard')
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-white to-blue-50/30 p-6 space-y-8">
+    <div className="min-h-screen bg-gradient-to-b from-white to-blue-50/30 dark:from-background dark:to-background p-6 space-y-8 min-w-0 overflow-x-hidden">
       {/* Header with action button */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="space-y-1">
-          <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-br from-slate-900 to-blue-900 bg-clip-text text-transparent">
+          <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-br from-slate-900 to-blue-900 dark:from-slate-100 dark:to-blue-300 bg-clip-text text-transparent">
             Mission Control
           </h1>
           <p className="text-sm text-muted-foreground/80">
@@ -35,7 +35,7 @@ export default function Dashboard() {
         <Button
           size="sm"
           onClick={() => setIsAdminInviteOpen(true)}
-          className="shadow-sm hover:shadow-md transition-all duration-200"
+          className="shadow-sm hover:shadow-md transition-all duration-200 self-start sm:self-auto"
         >
           <UserPlus2 className="h-4 w-4 mr-2" />
           Invite Admin
@@ -44,7 +44,7 @@ export default function Dashboard() {
 
       {/* Tab Navigation */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="inline-flex h-auto p-1 bg-white/80 backdrop-blur-sm border border-blue-100/50 shadow-sm rounded-xl">
+        <TabsList className="inline-flex h-auto p-1 bg-white/80 dark:bg-card/80 backdrop-blur-sm border border-blue-100/50 dark:border-border shadow-sm rounded-xl">
           <TabsTrigger
             value="dashboard"
             className="gap-2 px-4 py-2.5 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md transition-all duration-200"

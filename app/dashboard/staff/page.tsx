@@ -119,9 +119,9 @@ export default function MerchantStaffPage() {
   return (
     <main className="space-y-6 animate-in fade-in duration-500">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="space-y-1">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-2xl font-bold tracking-tight">
               Staff & Access
             </h1>
@@ -141,7 +141,7 @@ export default function MerchantStaffPage() {
             Manage dashboard users and POS staff with location-specific access
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-shrink-0">
           <Button variant="outline" asChild>
             <Link href="/dashboard/staff/timesheets">
               <Clock className="mr-2 h-4 w-4" />
@@ -162,7 +162,7 @@ export default function MerchantStaffPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
         <Card className="transition-all hover:shadow-md">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Staff</CardTitle>

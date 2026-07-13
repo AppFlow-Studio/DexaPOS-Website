@@ -48,6 +48,7 @@ import {
 import { ItemPreviewCard } from "./ItemPreviewCard";
 import {
   ChevronDown,
+  ChevronUp,
   ChevronRight,
   DollarSign,
   Tag,
@@ -65,6 +66,7 @@ import {
   Plus,
   X,
   Grip,
+  GripVertical,
   Search,
   Loader2,
   Flame,
@@ -80,6 +82,7 @@ import {
   UpdateMenuItem,
   CreateMenuItem,
   ResetMenuItemToGlobal,
+  ReorderMenuItemModifierGroups,
 } from "@/app/dashboard/actions/menu-items";
 import { AddItemToCategory, RemoveItemFromCategory } from "@/app/dashboard/actions/item-assignments";
 import {
@@ -87,7 +90,27 @@ import {
   ModifierGroupsModel,
   ModifierGroupItemsModel,
 } from "@/types/db-modles";
-import { useLocationStore, useIsAllLocations } from "@/stores/location-store";
+import {
+  useLocationStore,
+  useIsAllLocations,
+  useGatedLocationId,
+} from "@/stores/location-store";
+import {
+  DndContext,
+  closestCenter,
+  MouseSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS as DndCSS } from "@dnd-kit/utilities";
 import ModifierItemRow, { ExtendedModifierItem } from "./ModifierItemRow";
 import { LocationLibraryItem, ModifierGroup, ModifierItem } from "@/types/menu";
 import {
@@ -660,6 +683,21 @@ interface ModifierGroupSearchListProps {
   onSelect: (groupId: string) => void;
 }
 
+function SortableModifierGroupRow({ id, children }: { id: string; children: React.ReactNode }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ transform: DndCSS.Transform.toString(transform), transition }}
+      className={isDragging ? "opacity-50 z-50" : undefined}
+      {...attributes}
+      {...listeners}
+    >
+      {children}
+    </div>
+  );
+}
+
 function ModifierGroupSearchList({
   availableGroups,
   onSelect,
@@ -781,25 +819,17 @@ export function NewEditItemFormSheet({
 }: NewEditItemFormSheetProps) {
   const queryClient = useQueryClient();
 
-  // Dev warning: if the new edit page is enabled, callers should route to it.
-  React.useEffect(() => {
-    if (
-      mode === "full" &&
-      open &&
-      process.env.NEXT_PUBLIC_NEW_ITEM_EDIT === "true" &&
-      process.env.NODE_ENV !== "production"
-    ) {
-      // eslint-disable-next-line no-console
-      console.warn(
-        "[NewEditItemFormSheet] Full-mode sheet opened while NEXT_PUBLIC_NEW_ITEM_EDIT=true. Prefer routing to /dashboard/menu/items/[itemId]/edit.",
-      );
-    }
-  }, [mode, open]);
   const { data: userInfo } = useUserInfo();
   const merchantId =
     userInfo?.members?.[0]?.organizations?.merchants?.id || "";
   const { selectedLocationId, locations } = useLocationStore();
   const isAllLocations = useIsAllLocations();
+  // Single-location accounts edit menu/item price/availability/structure in
+  // CORE ('all') scope — that stays untouched. But genuinely location-only
+  // features (prep-station Kitchen Routing, Popular/New badges) target the one
+  // physical location, so resolve a concrete id via the gated resolver for
+  // those pieces ONLY. Null for multi-location on 'all'.
+  const gatedLocationId = useGatedLocationId();
   const { pricingStrategy: effectivePricingStrategy, dualPricingPercentage: effectiveDualPercentage } = useEffectivePricing();
 
   // Tax rates for current location
@@ -807,36 +837,35 @@ export function NewEditItemFormSheet({
   const taxRates = taxRatesData?.data || [];
 
   // Prep stations for current location (KDS routing)
-  const { data: prepStations = [] } = usePrepStations(
-    isAllLocations ? null : selectedLocationId,
-  );
-  const { data: categoryPrepDefaults = [] } = useCategoryPrepDefaults(
-    isAllLocations ? null : selectedLocationId,
-  );
+  const { data: prepStations = [] } = usePrepStations(gatedLocationId);
+  const { data: categoryPrepDefaults = [] } =
+    useCategoryPrepDefaults(gatedLocationId);
 
-  // Popular / New badge toggles (location-scoped, edit-only)
+  // Popular / New badge toggles (location-only, edit-only). Use the gated
+  // location so single-location accounts (locked to 'all') still toggle badges
+  // against their one location instead of being disabled.
   const { data: isPopular = false } = useQuery({
-    queryKey: ["item-popular", editItem?.id, selectedLocationId],
-    queryFn: () => GetItemIsPopular(editItem!.id, selectedLocationId!),
-    enabled: !!editItem?.id && !isAllLocations && !!selectedLocationId,
+    queryKey: ["item-popular", editItem?.id, gatedLocationId],
+    queryFn: () => GetItemIsPopular(editItem!.id, gatedLocationId!),
+    enabled: !!editItem?.id && !!gatedLocationId,
   });
   const popularMutation = useMutation({
-    mutationFn: (value: boolean) => SetItemPopular(editItem!.id, selectedLocationId!, value),
+    mutationFn: (value: boolean) => SetItemPopular(editItem!.id, gatedLocationId!, value),
     onSuccess: (_, value) => {
-      queryClient.setQueryData(["item-popular", editItem?.id, selectedLocationId], value);
+      queryClient.setQueryData(["item-popular", editItem?.id, gatedLocationId], value);
       toast.success(value ? "Marked as Popular" : "Removed Popular badge");
     },
     onError: () => toast.error("Failed to update popular flag"),
   });
   const { data: isNew = false } = useQuery({
-    queryKey: ["item-new", editItem?.id, selectedLocationId],
-    queryFn: () => GetItemIsNew(editItem!.id, selectedLocationId!),
-    enabled: !!editItem?.id && !isAllLocations && !!selectedLocationId,
+    queryKey: ["item-new", editItem?.id, gatedLocationId],
+    queryFn: () => GetItemIsNew(editItem!.id, gatedLocationId!),
+    enabled: !!editItem?.id && !!gatedLocationId,
   });
   const newMutation = useMutation({
-    mutationFn: (value: boolean) => SetItemNew(editItem!.id, selectedLocationId!, value),
+    mutationFn: (value: boolean) => SetItemNew(editItem!.id, gatedLocationId!, value),
     onSuccess: (_, value) => {
-      queryClient.setQueryData(["item-new", editItem?.id, selectedLocationId], value);
+      queryClient.setQueryData(["item-new", editItem?.id, gatedLocationId], value);
       toast.success(value ? "Marked as New" : "Removed New badge");
     },
     onError: () => toast.error("Failed to update new flag"),
@@ -930,16 +959,23 @@ export function NewEditItemFormSheet({
 
   // Merchant-facing scope for AffectsTag / headers / banners.
   // Kept separate from editingContext (which still carries table routing info).
+  // Library + specific location (no menu, no category) is technically level 1 routing
+  // but writes to location_item_overrides — show it as location-scoped (level 3) in UI.
   const scopeCtx = React.useMemo<ScopeContext>(
-    () => ({
-      level: editingContext.level as CascadeLevel,
-      locationName: isAllLocations ? null : currentLocationName,
-      categoryName: categoryName ?? null,
-      menuName: menuName ?? null,
-    }),
+    () => {
+      const isLibraryLocationScope = !isAllLocations && !menuId && !categoryId;
+      return {
+        level: (isLibraryLocationScope ? 3 : editingContext.level) as CascadeLevel,
+        locationName: isAllLocations ? null : currentLocationName,
+        categoryName: categoryName ?? null,
+        menuName: menuName ?? null,
+      };
+    },
     [
       editingContext.level,
       isAllLocations,
+      menuId,
+      categoryId,
       currentLocationName,
       categoryName,
       menuName,
@@ -1208,6 +1244,65 @@ export function NewEditItemFormSheet({
     );
   };
 
+  const modifierDndSensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 5 } }),
+  );
+
+  const handleModifierDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    if (!editItem) return;
+
+    const reordered = (() => {
+      const oldIndex = selectedModifiers.indexOf(active.id as string);
+      const newIndex = selectedModifiers.indexOf(over.id as string);
+      if (oldIndex === -1 || newIndex === -1) return null;
+      return arrayMove(selectedModifiers, oldIndex, newIndex);
+    })();
+    if (!reordered) return;
+
+    // Update UI immediately (optimistic)
+    setSelectedModifiers(reordered);
+
+    // Call the RPC directly — this writes only menu_item_modifier_groups.display_order
+    // for this specific item, never touching library order or other items
+    const locationId = isAllLocations ? null : (selectedLocationId ?? null);
+    const result = await ReorderMenuItemModifierGroups(
+      editItem.id,
+      reordered.map((groupId, idx) => ({ modifierGroupId: groupId, displayOrder: idx + 1 })),
+      locationId,
+    );
+    if (result.error) {
+      toast.error("Failed to save modifier order", { description: result.error });
+      // Rollback
+      setSelectedModifiers(selectedModifiers);
+    }
+  };
+
+  const moveSelectedModifier = (modifierId: string, direction: "up" | "down") => {
+    if (!canManageModifierLinks) return;
+
+    setSelectedModifiers((prev) => {
+      const currentIndex = prev.indexOf(modifierId);
+      if (currentIndex === -1) return prev;
+
+      const targetIndex =
+        direction === "up" ? currentIndex - 1 : currentIndex + 1;
+
+      if (targetIndex < 0 || targetIndex >= prev.length) {
+        return prev;
+      }
+
+      const next = [...prev];
+      [next[currentIndex], next[targetIndex]] = [
+        next[targetIndex],
+        next[currentIndex],
+      ];
+      return next;
+    });
+  };
+
   const toggleAllergen = (allergen: string) => {
     const current = form.getValues("allergens");
     if (current.includes(allergen)) {
@@ -1332,9 +1427,12 @@ export function NewEditItemFormSheet({
           updateParams.availableChannels = values.available_channels;
         }
 
-        // Prep Station — only include when a location is selected (location-only field)
-        if (!isAllLocations && values.prep_station_id !== undefined) {
+        // Prep Station — location-only field. Include whenever a concrete
+        // location resolves (specific location OR single-location account in
+        // core scope) and route the override there via prepStationLocationId.
+        if (gatedLocationId && values.prep_station_id !== undefined) {
           updateParams.prepStationId = values.prep_station_id;
+          updateParams.prepStationLocationId = gatedLocationId;
         }
 
         // Modifier groups are structure updates; only include when allowed
@@ -1432,12 +1530,16 @@ export function NewEditItemFormSheet({
       // Success message based on context
       const itemName = values.name;
       const contextName = menuName || categoryName || "menu";
+      // Level 1 from Library + specific location still writes to location_item_overrides
+      const isLocationScopedSave = !isAllLocations && !!selectedLocationId;
       const levelMessages: Record<number, string> = {
-        1: `"${itemName}" updated globally`,
-        2: `"${itemName}" category pricing updated for "${contextName}"`,
-        3: `"${itemName}" branch category pricing updated at ${currentLocationName}`,
-        4: `"${itemName}" menu category pricing updated for "${menuName || contextName}"`,
-        5: `"${itemName}" branch menu pricing updated at ${currentLocationName}`,
+        1: isLocationScopedSave
+          ? `"${itemName}" updated for branch "${currentLocationName}"`
+          : `"${itemName}" updated — affects all branches`,
+        2: `"${itemName}" category pricing updated for "${contextName}" — affects all branches`,
+        3: `"${itemName}" updated for branch "${currentLocationName}"`,
+        4: `"${itemName}" menu category pricing updated for "${menuName || contextName}" — affects all branches`,
+        5: `"${itemName}" updated for branch "${currentLocationName}"`,
       };
 
       toast.success(editItem ? "Item Updated" : "Item Created", {
@@ -1604,7 +1706,7 @@ export function NewEditItemFormSheet({
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && handleClose()}>
       <DialogContent
         overlayClassName="bg-slate-950/40 backdrop-blur-md"
-        className="w-full max-w-[calc(100vw-1rem)] gap-0 overflow-hidden rounded-[28px] border border-slate-200/80 bg-background/95 p-0 shadow-[0_30px_100px_rgba(15,23,42,0.26)] sm:max-w-5xl xl:max-w-6xl"
+        className="w-full max-w-[calc(100vw-1rem)] gap-0 overflow-x-hidden overflow-y-auto max-h-[92vh] rounded-[28px] border border-slate-200/80 bg-background/95 p-0 shadow-[0_30px_100px_rgba(15,23,42,0.26)] sm:max-w-5xl xl:max-w-6xl"
       >
         <Form {...form}>
           <form
@@ -1640,9 +1742,9 @@ export function NewEditItemFormSheet({
                     : "Please review the highlighted fields and try again.",
               });
             })}
-            className="flex max-h-[min(92vh,960px)] flex-col"
+            className="flex flex-col min-w-0"
           >
-        <DialogHeader className="border-b border-border/70 bg-background/95 px-6 py-5 pr-14 text-left sm:text-left">
+        <DialogHeader className="sticky top-0 z-10 border-b border-border/70 bg-background/95 px-4 sm:px-6 py-5 pr-14 text-left sm:text-left">
           <DialogTitle className="flex items-center gap-2 text-[1.625rem] font-semibold tracking-tight">
             <Sparkles className="h-5 w-5 text-primary animate-pulse" />
             {editItem ? "Edit Menu Item" : "Create New Menu Item"}
@@ -1716,9 +1818,9 @@ export function NewEditItemFormSheet({
           </div></DialogDescription>
         </DialogHeader>
 
-          <div className="min-h-0 flex flex-1 flex-col overflow-hidden lg:flex-row">
+          <div className="flex flex-col lg:flex-row w-full min-w-0">
             {/* Form Section */}
-            <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5 space-y-4">
+            <div className="flex-1 px-4 sm:px-6 py-5 space-y-4 min-w-0 overflow-x-hidden">
               {/* Editing Context Banner - Shows which level user is editing */}
               {editItem && editingContext.level > 1 && (
                 <EditingContextBanner
@@ -2057,16 +2159,22 @@ export function NewEditItemFormSheet({
                       <CollapsibleContent className="space-y-4 pt-4">
 
                       {/* Modifier Info */}
-                      <p className="text-xs text-muted-foreground flex items-center gap-1.5 px-1">
-                        <Info className="h-3 w-3 shrink-0" />
-                        Add or remove groups here. Edit individual options in the{" "}
-                        <Link
-                          href="/dashboard/menu/modifiers"
-                          className="font-medium underline underline-offset-2 hover:text-primary"
-                        >
-                          Modifiers page
-                        </Link>.
-                      </p>
+                      <div className="space-y-1.5 px-1">
+                        <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                          <Info className="h-3 w-3 shrink-0" />
+                          Add or remove groups here. Edit individual options in the{" "}
+                          <Link
+                            href="/dashboard/menu/modifiers"
+                            className="font-medium underline underline-offset-2 hover:text-primary"
+                          >
+                            Modifiers page
+                          </Link>.
+                        </p>
+                        <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                          <GripVertical className="h-3 w-3 shrink-0" />
+                          Drag to reorder — order is saved per-item and does not affect other items or the library.
+                        </p>
+                      </div>
                       {(() => {
                         // Build selected groups with enriched data from editItem (has location-specific overrides)
                         const isItemLocationOwned =
@@ -2153,6 +2261,15 @@ export function NewEditItemFormSheet({
                                 </p>
                               </div>
                             ) : (
+                              <DndContext
+                                sensors={modifierDndSensors}
+                                collisionDetection={closestCenter}
+                                onDragEnd={handleModifierDragEnd}
+                              >
+                              <SortableContext
+                                items={selectedGroups.map((g: any) => g.id)}
+                                strategy={verticalListSortingStrategy}
+                              >
                               <div className="space-y-2">
                                 {selectedGroups.map(
                                   (group: any, index: number) => {
@@ -2167,16 +2284,13 @@ export function NewEditItemFormSheet({
                                       !isLocationOwnedGroup;
 
                                     return (
+                                      <SortableModifierGroupRow key={group.id} id={group.id}>
                                       <div
-                                        key={group.id}
-                                        className="rounded-lg border border-primary/30 bg-primary/5 overflow-hidden animate-in fade-in slide-in-from-top-2"
-                                        style={{
-                                          animationDelay: `${index * 50}ms`,
-                                        }}
+                                        className="rounded-lg border border-primary/30 bg-primary/5 overflow-hidden"
                                       >
                                         <div className="p-3 flex items-center gap-3">
-                                          {/* Drag Handle (visual only for now) */}
-                                          <div className="text-muted-foreground/50">
+                                          {/* Drag Handle */}
+                                          <div className="text-muted-foreground/50 cursor-grab active:cursor-grabbing">
                                             <Grip className="h-4 w-4" />
                                           </div>
 
@@ -2222,19 +2336,57 @@ export function NewEditItemFormSheet({
                                             </div>
                                           </div>
 
-                                          {/* Remove Button (respect permissions) */}
+                                          {/* Reorder / Remove Controls */}
                                           {canManageModifierLinks && (
-                                            <Button
-                                              type="button"
-                                              variant="ghost"
-                                              size="icon"
-                                              className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                                              onClick={() =>
-                                                toggleModifier(group.id)
-                                              }
-                                            >
-                                              <X className="h-4 w-4" />
-                                            </Button>
+                                            <div className="flex items-center gap-1">
+                                              <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-7 w-7 text-muted-foreground"
+                                                onClick={() =>
+                                                  moveSelectedModifier(
+                                                    group.id,
+                                                    "up",
+                                                  )
+                                                }
+                                                disabled={index === 0}
+                                                aria-label={`Move ${group.name} up`}
+                                              >
+                                                <ChevronUp className="h-4 w-4" />
+                                              </Button>
+                                              <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-7 w-7 text-muted-foreground"
+                                                onClick={() =>
+                                                  moveSelectedModifier(
+                                                    group.id,
+                                                    "down",
+                                                  )
+                                                }
+                                                disabled={
+                                                  index ===
+                                                  selectedGroups.length - 1
+                                                }
+                                                aria-label={`Move ${group.name} down`}
+                                              >
+                                                <ChevronDown className="h-4 w-4" />
+                                              </Button>
+                                              <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                                onClick={() =>
+                                                  toggleModifier(group.id)
+                                                }
+                                                aria-label={`Remove ${group.name}`}
+                                              >
+                                                <X className="h-4 w-4" />
+                                              </Button>
+                                            </div>
                                           )}
                                         </div>
 
@@ -2338,10 +2490,13 @@ export function NewEditItemFormSheet({
                                             </div>
                                           )}
                                       </div>
+                                      </SortableModifierGroupRow>
                                     );
                                   },
                                 )}
                               </div>
+                              </SortableContext>
+                              </DndContext>
                             )}
 
                             {/* Add Modifier Section (All Levels) */}
@@ -2852,8 +3007,10 @@ export function NewEditItemFormSheet({
                         )}
                       />
 
-                      {/* Kitchen Routing (Prep Station) Section - Location only */}
-                      {!isAllLocations ? (
+                      {/* Kitchen Routing (Prep Station) Section — shown whenever a
+                          concrete location resolves (specific location OR
+                          single-location account locked to 'all'). */}
+                      {gatedLocationId ? (
                         <FormField
                           control={form.control}
                           name="prep_station_id"
@@ -2936,8 +3093,10 @@ export function NewEditItemFormSheet({
                       </CollapsibleContent>
                     </Collapsible>
 
-                    {/* SECTION 7: LOCATION BADGES (collapsible, edit-only, location-scoped) */}
-                    {editItem && !isAllLocations && (
+                    {/* SECTION 7: LOCATION BADGES (collapsible, edit-only, location-only).
+                        Shown whenever a concrete location resolves (specific location
+                        OR single-location account locked to 'all'). */}
+                    {editItem && gatedLocationId && (
                     <Collapsible
                       open={expandedSections.locationBadges}
                       onOpenChange={() => toggleSection("locationBadges")}
@@ -3082,11 +3241,12 @@ export function NewEditItemFormSheet({
               </div>
             </div>
           </div>
-        <DialogFooter className="shrink-0 border-t border-border/70 bg-background/95 px-6 py-4 sm:justify-end">
+        <DialogFooter className="sticky bottom-0 z-10 border-t border-border/70 bg-background/95 px-4 sm:px-6 py-4 sm:justify-end gap-2">
           <Button
             type="button"
             variant="outline"
             onClick={handleClose}
+            className="w-full sm:w-auto"
           >
             Cancel
           </Button>
@@ -3094,7 +3254,7 @@ export function NewEditItemFormSheet({
             type="submit"
             form="item-form"
             disabled={isSubmitting}
-            className="min-w-[150px]"
+            className="w-full sm:w-auto sm:min-w-[150px]"
           >
             {isSubmitting ? (
               <>

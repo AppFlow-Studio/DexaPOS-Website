@@ -217,8 +217,8 @@ export function ActivityLogSheet({
         </div>
 
         {/* Activity List */}
-        <ScrollArea className="h-[calc(100vh-220px)] pr-4">
-          <div className="py-4 space-y-3">
+        <ScrollArea className="h-[calc(100vh-220px)] w-full min-w-0 [&_[data-slot=scroll-area-viewport]>div]:!block [&_[data-slot=scroll-area-viewport]>div]:!w-full">
+          <div className="py-4 space-y-3 px-1 w-full min-w-0">
             {isLoading ? (
               // Loading skeletons
               Array.from({ length: 5 }).map((_, i) => (
@@ -272,7 +272,7 @@ function ActivityLogItem({ log }: { log: AuditLogWithLocation }) {
   return (
     <div
       className={cn(
-        "rounded-lg border p-3 transition-all hover:shadow-sm cursor-pointer",
+        "w-full min-w-0 rounded-lg border p-3 transition-all hover:shadow-sm cursor-pointer",
         expanded ? "bg-muted/30" : "hover:bg-muted/20"
       )}
       onClick={() => setExpanded(!expanded)}
@@ -303,8 +303,8 @@ function ActivityLogItem({ log }: { log: AuditLogWithLocation }) {
 
         {/* Content */}
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <span className="font-medium text-sm truncate">
+          <div className="flex items-center gap-2 mb-1 min-w-0">
+            <span className="font-medium text-sm truncate min-w-0">
               {formatAction(log.action)}
             </span>
             <Badge
@@ -320,9 +320,9 @@ function ActivityLogItem({ log }: { log: AuditLogWithLocation }) {
           </div>
 
           {/* Resource name and change info */}
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground min-w-0">
             {log.resource_name && (
-              <span className="truncate">{log.resource_name}</span>
+              <span className="truncate min-w-0">{log.resource_name}</span>
             )}
             {isStockUpdate && changeAmount !== undefined && (
               <Badge
@@ -346,19 +346,19 @@ function ActivityLogItem({ log }: { log: AuditLogWithLocation }) {
           </div>
 
           {/* Actor and time */}
-          <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground">
-            <span className="flex items-center gap-1">
-              <User className="h-3 w-3" />
-              {log.actor_name || "System"}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1 min-w-0">
+              <User className="h-3 w-3 shrink-0" />
+              <span className="truncate">{log.actor_name || "System"}</span>
             </span>
-            <span className="flex items-center gap-1">
-              <Clock className="h-3 w-3" />
+            <span className="flex items-center gap-1 shrink-0">
+              <Clock className="h-3 w-3 shrink-0" />
               {formatRelativeTime(log.created_at)}
             </span>
             {log.location && (
-              <span className="flex items-center gap-1">
-                <MapPin className="h-3 w-3" />
-                {log.location.name}
+              <span className="flex items-center gap-1 min-w-0">
+                <MapPin className="h-3 w-3 shrink-0" />
+                <span className="truncate">{log.location.name}</span>
               </span>
             )}
           </div>

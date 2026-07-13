@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import * as Sentry from "@sentry/nextjs";
-import { GetOrderFullHistory } from "@/app/dashboard/actions/order";
+import { GetOrderFullHistory } from "@/app/dashboard/actions/order-full-history";
 
 export async function GET(
   _req: Request,

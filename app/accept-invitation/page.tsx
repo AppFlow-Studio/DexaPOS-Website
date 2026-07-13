@@ -4,7 +4,7 @@ import { useSignUp, useSignIn, useClerk, useAuth } from '@clerk/nextjs'
 import { Shield, Eye, EyeOff, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
-import { useState, Suspense } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 
 function AcceptInvitationContent() {
     const { signUp, setActive: setActiveSignUp, isLoaded: signUpLoaded } = useSignUp()
@@ -43,6 +43,37 @@ function AcceptInvitationContent() {
     const [error, setError] = useState('')
     const [isSubmitting, setIsSubmitting] = useState(false)
 
+    // If Clerk's SDK never finishes loading — commonly because an ad-blocker,
+    // privacy extension, or corporate firewall blocks its frontend API — the
+    // submit button would otherwise sit disabled (the "not-allowed" cursor)
+    // with no explanation, and clicking it does nothing. Detect that case and
+    // surface a real message instead of a silent dead button.
+    const [clerkLoadFailed, setClerkLoadFailed] = useState(false)
+    useEffect(() => {
+        if (signUpLoaded || signInLoaded) {
+            setClerkLoadFailed(false)
+            return
+        }
+        const timer = setTimeout(() => setClerkLoadFailed(true), 8000)
+        return () => clearTimeout(timer)
+    }, [signUpLoaded, signInLoaded])
+
+    const clerkLoadBanner = clerkLoadFailed ? (
+        <div className="w-full mb-4 px-3 py-3 rounded-lg bg-destructive/10 border border-destructive/20">
+            <p className="text-sm font-medium text-destructive mb-1">Couldn&apos;t load the sign-up service</p>
+            <p className="text-xs text-destructive/90 mb-2">
+                This is usually caused by an ad-blocker, privacy extension, or network firewall blocking Clerk. Disable extensions or switch networks (e.g. mobile data), then reload.
+            </p>
+            <button
+                type="button"
+                onClick={() => window.location.reload()}
+                className="text-xs font-medium text-destructive underline hover:no-underline"
+            >
+                Reload page
+            </button>
+        </div>
+    ) : null
+
     // Invalid invitation link
     if (!ticket) {
         return (
@@ -60,7 +91,7 @@ function AcceptInvitationContent() {
                             <p className="text-muted-foreground mb-4">
                                 This invitation link is missing or has expired. Please ask your admin to resend the invitation.
                             </p>
-                            <Link href="/" className="text-primary hover:text-primary/80 font-medium text-sm">
+                            <Link href="/sign-in" className="text-primary hover:text-primary/80 font-medium text-sm">
                                 Back to sign in
                             </Link>
                         </div>
@@ -118,6 +149,7 @@ function AcceptInvitationContent() {
                                 <p className="text-sm font-medium text-foreground">{emailParam}</p>
                             </div>
                         )}
+                        {clerkLoadBanner}
                         {error && (
                             <div className="w-full mb-4 px-3 py-2 rounded-lg bg-destructive/10 border border-destructive/20">
                                 <p className="text-sm text-destructive">{error}</p>
@@ -128,13 +160,13 @@ function AcceptInvitationContent() {
                             disabled={isSubmitting || !signInLoaded}
                             className="w-full py-2.5 px-4 bg-foreground hover:bg-foreground/90 text-background rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                         >
-                            {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
-                            Accept Invitation
+                            {(isSubmitting || !signInLoaded) && <Loader2 className="w-4 h-4 animate-spin" />}
+                            {!signInLoaded ? 'Loading…' : 'Accept Invitation'}
                         </button>
                         <div className="text-center mt-6">
                             <p className="text-muted-foreground text-sm">
                                 Wrong account?{' '}
-                                <Link href="/" className="text-primary hover:text-primary/80 font-medium">
+                                <Link href="/sign-in" className="text-primary hover:text-primary/80 font-medium">
                                     Sign in with a different account
                                 </Link>
                             </p>
@@ -178,7 +210,18 @@ function AcceptInvitationContent() {
                 // the freshly activated session.
                 window.location.href = '/dashboard'
             } else {
-                setError('Something went wrong completing your sign up. Please try again.')
+                // Not 'complete' means Clerk needs more than the ticket +
+                // password provided — e.g. email verification or another
+                // required field configured on the instance. Surface exactly
+                // what's missing so it's diagnosable instead of generic.
+                console.error('[accept-invitation] signUp not complete:', result.status, result)
+                const missing = [
+                    ...(result.missingFields ?? []),
+                    ...(result.unverifiedFields ?? []),
+                ].join(', ')
+                setError(
+                    `Couldn't finish creating your account (status: ${result.status}${missing ? `; needs: ${missing}` : ''}). Please contact support so we can check the invitation settings.`
+                )
             }
         } catch (err: unknown) {
             const clerkError = err as { errors?: Array<{ longMessage?: string; message?: string }> }
@@ -285,6 +328,9 @@ function AcceptInvitationContent() {
                             </div>
                         </div>
 
+                        {/* Clerk load failure */}
+                        {clerkLoadBanner}
+
                         {/* Error */}
                         {error && (
                             <div className="px-3 py-2 rounded-lg bg-destructive/10 border border-destructive/20">
@@ -292,14 +338,25 @@ function AcceptInvitationContent() {
                             </div>
                         )}
 
+                        {/* Smart CAPTCHA anchor — REQUIRED for custom sign-up
+                            flows (useSignUp().signUp.create) whenever Clerk bot
+                            protection is enabled on the instance. Without this
+                            element Clerk falls back to an invisible challenge
+                            that silently blocks signUp.create(), which is why
+                            "Create account" appeared to do nothing for new
+                            users. Sign-in is unaffected, so existing-user
+                            invites worked. empty:hidden keeps it gap-free when
+                            no visible challenge is needed. */}
+                        <div id="clerk-captcha" className="empty:hidden" />
+
                         {/* Submit */}
                         <button
                             type="submit"
                             disabled={isSubmitting || !signUpLoaded}
                             className="w-full py-2.5 px-4 bg-foreground hover:bg-foreground/90 text-background rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-2"
                         >
-                            {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
-                            {isSubmitting ? 'Creating account...' : 'Create account'}
+                            {(isSubmitting || !signUpLoaded) && <Loader2 className="w-4 h-4 animate-spin" />}
+                            {!signUpLoaded ? 'Loading…' : isSubmitting ? 'Creating account...' : 'Create account'}
                         </button>
                     </form>
 
@@ -307,7 +364,7 @@ function AcceptInvitationContent() {
                     <div className="text-center mt-6">
                         <p className="text-muted-foreground text-sm">
                             Already have an account?{' '}
-                            <Link href="/" className="text-primary hover:text-primary/80 font-medium">
+                            <Link href="/sign-in" className="text-primary hover:text-primary/80 font-medium">
                                 Sign in
                             </Link>
                         </p>

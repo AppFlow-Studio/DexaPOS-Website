@@ -16,6 +16,7 @@ import {
   ShoppingBag,
   Truck,
   Globe,
+  QrCode,
   ChefHat,
   Printer,
   X,
@@ -48,6 +49,7 @@ import type {
 import type { OrderFullHistory } from "@/types/order-full-history";
 import { OrderStatusBadge } from "@/components/dashboard/orders/OrderStatusBadge";
 import { PaymentStatusBadge } from "@/components/dashboard/orders/PaymentStatusBadge";
+import { DeliveryPlatformBadge } from "@/components/dashboard/orders/DeliveryPlatformBadge";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -69,8 +71,10 @@ import { AssignCustomerModal } from "@/components/dashboard/orders/AssignCustome
 import { AdjustTipModal } from "@/components/dashboard/orders/AdjustTipModal";
 import { OrderActionBar } from "@/components/dashboard/orders/OrderActionBar";
 import { assignCustomerToOrder } from "@/app/actions/orders/assign-customer";
+import { getOrderBreakdown } from "@/lib/orders/order-breakdown";
 import { useOrderActions } from "@/app/dashboard/hooks/useOrderActions";
 import type { OrderActionsUserRole } from "@/app/dashboard/hooks/useOrderActions";
+import { useLocationStore } from "@/stores/location-store";
 import { toast } from "sonner";
 
 // ─── Props ───
@@ -144,6 +148,7 @@ function formatDateInTimezone(
 function orderChannelLabel(orderType: string): string {
   const map: Record<string, string> = {
     dine_in: "Dine-In",
+    qr_dine_in: "QR Table",
     takeout: "Pickup",
     delivery: "Delivery",
     online: "Online",
@@ -168,6 +173,7 @@ function formatPhoneDisplay(phone: string | null | undefined): string {
 function formatOrderType(type: string) {
   const labels: Record<string, string> = {
     dine_in: "Dine-In",
+    qr_dine_in: "QR Dine-In",
     takeout: "Takeout",
     delivery: "Delivery",
     online: "Online",
@@ -179,6 +185,7 @@ function formatOrderType(type: string) {
 function getOrderTypeIcon(type: string) {
   const icons: Record<string, React.ReactNode> = {
     dine_in: <Utensils className="h-4 w-4" />,
+    qr_dine_in: <QrCode className="h-4 w-4" />,
     takeout: <ShoppingBag className="h-4 w-4" />,
     delivery: <Truck className="h-4 w-4" />,
     online: <Globe className="h-4 w-4" />,
@@ -795,57 +802,31 @@ function PricingBreakdown({
     null;
   const isMixed = pricingMode === "mixed";
 
-  // Prefer RPC order fields when available, else order (OrderResponse)
-  const cardSubtotal =
-    fullHistoryOrder?.card_subtotal != null
-      ? Number(fullHistoryOrder.card_subtotal)
-      : Number(order.card_subtotal) || Number(order.subtotal) || 0;
-  const cashSubtotal =
-    fullHistoryOrder?.cash_subtotal != null
-      ? Number(fullHistoryOrder.cash_subtotal)
-      : Number(order.cash_subtotal) || Number(order.subtotal) || 0;
-  const cashSavings =
-    fullHistoryOrder?.cash_discount_amount != null
-      ? Number(fullHistoryOrder.cash_discount_amount)
-      : Number(order.cash_discount_amount) || 0;
+  // Single source of truth: each pricing lane is assembled from its own track
+  // columns (so it foots), and the lane actually charged drives the headline.
+  const breakdown = getOrderBreakdown(order, payments);
+  const cardLane = breakdown.card;
+  const cashLane = breakdown.cash;
+  const primaryLane = breakdown.primary;
+  const laneLabel = breakdown.display === "cash" ? "Cash" : "Card";
 
-  // In dual pricing, show actual savings when API returns 0: card subtotal − cash subtotal
-  const displayCashSavings =
-    isMixed && cardSubtotal > cashSubtotal && cashSavings === 0
-      ? cardSubtotal - cashSubtotal
-      : cashSavings;
+  const cashSavings = cardLane.total - cashLane.total;
+  const discountAmount = primaryLane.discount;
 
-  const taxAmount =
-    fullHistoryOrder?.tax_amount != null
-      ? Number(fullHistoryOrder.tax_amount)
-      : Number(order.card_tax_amount) || Number(order.tax_amount) || 0;
-  const discountAmount =
-    fullHistoryOrder?.discount_amount != null
-      ? Number(fullHistoryOrder.discount_amount)
-      : Number(order.discount_amount) || 0;
+  // Tip shown is what was actually captured at tender (may post-date the total).
   const tipTotal = payments.reduce(
     (sum, p) => sum + (Number(p.tip_amount) || 0),
     0
   );
-  const effectiveTotal =
-    fullHistoryOrder?.effective_total != null
-      ? Number(fullHistoryOrder.effective_total)
-      : Number(order.effective_total) || Number(order.total_amount) || 0;
   const amountPaid =
     fullHistoryOrder?.amount_paid != null
       ? Number(fullHistoryOrder.amount_paid)
       : Number(order.amount_paid) || 0;
-  const amountDue =
-    fullHistoryOrder?.amount_due != null
-      ? Number(fullHistoryOrder.amount_due)
-      : Number(order.amount_due) ?? 0;
 
-  const displayAmountDue = Math.max(0, effectiveTotal - amountPaid);
-
-  const cardTotal =
-    Number(order.card_total) || effectiveTotal;
-  const cashTotal =
-    Number(order.cash_total) || effectiveTotal;
+  // `effective_total` is always card_total and would show a phantom Amount Due
+  // on cash orders; the charged lane's own total is authoritative.
+  const chargedTotal = primaryLane.total;
+  const displayAmountDue = Math.max(0, chargedTotal - amountPaid);
 
   const showDualColumns = isMixed;
 
@@ -855,7 +836,7 @@ function PricingBreakdown({
         {/* Compact: small screens — Total, Amount Paid, Amount Due only */}
         <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 text-sm md:hidden">
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-            <PriceRow label="Total" value={formatMoney(effectiveTotal)} bold />
+            <PriceRow label="Total" value={formatMoney(chargedTotal)} bold />
             <PriceRow
               label="Amount Paid"
               value={formatMoney(amountPaid)}
@@ -875,50 +856,83 @@ function PricingBreakdown({
         <div className="hidden md:block">
           {showDualColumns ? (
             <>
+              {/* Two self-consistent lanes — each column foots on its own track */}
               <div className="grid grid-cols-2 gap-x-8 gap-y-1 text-sm">
                 <div className="space-y-1">
+                  <p className="text-xs font-medium text-muted-foreground">
+                    If all card
+                  </p>
                   <PriceRow
-                    label="Card Subtotal"
-                    value={formatMoney(cardSubtotal)}
+                    label="Subtotal"
+                    value={formatMoney(cardLane.subtotal)}
                   />
+                  {discountAmount > 0 && (
+                    <PriceRow
+                      label="Discount"
+                      value={formatMoney(-discountAmount)}
+                    />
+                  )}
+                  {cardLane.serviceCharge > 0 && (
+                    <PriceRow
+                      label="Service Charge"
+                      value={formatMoney(cardLane.serviceCharge)}
+                    />
+                  )}
+                  <PriceRow label="Tax" value={formatMoney(cardLane.tax)} />
                   <PriceRow
-                    label="Cash Savings"
-                    value={formatMoney(-displayCashSavings)}
-                    valueClassName="text-teal-600 dark:text-teal-400 font-medium"
-                  />
-                  <PriceRow
-                    label="Discount"
-                    value={formatMoney(-discountAmount)}
+                    label="Total (Card)"
+                    value={formatMoney(cardLane.total)}
+                    bold
                   />
                 </div>
                 <div className="space-y-1">
+                  <p className="text-xs font-medium text-green-700 dark:text-green-400">
+                    If all cash
+                  </p>
                   <PriceRow
-                    label="Cash Subtotal"
-                    value={formatMoney(cashSubtotal)}
+                    label="Subtotal"
+                    value={formatMoney(cashLane.subtotal)}
                   />
-                  <PriceRow label="Tax" value={formatMoney(taxAmount)} />
-                  <PriceRow label="Tip" value={formatMoney(tipTotal)} />
+                  {discountAmount > 0 && (
+                    <PriceRow
+                      label="Discount"
+                      value={formatMoney(-discountAmount)}
+                    />
+                  )}
+                  {cashLane.serviceCharge > 0 && (
+                    <PriceRow
+                      label="Service Charge"
+                      value={formatMoney(cashLane.serviceCharge)}
+                    />
+                  )}
+                  <PriceRow label="Tax" value={formatMoney(cashLane.tax)} />
+                  <PriceRow
+                    label="Total (Cash)"
+                    value={formatMoney(cashLane.total)}
+                    bold
+                    valueClassName="text-green-700 dark:text-green-400"
+                  />
                 </div>
               </div>
               <div className="my-2 border-t border-border" />
               <div className="grid grid-cols-2 gap-x-8 gap-y-1 text-sm">
                 <div className="space-y-1">
-                  <PriceRow
-                    label="Total (Card)"
-                    value={formatMoney(cardTotal)}
-                    bold
-                  />
+                  {cashSavings > 0 && (
+                    <PriceRow
+                      label="Cash Savings"
+                      value={formatMoney(-cashSavings)}
+                      valueClassName="text-teal-600 dark:text-teal-400 font-medium"
+                    />
+                  )}
+                  {tipTotal > 0 && (
+                    <PriceRow label="Tip" value={formatMoney(tipTotal)} />
+                  )}
+                </div>
+                <div className="space-y-1">
                   <PriceRow
                     label="Amount Paid"
                     value={formatMoney(amountPaid)}
                     valueClassName="text-green-600 dark:text-green-400"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <PriceRow
-                    label="Total (Cash)"
-                    value={formatMoney(cashTotal)}
-                    bold
                   />
                   <PriceRow
                     label="Amount Due"
@@ -932,25 +946,43 @@ function PricingBreakdown({
             </>
           ) : (
             <>
+              {/* Single track — every line foots to the displayed Total */}
               <div className="space-y-1 text-sm">
                 <PriceRow
                   label="Subtotal"
-                  value={formatMoney(cashSubtotal || cardSubtotal)}
+                  value={formatMoney(primaryLane.subtotal)}
                 />
-                <PriceRow label="Tax" value={formatMoney(taxAmount)} />
-                <PriceRow
-                  label="Discount"
-                  value={formatMoney(-discountAmount)}
-                />
-                <PriceRow label="Tip" value={formatMoney(tipTotal)} />
+                {discountAmount > 0 && (
+                  <PriceRow
+                    label="Discount"
+                    value={formatMoney(-discountAmount)}
+                  />
+                )}
+                {primaryLane.serviceCharge > 0 && (
+                  <PriceRow
+                    label="Service Charge"
+                    value={formatMoney(primaryLane.serviceCharge)}
+                  />
+                )}
+                <PriceRow label="Tax" value={formatMoney(primaryLane.tax)} />
+                {tipTotal > 0 && (
+                  <PriceRow label="Tip" value={formatMoney(tipTotal)} />
+                )}
               </div>
               <div className="my-2 border-t border-border" />
               <div className="space-y-1 text-sm">
                 <PriceRow
-                  label="Total"
-                  value={formatMoney(effectiveTotal)}
+                  label={breakdown.dual ? `Total (${laneLabel})` : "Total"}
+                  value={formatMoney(chargedTotal)}
                   bold
                 />
+                {breakdown.dual && cashSavings > 0 && (
+                  <PriceRow
+                    label="Cash savings"
+                    value={formatMoney(-cashSavings)}
+                    valueClassName="text-teal-600 dark:text-teal-400 font-medium"
+                  />
+                )}
                 <PriceRow
                   label="Amount Paid"
                   value={formatMoney(amountPaid)}
@@ -1095,6 +1127,7 @@ export function OrderDetailFullPage({
 }: OrderDetailFullPageProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { setSelectedLocation } = useLocationStore();
   const searchParams = useSearchParams();
   const pathname = usePathname();
   const [isAdjustTipOpen, setIsAdjustTipOpen] = React.useState(false);
@@ -1201,7 +1234,9 @@ export function OrderDetailFullPage({
         ? `${String(fullHistory.order.device_id).slice(0, 12)}…`
         : fullHistory.order.device_id
       : null);
+  const isQrDineIn = order?.order_type === "qr_dine_in";
   const isDineIn = order?.order_type === "dine_in";
+  const isTableLabeledOrder = isDineIn || isQrDineIn;
   // Use order only so all customer fields update together (same query)
   const customerName = order?.customer_name ?? null;
   const customerPhone = order?.customer_phone ?? null;
@@ -1265,9 +1300,16 @@ export function OrderDetailFullPage({
     queryClient.invalidateQueries({ queryKey: ["order-full-history", orderId] });
   }, [queryClient, orderId]);
 
+  const handleViewOnFloorPlan = React.useCallback(() => {
+    if (order?.location_id) {
+      setSelectedLocation(order.location_id);
+    }
+    router.push("/dashboard/tables");
+  }, [order?.location_id, router, setSelectedLocation]);
+
   React.useEffect(() => {
     document.title = order
-      ? `Order #${order.display_number || order.order_number} | DEXA POS`
+      ? `Order #${String(order.display_number || order.order_number).replace(/^#/, "")} | DEXA POS`
       : "Order | DEXA POS";
     return () => {
       document.title = "DEXA POS";
@@ -1357,7 +1399,7 @@ export function OrderDetailFullPage({
           const isLast = i === breadcrumbs.length - 1;
           const label =
             isLast && order
-              ? `Order #${order.display_number || order.order_number}`
+              ? `Order #${String(order.display_number || order.order_number).replace(/^#/, "")}`
               : crumb.label;
           return (
             <React.Fragment key={i}>
@@ -1391,11 +1433,11 @@ export function OrderDetailFullPage({
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <h1 className="text-2xl font-bold tracking-tight">
-            Order #{order.display_number || order.order_number}
+            Order #{String(order.display_number || order.order_number).replace(/^#/, "")}
           </h1>
-          <OrderStatusBadge status={order.status} />
+          <OrderStatusBadge status={order.status} prefix="Order" />
           <span className="text-muted-foreground">●</span>
-          <PaymentStatusBadge status={order.payment_status} />
+          <PaymentStatusBadge status={order.payment_status} prefix="Payment" />
           <div className="flex-1 min-w-0" />
           <div className="hidden md:block">
             <DropdownMenu>
@@ -1406,6 +1448,12 @@ export function OrderDetailFullPage({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
+              {isQrDineIn && tableName && (
+                <DropdownMenuItem onClick={handleViewOnFloorPlan}>
+                  <MapPin className="h-4 w-4 mr-2" />
+                  View on Floor Plan
+                </DropdownMenuItem>
+              )}
               {orderActions.canSendReceipt && (
                 <DropdownMenuItem onClick={() => setIsSendReceiptOpen(true)}>
                   <Mail className="h-4 w-4 mr-2" />
@@ -1459,6 +1507,7 @@ export function OrderDetailFullPage({
                 <p className="text-sm font-medium">
                   {formatOrderType(order.order_type)}
                 </p>
+                <DeliveryPlatformBadge order={order} className="mt-1" />
                 <p className="text-xs text-muted-foreground">
                   Channel: {orderChannelLabel(order.order_type)}
                 </p>
@@ -1489,30 +1538,40 @@ export function OrderDetailFullPage({
         })()}
 
         {/* Dine-in context (conditional) */}
-        {isDineIn && (tableName || serverName || partySize != null) && (
+        {isTableLabeledOrder && (tableName || (isDineIn && serverName) || (isDineIn && partySize != null)) && (
           <div className="rounded-lg border bg-muted/30 px-4 py-3">
             <p className="text-[11px] font-medium text-muted-foreground mb-2">
-              Dine-In Context
+              {isQrDineIn ? "QR Table Context" : "Dine-In Context"}
             </p>
             <div className="flex flex-wrap gap-4 text-sm">
               {tableName && (
                 <span className="flex items-center gap-1.5">
-                  <Utensils className="h-3.5 w-3.5 text-muted-foreground" />
+                  {isQrDineIn ? (
+                    <QrCode className="h-3.5 w-3.5 text-[#0C4FD1]" />
+                  ) : (
+                    <Utensils className="h-3.5 w-3.5 text-muted-foreground" />
+                  )}
                   Table: {tableName}
                 </span>
               )}
-              {serverName && (
+              {isDineIn && serverName && (
                 <span className="flex items-center gap-1.5">
                   <User className="h-3.5 w-3.5 text-muted-foreground" />
                   Server: {serverName}
                 </span>
               )}
-              {partySize != null && (
+              {isDineIn && partySize != null && (
                 <span className="flex items-center gap-1.5">
                   <Users className="h-3.5 w-3.5 text-muted-foreground" />
                   Party: {partySize} guests
                 </span>
               )}
+              {isQrDineIn ? (
+                <span className="flex items-center gap-1.5 text-[#0C4FD1]">
+                  <QrCode className="h-3.5 w-3.5" />
+                  Independent QR table order
+                </span>
+              ) : null}
             </div>
           </div>
         )}

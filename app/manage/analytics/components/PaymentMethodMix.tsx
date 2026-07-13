@@ -118,6 +118,7 @@ export function PaymentMethodMix() {
             <CardDescription className="text-xs">Estimated card processing fees at 2.5% of card GPV</CardDescription>
           </CardHeader>
           <CardContent className="p-0">
+            <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -145,6 +146,7 @@ export function PaymentMethodMix() {
                 )}
               </TableBody>
             </Table>
+            </div>
           </CardContent>
         </Card>
       </div>

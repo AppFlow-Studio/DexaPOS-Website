@@ -35,6 +35,12 @@ export interface PaymentRecord {
   // Split payment
   is_split_payment?: boolean;
   split_sequence?: number;
+  // Per-payment breakdown (from order_payments)
+  subtotal_portion?: number | null;
+  tax_portion?: number | null;
+  discount_portion?: number | null;
+  gateway_fee?: number | null;
+  cash_discount_applied?: boolean | null;
   // Refund/void/return
   refunded_amount?: number;
   voided_at?: string;
@@ -56,6 +62,8 @@ export interface PaymentRecord {
     customer_name?: string;
     created_at: string;
     merchant_id: string;
+    service_charge?: number | null;
+    total_amount?: number | null;
   };
   order_payment_items?: PaymentItemRecord[];
   reversals?: PaymentReversalRecord[];
@@ -156,9 +164,17 @@ export type BatchStatus = "open" | "closed" | "submitted" | "settled" | "funded"
 export interface SettlementBatchRecord {
   id: string;
   batch_id: string;
+  batch_number?: string;
+  acquirer?: string;
   merchant_id: string;
   location_id: string;
   terminal_id?: string;
+  payment_terminal_id?: string;
+  payment_terminals?: {
+    terminal_name: string | null;
+    serial_number: string | null;
+    terminal_model: string | null;
+  } | null;
   business_date: string;
   opened_at: string;
   closed_at?: string;

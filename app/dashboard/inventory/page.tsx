@@ -44,7 +44,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
-import { useLocationStore, useSelectedLocation } from "@/stores/location-store";
+import { useLocationStore, useSelectedLocation, useIsSingleLocation } from "@/stores/location-store";
 import {
   useInventoryItems,
   useVendors,
@@ -116,14 +116,16 @@ function StatCard({
         className
       )}
     >
-      <CardContent className="p-6">
-        <div className="flex items-start justify-between">
-          <div className="space-y-2">
+      <CardContent className="p-4 sm:p-6">
+        <div className="flex items-start justify-between gap-2 sm:gap-3">
+          <div className="space-y-2 min-w-0 flex-1">
             <p className="text-sm font-medium text-muted-foreground">{title}</p>
             {isLoading ? (
               <Skeleton className="h-8 w-16" />
             ) : (
-              <p className="text-3xl font-bold tracking-tight">{value}</p>
+              <p className="text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight tabular-nums break-words">
+                {value}
+              </p>
             )}
             {subtitle && (
               <p className="text-xs text-muted-foreground">{subtitle}</p>
@@ -145,7 +147,10 @@ function StatCard({
             )}
           </div>
           <div
-            className={cn("p-3 rounded-xl", iconClassName || "bg-primary/10")}
+            className={cn(
+              "shrink-0 p-3 rounded-xl",
+              iconClassName || "bg-primary/10"
+            )}
           >
             <Icon
               className={cn(
@@ -438,6 +443,9 @@ export default function InventoryPage() {
   const { selectedLocationId } = useLocationStore();
   const selectedLocation = useSelectedLocation();
   const isAllLocations = selectedLocationId === "all" || !selectedLocationId;
+  // Single-location accounts have exactly one active store, so the global-vs-
+  // location framing (badges, scope filter, "all locations" copy) is noise.
+  const isSingleLocation = useIsSingleLocation();
 
   // Data hooks
   const { data: items = [], isLoading: isLoadingItems } = useInventoryItems();
@@ -651,20 +659,22 @@ export default function InventoryPage() {
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       {/* Page Header */}
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text">
             Inventory Management
           </h1>
           <p className="text-muted-foreground mt-1">
-            {isAllLocations
+            {isSingleLocation
+              ? "Managing your inventory catalog and vendors"
+              : isAllLocations
               ? "Managing global inventory catalog and vendors"
               : `Managing inventory for ${
                   selectedLocation?.name || "selected location"
                 }`}
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2">
           <Button
             variant="outline"
             size="sm"
@@ -706,12 +716,14 @@ export default function InventoryPage() {
       </div>
 
       {/* Stats Overview */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
         <StatCard
           title="Total Items"
           value={stats?.totalItems || 0}
           subtitle={
-            isAllLocations
+            isSingleLocation
+              ? "Catalog items"
+              : isAllLocations
               ? "Global catalog items"
               : "Available at this location"
           }
@@ -722,7 +734,9 @@ export default function InventoryPage() {
           title="Low Stock"
           value={stats?.lowStock || 0}
           subtitle={
-            isAllLocations
+            isSingleLocation
+              ? "Low stock alerts"
+              : isAllLocations
               ? `Location${
                   (stats?.lowStock || 0) !== 1 ? "s" : ""
                 } with low stock`
@@ -736,7 +750,9 @@ export default function InventoryPage() {
           title="Out of Stock"
           value={stats?.outOfStock || 0}
           subtitle={
-            isAllLocations
+            isSingleLocation
+              ? "Out of stock alerts"
+              : isAllLocations
               ? `Location${
                   (stats?.outOfStock || 0) !== 1 ? "s" : ""
                 } with out of stock`
@@ -753,7 +769,9 @@ export default function InventoryPage() {
             maximumFractionDigits: 2,
           })}`}
           subtitle={
-            isAllLocations
+            isSingleLocation
+              ? "Total inventory value"
+              : isAllLocations
               ? "Total across all locations"
               : "Current location value"
           }
@@ -768,7 +786,8 @@ export default function InventoryPage() {
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <CardHeader className="pb-0 border-b">
             <div className="flex flex-col gap-4 md:flex-row md:flex-wrap md:items-center md:justify-between min-w-0">
-              <TabsList className="bg-muted/50 p-1 h-auto max-w-full flex-nowrap justify-start overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <div className="overflow-x-auto w-full min-w-0">
+              <TabsList className="bg-muted/50 p-1 h-auto w-max flex-nowrap justify-start">
                 <TabsTrigger
                   value="catalog"
                   className="gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm px-4 py-2"
@@ -844,18 +863,19 @@ export default function InventoryPage() {
                   Reports
                 </TabsTrigger>
               </TabsList>
+              </div>
 
               {(activeTab === "catalog" ||
                 activeTab === "vendors" ||
                 activeTab === "purchase-orders") && (
-              <div className="flex items-center gap-2">
-                <div className="relative">
+              <div className="flex items-center gap-2 w-full md:w-auto">
+                <div className="relative flex-1 md:flex-none">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
                     placeholder="Search..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-9 w-64 bg-background"
+                    className="pl-9 w-full md:w-64 bg-background"
                   />
                 </div>
                 <Popover open={filterOpen} onOpenChange={handleFilterOpenChange}>
@@ -929,28 +949,32 @@ export default function InventoryPage() {
                         </div>
                       </div>
 
-                      <Separator />
-
-                      {/* Scope */}
-                      <div className="space-y-2">
-                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Scope</p>
-                        <div className="flex gap-2">
-                          {(["all", "global", "local"] as const).map((s) => (
-                            <button
-                              key={s}
-                              onClick={() => setPendingScope(s)}
-                              className={cn(
-                                "flex-1 py-1.5 text-xs rounded-md border transition-colors capitalize",
-                                pendingScope === s
-                                  ? "bg-primary text-primary-foreground border-primary"
-                                  : "border-border hover:bg-muted"
-                              )}
-                            >
-                              {s}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
+                      {/* Scope — hidden for single-location accounts; every
+                          item is global, so global-vs-local filtering is noise. */}
+                      {!isSingleLocation && (
+                        <>
+                          <Separator />
+                          <div className="space-y-2">
+                            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Scope</p>
+                            <div className="flex gap-2">
+                              {(["all", "global", "local"] as const).map((s) => (
+                                <button
+                                  key={s}
+                                  onClick={() => setPendingScope(s)}
+                                  className={cn(
+                                    "flex-1 py-1.5 text-xs rounded-md border transition-colors capitalize",
+                                    pendingScope === s
+                                      ? "bg-primary text-primary-foreground border-primary"
+                                      : "border-border hover:bg-muted"
+                                  )}
+                                >
+                                  {s}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        </>
+                      )}
                     </div>
 
                     {/* Apply / Cancel */}
@@ -1025,7 +1049,8 @@ export default function InventoryPage() {
                   )}
                 </div>
               ) : (
-                <div className="divide-y">
+                <div className="overflow-x-auto">
+                <div className="divide-y min-w-[700px]">
                   {/* Table Header */}
                   <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-muted/30 text-sm font-medium text-muted-foreground">
                     {(
@@ -1034,7 +1059,7 @@ export default function InventoryPage() {
                         { label: "Stock", field: "stock" as const, span: "col-span-2" },
                         { label: "Status", field: null, span: "col-span-2" },
                         { label: "Cost", field: "cost" as const, span: "col-span-2" },
-                        { label: "Scope", field: null, span: "col-span-2" },
+                        { label: isSingleLocation ? "" : "Scope", field: null, span: "col-span-2" },
                       ] as { label: string; field: SortField | null; span: string }[]
                     ).map(({ label, field, span }) =>
                       field ? (
@@ -1130,7 +1155,7 @@ export default function InventoryPage() {
                       </div>
 
                       <div className="col-span-2 flex items-center justify-between">
-                        <ScopeBadge locationId={item.location_id} />
+                        {isSingleLocation ? <span /> : <ScopeBadge locationId={item.location_id} />}
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button
@@ -1169,6 +1194,7 @@ export default function InventoryPage() {
                       </div>
                     </div>
                   ))}
+                </div>
                 </div>
               )}
             </TabsContent>
@@ -1223,7 +1249,7 @@ export default function InventoryPage() {
                             <Truck className="h-5 w-5 text-blue-500" />
                           </div>
                           <div className="flex items-center gap-2">
-                            <ScopeBadge locationId={vendor.location_id} />
+                            {!isSingleLocation && <ScopeBadge locationId={vendor.location_id} />}
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
                                 <Button
@@ -1236,7 +1262,10 @@ export default function InventoryPage() {
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
                                 <DropdownMenuItem
-                                  onClick={() => setEditingVendor(vendor)}
+                                  onClick={() => {
+                                    setIsDetailSheetOpen(false);
+                                    setEditingVendor(vendor);
+                                  }}
                                 >
                                   Edit Vendor
                                 </DropdownMenuItem>

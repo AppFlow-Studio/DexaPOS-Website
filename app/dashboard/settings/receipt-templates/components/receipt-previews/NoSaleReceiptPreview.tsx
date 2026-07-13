@@ -1,11 +1,12 @@
-import type { ReceiptTemplateFormData } from "../../types";
-import { ReceiptPaper, DottedLine, DoubleLine } from "./ReceiptPaper";
+import type { ReceiptTemplateFormData, LocationIdentity } from "../../types";
+import { ReceiptPaper, ReceiptIdentityBlock, DottedLine, DoubleLine } from "./ReceiptPaper";
 
 interface NoSaleReceiptPreviewProps {
   formState: ReceiptTemplateFormData;
+  locationIdentity?: LocationIdentity;
 }
 
-export function NoSaleReceiptPreview({ formState }: NoSaleReceiptPreviewProps) {
+export function NoSaleReceiptPreview({ formState, locationIdentity }: NoSaleReceiptPreviewProps) {
   return (
     <ReceiptPaper>
       {formState.show_logo && (
@@ -19,7 +20,7 @@ export function NoSaleReceiptPreview({ formState }: NoSaleReceiptPreviewProps) {
         NO SALE
       </div>
 
-      <div className="text-center font-bold text-sm">Sample Restaurant</div>
+      <ReceiptIdentityBlock locationIdentity={locationIdentity} />
       {formState.header_text && (
         <div className="text-center text-[10px] mt-1 whitespace-pre-wrap">
           {formState.header_text}

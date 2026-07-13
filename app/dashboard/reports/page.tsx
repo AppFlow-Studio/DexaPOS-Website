@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useOrderAnalytics } from "../hooks/useOrderAnalytics";
+import { useFinancialKPIs, useOrderAnalytics } from "../hooks/useOrderAnalytics";
 import {
   DateRangePicker,
   DatePreset,
@@ -28,6 +28,8 @@ import { useSelectedLocation } from "@/stores/location-store";
 import { SalesChart } from "./components/SalesChart";
 import { OrderTypeChart } from "./components/OrderTypeChart";
 import { cn } from "@/lib/utils";
+import { useReportingQueryRange } from "../hooks/useReportingDateRange";
+import { fillDailyFinancialStats } from "@/lib/reporting/date-range";
 
 const SUB_REPORTS = [
   {
@@ -75,10 +77,15 @@ export default function ReportsPage() {
   });
   const [preset, setPreset] = useState<DatePreset>("last_30_days");
   const selectedLocation = useSelectedLocation();
+  const queryDateRange = useReportingQueryRange(dateRange);
 
-  const { data: analytics, isLoading } = useOrderAnalytics(
-    dateRange.from,
-    dateRange.to
+  const { data: analytics, isLoading, isError } = useOrderAnalytics(
+    queryDateRange.from,
+    queryDateRange.to
+  );
+  const { data: financialKPIs, isLoading: kpisLoading, isError: kpisError } = useFinancialKPIs(
+    queryDateRange.from,
+    queryDateRange.to
   );
 
   const handleDateRangeChange = (from: Date | null, to: Date | null) => {
@@ -86,11 +93,18 @@ export default function ReportsPage() {
   };
 
   // Derived metrics
-  const totalSales =
-    analytics?.salesByDate?.reduce((sum, d) => sum + d.sales, 0) ?? 0;
+  const totalSales = financialKPIs?.summary.net_sales ?? 0;
   const previousSales = analytics?.previousPeriodSales ?? 0;
   const salesTrend =
     previousSales > 0 ? ((totalSales - previousSales) / previousSales) * 100 : null;
+  const chartData = fillDailyFinancialStats(
+    financialKPIs?.daily_stats ?? [],
+    dateRange
+  ).map((item) => ({
+    date: item.date,
+    sales: item.net_sales,
+    orders: item.order_count,
+  }));
 
   const topOrderTypeEntry = Object.entries(
     analytics?.orderTypeBreakdown ?? {}
@@ -98,18 +112,21 @@ export default function ReportsPage() {
 
   const topOrderTypeLabel = topOrderTypeEntry
     ? topOrderTypeEntry[0]
+        .replace(/^qr_dine_in$/, "QR Table")
         .replace(/_/g, " ")
         .replace(/\b\w/g, (c) => c.toUpperCase())
     : "—";
 
-  const kpis = [
+  const isAnyError = isError || kpisError;
+  const kpiCards = [
     {
       label: "Total Revenue",
-      value: isLoading ? null : `$${totalSales.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      value: isLoading || kpisLoading ? null : isAnyError ? "—" : `$${totalSales.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
       icon: DollarSign,
-      trend: salesTrend,
-      description:
-        previousSales > 0
+      trend: isAnyError ? null : salesTrend,
+      description: isAnyError
+        ? "Failed to load"
+        : previousSales > 0
           ? `vs $${previousSales.toLocaleString("en-US", { maximumFractionDigits: 0 })} prev.`
           : "For selected period",
       iconColor: "text-indigo-500",
@@ -117,30 +134,28 @@ export default function ReportsPage() {
     },
     {
       label: "Total Orders",
-      value: isLoading ? null : (analytics?.totalOrders ?? 0).toLocaleString(),
+      value: isLoading || kpisLoading ? null : isAnyError ? "—" : (financialKPIs?.summary.order_count ?? 0).toLocaleString(),
       icon: ShoppingCart,
       trend: null,
-      description: "Completed orders",
+      description: isAnyError ? "Failed to load" : "Completed orders",
       iconColor: "text-emerald-500",
       iconBg: "bg-emerald-50",
     },
     {
       label: "Avg Order Value",
-      value: isLoading ? null : `$${(analytics?.avgOrderValue ?? 0).toFixed(2)}`,
+      value: isLoading || kpisLoading ? null : isAnyError ? "—" : `$${(financialKPIs?.summary.avg_order_value ?? 0).toFixed(2)}`,
       icon: TrendingUp,
       trend: null,
-      description: "Per transaction",
+      description: isAnyError ? "Failed to load" : "Per transaction",
       iconColor: "text-amber-500",
       iconBg: "bg-amber-50",
     },
     {
       label: "Top Order Type",
-      value: isLoading ? null : topOrderTypeLabel,
+      value: isLoading ? null : isAnyError ? "—" : topOrderTypeLabel,
       icon: Tag,
       trend: null,
-      description: topOrderTypeEntry
-        ? `${topOrderTypeEntry[1]} orders`
-        : "No data",
+      description: isAnyError ? "Failed to load" : topOrderTypeEntry ? `${topOrderTypeEntry[1]} orders` : "No data",
       iconColor: "text-purple-500",
       iconBg: "bg-purple-50",
     },
@@ -170,7 +185,8 @@ export default function ReportsPage() {
 
       {/* ── KPI Cards ──────────────────────────────────────────── */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {kpis.map((kpi) => (
+
+        {kpiCards.map((kpi) => (
           <Card
             key={kpi.label}
             className="border-none shadow-[0_2px_12px_rgba(0,0,0,0.06)] bg-card rounded-2xl overflow-hidden"
@@ -215,7 +231,7 @@ export default function ReportsPage() {
       </div>
 
       {/* ── Sales Chart (full-width) ────────────────────────────── */}
-      <SalesChart data={analytics?.salesByDate ?? []} isLoading={isLoading} />
+      <SalesChart data={chartData} isLoading={isLoading || kpisLoading} />
 
       {/* ── Bottom row: Order Sources / Top Items / Reports ──────── */}
       <div className="grid gap-4 lg:grid-cols-3">
@@ -224,6 +240,7 @@ export default function ReportsPage() {
           data={
             analytics?.orderTypeBreakdown ?? {
               dine_in: 0,
+              qr_dine_in: 0,
               takeout: 0,
               delivery: 0,
               online: 0,

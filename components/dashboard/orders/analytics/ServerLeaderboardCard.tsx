@@ -1,16 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  Cell,
-} from 'recharts'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell } from 'recharts'
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart'
 import { ChartCard } from './ChartCard'
 import { DataTable } from '@/components/ui/data-table'
@@ -152,7 +143,7 @@ export function ServerLeaderboardCard({
       emptyMessage="No staff data available"
       action={
         <Select value={selectedMetric} onValueChange={(v) => handleMetricChange(v as MetricKey)}>
-          <SelectTrigger className="w-[200px]">
+          <SelectTrigger className="w-full sm:w-[200px]">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -169,16 +160,15 @@ export function ServerLeaderboardCard({
       <div className="space-y-6">
         {/* Bar Chart */}
         {chartData.length > 0 && (
-          <ChartContainer config={chartConfig} className="h-[300px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
+          <ChartContainer config={chartConfig} className="aspect-auto h-[300px] w-full">
               <BarChart
                 data={chartData}
                 layout="vertical"
-                margin={{ top: 5, right: 30, left: 150, bottom: 5 }}
+                margin={{ top: 5, right: 16, left: 0, bottom: 5 }}
               >
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis type="number" />
-                <YAxis dataKey="name" type="category" width={150} tick={{ fontSize: 12 }} />
+                <YAxis dataKey="name" type="category" width={90} tick={{ fontSize: 12 }} />
                 <ChartTooltip content={<ChartTooltipContent />} />
                 <Bar dataKey="value" fill="#3b82f6" radius={[0, 8, 8, 0]}>
                   {chartData.map((entry, index) => (
@@ -186,13 +176,12 @@ export function ServerLeaderboardCard({
                   ))}
                 </Bar>
               </BarChart>
-            </ResponsiveContainer>
           </ChartContainer>
         )}
 
         {/* Data Table */}
         {data?.leaderboard && (
-          <DataTable columns={columns} data={data.leaderboard} />
+          <DataTable columns={columns} data={data.leaderboard} tableClassName="min-w-[560px]" />
         )}
       </div>
     </ChartCard>

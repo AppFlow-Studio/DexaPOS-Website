@@ -6,6 +6,7 @@ import { createClient } from "@supabase/supabase-js";
 
 interface OrderStatusWatcherProps {
   orderId: string | null;
+  sessionToken?: string | null;
   /** Called when a decision (accepted/declined/cancelled) arrives, so the caller can refresh. */
   onDecision?: (status: string) => void;
   /** Statuses for which the watcher should NOT show a toast (caller handles it directly). */
@@ -56,7 +57,12 @@ const DECISION_MESSAGES: Record<
   },
 };
 
-export function OrderStatusWatcher({ orderId, onDecision, silentStatuses }: OrderStatusWatcherProps) {
+export function OrderStatusWatcher({
+  orderId,
+  sessionToken,
+  onDecision,
+  silentStatuses,
+}: OrderStatusWatcherProps) {
   const prevStatusRef = useRef<string | null>(null);
   // Keep a stable ref to callbacks so the effect doesn't re-subscribe on every render
   const onDecisionRef = useRef(onDecision);
@@ -65,9 +71,10 @@ export function OrderStatusWatcher({ orderId, onDecision, silentStatuses }: Orde
   useEffect(() => { silentRef.current = silentStatuses; }, [silentStatuses]);
 
   useEffect(() => {
-    if (!orderId) return;
+    if (!orderId && !sessionToken) return;
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const channels = [];
 
     const handleStatus = (status: string | undefined) => {
       if (!status) return;
@@ -85,26 +92,43 @@ export function OrderStatusWatcher({ orderId, onDecision, silentStatuses }: Orde
       if (msgDef) onDecisionRef.current?.(status);
     };
 
-    const channel = supabase
-      .channel(`order-update:${orderId}`)
-      .on("broadcast", { event: "status_changed" }, (msg) => handleStatus(msg.payload?.status))
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "orders",
-          filter: `id=eq.${orderId}`,
-        },
-        (payload) => handleStatus((payload.new as { status?: string })?.status)
-      )
-      .subscribe();
+    if (orderId) {
+      const orderChannel = supabase
+        .channel(`order-update:${orderId}`)
+        .on("broadcast", { event: "status_changed" }, (msg) => handleStatus(msg.payload?.status))
+        .on(
+          "postgres_changes",
+          {
+            event: "UPDATE",
+            schema: "public",
+            table: "orders",
+            filter: `id=eq.${orderId}`,
+          },
+          (payload) => handleStatus((payload.new as { status?: string })?.status)
+        )
+        .subscribe();
+
+      channels.push(orderChannel);
+    }
+
+    if (sessionToken) {
+      const qrSessionChannel = supabase
+        .channel(`qr-session:${sessionToken}`)
+        .on("broadcast", { event: "qr_order_changed" }, (msg) =>
+          handleStatus(msg.payload?.status)
+        )
+        .subscribe();
+
+      channels.push(qrSessionChannel);
+    }
 
     return () => {
-      supabase.removeChannel(channel);
+      channels.forEach((channel) => {
+        void supabase.removeChannel(channel);
+      });
     };
   // Only re-subscribe when orderId actually changes — callbacks are via refs
-  }, [orderId]);
+  }, [orderId, sessionToken]);
 
   return null;
 }

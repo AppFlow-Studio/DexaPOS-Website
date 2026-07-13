@@ -29,7 +29,7 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog'
 import { US_TIMEZONES, Location } from '@/types/merchant_locations'
-import { useLocationStore } from '@/stores/location-store'
+import { useLocationStore, useIsSingleLocation } from '@/stores/location-store'
 import { LocationDetailSheet } from '@/components/dashboard/locations/LocationDetailSheet'
 import { formatPhoneForDisplay } from '@/lib/phone'
 
@@ -50,6 +50,7 @@ export default function LocationsPage() {
     const canCreateLocation = userRole === 'merchant.admin' || isOwner
 
     const { selectedLocationId, setSelectedLocation } = useLocationStore()
+    const isSingleLocation = useIsSingleLocation()
 
     const [searchTerm, setSearchTerm] = useState('')
     const [viewMode, setViewMode] = useState<ViewMode>('grid')
@@ -188,7 +189,7 @@ export default function LocationsPage() {
         }
 
         return (
-            <div className={cn("flex items-center gap-1", compact ? "opacity-0 group-hover:opacity-100 transition-opacity" : "")}>
+            <div className={cn("flex items-center gap-1", compact ? "opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity" : "")}>
                 <Button
                     variant="ghost"
                     size="icon"
@@ -220,11 +221,99 @@ export default function LocationsPage() {
         )
     }
 
+    // ─── Single-location detail view ──────────────────────────────────────────
+    // A one-active-location account gets a focused view of that store (matching
+    // the singular "Location" nav) instead of the list-with-add. No Add Location,
+    // no list/search/multi-stats. Multi-location accounts fall through unchanged.
+    if (!isLoading && isSingleLocation && activeLocations.length === 1) {
+        const store = activeLocations[0]
+        return (
+            <div className="space-y-6 animate-in fade-in duration-500 w-full min-w-0">
+                <div>
+                    <h1 className="text-2xl font-semibold tracking-tight">Location</h1>
+                    <p className="text-sm text-muted-foreground mt-0.5">
+                        Manage your store&apos;s details and settings
+                    </p>
+                </div>
+
+                <div className="rounded-xl border bg-card p-5 sm:p-6 max-w-2xl">
+                    <div className="flex items-start justify-between gap-3 mb-5">
+                        <div className="flex items-center gap-3 min-w-0">
+                            <div className="h-11 w-11 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                                <MapPin className="h-5 w-5 text-primary" />
+                            </div>
+                            <div className="min-w-0">
+                                <p className="font-semibold text-lg leading-tight truncate">{store.name}</p>
+                                {store.code && (
+                                    <p className="text-xs text-muted-foreground font-mono mt-0.5">{store.code}</p>
+                                )}
+                            </div>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5 justify-end shrink-0">
+                            <Badge variant="default" className="text-xs px-2 py-0">Active</Badge>
+                            {store.is_accepting_orders && (
+                                <Badge className="text-xs px-2 py-0 bg-emerald-600 hover:bg-emerald-600">Taking Orders</Badge>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="space-y-3 text-sm">
+                        <div className="flex items-start gap-2">
+                            <Building2 className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+                            <div className="text-muted-foreground leading-snug min-w-0">
+                                <p>{store.address_line1}</p>
+                                <p>{store.city}, {store.state} {store.postal_code}</p>
+                            </div>
+                        </div>
+                        {store.phone && (
+                            <div className="flex items-center gap-2 text-muted-foreground">
+                                <Phone className="h-4 w-4 shrink-0" />{formatPhoneForDisplay(store.phone)}
+                            </div>
+                        )}
+                        {store.email && (
+                            <div className="flex items-center gap-2 text-muted-foreground">
+                                <Mail className="h-4 w-4 shrink-0" />{store.email}
+                            </div>
+                        )}
+                        {store.timezone && (
+                            <div className="flex items-center gap-2 text-muted-foreground">
+                                <Clock className="h-4 w-4 shrink-0" />{getTimezoneLabel(store.timezone)}
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="flex flex-wrap gap-2 mt-6">
+                        <Button size="sm" className="gap-2" onClick={() => handleEditLocation(store)}>
+                            <Edit className="h-4 w-4" />
+                            Edit details
+                        </Button>
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            className="gap-2"
+                            onClick={() => router.push(`/dashboard/locations/${store.id}/settings`)}
+                        >
+                            <Settings className="h-4 w-4" />
+                            Tax &amp; banking
+                        </Button>
+                    </div>
+                </div>
+
+                <LocationDetailSheet
+                    location={editingLocation}
+                    open={isSheetOpen}
+                    onOpenChange={handleSheetClose}
+                    onUpdate={refetch}
+                />
+            </div>
+        )
+    }
+
     return (
-        <div className="space-y-6 animate-in fade-in duration-500">
+        <div className="space-y-6 animate-in fade-in duration-500 w-full min-w-0">
 
             {/* ── Header ─────────────────────────────────────────────────────── */}
-            <div className="flex items-start justify-between">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                     <h1 className="text-2xl font-semibold tracking-tight">Locations</h1>
                     <p className="text-sm text-muted-foreground mt-0.5">
@@ -232,7 +321,7 @@ export default function LocationsPage() {
                     </p>
                 </div>
                 {canCreateLocation && (
-                    <Button onClick={() => router.push('/dashboard/locations/new')} size="sm" className="gap-2">
+                    <Button onClick={() => router.push('/dashboard/locations/new')} size="sm" className="gap-2 self-start sm:self-auto shrink-0">
                         <Plus className="h-4 w-4" />
                         Add Location
                     </Button>
@@ -240,7 +329,7 @@ export default function LocationsPage() {
             </div>
 
             {/* ── Stats ──────────────────────────────────────────────────────── */}
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                 {[
                     { label: 'Active', value: activeLocations.length, icon: CheckCircle, color: 'text-emerald-500' },
                     { label: 'Archived', value: archivedLocations.length, icon: Archive, color: 'text-muted-foreground' },
@@ -261,10 +350,10 @@ export default function LocationsPage() {
             {/* ── Active location banner ──────────────────────────────────────── */}
             {selectedLocationId !== 'all' && (
                 <div className="flex items-center justify-between rounded-xl border border-primary/20 bg-primary/5 px-4 py-2.5 animate-in fade-in slide-in-from-top-2 duration-300">
-                    <div className="flex items-center gap-2 text-sm">
-                        <CheckCircle className="h-4 w-4 text-primary" />
-                        <span className="text-muted-foreground">Viewing</span>
-                        <span className="font-medium text-foreground">
+                    <div className="flex items-center gap-2 text-sm min-w-0">
+                        <CheckCircle className="h-4 w-4 text-primary shrink-0" />
+                        <span className="text-muted-foreground shrink-0">Viewing</span>
+                        <span className="font-medium text-foreground truncate">
                             {locationsList.find(l => l.id === selectedLocationId)?.name}
                         </span>
                     </div>
@@ -281,9 +370,10 @@ export default function LocationsPage() {
             )}
 
             {/* ── Toolbar ────────────────────────────────────────────────────── */}
-            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 w-full min-w-0">
                 {/* Status filter tabs */}
-                <div className="flex items-center rounded-lg border bg-muted/40 p-0.5 gap-0.5 shrink-0">
+                <div className="overflow-x-auto w-full sm:w-auto shrink-0">
+                <div className="flex items-center rounded-lg border bg-muted/40 p-0.5 gap-0.5 w-fit">
                     {([
                         { key: 'active', label: `Active (${activeLocations.length})` },
                         { key: 'archived', label: `Archived (${archivedLocations.length})` },
@@ -303,18 +393,19 @@ export default function LocationsPage() {
                         </Button>
                     ))}
                 </div>
+                </div>
 
-                <div className="relative flex-1 max-w-sm">
+                <div className="relative flex-1 w-full sm:w-auto">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
                     <Input
                         placeholder="Search locations..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="pl-9"
+                        className="pl-9 w-full"
                     />
                 </div>
 
-                <div className="flex items-center gap-2 ml-auto">
+                <div className="flex items-center gap-2 shrink-0">
                     <div className="flex items-center rounded-lg border bg-muted/40 p-0.5 gap-0.5">
                         <Button
                             variant="ghost"
@@ -333,7 +424,7 @@ export default function LocationsPage() {
                             <List className="h-4 w-4" />
                         </Button>
                     </div>
-                    <p className="text-sm text-muted-foreground whitespace-nowrap">
+                    <p className="text-sm text-muted-foreground whitespace-nowrap hidden lg:block">
                         {isLoading ? '' : `${filteredLocations.length} location${filteredLocations.length !== 1 ? 's' : ''}`}
                     </p>
                 </div>
@@ -382,7 +473,7 @@ export default function LocationsPage() {
                         <div
                             key={location.id}
                             className={cn(
-                                "group relative rounded-xl border bg-card p-5",
+                                "group relative rounded-xl border bg-card p-5 overflow-hidden",
                                 "transition-all duration-150",
                                 "animate-in fade-in slide-in-from-bottom-3",
                                 location.is_active
@@ -415,9 +506,9 @@ export default function LocationsPage() {
                             {/* Address */}
                             <div className="flex items-start gap-2 mb-3">
                                 <Building2 className="h-3.5 w-3.5 text-muted-foreground mt-0.5 shrink-0" />
-                                <div className="text-sm text-muted-foreground leading-snug">
-                                    <p>{location.address_line1}</p>
-                                    <p>{location.city}, {location.state} {location.postal_code}</p>
+                                <div className="text-sm text-muted-foreground leading-snug min-w-0">
+                                    <p className="truncate">{location.address_line1}</p>
+                                    <p className="truncate">{location.city}, {location.state} {location.postal_code}</p>
                                 </div>
                             </div>
 

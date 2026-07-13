@@ -1,6 +1,7 @@
 "use server";
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { isOrderReportable } from "@/lib/reporting/recognized-order";
 
 // ============================================================================
 // Types
@@ -86,6 +87,7 @@ export async function GetWaterfallReport(
       id,
       order_number,
       status,
+      payment_status,
       subtotal,
       tax_amount,
       tip_amount,
@@ -132,10 +134,11 @@ export async function GetWaterfallReport(
   // 2. Compute each waterfall line item
   // -------------------------------------------------------------------
 
-  // Only include orders that are not draft/cancelled/void for revenue
-  const activeOrders = ordersList.filter(
-    (o) => !["draft", "cancelled", "void"].includes(o.status)
-  );
+  // Recognized orders (payment collected) drive the revenue lines (gross sales,
+  // discounts). Voids and refunds are computed from the FULL ordersList below,
+  // so excluding refunded/unpaid here doesn't lose them — refunded orders are
+  // netted via the dedicated refunds line, matching the canonical predicate.
+  const activeOrders = ordersList.filter((o) => isOrderReportable(o));
 
   // --- Gross Sales: sum of non-voided order_items.subtotal ---
   let grossSalesAmount = 0;

@@ -40,6 +40,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useSelectedLocation } from "@/stores/location-store";
 import { SalesByItemReportItem } from "@/app/dashboard/actions/order-analytics";
+import { useReportingQueryRange } from "@/app/dashboard/hooks/useReportingDateRange";
 
 type SortKey = keyof Pick<
   SalesByItemReportItem,
@@ -100,9 +101,10 @@ export default function SalesByItemsPage() {
   const [sortDir, setSortDir] = useState<SortDir>("desc");
 
   const selectedLocation = useSelectedLocation();
-  const { data: items, isLoading } = useSalesByItemReport(
-    dateRange.from,
-    dateRange.to
+  const queryDateRange = useReportingQueryRange(dateRange);
+  const { data: items, isLoading, isError } = useSalesByItemReport(
+    queryDateRange.from,
+    queryDateRange.to
   );
 
   // Derived: unique categories
@@ -169,32 +171,28 @@ export default function SalesByItemsPage() {
   const kpis = [
     {
       label: "Unique Items",
-      value: isLoading ? null : summary.totalItems.toLocaleString(),
+      value: isLoading ? null : isError ? "—" : summary.totalItems.toLocaleString(),
       icon: Package,
       iconColor: "text-indigo-500",
       iconBg: "bg-indigo-50",
     },
     {
       label: "Total Qty Sold",
-      value: isLoading ? null : summary.totalQty.toLocaleString(),
+      value: isLoading ? null : isError ? "—" : summary.totalQty.toLocaleString(),
       icon: ShoppingCart,
       iconColor: "text-emerald-500",
       iconBg: "bg-emerald-50",
     },
     {
       label: "Gross Sales",
-      value: isLoading
-        ? null
-        : `$${summary.totalGross.toLocaleString("en-US", { minimumFractionDigits: 2 })}`,
+      value: isLoading ? null : isError ? "—" : `$${summary.totalGross.toLocaleString("en-US", { minimumFractionDigits: 2 })}`,
       icon: DollarSign,
       iconColor: "text-amber-500",
       iconBg: "bg-amber-50",
     },
     {
       label: "Net Sales",
-      value: isLoading
-        ? null
-        : `$${summary.totalNet.toLocaleString("en-US", { minimumFractionDigits: 2 })}`,
+      value: isLoading ? null : isError ? "—" : `$${summary.totalNet.toLocaleString("en-US", { minimumFractionDigits: 2 })}`,
       icon: TrendingUp,
       iconColor: "text-purple-500",
       iconBg: "bg-purple-50",
@@ -386,7 +384,17 @@ export default function SalesByItemsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {isLoading ? (
+              {isError ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="h-48 text-center">
+                    <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                      <Package className="h-8 w-8 opacity-30" />
+                      <p className="text-sm font-medium">Failed to load sales data</p>
+                      <p className="text-xs">Try refreshing the page or selecting a different date range.</p>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ) : isLoading ? (
                 Array.from({ length: 10 }).map((_, i) => (
                   <TableRow key={i} className="border-b border-border/30">
                     <TableCell className="pl-5 py-3.5">

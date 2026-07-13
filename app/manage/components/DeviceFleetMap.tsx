@@ -10,13 +10,13 @@ import { Radio, Wifi, WifiOff, Battery, BatteryLow, BatteryWarning, AlertCircle 
 function getStatusColor(status: 'green' | 'yellow' | 'red' | 'grey'): string {
   switch (status) {
     case 'green':
-      return 'bg-green-50 border-green-200 hover:border-green-300'
+      return 'bg-green-50 border-green-200 hover:border-green-300 dark:bg-green-950/30 dark:border-green-900 dark:hover:border-green-800'
     case 'yellow':
-      return 'bg-yellow-50 border-yellow-200 hover:border-yellow-300'
+      return 'bg-yellow-50 border-yellow-200 hover:border-yellow-300 dark:bg-yellow-950/30 dark:border-yellow-900 dark:hover:border-yellow-800'
     case 'red':
-      return 'bg-red-50 border-red-200 hover:border-red-300'
+      return 'bg-red-50 border-red-200 hover:border-red-300 dark:bg-red-950/30 dark:border-red-900 dark:hover:border-red-800'
     case 'grey':
-      return 'bg-gray-50 border-gray-200 hover:border-gray-300'
+      return 'bg-gray-50 border-gray-200 hover:border-gray-300 dark:bg-muted dark:border-border dark:hover:border-border'
   }
 }
 
@@ -52,9 +52,9 @@ export function DeviceFleetMap() {
 
   if (isLoading) {
     return (
-      <Card className="border border-blue-100/50 bg-white/80 backdrop-blur-sm shadow-sm rounded-xl overflow-hidden">
+      <Card className="border border-blue-100/50 dark:border-border bg-white/80 dark:bg-card/80 backdrop-blur-sm shadow-sm rounded-xl overflow-hidden">
         <CardHeader className="pb-2">
-          <CardTitle className="text-base font-semibold text-slate-900">Device Fleet Health</CardTitle>
+          <CardTitle className="text-base font-semibold text-slate-900 dark:text-slate-100">Device Fleet Health</CardTitle>
         </CardHeader>
         <CardContent className="p-4 pt-0">
           <div className="space-y-4">
@@ -69,15 +69,15 @@ export function DeviceFleetMap() {
 
   if (error) {
     return (
-      <Card className="border border-blue-100/50 bg-white/80 backdrop-blur-sm shadow-sm rounded-xl overflow-hidden">
+      <Card className="border border-blue-100/50 dark:border-border bg-white/80 dark:bg-card/80 backdrop-blur-sm shadow-sm rounded-xl overflow-hidden">
         <CardHeader className="pb-2">
-          <CardTitle className="text-base font-semibold text-slate-900">Device Fleet Health</CardTitle>
+          <CardTitle className="text-base font-semibold text-slate-900 dark:text-slate-100">Device Fleet Health</CardTitle>
         </CardHeader>
         <CardContent className="p-4 pt-0">
-          <div className="flex items-center justify-center h-32 bg-red-50/50 rounded-lg border border-red-100">
+          <div className="flex items-center justify-center h-32 bg-red-50/50 dark:bg-red-950/20 rounded-lg border border-red-100 dark:border-red-900">
             <div className="text-sm text-center">
-              <p className="font-semibold text-red-700 mb-1">Error loading fleet data</p>
-              <p className="text-xs text-red-600">{(error as Error).message}</p>
+              <p className="font-semibold text-red-700 dark:text-red-400 mb-1">Error loading fleet data</p>
+              <p className="text-xs text-red-600 dark:text-red-400">{(error as Error).message}</p>
             </div>
           </div>
         </CardContent>
@@ -87,12 +87,12 @@ export function DeviceFleetMap() {
 
   if (!fleet || fleet.length === 0) {
     return (
-      <Card className="border border-blue-100/50 bg-white/80 backdrop-blur-sm shadow-sm rounded-xl overflow-hidden">
+      <Card className="border border-blue-100/50 dark:border-border bg-white/80 dark:bg-card/80 backdrop-blur-sm shadow-sm rounded-xl overflow-hidden">
         <CardHeader className="pb-2">
-          <CardTitle className="text-base font-semibold text-slate-900">Device Fleet Health</CardTitle>
+          <CardTitle className="text-base font-semibold text-slate-900 dark:text-slate-100">Device Fleet Health</CardTitle>
         </CardHeader>
         <CardContent className="p-4 pt-0">
-          <div className="flex items-center justify-center h-32 bg-blue-50/30 rounded-lg border border-dashed border-blue-200">
+          <div className="flex items-center justify-center h-32 bg-blue-50/30 dark:bg-blue-950/20 rounded-lg border border-dashed border-blue-200 dark:border-border">
             <span className="text-sm text-muted-foreground">No active stations found</span>
           </div>
         </CardContent>
@@ -101,28 +101,28 @@ export function DeviceFleetMap() {
   }
 
   return (
-    <Card className="border border-blue-100/50 bg-white/80 backdrop-blur-sm shadow-sm rounded-xl overflow-hidden hover:shadow-md transition-all duration-200">
-      <CardHeader className="pb-2 border-b border-blue-100/50">
-        <div className="flex items-center justify-between">
+    <Card className="border border-blue-100/50 dark:border-border bg-white/80 dark:bg-card/80 backdrop-blur-sm shadow-sm rounded-xl overflow-hidden hover:shadow-md transition-all duration-200">
+      <CardHeader className="pb-2 border-b border-blue-100/50 dark:border-border">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
-            <Radio className="h-4 w-4 text-blue-600" />
-            <CardTitle className="text-base font-semibold text-slate-900">Device Fleet Health</CardTitle>
+            <Radio className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+            <CardTitle className="text-base font-semibold text-slate-900 dark:text-slate-100">Device Fleet Health</CardTitle>
           </div>
-          <div className="flex items-center gap-3 text-xs">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
             <div className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-green-500"></span>
+              <span className="w-2 h-2 rounded-full bg-green-500 shrink-0"></span>
               <span>Online</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-yellow-500"></span>
+              <span className="w-2 h-2 rounded-full bg-yellow-500 shrink-0"></span>
               <span>Warning</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-red-500"></span>
+              <span className="w-2 h-2 rounded-full bg-red-500 shrink-0"></span>
               <span>Offline</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-gray-400"></span>
+              <span className="w-2 h-2 rounded-full bg-gray-400 shrink-0"></span>
               <span>Inactive</span>
             </div>
           </div>
@@ -132,7 +132,7 @@ export function DeviceFleetMap() {
         <div className="space-y-5">
           {fleet.map((merchant) => (
             <div key={merchant.merchantId} className="space-y-2">
-              <h4 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+              <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
                 {merchant.merchantName}
               </h4>
@@ -146,12 +146,12 @@ export function DeviceFleetMap() {
                     }
                   >
                     <div className="flex items-start gap-2">
-                      <div className={`mt-0.5 w-5 h-5 rounded-full flex items-center justify-center bg-white/80`}>
+                      <div className={`mt-0.5 w-5 h-5 rounded-full flex items-center justify-center bg-white/80 dark:bg-white/10`}>
                         {getStatusIcon(station.status)}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between">
-                          <div className="text-sm font-semibold truncate text-slate-800">{station.name}</div>
+                          <div className="text-sm font-semibold truncate text-slate-800 dark:text-slate-200">{station.name}</div>
                           <span className={`w-2 h-2 rounded-full ${getStatusDot(station.status)}`}></span>
                         </div>
                         <div className="text-xs text-muted-foreground truncate">

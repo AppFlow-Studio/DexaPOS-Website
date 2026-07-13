@@ -1,6 +1,7 @@
 "use server";
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { applyReportablePredicate } from "@/lib/reporting/recognized-order";
 
 export interface OrderAnalytics {
   salesToday: number;
@@ -14,6 +15,7 @@ export interface OrderAnalytics {
   }>;
   orderTypeBreakdown: {
     dine_in: number;
+    qr_dine_in: number;
     takeout: number;
     delivery: number;
     online: number;
@@ -37,6 +39,7 @@ export interface BestSellingItem {
 
 export interface OrderTypeBreakdown {
   dine_in: number;
+  qr_dine_in: number;
   takeout: number;
   delivery: number;
   online: number;
@@ -69,6 +72,50 @@ async function getMerchantId(clerkOrgId: string) {
   return merchant.id;
 }
 
+const FALLBACK_REPORTING_TIMEZONE = "America/New_York";
+
+async function getLocationTimezoneMap(
+  supabase: ReturnType<typeof createServerSupabaseClient>,
+  merchantId: string,
+  locationId: string | null
+) {
+  let query = supabase
+    .from("locations")
+    .select("id, timezone")
+    .eq("merchant_id", merchantId);
+
+  if (locationId && locationId !== "all") {
+    query = query.eq("id", locationId);
+  }
+
+  const { data: locations } = await query;
+  return new Map(
+    (locations ?? []).map((location) => [
+      location.id,
+      location.timezone || FALLBACK_REPORTING_TIMEZONE,
+    ])
+  );
+}
+
+function getLocalDateKey(
+  instant: string | Date,
+  timeZone: string = FALLBACK_REPORTING_TIMEZONE
+) {
+  const date = instant instanceof Date ? instant : new Date(instant);
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+
+  const year = parts.find((part) => part.type === "year")?.value ?? "0000";
+  const month = parts.find((part) => part.type === "month")?.value ?? "01";
+  const day = parts.find((part) => part.type === "day")?.value ?? "01";
+
+  return `${year}-${month}-${day}`;
+}
+
 /**
  * Get order analytics for a date range
  */
@@ -86,13 +133,14 @@ export async function GetOrderAnalytics(
   const supabase = createServerSupabaseClient();
 
   // Build base query
-  let query = supabase
-    .from("orders")
-    .select("*, order_items(*)")
-    .eq("merchant_id", merchantId)
-    .not("status", "in", "(draft,cancelled,void)")
+  let query = applyReportablePredicate(
+    supabase
+      .from("orders")
+      .select("*, order_items(*)")
+      .eq("merchant_id", merchantId)
+  )
     .gte("created_at", dateFrom.toISOString())
-    .lte("created_at", dateTo.toISOString());
+    .lt("created_at", dateTo.toISOString());
 
   if (locationId && locationId !== "all") {
     query = query.eq("location_id", locationId);
@@ -106,6 +154,11 @@ export async function GetOrderAnalytics(
   }
 
   const ordersList = orders || [];
+  const locationTimezoneById = await getLocationTimezoneMap(
+    supabase,
+    merchantId,
+    locationId
+  );
 
   // Calculate today's sales
   const today = new Date();
@@ -169,6 +222,7 @@ export async function GetOrderAnalytics(
   // Order type breakdown
   const orderTypeBreakdown = {
     dine_in: 0,
+    qr_dine_in: 0,
     takeout: 0,
     delivery: 0,
     online: 0,
@@ -185,7 +239,10 @@ export async function GetOrderAnalytics(
   // Sales by date
   const salesByDateMap = new Map<string, { sales: number; orders: number }>();
   ordersList.forEach((order) => {
-    const date = new Date(order.created_at).toISOString().split("T")[0];
+    const date = getLocalDateKey(
+      order.created_at,
+      locationTimezoneById.get(order.location_id) ?? FALLBACK_REPORTING_TIMEZONE
+    );
     const amount = Number(order.total_amount || 0);
 
     if (salesByDateMap.has(date)) {
@@ -216,11 +273,12 @@ export async function GetOrderAnalytics(
   previousDateFrom.setDate(previousDateFrom.getDate() - periodDays);
   const previousDateTo = new Date(dateFrom);
 
-  let previousPeriodQuery = supabase
-    .from("orders")
-    .select("total_amount")
-    .eq("merchant_id", merchantId)
-    .eq("status", "completed")
+  let previousPeriodQuery = applyReportablePredicate(
+    supabase
+      .from("orders")
+      .select("total_amount")
+      .eq("merchant_id", merchantId)
+  )
     .gte("created_at", previousDateFrom.toISOString())
     .lt("created_at", previousDateTo.toISOString());
 
@@ -261,13 +319,14 @@ export async function GetSalesByDateRange(
 
   const supabase = createServerSupabaseClient();
 
-  let query = supabase
-    .from("orders")
-    .select("created_at, total_amount")
-    .eq("merchant_id", merchantId)
-    .not("status", "in", '("draft", "cancelled", "void")')
+  let query = applyReportablePredicate(
+    supabase
+      .from("orders")
+      .select("created_at, total_amount, location_id")
+      .eq("merchant_id", merchantId)
+  )
     .gte("created_at", dateFrom.toISOString())
-    .lte("created_at", dateTo.toISOString());
+    .lt("created_at", dateTo.toISOString());
 
   if (locationId && locationId !== "all") {
     query = query.eq("location_id", locationId);
@@ -280,9 +339,17 @@ export async function GetSalesByDateRange(
     return [];
   }
 
+  const locationTimezoneById = await getLocationTimezoneMap(
+    supabase,
+    merchantId,
+    locationId
+  );
   const salesByDateMap = new Map<string, { sales: number; orders: number }>();
   orders?.forEach((order) => {
-    const date = new Date(order.created_at).toISOString().split("T")[0];
+    const date = getLocalDateKey(
+      order.created_at,
+      locationTimezoneById.get(order.location_id) ?? FALLBACK_REPORTING_TIMEZONE
+    );
     const amount = Number(order.total_amount || 0);
 
     if (salesByDateMap.has(date)) {
@@ -322,13 +389,14 @@ export async function GetBestSellingItems(
 
   const supabase = createServerSupabaseClient();
 
-  let query = supabase
-    .from("orders")
-    .select("order_items(item_name, quantity, subtotal)")
-    .eq("merchant_id", merchantId)
-    .not("status", "in", '("draft", "cancelled", "void")')
+  let query = applyReportablePredicate(
+    supabase
+      .from("orders")
+      .select("order_items(item_name, quantity, subtotal)")
+      .eq("merchant_id", merchantId)
+  )
     .gte("created_at", dateFrom.toISOString())
-    .lte("created_at", dateTo.toISOString());
+    .lt("created_at", dateTo.toISOString());
 
   if (locationId && locationId !== "all") {
     query = query.eq("location_id", locationId);
@@ -385,6 +453,7 @@ export async function GetOrderTypeBreakdown(
   if (!merchantId) {
     return {
       dine_in: 0,
+      qr_dine_in: 0,
       takeout: 0,
       delivery: 0,
       online: 0,
@@ -394,13 +463,14 @@ export async function GetOrderTypeBreakdown(
 
   const supabase = createServerSupabaseClient();
 
-  let query = supabase
-    .from("orders")
-    .select("order_type")
-    .eq("merchant_id", merchantId)
-    .not("status", "in", '("draft", "cancelled", "void")')
+  let query = applyReportablePredicate(
+    supabase
+      .from("orders")
+      .select("order_type")
+      .eq("merchant_id", merchantId)
+  )
     .gte("created_at", dateFrom.toISOString())
-    .lte("created_at", dateTo.toISOString());
+    .lt("created_at", dateTo.toISOString());
 
   if (locationId && locationId !== "all") {
     query = query.eq("location_id", locationId);
@@ -412,6 +482,7 @@ export async function GetOrderTypeBreakdown(
     console.error("[GetOrderTypeBreakdown] Error:", error);
     return {
       dine_in: 0,
+      qr_dine_in: 0,
       takeout: 0,
       delivery: 0,
       online: 0,
@@ -421,6 +492,7 @@ export async function GetOrderTypeBreakdown(
 
   const breakdown: OrderTypeBreakdown = {
     dine_in: 0,
+    qr_dine_in: 0,
     takeout: 0,
     delivery: 0,
     online: 0,
@@ -458,12 +530,14 @@ export async function GetOrderStats(
 
   const supabase = createServerSupabaseClient();
 
-  let query = supabase
-    .from("orders")
-    .select("total_amount, status")
-    .eq("merchant_id", merchantId)
+  let query = applyReportablePredicate(
+    supabase
+      .from("orders")
+      .select("total_amount, status")
+      .eq("merchant_id", merchantId)
+  )
     .gte("created_at", dateFrom.toISOString())
-    .lte("created_at", dateTo.toISOString());
+    .lt("created_at", dateTo.toISOString());
 
   if (locationId && locationId !== "all") {
     query = query.eq("location_id", locationId);
@@ -481,14 +555,16 @@ export async function GetOrderStats(
     };
   }
 
+  // Every returned row is a recognized order (paid + not draft/cancelled/void/
+  // refunded). "completedOrders" retains its API name but now means the
+  // recognized-order count — no longer the manual `completed` tap.
   const ordersList = orders || [];
   const totalOrders = ordersList.length;
-  const completedOrders = ordersList.filter(
-    (o: any) => o.status === "completed"
-  ).length;
-  const totalSales = ordersList
-    .filter((o: any) => o.status === "completed")
-    .reduce((sum, o: any) => sum + Number(o.total_amount || 0), 0);
+  const completedOrders = totalOrders;
+  const totalSales = ordersList.reduce(
+    (sum, o: any) => sum + Number(o.total_amount || 0),
+    0
+  );
   const avgOrderValue = completedOrders > 0 ? totalSales / completedOrders : 0;
 
   return {
@@ -511,6 +587,7 @@ function getEmptyAnalytics(): OrderAnalytics {
     bestSellingItems: [],
     orderTypeBreakdown: {
       dine_in: 0,
+      qr_dine_in: 0,
       takeout: 0,
       delivery: 0,
       online: 0,
@@ -728,10 +805,11 @@ export async function GetRevenueByCategoryReport(
   const supabase = createServerSupabaseClient();
 
   // Query orders → order_items + nested order_item_modifiers
-  let query = supabase
-    .from("orders")
-    .select(
-      `
+  let query = applyReportablePredicate(
+    supabase
+      .from("orders")
+      .select(
+        `
       id,
       order_items(
         id,
@@ -749,11 +827,11 @@ export async function GetRevenueByCategoryReport(
         )
       )
     `
-    )
-    .eq("merchant_id", merchantId)
-    .not("status", "in", "(draft,cancelled,void)")
+      )
+      .eq("merchant_id", merchantId)
+  )
     .gte("created_at", dateFrom.toISOString())
-    .lte("created_at", dateTo.toISOString());
+    .lt("created_at", dateTo.toISOString());
 
   if (locationId && locationId !== "all") {
     query = query.eq("location_id", locationId);
@@ -1059,7 +1137,7 @@ export async function GetTransactionVolumeReport(
     )
     .eq("orders.merchant_id", merchantId)
     .gte("initiated_at", dateFrom.toISOString())
-    .lte("initiated_at", dateTo.toISOString());
+    .lt("initiated_at", dateTo.toISOString());
 
   if (locationId && locationId !== "all") {
     query = query.eq("orders.location_id", locationId);
@@ -1194,13 +1272,14 @@ export async function GetNetCollectedBySourceReport(
 
   const supabase = createServerSupabaseClient();
 
-  let query = supabase
-    .from("orders")
-    .select("order_type, total_amount, discount_amount, status")
-    .eq("merchant_id", merchantId)
-    .not("status", "in", "(draft,cancelled,void)")
+  let query = applyReportablePredicate(
+    supabase
+      .from("orders")
+      .select("order_type, total_amount, discount_amount, status")
+      .eq("merchant_id", merchantId)
+  )
     .gte("created_at", dateFrom.toISOString())
-    .lte("created_at", dateTo.toISOString());
+    .lt("created_at", dateTo.toISOString());
 
   if (locationId && locationId !== "all") {
     query = query.eq("location_id", locationId);
@@ -1217,6 +1296,7 @@ export async function GetNetCollectedBySourceReport(
   const sourceMap: Record<string, string> = {
     dine_in: "POS",
     takeout: "POS",
+    qr_dine_in: "QR Table",
     online: "Online",
     delivery: "Third-Party",
     catering: "Catering",
@@ -1325,11 +1405,12 @@ export async function GetTaxableRevenueByTenderReport(
 
   const supabase = createServerSupabaseClient();
 
-  // 1. Get all completed orders with their payments and item-level tax info
-  let orderQuery = supabase
-    .from("orders")
-    .select(
-      `
+  // 1. Get all recognized orders with their payments and item-level tax info
+  let orderQuery = applyReportablePredicate(
+    supabase
+      .from("orders")
+      .select(
+        `
       id,
       subtotal,
       tax_amount,
@@ -1348,11 +1429,11 @@ export async function GetTaxableRevenueByTenderReport(
         status
       )
     `
-    )
-    .eq("merchant_id", merchantId)
-    .not("status", "in", "(draft,cancelled,void)")
+      )
+      .eq("merchant_id", merchantId)
+  )
     .gte("created_at", dateFrom.toISOString())
-    .lte("created_at", dateTo.toISOString());
+    .lt("created_at", dateTo.toISOString());
 
   if (locationId && locationId !== "all") {
     orderQuery = orderQuery.eq("location_id", locationId);
@@ -1562,15 +1643,16 @@ export async function GetRevenueBreakdown(
 
   const supabase = createServerSupabaseClient();
 
-  let query = supabase
-    .from("orders")
-    .select(
-      "created_at, subtotal, tax_amount, tip_amount, service_charge, discount_amount, total_amount"
-    )
-    .eq("merchant_id", merchantId)
-    .not("status", "in", "(draft,cancelled,void)")
+  let query = applyReportablePredicate(
+    supabase
+      .from("orders")
+      .select(
+        "created_at, subtotal, tax_amount, tip_amount, service_charge, discount_amount, total_amount"
+      )
+      .eq("merchant_id", merchantId)
+  )
     .gte("created_at", dateFrom.toISOString())
-    .lte("created_at", dateTo.toISOString());
+    .lt("created_at", dateTo.toISOString());
 
   if (locationId && locationId !== "all") {
     query = query.eq("location_id", locationId);
@@ -1668,13 +1750,14 @@ export async function GetDualPricingComparison(
 
   const supabase = createServerSupabaseClient();
 
-  let query = supabase
-    .from("orders")
-    .select(
-      "created_at, total_amount, card_total, cash_total, cash_discount_applied, payment_pricing_mode"
-    )
-    .eq("merchant_id", merchantId)
-    .not("status", "in", "(draft,cancelled,void)")
+  let query = applyReportablePredicate(
+    supabase
+      .from("orders")
+      .select(
+        "created_at, total_amount, card_total, cash_total, cash_discount_applied, payment_pricing_mode"
+      )
+      .eq("merchant_id", merchantId)
+  )
     .gte("created_at", dateFrom.toISOString())
     .lte("created_at", dateTo.toISOString());
 
@@ -1771,13 +1854,14 @@ export async function GetDiscountImpact(
   const supabase = createServerSupabaseClient();
 
   // Get total order count for the period
-  let orderCountQuery = supabase
-    .from("orders")
-    .select("id", { count: "exact", head: true })
-    .eq("merchant_id", merchantId)
-    .not("status", "in", "(draft,cancelled,void)")
+  let orderCountQuery = applyReportablePredicate(
+    supabase
+      .from("orders")
+      .select("id", { count: "exact", head: true })
+      .eq("merchant_id", merchantId)
+  )
     .gte("created_at", dateFrom.toISOString())
-    .lte("created_at", dateTo.toISOString());
+    .lt("created_at", dateTo.toISOString());
 
   if (locationId && locationId !== "all") {
     orderCountQuery = orderCountQuery.eq("location_id", locationId);
@@ -1785,16 +1869,19 @@ export async function GetDiscountImpact(
 
   const { count: totalOrderCount } = await orderCountQuery;
 
-  // Get discount data
-  let discountQuery = supabase
-    .from("order_discounts")
-    .select(
-      "order_id, discount_name, source, calculated_amount, orders!inner(merchant_id, location_id, created_at, status)"
-    )
-    .eq("orders.merchant_id", merchantId)
-    .not("orders.status", "in", "(draft,cancelled,void)")
+  // Get discount data (recognized orders only — predicate targets the embedded
+  // `orders` relation via the "orders." prefix)
+  let discountQuery = applyReportablePredicate(
+    supabase
+      .from("order_discounts")
+      .select(
+        "order_id, discount_name, source, calculated_amount, orders!inner(merchant_id, location_id, created_at, status, payment_status)"
+      )
+      .eq("orders.merchant_id", merchantId),
+    "orders."
+  )
     .gte("orders.created_at", dateFrom.toISOString())
-    .lte("orders.created_at", dateTo.toISOString())
+    .lt("orders.created_at", dateTo.toISOString())
     .is("voided_at", null);
 
   if (locationId && locationId !== "all") {
@@ -1871,15 +1958,16 @@ export async function GetSalesSummaryReport(
 
   const supabase = createServerSupabaseClient();
 
-  let query = supabase
-    .from("orders")
-    .select(
-      "created_at, subtotal, tax_amount, tip_amount, discount_amount, total_amount, status"
-    )
-    .eq("merchant_id", merchantId)
-    .not("status", "in", "(draft,cancelled,void)")
+  let query = applyReportablePredicate(
+    supabase
+      .from("orders")
+      .select(
+        "created_at, subtotal, tax_amount, tip_amount, discount_amount, total_amount, status"
+      )
+      .eq("merchant_id", merchantId)
+  )
     .gte("created_at", dateFrom.toISOString())
-    .lte("created_at", dateTo.toISOString());
+    .lt("created_at", dateTo.toISOString());
 
   if (locationId && locationId !== "all") {
     query = query.eq("location_id", locationId);
@@ -1889,6 +1977,32 @@ export async function GetSalesSummaryReport(
   if (error || !orders) {
     console.error("[GetSalesSummaryReport] Error:", error);
     return [];
+  }
+
+  // Refunds are netted from the dedicated refunds source (order_payments),
+  // NOT from the recognized-order gate — which excludes `refunded` orders.
+  // Without this separate query the refunds column would silently read 0.
+  let refundQuery = supabase
+    .from("order_payments")
+    .select("refunded_amount, refunded_at, orders!inner(merchant_id, location_id)")
+    .eq("orders.merchant_id", merchantId)
+    .in("status", ["refunded", "partially_refunded"])
+    .gte("refunded_at", dateFrom.toISOString())
+    .lt("refunded_at", dateTo.toISOString());
+
+  if (locationId && locationId !== "all") {
+    refundQuery = refundQuery.eq("orders.location_id", locationId);
+  }
+
+  const { data: refundRows } = await refundQuery;
+  const refundsByDate = new Map<string, number>();
+  for (const r of refundRows || []) {
+    if (!r.refunded_at) continue;
+    const date = new Date(r.refunded_at).toISOString().split("T")[0];
+    refundsByDate.set(
+      date,
+      (refundsByDate.get(date) || 0) + Number(r.refunded_amount || 0)
+    );
   }
 
   const byDateMap = new Map<
@@ -1919,10 +2033,22 @@ export async function GetSalesSummaryReport(
     existing.discounts += Number(o.discount_amount || 0);
     existing.tax += Number(o.tax_amount || 0);
     existing.tips += Number(o.tip_amount || 0);
-    if ((o as any).status === "refunded") {
-      existing.refunds += Number(o.total_amount || 0);
-    }
 
+    byDateMap.set(date, existing);
+  }
+
+  // Fold in refunds (keyed by refund date, which may differ from order date,
+  // so ensure those dates exist in the map).
+  for (const [date, amount] of refundsByDate.entries()) {
+    const existing = byDateMap.get(date) || {
+      orderCount: 0,
+      grossSales: 0,
+      discounts: 0,
+      tax: 0,
+      tips: 0,
+      refunds: 0,
+    };
+    existing.refunds += amount;
     byDateMap.set(date, existing);
   }
 
@@ -1949,13 +2075,14 @@ export async function GetHourlySalesReport(
 
   const supabase = createServerSupabaseClient();
 
-  let query = supabase
-    .from("orders")
-    .select("created_at, total_amount")
-    .eq("merchant_id", merchantId)
-    .not("status", "in", "(draft,cancelled,void)")
+  let query = applyReportablePredicate(
+    supabase
+      .from("orders")
+      .select("created_at, total_amount")
+      .eq("merchant_id", merchantId)
+  )
     .gte("created_at", dateFrom.toISOString())
-    .lte("created_at", dateTo.toISOString());
+    .lt("created_at", dateTo.toISOString());
 
   if (locationId && locationId !== "all") {
     query = query.eq("location_id", locationId);

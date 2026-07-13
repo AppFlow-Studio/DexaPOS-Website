@@ -58,7 +58,7 @@ export function KitchenSpeedHeatmap({
     >
       {data && data.length > 0 && (
         <div className="space-y-4">
-          <div className="overflow-x-auto flex justify-center">
+          <div className="overflow-x-auto flex justify-start lg:justify-center">
             <div className="min-w-fit">
               {/* Header with day labels */}
               <div className="flex items-start">

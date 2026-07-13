@@ -107,10 +107,10 @@ export function PromotionCard({
 
   return (
     <Card className="overflow-hidden">
-      <div className="flex items-center justify-between p-4">
-        <div className="flex items-start gap-4 flex-1">
+      <div className="flex items-center justify-between gap-2 p-4">
+        <div className="flex items-start gap-4 flex-1 min-w-0">
           {/* Icon */}
-          <div className="text-muted-foreground mt-0.5">
+          <div className="text-muted-foreground mt-0.5 shrink-0">
             {icon || <Snowflake className="h-5 w-5" />}
           </div>
 
@@ -122,9 +122,9 @@ export function PromotionCard({
                 {getPromoTypeLabel()}
               </Badge>
             </div>
-            <div className="flex flex-col gap-0.5 text-sm text-muted-foreground">
-              <span>{getDiscountText()}</span>
-              <span className="text-xs">{getScheduleText()}</span>
+            <div className="flex flex-col gap-0.5 text-sm text-muted-foreground min-w-0">
+              <span className="truncate">{getDiscountText()}</span>
+              <span className="text-xs truncate">{getScheduleText()}</span>
             </div>
             {promotion.description && (
               <p className="text-xs text-muted-foreground mt-2">{promotion.description}</p>
@@ -133,15 +133,15 @@ export function PromotionCard({
         </div>
 
         {/* Right side: Toggle + Menu */}
-        <div className="flex items-center gap-3 ml-4">
-          <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 ml-2 shrink-0">
+          <div className="flex items-center gap-1.5">
             <Switch
               checked={promotion.is_active}
               onCheckedChange={(checked) => onToggle(promotion.id, checked)}
               disabled={isToggling}
               aria-label="Toggle promotion"
             />
-            <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">
+            <span className="text-xs font-medium text-muted-foreground whitespace-nowrap hidden sm:inline">
               {promotion.is_active ? 'Active' : 'Inactive'}
             </span>
           </div>

@@ -23,6 +23,10 @@ import {
   type OnlineStoreReviewChecklist,
 } from '@/lib/online-store/setup-flow'
 import { uploadMerchantDocument, uploadOrganizationDocument } from '@/lib/cdn/server'
+import {
+  syncStorefrontWhitelistForLocation,
+  type WhitelistSyncResult,
+} from '@/lib/payments/storefront-whitelist'
 
 type MissingRequestFieldKey =
   | 'legalBusinessName'
@@ -154,6 +158,7 @@ interface LocationNmiPaymentDeviceSummary {
   provider_merchant_id: string | null
   provider_gateway_id: string | null
   has_provider_secret: boolean
+  has_webhook_secret?: boolean
 }
 
 interface OnlineOrderingSettings {
@@ -174,6 +179,7 @@ interface OnlineOrderingSettings {
   storeName: string
   storeSlug: string
   storeUrl?: string
+  customDomain?: string | null
   description?: string
   phone: string
   email: string
@@ -216,7 +222,9 @@ interface OnlineOrderingSettings {
   acceptCardOnDelivery?: boolean
   nmiTokenizationKey?: string
   nmiPrivateApiKey?: string
+  nmiWebhookSecret?: string
   nmiConfigured?: boolean
+  nmiWebhookConfigured?: boolean
   tippingEnabled?: boolean
   tipConfig?: TipConfig
   baseDeliveryFee?: number
@@ -269,6 +277,25 @@ async function buildRequestedStoreSlug(
   }
 
   return `${baseSlug}-${Date.now().toString().slice(-6)}`
+}
+
+// ============================================================================
+// Storefront whitelist sync (QR-32)
+//
+// The actual sync logic lives in lib/payments/storefront-whitelist.ts so the
+// same code path is reused by the standalone backfill/audit scripts under
+// scripts/. Kept the type alias here for backward compatibility with anything
+// that imports `StorefrontWhitelistSyncResult` from this module.
+// See docs/RUNBOOK-PAYMENT-WHITELIST-SYNC.md.
+// ============================================================================
+
+export type StorefrontWhitelistSyncResult = WhitelistSyncResult
+
+async function syncStorefrontWhitelist(
+  supabase: ReturnType<typeof createServerSupabaseClient>,
+  locationId: string
+): Promise<StorefrontWhitelistSyncResult> {
+  return syncStorefrontWhitelistForLocation(supabase as any, locationId)
 }
 
 async function getReviewContext(
@@ -655,13 +682,14 @@ export async function getAdminOnlineOrderingSettings(
       settings.enabled = config.is_active ?? false
       settings.storeName = config.store_name || settings.storeName
       settings.storeSlug = config.slug ?? ''
+      settings.customDomain = config.custom_domain ?? null
       settings.description = config.description ?? ''
       settings.logoUrl = config.logo_url
       settings.heroImageUrl = config.hero_image_url
       settings.faviconUrl = config.favicon_url
       settings.ogImageUrl = config.og_image_url
       settings.templateId = (config.template_id ?? 'classic') as OnlineOrderingSettings['templateId']
-      settings.primaryColor = config.primary_color ?? '#2DD4BF'
+      settings.primaryColor = config.primary_color ?? '#0C4FD1'
       settings.secondaryColor = config.secondary_color ?? '#10b981'
       settings.accentColor = config.accent_color ?? null
       settings.backgroundColor = config.background_color ?? '#FFFFFF'
@@ -699,9 +727,14 @@ export async function getAdminOnlineOrderingSettings(
       settings.acceptCardOnDelivery = config.accepts_card_on_delivery ?? false
       settings.nmiTokenizationKey = locationPaymentDevice?.provider_public_key ?? ''
       settings.nmiPrivateApiKey = ''
+      settings.nmiWebhookSecret = ''
       settings.nmiConfigured = Boolean(
         locationPaymentDevice?.provider_public_key &&
         locationPaymentDevice?.has_provider_secret &&
+        locationPaymentDevice?.status === 'active'
+      )
+      settings.nmiWebhookConfigured = Boolean(
+        locationPaymentDevice?.has_webhook_secret &&
         locationPaymentDevice?.status === 'active'
       )
     }
@@ -1184,12 +1217,18 @@ export async function adminSaveOnlineOrderingSettings(
         ? settings.nmiTokenizationKey.trim()
         : existingLocationPaymentDevice?.provider_public_key ?? ''
     const providedPrivateApiKey = settings.nmiPrivateApiKey?.trim() ?? ''
+    const providedWebhookSecret = settings.nmiWebhookSecret?.trim() ?? ''
     const tokenizationKeyChanged =
       settings.nmiTokenizationKey !== undefined &&
       nextTokenizationKey !== (existingLocationPaymentDevice?.provider_public_key ?? '')
+    const webhookSecretProvided = providedWebhookSecret.length > 0
     const shouldUpsertLocationPaymentDevice =
       tokenizationKeyChanged ||
       providedPrivateApiKey.length > 0
+    const shouldUpdateWebhookSecretOnly =
+      Boolean(existingLocationPaymentDevice?.id) &&
+      !shouldUpsertLocationPaymentDevice &&
+      webhookSecretProvided
 
     if (shouldUpsertLocationPaymentDevice && nextTokenizationKey.length === 0) {
       return {
@@ -1289,7 +1328,7 @@ export async function adminSaveOnlineOrderingSettings(
           p_provider_gateway_id: providerGatewayId,
           p_public_key: nextTokenizationKey,
           p_security_key: providedPrivateApiKey,
-          p_webhook_secret: null,
+          p_webhook_secret: webhookSecretProvided ? providedWebhookSecret : null,
         }
       )
 
@@ -1297,6 +1336,23 @@ export async function adminSaveOnlineOrderingSettings(
         return {
           success: false,
           error: `NMI device activation failed: ${activateDeviceError.message}`,
+        }
+      }
+    }
+
+    if (shouldUpdateWebhookSecretOnly) {
+      const { error: webhookSecretError } = await (supabase as any).rpc(
+        'set_nmi_payment_device_webhook_secret',
+        {
+          p_device_id: existingLocationPaymentDevice!.id,
+          p_webhook_secret: providedWebhookSecret,
+        }
+      )
+
+      if (webhookSecretError) {
+        return {
+          success: false,
+          error: `NMI webhook secret update failed: ${webhookSecretError.message}`,
         }
       }
     }
@@ -1326,18 +1382,34 @@ export async function adminSaveOnlineOrderingSettings(
             existingLocationPaymentDevice?.has_provider_secret &&
             existingLocationPaymentDevice?.status === 'active'
           ),
+        nmi_webhook_configured: shouldUpsertLocationPaymentDevice
+          ? webhookSecretProvided || Boolean(existingLocationPaymentDevice?.has_webhook_secret)
+          : shouldUpdateWebhookSecretOnly || Boolean(existingLocationPaymentDevice?.has_webhook_secret),
         nmi_tokenization_key_changed: tokenizationKeyChanged,
+        nmi_webhook_secret_updated: shouldUpsertLocationPaymentDevice
+          ? webhookSecretProvided
+          : shouldUpdateWebhookSecretOnly,
       },
     })
+
+    const whitelist = await syncStorefrontWhitelist(supabase, locationId)
+    if (whitelist.error) {
+      console.error(
+        '[adminSaveOnlineOrderingSettings] Whitelist sync error:',
+        whitelist.error
+      )
+    }
 
     revalidateOnlineStorePaths(merchantId)
 
     return {
       success: true,
       error: null,
-      domainWhitelisted: false,
-      domainWhitelistError: undefined,
-      domainWhitelistSkipped: true,
+      domainWhitelisted: whitelist.synced && !whitelist.skipped,
+      domainWhitelistError: whitelist.error,
+      domainWhitelistSkipped: whitelist.skipped ?? false,
+      whitelistOrigins: whitelist.origins,
+      whitelistSyncedAt: whitelist.syncedAt,
     }
   } catch (error) {
     console.error('[adminSaveOnlineOrderingSettings] Exception:', error)
@@ -1360,7 +1432,7 @@ export async function adminToggleOnlineStore(
 
     const { data: existingConfig } = await supabase
       .from('online_store_config')
-      .select('id, slug, setup_request_status, accepts_online_payments')
+      .select('id, slug, custom_domain, setup_request_status, accepts_online_payments')
       .eq('location_id', locationId)
       .single()
 
@@ -1422,12 +1494,26 @@ export async function adminToggleOnlineStore(
       },
     })
 
+    const whitelist = enabled
+      ? await syncStorefrontWhitelist(supabase, locationId)
+      : null
+
+    if (whitelist?.error) {
+      console.error(
+        '[adminToggleOnlineStore] Whitelist sync error:',
+        whitelist.error
+      )
+    }
+
     revalidateOnlineStorePaths(merchantId)
     return {
       success: true,
       error: null,
-      domainWhitelistError: undefined,
-      domainWhitelistSkipped: true,
+      domainWhitelisted: Boolean(whitelist?.synced && !whitelist?.skipped),
+      domainWhitelistError: whitelist?.error,
+      domainWhitelistSkipped: whitelist ? (whitelist.skipped ?? false) : true,
+      whitelistOrigins: whitelist?.origins ?? [],
+      whitelistSyncedAt: whitelist?.syncedAt ?? null,
     }
   } catch (error) {
     console.error('[adminToggleOnlineStore] Exception:', error)
@@ -1471,7 +1557,7 @@ export async function adminCreateOnlineStore(
         store_name: locationName,
         slug: defaultSlug,
         is_active: false,
-        primary_color: '#2DD4BF',
+        primary_color: '#0C4FD1',
         accepts_pickup: true,
         accepts_delivery: false,
         estimated_prep_minutes: 15,

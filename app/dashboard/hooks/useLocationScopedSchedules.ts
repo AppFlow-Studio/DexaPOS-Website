@@ -218,10 +218,10 @@ export function useDeleteScheduleMutation() {
  */
 export function useToggleScheduleActiveMutation() {
   const queryClient = useQueryClient();
+  const locationId = useEffectiveLocationId();
 
   return useMutation({
     mutationFn: (scheduleId: string) => {
-      const locationId = useEffectiveLocationId();
       return ToggleScheduleActive(scheduleId, locationId);
     },
     onSuccess: (result) => {

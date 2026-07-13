@@ -46,6 +46,7 @@ import {
 import {
   useIsAllLocations,
   useSelectedLocation,
+  useIsSingleLocation,
 } from "@/stores/location-store";
 
 interface TimeSlotInput {
@@ -84,6 +85,7 @@ export function ScheduleFormSheet({
   // Location context
   const isAllLocations = useIsAllLocations();
   const selectedLocation = useSelectedLocation();
+  const isSingleLocation = useIsSingleLocation();
 
   // Form state
   const [name, setName] = useState("");
@@ -471,7 +473,9 @@ export function ScheduleFormSheet({
               <DialogDescription className="max-w-[60ch] text-sm leading-6">
                 Control when menus and categories are available to customers
               </DialogDescription>
-              {/* Location Context Banner */}
+              {/* Location Context Banner — hidden for single-location accounts
+                  (the global-vs-location distinction is meaningless). */}
+              {!isSingleLocation && (
               <div
                 className={cn(
                   "mt-3 p-3 rounded-lg border flex items-center gap-2",
@@ -507,9 +511,10 @@ export function ScheduleFormSheet({
                   </>
                 )}
               </div>
+              )}
             </DialogHeader>
 
-            <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6">
               <div className="space-y-6">
                 {/* Schedule Details */}
                 <BottomSheetSection title="Schedule Details">
@@ -541,7 +546,7 @@ export function ScheduleFormSheet({
 
                 {/* Day Selection */}
                 <BottomSheetSection title="Active Days">
-                  <div className="grid grid-cols-7 gap-2">
+                  <div className="grid grid-cols-7 gap-1 sm:gap-2">
                     {DAYS_OF_WEEK.map((day, index) => {
                       const isSelected = selectedDays.includes(index);
                       return (
@@ -550,7 +555,7 @@ export function ScheduleFormSheet({
                           type="button"
                           onClick={() => toggleDay(index)}
                           className={cn(
-                            "aspect-square rounded-xl text-sm font-medium transition-all duration-200",
+                            "aspect-square min-w-0 rounded-xl text-xs sm:text-sm font-medium transition-all duration-200",
                             "flex items-center justify-center",
                             "active:scale-95",
                             isSelected
@@ -646,7 +651,7 @@ export function ScheduleFormSheet({
                               {daySlots.map((slot, slotIdx) => (
                                 <div
                                   key={slot.id}
-                                  className="flex items-center gap-2 animate-in fade-in slide-in-from-left-2"
+                                  className="flex flex-wrap items-center gap-x-2 gap-y-2 animate-in fade-in slide-in-from-left-2"
                                   style={{
                                     animationDelay: `${slotIdx * 30}ms`,
                                   }}
@@ -656,7 +661,7 @@ export function ScheduleFormSheet({
                                     onChange={(v) =>
                                       updateTimeSlot(slot.id, "start_time", v)
                                     }
-                                    className="flex-1"
+                                    className="flex-1 min-w-[130px]"
                                   />
                                   <span className="text-muted-foreground text-sm">
                                     to
@@ -666,7 +671,7 @@ export function ScheduleFormSheet({
                                     onChange={(v) =>
                                       updateTimeSlot(slot.id, "end_time", v)
                                     }
-                                    className="flex-1"
+                                    className="flex-1 min-w-[130px]"
                                   />
                                   {daySlots.length > 1 && (
                                     <Button

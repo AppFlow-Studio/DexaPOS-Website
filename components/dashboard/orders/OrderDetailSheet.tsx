@@ -23,6 +23,7 @@ import {
 } from "@/types/order-management";
 import { OrderStatusBadge } from "./OrderStatusBadge";
 import { PaymentStatusBadge } from "./PaymentStatusBadge";
+import { DeliveryPlatformBadge } from "./DeliveryPlatformBadge";
 import { cn } from "@/lib/utils";
 import {
   Calendar,
@@ -32,6 +33,7 @@ import {
   ShoppingBag,
   Truck,
   Globe,
+  QrCode,
   ChefHat,
   DollarSign,
   RotateCcw,
@@ -52,10 +54,8 @@ import {
 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import {
-  GetOrderDetails,
-  GetOrderFullHistory,
-} from "@/app/dashboard/actions/order";
+import { GetOrderDetails } from "@/app/dashboard/actions/order";
+import { GetOrderFullHistory } from "@/app/dashboard/actions/order-full-history";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   DropdownMenu,
@@ -66,7 +66,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ArrowRight, ChevronDown, ChevronUp } from "lucide-react";
 import { OrderFullTimeline } from "./OrderFullTimeline";
-import { useSelectedLocation } from "@/stores/location-store";
+import { useLocationStore, useSelectedLocation } from "@/stores/location-store";
+import { orderTypeLabel } from "@/lib/constants/order-type";
 import type { OrderFullHistory } from "@/types/order-full-history";
 import {
   EnhancedPaymentsList,
@@ -78,6 +79,13 @@ import { SendReceiptModal } from "./SendReceiptModal";
 import { AssignCustomerModal } from "./AssignCustomerModal";
 import { AdjustTipModal } from "./AdjustTipModal";
 import { assignCustomerToOrder } from "@/app/actions/orders/assign-customer";
+import { getOrderBreakdown } from "@/lib/orders/order-breakdown";
+import {
+  orderSourceLabel,
+  platformLabel,
+  isKnownPlatform,
+} from "@/lib/orderout/platform";
+import { PlatformBadge } from "./PlatformBadge";
 import { toast } from "sonner";
 
 interface OrderDetailSheetProps {
@@ -88,6 +96,11 @@ interface OrderDetailSheetProps {
   fullPageUrlPattern?: (orderId: string) => string;
   /** When true (e.g. HQ/Carrier admin view), hide merchant-only actions */
   readOnly?: boolean;
+  /**
+   * Render above a parent Sheet (e.g. when opened from the Customer Profile
+   * Orders tab) so it appears in the foreground instead of behind the sheet.
+   */
+  elevated?: boolean;
 }
 
 function formatCurrency(amount: number): string {
@@ -111,6 +124,7 @@ function formatDate(dateString: string): string {
 function getOrderTypeIcon(type: string) {
   const icons: Record<string, React.ReactNode> = {
     dine_in: <Utensils className="h-3.5 w-3.5" />,
+    qr_dine_in: <QrCode className="h-3.5 w-3.5" />,
     takeout: <ShoppingBag className="h-3.5 w-3.5" />,
     delivery: <Truck className="h-3.5 w-3.5" />,
     online: <Globe className="h-3.5 w-3.5" />,
@@ -135,19 +149,13 @@ function formatDateShort(dateString: string) {
 }
 
 function formatOrderType(type: string) {
-  const labels: Record<string, string> = {
-    dine_in: "Dine-In",
-    takeout: "Takeout",
-    delivery: "Delivery",
-    online: "Online",
-    catering: "Catering",
-  };
-  return labels[type] || type.replace("_", " ");
+  return orderTypeLabel(type);
 }
 
 function getChannelLabel(orderType: string) {
   const channels: Record<string, string> = {
     dine_in: "In-Store",
+    qr_dine_in: "QR Table",
     takeout: "Pickup",
     delivery: "Delivery",
     online: "Online",
@@ -356,15 +364,15 @@ function HeroStatCard({
       )}
     >
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
             {label}
           </p>
-          <div className="mt-2 text-lg font-semibold tracking-tight text-foreground">
+          <div className="mt-2 text-lg font-semibold tracking-tight text-foreground break-words">
             {value}
           </div>
           {description && (
-            <div className="mt-1 text-xs text-muted-foreground">
+            <div className="mt-1 text-xs text-muted-foreground break-words">
               {description}
             </div>
           )}
@@ -855,9 +863,11 @@ export function OrderDetailSheet({
   onOpenChange,
   fullPageUrlPattern,
   readOnly = false,
+  elevated = false,
 }: OrderDetailSheetProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { setSelectedLocation } = useLocationStore();
   const selectedLocation = useSelectedLocation();
   const [isSendReceiptOpen, setIsSendReceiptOpen] = React.useState(false);
   const [isAdjustTipOpen, setIsAdjustTipOpen] = React.useState(false);
@@ -943,6 +953,14 @@ export function OrderDetailSheet({
     router.push(url);
   };
 
+  const handleViewOnFloorPlan = () => {
+    if (displayOrder.location_id) {
+      setSelectedLocation(displayOrder.location_id);
+    }
+    onOpenChange(false);
+    router.push("/dashboard/tables");
+  };
+
   // Derived metadata
   const { date, time } = formatDateShort(displayOrder.created_at);
   const isMetadataLoading = isLoading || isHistoryLoading;
@@ -974,7 +992,9 @@ export function OrderDetailSheet({
     fullHistory?.order?.station_name ??
     displayOrder.station?.station_name ??
     null;
+  const isQrDineIn = displayOrder.order_type === "qr_dine_in";
   const isDineIn = displayOrder.order_type === "dine_in";
+  const isTableLabeledOrder = isDineIn || isQrDineIn;
 
   // Use displayOrder only so all customer fields update together (same query)
   const customerName = displayOrder.customer_name ?? null;
@@ -985,6 +1005,49 @@ export function OrderDetailSheet({
   const notes =
     fullHistory?.order?.internal_notes ?? displayOrder.internal_notes ?? null;
 
+  // ─── Channel / delivery origin ───
+  // order_source is the canonical taxonomy; delivery_platform is the marketplace
+  // for orderout orders. Fall back to metadata.* so rows created before the
+  // backfill migration still render the platform/order-number.
+  const orderMeta = (displayOrder.metadata ?? {}) as Record<string, any>;
+  const orderSource = displayOrder.order_source ?? null;
+  const isOrderOut =
+    orderSource === "orderout" || orderMeta.provider === "orderout";
+  // Show the channel section for anything that isn't plain in-store POS.
+  const showChannelSection = !!orderSource && orderSource !== "pos";
+  const deliveryPlatformRaw =
+    displayOrder.delivery_platform ??
+    (orderMeta.delivery_company as string | undefined) ??
+    null;
+  // True only when a real marketplace name is present (not a placeholder 'orderout').
+  const hasKnownPlatform = isOrderOut && isKnownPlatform(deliveryPlatformRaw);
+  const platformOrderNumber =
+    displayOrder.platform_order_number ??
+    (orderMeta.provider_order_id as string | undefined) ??
+    null;
+  const platformExternalRef =
+    (orderMeta.external_reference as string | undefined) ?? null;
+  const deliveryAddress = (displayOrder.delivery_address ?? null) as {
+    street?: string | null;
+    unit?: string | null;
+    city?: string | null;
+    state?: string | null;
+    zip?: string | null;
+    delivery_notes?: string | null;
+  } | null;
+  const deliveryAddressLine = deliveryAddress
+    ? [
+        [deliveryAddress.street, deliveryAddress.unit].filter(Boolean).join(" "),
+        deliveryAddress.city,
+        [deliveryAddress.state, deliveryAddress.zip].filter(Boolean).join(" "),
+      ]
+        .filter((s) => s && String(s).trim())
+        .join(", ")
+    : null;
+  const deliveryNotes = deliveryAddress?.delivery_notes ?? null;
+  const estimatedTime =
+    displayOrder.estimated_delivery_time ?? null;
+
   const itemCount = items.reduce(
     (sum, i) => sum + (i.is_voided ? 0 : Number(i.quantity) || 1),
     0
@@ -993,14 +1056,15 @@ export function OrderDetailSheet({
   const paymentCount = payments.length;
   const totalAmount = Number(displayOrder.total_amount) || 0;
   const amountDue = Number(displayOrder.amount_due) || 0;
-  const fulfillmentValue = isDineIn
+  const fulfillmentValue = isTableLabeledOrder
     ? tableName ?? "Dining Room"
     : formatOrderType(displayOrder.order_type);
-  const fulfillmentDescription = isDineIn
+  const fulfillmentDescription = isTableLabeledOrder
     ? [
         locationName,
-        partySize != null ? `${partySize} guests` : null,
-        serverName ? `Server: ${serverName}` : null,
+        isDineIn && partySize != null ? `${partySize} guests` : null,
+        isDineIn && serverName ? `Server: ${serverName}` : null,
+        isQrDineIn ? "Pay-before-kitchen QR order" : null,
       ]
         .filter(Boolean)
         .join(" • ")
@@ -1035,10 +1099,10 @@ export function OrderDetailSheet({
       value: createdByName,
     });
   }
-  if (isDineIn && tableName) {
+  if (isTableLabeledOrder && tableName) {
     metaChips.push({
-      icon: <Utensils className="h-3.5 w-3.5" />,
-      label: "Table",
+      icon: isQrDineIn ? <QrCode className="h-3.5 w-3.5" /> : <Utensils className="h-3.5 w-3.5" />,
+      label: isQrDineIn ? "QR Table" : "Table",
       value: tableName,
     });
   }
@@ -1079,27 +1143,27 @@ export function OrderDetailSheet({
 
   return (
     <>
-      <BottomSheet open={open} onOpenChange={onOpenChange}>
+      <BottomSheet open={open} onOpenChange={onOpenChange} elevated={elevated}>
         <BottomSheetContent
           height="95"
-          className="border-x-0 border-t border-border/60 bg-gradient-to-b from-background via-background to-muted/20 sm:inset-x-4 sm:bottom-4 sm:mx-auto sm:h-[calc(100vh-2rem)] sm:max-w-6xl sm:rounded-[28px] sm:border"
+          className="border-x-0 border-t border-border/60 bg-gradient-to-b from-background via-background to-muted/20 sm:inset-x-4 sm:bottom-4 sm:mx-auto sm:h-[calc(100dvh-2rem)] sm:max-w-6xl sm:rounded-[28px] sm:border"
         >
-          {/* ─── Header ─── */}
-          <BottomSheetHeader className="shrink-0 border-b border-border/60 bg-gradient-to-b from-muted/60 via-background to-background px-6 pb-6 pt-2 sm:px-8">
+          {/* ─── Header (non-scrollable part — capped at half the sheet, scrolls internally if it overflows) ─── */}
+          <BottomSheetHeader className="max-h-[50%] min-h-0 shrink-0 overflow-y-auto border-b border-border/60 bg-gradient-to-b from-muted/60 via-background to-background px-4 pb-6 pt-2 sm:px-8">
             <div className="space-y-6">
               <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
-                <div className="min-w-0 space-y-4">
+                <div className="min-w-0 space-y-4 pr-10 xl:pr-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge className="rounded-full border border-border/60 bg-background/90 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground shadow-sm hover:bg-background">
                       Order Details
                     </Badge>
-                    <OrderStatusBadge status={displayOrder.status} />
-                    <PaymentStatusBadge status={displayOrder.payment_status} />
+                    <OrderStatusBadge status={displayOrder.status} prefix="Order" />
+                    <PaymentStatusBadge status={displayOrder.payment_status} prefix="Payment" />
                   </div>
 
                   <div className="space-y-2">
-                    <BottomSheetTitle className="text-2xl font-semibold tracking-tight sm:text-3xl">
-                      Order #{displayOrder.display_number || displayOrder.order_number}
+                    <BottomSheetTitle className="text-2xl font-semibold tracking-tight break-words sm:text-3xl">
+                      Order #{String(displayOrder.display_number || displayOrder.order_number).replace(/^#/, "")}
                     </BottomSheetTitle>
                     <BottomSheetDescription className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
                       <span className="flex items-center gap-1.5">
@@ -1114,6 +1178,10 @@ export function OrderDetailSheet({
                         {getOrderTypeIcon(displayOrder.order_type)}
                         {formatOrderType(displayOrder.order_type)}
                       </span>
+                      {/* Delivery-marketplace chip. Uses the shared resolver
+                          (lib/orders/delivery-platform) which self-gates: returns
+                          null for POS / no-platform orders, so no extra guard needed. */}
+                      <DeliveryPlatformBadge order={displayOrder} />
                       {locationOrChannel && (
                         <span className="flex items-center gap-1.5">
                           <MapPin className="h-3.5 w-3.5" />
@@ -1124,11 +1192,22 @@ export function OrderDetailSheet({
                   </div>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2 pr-8 xl:max-w-[360px] xl:justify-end">
+                <div className="flex flex-wrap items-center gap-2 xl:max-w-[360px] xl:justify-end">
+                  {isQrDineIn && tableName ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1 rounded-xl border-[#0C4FD1]/20 bg-[#0C4FD1]/5 text-[#0C4FD1] hover:bg-[#0C4FD1]/10 xl:flex-none"
+                      onClick={handleViewOnFloorPlan}
+                    >
+                      <MapPin className="mr-1.5 h-4 w-4" />
+                      View on Floor Plan
+                    </Button>
+                  ) : null}
                   <Button
                     variant="outline"
                     size="sm"
-                    className="rounded-xl border-border/60 bg-background/80 hover:bg-background"
+                    className="flex-1 rounded-xl border-border/60 bg-background/80 hover:bg-background xl:flex-none"
                     onClick={() => setIsSendReceiptOpen(true)}
                   >
                     <Mail className="mr-1.5 h-4 w-4" />
@@ -1137,7 +1216,7 @@ export function OrderDetailSheet({
                 </div>
               </div>
 
-              <div className="grid gap-3 md:grid-cols-3">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 <HeroStatCard
                   label="Order Total"
                   value={formatCurrency(totalAmount)}
@@ -1146,17 +1225,17 @@ export function OrderDetailSheet({
                   tone={amountDue > 0 ? "warning" : "success"}
                 />
                 <HeroStatCard
-                  label={isDineIn ? "Table" : "Fulfillment"}
+                  label={isTableLabeledOrder ? (isQrDineIn ? "QR Table" : "Table") : "Fulfillment"}
                   value={fulfillmentValue}
                   description={
                     fulfillmentDescription ||
-                    (isDineIn
+                    (isTableLabeledOrder
                       ? "Dining room service details"
                       : "Order channel details")
                   }
                   icon={
-                    isDineIn ? (
-                      <Utensils className="h-5 w-5" />
+                    isTableLabeledOrder ? (
+                      isQrDineIn ? <QrCode className="h-5 w-5" /> : <Utensils className="h-5 w-5" />
                     ) : (
                       <span className="flex h-5 w-5 items-center justify-center">
                         {getOrderTypeIcon(displayOrder.order_type)}
@@ -1176,7 +1255,7 @@ export function OrderDetailSheet({
           </BottomSheetHeader>
 
           {/* ─── Body ─── */}
-          <BottomSheetBody className="bg-transparent px-6 py-6 sm:px-8">
+          <BottomSheetBody className="bg-transparent px-4 py-6 sm:px-8">
             <div className="space-y-6">
               {metaChips.length === 0 && isMetadataLoading ? (
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -1284,6 +1363,78 @@ export function OrderDetailSheet({
                 )}
               </SectionCard>
 
+              {/* ─── Delivery / Channel (online + delivery-app orders) ─── */}
+              {showChannelSection && (
+                <SectionCard
+                  title={isOrderOut ? "Delivery / Channel" : "Channel"}
+                  icon={isOrderOut ? <Truck className="h-4 w-4" /> : <Globe className="h-4 w-4" />}
+                >
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                      <MetaChip
+                        icon={<Globe className="h-3.5 w-3.5" />}
+                        label="Source"
+                        value={orderSourceLabel(orderSource) || "—"}
+                      />
+                      {hasKnownPlatform && (
+                        <MetaChip
+                          icon={
+                            <PlatformBadge
+                              platform={deliveryPlatformRaw}
+                              size={18}
+                              iconOnly
+                            />
+                          }
+                          label="Platform"
+                          value={platformLabel(deliveryPlatformRaw)}
+                        />
+                      )}
+                      {platformOrderNumber && (
+                        <MetaChip
+                          icon={<Receipt className="h-3.5 w-3.5" />}
+                          label="Platform order #"
+                          value={platformOrderNumber}
+                        />
+                      )}
+                      {platformExternalRef && (
+                        <MetaChip
+                          icon={<Receipt className="h-3.5 w-3.5" />}
+                          label="External reference"
+                          value={platformExternalRef}
+                        />
+                      )}
+                      {estimatedTime && (
+                        <MetaChip
+                          icon={<Clock className="h-3.5 w-3.5" />}
+                          label="Estimated ready / delivery"
+                          value={formatDate(estimatedTime)}
+                        />
+                      )}
+                    </div>
+
+                    {(deliveryAddressLine || deliveryNotes) && (
+                      <div className="rounded-2xl border border-border/60 bg-background/80 px-4 py-3 shadow-sm">
+                        <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                          Delivery
+                        </p>
+                        {deliveryAddressLine && (
+                          <div className="flex items-start gap-2 text-sm">
+                            <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                            <span>{deliveryAddressLine}</span>
+                          </div>
+                        )}
+                        {deliveryNotes && (
+                          <div className="mt-2 flex items-start gap-2 text-sm text-muted-foreground">
+                            <MessageSquare className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                            <span className="italic">&ldquo;{deliveryNotes}&rdquo;</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </SectionCard>
+              )}
+
               {/* ─── Order Items (Enhanced) ─── */}
               <EnhancedItemsSection
                 items={items}
@@ -1310,295 +1461,135 @@ export function OrderDetailSheet({
                 icon={<DollarSign className="h-4 w-4" />}
               >
                 {(() => {
-                  const cardSubtotal =
-                    Number(displayOrder.card_subtotal) ||
-                    displayOrder.subtotal;
-                  const cashSubtotal =
-                    Number(displayOrder.cash_subtotal) ||
-                    displayOrder.subtotal;
-                  const cardTax =
-                    Number(displayOrder.card_tax_amount) ||
-                    Number(displayOrder.tax_amount) ||
-                    0;
-                  const cashTax =
-                    Number(displayOrder.cash_tax_amount) ||
-                    Number(displayOrder.tax_amount) ||
-                    0;
-                  const cardTotal =
-                    Number(displayOrder.card_total) ||
-                    displayOrder.total_amount;
-                  const cashTotal =
-                    Number(displayOrder.cash_total) ||
-                    displayOrder.total_amount;
-
-                  const hasDualPricing = cardSubtotal !== cashSubtotal;
-                  const totalSavings = hasDualPricing
-                    ? cardTotal - cashTotal
-                    : 0;
+                  // Single source of truth: one consistent pricing track per
+                  // render. The breakdown ladder always foots; the alternate
+                  // lane and split tenders are shown as separate context rows.
+                  const b = getOrderBreakdown(displayOrder, payments);
+                  const lane = b.primary;
                   const isMixedPayment =
-                    displayOrder.payment_pricing_mode === "mixed";
+                    displayOrder.payment_pricing_mode === "mixed" ||
+                    b.charged === "mixed";
+                  const laneLabel = b.display === "cash" ? "Cash" : "Card";
+                  const cashSavings = b.card.total - b.cash.total;
 
                   const paidPayments = payments.filter(
                     (p) => p.status === "paid" || p.status === "captured"
                   );
                   const cashPayments = paidPayments
                     .filter((p) => p.payment_method === "cash")
-                    .reduce(
-                      (sum, p) => sum + Number(p.total_amount),
-                      0
-                    );
+                    .reduce((sum, p) => sum + Number(p.total_amount), 0);
                   const cardPayments = paidPayments
                     .filter((p) => p.payment_method !== "cash")
-                    .reduce(
-                      (sum, p) => sum + Number(p.total_amount),
-                      0
-                    );
-                  const totalPaid = cashPayments + cardPayments;
+                    .reduce((sum, p) => sum + Number(p.total_amount), 0);
 
                   return (
                     <div className="space-y-2 text-sm">
-                      {isMixedPayment ? (
-                        <>
-                          <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-800 mb-3">
-                            <DollarSign className="h-3.5 w-3.5 text-amber-600" />
-                            <span className="text-xs text-amber-700 dark:text-amber-400">
-                              Mixed Payment: Paid with both cash and card
-                            </span>
-                          </div>
+                      {isMixedPayment && (
+                        <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-800 mb-3">
+                          <DollarSign className="h-3.5 w-3.5 text-amber-600" />
+                          <span className="text-xs text-amber-700 dark:text-amber-400">
+                            Mixed Payment: Paid with both cash and card
+                          </span>
+                        </div>
+                      )}
 
-                          {hasDualPricing && (
-                            <div className="grid grid-cols-2 gap-2 mb-3">
-                              <div className="p-3 rounded-lg bg-muted/50 border space-y-1.5">
-                                <p className="text-xs font-medium text-muted-foreground">
-                                  If All Card
-                                </p>
-                                <PriceRow
-                                  label="Subtotal"
-                                  value={formatCurrency(cardSubtotal)}
-                                />
-                                <PriceRow
-                                  label="Tax"
-                                  value={formatCurrency(cardTax)}
-                                />
-                                <div className="border-t pt-1.5 mt-1.5">
-                                  <PriceRow
-                                    label="Total"
-                                    value={formatCurrency(cardTotal)}
-                                    bold
-                                  />
-                                </div>
-                              </div>
-                              <div className="p-3 rounded-lg bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 space-y-1.5">
-                                <p className="text-xs font-medium text-green-700 dark:text-green-400">
-                                  If All Cash
-                                </p>
-                                <PriceRow
-                                  label="Subtotal"
-                                  value={formatCurrency(cashSubtotal)}
-                                />
-                                <PriceRow
-                                  label="Tax"
-                                  value={formatCurrency(cashTax)}
-                                />
-                                <div className="border-t border-green-200 dark:border-green-800 pt-1.5 mt-1.5">
-                                  <PriceRow
-                                    label="Total"
-                                    value={formatCurrency(cashTotal)}
-                                    bold
-                                    valueClassName="text-green-700 dark:text-green-400"
-                                  />
-                                </div>
-                              </div>
-                            </div>
+                      {/* Footing ladder — every line from the charged track */}
+                      <PriceRow
+                        label="Subtotal"
+                        value={formatCurrency(lane.subtotal)}
+                      />
+                      {lane.discount > 0 && (
+                        <PriceRow
+                          label="Discount"
+                          value={`-${formatCurrency(lane.discount)}`}
+                          valueClassName="text-green-600"
+                        />
+                      )}
+                      {lane.serviceCharge > 0 && (
+                        <PriceRow
+                          label="Service Charge"
+                          value={formatCurrency(lane.serviceCharge)}
+                        />
+                      )}
+                      {lane.tax > 0 && (
+                        <PriceRow label="Tax" value={formatCurrency(lane.tax)} />
+                      )}
+                      {lane.tip > 0 && (
+                        <PriceRow label="Tip" value={formatCurrency(lane.tip)} />
+                      )}
+                      {b.mixedCashDiscount > 0 && (
+                        <PriceRow
+                          label="Cash Discount"
+                          value={`-${formatCurrency(b.mixedCashDiscount)}`}
+                          valueClassName="text-green-600 dark:text-green-400 font-medium"
+                        />
+                      )}
+                      <div className="border-t pt-3 mt-2">
+                        <PriceRow
+                          label={
+                            isMixedPayment
+                              ? "Total"
+                              : b.dual
+                              ? `Total (${laneLabel})`
+                              : "Total"
+                          }
+                          value={formatCurrency(
+                            isMixedPayment && lane.amountPaid > 0
+                              ? lane.amountPaid
+                              : lane.total
                           )}
+                          bold
+                          className="text-base"
+                          valueClassName={
+                            !isMixedPayment && b.display === "card"
+                              ? "text-[#0C4FD1]"
+                              : undefined
+                          }
+                        />
+                      </div>
 
-                          {totalSavings > 0 && (
-                            <div className="flex justify-between items-center p-3 bg-green-100 dark:bg-green-900/30 rounded-lg mb-3">
-                              <span className="text-xs font-medium text-green-700 dark:text-green-400">
-                                Cash Discount Available
-                              </span>
-                              <span className="text-sm font-bold text-green-700 dark:text-green-400">
-                                -{formatCurrency(totalSavings)}
-                              </span>
-                            </div>
-                          )}
+                      {b.dual && !isMixedPayment && cashSavings > 0 && (
+                        <PriceRow
+                          label="Cash savings"
+                          value={`-${formatCurrency(cashSavings)}`}
+                          valueClassName="text-green-600 dark:text-green-400 font-medium"
+                        />
+                      )}
 
-                          {!hasDualPricing && (
-                            <>
-                              <PriceRow
-                                label="Subtotal"
-                                value={formatCurrency(displayOrder.subtotal)}
-                              />
-                              {Number(displayOrder.tax_amount) > 0 && (
-                                <PriceRow
-                                  label="Tax"
-                                  value={formatCurrency(
-                                    Number(displayOrder.tax_amount)
-                                  )}
-                                />
-                              )}
-                            </>
-                          )}
-
-                          <div className="border-t pt-3 mt-3 space-y-1.5">
-                            <p className="text-xs font-medium text-muted-foreground mb-1">
-                              Payments
-                            </p>
-                            {cashPayments > 0 && (
-                              <PriceRow
-                                label={`Cash${hasDualPricing ? " (discounted)" : ""}`}
-                                value={formatCurrency(cashPayments)}
-                                valueClassName={
-                                  hasDualPricing
-                                    ? "text-green-600 dark:text-green-400 font-medium"
-                                    : ""
-                                }
-                              />
-                            )}
-                            {cardPayments > 0 && (
-                              <PriceRow
-                                label={`Card${hasDualPricing ? " (full rate)" : ""}`}
-                                value={formatCurrency(cardPayments)}
-                              />
-                            )}
-                          </div>
-
-                          <div className="border-t pt-3 mt-2">
+                      {isMixedPayment && (
+                        <div className="border-t pt-3 mt-3 space-y-1.5">
+                          <p className="text-xs font-medium text-muted-foreground mb-1">
+                            Tendered
+                          </p>
+                          {cashPayments > 0 && (
                             <PriceRow
-                              label="Total Paid"
-                              value={formatCurrency(totalPaid)}
-                              bold
-                              className="text-base"
-                            />
-                          </div>
-                        </>
-                      ) : hasDualPricing ? (
-                        <>
-                          <PriceRow
-                            label="Card Subtotal"
-                            value={formatCurrency(cardSubtotal)}
-                            valueClassName="text-muted-foreground"
-                          />
-                          <PriceRow
-                            label="Cash Subtotal"
-                            value={formatCurrency(cashSubtotal)}
-                          />
-                          {totalSavings > 0 && (
-                            <PriceRow
-                              label="Cash Savings"
-                              value={`-${formatCurrency(totalSavings)}`}
+                              label="Cash"
+                              value={formatCurrency(cashPayments)}
                               valueClassName="text-green-600 dark:text-green-400 font-medium"
-                              className="text-green-600 dark:text-green-400"
                             />
                           )}
-                          {Number(displayOrder.tax_amount) > 0 && (
+                          {cardPayments > 0 && (
                             <PriceRow
-                              label="Tax"
-                              value={formatCurrency(
-                                Number(displayOrder.tax_amount)
-                              )}
+                              label="Card"
+                              value={formatCurrency(cardPayments)}
                             />
                           )}
-                          {Number(displayOrder.tip_amount) > 0 && (
-                            <PriceRow
-                              label="Tip"
-                              value={formatCurrency(
-                                Number(displayOrder.tip_amount)
-                              )}
-                            />
-                          )}
-                          {Number(displayOrder.discount_amount) > 0 && (
-                            <PriceRow
-                              label="Discount"
-                              value={`-${formatCurrency(Number(displayOrder.discount_amount))}`}
-                              valueClassName="text-green-600"
-                            />
-                          )}
-                          <div className="border-t pt-3 mt-2 space-y-1">
-                            <PriceRow
-                              label="Total (Card)"
-                              value={formatCurrency(cardTotal)}
-                              valueClassName="text-muted-foreground line-through"
-                            />
-                            <PriceRow
-                              label="Total (Cash)"
-                              value={formatCurrency(cashTotal)}
-                              bold
-                              className="text-base"
-                            />
-                          </div>
-                          {totalPaid > 0 && (
-                            <PriceRow
-                              label="Amount Paid"
-                              value={formatCurrency(totalPaid)}
-                              valueClassName="text-green-600"
-                            />
-                          )}
-                        </>
-                      ) : (
-                        <>
-                          <PriceRow
-                            label="Subtotal"
-                            value={formatCurrency(displayOrder.subtotal)}
-                          />
-                          {Number(displayOrder.tax_amount) > 0 && (
-                            <PriceRow
-                              label="Tax"
-                              value={formatCurrency(
-                                Number(displayOrder.tax_amount)
-                              )}
-                            />
-                          )}
-                          {Number(displayOrder.tip_amount) > 0 && (
-                            <PriceRow
-                              label="Tip"
-                              value={formatCurrency(
-                                Number(displayOrder.tip_amount)
-                              )}
-                            />
-                          )}
-                          {Number(displayOrder.discount_amount) > 0 && (
-                            <PriceRow
-                              label="Discount"
-                              value={`-${formatCurrency(Number(displayOrder.discount_amount))}`}
-                              valueClassName="text-green-600"
-                            />
-                          )}
-                          {Number(displayOrder.service_charge) > 0 && (
-                            <PriceRow
-                              label="Service Charge"
-                              value={formatCurrency(
-                                Number(displayOrder.service_charge)
-                              )}
-                            />
-                          )}
-                          <div className="border-t pt-3 mt-2">
-                            <PriceRow
-                              label="Total"
-                              value={formatCurrency(
-                                displayOrder.total_amount
-                              )}
-                              bold
-                              className="text-base"
-                            />
-                          </div>
-                          {totalPaid > 0 && (
-                            <PriceRow
-                              label="Amount Paid"
-                              value={formatCurrency(totalPaid)}
-                              valueClassName="text-green-600"
-                            />
-                          )}
-                          {Number(displayOrder.amount_due) > 0 && (
-                            <PriceRow
-                              label="Amount Due"
-                              value={formatCurrency(
-                                Number(displayOrder.amount_due)
-                              )}
-                              valueClassName="text-amber-600"
-                            />
-                          )}
-                        </>
+                        </div>
+                      )}
+
+                      {!isMixedPayment && lane.amountPaid > 0 && (
+                        <PriceRow
+                          label="Amount Paid"
+                          value={formatCurrency(lane.amountPaid)}
+                          valueClassName="text-green-600"
+                        />
+                      )}
+                      {lane.amountDue > 0 && (
+                        <PriceRow
+                          label="Amount Due"
+                          value={formatCurrency(lane.amountDue)}
+                          valueClassName="text-amber-600"
+                        />
                       )}
                     </div>
                   );

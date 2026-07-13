@@ -2,7 +2,7 @@
 
 import { ChartCard } from './ChartCard'
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend, Tooltip, ResponsiveContainer } from 'recharts'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend, Tooltip } from 'recharts'
 import { Zap } from 'lucide-react'
 import type { RushStats } from '@/types/analytics'
 
@@ -66,7 +66,7 @@ export function RushTrackingCard({
       {data && (
         <div className="space-y-4">
           {/* Stats Cards */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div className="space-y-1 bg-orange-50 dark:bg-orange-950 p-2 rounded">
               <p className="text-xs text-muted-foreground">Rush Items</p>
               <p className="text-lg font-bold text-orange-600 dark:text-orange-400">
@@ -101,8 +101,7 @@ export function RushTrackingCard({
 
           {/* Chart */}
           <div className="w-full h-[280px]">
-            <ChartContainer config={chartConfig} className="w-full h-full">
-              <ResponsiveContainer width="100%" height="100%">
+            <ChartContainer config={chartConfig} className="aspect-auto w-full h-full">
                 <BarChart data={chartData} margin={{ left: 0, right: 10, top: 5, bottom: 20 }}>
                   <CartesianGrid vertical={false} strokeDasharray="3 3" />
                   <XAxis dataKey="name" tickLine={false} axisLine={false} />
@@ -139,7 +138,6 @@ export function RushTrackingCard({
                   <Bar dataKey="rushTime" fill={COLORS.rushTime} name="Rush Avg Time" />
                   <Bar dataKey="normalTime" fill={COLORS.normalTime} name="Normal Avg Time" />
                 </BarChart>
-              </ResponsiveContainer>
             </ChartContainer>
           </div>
         </div>

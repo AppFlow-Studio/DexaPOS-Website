@@ -5,6 +5,7 @@ import {
   usePrepStations,
   useUpdatePrepStation,
   useDeletePrepStation,
+  useCategoryPrepDefaults,
   type PrepStationWithCount,
 } from "@/app/dashboard/hooks/usePrepStations";
 import { AddEditPrepStationDialog } from "./components/AddEditPrepStationDialog";
@@ -25,18 +26,18 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Plus, AlertTriangle, MapPin, Loader2, Flame } from "lucide-react";
 import {
-  useLocationStore,
-  useIsAllLocations,
-  useSelectedLocation,
+  useGatedLocationId,
+  useGatedLocation,
 } from "@/stores/location-store";
 import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
 
 export default function PrepStationsPage() {
-  const selectedLocationId = useLocationStore(
-    (state) => state.selectedLocationId,
-  );
-  const isAllLocations = useIsAllLocations();
-  const selectedLocation = useSelectedLocation();
+  // Resolve to the gated location so single-location accounts (locked to 'all')
+  // skip the "Select a Location" prompt. Multi-location on 'all' -> null.
+  const gatedLocationId = useGatedLocationId();
+  const selectedLocationId = gatedLocationId ?? "all";
+  const isAllLocations = !gatedLocationId;
+  const selectedLocation = useGatedLocation();
   const { data: userInfo } = useUserInfo();
   const clerkOrgId = userInfo?.members?.[0]?.organizations?.id;
 
@@ -46,6 +47,18 @@ export default function PrepStationsPage() {
     isError,
     error,
   } = usePrepStations(selectedLocationId);
+
+  const { data: categoryDefaults = [] } =
+    useCategoryPrepDefaults(selectedLocationId);
+
+  const categoriesByStationId = categoryDefaults.reduce<Record<string, string[]>>(
+    (acc, def) => {
+      if (!def.category_name) return acc;
+      (acc[def.prep_station_id] ||= []).push(def.category_name);
+      return acc;
+    },
+    {},
+  );
 
   const updateMutation = useUpdatePrepStation();
   const deleteMutation = useDeletePrepStation();
@@ -181,6 +194,15 @@ export default function PrepStationsPage() {
 
   return (
     <div className="space-y-6">
+      {/* Mobile notice */}
+      <div className="sm:hidden flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-900/50 dark:bg-amber-950/30 p-4">
+        <Flame className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+        <div>
+          <p className="text-sm font-medium text-amber-800 dark:text-amber-300">Use a larger screen to configure prep stations</p>
+          <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">Kitchen station routing and display assignment require a tablet or desktop.</p>
+        </div>
+      </div>
+
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -222,6 +244,7 @@ export default function PrepStationsPage() {
             <PrepStationCard
               key={station.id}
               station={station}
+              assignedCategories={categoriesByStationId[station.id] || []}
               onEdit={handleEdit}
               onDelete={handleDeleteClick}
               onToggleActive={handleToggleActive}

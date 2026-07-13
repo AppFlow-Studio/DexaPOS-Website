@@ -159,7 +159,7 @@ export function SupportTicketsSection({ merchantId }: { merchantId: string }) {
             <KpiStrip cells={cells} loading={isLoading} />
 
             {/* Status tabs */}
-            <div className="flex gap-0 border-b">
+            <div className="flex gap-0 border-b overflow-x-auto">
                 {STATUS_TABS.map((tab) => (
                     <button
                         key={tab.key}

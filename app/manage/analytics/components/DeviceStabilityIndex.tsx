@@ -46,10 +46,10 @@ export default function DeviceStabilityIndex() {
             {/* ================================================================ */}
 
             {/* Section Header */}
-            <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                    <Smartphone className="h-5 w-5 text-primary" />
-                    <div>
+            <div className="flex flex-wrap items-center gap-3 justify-between">
+                <div className="flex flex-wrap items-center gap-2 min-w-0">
+                    <Smartphone className="h-5 w-5 text-primary shrink-0" />
+                    <div className="min-w-0">
                         <h2 className="text-lg font-semibold">Device Stability Index</h2>
                         <p className="text-sm text-muted-foreground">
                             Instability rate per app version — offline heartbeats &amp; kicked sessions
@@ -57,12 +57,12 @@ export default function DeviceStabilityIndex() {
                     </div>
                     {!isLoading && stabilityData && (
                         stabilityData.overallInstabilityRate <= INSTABILITY_THRESHOLD ? (
-                            <Badge variant="default" className="flex items-center gap-1 ml-2 bg-green-600">
+                            <Badge variant="default" className="flex items-center gap-1 shrink-0 bg-green-600">
                                 <ShieldCheck className="h-3 w-3" />
                                 Fleet Stable
                             </Badge>
                         ) : (
-                            <Badge variant="destructive" className="flex items-center gap-1 ml-2">
+                            <Badge variant="destructive" className="flex items-center gap-1 shrink-0">
                                 <ShieldAlert className="h-3 w-3" />
                                 {stabilityData.overallInstabilityRate}% Instability
                             </Badge>
@@ -70,7 +70,7 @@ export default function DeviceStabilityIndex() {
                     )}
                 </div>
                 <Select value={String(days)} onValueChange={(v) => { setDays(Number(v)); setSelectedVersion(null) }}>
-                    <SelectTrigger className="w-32.5">
+                    <SelectTrigger className="w-32.5 shrink-0">
                         <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -124,7 +124,7 @@ export default function DeviceStabilityIndex() {
 
             {/* KPI Summary Cards */}
             {isLoading ? (
-                <div className="grid gap-4 md:grid-cols-4">
+                <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
                     {Array.from({ length: 4 }).map((_, i) => (
                         <Card key={i}>
                             <CardHeader className="pb-2"><Skeleton className="h-4 w-24" /></CardHeader>
@@ -133,7 +133,7 @@ export default function DeviceStabilityIndex() {
                     ))}
                 </div>
             ) : stabilityData ? (
-                <div className="grid gap-4 md:grid-cols-4">
+                <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
                     <Card>
                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                             <CardTitle className="text-sm font-medium text-muted-foreground">Total Devices</CardTitle>

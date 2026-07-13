@@ -64,6 +64,12 @@ interface DiscountFormProps {
   categories?: CategoryOption[];
   menuItems?: MenuItemOption[];
   locations?: LocationOption[];
+  /**
+   * When the account has exactly one active location, the global-vs-location
+   * scope picker is meaningless — the discount silently defaults to global
+   * (location_id = null, unchanged stored data). Hide the field entirely.
+   */
+  isSingleLocation?: boolean;
   onCancel?: () => void;
 }
 
@@ -80,6 +86,7 @@ export function DiscountForm({
   categories = [],
   menuItems = [],
   locations = [],
+  isSingleLocation = false,
   onCancel,
 }: DiscountFormProps) {
   const [scheduleOpen, setScheduleOpen] = useState(false);
@@ -163,8 +170,8 @@ export function DiscountForm({
 
   return (
     <Form {...form}>
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <div className="grid gap-6 lg:grid-cols-3">
+      <form onSubmit={handleSubmit} className="space-y-6 w-full min-w-0">
+        <div className="grid gap-6 lg:grid-cols-3 min-w-0">
           {/* ── Main column ── */}
           <div className="space-y-6 lg:col-span-2">
 
@@ -198,12 +205,12 @@ export function DiscountForm({
                     <FormItem>
                       <FormLabel>Discount type <span className="text-destructive">*</span></FormLabel>
                       <FormControl>
-                        <div className="flex gap-2">
+                        <div className="flex flex-col sm:flex-row gap-2">
                           <button
                             type="button"
                             onClick={() => field.onChange("percentage")}
                             className={cn(
-                              "flex flex-1 items-center justify-center gap-2 rounded-lg border px-4 py-3 text-sm font-medium transition-colors",
+                              "flex flex-1 items-center justify-center gap-2 rounded-lg border px-3 py-3 text-sm font-medium transition-colors",
                               field.value === "percentage"
                                 ? "border-primary bg-primary text-primary-foreground"
                                 : "border-border bg-background text-muted-foreground hover:border-primary/50 hover:text-foreground"
@@ -216,7 +223,7 @@ export function DiscountForm({
                             type="button"
                             onClick={() => field.onChange("fixed_amount")}
                             className={cn(
-                              "flex flex-1 items-center justify-center gap-2 rounded-lg border px-4 py-3 text-sm font-medium transition-colors",
+                              "flex flex-1 items-center justify-center gap-2 rounded-lg border px-3 py-3 text-sm font-medium transition-colors",
                               field.value === "fixed_amount"
                                 ? "border-primary bg-primary text-primary-foreground"
                                 : "border-border bg-background text-muted-foreground hover:border-primary/50 hover:text-foreground"
@@ -283,7 +290,9 @@ export function DiscountForm({
                   )}
                 />
 
-                {/* Location scope */}
+                {/* Location scope — hidden for single-location accounts
+                    (silently defaults to global; location_id stays null). */}
+                {!isSingleLocation && (
                 <FormField
                   control={form.control}
                   name="location_id"
@@ -322,6 +331,7 @@ export function DiscountForm({
                     </FormItem>
                   )}
                 />
+                )}
               </CardContent>
             </Card>
 
@@ -723,32 +733,18 @@ export function DiscountForm({
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="rounded-md bg-muted/50 divide-y divide-border text-sm">
-                  <div className="flex items-center justify-between px-3 py-2">
-                    <span className="text-muted-foreground">Order type</span>
-                    <span className="font-medium">{scopeLabel}</span>
-                  </div>
-                  <div className="flex items-center justify-between px-3 py-2">
-                    <span className="text-muted-foreground">Include categories</span>
-                    <span className="font-medium">
-                      {watchAppliesTo?.length ? `${watchAppliesTo.length} selected` : "All"}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between px-3 py-2">
-                    <span className="text-muted-foreground">Exclude categories</span>
-                    <span className="font-medium">
-                      {watchExcludeCategories?.length ? `${watchExcludeCategories.length} selected` : "None"}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between px-3 py-2">
-                    <span className="text-muted-foreground">Menu items</span>
-                    <span className="font-medium">
-                      {watchMenuItems?.length ? `${watchMenuItems.length} selected` : "All"}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between px-3 py-2">
-                    <span className="text-muted-foreground">Exclude alcohol</span>
-                    <span className="font-medium">{watchExcludeAlcohol ? "Yes" : "No"}</span>
-                  </div>
+                  {[
+                    { label: "Order type", value: scopeLabel },
+                    { label: "Include cats", value: watchAppliesTo?.length ? `${watchAppliesTo.length} selected` : "All" },
+                    { label: "Exclude cats", value: watchExcludeCategories?.length ? `${watchExcludeCategories.length} selected` : "None" },
+                    { label: "Menu items", value: watchMenuItems?.length ? `${watchMenuItems.length} selected` : "All" },
+                    { label: "Excl. alcohol", value: watchExcludeAlcohol ? "Yes" : "No" },
+                  ].map(({ label, value }) => (
+                    <div key={label} className="flex items-center justify-between gap-2 px-3 py-2">
+                      <span className="text-muted-foreground shrink-0">{label}</span>
+                      <span className="font-medium truncate text-right">{value}</span>
+                    </div>
+                  ))}
                 </div>
 
                 <Button

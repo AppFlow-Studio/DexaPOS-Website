@@ -300,7 +300,7 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
     <div className="space-y-6 animate-in fade-in duration-500">
       {/* Premium Header */}
       {/* Standard Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-2">
+      <div className="flex flex-col gap-4 pb-2">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Audit Logs</h1>
           <p className="text-muted-foreground text-sm mt-1">
@@ -308,7 +308,7 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 flex-wrap">
           <Badge
             variant="outline"
             className="h-9 px-3 text-sm font-normal gap-2"
@@ -336,22 +336,23 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
             className="h-9"
           >
             <Download className="h-4 w-4 mr-2" />
-            {isExporting ? 'Exporting...' : 'Export CSV'}
+            <span className="hidden sm:inline">{isExporting ? 'Exporting...' : 'Export CSV'}</span>
+            <span className="sm:hidden">Export</span>
           </Button>
         </div>
       </div>
 
       {/* Filters Card */}
       <Card className="border-none shadow-lg bg-card/80 backdrop-blur-sm">
-        <CardContent className="p-6">
+        <CardContent className="p-3 sm:p-6">
           <div className="flex flex-col gap-4">
             {/* Top row - Search and Date Range */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
               {/* Search */}
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Search actions, actors, resources..."
+                  placeholder="Search actions, actors..."
                   className="pl-10 h-11 bg-background/50"
                   value={filters.search}
                   onChange={(e) => handleFilterChange("search", e.target.value)}
@@ -364,26 +365,25 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
                   <Button
                     variant="outline"
                     className={cn(
-                      "h-11 justify-start text-left font-normal bg-background/50",
+                      "h-10 justify-start text-left font-normal bg-background/50 w-full min-w-0 truncate",
                       !dateRange && "text-muted-foreground",
                     )}
                   >
-                    <CalendarIcon className="mr-2 h-4 w-4 text-muted-foreground" />
+                    <CalendarIcon className="mr-2 h-4 w-4 text-muted-foreground shrink-0" />
+                    <span className="truncate text-sm">
                     {dateRange?.from ? (
                       dateRange.to ? (
-                        <>
-                          {format(dateRange.from, "MMM d, yyyy")} -{" "}
-                          {format(dateRange.to, "MMM d, yyyy")}
-                        </>
+                        `${format(dateRange.from, "MMM d")} – ${format(dateRange.to, "MMM d, yyyy")}`
                       ) : (
                         format(dateRange.from, "MMM d, yyyy")
                       )
                     ) : (
-                      <span>Select date range</span>
+                      "Select date range"
                     )}
+                    </span>
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
+                <PopoverContent className="w-auto min-w-[280px] p-0" align="start">
                   <Calendar
                     initialFocus
                     mode="range"
@@ -425,15 +425,15 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
             </div>
 
             {/* Bottom row - Filters */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
               {/* Location Filter */}
               <Select
                 value={filters.location_id}
                 onValueChange={(val) => handleFilterChange("location_id", val)}
               >
-                <SelectTrigger className="h-11 bg-background/50">
-                  <div className="flex items-center gap-2">
-                    <MapPin className="h-4 w-4 text-muted-foreground" />
+                <SelectTrigger className="h-10 bg-background/50">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <MapPin className="h-4 w-4 text-muted-foreground shrink-0 hidden lg:block" />
                     <SelectValue placeholder="All Locations" />
                   </div>
                 </SelectTrigger>
@@ -457,9 +457,9 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
                   )
                 }
               >
-                <SelectTrigger className="h-11 bg-background/50">
-                  <div className="flex items-center gap-2">
-                    <Filter className="h-4 w-4 text-muted-foreground" />
+                <SelectTrigger className="h-10 bg-background/50">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Filter className="h-4 w-4 text-muted-foreground shrink-0 hidden lg:block" />
                     <SelectValue placeholder="All Categories" />
                   </div>
                 </SelectTrigger>
@@ -492,9 +492,9 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
                   )
                 }
               >
-                <SelectTrigger className="h-11 bg-background/50">
-                  <div className="flex items-center gap-2">
-                    <AlertCircle className="h-4 w-4 text-muted-foreground" />
+                <SelectTrigger className="h-10 bg-background/50">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <AlertCircle className="h-4 w-4 text-muted-foreground shrink-0 hidden lg:block" />
                     <SelectValue placeholder="All Severities" />
                   </div>
                 </SelectTrigger>
@@ -531,9 +531,9 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
                   )
                 }
               >
-                <SelectTrigger className="h-11 bg-background/50">
-                  <div className="flex items-center gap-2">
-                    <User className="h-4 w-4 text-muted-foreground" />
+                <SelectTrigger className="h-10 bg-background/50">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <User className="h-4 w-4 text-muted-foreground shrink-0 hidden lg:block" />
                     <SelectValue placeholder="All Staff" />
                   </div>
                 </SelectTrigger>
@@ -619,7 +619,8 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
 
       {/* Logs Table */}
       <Card className="border-none shadow-lg overflow-hidden">
-        <Table>
+        <div className="overflow-x-auto">
+        <Table className="min-w-[640px]">
           <TableHeader className="bg-muted/50">
             <TableRow>
               <TableHead className="w-45">
@@ -903,6 +904,7 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
             )}
           </TableBody>
         </Table>
+        </div>
       </Card>
       
       {/* Pagination (Simple for now) */}

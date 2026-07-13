@@ -24,6 +24,7 @@ import {
 } from '@/components/ui/table'
 import {
     DropdownMenu,
+    DropdownMenuCheckboxItem,
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuLabel,
@@ -44,17 +45,30 @@ import {
     ShoppingBag,
     Truck,
     Globe,
+    QrCode,
     ChefHat,
+    MapPin,
     ChevronLeft,
     ChevronsLeft,
     ChevronRight,
     ChevronsRight,
+    Store,
+    Phone,
+    SlidersHorizontal,
 } from 'lucide-react'
 import { Order, OrderResponse, OrderType } from '@/types/order-management'
 import { OrderStatusBadge } from './OrderStatusBadge'
 import { PaymentStatusBadge } from './PaymentStatusBadge'
+import { DeliveryPlatformBadge } from './DeliveryPlatformBadge'
 import { useIsAllLocations, useLocationStore } from '@/stores/location-store'
 import { useRouter } from 'next/navigation'
+import {
+    orderSourceLabel,
+    platformLabel,
+    isKnownPlatform,
+} from '@/lib/orderout/platform'
+import { PlatformBadge } from './PlatformBadge'
+import { useColumnPreferences } from '@/app/dashboard/hooks/useColumnPreferences'
 
 interface OrdersDataTableProps {
     data: OrderResponse[]
@@ -64,6 +78,7 @@ interface OrdersDataTableProps {
     showLocationColumn?: boolean
     locationsMap?: Map<string, string>
     pageSize?: number
+    hideOrderStatus?: boolean
 }
 
 // Format date to "Today at 9:53 pm" or "Dec 15 at 2:30 pm"
@@ -108,6 +123,10 @@ function getOrderTypeConfig(type: OrderType) {
             icon: <Utensils className="h-3 w-3 text-muted-foreground" />,
             label: 'Dine In',
         },
+        qr_dine_in: {
+            icon: <QrCode className="h-3 w-3 text-[#0C4FD1]" />,
+            label: 'QR Dine-In',
+        },
         takeout: {
             icon: <ShoppingBag className="h-3 w-3 text-muted-foreground" />,
             label: 'Takeout',
@@ -128,16 +147,56 @@ function getOrderTypeConfig(type: OrderType) {
     return configs[type] || configs.dine_in
 }
 
-export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showLocationColumn, locationsMap, pageSize = 50 }: OrdersDataTableProps) {
+// Icon for each order_source channel (mirrors ORDER_SOURCE_META.iconKey in
+// lib/orderout/platform.ts, kept here so the helper stays framework-agnostic).
+function getChannelIcon(source: string | null | undefined) {
+    switch (source) {
+        case 'orderout':
+            return <Truck className="h-3 w-3" />
+        case 'online_store':
+        case 'online': // legacy pre-backfill value
+            return <Globe className="h-3 w-3" />
+        case 'phone':
+            return <Phone className="h-3 w-3" />
+        case 'pos':
+        default:
+            return <Store className="h-3 w-3" />
+    }
+}
+
+// localStorage key for persisted column visibility on the Orders list.
+const ORDERS_COLUMN_VIS_KEY = 'orders-table-columns-v1'
+
+// Human labels for the Columns show/hide menu (TanStack column ids → label).
+const COLUMN_LABELS: Record<string, string> = {
+    order_display: '#ID',
+    created_at: 'Date',
+    order_type: 'Order Type',
+    channel: 'Channel',
+    table: 'Table',
+    status: 'Order Status',
+    item_count: 'Items',
+    total_amount: 'Total',
+    payment_method: 'Payment',
+    created_by: 'Staff',
+}
+
+export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showLocationColumn, locationsMap, pageSize = 50, hideOrderStatus = false }: OrdersDataTableProps) {
     const [sorting, setSorting] = React.useState<SortingState>([
         { id: 'created_at', desc: true },
     ])
     const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
-    const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({})
+    // Column visibility persists per-user in Supabase (user_ui_preferences) so it
+    // follows the user across devices; localStorage backs it as an instant-paint
+    // cache + offline fallback. See useColumnPreferences.
+    const { columnVisibility, setColumnVisibility } = useColumnPreferences(
+        'orders.columns',
+        ORDERS_COLUMN_VIS_KEY,
+    )
     const [globalFilter, setGlobalFilter] = React.useState('')
     const router = useRouter()
     const isAllLocations = useIsAllLocations()
-    const { locations } = useLocationStore()
+    const { locations, setSelectedLocation } = useLocationStore()
     const shouldShowLocation = showLocationColumn ?? isAllLocations
 
     const handleRowClick = (order: OrderResponse) => {
@@ -146,6 +205,13 @@ export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showL
         } else {
             router.push(`/dashboard/orders/${order.id}`)
         }
+    }
+
+    const handleViewOnFloorPlan = (order: OrderResponse) => {
+        if (order.location_id) {
+            setSelectedLocation(order.location_id)
+        }
+        router.push('/dashboard/tables')
     }
 
     const getCreatedByName = (order: OrderResponse): string => {
@@ -166,6 +232,7 @@ export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showL
         {
             accessorKey: 'display_number',
             id: 'order_display',
+            enableHiding: false, // #ID is always visible (ticket requirement)
             header: ({ column }) => (
                 <Button
                     variant="ghost"
@@ -210,13 +277,90 @@ export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showL
         },
         {
             accessorKey: 'order_type',
-            header: 'Type',
+            header: 'Order Type',
             cell: ({ row }) => {
-                const typeConfig = getOrderTypeConfig(row.original.order_type)
+                const order = row.original
+                const typeConfig = getOrderTypeConfig(order.order_type)
+                return (
+                    <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                        <span className="inline-flex items-center gap-1.5">
+                            {typeConfig.icon}
+                            <span className="font-medium text-foreground/80">{typeConfig.label}</span>
+                        </span>
+                        <DeliveryPlatformBadge order={order} />
+                    </div>
+                )
+            },
+        },
+        {
+            id: 'channel',
+            header: 'Channel',
+            // Order origin: the canonical order_source, plus the delivery marketplace
+            // (logo/name) for OrderOut orders. Falls back to metadata.delivery_company
+            // so pre-backfill rows still render the platform. accessorFn feeds global
+            // search + keeps the value sortable/filterable.
+            accessorFn: (row) => {
+                const r = row as OrderResponse & { metadata?: Record<string, any> | null }
+                const platform =
+                    r.delivery_platform || (r.metadata?.delivery_company as string | undefined) || ''
+                return `${orderSourceLabel(r.order_source)} ${platformLabel(platform)}`.trim()
+            },
+            cell: ({ row }) => {
+                const order = row.original as OrderResponse & {
+                    metadata?: Record<string, any> | null
+                }
+                const source = order.order_source
+                // No channel recorded (older POS rows): show a muted dash.
+                if (!source) {
+                    return <span className="text-sm text-muted-foreground/50">—</span>
+                }
+                // Treat legacy pre-backfill rows (order_source 'online' but
+                // metadata.provider 'orderout') as OrderOut so they still brand.
+                const isOrderOut =
+                    source === 'orderout' || order.metadata?.provider === 'orderout'
+                const rawPlatform =
+                    order.delivery_platform ||
+                    (order.metadata?.delivery_company as string | undefined) ||
+                    ''
+                // Only brand with a logo when there's a real marketplace name.
+                // OrderOut rows with a missing/placeholder platform ('orderout')
+                // show the generic "Delivery App" channel instead of echoing it.
+                if (isOrderOut && isKnownPlatform(rawPlatform)) {
+                    return <PlatformBadge platform={rawPlatform} className="text-xs" />
+                }
                 return (
                     <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-                        {typeConfig.icon}
-                        <span className="font-medium text-foreground/80">{typeConfig.label}</span>
+                        {getChannelIcon(isOrderOut ? 'orderout' : source)}
+                        <span className="font-medium text-foreground/80">
+                            {isOrderOut ? orderSourceLabel('orderout') : orderSourceLabel(source)}
+                        </span>
+                    </span>
+                )
+            },
+        },
+        {
+            id: 'table',
+            header: 'Table',
+            // Reference column so a row can be traced to its physical table for
+            // audit without opening the receipt. Dine-in / QR show the table
+            // number; other order types have no table. Merged dine-in checks
+            // resolve all their tables inside the order detail / receipt.
+            accessorFn: (row) =>
+                row.order_type === 'dine_in' || row.order_type === 'qr_dine_in'
+                    ? row.table_number || ''
+                    : '',
+            cell: ({ row }) => {
+                const order = row.original
+                const isDineIn =
+                    order.order_type === 'dine_in' ||
+                    order.order_type === 'qr_dine_in'
+                if (!isDineIn || !order.table_number) {
+                    return <span className="text-sm text-muted-foreground/50">—</span>
+                }
+                return (
+                    <span className="inline-flex items-center gap-1.5 text-xs text-[#0C4FD1]">
+                        <MapPin className="h-3 w-3" />
+                        {order.table_number}
                     </span>
                 )
             },
@@ -229,7 +373,7 @@ export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showL
                     onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
                     className="h-8 px-2"
                 >
-                    Status
+                    Order Status
                     <ArrowUpDown className="ml-2 h-3 w-3" />
                 </Button>
             ),
@@ -277,7 +421,7 @@ export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showL
         {
             accessorKey: 'payment_status',
             id: 'payment_method',
-            header: 'Payment method',
+            header: hideOrderStatus ? 'Payment status' : 'Payment method',
             cell: ({ row }) => {
                 const order = row.original
                 const payments = order.order_payments || []
@@ -305,6 +449,20 @@ export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showL
                 }).filter(Boolean)
 
                 const summary = methodLabels.length > 0 ? methodLabels.join(', ') : null
+                // In Financials/Transactions (hideOrderStatus), payment status is the
+                // only status surfaced — so always show the badge, with the method text
+                // beneath it when available. Elsewhere, fall back to the badge only when
+                // no payment method is present.
+                if (hideOrderStatus) {
+                    return (
+                        <div className="flex flex-col gap-0.5">
+                            <PaymentStatusBadge status={order.payment_status} />
+                            {summary && (
+                                <span className="text-sm text-muted-foreground">{summary}</span>
+                            )}
+                        </div>
+                    )
+                }
                 return (
                     <div className="flex flex-col gap-0.5">
                         {summary ? (
@@ -328,6 +486,7 @@ export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showL
         },
         {
             id: 'actions',
+            enableHiding: false,
             cell: ({ row }) => {
                 const order = row.original
 
@@ -345,6 +504,12 @@ export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showL
                                 <Eye className="mr-2 h-4 w-4" />
                                 View Details
                             </DropdownMenuItem>
+                            {order.order_type === 'qr_dine_in' && order.table_number ? (
+                                <DropdownMenuItem onClick={() => handleViewOnFloorPlan(order)}>
+                                    <MapPin className="mr-2 h-4 w-4" />
+                                    View on Floor Plan
+                                </DropdownMenuItem>
+                            ) : null}
                             {!readOnly && (
                                 <>
                                     <DropdownMenuSeparator />
@@ -373,9 +538,13 @@ export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showL
         },
     ]
 
+    const visibleColumns = hideOrderStatus
+        ? columns.filter((c) => (c as { accessorKey?: string }).accessorKey !== 'status')
+        : columns
+
     const table = useReactTable({
         data,
-        columns,
+        columns: visibleColumns,
         getCoreRowModel: getCoreRowModel(),
         getSortedRowModel: getSortedRowModel(),
         getFilteredRowModel: getFilteredRowModel(),
@@ -401,7 +570,7 @@ export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showL
 
     return (
         <div className="space-y-4">
-            {/* Search */}
+            {/* Search + column visibility */}
             <div className="flex items-center gap-2">
                 <div className="relative flex-1 max-w-sm">
                     <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
@@ -412,6 +581,33 @@ export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showL
                         className="pl-9 border-border/60"
                     />
                 </div>
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <Button variant="outline" size="sm" className="ml-auto border-border/60">
+                            <SlidersHorizontal className="mr-2 h-4 w-4" />
+                            Columns
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-[180px]">
+                        <DropdownMenuLabel>Toggle columns</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        {table
+                            .getAllColumns()
+                            .filter((column) => column.getCanHide())
+                            .map((column) => (
+                                <DropdownMenuCheckboxItem
+                                    key={column.id}
+                                    checked={column.getIsVisible()}
+                                    onCheckedChange={(value) =>
+                                        column.toggleVisibility(!!value)
+                                    }
+                                    onSelect={(e) => e.preventDefault()}
+                                >
+                                    {COLUMN_LABELS[column.id] ?? column.id}
+                                </DropdownMenuCheckboxItem>
+                            ))}
+                    </DropdownMenuContent>
+                </DropdownMenu>
             </div>
 
             {/* Table */}
@@ -438,7 +634,7 @@ export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showL
                     <TableBody>
                         {isLoading ? (
                             <TableRow>
-                                <TableCell colSpan={columns.length} className="h-24 text-center">
+                                <TableCell colSpan={visibleColumns.length} className="h-24 text-center">
                                     <div className="flex items-center justify-center">
                                         <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary" />
                                     </div>
@@ -464,7 +660,7 @@ export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showL
                             ))
                         ) : (
                             <TableRow>
-                                <TableCell colSpan={columns.length} className="h-24 text-center">
+                                <TableCell colSpan={visibleColumns.length} className="h-24 text-center">
                                     <div className="flex flex-col items-center gap-2 text-muted-foreground">
                                         <ShoppingBag className="h-8 w-8" />
                                         <p>No orders found</p>

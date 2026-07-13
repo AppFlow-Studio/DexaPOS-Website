@@ -273,7 +273,7 @@ export function CreateLocationWizard({ clerkOrgId, actorUserId, mode = 'standard
 
                     createLocationSchema.parse({
                         ...formData,
-                        phone: normalizePhone(formData.phone) ?? formData.phone || undefined,
+                        phone: (normalizePhone(formData.phone) ?? formData.phone) || undefined,
                         email: formData.email || undefined,
                         code: formData.code || undefined,
                         address_line2: formData.address_line2 || undefined,
@@ -402,19 +402,26 @@ export function CreateLocationWizard({ clerkOrgId, actorUserId, mode = 'standard
                 description: `"${formData.name}" has been added to your locations.`
             })
 
-            // Invalidate locations query to refresh the list
-            queryClient.invalidateQueries({ queryKey: ['locations'] })
-            queryClient.invalidateQueries({ queryKey: ['menus'] })
-
             // Reset unsaved changes flag
             setHasUnsavedChanges(false)
 
+            queryClient.invalidateQueries({ queryKey: ['menus'] })
+
             if (isOnboarding) {
+                // The dashboard layout's first-location gate redirects any merchant
+                // with zero locations back into this wizard. We must AWAIT the
+                // locations refetch so the cache holds the freshly-created location
+                // before we navigate — otherwise the gate re-reads the stale empty
+                // list and bounces the user back to Step 1 (the onboarding loop).
+                await queryClient.refetchQueries({ queryKey: ['locations'] })
                 router.replace('/dashboard')
-            } else if (result.data?.id) {
-                router.push(`/dashboard/locations?open=${result.data.id}`)
             } else {
-                router.push('/dashboard/locations')
+                queryClient.invalidateQueries({ queryKey: ['locations'] })
+                if (result.data?.id) {
+                    router.push(`/dashboard/locations?open=${result.data.id}`)
+                } else {
+                    router.push('/dashboard/locations')
+                }
             }
         } catch (error) {
             toast.error('Creation Failed', {
@@ -506,9 +513,9 @@ export function CreateLocationWizard({ clerkOrgId, actorUserId, mode = 'standard
 
     return (
         <>
-            <div className="h-[92vh] flex">
-                {/* Sidebar — hidden on mobile, visible md+ */}
-                <div className="hidden md:flex">
+            <div className="h-[calc(92vh-3.5rem)] sm:h-[92vh] flex">
+                {/* Sidebar — hidden on mobile/tablet, visible lg+ */}
+                <div className="hidden lg:flex">
                     <WizardSidebar
                         currentStep={currentStep}
                         completedSteps={completedSteps}
@@ -521,8 +528,8 @@ export function CreateLocationWizard({ clerkOrgId, actorUserId, mode = 'standard
                     {/* Header */}
                     <div className="border-b px-4 md:px-8 py-4 flex items-center justify-between gap-4">
                         <div className="min-w-0">
-                            {/* Mobile step indicator */}
-                            <p className="text-xs font-medium text-muted-foreground mb-0.5 md:hidden">
+                            {/* Mobile/tablet step indicator */}
+                            <p className="text-xs font-medium text-muted-foreground mb-0.5 lg:hidden">
                                 Step {currentStep} of {TOTAL_STEPS}
                             </p>
                             <h1 className="text-lg md:text-2xl font-semibold truncate">
@@ -546,8 +553,8 @@ export function CreateLocationWizard({ clerkOrgId, actorUserId, mode = 'standard
                         )}
                     </div>
 
-                    {/* Mobile progress bar */}
-                    <div className="md:hidden px-4 pt-2 pb-1">
+                    {/* Mobile/tablet progress bar */}
+                    <div className="lg:hidden px-4 pt-2 pb-1">
                         <div className="h-1 bg-muted rounded-full overflow-hidden">
                             <div
                                 className="h-full bg-primary rounded-full transition-all duration-500"

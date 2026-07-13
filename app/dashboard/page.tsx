@@ -22,6 +22,7 @@ import {
   CheckCircle,
   AlertCircle,
   Lock,
+  QrCode,
   X,
 } from "lucide-react";
 import {
@@ -35,6 +36,7 @@ import {
   useLocationScopedSchedules,
 } from "./hooks/useLocationScoped";
 import { useOrders } from "./hooks/useOrder";
+import { isOrderReportable } from "@/lib/reporting/recognized-order";
 import {
   useOrderAnalytics,
   useOrderStats,
@@ -75,6 +77,7 @@ import {
 import { TransactionVolumeCard } from "./components/TransactionVolumeCard";
 import { NetCollectedBySourceCard } from "./components/NetCollectedBySourceCard";
 import { TaxableRevenueByTenderCard } from "./components/TaxableRevenueByTenderCard";
+import { fillDailyFinancialStats } from "@/lib/reporting/date-range";
 
 export default function MerchantDashboardPage() {
   const { selectedLocationId, locations } = useLocationStore();
@@ -92,12 +95,6 @@ export default function MerchantDashboardPage() {
   const [pinBannerDismissed, setPinBannerDismissed] = useState(false);
 
   // Date ranges for analytics
-  const today = useMemo(() => {
-    const date = new Date();
-    date.setHours(0, 0, 0, 0);
-    return date;
-  }, []);
-
   const last7Days = useMemo(() => {
     const date = new Date();
     date.setDate(date.getDate() - 7);
@@ -178,10 +175,18 @@ export default function MerchantDashboardPage() {
 
   // Calculate today's stats - use KPIs if available for consistency
   const todayStats = useMemo(() => {
+    // Local calendar "today" (e.g. "2026-06-29"), computed fresh on every
+    // recompute — never a frozen mount-time value. get_financial_kpis buckets
+    // daily_stats by the location-local calendar day, so we match on a local
+    // date string (not the UTC `toISOString()` date, which drifts across the
+    // UTC/local midnight boundary and would select the wrong day).
+    const todayKey = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD, local
+
     if (kpis7Days?.daily_stats) {
-      const todayStr = today.toISOString().split("T")[0];
+      // No bucket for today => 0 recognized orders today (NOT the latest
+      // historical day — the previous code fell through to yesterday's count).
       const todayMatch = kpis7Days.daily_stats.find((d) =>
-        d.date.startsWith(todayStr)
+        d.date.startsWith(todayKey)
       );
 
       return {
@@ -191,18 +196,14 @@ export default function MerchantDashboardPage() {
       };
     }
 
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-    const todayEnd = new Date();
-    todayEnd.setHours(23, 59, 59, 999);
-
+    // Fallback (KPIs unavailable): recognized orders created today, locally.
+    // Both revenue and count derive from the same set so they agree.
     const todayOrders = ordersList.filter((order) => {
-      const orderDate = new Date(order.created_at);
-      return orderDate >= todayStart && orderDate <= todayEnd;
+      const orderKey = new Date(order.created_at).toLocaleDateString("en-CA");
+      return orderKey === todayKey && isOrderReportable(order);
     });
 
-    const completedToday = todayOrders.filter((o) => o.status === "completed");
-    const revenueToday = completedToday.reduce(
+    const revenueToday = todayOrders.reduce(
       (sum, o) => sum + Number(o.total_amount || 0),
       0
     );
@@ -211,9 +212,9 @@ export default function MerchantDashboardPage() {
     return {
       revenue: revenueToday,
       orders: ordersToday,
-      completed: completedToday.length,
+      completed: ordersToday,
     };
-  }, [ordersList, kpis7Days, today]);
+  }, [ordersList, kpis7Days]);
 
   // Calculate growth (comparing last 7 days to previous 7 days)
   const growth = useMemo(() => {
@@ -238,7 +239,10 @@ export default function MerchantDashboardPage() {
 
   // Prepare chart data for revenue trend
   const revenueChartData = useMemo(() => {
-    const data = kpis7Days?.daily_stats || [];
+    const data = fillDailyFinancialStats(kpis7Days?.daily_stats || [], {
+      from: last7Days,
+      to: now,
+    });
     if (data.length === 0) return [];
 
     return data.map((item) => ({
@@ -249,7 +253,7 @@ export default function MerchantDashboardPage() {
       sales: item.net_sales,
     }));
 
-  }, [kpis7Days]);
+  }, [kpis7Days, last7Days, now]);
 
   // Chart configuration
   const chartConfig = {
@@ -264,6 +268,15 @@ export default function MerchantDashboardPage() {
       style: "currency",
       currency: "USD",
     }).format(amount);
+  };
+
+  const orderTypeLabels: Record<string, string> = {
+    dine_in: "Dine In",
+    qr_dine_in: "QR Table",
+    takeout: "Takeout",
+    delivery: "Delivery",
+    online: "Online",
+    catering: "Catering",
   };
 
   return (
@@ -835,6 +848,7 @@ export default function MerchantDashboardPage() {
                       const percentage = total > 0 ? (count / total) * 100 : 0;
                       const typeLabels: Record<string, string> = {
                         dine_in: "Dine In",
+                        qr_dine_in: "QR Table",
                         takeout: "Takeout",
                         delivery: "Delivery",
                         online: "Online",
@@ -905,24 +919,24 @@ export default function MerchantDashboardPage() {
                   .map((item, index) => (
                     <div
                       key={index}
-                      className="flex items-center justify-between p-2 rounded-lg border"
+                      className="flex items-center justify-between gap-3 p-2 rounded-lg border"
                     >
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
                         <Badge
                           variant="outline"
-                          className="w-6 h-6 flex items-center justify-center p-0"
+                          className="w-6 h-6 flex items-center justify-center p-0 shrink-0"
                         >
                           {index + 1}
                         </Badge>
-                        <span className="font-medium text-sm">
+                        <span className="font-medium text-sm truncate">
                           {item.item_name}
                         </span>
                       </div>
-                      <div className="flex items-center gap-4">
-                        <span className="text-xs text-muted-foreground">
+                      <div className="flex items-center gap-4 shrink-0">
+                        <span className="text-xs text-muted-foreground whitespace-nowrap">
                           {item.quantity} sold
                         </span>
-                        <span className="font-semibold text-sm">
+                        <span className="font-semibold text-sm whitespace-nowrap">
                           {formatCurrency(item.revenue)}
                         </span>
                       </div>
@@ -992,6 +1006,15 @@ export default function MerchantDashboardPage() {
                       <Badge variant="outline" className="text-xs capitalize">
                         {order.status}
                       </Badge>
+                      {order.order_type === "qr_dine_in" && (
+                        <Badge
+                          className="text-xs"
+                          style={{ backgroundColor: "#0C4FD1", color: "#FFFFFF" }}
+                        >
+                          <QrCode className="mr-1 h-3 w-3" />
+                          QR Table
+                        </Badge>
+                      )}
                     </div>
                     <p className="text-xs text-muted-foreground mt-1">
                       {new Date(order.created_at).toLocaleString("en-US", {
@@ -1001,13 +1024,30 @@ export default function MerchantDashboardPage() {
                         minute: "2-digit",
                       })}
                     </p>
+                    {order.order_type === "qr_dine_in" && order.table_number ? (
+                      <div className="mt-2 flex items-center gap-2">
+                        <Badge
+                          variant="outline"
+                          className="border-blue-200 bg-blue-50 text-blue-700"
+                        >
+                          Table {order.table_number}
+                        </Badge>
+                        <Link
+                          href="/dashboard/tables"
+                          className="text-xs font-medium"
+                          style={{ color: "#0C4FD1" }}
+                        >
+                          View on floor plan
+                        </Link>
+                      </div>
+                    ) : null}
                   </div>
                   <div className="text-right">
                     <p className="font-semibold">
                       {formatCurrency(order.total_amount)}
                     </p>
                     <p className="text-xs text-muted-foreground capitalize">
-                      {order.order_type.replace("_", " ")}
+                      {orderTypeLabels[order.order_type] || order.order_type.replace("_", " ")}
                     </p>
                   </div>
                 </div>

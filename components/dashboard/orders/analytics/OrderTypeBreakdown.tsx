@@ -1,13 +1,7 @@
 'use client'
 
 import { useMemo } from 'react'
-import {
-  PieChart,
-  Pie,
-  Cell,
-  ResponsiveContainer,
-  Legend,
-} from 'recharts'
+import { PieChart, Pie, Cell, Legend } from 'recharts'
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart'
 import { ChartCard } from './ChartCard'
 import { DataTable } from '@/components/ui/data-table'
@@ -97,17 +91,15 @@ export function OrderTypeBreakdown({ data, isLoading }: OrderTypeBreakdownProps)
       <div className="space-y-6">
         {/* Donut Chart */}
         {pieData.length > 0 && (
-          <ChartContainer config={chartConfig} className="h-[300px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
+          <ChartContainer config={chartConfig} className="aspect-auto h-[300px] w-full">
               <PieChart>
                 <Pie
                   data={pieData}
                   cx="50%"
                   cy="50%"
                   labelLine={false}
-                  label={({ name, value }) => `${name}: ${value}`}
-                  innerRadius={60}
-                  outerRadius={120}
+                  innerRadius="45%"
+                  outerRadius="80%"
                   fill="#3b82f6"
                   dataKey="value"
                 >
@@ -116,8 +108,16 @@ export function OrderTypeBreakdown({ data, isLoading }: OrderTypeBreakdownProps)
                   ))}
                 </Pie>
                 <ChartTooltip content={<ChartTooltipContent />} />
+                <Legend
+                  verticalAlign="bottom"
+                  height={36}
+                  wrapperStyle={{ fontSize: 12 }}
+                  formatter={(value, entry) => {
+                    const v = (entry?.payload as { value?: number } | undefined)?.value
+                    return `${value}${v != null ? `: ${v}` : ''}`
+                  }}
+                />
               </PieChart>
-            </ResponsiveContainer>
           </ChartContainer>
         )}
 
@@ -125,7 +125,7 @@ export function OrderTypeBreakdown({ data, isLoading }: OrderTypeBreakdownProps)
         {data?.order_types && (
           <div>
             <h3 className="text-sm font-semibold mb-4">Details by Order Type</h3>
-            <DataTable columns={columns} data={data.order_types} />
+            <DataTable columns={columns} data={data.order_types} tableClassName="min-w-[560px]" />
           </div>
         )}
       </div>

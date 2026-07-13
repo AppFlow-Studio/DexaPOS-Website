@@ -46,7 +46,7 @@ export function HealthDashboard() {
     return (
         <div className="space-y-6">
             {/* Header */}
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                     <h2 className="text-2xl font-bold tracking-tight flex items-center gap-2">
                         <Activity className="h-6 w-6" />
@@ -59,6 +59,7 @@ export function HealthDashboard() {
                 <Button
                     variant="outline"
                     size="sm"
+                    className="self-start sm:self-auto shrink-0"
                     onClick={() => refetch()}
                     disabled={healthLoading}
                 >

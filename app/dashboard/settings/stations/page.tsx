@@ -50,9 +50,8 @@ import {
 } from "lucide-react";
 import { useState, useMemo, useEffect } from "react";
 import {
-  useLocationStore,
-  useIsAllLocations,
-  useSelectedLocation,
+  useGatedLocationId,
+  useGatedLocation,
 } from "@/stores/location-store";
 import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
 
@@ -62,9 +61,12 @@ type SortDirection = "asc" | "desc";
 const ITEMS_PER_PAGE = 10;
 
 export default function StationsPage() {
-  const selectedLocationId = useLocationStore((state) => state.selectedLocationId);
-  const isAllLocations = useIsAllLocations();
-  const selectedLocation = useSelectedLocation();
+  // Resolve to the gated location so single-location accounts (locked to 'all')
+  // skip the "Select a Location" prompt. Multi-location on 'all' -> null.
+  const gatedLocationId = useGatedLocationId();
+  const selectedLocationId = gatedLocationId ?? "all";
+  const isAllLocations = !gatedLocationId;
+  const selectedLocation = useGatedLocation();
   const { data: userInfo } = useUserInfo();
   const clerkOrgId = userInfo?.members?.[0]?.organizations?.id;
 
@@ -406,6 +408,15 @@ export default function StationsPage() {
 
   return (
     <div className="space-y-6">
+      {/* Mobile notice — full editing requires a larger screen */}
+      <div className="sm:hidden flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-900/50 dark:bg-amber-950/30 p-4">
+        <Monitor className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+        <div>
+          <p className="text-sm font-medium text-amber-800 dark:text-amber-300">Use a larger screen to configure stations</p>
+          <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">Station setup, PIN config, and printer pairing require a tablet or desktop.</p>
+        </div>
+      </div>
+
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>

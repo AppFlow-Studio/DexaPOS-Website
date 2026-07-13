@@ -223,18 +223,19 @@ export function NotificationsTab({
                   key={row.id}
                   className="flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm"
                 >
-                  <div className="flex flex-col">
+                  <div className="flex min-w-0 flex-col">
                     <span className="font-medium">
                       {row.event} · {row.channel}
                     </span>
-                    <span className="text-xs text-muted-foreground">
+                    <span className="text-xs text-muted-foreground break-words">
                       {row.recipient} · {new Date(row.sentAt).toLocaleString()}
                     </span>
                     {row.error ? (
-                      <span className="text-xs text-destructive">{row.error}</span>
+                      <span className="text-xs text-destructive break-words">{row.error}</span>
                     ) : null}
                   </div>
                   <Badge
+                    className="shrink-0"
                     variant={
                       row.status === "sent"
                         ? "default"

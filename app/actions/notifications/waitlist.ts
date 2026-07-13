@@ -2,6 +2,7 @@
 
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { sendSMS } from "@/lib/messaging/telnyx";
+import { logOutboundMessage } from "@/lib/messaging/message-log";
 import { sendEmail, isValidEmail } from "@/lib/messaging/resend";
 import {
   renderWaitlistAddedHtml,
@@ -98,6 +99,14 @@ export async function notifyWaitlistAdded(
     if (entry.phone) {
       const text = renderWaitlistAddedText(brand, ctx);
       const smsResult = await sendSMS(entry.phone, text);
+      await logOutboundMessage(supabase, {
+        merchantId: entry.merchant_id,
+        toNumber: entry.phone,
+        body: text,
+        telnyxMessageId: "error" in smsResult ? null : smsResult.id,
+        status: "error" in smsResult ? "failed" : "sent",
+        errorCode: "error" in smsResult ? smsResult.error : null,
+      });
       if ("error" in smsResult) {
         result.errors.push(`SMS: ${smsResult.error}`);
       } else {

@@ -9,12 +9,14 @@ import { StorefrontHeader } from "../StorefrontHeader";
 import { AccountDrawer } from "../AccountDrawer";
 import { OrdersSheet } from "../OrdersSheet";
 import { OrderStatusWatcher } from "../OrderStatusWatcher";
+import { QrTableBanner } from "../QrTableBanner";
 import { MobileBottomTabs, TabType } from "../MobileBottomTabs";
 import { OrdersPanel } from "../OrdersPanel";
 import { ItemDetailsModal } from "../ItemDetailsModal";
 import { useCart } from "../../hooks/useCart";
 import { useSession } from "../../hooks/useSession";
 import { useSessionInit } from "../../hooks/useSessionInit";
+import { useQrFunnelTracking } from "../../hooks/useQrFunnelTracking";
 import { useStorefrontPath } from "../../lib/use-storefront-path";
 import { getTodayHoursString, isStoreOpenNow } from "../StoreInfoBar";
 import { MenuSearch } from "../MenuSearch";
@@ -39,19 +41,33 @@ interface HeroLayoutProps {
     business_hours: any;
     latitude?: number | null;
     longitude?: number | null;
+    timezone?: string | null;
   };
   menus: StorefrontMenu[];
   slug: string;
+  seedQrSession?: {
+    sessionToken: string;
+    floorPlanObjectId?: string | null;
+    tableLabel?: string | null;
+    tableQrCodeId?: string | null;
+  } | null;
 }
 
 function isValidImageSrc(src?: string | null): boolean {
   return !!src && (src.startsWith("http://") || src.startsWith("https://") || src.startsWith("/"));
 }
 
-export function HeroLayout({ site, location, menus, slug }: HeroLayoutProps) {
-  useSessionInit(site?.id);
+export function HeroLayout({
+  site,
+  location,
+  menus,
+  slug,
+  seedQrSession,
+}: HeroLayoutProps) {
+  useSessionInit(site?.id, seedQrSession);
   const router = useRouter();
   const activeOrderId = useSession((s) => s.activeOrderId);
+  const qrTableLabel = useSession((s) => s.qrTableLabel);
   const storefrontPath = useStorefrontPath(slug);
 
   const [activeTab, setActiveTab] = useState<TabType>("menu");
@@ -60,6 +76,11 @@ export function HeroLayout({ site, location, menus, slug }: HeroLayoutProps) {
   const [showWelcomeDrawer, setShowWelcomeDrawer] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [headerHeight, setHeaderHeight] = useState(56);
+
+  useQrFunnelTracking({
+    trackMenuViewed: activeTab === "menu",
+    trackCartStarted: true,
+  });
 
   const [activeMenuId, setActiveMenuId] = useState<string>(() => menus[0]?.id ?? "");
   const [activeCategory, setActiveCategory] = useState<string>("");
@@ -71,8 +92,9 @@ export function HeroLayout({ site, location, menus, slug }: HeroLayoutProps) {
   const { setOpen: setCartOpen, pendingModalItem, clearPendingModalItem } = useCart();
 
   const rawBusinessHours = site?.online_ordering_config?.operatingHours || (location as any).business_hours;
-  const todayHours = useMemo(() => getTodayHoursString(rawBusinessHours), [rawBusinessHours]);
-  const isStoreOpen = useMemo(() => isStoreOpenNow(rawBusinessHours), [rawBusinessHours]);
+  const locationTimezone = (location as any).timezone ?? null;
+  const todayHours = useMemo(() => getTodayHoursString(rawBusinessHours, locationTimezone), [rawBusinessHours, locationTimezone]);
+  const isStoreOpen = useMemo(() => isStoreOpenNow(rawBusinessHours, locationTimezone), [rawBusinessHours, locationTimezone]);
 
   useEffect(() => {
     const onScroll = () => setShowScrollTop(window.scrollY > 400);
@@ -275,6 +297,7 @@ export function HeroLayout({ site, location, menus, slug }: HeroLayoutProps) {
 
           {/* Menu content */}
           <main className="container mx-auto px-4 py-8 pb-32 lg:pb-8">
+            <QrTableBanner tableLabel={qrTableLabel} className="mb-6" />
             {allCategories.map((category) => (
               <section key={category.id} id={`hero-category-${category.id}`} className="mb-12 scroll-mt-32">
                 <h2 className="text-2xl font-bold mb-5" style={{ color: "var(--primary)" }}>

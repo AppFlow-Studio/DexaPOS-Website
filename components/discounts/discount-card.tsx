@@ -8,9 +8,11 @@ import { format } from 'date-fns'
 interface DiscountCardProps {
     discount: Discount
     locationName?: string | null
+    /** Hide the global-vs-location Availability row for single-location accounts. */
+    isSingleLocation?: boolean
 }
 
-export function DiscountCard({ discount, locationName }: DiscountCardProps) {
+export function DiscountCard({ discount, locationName, isSingleLocation = false }: DiscountCardProps) {
     const formatDate = (value: string | null) => (value ? format(new Date(value), 'MMM d, yyyy') : 'Not set')
     const formatValue = () =>
         discount.discount_type === 'percentage' ? `${discount.discount_value}%` : `$${discount.discount_value}`
@@ -59,14 +61,16 @@ export function DiscountCard({ discount, locationName }: DiscountCardProps) {
                     <p className="text-xs text-muted-foreground">Requires approval</p>
                     <p className="font-medium">{discount.requires_manager_approval ? 'Yes' : 'No'}</p>
                 </div>
-                <div>
-                    <p className="text-xs text-muted-foreground">Availability</p>
-                    <p className="font-medium">
-                        {discount.location_id
-                            ? (locationName ?? 'Location')
-                            : 'Global (all locations)'}
-                    </p>
-                </div>
+                {!isSingleLocation && (
+                    <div>
+                        <p className="text-xs text-muted-foreground">Availability</p>
+                        <p className="font-medium">
+                            {discount.location_id
+                                ? (locationName ?? 'Location')
+                                : 'Global (all locations)'}
+                        </p>
+                    </div>
+                )}
             </CardContent>
         </Card>
     )

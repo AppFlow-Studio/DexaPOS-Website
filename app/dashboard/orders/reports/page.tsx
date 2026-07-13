@@ -6,7 +6,9 @@ import { useIsAllLocations, useSelectedLocation } from '@/stores/location-store'
 import { Card, CardContent } from '@/components/ui/card'
 
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
-import { MapPin, Globe } from 'lucide-react'
+import { MapPin, Globe, ArrowLeft } from 'lucide-react'
+import Link from 'next/link'
+import { Button } from '@/components/ui/button'
 import { DateRangePicker, DatePreset } from '@/components/dashboard/orders/DateRangePicker'
 import { SalesSummaryReport } from '@/components/dashboard/orders/reports/SalesSummaryReport'
 import { HourlySalesReport } from '@/components/dashboard/orders/reports/HourlySalesReport'
@@ -47,6 +49,12 @@ export default function ReportsPage() {
     <main className="space-y-6 animate-in fade-in duration-500 ">
       {/* Header with Blue Theme */}
       <div className="space-y-4">
+        <Button variant="ghost" size="sm" className="-ml-2 h-8 gap-1.5 text-muted-foreground" asChild>
+          <Link href="/dashboard/orders">
+            <ArrowLeft className="h-4 w-4" />
+            Back to Orders
+          </Link>
+        </Button>
         <div className="flex items-center justify-between">
           <div className="space-y-1">
             <div className="flex items-center gap-3">

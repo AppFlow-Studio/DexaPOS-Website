@@ -49,6 +49,7 @@ interface LocationAssignmentSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   memberId: string;
+  staffProfileId: string;
   memberName: string;
   isClerkUser: boolean;
   assignment: LocationAssignment;
@@ -59,6 +60,7 @@ export function LocationAssignmentSheet({
   open,
   onOpenChange,
   memberId,
+  staffProfileId,
   memberName,
   isClerkUser,
   assignment,
@@ -126,7 +128,7 @@ export function LocationAssignmentSheet({
       if (editedIsActive) {
         // Reactivate
         reactivateStaff.mutate(
-          { memberId, locationId: assignment.location_id },
+          { staffProfileId, locationId: assignment.location_id },
           {
             onSuccess: () => {
               toast.success(
@@ -138,7 +140,7 @@ export function LocationAssignmentSheet({
       } else {
         // Deactivate
         deactivateStaff.mutate(
-          { memberId, locationId: assignment.location_id },
+          { staffProfileId, locationId: assignment.location_id },
           {
             onSuccess: () => {
               toast.success(
@@ -347,7 +349,7 @@ export function LocationAssignmentSheet({
           <Separator />
 
           {/* PIN Management */}
-          <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
+          <div className="space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <KeyRound className="h-4 w-4 text-muted-foreground" />

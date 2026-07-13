@@ -10,9 +10,9 @@ import { formatDistanceToNow } from 'date-fns'
 import type { MerchantSpotlightRow } from '../actions/get-merchant-spotlight'
 
 const STATUS_STYLES: Record<string, string> = {
-  active: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-  onboarding: 'bg-blue-50 text-blue-700 border-blue-200',
-  inactive: 'bg-gray-100 text-gray-600 border-gray-200',
+  active: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-900',
+  onboarding: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-900',
+  inactive: 'bg-gray-100 text-gray-600 border-gray-200 dark:bg-muted dark:text-muted-foreground dark:border-border',
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -48,9 +48,9 @@ export function MerchantSpotlightCard({ merchant }: { merchant: MerchantSpotligh
   return (
     <Link
       href={`/manage/merchants/${merchant.id}`}
-      className="group block focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-xl"
+      className="group block min-w-0 overflow-hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-xl"
     >
-      <Card className="p-4 h-full transition-all duration-200 border-blue-100/50 hover:border-blue-300 hover:shadow-md group-focus-visible:border-blue-300">
+      <Card className="p-4 h-full min-w-0 overflow-hidden transition-all duration-200 border-blue-100/50 dark:border-border hover:border-blue-300 dark:hover:border-blue-800 hover:shadow-md group-focus-visible:border-blue-300">
         <div className="flex items-start gap-3 mb-3">
           {merchant.logo_url ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -60,12 +60,12 @@ export function MerchantSpotlightCard({ merchant }: { merchant: MerchantSpotligh
               className="h-10 w-10 rounded-lg object-cover bg-muted shrink-0"
             />
           ) : (
-            <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100 flex items-center justify-center shrink-0">
-              <Building2 className="h-5 w-5 text-blue-600" />
+            <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/40 dark:to-indigo-950/40 border border-blue-100 dark:border-border flex items-center justify-center shrink-0">
+              <Building2 className="h-5 w-5 text-blue-600 dark:text-blue-400" />
             </div>
           )}
           <div className="min-w-0 flex-1">
-            <p className="font-semibold text-sm leading-tight truncate group-hover:text-blue-700 transition-colors">
+            <p className="font-semibold text-sm leading-tight truncate group-hover:text-blue-700 dark:group-hover:text-blue-400 transition-colors">
               {merchant.name ?? 'Unnamed merchant'}
             </p>
             <Badge
@@ -125,10 +125,10 @@ function Stat({
   tone: 'emerald' | 'blue' | 'indigo' | 'violet'
 }) {
   const toneClasses: Record<typeof tone, string> = {
-    emerald: 'text-emerald-600 bg-emerald-50',
-    blue: 'text-blue-600 bg-blue-50',
-    indigo: 'text-indigo-600 bg-indigo-50',
-    violet: 'text-violet-600 bg-violet-50',
+    emerald: 'text-emerald-600 bg-emerald-50 dark:text-emerald-400 dark:bg-emerald-950/40',
+    blue: 'text-blue-600 bg-blue-50 dark:text-blue-400 dark:bg-blue-950/40',
+    indigo: 'text-indigo-600 bg-indigo-50 dark:text-indigo-400 dark:bg-indigo-950/40',
+    violet: 'text-violet-600 bg-violet-50 dark:text-violet-400 dark:bg-violet-950/40',
   }
   return (
     <div className="flex items-center gap-2 min-w-0">
@@ -145,7 +145,7 @@ function Stat({
 
 export function MerchantSpotlightCardSkeleton() {
   return (
-    <Card className="p-4 h-full border-blue-100/50">
+    <Card className="p-4 h-full border-blue-100/50 dark:border-border">
       <div className="flex items-start gap-3 mb-3">
         <Skeleton className="h-10 w-10 rounded-lg" />
         <div className="flex-1 space-y-1.5">

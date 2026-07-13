@@ -90,9 +90,9 @@ export default function MerchantsPage() {
     }
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 min-w-0 overflow-x-hidden">
             {/* Header */}
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                     <h1 className="text-3xl font-bold tracking-tight">Merchants</h1>
                     <p className="text-muted-foreground">
@@ -100,14 +100,14 @@ export default function MerchantsPage() {
                     </p>
                 </div>
                 <PermissionGate permission="hq.merchant.create">
-                    <Link href="/manage/merchants/new">
+                    <Link href="/manage/merchants/new" className="self-start sm:self-auto">
                         <Button>Create Merchant</Button>
                     </Link>
                 </PermissionGate>
             </div>
 
             {/* Stats Cards */}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
                 <StatsCard
                     title="Total Merchants"
                     value={stats?.total ?? 0}
@@ -140,10 +140,10 @@ export default function MerchantsPage() {
             {/* Filters */}
             <Card>
                 <CardHeader className="pb-4">
-                    <div className="flex flex-wrap gap-4 items-center justify-between">
-                        <div className="flex flex-wrap gap-4 items-center">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+                        <div className="flex flex-wrap gap-3 items-center">
                             {/* Search */}
-                            <div className="relative flex-1 min-w-50 max-w-sm">
+                            <div className="relative flex-1 min-w-[200px] max-w-sm">
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                                 <Input
                                     placeholder="Search merchants..."
@@ -410,6 +410,7 @@ function MerchantListView({
     }
 
     return (
+        <div className="overflow-x-auto">
         <Table>
             <TableHeader>
                 <TableRow>
@@ -491,5 +492,6 @@ function MerchantListView({
                 })}
             </TableBody>
         </Table>
+        </div>
     )
 }

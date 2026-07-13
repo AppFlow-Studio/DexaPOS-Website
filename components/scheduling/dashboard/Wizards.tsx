@@ -83,26 +83,26 @@ export function QuickScheduleModal({
         <div className="space-y-4 py-4">
           <div className="space-y-2">
             <Label>Select Start Date</Label>
-            <div className="flex justify-center border rounded-lg p-2">
+            <div className="flex justify-center border rounded-lg p-2 overflow-x-auto">
               <Calendar
                 mode="single"
                 selected={selectedDate}
                 onSelect={setSelectedDate}
-                className="rounded-md"
+                className="rounded-md w-full max-w-[320px] [&_table]:w-full"
               />
             </div>
           </div>
 
           <div className="space-y-2">
             <Label>Schedule Duration</Label>
-            <div className="flex gap-2">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               {WEEK_OPTIONS.map((opt) => (
                 <Button
                   key={opt.value}
                   type="button"
                   variant={numberOfWeeks === opt.value ? "default" : "outline"}
                   size="sm"
-                  className="flex-1"
+                  className="w-full"
                   onClick={() => setNumberOfWeeks(opt.value)}
                 >
                   {opt.label}
@@ -313,14 +313,14 @@ export function PeriodWizard({
           {/* Step 2: Start Date */}
           {step === 2 && (
             <div className="space-y-4 p-2 animate-in fade-in slide-in-from-right-4 duration-300">
-              <div className="flex justify-center border rounded-lg p-2">
+              <div className="flex justify-center border rounded-lg p-2 overflow-x-auto">
                 <Calendar
                   mode="single"
                   selected={formData.startDate}
                   onSelect={(date) =>
                     setFormData({ ...formData, startDate: date })
                   }
-                  className="rounded-md"
+                  className="rounded-md w-full max-w-[320px] [&_table]:w-full"
                 />
               </div>
               {formData.startDate && (
@@ -339,7 +339,7 @@ export function PeriodWizard({
           {/* Step 3: End Date */}
           {step === 3 && (
             <div className="space-y-4 p-2 animate-in fade-in slide-in-from-right-4 duration-300">
-              <div className="flex justify-center border rounded-lg p-2">
+              <div className="flex justify-center border rounded-lg p-2 overflow-x-auto">
                 <Calendar
                   mode="single"
                   selected={formData.endDate}
@@ -349,7 +349,7 @@ export function PeriodWizard({
                   disabled={(date) =>
                     formData.startDate ? date < formData.startDate : false
                   }
-                  className="rounded-md"
+                  className="rounded-md w-full max-w-[320px] [&_table]:w-full"
                 />
               </div>
               {formData.startDate && formData.endDate && (
@@ -371,7 +371,7 @@ export function PeriodWizard({
         </div>
 
         {/* Footer Navigation */}
-        <DialogFooter className="flex items-center justify-between pt-4 border-t">
+        <DialogFooter className="flex-row items-center justify-between gap-2 pt-4 border-t sm:justify-between">
           <Button
             variant="outline"
             onClick={step === 1 ? handleClose : handleBack}

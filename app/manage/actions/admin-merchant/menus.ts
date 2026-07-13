@@ -1614,6 +1614,7 @@ export async function updateMenuCategoryOrder(
 export interface CreateMenuItemData {
   name: string
   description?: string | null
+  location_id?: string | null
   price: number
   cash_price?: number | null
   delivery_price?: number | null
@@ -1642,6 +1643,7 @@ export async function createAdminMenuItem(
     .from('menu_items')
     .insert({
       merchant_id: merchantId,
+      location_id: data.location_id || null,
       name: data.name,
       description: data.description || null,
       price: data.price,
@@ -1693,6 +1695,7 @@ export async function createAdminMenuItem(
     resourceType: 'menu_item',
     resourceId: item.id,
     resourceName: data.name,
+    locationId: data.location_id || undefined,
     changes: { after: data as any },
     metadata: {
       admin_action: true,

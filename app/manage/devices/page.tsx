@@ -8,6 +8,7 @@ import { useAdminDeviceInventory, useAdminDeviceSummary } from '@/app/manage/hoo
 import { useDeviceCatalog } from '@/app/manage/hooks/useDeviceCatalog'
 import { DeviceRegistryMetricCard } from '@/app/manage/devices/components/DeviceRegistryMetricCard'
 import { DeviceRegistryPageHeader } from '@/app/manage/devices/components/DeviceRegistryPageHeader'
+import { ManageInLandiConnectButton } from '@/app/manage/devices/components/ManageInLandiConnectButton'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -123,7 +124,7 @@ export default function ManageDevicesPage() {
     inventoryQuery.error?.message ?? summaryQuery.error?.message ?? 'Failed to load device registry'
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 min-w-0 overflow-x-hidden">
       <DeviceRegistryPageHeader
         title="Fleet inventory"
         description="Track warehouse stock, merchant assignments, and deployment status from one HQ view."
@@ -283,7 +284,7 @@ export default function ManageDevicesPage() {
               />
             </div>
           ) : (
-            <Table containerClassName="min-h-[480px]">
+            <Table containerClassName="min-h-[480px] overflow-x-auto">
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
                   <TableHead className="pl-6">Device</TableHead>
@@ -319,6 +320,7 @@ export default function ManageDevicesPage() {
                             </div>
                             <div className="text-xs text-muted-foreground">
                               {formatDeviceCategory(device.device_category)}
+                              {device.pos_id ? ` | POS ID ${device.pos_id}` : ''}
                             </div>
                           </div>
                         </div>
@@ -363,12 +365,19 @@ export default function ManageDevicesPage() {
                         </div>
                       </TableCell>
                       <TableCell className="pr-6 text-right align-top">
-                        <Button asChild variant="ghost" size="sm">
-                          <Link href={`/manage/devices/${device.id}`}>
-                            View
-                            <ArrowRight className="h-4 w-4" />
-                          </Link>
-                        </Button>
+                        <div className="flex items-center justify-end gap-1">
+                          <ManageInLandiConnectButton
+                            serialNumber={device.serial_number}
+                            variant="ghost"
+                            iconOnly
+                          />
+                          <Button asChild variant="ghost" size="sm">
+                            <Link href={`/manage/devices/${device.id}`}>
+                              View
+                              <ArrowRight className="h-4 w-4" />
+                            </Link>
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   )

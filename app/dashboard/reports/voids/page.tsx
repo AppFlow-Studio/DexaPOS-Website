@@ -41,6 +41,7 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { useSelectedLocation } from "@/stores/location-store";
 import type { VoidItem, RefundItem } from "@/app/dashboard/actions/order-analytics";
+import { useReportingQueryRange } from "@/app/dashboard/hooks/useReportingDateRange";
 
 type VoidSort = "voided_at" | "amount" | "item_name" | "voided_by";
 type RefundSort = "refunded_at" | "amount" | "refunded_by";
@@ -66,7 +67,8 @@ export default function VoidsReportPage() {
   const [refundDir, setRefundDir] = useState<SortDir>("desc");
 
   const selectedLocation = useSelectedLocation();
-  const { data, isLoading } = useVoidsReport(dateRange.from, dateRange.to);
+  const queryDateRange = useReportingQueryRange(dateRange);
+  const { data, isLoading, isError } = useVoidsReport(queryDateRange.from, queryDateRange.to);
 
   const totalVoidAmount = data?.voids.reduce((s, r) => s + r.amount, 0) ?? 0;
   const totalRefundAmount = data?.refunds.reduce((s, r) => s + r.amount, 0) ?? 0;
@@ -122,32 +124,32 @@ export default function VoidsReportPage() {
   const kpis = [
     {
       label: "Voided Items",
-      value: isLoading ? null : (data?.voids.length ?? 0).toLocaleString(),
-      sub: isLoading ? null : `-$${totalVoidAmount.toFixed(2)} lost`,
+      value: isLoading ? null : isError ? "—" : (data?.voids.length ?? 0).toLocaleString(),
+      sub: isError ? "Failed to load" : `-$${totalVoidAmount.toFixed(2)} lost`,
       icon: AlertTriangle,
       iconColor: "text-rose-500",
       iconBg: "bg-rose-50",
     },
     {
       label: "Total Void Amount",
-      value: isLoading ? null : `$${totalVoidAmount.toFixed(2)}`,
-      sub: "Cancelled item value",
+      value: isLoading ? null : isError ? "—" : `$${totalVoidAmount.toFixed(2)}`,
+      sub: isError ? "Failed to load" : "Cancelled item value",
       icon: TrendingDown,
       iconColor: "text-rose-500",
       iconBg: "bg-rose-50",
     },
     {
       label: "Refunded Orders",
-      value: isLoading ? null : (data?.refunds.length ?? 0).toLocaleString(),
-      sub: isLoading ? null : `-$${totalRefundAmount.toFixed(2)} returned`,
+      value: isLoading ? null : isError ? "—" : (data?.refunds.length ?? 0).toLocaleString(),
+      sub: isError ? "Failed to load" : `-$${totalRefundAmount.toFixed(2)} returned`,
       icon: RefreshCcw,
       iconColor: "text-amber-500",
       iconBg: "bg-amber-50",
     },
     {
       label: "Total Net Impact",
-      value: isLoading ? null : `-$${netImpact.toFixed(2)}`,
-      sub: "Voids + refunds combined",
+      value: isLoading ? null : isError ? "—" : `-$${netImpact.toFixed(2)}`,
+      sub: isError ? "Failed to load" : "Voids + refunds combined",
       icon: DollarSign,
       iconColor: "text-indigo-500",
       iconBg: "bg-indigo-50",
@@ -259,6 +261,16 @@ export default function VoidsReportPage() {
                     ))}
                   </TableRow>
                 ))
+              ) : isError ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="h-32 text-center">
+                    <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                      <AlertTriangle className="h-7 w-7 opacity-30" />
+                      <p className="text-sm font-medium">Failed to load voids data</p>
+                      <p className="text-xs">Try refreshing the page or selecting a different date range.</p>
+                    </div>
+                  </TableCell>
+                </TableRow>
               ) : filteredVoids.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={6} className="h-32 text-center">
@@ -350,6 +362,16 @@ export default function VoidsReportPage() {
                     ))}
                   </TableRow>
                 ))
+              ) : isError ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="h-32 text-center">
+                    <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                      <RefreshCcw className="h-7 w-7 opacity-30" />
+                      <p className="text-sm font-medium">Failed to load refunds data</p>
+                      <p className="text-xs">Try refreshing the page or selecting a different date range.</p>
+                    </div>
+                  </TableCell>
+                </TableRow>
               ) : filteredRefunds.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={5} className="h-32 text-center">

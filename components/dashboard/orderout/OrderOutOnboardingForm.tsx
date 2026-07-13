@@ -280,7 +280,7 @@ export function OrderOutOnboardingForm({
       </div>
 
       {/* Actions */}
-      <div className="flex items-center justify-end gap-3 pt-2">
+      <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center sm:justify-end gap-3 pt-2">
         <Button
           type="button"
           variant="outline"

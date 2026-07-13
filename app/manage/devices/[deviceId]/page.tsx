@@ -8,6 +8,7 @@ import { useAdminDeviceActivity, useAdminDeviceDetail } from '@/app/manage/hooks
 import { DeviceRegistryCommandPaletteTrigger } from '@/app/manage/devices/components/DeviceRegistryCommandPalette'
 import { DeviceRegistrySectionNav } from '@/app/manage/devices/components/DeviceRegistrySectionNav'
 import { DeviceStatusTransitionDialog } from '@/app/manage/devices/components/DeviceStatusTransitionDialog'
+import { ManageInLandiConnectButton } from '@/app/manage/devices/components/ManageInLandiConnectButton'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -115,6 +116,12 @@ export default function DeviceDetailPage() {
               </p>
               <div className="flex flex-wrap gap-2 text-sm text-muted-foreground">
                 <span>{formatDeviceCategory(device.device_category)}</span>
+                {device.pos_id ? (
+                  <>
+                    <span>|</span>
+                    <span>POS ID: {device.pos_id}</span>
+                  </>
+                ) : null}
                 <span>|</span>
                 <span>Condition: {device.condition}</span>
                 <span>|</span>
@@ -130,7 +137,8 @@ export default function DeviceDetailPage() {
             <div>Merchant: <span className="font-medium text-foreground">{device.merchant_name ?? 'DEXA HQ'}</span></div>
             <div>Location: <span className="font-medium text-foreground">{device.location_name ?? 'N/A'}</span></div>
             <div>Updated: <span className="font-medium text-foreground">{formatDateTime(device.updated_at)}</span></div>
-            <div className="pt-2">
+            <div className="flex flex-col gap-2 pt-2">
+              <ManageInLandiConnectButton serialNumber={device.serial_number} />
               <DeviceStatusTransitionDialog device={device} />
             </div>
           </div>
@@ -149,6 +157,7 @@ export default function DeviceDetailPage() {
             <div className="rounded-2xl border bg-muted/20 p-4">
               <div className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Ownership</div>
               <div className="mt-3 space-y-2 text-sm">
+                <div>POS ID: <span className="font-medium">{device.pos_id ?? 'N/A'}</span></div>
                 <div>Merchant: <span className="font-medium">{device.merchant_name ?? 'DEXA HQ'}</span></div>
                 <div>Location: <span className="font-medium">{device.location_name ?? 'N/A'}</span></div>
                 <div>Purchased: <span className="font-medium">{formatDate(device.purchased_at)}</span></div>

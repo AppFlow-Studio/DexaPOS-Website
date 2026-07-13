@@ -129,6 +129,21 @@ export default function CreateTemplatePage() {
     setIsShiftEditorOpen(false);
   };
 
+  const handleMoveShift = (
+    tempId: string,
+    targetEmployeeId: string,
+    targetDayOfWeek: number
+  ) => {
+    setTemplate((prev) => ({
+      ...prev,
+      shifts: prev.shifts.map((s) =>
+        s.tempId === tempId
+          ? { ...s, employeeId: targetEmployeeId, dayOfWeek: targetDayOfWeek }
+          : s
+      ),
+    }));
+  };
+
   const handleSave = () => {
     if (!template.name.trim()) {
       toast("Name Required", {
@@ -157,7 +172,7 @@ export default function CreateTemplatePage() {
   return (
     <div className="flex flex-col h-screen bg-background text-foreground">
       {/* Header */}
-      <header className="flex items-center justify-between px-6 py-4 border-b">
+      <header className="flex flex-col gap-3 px-4 py-4 border-b sm:flex-row sm:items-center sm:justify-between sm:px-6">
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="icon" onClick={() => router.back()}>
             <ChevronLeft className="w-5 h-5" />
@@ -170,19 +185,23 @@ export default function CreateTemplatePage() {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <Button variant="outline" onClick={() => router.back()}>
+          <Button
+            variant="outline"
+            onClick={() => router.back()}
+            className="flex-1 sm:flex-none"
+          >
             Cancel
           </Button>
-          <Button onClick={handleSave}>
+          <Button onClick={handleSave} className="flex-1 sm:flex-none">
             <Save className="w-4 h-4 mr-2" />
             Save Template
           </Button>
         </div>
       </header>
 
-      <div className="flex-1 overflow-hidden flex">
+      <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
         {/* Sidebar / Form */}
-        <div className="w-80 border-r p-6 overflow-y-auto bg-muted/10">
+        <div className="w-full md:w-80 border-b md:border-b-0 md:border-r p-4 sm:p-6 overflow-y-auto bg-muted/10 shrink-0">
           <div className="space-y-6">
             <div className="space-y-2">
               <label className="text-sm font-medium">Template Name</label>
@@ -250,7 +269,7 @@ export default function CreateTemplatePage() {
             </div>
           </div>
 
-          <div className="flex-1 p-6 overflow-hidden">
+          <div className="flex-1 p-3 sm:p-6 overflow-auto min-w-0">
             <TemplateGrid
               shifts={template.shifts}
               // Adapt employees to what TemplateGrid expects
@@ -271,6 +290,7 @@ export default function CreateTemplatePage() {
               }
               onShiftPress={handleShiftPress}
               onAddShift={handleAddShift}
+              onMoveShift={handleMoveShift}
             />
           </div>
         </div>

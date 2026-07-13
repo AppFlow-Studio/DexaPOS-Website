@@ -98,6 +98,15 @@ export async function sendOrderOutTestOrder(
     return { success: false, error: "Missing locationId" };
   }
 
+  // 0. DEV-only guard — the synthetic-webhook tester must never run in production,
+  // even if the action is invoked directly. Mirrors the UI gate in OrderOutTab.
+  if (process.env.NODE_ENV !== "development") {
+    return {
+      success: false,
+      error: "Test orders are only available in development.",
+    };
+  }
+
   // 1. Authz — confirm caller is an admin/owner for this merchant
   const role = await getCurrentUserMerchantRole();
   if (!role) {

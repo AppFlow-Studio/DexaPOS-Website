@@ -60,7 +60,7 @@ import {
   MenuListView,
   MenuWithLocation
 } from '@/components/dashboard/menu/MenuListView'
-import { useLocationStore, useSelectedLocation } from '@/stores/location-store'
+import { useLocationStore, useSelectedLocation, useIsSingleLocation } from '@/stores/location-store'
 import { Badge } from '@/components/ui/badge'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Label } from '@/components/ui/label'
@@ -91,9 +91,9 @@ export default function MenuPage () {
   const queryClient = useQueryClient()
 
   const selectedLocation = useSelectedLocation()
-  console.log('selectedLocation', selectedLocation)
   const selectedLocationId = selectedLocation?.id || null
   const isAllLocations = selectedLocationId === 'all' || !selectedLocationId
+  const isSingleLocation = useIsSingleLocation()
   const imageUpload = useMerchantCdnImageUpload({
     merchantId,
     category: 'menus',
@@ -449,7 +449,7 @@ export default function MenuPage () {
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <ScopeContextStrip />
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className='text-2xl font-bold tracking-tight'>Menus</h2>
           <p className='text-muted-foreground'>
@@ -501,8 +501,10 @@ export default function MenuPage () {
 
                 <div className='min-h-0 flex flex-1 flex-col overflow-hidden lg:flex-row'>
                   <div className='min-h-0 flex-1 overflow-y-auto px-6 py-5 space-y-4'>
-                    {/* Menu Type Selection - Only show when viewing all locations */}
-                    {isAllLocations && (
+                    {/* Menu Type Selection - Only show when viewing all locations.
+                        Single-location accounts have one menu plane, so there is
+                        nothing to choose; hide the Global/Location selector. */}
+                    {isAllLocations && !isSingleLocation && (
                       <FormField
                         control={form.control}
                         name='menu_type'
@@ -588,11 +590,13 @@ export default function MenuPage () {
                         )}
                       />
                       <span className='text-muted-foreground'>
-                        {isAllLocations && menuType === 'global'
-                          ? 'This menu will be available at all locations. Locations can customize pricing and availability.'
-                          : `This menu will only be available at ${
-                              currentLocation?.name || 'the selected location'
-                            }. You have full control over this menu.`}
+                        {isSingleLocation
+                          ? 'This will be one of your menus.'
+                          : isAllLocations && menuType === 'global'
+                            ? 'This menu will be available at all locations. Locations can customize pricing and availability.'
+                            : `This menu will only be available at ${
+                                currentLocation?.name || 'the selected location'
+                              }. You have full control over this menu.`}
                       </span>
                     </div>
 
@@ -683,20 +687,22 @@ export default function MenuPage () {
                             </p>
                           </div>
                           <div className='flex flex-wrap gap-2'>
-                            <Badge variant='outline'>
-                              {isAllLocations &&
-                              watchedMenuValues.menu_type === 'global' ? (
-                                <>
-                                  <Globe className='mr-1 h-3 w-3' />
-                                  Global
-                                </>
-                              ) : (
-                                <>
-                                  <MapPin className='mr-1 h-3 w-3' />
-                                  Location
-                                </>
-                              )}
-                            </Badge>
+                            {!isSingleLocation && (
+                              <Badge variant='outline'>
+                                {isAllLocations &&
+                                watchedMenuValues.menu_type === 'global' ? (
+                                  <>
+                                    <Globe className='mr-1 h-3 w-3' />
+                                    Global
+                                  </>
+                                ) : (
+                                  <>
+                                    <MapPin className='mr-1 h-3 w-3' />
+                                    Location
+                                  </>
+                                )}
+                              </Badge>
+                            )}
                             <Badge
                               variant={
                                 watchedMenuValues.is_active
@@ -724,16 +730,20 @@ export default function MenuPage () {
                     Cancel
                   </Button>
                   <Button type='submit' className='gap-2'>
-                    {isAllLocations && menuType === 'global' ? (
+                    {isSingleLocation ? (
+                      <Plus className='h-4 w-4' />
+                    ) : isAllLocations && menuType === 'global' ? (
                       <Globe className='h-4 w-4' />
                     ) : (
                       <MapPin className='h-4 w-4' />
                     )}
-                    Create{' '}
-                    {isAllLocations && menuType === 'global'
-                      ? 'Global'
-                      : 'Location'}{' '}
-                    Menu
+                    {isSingleLocation
+                      ? 'Create Menu'
+                      : `Create ${
+                          isAllLocations && menuType === 'global'
+                            ? 'Global'
+                            : 'Location'
+                        } Menu`}
                   </Button>
                 </DialogFooter>
               </form>
@@ -743,7 +753,7 @@ export default function MenuPage () {
       </div>
 
       {/* Stats Overview */}
-      <div className='grid gap-4 md:grid-cols-4'>
+      <div className='grid gap-4 grid-cols-2 md:grid-cols-4'>
         <Card className='transition-all hover:shadow-md'>
           <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
             <CardTitle className='text-sm font-medium'>Total Menus</CardTitle>
@@ -766,43 +776,49 @@ export default function MenuPage () {
             <p className='text-xs text-muted-foreground'>Currently active</p>
           </CardContent>
         </Card>
-        <Card className='transition-all hover:shadow-md'>
-          <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
-            <CardTitle className='text-sm font-medium'>Global</CardTitle>
-            <Utensils className='h-4 w-4 text-emerald-500' />
-          </CardHeader>
-          <CardContent>
-            <div className='text-2xl font-bold text-emerald-600'>
-              {globalMenus}
-            </div>
-            <p className='text-xs text-muted-foreground'>Merchant-wide menus</p>
-          </CardContent>
-        </Card>
-        <Card className='transition-all hover:shadow-md'>
-          <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
-            <CardTitle className='text-sm font-medium'>
-              Location-Specific
-            </CardTitle>
-            <Utensils className='h-4 w-4 text-blue-500' />
-          </CardHeader>
-          <CardContent>
-            <div className='text-2xl font-bold text-blue-600'>
-              {locationMenus}
-            </div>
-            <p className='text-xs text-muted-foreground'>Location menus</p>
-          </CardContent>
-        </Card>
+        {/* Global vs Location-Specific split is meaningless for single-location
+            accounts (all menus are simply "your menus") — hide both cards. */}
+        {!isSingleLocation && (
+          <>
+            <Card className='transition-all hover:shadow-md'>
+              <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
+                <CardTitle className='text-sm font-medium'>Global</CardTitle>
+                <Utensils className='h-4 w-4 text-emerald-500' />
+              </CardHeader>
+              <CardContent>
+                <div className='text-2xl font-bold text-emerald-600'>
+                  {globalMenus}
+                </div>
+                <p className='text-xs text-muted-foreground'>Merchant-wide menus</p>
+              </CardContent>
+            </Card>
+            <Card className='transition-all hover:shadow-md'>
+              <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
+                <CardTitle className='text-sm font-medium'>
+                  Location-Specific
+                </CardTitle>
+                <Utensils className='h-4 w-4 text-blue-500' />
+              </CardHeader>
+              <CardContent>
+                <div className='text-2xl font-bold text-blue-600'>
+                  {locationMenus}
+                </div>
+                <p className='text-xs text-muted-foreground'>Location menus</p>
+              </CardContent>
+            </Card>
+          </>
+        )}
       </div>
 
       {/* Menus List */}
       <Card>
         <CardHeader>
-          <div className='flex items-center justify-between'>
+          <div className='flex flex-col gap-3 md:flex-row md:items-center md:justify-between'>
             <div>
               <CardTitle>All Menus</CardTitle>
               <CardDescription>View and manage all your menus</CardDescription>
             </div>
-            <div className='flex items-center gap-2'>
+            <div className='flex items-center gap-2 flex-wrap'>
               {hasOrderChanges && (
                 <Button
                   variant='default'
@@ -815,13 +831,13 @@ export default function MenuPage () {
                   {isSavingOrder ? 'Saving...' : 'Save Order'}
                 </Button>
               )}
-              <div className='relative'>
+              <div className='relative flex-1 min-w-[160px]'>
                 <Search className='absolute left-2 top-2.5 h-4 w-4 text-muted-foreground' />
                 <Input
                   placeholder='Search menus...'
                   value={searchTerm}
                   onChange={e => setSearchTerm(e.target.value)}
-                  className='pl-8 w-64'
+                  className='pl-8 w-full md:w-64'
                 />
               </div>
               <div className='flex items-center border rounded-md'>

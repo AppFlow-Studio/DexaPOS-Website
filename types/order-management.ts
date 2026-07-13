@@ -12,6 +12,7 @@ export type OrderStatus =
 
 export type OrderType =
   | "dine_in"
+  | "qr_dine_in"
   | "takeout"
   | "delivery"
   | "online"
@@ -36,7 +37,8 @@ export type PaymentStatus =
   | "refunded"
   | "partially_refunded"
   | "void"
-  | "paid";
+  | "paid"
+  | "partial";
 
 export type TerminalType =
   | "dejavoo_spinapi"
@@ -52,9 +54,24 @@ export interface Order {
   location_id: string;
   order_type: OrderType;
   status: OrderStatus;
+  // Order channel / origin. order_source is the canonical taxonomy
+  // (pos | orderout | online_store | phone); delivery_platform is the specific
+  // marketplace for orderout orders (e.g. "Grubhub"); platform_order_number is the
+  // provider's order id. See lib/orderout/platform.ts for display vocabulary.
+  order_source?: string | null;
+  delivery_platform?: string | null;
+  platform_order_number?: string | null;
+  metadata?: Record<string, any> | null;
+  delivery_address?: Record<string, any> | null;
   customer_name?: string;
   customer_phone?: string;
   table_number?: string;
+  delivery_platform?: string | null;
+  order_source?: string | null;
+  platform_order_number?: string | null;
+  metadata?: Record<string, any> | null;
+  online_order_provider?: string | null;
+  delivery_company?: string | null;
   subtotal: number;
   tax_amount: number;
   tip_amount: number;
@@ -91,6 +108,8 @@ export interface OrderFilters {
   status?: OrderStatus[];
   orderType?: OrderType[];
   paymentMethod?: PaymentMethod[];
+  orderSource?: string[];
+  deliveryPlatform?: string[];
   staffId?: string;
   amountRange?: {
     min?: number;
@@ -120,6 +139,13 @@ export interface OrderItem {
   voided_at?: string;
   voided_by?: string;
   special_instructions?: string;
+  tax_amount?: number | null;
+  // Open / custom item
+  is_open_item?: boolean | null;
+  open_item_name?: string | null;
+  // Dine-in seat / course context
+  seat_number?: string | null;
+  course_number?: number | null;
   created_at: string;
   updated_at: string;
   // Discount fields
@@ -189,6 +215,8 @@ export interface OrderPayment {
   original_tip_fee?: number | null;
   dual_pricing_percentage_snapshot?: number;
   tip_surcharge_percentage_snapshot?: number;
+  // True when this payment was tendered at the cash (discounted) price lane.
+  is_cash_priced?: boolean | null;
   // Junction table items
   order_payment_items?: OrderPaymentItem[];
 }
@@ -267,8 +295,21 @@ export interface OrderResponse {
   customer_phone?: string;
   customer_email?: string;
   table_number?: string;
+  delivery_platform?: string | null;
+  order_source?: string | null;
+  platform_order_number?: string | null;
+  metadata?: Record<string, any> | null;
+  online_order_provider?: string | null;
+  delivery_company?: string | null;
   device_id?: string;
   internal_notes?: string;
+  // Order channel / origin (see Order interface + lib/orderout/platform.ts).
+  order_source?: string | null;
+  delivery_platform?: string | null;
+  platform_order_number?: string | null;
+  metadata?: Record<string, any> | null;
+  delivery_address?: Record<string, any> | null;
+  estimated_delivery_time?: string | null;
   payment_pricing_mode?: "card" | "cash" | "mixed";
   cash_discount_applied?: boolean;
   cash_discount_amount?: number;

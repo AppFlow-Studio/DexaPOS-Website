@@ -48,6 +48,7 @@ export interface OnlineOrderingSettings {
   enabled: boolean;
   storeName: string;
   storeSlug: string;
+  customDomain: string | null;
   description: string;
   phone: string;
   email: string;
@@ -79,6 +80,22 @@ export interface OnlineOrderingSettings {
   preparationLeadTime: number;
   futureOrderMaxDays: number;
   minimumOrderAmount: number;
+  acceptsDineIn: boolean;
+  qrBillingGate: {
+    entitled: boolean;
+    requiredPlanCode: string | null;
+    requiredPlanName: string | null;
+    currentPlanCode: string | null;
+    currentPlanName: string | null;
+    subscriptionStatus: string | null;
+    hasServiceOverride: boolean;
+    serviceCode: string;
+    reason: string | null;
+  };
+  qrFulfillmentMode: "runner" | "counter";
+  qrGeofenceEnabled: boolean;
+  qrServiceFeePct: number;
+  qrKillSwitch: boolean;
 
   // Delivery
   baseDeliveryFee: number;
@@ -177,13 +194,14 @@ const createDefaultSettings = (
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, ""),
+  customDomain: null,
   description: "",
   phone: "",
   email: "",
   address: "",
 
   templateId: "classic",
-  primaryColor: "#2DD4BF",
+  primaryColor: "#0C4FD1",
   secondaryColor: "#10b981",
   accentColor: null,
   backgroundColor: "#FFFFFF",
@@ -204,6 +222,23 @@ const createDefaultSettings = (
   preparationLeadTime: 20,
   futureOrderMaxDays: 0,
   minimumOrderAmount: 0,
+  acceptsDineIn: false,
+  qrBillingGate: {
+    entitled: false,
+    requiredPlanCode: "multi_location",
+    requiredPlanName: "Multi-Location",
+    currentPlanCode: null,
+    currentPlanName: null,
+    subscriptionStatus: null,
+    hasServiceOverride: false,
+    serviceCode: "qr_table_ordering",
+    reason:
+      "QR Table Ordering requires the Multi-Location tier or an HQ override.",
+  },
+  qrFulfillmentMode: "runner",
+  qrGeofenceEnabled: false,
+  qrServiceFeePct: 0,
+  qrKillSwitch: false,
 
   baseDeliveryFee: 0,
   freeDeliveryThreshold: 0,
@@ -331,7 +366,7 @@ export const useOnlineOrderingSettings = create<OnlineOrderingStore>(
       try {
         // Merchant dashboard is intentionally restricted: no payment/tip changes.
         // It can maintain non-payment storefront settings only after HQ completes setup.
-        await saveOnlineOrderingSettings(locationId, {
+        const saveResult = await saveOnlineOrderingSettings(locationId, {
           enabled: currentSettings.enabled,
           storeName: currentSettings.storeName,
           description: currentSettings.description,
@@ -361,12 +396,27 @@ export const useOnlineOrderingSettings = create<OnlineOrderingStore>(
           preparationLeadTime: currentSettings.preparationLeadTime,
           futureOrderMaxDays: currentSettings.futureOrderMaxDays,
           minimumOrderAmount: currentSettings.minimumOrderAmount,
+          acceptsDineIn: currentSettings.acceptsDineIn,
+          qrFulfillmentMode: currentSettings.qrFulfillmentMode,
+          qrGeofenceEnabled: currentSettings.qrGeofenceEnabled,
+          qrServiceFeePct: currentSettings.qrServiceFeePct,
+          qrKillSwitch: currentSettings.qrKillSwitch,
           baseDeliveryFee: currentSettings.baseDeliveryFee,
           freeDeliveryThreshold: currentSettings.freeDeliveryThreshold,
           deliveryRadiusMiles: currentSettings.deliveryRadiusMiles,
         });
         await get().loadSettings(locationId);
-        toast.success("Settings saved");
+        if (saveResult.domainWhitelistError) {
+          toast.warning(
+            `Settings saved, but payment-domain sync needs attention: ${saveResult.domainWhitelistError}`,
+          );
+        } else if (saveResult.domainWhitelistSkipped) {
+          toast.warning(
+            "Settings saved. Payment-domain sync was skipped because no active online-ordering payment device is ready yet.",
+          );
+        } else {
+          toast.success("Settings saved");
+        }
       } catch (error) {
         console.error("Failed to save settings:", error);
         toast.error(

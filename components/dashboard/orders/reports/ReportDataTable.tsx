@@ -53,8 +53,8 @@ export function ReportDataTable<TData, TValue>({
 
   return (
     <div>
-      <div className="rounded-md border border-gray-200 dark:border-gray-700 overflow-hidden">
-        <Table>
+      <div className="rounded-md border border-gray-200 dark:border-gray-700 overflow-x-auto">
+        <Table className="min-w-max">
           <TableHeader className="bg-[#0A5C9E] dark:bg-[#0A4A7E]">
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id} className="hover:bg-transparent border-none">

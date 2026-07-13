@@ -59,9 +59,23 @@ export function OverviewTab({ merchantInfo }: OverviewTabProps) {
     const { data: financialKPIs, isLoading: kpisLoading } = useAdminFinancialKPIs(merchantId)
     const { data: salesByDate, isLoading: salesLoading } = useAdminSalesByDate(merchantId)
     const { data: recentOrders, isLoading: ordersLoading } = useAdminRecentOrders(merchantId)
-    const { data: transactionSummary, isLoading: summaryLoading } = useAdminTransactionSummary(merchantId)
+    // "Today's Snapshot" tiles need an actual today range — the default hook
+    // window is the last 30 days, which previously made these tiles show 30-day
+    // figures under a "today" label.
+    const { todayStart, todayEnd } = useMemo(() => {
+        const start = new Date()
+        start.setHours(0, 0, 0, 0)
+        const end = new Date()
+        end.setHours(23, 59, 59, 999)
+        return { todayStart: start, todayEnd: end }
+    }, [])
+    const { data: todaySummary, isLoading: todayLoading } = useAdminTransactionSummary(
+        merchantId,
+        todayStart,
+        todayEnd
+    )
 
-    const isLoading = analyticsLoading || kpisLoading || salesLoading || ordersLoading || summaryLoading
+    const isLoading = analyticsLoading || kpisLoading || salesLoading || ordersLoading || todayLoading
 
     // Derivatives
     const totalRevenue = financialKPIs?.summary?.net_sales ?? orderAnalytics?.totalRevenue ?? 0
@@ -82,10 +96,10 @@ export function OverviewTab({ merchantInfo }: OverviewTabProps) {
     // Order Types for Pie Chart (Revenue by Category proxy)
     const orderTypeData = useMemo(() => {
         if (!orderAnalytics?.orderTypeBreakdown) return []
-        const colors = ['hsl(var(--chart-1))', 'hsl(var(--chart-2))', 'hsl(var(--chart-3))', 'hsl(var(--chart-4))']
+        const colors = ['hsl(var(--chart-1))', '#0C4FD1', 'hsl(var(--chart-2))', 'hsl(var(--chart-3))', 'hsl(var(--chart-4))']
         return Object.entries(orderAnalytics.orderTypeBreakdown)
             .map(([type, value], index) => ({
-                name: type.replace('_', ' '),
+                name: type === 'qr_dine_in' ? 'QR Table' : type.replace(/_/g, ' '),
                 value,
                 color: colors[index % colors.length]
             }))
@@ -103,16 +117,16 @@ export function OverviewTab({ merchantInfo }: OverviewTabProps) {
     return (
         <div className="space-y-4">
             {/* Main KPIs */}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Net Sales (30d)</CardTitle>
-                        <DollarSign className="h-4 w-4 text-muted-foreground" />
+                        <CardTitle className="text-sm font-medium min-w-0 mr-2">Net Sales (30d)</CardTitle>
+                        <DollarSign className="h-4 w-4 text-muted-foreground shrink-0" />
                     </CardHeader>
                     <CardContent>
                         <div className="text-2xl font-bold">${totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                         {growth !== 0 && (
-                            <p className="text-xs text-muted-foreground flex items-center gap-1">
+                            <p className="text-xs text-muted-foreground flex items-center gap-1 flex-wrap">
                                 {growth > 0 ? <ArrowUpRight className="h-3 w-3 text-green-600" /> : <ArrowDownRight className="h-3 w-3 text-red-600" />}
                                 <span className={growth > 0 ? "text-green-600" : "text-red-600"}>{growth > 0 ? '+' : ''}{growth.toFixed(1)}%</span> from previous
                             </p>
@@ -121,8 +135,8 @@ export function OverviewTab({ merchantInfo }: OverviewTabProps) {
                 </Card>
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Total Orders (30d)</CardTitle>
-                        <ShoppingCart className="h-4 w-4 text-muted-foreground" />
+                        <CardTitle className="text-sm font-medium min-w-0 mr-2">Total Orders (30d)</CardTitle>
+                        <ShoppingCart className="h-4 w-4 text-muted-foreground shrink-0" />
                     </CardHeader>
                     <CardContent>
                         <div className="text-2xl font-bold">{totalOrders.toLocaleString()}</div>
@@ -131,8 +145,8 @@ export function OverviewTab({ merchantInfo }: OverviewTabProps) {
                 </Card>
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Avg. Order Value</CardTitle>
-                        <Target className="h-4 w-4 text-muted-foreground" />
+                        <CardTitle className="text-sm font-medium min-w-0 mr-2">Avg. Order Value</CardTitle>
+                        <Target className="h-4 w-4 text-muted-foreground shrink-0" />
                     </CardHeader>
                     <CardContent>
                         <div className="text-2xl font-bold">${avgOrderValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
@@ -141,8 +155,8 @@ export function OverviewTab({ merchantInfo }: OverviewTabProps) {
                 </Card>
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Refunds (30d)</CardTitle>
-                        <TrendingDown className="h-4 w-4 text-muted-foreground" />
+                        <CardTitle className="text-sm font-medium min-w-0 mr-2">Refunds (30d)</CardTitle>
+                        <TrendingDown className="h-4 w-4 text-muted-foreground shrink-0" />
                     </CardHeader>
                     <CardContent>
                         <div className="text-2xl font-bold text-red-600">${(financialKPIs?.summary?.refunds_total || 0).toLocaleString()}</div>
@@ -152,34 +166,34 @@ export function OverviewTab({ merchantInfo }: OverviewTabProps) {
             </div>
 
             {/* Additional KPIs - Today's Snapshot */}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-4 grid-cols-2 lg:grid-cols-3">
                  <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Revenue Today</CardTitle>
-                        <Activity className="h-4 w-4 text-muted-foreground" />
+                        <CardTitle className="text-sm font-medium min-w-0 mr-2">Revenue Today</CardTitle>
+                        <Activity className="h-4 w-4 text-muted-foreground shrink-0" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">${(transactionSummary?.netSales || 0).toLocaleString()}</div>
+                        <div className="text-2xl font-bold">${(todaySummary?.netSales || 0).toLocaleString()}</div>
                          <p className="text-xs text-muted-foreground">Net sales for today</p>
                     </CardContent>
                 </Card>
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Tips Collected</CardTitle>
-                        <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                        <CardTitle className="text-sm font-medium min-w-0 mr-2">Tips Collected</CardTitle>
+                        <TrendingUp className="h-4 w-4 text-muted-foreground shrink-0" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">${(transactionSummary?.totalTips || 0).toLocaleString()}</div>
+                        <div className="text-2xl font-bold">${(todaySummary?.totalTips || 0).toLocaleString()}</div>
                         <p className="text-xs text-muted-foreground">Tips for today</p>
                     </CardContent>
                 </Card>
                 <Card>
                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Tax Collected</CardTitle>
-                        <DollarSign className="h-4 w-4 text-muted-foreground" />
+                        <CardTitle className="text-sm font-medium min-w-0 mr-2">Tax Collected</CardTitle>
+                        <DollarSign className="h-4 w-4 text-muted-foreground shrink-0" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">${(transactionSummary?.totalTax || 0).toLocaleString()}</div>
+                        <div className="text-2xl font-bold">${(todaySummary?.totalTax || 0).toLocaleString()}</div>
                         <p className="text-xs text-muted-foreground">Tax for today</p>
                     </CardContent>
                 </Card>

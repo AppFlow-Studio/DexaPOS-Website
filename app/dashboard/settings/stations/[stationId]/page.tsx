@@ -47,7 +47,7 @@ import {
   useDeleteStation,
 } from "../hooks/useStations";
 
-import { useAuth } from "@clerk/nextjs";
+import { useClerkOrgId } from "@/app/dashboard/hooks/useLocationScoped";
 import { AddStationDialog } from "../components/AddStationDialog";
 
 // Tab components
@@ -70,11 +70,22 @@ const TABS = [
   { id: "activity", label: "Activity" },
 ];
 
+// KDS stations don't take payments, so hide the Payment Terminal tab
+const TABS_HIDDEN_BY_STATION_TYPE: Record<string, string[]> = {
+  kds: ["terminal"],
+};
+
+function getVisibleTabs(stationType: string | null | undefined) {
+  const hidden = TABS_HIDDEN_BY_STATION_TYPE[stationType ?? ""] ?? [];
+  return TABS.filter((tab) => !hidden.includes(tab.id));
+}
+
 export default function StationDetailPage() {
   const params = useParams();
   const router = useRouter();
   const stationId = params.stationId as string;
-  const { orgId } = useAuth();
+  // Impersonation-aware org id (NOT useAuth().orgId, which stays HQ during impersonation).
+  const orgId = useClerkOrgId();
 
   const [activeTab, setActiveTab] = useState("overview");
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -356,7 +367,7 @@ export default function StationDetailPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 border-b overflow-x-auto">
-        {TABS.map((tab) => (
+        {getVisibleTabs(station.station_type).map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}

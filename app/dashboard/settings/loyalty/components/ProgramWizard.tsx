@@ -24,11 +24,13 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { Card } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { DateTimePicker } from '@/components/ui/date-time-picker';
 import { ChevronLeft, ChevronRight, Star, Coffee, Hash, Loader2, Gift, Target, Flame } from 'lucide-react';
 import { useMenuItems } from '../../../hooks/useMenuItems';
 import { useCategories } from '../../../hooks/useCategories';
 import { useLocations } from '../../../hooks/useLocations';
 import { useUserInfo } from '@/app/manage/hooks/useUserInfo.';
+import { useIsSingleLocation } from '@/stores/location-store';
 import type { LoyaltyProgram, LoyaltyProgramInsert } from '../../../actions/loyalty-programs';
 
 interface ProgramWizardProps {
@@ -141,6 +143,7 @@ export function ProgramWizard({
   const { data: menuItems = [], isLoading: itemsLoading } = useMenuItems(clerkOrgId || '');
   const { data: categories = [], isLoading: categoriesLoading } = useCategories(clerkOrgId || '');
   const { data: locations = [], isLoading: locationsLoading } = useLocations(clerkOrgId || '', userInfo?.id || '');
+  const isSingleLocation = useIsSingleLocation();
 
   const isEditing = !!program;
   const menusLoading = itemsLoading || categoriesLoading;
@@ -297,8 +300,14 @@ export function ProgramWizard({
   const renderStep2 = () => (
     <div className="space-y-4">
       <div className="rounded-lg border border-blue-200 dark:border-blue-900/40 bg-blue-50 dark:bg-blue-900/20 p-3 text-sm text-blue-900 dark:text-blue-300">
-        <p className="font-medium mb-1">📢 Merchant-Wide Program</p>
-        <p>This program will be created for your entire merchant. You can optionally limit it to specific locations in <span className="font-semibold">Advanced Settings → Schedule</span>.</p>
+        <p className="font-medium mb-1">📢 {isSingleLocation ? "Loyalty Program" : "Merchant-Wide Program"}</p>
+        <p>
+          {isSingleLocation
+            ? "This program will be created for your business."
+            : (
+              <>This program will be created for your entire merchant. You can optionally limit it to specific locations in <span className="font-semibold">Advanced Settings → Schedule</span>.</>
+            )}
+        </p>
       </div>
 
       <div className="space-y-2">
@@ -326,7 +335,7 @@ export function ProgramWizard({
       {formData.program_type === 'points' && (
         <div className="space-y-4 border rounded-lg p-4 bg-muted/30">
           <h4 className="font-semibold text-sm">Points Configuration</h4>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="space-y-2">
               <Label htmlFor="ppd">Points per $1 *</Label>
               <Input
@@ -554,7 +563,7 @@ export function ProgramWizard({
         </RadioGroup>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label htmlFor="reward-val">Reward Value *</Label>
           <div className="relative">
@@ -735,7 +744,7 @@ export function ProgramWizard({
           <p className="text-xs text-muted-foreground">Multiple rewards per order</p>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label htmlFor="cooldown">Cooldown (minutes)</Label>
             <Input
@@ -859,37 +868,30 @@ export function ProgramWizard({
 
       {/* Schedule Tab */}
       <TabsContent value="schedule" className="space-y-4 py-4">
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label htmlFor="starts">Start date</Label>
-            <Input
+            <DateTimePicker
               id="starts"
-              type="datetime-local"
-              value={formData.starts_at?.substring(0, 16) || ''}
-              onChange={(e) =>
-                setFormData({
-                  ...formData,
-                  starts_at: e.target.value ? `${e.target.value}:00Z` : null,
-                })
-              }
+              value={formData.starts_at}
+              onChange={(value) => setFormData({ ...formData, starts_at: value })}
+              placeholder="No start date"
             />
           </div>
           <div className="space-y-2">
             <Label htmlFor="ends">End date</Label>
-            <Input
+            <DateTimePicker
               id="ends"
-              type="datetime-local"
-              value={formData.ends_at?.substring(0, 16) || ''}
-              onChange={(e) =>
-                setFormData({
-                  ...formData,
-                  ends_at: e.target.value ? `${e.target.value}:00Z` : null,
-                })
-              }
+              value={formData.ends_at}
+              onChange={(value) => setFormData({ ...formData, ends_at: value })}
+              placeholder="No end date"
             />
           </div>
         </div>
 
+        {/* Location targeting — hidden for single-location accounts; the
+            program silently applies to the one location (location_ids = null). */}
+        {!isSingleLocation && (
         <div className="space-y-3">
           <div>
             <Label>Locations (optional)</Label>
@@ -935,11 +937,12 @@ export function ProgramWizard({
             )}
           </div>
         </div>
+        )}
       </TabsContent>
 
       {/* Display Tab */}
       <TabsContent value="display" className="space-y-4 py-4">
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label htmlFor="color">Display Color</Label>
             <div className="flex gap-2">
@@ -1009,7 +1012,7 @@ export function ProgramWizard({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto overflow-x-hidden">
         <DialogHeader>
           <DialogTitle>{isEditing ? 'Edit Program' : 'Create Loyalty Program'}</DialogTitle>
           <DialogDescription>
