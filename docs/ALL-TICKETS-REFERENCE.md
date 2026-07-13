@@ -260,9 +260,21 @@ Single index for active ticket streams and their source trackers.
   - invoice generation alignment,
   - POS ID generation/exposure,
   - website POS ID display/search,
-  - device catalog deactivate-instead-of-delete behavior.
-- Still needed: staging migration apply, SQL/RLS QA, live calculator parity, device-to-billing bridge, station quota enforcement, non-payment suspend/restore gating, and any remaining visible HQ UI for add-on editing/live calculator.
-- Do not mark Done until calculator parity, next-invoice cascade, device-driven billing, quota blocking, suspension/restore, RLS checks, and proof video pass.
+  - device catalog deactivate-instead-of-delete behavior,
+  - HQ service-billing plan editor,
+  - HQ billable service/add-on editor,
+  - live calculator quote backed by the unified calculator.
+- 2026-07-13 website/backend phase added:
+  - `supabase/migrations/20260713130000_hq_billing_device_bridge_and_access_gates.sql`
+  - HQ-editable device billing mappings,
+  - device inventory to subscription billing sync,
+  - deployed POS tablet station-count bridge,
+  - station quota enforcement,
+  - suspended-subscription station/payment-terminal access gate,
+  - HQ suspended/past-due billing status messaging.
+- Website/backend code is locally complete, but still needs staging migration apply, SQL/RLS QA, live calculator parity, invoice parity, device billing sync QA, quota QA, and suspend/restore QA.
+- Remaining POS repo items: suspended login/session refusal, clean POS error handling for quota/suspended states, local device/station state sync after suspend/restore, and POS proof video.
+- Do not mark Done until calculator parity, next-invoice cascade, device-driven billing, quota blocking, suspension/restore, RLS checks, POS enforcement, and proof video pass.
 
 ## Notes
 
@@ -274,3 +286,10 @@ Single index for active ticket streams and their source trackers.
 
 5. Latest senior handoff:
 - `docs/HANDOFF-2026-06-30-LATEST-TICKETS-SENIOR-REVIEW.md`
+
+6. Latest billing-control handoff:
+- `docs/HANDOFF-2026-07-13-HQ-BILLING-CONTROL-PHASE1.md`
+- `docs/HANDOFF-2026-07-13-BILLING-CONTROL-REMAINING-POS-ITEMS.md`
+
+7. Next 16 upgrade handoff:
+- `docs/HANDOFF-2026-07-13-NEXT-16-UPGRADE.md`
