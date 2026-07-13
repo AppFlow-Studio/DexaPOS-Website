@@ -34,7 +34,16 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default withSentryConfig(nextConfig, {
+// Isolation switch: set SENTRY_DISABLE_BUILD_PLUGIN=1 in the Vercel env to build
+// WITHOUT the Sentry build-time plugin (no source-map generation/upload, no
+// runAfterProductionCompile hook). Runtime error tracking still works via the
+// sentry.*.config files. Used to determine whether the Sentry build step is what
+// crashes the production build right after the source-map upload.
+const sentryDisabled = process.env.SENTRY_DISABLE_BUILD_PLUGIN === "1";
+
+export default sentryDisabled
+  ? nextConfig
+  : withSentryConfig(nextConfig, {
   // For all available options, see:
   // https://www.npmjs.com/package/@sentry/webpack-plugin#options
 
