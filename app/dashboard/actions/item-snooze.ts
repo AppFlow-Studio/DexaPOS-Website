@@ -62,10 +62,16 @@ async function triggerOrderOutResyncForLocation(
     if (!links?.length) return;
 
     // Re-push each active menu. Awaited-but-swallowed: guarantees it runs in the
-    // server action while never surfacing an error to the caller.
+    // server action while never surfacing an error to the caller. skipCooldown so
+    // a burst of 86s all propagate (availability changes, not spammy menu edits).
     await Promise.allSettled(
       links.map((l) =>
-        pushMenuToConnectedChannels({ clerkOrgId, menuId: l.menu_id, locationId }),
+        pushMenuToConnectedChannels({
+          clerkOrgId,
+          menuId: l.menu_id,
+          locationId,
+          skipCooldown: true,
+        }),
       ),
     );
   } catch (e) {

@@ -1594,6 +1594,17 @@ export interface PushMenuToChannelsParams {
   clerkOrgId: string;
   menuId: string;
   locationId: string;
+  /**
+   * Skip the 30s cooldown + 5/hour ceiling. Used for availability-only re-pushes
+   * (86ing) where propagating an out-of-stock change promptly matters more than
+   * throttling. Human-triggered menu pushes still get the throttles.
+   */
+  skipCooldown?: boolean;
+  /**
+   * Server-to-server invocation (DB trigger / internal route) with no Clerk
+   * session: use the service-role client and a null audit actor.
+   */
+  internal?: boolean;
 }
 
 export interface PushMenuToChannelsResult {
@@ -1618,14 +1629,16 @@ export async function pushMenuToConnectedChannels(
   data?: PushMenuToChannelsResult;
   error: string | null;
 }> {
-  const { clerkOrgId, menuId, locationId } = params;
+  const { clerkOrgId, menuId, locationId, skipCooldown = false, internal = false } = params;
 
   if (!clerkOrgId || !menuId || !locationId) {
     return { success: false, error: "Missing required parameters" };
   }
 
   try {
-    const supabase = createServerSupabaseClient();
+    const supabase = internal
+      ? createServiceRoleClient()
+      : createServerSupabaseClient();
 
     // Best-effort reconcile of stuck rows. Never fail the action on reconcile error.
     try {
@@ -1643,8 +1656,10 @@ export async function pushMenuToConnectedChannels(
       console.warn("[pushMenuToConnectedChannels] reconcile threw (non-fatal):", e);
     }
 
-    // Clerk user id for audit + trigger tracking
-    const { userId: clerkUserId } = await auth();
+    // Clerk user id for audit + trigger tracking (none for server-to-server)
+    const { userId: clerkUserId } = internal
+      ? { userId: null }
+      : await auth();
 
     // Resolve merchant
     const { data: merchant, error: merchantError } = await supabase
@@ -1707,6 +1722,9 @@ export async function pushMenuToConnectedChannels(
       };
     }
 
+    // Availability-only re-pushes (86ing) skip both throttles so out-of-stock
+    // changes propagate promptly. Human-triggered pushes keep the throttles.
+    if (!skipCooldown) {
     // Rate limit — 30-second cooldown
     const cooldownSince = new Date(
       Date.now() - PUSH_CHANNELS_COOLDOWN_SECONDS * 1000
@@ -1779,6 +1797,7 @@ export async function pushMenuToConnectedChannels(
         error: `Hourly push limit reached (${PUSH_CHANNELS_HOURLY_LIMIT}). Try again later.`,
       };
     }
+    } // end !skipCooldown throttles
 
     // Insert the sync row (pending)
     const { data: syncRow, error: insertErr } = await supabase
