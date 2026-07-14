@@ -126,7 +126,7 @@ export function InfoPanel({ site, location }: InfoPanelProps) {
   return (
     <div className="pb-8 max-w-4xl mx-auto space-y-4">
       {/* Store Header Card */}
-      <div className="p-5" style={{ border, borderRadius: "8px", backgroundColor: "#fff" }}>
+      <div className="p-5" style={{ border, borderRadius: "16px", backgroundColor: "#fff" }}>
         <div className="flex items-start gap-4">
           {site?.logo_url ? (
             <div className="h-16 w-16 overflow-hidden shrink-0" style={{ border, borderRadius: "8px" }}>
@@ -165,7 +165,7 @@ export function InfoPanel({ site, location }: InfoPanelProps) {
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-4 p-4 transition-colors hover:bg-gray-50"
-            style={{ border, borderRadius: "8px", backgroundColor: "#fff" }}
+            style={{ border, borderRadius: "16px", backgroundColor: "#fff" }}
           >
             <div className="flex h-9 w-9 shrink-0 items-center justify-center" style={{ backgroundColor: "#f3f4f6", borderRadius: "8px" }}>
               <MapPin className="h-4 w-4" style={{ color: "#6B7280" }} />
@@ -183,7 +183,7 @@ export function InfoPanel({ site, location }: InfoPanelProps) {
             <a
               href={`tel:${location.phone}`}
               className="flex items-center gap-4 p-4 transition-colors hover:bg-gray-50"
-              style={{ border, borderRadius: "8px", backgroundColor: "#fff" }}
+              style={{ border, borderRadius: "16px", backgroundColor: "#fff" }}
             >
               <div className="flex h-9 w-9 shrink-0 items-center justify-center" style={{ backgroundColor: "#f3f4f6", borderRadius: "8px" }}>
                 <Phone className="h-4 w-4" style={{ color: "#6B7280" }} />
@@ -201,7 +201,7 @@ export function InfoPanel({ site, location }: InfoPanelProps) {
             <a
               href={`mailto:${location.email}`}
               className="flex items-center gap-4 p-4 transition-colors hover:bg-gray-50"
-              style={{ border, borderRadius: "8px", backgroundColor: "#fff" }}
+              style={{ border, borderRadius: "16px", backgroundColor: "#fff" }}
             >
               <div className="flex h-9 w-9 shrink-0 items-center justify-center" style={{ backgroundColor: "#f3f4f6", borderRadius: "8px" }}>
                 <Mail className="h-4 w-4" style={{ color: "#6B7280" }} />
@@ -216,7 +216,7 @@ export function InfoPanel({ site, location }: InfoPanelProps) {
 
           {/* Ordering Options */}
           {showOrderingOptions && (
-            <div className="p-5" style={{ border, borderRadius: "8px", backgroundColor: "#fff" }}>
+            <div className="p-5" style={{ border, borderRadius: "16px", backgroundColor: "#fff" }}>
               <div className="flex items-center gap-2 mb-4" style={{ borderBottom: "1px solid #f3f4f6", paddingBottom: "12px" }}>
                 <ShoppingBag className="h-4 w-4" style={{ color: "#9ca3af" }} />
                 <h3 className="text-sm font-semibold" style={{ color: "#111827" }}>Ordering Options</h3>
@@ -300,7 +300,7 @@ export function InfoPanel({ site, location }: InfoPanelProps) {
         </div>
 
         {/* RIGHT: Hours */}
-        <div className="p-5" style={{ border, borderRadius: "8px", backgroundColor: "#fff" }}>
+        <div className="p-5" style={{ border, borderRadius: "16px", backgroundColor: "#fff" }}>
           <div className="flex items-center gap-2 mb-4" style={{ borderBottom: "1px solid #f3f4f6", paddingBottom: "12px" }}>
             <Clock className="h-4 w-4" style={{ color: "#9ca3af" }} />
             <h3 className="text-sm font-semibold" style={{ color: "#111827" }}>Store Hours</h3>

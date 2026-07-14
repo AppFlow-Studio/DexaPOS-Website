@@ -1,4 +1,4 @@
-import { getStorefrontData } from "../actions";
+import { getStorefrontData, getStorefrontMetaData } from "../actions";
 import { getStoreTaxRate } from "../order-actions";
 import { notFound } from "next/navigation";
 import { AnalyticsScripts } from "../components/AnalyticsScripts";
@@ -31,7 +31,9 @@ function absoluteUrl(url: string | null | undefined): string | null {
  */
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
-  const { site, location } = await getStorefrontData(slug);
+  // Metadata only needs site + location (title/description/OG) — skip the menu
+  // tree so we don't fetch all menus twice per page load.
+  const { site, location } = await getStorefrontMetaData(slug);
   if (!location) return { title: "Store" };
   const title =
     site?.meta_title?.trim() ||

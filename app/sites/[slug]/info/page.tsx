@@ -1,4 +1,4 @@
-import { getStorefrontData } from "../../actions";
+import { getStorefrontMetaData } from "../../actions";
 import { notFound } from "next/navigation";
 import { TEMPLATE_DEFAULTS, buildThemeVars, FONT_GOOGLE_URLS } from "../../lib/theme-utils";
 import { StoreInfoPageContent } from "../../components/StoreInfoPageContent";
@@ -10,7 +10,7 @@ interface PageProps {
 
 export default async function StoreInfoPage({ params }: PageProps) {
   const { slug } = await params;
-  const { site, location } = await getStorefrontData(slug);
+  const { site, location } = await getStorefrontMetaData(slug);
 
   if (!location) {
     notFound();

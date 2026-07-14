@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Site } from "@/types/site";
@@ -89,6 +89,13 @@ export function BoutiqueLayout({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [failedImageIds, setFailedImageIds] = useState<Set<string>>(new Set());
   const [activeTag, setActiveTag] = useState<string | null>(null);
+  // While a pill click is smooth-scrolling, lock the highlight to the target so
+  // the scroll-spy doesn't flicker to sections passed en route. Released when the
+  // user next scrolls meaningfully away from where the click-scroll settles.
+  const scrollLockRef = useRef<string | null>(null);
+  const scrollLockTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scrollLockSettleYRef = useRef<number | null>(null);
+  const mobilePillsRef = useRef<HTMLDivElement>(null);
 
   const { setOpen: setCartOpen, items: cartItems, pendingModalItem, clearPendingModalItem } = useCart();
   const cartCount = cartItems.reduce((sum, i) => sum + i.quantity, 0);
@@ -147,25 +154,79 @@ export function BoutiqueLayout({
     if (allCategories.length) setActiveCategory(allCategories[0].id);
   }, [activeMenu]);
 
-  // IntersectionObserver to track active category as user scrolls
+  // Scroll-spy: highlight the category filling the viewport. Picks the last
+  // section whose top has passed the boundary line (works scrolling up or down),
+  // with a near-bottom guard for short trailing sections. A click-lock keeps the
+  // clicked pill highlighted until the user scrolls away, so it never flickers to
+  // a section passed en route.
   useEffect(() => {
     if (!allCategories.length) return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const e of entries) {
-          if (e.isIntersecting) {
-            const id = e.target.getAttribute("id")?.replace("boutique-cat-", "");
-            if (id) setActiveCategory(id);
+
+    const updateActiveCategory = () => {
+      const boundary = headerHeight + 16 + 8;
+      let current = allCategories[0].id;
+      for (const c of allCategories) {
+        const el = document.getElementById(`boutique-cat-${c.id}`);
+        if (!el) continue;
+        if (el.getBoundingClientRect().top - boundary <= 1) {
+          current = c.id;
+        } else {
+          break;
+        }
+      }
+      // Near the page bottom, trailing sections may be too short to ever reach
+      // the boundary line. Promote to the last section whose heading is visible.
+      const nearBottom =
+        window.innerHeight + window.scrollY >=
+        document.documentElement.scrollHeight - 4;
+      if (nearBottom) {
+        for (const c of allCategories) {
+          const el = document.getElementById(`boutique-cat-${c.id}`);
+          if (!el) continue;
+          if (el.getBoundingClientRect().top < window.innerHeight) {
+            current = c.id;
           }
         }
-      },
-      { rootMargin: `-${headerHeight + 16}px 0px -60% 0px`, threshold: 0 }
-    );
-    allCategories.forEach((c) => {
-      const el = document.getElementById(`boutique-cat-${c.id}`);
-      if (el) observer.observe(el);
-    });
-    return () => observer.disconnect();
+      }
+      // Click-lock wins over the scroll position until released.
+      if (scrollLockRef.current) {
+        setActiveCategory(scrollLockRef.current);
+        return;
+      }
+      setActiveCategory(current);
+    };
+
+    updateActiveCategory();
+    let ticking = false;
+    const onScroll = () => {
+      if (scrollLockRef.current) {
+        if (scrollLockSettleYRef.current === null) {
+          // Still animating toward the target: once it stops, record the settle
+          // position rather than releasing (target may sit at the page bottom).
+          if (scrollLockTimerRef.current) clearTimeout(scrollLockTimerRef.current);
+          scrollLockTimerRef.current = setTimeout(() => {
+            scrollLockSettleYRef.current = window.scrollY;
+          }, 120);
+        } else if (Math.abs(window.scrollY - scrollLockSettleYRef.current) > 40) {
+          // User scrolled away from the settled target — release the lock.
+          scrollLockRef.current = null;
+          scrollLockSettleYRef.current = null;
+        }
+      }
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        updateActiveCategory();
+        ticking = false;
+      });
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+      if (scrollLockTimerRef.current) clearTimeout(scrollLockTimerRef.current);
+    };
   }, [allCategories, headerHeight]);
 
   const handleImageError = useCallback((itemId: string) => {
@@ -189,10 +250,30 @@ export function BoutiqueLayout({
     if (pendingModalItem) { handleItemClick(pendingModalItem); clearPendingModalItem(); }
   }, [pendingModalItem, handleItemClick, clearPendingModalItem]);
 
+  // Keep the active category pill visible within the mobile nav strip, so
+  // scroll-spy never highlights a pill scrolled off-screen.
+  useEffect(() => {
+    if (!activeCategory) return;
+    const container = mobilePillsRef.current;
+    if (!container) return;
+    const pill = container.querySelector<HTMLElement>(`[data-cat-pill="${activeCategory}"]`);
+    if (!pill) return;
+    const cRect = container.getBoundingClientRect();
+    const pRect = pill.getBoundingClientRect();
+    if (pRect.left < cRect.left || pRect.right > cRect.right) {
+      container.scrollBy({ left: pRect.left - cRect.left - (cRect.width - pRect.width) / 2, behavior: "smooth" });
+    }
+  }, [activeCategory]);
+
   const scrollToCategory = (categoryId: string) => {
     setActiveCategory(categoryId);
     const el = document.getElementById(`boutique-cat-${categoryId}`);
     if (el) {
+      // Lock the highlight to this target; released when the user next scrolls
+      // meaningfully away from where this scroll settles (see scroll handler).
+      scrollLockRef.current = categoryId;
+      scrollLockSettleYRef.current = null;
+      if (scrollLockTimerRef.current) clearTimeout(scrollLockTimerRef.current);
       const top = el.getBoundingClientRect().top + window.pageYOffset - headerHeight - 16;
       window.scrollTo({ top, behavior: "smooth" });
     }
@@ -251,6 +332,16 @@ export function BoutiqueLayout({
               )}
             </div>
 
+            {/* Search */}
+            <div className="px-6 pt-5 pb-4 border-b" style={{ borderColor: "#E5E7EB" }}>
+              <MenuSearch
+                menus={menus}
+                variant="bar"
+                placeholder="Search menu…"
+                onResultClick={handleItemClick}
+              />
+            </div>
+
             {/* Menu tabs — only when multiple menus */}
             {menus.length > 1 && (
               <div className="border-b" style={{ borderColor: "#E5E7EB" }}>
@@ -275,15 +366,6 @@ export function BoutiqueLayout({
                 })}
               </div>
             )}
-            {/* Search */}
-            <div className="px-6 pt-5 pb-1">
-              <MenuSearch
-                menus={menus}
-                variant="bar"
-                placeholder="Search menu…"
-                onResultClick={handleItemClick}
-              />
-            </div>
 
             {/* Numbered category links */}
             <div className="flex-1 py-4 px-6">
@@ -437,7 +519,7 @@ export function BoutiqueLayout({
                   onResultClick={handleItemClick}
                 />
               </div>
-              <div className="overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
+              <div ref={mobilePillsRef} className="overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
                 <div className="flex gap-2">
                   {allCategories.map((cat) => {
                     const isActive = activeCategory === cat.id;
@@ -445,6 +527,7 @@ export function BoutiqueLayout({
                       <button
                         key={cat.id}
                         type="button"
+                        data-cat-pill={cat.id}
                         onClick={() => scrollToCategory(cat.id)}
                         className="shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-all"
                         style={{
