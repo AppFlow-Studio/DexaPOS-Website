@@ -10,6 +10,7 @@ import {
   pushMenuToConnectedChannels,
   getPushChannelsHistory,
   getPushChannelsLiveStatus,
+  getOrderOutWebhookHealth,
   setOrderOutChannelsConfirmed,
   type OnboardOrderOutParams,
   type PushMenuToOrderOutParams,
@@ -244,5 +245,22 @@ export function usePushChannelsLiveStatus(
         data.syncStatus === "pending" || data.syncStatus === "syncing";
       return active ? 3000 : false;
     },
+  });
+}
+
+/**
+ * Merchant-scoped health of the push_menu webhook for a location: whether
+ * OrderOut is delivering results, when the last one arrived, and any failing
+ * callbacks in the dead-letter queue.
+ */
+export function useOrderOutWebhookHealth(
+  clerkOrgId: string,
+  locationId: string
+) {
+  return useQuery({
+    queryKey: ["orderout-webhook-health", clerkOrgId, locationId],
+    queryFn: () => getOrderOutWebhookHealth(clerkOrgId, locationId),
+    enabled: !!clerkOrgId && !!locationId && locationId !== "all",
+    staleTime: 30 * 1000,
   });
 }

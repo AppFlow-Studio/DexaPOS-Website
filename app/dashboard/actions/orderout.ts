@@ -15,7 +15,9 @@ import {
 import type { MenuWithCategories } from "@/types/menu";
 import {
   extractConnectedPlatforms,
+  extractChannelStatuses,
   normalizeDeliveryChannels,
+  type PlatformChannelStatus,
 } from "@/lib/orderout/helpers";
 import { auth } from "@clerk/nextjs/server";
 
@@ -802,6 +804,13 @@ export interface OrderOutMenuSyncStatus {
   } | null;
   totalSyncs: number;
   ooMenuId: string | null;
+  // Per-platform delivery-channel status for this menu, from the menu link's
+  // platform_statuses (populated by the push-menu webhook). Empty until a
+  // channel callback lands.
+  platformStatuses: PlatformChannelStatus[];
+  // Platforms currently reporting "success" on the restaurant's
+  // connected_channels — the channels a push would fan out to.
+  connectedChannels: string[];
   syncHistory: Array<{
     id: string;
     menuId: string | null;
@@ -849,29 +858,44 @@ export async function getOrderOutMenuSyncStatus(
     // Get restaurant for this location
     const { data: restaurant } = await supabase
       .from("orderout_restaurants")
-      .select("id")
+      .select("id, connected_channels")
       .eq("location_id", locationId)
       .single();
 
     if (!restaurant) {
       return {
         success: true,
-        data: { lastSync: null, totalSyncs: 0, ooMenuId: null, syncHistory: [] },
+        data: {
+          lastSync: null,
+          totalSyncs: 0,
+          ooMenuId: null,
+          platformStatuses: [],
+          connectedChannels: [],
+          syncHistory: [],
+        },
         error: null,
       };
     }
 
-    // 4a. Query orderout_menu_links for the canonical oo_menu_id
+    // Channels this restaurant would fan a push out to (reporting "success").
+    const connectedChannels = extractConnectedPlatforms(
+      restaurant.connected_channels
+    );
+
+    // 4a. Query orderout_menu_links for the canonical oo_menu_id + per-platform
+    // push status for this menu.
     let ooMenuId: string | null = null;
+    let platformStatuses: PlatformChannelStatus[] = [];
     if (menuId) {
       const { data: link } = await supabase
         .from("orderout_menu_links")
-        .select("oo_menu_id")
+        .select("oo_menu_id, platform_statuses")
         .eq("orderout_restaurant_id", restaurant.id)
         .eq("menu_id", menuId)
         .eq("is_active", true)
         .single();
       ooMenuId = link?.oo_menu_id || null;
+      platformStatuses = extractChannelStatuses(link?.platform_statuses);
     }
 
     // Get all sync records for this restaurant
@@ -953,12 +977,139 @@ export async function getOrderOutMenuSyncStatus(
           : null,
         totalSyncs: filteredSyncs.length,
         ooMenuId,
+        platformStatuses,
+        connectedChannels,
         syncHistory,
       },
       error: null,
     };
   } catch (error) {
     console.error("[getOrderOutMenuSyncStatus] Exception:", error);
+    return {
+      success: false,
+      data: null,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+  }
+}
+
+export interface OrderOutWebhookHealth {
+  /** The restaurant's oo_restaurant_id, or null if not onboarded. */
+  ooRestaurantId: string | null;
+  /**
+   * Most recent time OrderOut delivered a push_menu result for this
+   * restaurant. Derived from the max platform_statuses.last_updated across the
+   * restaurant's menu links — bumped by both correlated and orphan callbacks.
+   */
+  lastResultReceivedAt: string | null;
+  /** Any delivery platform currently reporting "success". */
+  anyChannelLive: boolean;
+  /** Unresolved push_menu dead-letters attributed to this restaurant. */
+  dlqCount: number;
+}
+
+/**
+ * Merchant-scoped health of the OrderOut push_menu webhook for a location:
+ * is OrderOut delivering results, when was the last one, and are any callbacks
+ * failing into the dead-letter queue. Scoped strictly to the merchant's own
+ * restaurant — unlike the HQ-gated getOrderOutPushMenuWebhookStatus.
+ */
+export async function getOrderOutWebhookHealth(
+  clerkOrgId: string,
+  locationId: string
+): Promise<{
+  success: boolean;
+  data: OrderOutWebhookHealth | null;
+  error: string | null;
+}> {
+  if (!clerkOrgId || !locationId) {
+    return { success: false, data: null, error: "Missing required parameters" };
+  }
+
+  try {
+    const supabase = createServerSupabaseClient();
+
+    const { data: merchant, error: merchantError } = await supabase
+      .from("merchants")
+      .select("id")
+      .eq("clerk_org_id", clerkOrgId)
+      .single();
+
+    if (merchantError || !merchant) {
+      return { success: false, data: null, error: "Merchant not found" };
+    }
+
+    const { data: restaurant } = await supabase
+      .from("orderout_restaurants")
+      .select("id, oo_restaurant_id, connected_channels")
+      .eq("location_id", locationId)
+      .single();
+
+    if (!restaurant) {
+      return {
+        success: true,
+        data: {
+          ooRestaurantId: null,
+          lastResultReceivedAt: null,
+          anyChannelLive: false,
+          dlqCount: 0,
+        },
+        error: null,
+      };
+    }
+
+    // Max platform_statuses.last_updated across this restaurant's menu links.
+    // Both the correlated and orphan webhook paths merge platform_statuses, so
+    // this timestamp advances on every result OrderOut delivers.
+    const { data: links } = await supabase
+      .from("orderout_menu_links")
+      .select("platform_statuses")
+      .eq("orderout_restaurant_id", restaurant.id);
+
+    let lastResultReceivedAt: string | null = null;
+    for (const link of links ?? []) {
+      for (const s of extractChannelStatuses(link.platform_statuses)) {
+        if (
+          s.last_updated &&
+          (!lastResultReceivedAt || s.last_updated > lastResultReceivedAt)
+        ) {
+          lastResultReceivedAt = s.last_updated;
+        }
+      }
+    }
+
+    const anyChannelLive =
+      extractConnectedPlatforms(restaurant.connected_channels).length > 0;
+
+    // Unresolved push_menu dead-letters attributed to this restaurant.
+    let dlqCount = 0;
+    if (restaurant.oo_restaurant_id) {
+      const { count } = await supabase
+        .from("webhook_dead_letter_queue")
+        .select("id", { count: "exact", head: true })
+        .eq("source", "orderout")
+        .in("event_type", ["push_menu", "push_menu_channels"])
+        .eq("status", "pending")
+        .filter(
+          "raw_payload->>restaurant_id",
+          "eq",
+          String(restaurant.oo_restaurant_id)
+        );
+      dlqCount = count ?? 0;
+    }
+
+    return {
+      success: true,
+      data: {
+        ooRestaurantId: restaurant.oo_restaurant_id ?? null,
+        lastResultReceivedAt,
+        anyChannelLive,
+        dlqCount,
+      },
+      error: null,
+    };
+  } catch (error) {
+    console.error("[getOrderOutWebhookHealth] Exception:", error);
     return {
       success: false,
       data: null,

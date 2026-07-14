@@ -352,3 +352,31 @@ export async function getActiveSnoozes(
     data: (data as ActiveSnoozes) ?? { items: [], modifiers: [] },
   };
 }
+
+/**
+ * Current snooze state for a single item at a location. Mirrors the
+ * GetItemIsPopular/GetItemIsNew per-location read pattern used by the item
+ * editor, so the snooze control can self-fetch without threading snoozed_until
+ * through every page's item mapping.
+ */
+export async function getItemSnooze(
+  menuItemId: string,
+  locationId: string,
+): Promise<{ snoozed_until: string | null; snooze_reason: string | null }> {
+  if (!menuItemId || !locationId || locationId === "all") {
+    return { snoozed_until: null, snooze_reason: null };
+  }
+
+  const supabase = createServerSupabaseClient();
+  const { data } = await supabase
+    .from("location_item_overrides")
+    .select("snoozed_until, snooze_reason")
+    .eq("location_id", locationId)
+    .eq("menu_item_id", menuItemId)
+    .maybeSingle();
+
+  return {
+    snoozed_until: data?.snoozed_until ?? null,
+    snooze_reason: data?.snooze_reason ?? null,
+  };
+}

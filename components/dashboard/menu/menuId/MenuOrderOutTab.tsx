@@ -40,8 +40,13 @@ import {
   useOrderOutMenuSync,
   useMenuPayloadDiff,
 } from "@/app/dashboard/hooks/useOrderOutMenuSync";
-import { usePushMenuToOrderOut } from "@/app/dashboard/online-ordering/hooks/useOrderOutStatus";
+import {
+  usePushMenuToOrderOut,
+  usePushMenuToChannels,
+  usePushChannelsLiveStatus,
+} from "@/app/dashboard/online-ordering/hooks/useOrderOutStatus";
 import { SyncStatusBadge, formatTimeAgo } from "./OrderOutMenuStatus";
+import { MenuChannelsCard } from "@/components/dashboard/orderout/MenuChannelsCard";
 import Link from "next/link";
 
 interface MenuOrderOutTabProps {
@@ -81,6 +86,9 @@ export function MenuOrderOutTab({
     menuId
   );
   const pushMenuMutation = usePushMenuToOrderOut(clerkOrgId);
+  const pushChannelsMutation = usePushMenuToChannels(clerkOrgId);
+  const [activeSyncId, setActiveSyncId] = useState<string | null>(null);
+  const channelsLive = usePushChannelsLiveStatus(clerkOrgId, activeSyncId);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [showPayload, setShowPayload] = useState(false);
@@ -89,6 +97,19 @@ export function MenuOrderOutTab({
   const lastSync = syncStatus?.lastSync;
   const ooMenuId = syncStatus?.ooMenuId ?? null;
   const syncHistory = syncStatus?.syncHistory ?? [];
+  const platformStatuses = syncStatus?.platformStatuses ?? [];
+  const connectedChannels = syncStatus?.connectedChannels ?? [];
+
+  const handlePushChannels = () => {
+    pushChannelsMutation.mutate(
+      { clerkOrgId, menuId, locationId },
+      {
+        onSuccess: (res) => {
+          if (res.success && res.data?.syncId) setActiveSyncId(res.data.syncId);
+        },
+      }
+    );
+  };
 
   const diffData = diffResult?.data ?? null;
   const hasChanges = diffData?.hasChanges ?? false;
@@ -236,6 +257,16 @@ export function MenuOrderOutTab({
           </div>
         </CardContent>
       </Card>
+
+      {/* Section 1b: Delivery Channels — per-menu status + push */}
+      <MenuChannelsCard
+        ooMenuId={ooMenuId}
+        platformStatuses={platformStatuses}
+        connectedChannels={connectedChannels}
+        onPush={handlePushChannels}
+        isPushing={pushChannelsMutation.isPending}
+        live={channelsLive.data?.data ?? null}
+      />
 
       {/* Section 2: Diff-based Sync Card */}
       {isDiffLoading ? (

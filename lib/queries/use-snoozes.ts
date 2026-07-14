@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
   getActiveSnoozes,
+  getItemSnooze,
   snoozeItem,
   snoozeItemUntilEndOfDay,
   snoozeItemForHours,
@@ -14,6 +15,24 @@ import {
 } from '@/app/dashboard/actions/item-snooze'
 
 export type { ActiveSnoozes }
+
+// Per-item snooze state at a location (drives the item editor's 86 control).
+export function useItemSnooze(
+  menuItemId: string | undefined,
+  locationId: string | null,
+) {
+  return useQuery<{ snoozed_until: string | null; snooze_reason: string | null }>({
+    queryKey: ['item-snooze', menuItemId ?? null, locationId ?? null],
+    queryFn: async () => {
+      if (!menuItemId || !locationId) {
+        return { snoozed_until: null, snooze_reason: null }
+      }
+      return getItemSnooze(menuItemId, locationId)
+    },
+    enabled: !!menuItemId && !!locationId,
+    staleTime: 30 * 1000,
+  })
+}
 
 // ============================================================================
 // 86'd items / modifiers (out-of-stock snooze), per location.
@@ -40,14 +59,19 @@ function invalidate(
   clerkOrgId: string,
 ) {
   queryClient.invalidateQueries({ queryKey: ['snoozed-items', clerkOrgId] })
-  // Item availability shows up in menu views too.
+  // Per-item control state + menu views that surface availability.
+  queryClient.invalidateQueries({ queryKey: ['item-snooze'] })
   queryClient.invalidateQueries({ queryKey: ['menu-items'] })
+  queryClient.invalidateQueries({ queryKey: ['menu-item'] })
+  queryClient.invalidateQueries({ queryKey: ['menu-items-flat'] })
+  queryClient.invalidateQueries({ queryKey: ['categories-with-items'] })
 }
 
 export type SnoozeDuration =
   | { kind: 'end_of_day' }
   | { kind: 'hours'; hours: number }
   | { kind: 'until_manual' }
+  | { kind: 'until'; iso: string }
 
 export function useSnoozeItem() {
   const queryClient = useQueryClient()
@@ -72,6 +96,8 @@ export function useSnoozeItem() {
           return snoozeItemForHours(clerkOrgId, menuItemId, locationId, duration.hours, reason)
         case 'until_manual':
           return snoozeItemUntilManual(clerkOrgId, menuItemId, locationId, reason)
+        case 'until':
+          return snoozeItem(clerkOrgId, menuItemId, locationId, duration.iso, reason)
       }
     },
     onSuccess: (result, { clerkOrgId }) => {
