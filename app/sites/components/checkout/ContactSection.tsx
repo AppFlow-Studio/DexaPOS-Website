@@ -75,8 +75,9 @@ export function ContactSection({
               onClick={onSignInClick}
               className="hover:bg-transparent active:bg-transparent"
               style={{
-                borderColor: "#E5E7EB",
-                color: "#6B7280",
+                borderColor: "var(--border)",
+                backgroundColor: "var(--bg)",
+                color: "var(--text)",
                 borderRadius: "var(--radius)",
               }}
             >
@@ -94,8 +95,9 @@ export function ContactSection({
                 onClick={onSignUpClick}
                 className="hover:bg-transparent active:bg-transparent"
                 style={{
-                  borderColor: "#E5E7EB",
-                  color: "#6B7280",
+                  borderColor: "var(--border)",
+                  backgroundColor: "var(--bg)",
+                  color: "var(--text)",
                   borderRadius: "var(--radius)",
                 }}
               >
@@ -178,6 +180,7 @@ export function ContactSection({
             onChange={(e164) => onPhoneChange(normalizePhone(e164) ?? e164)}
             onBlur={() => setTouched((t) => ({ ...t, phone: true }))}
             aria-invalid={!!phoneError}
+            className="[&_.react-international-phone-input]:!bg-[var(--bg)] [&_.react-international-phone-country-selector-button]:!bg-[var(--bg)]"
           />
           {phoneError && <p className="text-xs text-red-500">{phoneError}</p>}
         </div>

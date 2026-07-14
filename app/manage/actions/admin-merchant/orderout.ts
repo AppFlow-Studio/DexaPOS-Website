@@ -8,7 +8,11 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { assertHQPermission } from '@/lib/admin/auth'
 import { LogAuditEvent } from '@/app/dashboard/actions/audit-logs'
-import { extractConnectedPlatforms } from '@/lib/orderout/helpers'
+import {
+  extractConnectedPlatforms,
+  extractChannelStatuses,
+  type PlatformChannelStatus,
+} from '@/lib/orderout/helpers'
 import type {
   PushMenuToChannelsResult,
   PushChannelsHistoryEntry,
@@ -177,29 +181,44 @@ export async function getAdminOrderOutMenuSyncStatus(
     // Get restaurant for this location
     const { data: restaurant } = await supabase
       .from('orderout_restaurants')
-      .select('id')
+      .select('id, connected_channels')
       .eq('location_id', locationId)
       .single()
 
     if (!restaurant) {
       return {
         success: true,
-        data: { lastSync: null, totalSyncs: 0, ooMenuId: null, syncHistory: [] },
+        data: {
+          lastSync: null,
+          totalSyncs: 0,
+          ooMenuId: null,
+          platformStatuses: [],
+          connectedChannels: [],
+          syncHistory: [],
+        },
         error: null,
       }
     }
 
-    // Query orderout_menu_links for the canonical oo_menu_id
+    // Channels this restaurant would fan a push out to (reporting "success").
+    const connectedChannels = extractConnectedPlatforms(
+      restaurant.connected_channels
+    )
+
+    // Query orderout_menu_links for the canonical oo_menu_id + per-platform
+    // push status for this menu.
     let ooMenuId: string | null = null
+    let platformStatuses: PlatformChannelStatus[] = []
     if (menuId) {
       const { data: link } = await supabase
         .from('orderout_menu_links')
-        .select('oo_menu_id')
+        .select('oo_menu_id, platform_statuses')
         .eq('orderout_restaurant_id', restaurant.id)
         .eq('menu_id', menuId)
         .eq('is_active', true)
         .single()
       ooMenuId = link?.oo_menu_id || null
+      platformStatuses = extractChannelStatuses(link?.platform_statuses)
     }
 
     // Get all sync records for this restaurant
@@ -271,6 +290,8 @@ export async function getAdminOrderOutMenuSyncStatus(
           : null,
         totalSyncs: filteredSyncs.length,
         ooMenuId,
+        platformStatuses,
+        connectedChannels,
         syncHistory,
       },
       error: null,
