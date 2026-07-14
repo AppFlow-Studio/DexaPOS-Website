@@ -8,7 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { AlertCircle, Lock } from "lucide-react";
+import { Lock } from "lucide-react";
 
 export interface PaymentCardFormHandle {
   validateCardInput: () => { valid: boolean; error?: string };
@@ -154,6 +154,7 @@ export const PaymentCardForm = forwardRef<
       cardLastFour: string | null;
     }) => void;
     reject: (reason?: unknown) => void;
+    timeoutId: ReturnType<typeof setTimeout>;
   } | null>(null);
 
   const [collectReady, setCollectReady] = useState(false);
@@ -267,8 +268,11 @@ export const PaymentCardForm = forwardRef<
                 token: null,
               }));
               onError(message);
-              pendingTokenizeRef.current?.reject(new Error(message));
-              pendingTokenizeRef.current = null;
+              if (pendingTokenizeRef.current) {
+                clearTimeout(pendingTokenizeRef.current.timeoutId);
+                pendingTokenizeRef.current.reject(new Error(message));
+                pendingTokenizeRef.current = null;
+              }
               return;
             }
 
@@ -285,8 +289,11 @@ export const PaymentCardForm = forwardRef<
               cardLastFour: tokenized.cardLastFour,
             });
             onError("");
-            pendingTokenizeRef.current?.resolve(tokenized);
-            pendingTokenizeRef.current = null;
+            if (pendingTokenizeRef.current) {
+              clearTimeout(pendingTokenizeRef.current.timeoutId);
+              pendingTokenizeRef.current.resolve(tokenized);
+              pendingTokenizeRef.current = null;
+            }
           },
         });
       })
@@ -340,11 +347,26 @@ export const PaymentCardForm = forwardRef<
       cardType: string | null;
       cardLastFour: string | null;
     }>((resolve, reject) => {
-      pendingTokenizeRef.current = { resolve, reject };
+      // NMI's callback never fires when the tokenization key is rejected (e.g.
+      // a 401 from Collect.js), which would leave this promise — and the
+      // place-order flow — hanging forever. Bound the wait so a bad key surfaces
+      // a clear error instead of freezing checkout.
+      const timeoutId = setTimeout(() => {
+        if (pendingTokenizeRef.current) {
+          pendingTokenizeRef.current = null;
+          const message =
+            "We couldn't process this card right now. Please try again or use a different payment method.";
+          onError(message);
+          reject(new Error(message));
+        }
+      }, 20000);
+
+      pendingTokenizeRef.current = { resolve, reject, timeoutId };
 
       try {
         window.CollectJS?.startPaymentRequest();
       } catch (error) {
+        clearTimeout(timeoutId);
         pendingTokenizeRef.current = null;
         reject(
           error instanceof Error
@@ -353,7 +375,7 @@ export const PaymentCardForm = forwardRef<
         );
       }
     });
-  }, [collectReady]);
+  }, [collectReady, onError]);
 
   useImperativeHandle(
     ref,
@@ -367,7 +389,7 @@ export const PaymentCardForm = forwardRef<
   if (!tokenizationKey) {
     return (
       <div
-        className="flex items-center gap-3 px-4 py-3 text-sm"
+        className="flex items-center gap-3 px-4 py-3 text-sm rounded-xl"
         style={{
           backgroundColor: "#fffbeb",
           borderLeft: "4px solid #f59e0b",
@@ -380,75 +402,71 @@ export const PaymentCardForm = forwardRef<
     );
   }
 
+  // Themed, flat card entry — matches the surrounding checkout sections (no
+  // nested card/shadow). NMI Collect.js injects secure iframes into the field
+  // slots below. Field chrome is styled here via the "nmi-field" class.
+  const fieldClass =
+    "nmi-field h-11 rounded-xl px-3 bg-[var(--card,#fff)]";
+
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="mb-4 flex items-start justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-            <Lock className="h-4 w-4 text-emerald-600" />
-            Secure card payment
-          </div>
-          <p className="mt-1 text-xs text-slate-500">
-            Card entry and tokenization are handled directly by NMI Collect.js.
-          </p>
+    <div className={disabled ? "pointer-events-none opacity-60" : ""}>
+      <style>{`
+        .nmi-field {
+          border: 1px solid var(--border, #e2e8f0);
+          transition: border-color .15s ease, box-shadow .15s ease;
+        }
+        .nmi-field:focus-within {
+          border-color: var(--primary, #6366f1);
+          box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary, #6366f1) 18%, transparent);
+        }
+        /* NMI injects a secure <iframe> into each slot. It must fill the slot
+           and stay clickable — don't wrap it in a flex/centered container, and
+           don't force a height that fights NMI's own inline sizing. */
+        .nmi-field iframe {
+          display: block;
+          width: 100% !important;
+          height: 100% !important;
+          border: 0;
+        }
+      `}</style>
+
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-1.5 text-xs" style={{ color: "var(--text-muted, #64748b)" }}>
+          <Lock className="h-3.5 w-3.5" style={{ color: "var(--primary, #10b981)" }} />
+          Payments are secure and encrypted
         </div>
-        {paymentState.complete ? (
-          <span className="rounded-full bg-emerald-100 px-2 py-1 text-[11px] font-medium text-emerald-700">
+        {paymentState.complete && (
+          <span
+            className="rounded-full px-2 py-0.5 text-[11px] font-medium"
+            style={{ backgroundColor: "color-mix(in srgb, var(--primary,#10b981) 12%, transparent)", color: "var(--primary,#059669)" }}
+          >
             Card ready
-          </span>
-        ) : (
-          <span className="rounded-full bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-600">
-            {collectReady ? "Enter card details" : "Loading fields"}
           </span>
         )}
       </div>
 
-      <div className={disabled ? "pointer-events-none opacity-60" : ""}>
-        <div className="grid gap-3 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)]">
-          <div>
-            <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">
-              Card Number
-            </label>
-            <div
-              id={ccNumberId}
-              className="min-h-[48px] rounded-xl border border-slate-300 bg-white px-3 py-3"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">
-              Expiration
-            </label>
-            <div
-              id={ccExpId}
-              className="min-h-[48px] rounded-xl border border-slate-300 bg-white px-3 py-3"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">
-              CVV
-            </label>
-            <div
-              id={cvvId}
-              className="min-h-[48px] rounded-xl border border-slate-300 bg-white px-3 py-3"
-            />
-          </div>
-        </div>
+      {/* Card number — full width */}
+      <div id={ccNumberId} className={fieldClass} />
 
-        <button
-          id={paymentButtonId}
-          type="button"
-          className="hidden"
-          aria-hidden="true"
-          tabIndex={-1}
-        />
+      {/* Expiration + CVV row */}
+      <div className="grid grid-cols-2 gap-3 mt-3">
+        <div id={ccExpId} className={fieldClass} />
+        <div id={cvvId} className={fieldClass} />
       </div>
 
-      {!paymentState.complete && (
-        <div className="mt-3 flex items-start gap-2 text-xs text-slate-500">
-          <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          Complete the card form above before placing the order.
-        </div>
+      {!collectReady && (
+        <p className="mt-2 text-xs" style={{ color: "var(--text-muted, #94a3b8)" }}>
+          Loading secure card fields…
+        </p>
       )}
+
+      <button
+        id={paymentButtonId}
+        type="button"
+        className="hidden"
+        aria-hidden="true"
+        tabIndex={-1}
+      />
     </div>
   );
 });

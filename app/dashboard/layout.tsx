@@ -50,6 +50,7 @@ import {
   User,
   LogOut,
   Utensils,
+  CircleSlash,
   Coffee,
   Receipt,
   Calendar,
@@ -158,6 +159,11 @@ const navMain = [
         icon: List,
       },
       {
+        title: "86'd Items",
+        url: "/dashboard/menu/out-of-stock",
+        icon: CircleSlash,
+      },
+      {
         title: "Categories",
         url: "/dashboard/menu/categories",
         icon: Tag,
@@ -191,6 +197,11 @@ const navMain = [
         title: "Online Ordering",
         url: "/dashboard/online-ordering",
         icon: Globe,
+      },
+      {
+        title: "Kiosk",
+        url: "/dashboard/kiosk",
+        icon: MonitorPlay,
       },
       {
         title: "Customers",

@@ -165,6 +165,7 @@ export interface MerchantProvisionedDeviceViewRecord {
   location_name: string | null
   model_name: string
   serial_number: string
+  pos_id: string | null
   status: string
   linked_station_id: string | null
   linked_station_name: string | null
@@ -328,7 +329,7 @@ export async function getMerchantSubscriptionOverview(): Promise<{
       .not('location_id', 'is', null),
     serviceRole
       .from('admin_device_inventory')
-      .select('id, location_id, location_name, model_name, serial_number, status, linked_station_id')
+      .select('id, location_id, location_name, model_name, serial_number, pos_id, status, linked_station_id')
       .eq('merchant_id', merchantId)
       .order('location_name', { ascending: true })
       .order('model_name', { ascending: true }),
@@ -359,8 +360,29 @@ export async function getMerchantSubscriptionOverview(): Promise<{
     throw new Error('Failed to load billing profiles.')
   }
 
-  if (devicesResult.error) {
-    console.error('[getMerchantSubscriptionOverview] device inventory error:', devicesResult.error)
+  let resolvedDevicesData = devicesResult.data
+  let resolvedDevicesError = devicesResult.error
+  if (
+    resolvedDevicesError &&
+    typeof resolvedDevicesError.message === 'string' &&
+    resolvedDevicesError.message.includes('pos_id')
+  ) {
+    const fallbackDevicesResult = await serviceRole
+      .from('admin_device_inventory')
+      .select('id, location_id, location_name, model_name, serial_number, status, linked_station_id')
+      .eq('merchant_id', merchantId)
+      .order('location_name', { ascending: true })
+      .order('model_name', { ascending: true })
+
+    resolvedDevicesData = (fallbackDevicesResult.data ?? []).map((row) => ({
+      ...row,
+      pos_id: null,
+    }))
+    resolvedDevicesError = fallbackDevicesResult.error
+  }
+
+  if (resolvedDevicesError) {
+    console.error('[getMerchantSubscriptionOverview] device inventory error:', resolvedDevicesError)
     throw new Error('Failed to load provisioned devices.')
   }
 
@@ -375,7 +397,7 @@ export async function getMerchantSubscriptionOverview(): Promise<{
 
   const stationIds = Array.from(
     new Set(
-      ((devicesResult.data ?? []) as Array<{ linked_station_id: string | null }>)
+      ((resolvedDevicesData ?? []) as Array<{ linked_station_id: string | null }>)
         .map((row) => row.linked_station_id)
         .filter((value): value is string => Boolean(value)),
     ),
@@ -398,12 +420,13 @@ export async function getMerchantSubscriptionOverview(): Promise<{
     }
   }
 
-  const normalizedDevices = ((devicesResult.data ?? []) as Array<{
+  const normalizedDevices = ((resolvedDevicesData ?? []) as Array<{
     id: string
     location_id: string | null
     location_name: string | null
     model_name: string
     serial_number: string
+    pos_id: string | null
     status: string
     linked_station_id: string | null
   }>).map((row) => ({
@@ -412,6 +435,7 @@ export async function getMerchantSubscriptionOverview(): Promise<{
     location_name: row.location_name,
     model_name: row.model_name,
     serial_number: row.serial_number,
+    pos_id: row.pos_id,
     status: row.status,
     linked_station_id: row.linked_station_id,
     linked_station_name: row.linked_station_id ? stationNameMap.get(row.linked_station_id) ?? null : null,

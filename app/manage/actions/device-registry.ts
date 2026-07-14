@@ -297,14 +297,15 @@ export async function searchAdminDeviceRegistry(
     const searchLimit = Math.min(Math.max(limit, 1), 12)
     const term = `%${trimmedQuery}%`
 
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from('admin_device_inventory')
       .select(
-        'id, serial_number, status, device_category, manufacturer, model_name, model_sku, merchant_name, location_name, updated_at'
+        'id, serial_number, pos_id, status, device_category, manufacturer, model_name, model_sku, merchant_name, location_name, updated_at'
       )
       .or(
         [
           `serial_number.ilike.${term}`,
+          `pos_id.ilike.${term}`,
           `manufacturer.ilike.${term}`,
           `model_name.ilike.${term}`,
           `model_sku.ilike.${term}`,
@@ -314,6 +315,32 @@ export async function searchAdminDeviceRegistry(
       )
       .order('updated_at', { ascending: false })
       .limit(searchLimit)
+
+    if (error && typeof error.message === 'string' && error.message.includes('pos_id')) {
+      const fallback = await supabase
+        .from('admin_device_inventory')
+        .select(
+          'id, serial_number, status, device_category, manufacturer, model_name, model_sku, merchant_name, location_name, updated_at'
+        )
+        .or(
+          [
+            `serial_number.ilike.${term}`,
+            `manufacturer.ilike.${term}`,
+            `model_name.ilike.${term}`,
+            `model_sku.ilike.${term}`,
+            `merchant_name.ilike.${term}`,
+            `location_name.ilike.${term}`,
+          ].join(',')
+        )
+        .order('updated_at', { ascending: false })
+        .limit(searchLimit)
+
+      data = (fallback.data ?? []).map((row: Record<string, unknown>) => ({
+        ...row,
+        pos_id: null,
+      }))
+      error = fallback.error
+    }
 
     if (error) {
       console.error('[searchAdminDeviceRegistry] Error:', error)
