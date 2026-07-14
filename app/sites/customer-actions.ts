@@ -277,21 +277,36 @@ export async function setDefaultAddress(
     return { success: false, error: "No customer linked" };
   }
 
-  // Clear the current default, then mark the chosen address (scoped to this
-  // customer so a stray id can't flip someone else's address).
-  await supabase
-    .from("customer_saved_addresses")
-    .update({ is_default: false })
-    .eq("customer_id", session.customer_id)
-    .eq("is_default", true);
-
-  const { error } = await supabase
+  // Promote the target first, scoped to this customer, and confirm it actually
+  // matched a row. Supabase update() does not error when zero rows match, so a
+  // stale/deleted/foreign id would otherwise "succeed" — and clearing the old
+  // default first would have left the customer with no default at all.
+  const { data: promoted, error: promoteError } = await supabase
     .from("customer_saved_addresses")
     .update({ is_default: true })
     .eq("id", addressId)
-    .eq("customer_id", session.customer_id);
+    .eq("customer_id", session.customer_id)
+    .select("id")
+    .maybeSingle();
 
-  if (error) {
+  if (promoteError) {
+    return { success: false, error: "Failed to update default address" };
+  }
+
+  if (!promoted) {
+    return { success: false, error: "Address not found" };
+  }
+
+  // Only now demote the previous default(s). Excluding the row we just promoted
+  // keeps this safe if it was already the default.
+  const { error: demoteError } = await supabase
+    .from("customer_saved_addresses")
+    .update({ is_default: false })
+    .eq("customer_id", session.customer_id)
+    .eq("is_default", true)
+    .neq("id", promoted.id);
+
+  if (demoteError) {
     return { success: false, error: "Failed to update default address" };
   }
 
