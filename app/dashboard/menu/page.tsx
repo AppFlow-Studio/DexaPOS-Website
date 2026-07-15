@@ -60,7 +60,8 @@ import {
   MenuListView,
   MenuWithLocation
 } from '@/components/dashboard/menu/MenuListView'
-import { useLocationStore, useSelectedLocation, useIsSingleLocation } from '@/stores/location-store'
+import { useLocationStore, useSelectedLocation, useIsSingleLocation, useGatedLocationId } from '@/stores/location-store'
+import { useLocationOnlineMenu, useSetPrimaryOnlineMenu } from '@/app/dashboard/online-ordering/hooks/useOrderOutStatus'
 import { Badge } from '@/components/ui/badge'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Label } from '@/components/ui/label'
@@ -108,6 +109,17 @@ export default function MenuPage () {
     isLoading,
     refetch
   } = useMenus(clerkOrgId || '', selectedLocationId)
+
+  // OrderOut canonical online-ordering menu for the resolved location (single-loc
+  // resolves to its one store; multi-loc on "All" -> null, so no badge shown).
+  const gatedLocationId = useGatedLocationId()
+  const { data: onlineMenu } = useLocationOnlineMenu(clerkOrgId || '', gatedLocationId)
+  const setOnlineMenuMutation = useSetPrimaryOnlineMenu(clerkOrgId || '')
+  const handleSetOnlineMenu = (menuId: string) => {
+    if (!gatedLocationId) return
+    setOnlineMenuMutation.mutate({ locationId: gatedLocationId, menuId })
+  }
+
   const [searchTerm, setSearchTerm] = useState('')
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list')
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
@@ -883,6 +895,9 @@ export default function MenuPage () {
             hasOrderChanges={hasOrderChanges}
             onReorder={handleReorder}
             isFiltered={searchTerm.length > 0}
+            onlineMenuId={onlineMenu?.primaryMenuId ?? null}
+            linkedMenuIds={onlineMenu?.linkedMenuIds ?? []}
+            onSetOnlineMenu={handleSetOnlineMenu}
           />
           {filteredMenus.length > 0 && (
             <div className='flex items-center gap-2 mt-4 text-sm text-muted-foreground'>

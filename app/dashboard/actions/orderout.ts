@@ -1705,6 +1705,40 @@ export async function setPrimaryOnlineMenu(
 }
 
 /**
+ * The location's canonical online menu + all its active-linked menus, for
+ * surfacing the designation on the menus list. Empty when the location isn't
+ * onboarded to OrderOut.
+ */
+export async function getLocationOnlineMenu(
+  clerkOrgId: string,
+  locationId: string,
+): Promise<{ primaryMenuId: string | null; linkedMenuIds: string[] }> {
+  if (!clerkOrgId || !locationId || locationId === "all") {
+    return { primaryMenuId: null, linkedMenuIds: [] };
+  }
+
+  const supabase = createServerSupabaseClient();
+  const { data: restaurant } = await supabase
+    .from("orderout_restaurants")
+    .select("id")
+    .eq("location_id", locationId)
+    .maybeSingle();
+  if (!restaurant) return { primaryMenuId: null, linkedMenuIds: [] };
+
+  const { data: links } = await supabase
+    .from("orderout_menu_links")
+    .select("menu_id, is_primary")
+    .eq("orderout_restaurant_id", restaurant.id)
+    .eq("is_active", true);
+
+  const rows = links ?? [];
+  return {
+    primaryMenuId: rows.find((l) => l.is_primary)?.menu_id ?? null,
+    linkedMenuIds: rows.map((l) => l.menu_id),
+  };
+}
+
+/**
  * Push an already-synced menu to all connected delivery channels via OrderOut's
  * async fan-out endpoint. Per-service results come back via
  * orderout-push-menu-webhook.
