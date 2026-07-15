@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
-import { pushMenuToConnectedChannels } from "@/app/dashboard/actions/orderout";
+import {
+  pushMenuToConnectedChannels,
+  resolvePrimaryOnlineMenu,
+} from "@/app/dashboard/actions/orderout";
 
 /**
  * Internal endpoint invoked from the item/modifier snooze DB trigger
@@ -71,34 +74,25 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true, skipped: "no_org" });
     }
 
-    // Active menu links for this restaurant.
-    const { data: links } = await supabase
-      .from("orderout_menu_links")
-      .select("menu_id")
-      .eq("orderout_restaurant_id", restaurant.id)
-      .eq("is_active", true);
-
-    if (!links || links.length === 0) {
+    // OrderOut serves one menu per store — re-push only the canonical online menu.
+    const online = await resolvePrimaryOnlineMenu(supabase, restaurant.id);
+    if (!online) {
       return NextResponse.json({ ok: true, skipped: "no_menus" });
     }
 
-    const results = await Promise.allSettled(
-      links.map((l) =>
-        pushMenuToConnectedChannels({
-          clerkOrgId,
-          menuId: l.menu_id,
-          locationId,
-          skipCooldown: true,
-          internal: true,
-        }),
-      ),
-    );
+    const result = await pushMenuToConnectedChannels({
+      clerkOrgId,
+      menuId: online.menu_id,
+      locationId,
+      skipCooldown: true,
+      internal: true,
+    });
 
-    const pushed = results.filter(
-      (r) => r.status === "fulfilled" && r.value?.success,
-    ).length;
-
-    return NextResponse.json({ ok: true, menus: links.length, pushed });
+    return NextResponse.json({
+      ok: true,
+      menu_id: online.menu_id,
+      pushed: result.success ? 1 : 0,
+    });
   } catch (err) {
     console.error("[orderout-resync] failed:", err);
     return NextResponse.json({ error: "resync_failed" }, { status: 500 });
