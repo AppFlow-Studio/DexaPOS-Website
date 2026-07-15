@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Site } from "@/types/site";
@@ -24,7 +24,7 @@ import {
   getStorefrontDeliveryPriceLabel,
 } from "../../lib/storefront-pricing";
 import { motion, AnimatePresence } from "motion/react";
-import { Plus, ChevronUp, SlidersHorizontal, LayoutGrid, LayoutList } from "lucide-react";
+import { Plus, ChevronUp, SlidersHorizontal, LayoutGrid, LayoutList, ListFilter } from "lucide-react";
 
 interface MarketLayoutProps {
   site: Site | null;
@@ -86,7 +86,14 @@ export function MarketLayout({
   });
 
   const [activeMenuId, setActiveMenuId] = useState<string>(() => menus[0]?.id ?? "");
-  const [activeCategory, setActiveCategory] = useState<string>("__all__");
+  const [activeCategory, setActiveCategory] = useState<string>("");
+  const [navHeight, setNavHeight] = useState(0);
+  const mobilePillsRef = useRef<HTMLDivElement>(null);
+  const sidebarNavRef = useRef<HTMLDivElement>(null);
+  // While a pill click is smooth-scrolling, lock the highlight to the target so
+  // the scroll-spy doesn't flicker to sections passed en route.
+  const scrollLockRef = useRef<string | null>(null);
+  const scrollLockTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [selectedItem, setSelectedItem] = useState<StorefrontItem | null>(null);
   const [selectedCategoryItems, setSelectedCategoryItems] = useState<StorefrontItem[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -102,6 +109,7 @@ export function MarketLayout({
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
+
 
   useEffect(() => {
     const update = () => {
@@ -125,24 +133,35 @@ export function MarketLayout({
     [allCategories]
   );
 
-  const itemsInCategory = useMemo(() => {
-    if (activeCategory === "__all__") return allItems;
-    return allCategories.find((c) => c.id === activeCategory)?.items ?? [];
-  }, [activeCategory, allItems, allCategories]);
-
-  const filteredItems = useMemo(() => {
-    let items = itemsInCategory;
-    if (activeTag === "Popular") items = items.filter((i) => i.is_popular);
-    else if (activeTag === "New") items = items.filter((i) => i.is_new);
-    else if (activeTag) items = items.filter((i) => (i.dietary_tags || []).some((t) => t.toLowerCase().includes(activeTag.toLowerCase())));
+  // Apply the active tag + sort to a category's items (used per stacked section).
+  const processItems = useCallback((items: StorefrontItem[]) => {
+    let result = items;
+    if (activeTag === "Popular") result = result.filter((i) => i.is_popular);
+    else if (activeTag === "New") result = result.filter((i) => i.is_new);
+    else if (activeTag) result = result.filter((i) => (i.dietary_tags || []).some((t) => t.toLowerCase().includes(activeTag.toLowerCase())));
 
     switch (sortOption) {
-      case "price_asc": return [...items].sort((a, b) => getStorefrontBrowsePrice(a) - getStorefrontBrowsePrice(b));
-      case "price_desc": return [...items].sort((a, b) => getStorefrontBrowsePrice(b) - getStorefrontBrowsePrice(a));
-      case "name": return [...items].sort((a, b) => a.name.localeCompare(b.name));
-      default: return items;
+      case "price_asc": return [...result].sort((a, b) => getStorefrontBrowsePrice(a) - getStorefrontBrowsePrice(b));
+      case "price_desc": return [...result].sort((a, b) => getStorefrontBrowsePrice(b) - getStorefrontBrowsePrice(a));
+      case "name": return [...result].sort((a, b) => a.name.localeCompare(b.name));
+      default: return result;
     }
-  }, [itemsInCategory, sortOption, activeTag]);
+  }, [activeTag, sortOption]);
+
+  // Every category stays rendered as a stacked section (only hidden when a tag
+  // filter empties it). Clicking a pill scrolls here; scrolling highlights it.
+  const sectionsWithItems = useMemo(
+    () =>
+      allCategories
+        .map((cat) => ({ cat, items: processItems(cat.items) }))
+        .filter(({ items }) => items.length > 0),
+    [allCategories, processItems]
+  );
+
+  const totalVisibleItems = useMemo(
+    () => sectionsWithItems.reduce((sum, s) => sum + s.items.length, 0),
+    [sectionsWithItems]
+  );
 
   const handleImageError = useCallback((itemId: string) => {
     setFailedImageIds((prev) => new Set(prev).add(itemId));
@@ -187,10 +206,133 @@ export function MarketLayout({
   });
 
   const categoryCounts = useMemo(() => {
-    const counts: Record<string, number> = { __all__: allItems.length };
+    const counts: Record<string, number> = {};
     allCategories.forEach((c) => { counts[c.id] = c.items.length; });
     return counts;
-  }, [allItems, allCategories]);
+  }, [allCategories]);
+
+  // Default the active category to the first visible section (and re-seed when
+  // the menu or filters change the set of visible sections).
+  useEffect(() => {
+    if (sectionsWithItems.length === 0) return;
+    if (!sectionsWithItems.some((s) => s.cat.id === activeCategory)) {
+      setActiveCategory(sectionsWithItems[0].cat.id);
+    }
+  }, [sectionsWithItems, activeCategory]);
+
+  // Measure the mobile sticky category-nav height (offset for scroll targeting).
+  useEffect(() => {
+    const update = () => {
+      const nav = document.getElementById("market-mobile-catnav");
+      setNavHeight(nav ? nav.offsetHeight : 0);
+    };
+    update();
+    const nav = document.getElementById("market-mobile-catnav");
+    if (!nav) return;
+    const ro = new ResizeObserver(update);
+    ro.observe(nav);
+    return () => ro.disconnect();
+  }, [activeMenuId, sectionsWithItems.length]);
+
+  const scrollToCategory = useCallback((categoryId: string) => {
+    setActiveCategory(categoryId);
+    const el = document.getElementById(`market-cat-${categoryId}`);
+    if (!el) return;
+    // Lock the highlight to this target until the smooth-scroll settles, so the
+    // spy doesn't briefly light up sections we pass through.
+    scrollLockRef.current = categoryId;
+    if (scrollLockTimerRef.current) clearTimeout(scrollLockTimerRef.current);
+    // Safety release in case the target never precisely reaches the boundary.
+    scrollLockTimerRef.current = setTimeout(() => {
+      scrollLockRef.current = null;
+    }, 1000);
+    // On mobile the category nav is sticky under the header; on desktop it isn't.
+    const isDesktop = window.matchMedia("(min-width: 1024px)").matches;
+    const offset = headerHeight + (isDesktop ? 16 : navHeight + 8);
+    const top = el.getBoundingClientRect().top + window.scrollY - offset;
+    window.scrollTo({ top, behavior: "smooth" });
+  }, [headerHeight, navHeight]);
+
+  // Scroll-spy: highlight the category currently filling the viewport. Works in
+  // both scroll directions, with a bottom-of-page guard for short trailing
+  // sections (mirrors the Classic MenuBrowser behavior).
+  useEffect(() => {
+    const sections = sectionsWithItems;
+    if (sections.length === 0) return;
+
+    const updateActiveCategory = () => {
+      const atBottom =
+        window.innerHeight + window.scrollY >=
+        document.documentElement.scrollHeight - 2;
+      if (atBottom) {
+        scrollLockRef.current = null;
+        setActiveCategory(sections[sections.length - 1].cat.id);
+        return;
+      }
+      const isDesktop = window.matchMedia("(min-width: 1024px)").matches;
+      const boundary = headerHeight + (isDesktop ? 16 : navHeight + 8) + 8;
+      let current = sections[0].cat.id;
+      for (const { cat } of sections) {
+        const el = document.getElementById(`market-cat-${cat.id}`);
+        if (!el) continue;
+        if (el.getBoundingClientRect().top - boundary <= 1) {
+          current = cat.id;
+        } else {
+          break;
+        }
+      }
+      // While locked to a click target, keep it highlighted regardless of
+      // sections passed (or slightly overshot) during the smooth scroll. The
+      // lock is released by an idle timer once scrolling settles.
+      if (scrollLockRef.current) {
+        setActiveCategory(scrollLockRef.current);
+        return;
+      }
+      setActiveCategory(current);
+    };
+
+    updateActiveCategory();
+    let ticking = false;
+    const onScroll = () => {
+      // Refresh the idle timer: release the click-lock only once the smooth
+      // scroll has fully stopped, then re-sync to the real scroll position.
+      if (scrollLockRef.current) {
+        if (scrollLockTimerRef.current) clearTimeout(scrollLockTimerRef.current);
+        scrollLockTimerRef.current = setTimeout(() => {
+          scrollLockRef.current = null;
+          updateActiveCategory();
+        }, 120);
+      }
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        updateActiveCategory();
+        ticking = false;
+      });
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+      if (scrollLockTimerRef.current) clearTimeout(scrollLockTimerRef.current);
+    };
+  }, [sectionsWithItems, headerHeight, navHeight]);
+
+  // Keep the active pill visible within each horizontal/vertical nav strip.
+  useEffect(() => {
+    if (!activeCategory) return;
+    const mobile = mobilePillsRef.current?.querySelector<HTMLElement>(`[data-cat-pill="${activeCategory}"]`);
+    if (mobile && mobilePillsRef.current) {
+      const c = mobilePillsRef.current.getBoundingClientRect();
+      const p = mobile.getBoundingClientRect();
+      if (p.left < c.left || p.right > c.right) {
+        mobilePillsRef.current.scrollBy({ left: p.left - c.left - (c.width - p.width) / 2, behavior: "smooth" });
+      }
+    }
+    const side = sidebarNavRef.current?.querySelector<HTMLElement>(`[data-cat-pill="${activeCategory}"]`);
+    side?.scrollIntoView({ block: "nearest" });
+  }, [activeCategory]);
 
   return (
     <>
@@ -253,14 +395,15 @@ export function MarketLayout({
                   <SlidersHorizontal className="h-3.5 w-3.5" />
                   Categories
                 </div>
-                <nav className="space-y-0.5">
-                  {[{ id: "__all__", name: "All Items" }, ...allCategories].map((cat) => {
+                <nav ref={sidebarNavRef} className="space-y-0.5 max-h-[60vh] overflow-y-auto">
+                  {sectionsWithItems.map(({ cat }) => {
                     const isActive = activeCategory === cat.id;
                     return (
                       <button
                         key={cat.id}
                         type="button"
-                        onClick={() => setActiveCategory(cat.id)}
+                        data-cat-pill={cat.id}
+                        onClick={() => scrollToCategory(cat.id)}
                         className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-all"
                         style={{
                           backgroundColor: isActive ? "color-mix(in srgb, var(--primary) 8%, #FFFFFF)" : "transparent",
@@ -320,37 +463,41 @@ export function MarketLayout({
                 />
               </div>
 
-              {/* Mobile category pills */}
-              <div className="lg:hidden overflow-x-auto pb-2 mb-4" style={{ scrollbarWidth: "none" }}>
-                <div className="flex gap-2">
-                  {[{ id: "__all__", name: "All" }, ...allCategories].map((cat) => {
-                    const isActive = activeCategory === cat.id;
-                    return (
-                      <button
-                        key={cat.id}
-                        type="button"
-                        onClick={() => setActiveCategory(cat.id)}
-                        className="shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-all"
-                        style={{
-                          backgroundColor: isActive ? "var(--primary)" : "#FFFFFF",
-                          color: isActive ? "var(--primary-text)" : "#6B7280",
-                          border: `1px solid ${isActive ? "var(--primary)" : "#E5E7EB"}`,
-                        }}
-                      >
-                        {cat.name}
-                      </button>
-                    );
-                  })}
+              {/* Mobile category pills — sticky scroll-nav */}
+              <div
+                id="market-mobile-catnav"
+                className="lg:hidden sticky z-30 -mx-4 px-4 py-2 mb-4"
+                style={{ top: headerHeight, backgroundColor: "#FFFFFF", borderBottom: "1px solid #E5E7EB" }}
+              >
+                <div ref={mobilePillsRef} className="overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+                  <div className="flex gap-2">
+                    {sectionsWithItems.map(({ cat }) => {
+                      const isActive = activeCategory === cat.id;
+                      return (
+                        <button
+                          key={cat.id}
+                          type="button"
+                          data-cat-pill={cat.id}
+                          onClick={() => scrollToCategory(cat.id)}
+                          className="shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-all"
+                          style={{
+                            backgroundColor: isActive ? "var(--primary)" : "#FFFFFF",
+                            color: isActive ? "var(--primary-text)" : "#6B7280",
+                            border: `1px solid ${isActive ? "var(--primary)" : "#E5E7EB"}`,
+                          }}
+                        >
+                          {cat.name}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
 
               {/* Toolbar */}
               <div className="flex items-center justify-between mb-4">
                 <p className="text-sm" style={{ color: "#6B7280" }}>
-                  {activeCategory === "__all__"
-                    ? `${filteredItems.length} item${filteredItems.length !== 1 ? "s" : ""}`
-                    : `${filteredItems.length} item${filteredItems.length !== 1 ? "s" : ""} in ${allCategories.find((c) => c.id === activeCategory)?.name ?? ""}`
-                  }
+                  {`${totalVisibleItems} item${totalVisibleItems !== 1 ? "s" : ""}`}
                 </p>
                 <div className="flex items-center gap-2">
                   <select
@@ -365,6 +512,14 @@ export function MarketLayout({
                   </select>
                   <button
                     type="button"
+                    aria-label="Filter"
+                    className="h-8 w-8 flex items-center justify-center rounded-lg border transition-colors"
+                    style={{ backgroundColor: "#FFFFFF", border: "1px solid #E5E7EB", color: "#6B7280" }}
+                  >
+                    <ListFilter className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => setViewMode(viewMode === "grid" ? "list" : "grid")}
                     className="h-8 w-8 flex items-center justify-center rounded-lg border transition-colors"
                     style={{ backgroundColor: "#FFFFFF", border: "1px solid #E5E7EB", color: "#6B7280" }}
@@ -374,93 +529,41 @@ export function MarketLayout({
                 </div>
               </div>
 
-              {/* Item grid / list */}
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={`${activeCategory}-${sortOption}-${viewMode}-${activeTag}`}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.2 }}
-                >
-                  {activeCategory === "__all__" ? (
-                    /* Show all categories with section headers */
-                    (() => {
-                      const sectionsWithItems = allCategories
-                        .map((cat) => {
-                          let items = cat.items;
-                          if (activeTag === "Popular") items = items.filter((i) => i.is_popular);
-                          else if (activeTag === "New") items = items.filter((i) => i.is_new);
-                          else if (activeTag) items = items.filter((i) => (i.dietary_tags || []).some((t) => t.toLowerCase().includes(activeTag.toLowerCase())));
-                          switch (sortOption) {
-                            case "price_asc": items = [...items].sort((a, b) => getStorefrontBrowsePrice(a) - getStorefrontBrowsePrice(b)); break;
-                            case "price_desc": items = [...items].sort((a, b) => getStorefrontBrowsePrice(b) - getStorefrontBrowsePrice(a)); break;
-                            case "name": items = [...items].sort((a, b) => a.name.localeCompare(b.name)); break;
-                          }
-                          return { cat, items };
-                        })
-                        .filter(({ items }) => items.length > 0);
-
-                      if (sectionsWithItems.length === 0) {
-                        return (
-                          <div className="flex flex-col items-center justify-center py-20 text-center">
-                            <p className="text-lg font-semibold" style={{ color: "#111827" }}>No items found</p>
-                            <p className="mt-1 text-sm" style={{ color: "#6B7280" }}>Try a different tag or sort</p>
-                          </div>
-                        );
-                      }
-
-                      return (
-                        <div className="space-y-10">
-                          {sectionsWithItems.map(({ cat, items }) => (
-                            <section key={cat.id}>
-                              <h2 className="text-base font-semibold mb-3 pb-2 border-b" style={{ color: "var(--primary)", borderColor: "#E5E7EB" }}>
-                                {cat.name}
-                                <span className="ml-2 text-xs font-normal" style={{ color: "#9CA3AF" }}>({items.length})</span>
-                              </h2>
-                              <div className={viewMode === "grid" ? "grid gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-3" : "flex flex-col gap-3"}>
-                                {items.map((item) => (
-                                  <MarketItemCard
-                                    key={item.id}
-                                    item={item}
-                                    viewMode={viewMode}
-                                    failedImageIds={failedImageIds}
-                                    onImageError={handleImageError}
-                                    onClick={() => handleItemClick(item)}
-                                  />
-                                ))}
-                              </div>
-                            </section>
-                          ))}
-                        </div>
-                      );
-                    })()
-                  ) : (
-                    /* Single category — flat grid */
-                    <>
-                      {filteredItems.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center py-20 text-center">
-                          <p className="text-lg font-semibold" style={{ color: "#111827" }}>No items found</p>
-                          <p className="mt-1 text-sm" style={{ color: "#6B7280" }}>Try a different tag or sort</p>
-                        </div>
-                      ) : (
-                        <div className={viewMode === "grid" ? "grid gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-3" : "flex flex-col gap-3"}>
-                          {filteredItems.map((item) => (
-                            <MarketItemCard
-                              key={item.id}
-                              item={item}
-                              viewMode={viewMode}
-                              failedImageIds={failedImageIds}
-                              onImageError={handleImageError}
-                              onClick={() => handleItemClick(item)}
-                            />
-                          ))}
-                        </div>
-                      )}
-                    </>
-                  )}
-                </motion.div>
-              </AnimatePresence>
+              {/* Stacked category sections — every category rendered; pills
+                  scroll to them and highlight on scroll. */}
+              {sectionsWithItems.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-20 text-center">
+                  <p className="text-lg font-semibold" style={{ color: "#111827" }}>No items found</p>
+                  <p className="mt-1 text-sm" style={{ color: "#6B7280" }}>Try a different tag or sort</p>
+                </div>
+              ) : (
+                <div className="space-y-10">
+                  {sectionsWithItems.map(({ cat, items }) => (
+                    <section
+                      key={cat.id}
+                      id={`market-cat-${cat.id}`}
+                      style={{ scrollMarginTop: headerHeight + navHeight + 16 }}
+                    >
+                      <h2 className="text-base font-semibold mb-3 pb-2 border-b" style={{ color: "var(--primary)", borderColor: "#E5E7EB" }}>
+                        {cat.name}
+                        <span className="ml-2 text-xs font-normal" style={{ color: "#9CA3AF" }}>({items.length})</span>
+                      </h2>
+                      <div className={viewMode === "grid" ? "grid gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-3" : "flex flex-col gap-3"}>
+                        {items.map((item) => (
+                          <MarketItemCard
+                            key={item.id}
+                            item={item}
+                            viewMode={viewMode}
+                            failedImageIds={failedImageIds}
+                            onImageError={handleImageError}
+                            onClick={() => handleItemClick(item)}
+                          />
+                        ))}
+                      </div>
+                    </section>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </>
@@ -586,17 +689,17 @@ function MarketItemCard({
           )}
         </div>
         <div className="flex items-center gap-3 shrink-0">
-          <div className="flex flex-col items-end">
-            <span className="font-semibold text-sm" style={{ color: "#111827" }}>${getStorefrontBrowsePrice(item).toFixed(2)}</span>
+          <div className="flex flex-col items-end min-w-0 max-w-[110px]">
+            <span className="font-semibold text-sm truncate max-w-full" style={{ color: "#111827" }}>${getStorefrontBrowsePrice(item).toFixed(2)}</span>
             {getStorefrontDeliveryPriceLabel(item) && (
-              <span className="text-[10px]" style={{ color: "#6B7280" }}>{getStorefrontDeliveryPriceLabel(item)}</span>
+              <span className="text-[10px] truncate max-w-full" style={{ color: "#6B7280" }}>{getStorefrontDeliveryPriceLabel(item)}</span>
             )}
           </div>
           {!isSoldOut && (
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); onClick(); }}
-              className="w-8 h-8 flex items-center justify-center rounded-full transition-all"
+              className="w-8 h-8 shrink-0 flex items-center justify-center rounded-full transition-all"
               style={{ backgroundColor: "var(--primary)", color: "var(--primary-text)" }}
             >
               <Plus className="h-4 w-4" />
@@ -652,17 +755,17 @@ function MarketItemCard({
           <p className="text-xs line-clamp-2 flex-1 mb-2" style={{ color: "#6B7280" }}>{item.description}</p>
         )}
         <div className="flex items-center justify-between gap-2 mt-auto">
-          <div className="flex flex-col">
-            <span className="font-semibold text-sm" style={{ color: "#111827" }}>${getStorefrontBrowsePrice(item).toFixed(2)}</span>
+          <div className="flex flex-col min-w-0">
+            <span className="font-semibold text-sm truncate max-w-full" style={{ color: "#111827" }}>${getStorefrontBrowsePrice(item).toFixed(2)}</span>
             {getStorefrontDeliveryPriceLabel(item) && (
-              <span className="text-[10px]" style={{ color: "#6B7280" }}>{getStorefrontDeliveryPriceLabel(item)}</span>
+              <span className="text-[10px] truncate max-w-full" style={{ color: "#6B7280" }}>{getStorefrontDeliveryPriceLabel(item)}</span>
             )}
           </div>
           {!isSoldOut && (
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); onClick(); }}
-              className="w-8 h-8 flex items-center justify-center rounded-full transition-all"
+              className="w-8 h-8 shrink-0 flex items-center justify-center rounded-full transition-all"
               style={{ backgroundColor: "var(--primary)", color: "var(--primary-text)" }}
               aria-label={`Add ${item.name} to cart`}
             >

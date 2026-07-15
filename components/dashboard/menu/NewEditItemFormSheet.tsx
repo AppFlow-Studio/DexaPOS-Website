@@ -122,6 +122,7 @@ import {
 import { AffectsTag } from "./AffectsTag";
 import { DisabledFieldBanner } from "./DisabledFieldBanner";
 import { CascadeLadder } from "./CascadeLadder";
+import { ItemSnoozeControl } from "./item-edit/ItemSnoozeControl";
 import {
   TAX_CATEGORIES,
   TAX_CATEGORY_LABELS,
@@ -2944,6 +2945,11 @@ export function NewEditItemFormSheet({
                           </FormItem>
                         )}
                       />
+
+                      {/* 86 / out of stock — per-location snooze, edit-only */}
+                      {editItem?.id ? (
+                        <ItemSnoozeControl menuItemId={editItem.id} />
+                      ) : null}
 
                       {/* Available Channels */}
                       <FormField

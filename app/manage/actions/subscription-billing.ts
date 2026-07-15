@@ -45,6 +45,23 @@ export interface BillableServiceRecord {
   updated_at: string
 }
 
+export interface DeviceBillingServiceMappingRecord {
+  id: string
+  device_category: string
+  service_code: string
+  is_active: boolean
+  metadata: Record<string, unknown>
+  created_at: string
+  updated_at: string
+}
+
+export interface UpsertDeviceBillingServiceMappingParams {
+  deviceCategory: string
+  serviceCode: string
+  isActive?: boolean
+  metadata?: Record<string, unknown>
+}
+
 export interface UpsertBillableServiceParams {
   serviceId?: string | null
   serviceCode: string
@@ -56,6 +73,18 @@ export interface UpsertBillableServiceParams {
   includedQuantity?: number
   cardSurchargePct?: number
   unitLabel?: string
+  isActive?: boolean
+  metadata?: Record<string, unknown>
+}
+
+export interface UpsertSubscriptionPlanParams {
+  planId?: string | null
+  planCode: string
+  displayName: string
+  basePriceMonthly: number
+  includedStations: number
+  perExtraStationPrice: number
+  cardSurchargePct: number
   isActive?: boolean
   metadata?: Record<string, unknown>
 }
@@ -615,6 +644,43 @@ export async function getSubscriptionPlans(): Promise<SubscriptionPlanRecord[]> 
   return (data ?? []) as SubscriptionPlanRecord[]
 }
 
+export async function upsertSubscriptionPlan(
+  params: UpsertSubscriptionPlanParams
+): Promise<{ success: boolean; planId?: string; error?: string }> {
+  await assertHQPermission('system.billing.manage')
+
+  if (!params.planCode?.trim()) {
+    return { success: false, error: 'Plan code is required.' }
+  }
+
+  if (!params.displayName?.trim()) {
+    return { success: false, error: 'Display name is required.' }
+  }
+
+  const supabase = createServerSupabaseClient() as any
+  const { data, error } = await supabase.rpc('upsert_subscription_plan', {
+    p_plan_id: params.planId ?? null,
+    p_plan_code: params.planCode,
+    p_display_name: params.displayName,
+    p_base_price_monthly: params.basePriceMonthly,
+    p_included_stations: params.includedStations,
+    p_per_extra_station_price: params.perExtraStationPrice,
+    p_card_surcharge_pct: params.cardSurchargePct,
+    p_is_active: params.isActive ?? true,
+    p_metadata: params.metadata ?? {},
+  })
+
+  if (error) {
+    console.error('[upsertSubscriptionPlan] Error:', error)
+    return { success: false, error: error.message }
+  }
+
+  revalidatePath('/manage/subscriptions')
+  revalidatePath('/dashboard/subscriptions')
+
+  return { success: true, planId: data as string }
+}
+
 export async function getMerchantTierPlans(): Promise<MerchantTierPlanRecord[]> {
   await assertHQPermission('system.billing.manage')
 
@@ -900,6 +966,55 @@ export async function upsertBillableService(
   revalidatePath('/manage/subscriptions')
 
   return { success: true, serviceId: data as string }
+}
+
+export async function getDeviceBillingServiceMappings(): Promise<DeviceBillingServiceMappingRecord[]> {
+  await assertHQPermission('system.billing.manage')
+
+  const supabase = createServerSupabaseClient() as any
+  const { data, error } = await supabase
+    .from('device_billing_service_mappings')
+    .select('*')
+    .order('device_category', { ascending: true })
+
+  if (error) {
+    console.error('[getDeviceBillingServiceMappings] Error:', error)
+    throw new Error('Failed to load device billing mappings.')
+  }
+
+  return (data ?? []) as DeviceBillingServiceMappingRecord[]
+}
+
+export async function upsertDeviceBillingServiceMapping(
+  params: UpsertDeviceBillingServiceMappingParams
+): Promise<{ success: boolean; mappingId?: string; error?: string }> {
+  await assertHQPermission('system.billing.manage')
+
+  if (!params.deviceCategory?.trim()) {
+    return { success: false, error: 'Device category is required.' }
+  }
+
+  if (!params.serviceCode?.trim()) {
+    return { success: false, error: 'Billable service is required.' }
+  }
+
+  const supabase = createServerSupabaseClient() as any
+  const { data, error } = await supabase.rpc('upsert_device_billing_service_mapping', {
+    p_device_category: params.deviceCategory,
+    p_service_code: params.serviceCode,
+    p_is_active: params.isActive ?? true,
+    p_metadata: params.metadata ?? {},
+  })
+
+  if (error) {
+    console.error('[upsertDeviceBillingServiceMapping] Error:', error)
+    return { success: false, error: error.message }
+  }
+
+  revalidatePath('/manage/subscriptions')
+  revalidatePath('/dashboard/subscriptions')
+
+  return { success: true, mappingId: data as string }
 }
 
 export async function calculateSubscriptionTotal(

@@ -28,7 +28,7 @@ import {
 import { Textarea } from '@/components/ui/textarea'
 import { AddressAutocomplete } from '@/components/ui/address-autocomplete'
 import { PhoneInput } from '@/components/ui/phone-input'
-import { isValidPhone, normalizePhone, formatPhoneForDisplay } from '@/lib/phone'
+import { isValidPhone, normalizePhone, formatPhoneForDisplay, hasNationalDigits } from '@/lib/phone'
 import { ImagePlus, X, Loader2 } from 'lucide-react'
 import {
   createMerchantOnboarding,
@@ -37,6 +37,32 @@ import {
 } from '@/app/manage/actions/create-merchant-onboarding'
 import { uploadOrganizationDocument, uploadOrganizationLogo } from '@/lib/cdn/server'
 import { cn } from '@/lib/utils'
+
+// A masked PhoneInput left untouched emits a bare dial code ("+1"), which is
+// neither empty nor a valid number. Normalize that to '' first so an unentered
+// number is treated as blank — never as an invalid value that silently blocks
+// submit.
+const emptyIfNoNationalDigits = (v: unknown) =>
+  typeof v === 'string' && !hasNationalDigits(v) ? '' : v
+
+// Optional phone: blank is fine; a partially typed number is rejected.
+const optionalPhone = z.preprocess(
+  emptyIfNoNationalDigits,
+  z
+    .string()
+    .optional()
+    .refine((v) => !v || isValidPhone(v), { message: 'Enter a valid phone number' })
+)
+
+// Required phone (owner): the server rejects merchants without an owner phone,
+// so enforce it here for inline feedback instead of a round-trip error.
+const requiredPhone = z.preprocess(
+  emptyIfNoNationalDigits,
+  z
+    .string()
+    .min(1, 'Owner phone is required.')
+    .refine((v) => isValidPhone(v), { message: 'Enter a valid phone number' })
+)
 
 const createMerchantSchema = z.object({
   // Step 1 — Business Identity
@@ -49,7 +75,7 @@ const createMerchantSchema = z.object({
 
   // Step 2 — Primary Contact
   ownerEmail: z.string().email('Valid owner email is required.'),
-  ownerPhone: z.string().refine(v => !v || isValidPhone(v), { message: 'Enter a valid phone number' }),
+  ownerPhone: requiredPhone,
   ownerDob: z.string().min(1, 'Owner date of birth is required.'),
 
   // Step 3 — First Location
@@ -59,10 +85,7 @@ const createMerchantSchema = z.object({
   businessPostalCode: z.string().min(3, 'Postal code is required.'),
   businessAddressLine2: z.string().optional(),
   businessCountry: z.string().default('US'),
-  locationPhone: z
-    .string()
-    .optional()
-    .refine(v => !v || isValidPhone(v), { message: 'Enter a valid phone number' }),
+  locationPhone: optionalPhone,
   locationHours: z.string().optional(),
 
   // Step 4 — Payment Processing
@@ -85,6 +108,12 @@ const FIELD_LABELS: Record<string, string> = {
   businessCity: 'City',
   businessState: 'State',
   businessPostalCode: 'Postal Code',
+  businessAddressLine2: 'Business Address Line 2',
+  businessCountry: 'Country',
+  locationPhone: 'Location Phone',
+  locationHours: 'Location Hours',
+  dbaName: 'DBA Name',
+  lucraMid: 'TSYS MID',
 }
 
 const STEP_TITLES = [
@@ -191,12 +220,24 @@ export function CreateMerchantWizard() {
     () => ({
       1: ['businessLegalName', 'businessType', 'einTaxId', 'ownerFirstName', 'ownerLastName'],
       2: ['ownerEmail', 'ownerPhone', 'ownerDob'],
-      3: ['businessAddressLine1', 'businessCity', 'businessState', 'businessPostalCode'],
+      3: ['businessAddressLine1', 'businessCity', 'businessState', 'businessPostalCode', 'locationPhone'],
       4: [],
       5: [],
     }),
     []
   )
+
+  // Reverse index: which step owns each field. Lets the final-submit invalid
+  // handler jump the user back to the earliest step that has an error.
+  const fieldToStep = useMemo<Partial<Record<WizardField, StepNumber>>>(() => {
+    const map: Partial<Record<WizardField, StepNumber>> = {}
+    ;(Object.keys(stepFields) as unknown as StepNumber[]).forEach((s) => {
+      stepFields[s].forEach((f) => {
+        if (map[f] === undefined) map[f] = s
+      })
+    })
+    return map
+  }, [stepFields])
 
   const values = form.watch()
 
@@ -309,6 +350,51 @@ export function CreateMerchantWizard() {
       toast.success('Merchant created and owner invited.')
       router.push(`/manage/merchants/${result.organizationId}`)
     })
+  }
+
+  // Runs when the final "Create Merchant" submit fails Zod validation. Without
+  // this, react-hook-form's handleSubmit silently no-ops and the button appears
+  // dead. Instead: surface exactly what's wrong, jump to the earliest offending
+  // step, and scroll to the first bad field.
+  const onInvalid = (errors: typeof form.formState.errors) => {
+    const invalidFields = (Object.keys(errors) as WizardField[]).filter(
+      (f) => !!errors[f as keyof typeof errors]
+    )
+
+    const labels = invalidFields.map((f) => FIELD_LABELS[f] ?? f)
+
+    // The Owner Government ID is React state, not a form field — assert it too.
+    const idMissing = !ownerIdFile
+    if (idMissing) {
+      labels.push('Owner Government ID')
+      setOwnerIdError(true)
+    }
+
+    if (labels.length === 0) return
+
+    // Earliest step that has a problem (default to the ID step if only the ID is missing).
+    const errorSteps = invalidFields
+      .map((f) => fieldToStep[f])
+      .filter((s): s is StepNumber => s !== undefined)
+    if (idMissing) errorSteps.push(2)
+    const targetStep = errorSteps.length > 0 ? (Math.min(...errorSteps) as StepNumber) : step
+
+    toast.error('Please fix the highlighted fields before creating.', {
+      description: `Missing or invalid: ${labels.join(', ')}`,
+    })
+
+    if (targetStep !== step) {
+      setStep(targetStep)
+    }
+
+    // Scroll to the first offending field once the target step has rendered.
+    const firstField = invalidFields.find((f) => fieldToStep[f] === targetStep)
+    if (firstField) {
+      requestAnimationFrame(() => {
+        const el = document.querySelector(`[name="${firstField}"]`) as HTMLElement | null
+        el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      })
+    }
   }
 
   return (
@@ -850,7 +936,9 @@ export function CreateMerchantWizard() {
                 <div className="rounded-md border p-4 space-y-1">
                   <h3 className="font-semibold text-sm mb-3">Primary Contact</h3>
                   <ReviewRow label="Email" value={values.ownerEmail} />
-                  <ReviewRow label="Phone" value={formatPhoneForDisplay(values.ownerPhone)} />
+                  {hasNationalDigits(values.ownerPhone) && (
+                    <ReviewRow label="Phone" value={formatPhoneForDisplay(values.ownerPhone)} />
+                  )}
                   <ReviewRow label="Date of Birth" value={values.ownerDob} />
                   <ReviewRow
                     label="Government ID"
@@ -875,7 +963,7 @@ export function CreateMerchantWizard() {
                       .filter(Boolean)
                       .join(', ')}
                   />
-                  {values.locationPhone && (
+                  {hasNationalDigits(values.locationPhone) && (
                     <ReviewRow
                       label="Location Phone"
                       value={formatPhoneForDisplay(values.locationPhone)}
@@ -920,7 +1008,7 @@ export function CreateMerchantWizard() {
             <Button
               type="button"
               disabled={isSubmitting}
-              onClick={form.handleSubmit(onSubmit)}
+              onClick={form.handleSubmit(onSubmit, onInvalid)}
             >
               {isSubmitting ? (
                 <>

@@ -1,5 +1,5 @@
-import { getStorefrontData } from "../../actions";
-import { getStoreTaxRate } from "../../order-actions";
+import { getStorefrontMetaData } from "../../actions";
+import { getStoreTaxRateByLocationId } from "../../order-actions";
 import { notFound } from "next/navigation";
 import { TEMPLATE_DEFAULTS, buildThemeVars } from "../../lib/theme-utils";
 import { CheckoutPage } from "../../components/checkout/CheckoutPage";
@@ -19,13 +19,15 @@ interface PageProps {
 export default async function CheckoutRoute({ params, searchParams }: PageProps) {
   const { slug } = await params;
   const { recover } = await searchParams;
-  const { site, location, pricingDisclosureText } = await getStorefrontData(slug);
+  const { site, location, pricingDisclosureText } = await getStorefrontMetaData(slug);
 
   if (!location) {
     notFound();
   }
 
-  const taxRate = site?.id ? await getStoreTaxRate(site.id) : 0;
+  // Use the location we already have — avoids a redundant online_store_config
+  // lookup that getStoreTaxRate(site.id) would otherwise do.
+  const taxRate = await getStoreTaxRateByLocationId(location.id);
 
   // Fetch recovery data if token present
   let recoveryData: { cartData: any[] | null; sessionToken: string | null; notificationId: string | null } | null = null;

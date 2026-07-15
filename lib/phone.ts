@@ -59,6 +59,31 @@ export function phoneDigits(value: string | null | undefined): string {
   return value.replace(/\D/g, '')
 }
 
+/**
+ * True when the input carries an actual national (subscriber) number, not just
+ * a bare dial/country code. A masked PhoneInput left untouched emits "+1" (or
+ * "+44", etc.) with no digits typed — that should count as "no phone entered",
+ * not an invalid one. Used to keep optional phone fields from silently failing
+ * validation on a leftover country code.
+ */
+export function hasNationalDigits(
+  input: string | null | undefined,
+  defaultCountry: CountryCode = 'US'
+): boolean {
+  if (!input?.trim()) return false
+  try {
+    const parsed = parsePhoneNumber(input, defaultCountry)
+    // nationalNumber is the subscriber part (country code stripped).
+    if (parsed?.nationalNumber) return parsed.nationalNumber.length > 0
+  } catch {
+    // Fall through to a permissive digits-only check.
+  }
+  // Fallback (parse failed): mirror normalizePhone's permissive US check. A bare
+  // dial code like "+1" is a single digit here and correctly returns false.
+  const digits = input.replace(/\D/g, '')
+  return digits.length === 10 || (digits.length === 11 && digits.startsWith('1'))
+}
+
 /** Return the last 10 digits of a phone value (US national number). */
 export function tenDigits(value: string | null | undefined): string {
   return phoneDigits(value).slice(-10)
