@@ -12,6 +12,7 @@ import {
   getPushChannelsLiveStatus,
   getOrderOutWebhookHealth,
   setOrderOutChannelsConfirmed,
+  setPrimaryOnlineMenu,
   type OnboardOrderOutParams,
   type PushMenuToOrderOutParams,
   type PushMenuToChannelsParams,
@@ -28,6 +29,34 @@ export function useOrderOutStatus(clerkOrgId: string, locationId: string) {
     queryFn: () => getOrderOutStatus(clerkOrgId, locationId),
     enabled: !!clerkOrgId && !!locationId && locationId !== "all",
     staleTime: 30 * 1000,
+  });
+}
+
+/**
+ * Designate a menu as the location's canonical online-ordering menu — the single
+ * OrderOut push target for availability/86 re-pushes.
+ */
+export function useSetPrimaryOnlineMenu(clerkOrgId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      locationId,
+      menuId,
+    }: {
+      locationId: string;
+      menuId: string;
+    }) => setPrimaryOnlineMenu(clerkOrgId, locationId, menuId),
+    onSuccess: (result) => {
+      if (result.success) {
+        toast.success("Set as the online ordering menu");
+        queryClient.invalidateQueries({ queryKey: ["orderout-menu-sync"] });
+        queryClient.invalidateQueries({ queryKey: ["orderout-synced-menus"] });
+      } else {
+        toast.error(result.error || "Failed to set online menu");
+      }
+    },
+    onError: (e: Error) =>
+      toast.error(e.message || "Failed to set online menu"),
   });
 }
 

@@ -804,6 +804,9 @@ export interface OrderOutMenuSyncStatus {
   } | null;
   totalSyncs: number;
   ooMenuId: string | null;
+  // Whether this menu is the canonical online-ordering menu for the location
+  // (the single OrderOut push target for availability/86 re-pushes).
+  isPrimaryOnlineMenu: boolean;
   // Per-platform delivery-channel status for this menu, from the menu link's
   // platform_statuses (populated by the push-menu webhook). Empty until a
   // channel callback lands.
@@ -869,6 +872,7 @@ export async function getOrderOutMenuSyncStatus(
           lastSync: null,
           totalSyncs: 0,
           ooMenuId: null,
+          isPrimaryOnlineMenu: false,
           platformStatuses: [],
           connectedChannels: [],
           syncHistory: [],
@@ -885,16 +889,18 @@ export async function getOrderOutMenuSyncStatus(
     // 4a. Query orderout_menu_links for the canonical oo_menu_id + per-platform
     // push status for this menu.
     let ooMenuId: string | null = null;
+    let isPrimaryOnlineMenu = false;
     let platformStatuses: PlatformChannelStatus[] = [];
     if (menuId) {
       const { data: link } = await supabase
         .from("orderout_menu_links")
-        .select("oo_menu_id, platform_statuses")
+        .select("oo_menu_id, platform_statuses, is_primary")
         .eq("orderout_restaurant_id", restaurant.id)
         .eq("menu_id", menuId)
         .eq("is_active", true)
         .single();
       ooMenuId = link?.oo_menu_id || null;
+      isPrimaryOnlineMenu = link?.is_primary ?? false;
       platformStatuses = extractChannelStatuses(link?.platform_statuses);
     }
 
@@ -977,6 +983,7 @@ export async function getOrderOutMenuSyncStatus(
           : null,
         totalSyncs: filteredSyncs.length,
         ooMenuId,
+        isPrimaryOnlineMenu,
         platformStatuses,
         connectedChannels,
         syncHistory,
@@ -1616,6 +1623,86 @@ export interface PushMenuToChannelsResult {
 
 const PUSH_CHANNELS_COOLDOWN_SECONDS = 30;
 const PUSH_CHANNELS_HOURLY_LIMIT = 5;
+
+/**
+ * Resolve the canonical online-ordering menu link for an OrderOut restaurant.
+ * OrderOut serves one menu per store, so availability re-pushes (86ing) target
+ * this single link. Prefers the primary flag; falls back to the single / most-
+ * recent active link so pre-backfill or freshly-linked restaurants still work.
+ * Returns null when the restaurant has no active link.
+ */
+export async function resolvePrimaryOnlineMenu(
+  client: ReturnType<typeof createServiceRoleClient>,
+  orderoutRestaurantId: string,
+): Promise<{ menu_id: string; oo_menu_id: string | null } | null> {
+  const { data: primary } = await client
+    .from("orderout_menu_links")
+    .select("menu_id, oo_menu_id")
+    .eq("orderout_restaurant_id", orderoutRestaurantId)
+    .eq("is_active", true)
+    .eq("is_primary", true)
+    .maybeSingle();
+  if (primary) return primary;
+
+  const { data: fallback } = await client
+    .from("orderout_menu_links")
+    .select("menu_id, oo_menu_id")
+    .eq("orderout_restaurant_id", orderoutRestaurantId)
+    .eq("is_active", true)
+    .order("last_pushed_at", { ascending: false, nullsFirst: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (fallback) {
+    console.warn(
+      `[orderout] no primary online menu for restaurant ${orderoutRestaurantId}; using most-recent active link (menu ${fallback.menu_id})`,
+    );
+    return fallback;
+  }
+  return null;
+}
+
+/**
+ * Designate a menu as the location's canonical online-ordering menu (the single
+ * OrderOut push target for availability/86 re-pushes). The menu must already be
+ * linked + active on OrderOut; the swap is atomic in set_primary_online_menu_v1.
+ */
+export async function setPrimaryOnlineMenu(
+  clerkOrgId: string,
+  locationId: string,
+  menuId: string,
+): Promise<{ success: boolean; error: string | null }> {
+  if (!clerkOrgId || !locationId || !menuId) {
+    return { success: false, error: "Missing required parameters" };
+  }
+
+  const supabase = createServerSupabaseClient();
+  const { error } = await supabase.rpc("set_primary_online_menu_v1", {
+    p_location_id: locationId,
+    p_menu_id: menuId,
+  });
+  if (error) return { success: false, error: error.message };
+
+  const { data: menu } = await supabase
+    .from("menus")
+    .select("name")
+    .eq("id", menuId)
+    .maybeSingle();
+
+  await LogAuditEvent({
+    clerkOrgId,
+    locationId,
+    action: `Set OrderOut online menu: ${menu?.name ?? menuId}`,
+    actionCategory: "integrations",
+    severity: "info",
+    resourceType: "menu",
+    resourceId: menuId,
+    resourceName: menu?.name ?? undefined,
+    metadata: { orderout: true },
+  });
+
+  return { success: true, error: null };
+}
 
 /**
  * Push an already-synced menu to all connected delivery channels via OrderOut's

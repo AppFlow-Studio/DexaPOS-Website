@@ -2,7 +2,7 @@
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { LogAuditEvent } from "./audit-logs";
-import { pushMenuToConnectedChannels } from "./orderout";
+import { pushMenuToConnectedChannels, resolvePrimaryOnlineMenu } from "./orderout";
 
 // ============================================================================
 // 86ing (out-of-stock snooze) — item + modifier, per location.
@@ -53,27 +53,18 @@ async function triggerOrderOutResyncForLocation(
 
     if (!restaurant || restaurant.status !== "active") return;
 
-    const { data: links } = await supabase
-      .from("orderout_menu_links")
-      .select("menu_id")
-      .eq("orderout_restaurant_id", restaurant.id)
-      .eq("is_active", true);
+    // OrderOut serves one menu per store — re-push only the canonical online menu,
+    // not every linked menu. skipCooldown so a burst of 86s all propagate.
+    const online = await resolvePrimaryOnlineMenu(supabase, restaurant.id);
+    if (!online) return;
 
-    if (!links?.length) return;
-
-    // Re-push each active menu. Awaited-but-swallowed: guarantees it runs in the
-    // server action while never surfacing an error to the caller. skipCooldown so
-    // a burst of 86s all propagate (availability changes, not spammy menu edits).
-    await Promise.allSettled(
-      links.map((l) =>
-        pushMenuToConnectedChannels({
-          clerkOrgId,
-          menuId: l.menu_id,
-          locationId,
-          skipCooldown: true,
-        }),
-      ),
-    );
+    // Awaited-but-swallowed: runs in the server action, never surfaces an error.
+    await pushMenuToConnectedChannels({
+      clerkOrgId,
+      menuId: online.menu_id,
+      locationId,
+      skipCooldown: true,
+    });
   } catch (e) {
     console.warn("[item-snooze] OrderOut resync (non-fatal):", e);
   }
