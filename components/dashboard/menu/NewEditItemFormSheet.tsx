@@ -2946,9 +2946,18 @@ export function NewEditItemFormSheet({
                         )}
                       />
 
-                      {/* 86 / out of stock — per-location snooze, edit-only */}
+                      {/* 86 / out of stock — per-location snooze, edit-only.
+                          Marking out of stock also switches "Available on this menu"
+                          off (and restore switches it back on). */}
                       {editItem?.id ? (
-                        <ItemSnoozeControl menuItemId={editItem.id} />
+                        <ItemSnoozeControl
+                          menuItemId={editItem.id}
+                          onOutOfStockChange={(oos) =>
+                            form.setValue("availability", !oos, {
+                              shouldDirty: true,
+                            })
+                          }
+                        />
                       ) : null}
 
                       {/* Available Channels */}

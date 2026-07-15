@@ -35,6 +35,24 @@ function priceToCents(price: number): number {
   return Math.round(price * 100);
 }
 
+// "Until manually restored" (snoozed_until = 'infinity') has no representable
+// timestamp — use a far-future one so Uber keeps it Sold Out until we clear it.
+const INDEFINITE_SUSPEND_UNTIL = 4102444800; // 2100-01-01 UTC, seconds
+
+// Map a snooze (location_item_overrides.snoozed_until) to Uber Eats suspend_until
+// (unix SECONDS). Returns null when not currently snoozed (available).
+function snoozeToSuspendUntil(
+  snoozedUntil: string | null | undefined,
+): number | null {
+  if (!snoozedUntil) return null;
+  if (snoozedUntil === "infinity") return INDEFINITE_SUSPEND_UNTIL;
+  const ms = new Date(snoozedUntil).getTime();
+  if (!Number.isFinite(ms)) return INDEFINITE_SUSPEND_UNTIL;
+  const sec = Math.floor(ms / 1000);
+  // Past timestamps mean the snooze has expired -> available.
+  return sec > Math.floor(Date.now() / 1000) ? sec : null;
+}
+
 export function transformMenuToOrderOut(
   menu: MenuWithCategories
 ): OrderOutMenuPayload {
@@ -52,11 +70,16 @@ export function transformMenuToOrderOut(
     for (const catItem of menuCategory.items) {
       const mi = catItem.menu_item;
 
-      // Skip only items explicitly marked unavailable. Treat a missing/
-      // undefined value as available so a dropped RPC field can never again
-      // silently zero out the entire menu (see migration
+      // Out-of-stock (86) vs deliberately unavailable are different:
+      //  - 86'd item -> keep it on the menu, marked "Sold Out" via suspension_info
+      //    (Uber auto-restores at suspend_until).
+      //  - unavailable for any OTHER reason (manager hid it / not sold here) -> drop.
+      // Treat a missing/undefined effective_availability as available so a dropped
+      // RPC field can never again silently zero out the entire menu (migration
       // 20260625000000_restore_effective_availability_in_get_menu_with_categories).
-      if (mi.effective_availability === false) continue;
+      const suspendUntil = snoozeToSuspendUntil((mi as any).snoozed_until);
+      const isSnoozed = suspendUntil !== null;
+      if (mi.effective_availability === false && !isSnoozed) continue;
 
       // Deduplicate regular items by menu_item.id
       if (!itemMap.has(mi.id)) {
@@ -76,6 +99,16 @@ export function transformMenuToOrderOut(
           },
           price_info: { price: priceToCents(price) },
           modifier_group_ids: { ids: modGroupIds },
+          ...(isSnoozed
+            ? {
+                suspension_info: {
+                  suspension: {
+                    suspend_until: suspendUntil,
+                    reason: (mi as any).snooze_reason || "Out of stock",
+                  },
+                },
+              }
+            : {}),
         });
 
         // Collect modifier groups and their items

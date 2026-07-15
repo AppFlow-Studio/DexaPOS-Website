@@ -7,6 +7,7 @@ import {
   pushMenuToConnectedChannels,
   resolvePrimaryOnlineMenu,
 } from "./orderout";
+import { setItemAvailability } from "./menu-items-rpc";
 
 // ============================================================================
 // 86ing (out-of-stock snooze) — item + modifier, per location.
@@ -113,6 +114,21 @@ export async function snoozeItem(
 
   if (error) {
     return { success: false, error: error.message };
+  }
+
+  // Couple availability with 86 (product decision): marking out of stock also
+  // turns the item unavailable at this location; restore turns it back on. Scoped
+  // to the same location as the snooze (L2). Best-effort — the snooze already
+  // succeeded, so a hiccup here shouldn't fail the whole action.
+  try {
+    const availRes = await setItemAvailability(menuItemId, !snoozedUntil, {
+      locationId,
+    });
+    if (availRes && availRes.success === false) {
+      console.warn("[item-snooze] availability coupling failed:", availRes.error);
+    }
+  } catch (e) {
+    console.warn("[item-snooze] availability coupling threw (non-fatal):", e);
   }
 
   const { data: item } = await supabase
