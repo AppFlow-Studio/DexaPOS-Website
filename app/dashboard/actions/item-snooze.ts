@@ -2,7 +2,11 @@
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { LogAuditEvent } from "./audit-logs";
-import { pushMenuToConnectedChannels, resolvePrimaryOnlineMenu } from "./orderout";
+import {
+  pushMenuToOrderOut,
+  pushMenuToConnectedChannels,
+  resolvePrimaryOnlineMenu,
+} from "./orderout";
 
 // ============================================================================
 // 86ing (out-of-stock snooze) — item + modifier, per location.
@@ -53,12 +57,17 @@ async function triggerOrderOutResyncForLocation(
 
     if (!restaurant || restaurant.status !== "active") return;
 
-    // OrderOut serves one menu per store — re-push only the canonical online menu,
-    // not every linked menu. skipCooldown so a burst of 86s all propagate.
+    // OrderOut serves one menu per store — target only the canonical online menu.
     const online = await resolvePrimaryOnlineMenu(supabase, restaurant.id);
     if (!online) return;
 
-    // Awaited-but-swallowed: runs in the server action, never surfaces an error.
+    // 1) Update the menu OrderOut stores so it reflects the 86. This works even
+    //    when no delivery channels are connected yet, so the corrected menu is
+    //    ready to fan out later. Awaited-but-swallowed (best-effort).
+    await pushMenuToOrderOut({ clerkOrgId, menuId: online.menu_id, locationId });
+
+    // 2) Best-effort fan-out to any connected channels (no-ops if none). skipCooldown
+    //    so a burst of 86s all propagate.
     await pushMenuToConnectedChannels({
       clerkOrgId,
       menuId: online.menu_id,

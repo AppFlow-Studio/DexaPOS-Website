@@ -59,12 +59,15 @@ function invalidate(
   clerkOrgId: string,
 ) {
   queryClient.invalidateQueries({ queryKey: ['snoozed-items', clerkOrgId] })
-  // Per-item control state + menu views that surface availability.
+  // Per-item control state + every menu view that surfaces effective_availability.
   queryClient.invalidateQueries({ queryKey: ['item-snooze'] })
   queryClient.invalidateQueries({ queryKey: ['menu-items'] })
   queryClient.invalidateQueries({ queryKey: ['menu-item'] })
   queryClient.invalidateQueries({ queryKey: ['menu-items-flat'] })
   queryClient.invalidateQueries({ queryKey: ['categories-with-items'] })
+  // Menu builder (/dashboard/menu/[menuId]) reads effective_availability from here;
+  // without this the 86'd item stays "green" until a manual refresh.
+  queryClient.invalidateQueries({ queryKey: ['menu-with-categories'] })
 }
 
 export type SnoozeDuration =
