@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import {
+  pushMenuToOrderOut,
   pushMenuToConnectedChannels,
   resolvePrimaryOnlineMenu,
 } from "@/app/dashboard/actions/orderout";
@@ -74,13 +75,22 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true, skipped: "no_org" });
     }
 
-    // OrderOut serves one menu per store — re-push only the canonical online menu.
+    // OrderOut serves one menu per store — target only the canonical online menu.
     const online = await resolvePrimaryOnlineMenu(supabase, restaurant.id);
     if (!online) {
       return NextResponse.json({ ok: true, skipped: "no_menus" });
     }
 
-    const result = await pushMenuToConnectedChannels({
+    // 1) Update the menu OrderOut stores (reflects the 86; works with no channels).
+    const upload = await pushMenuToOrderOut({
+      clerkOrgId,
+      menuId: online.menu_id,
+      locationId,
+      internal: true,
+    });
+
+    // 2) Best-effort fan-out to any connected delivery channels.
+    const fanout = await pushMenuToConnectedChannels({
       clerkOrgId,
       menuId: online.menu_id,
       locationId,
@@ -91,7 +101,8 @@ export async function POST(request: Request) {
     return NextResponse.json({
       ok: true,
       menu_id: online.menu_id,
-      pushed: result.success ? 1 : 0,
+      menu_uploaded: upload.success,
+      channels_pushed: fanout.success,
     });
   } catch (err) {
     console.error("[orderout-resync] failed:", err);

@@ -370,6 +370,8 @@ export interface PushMenuToOrderOutParams {
   clerkOrgId: string;
   menuId: string;
   locationId: string;
+  /** Server-to-server (DB trigger / internal route): use the service-role client. */
+  internal?: boolean;
 }
 
 /**
@@ -391,7 +393,9 @@ export async function pushMenuToOrderOut(
   let syncRecord: { id: string } | null = null;
 
   try {
-    const supabase = createServerSupabaseClient();
+    const supabase = params.internal
+      ? createServiceRoleClient()
+      : createServerSupabaseClient();
 
     // 1. Resolve merchant
     const { data: merchant, error: merchantError } = await supabase
