@@ -53,9 +53,12 @@ function nowLocalInput(): string {
 export function ItemSnoozeControl({
   menuItemId,
   className,
+  onOutOfStockChange,
 }: {
   menuItemId: string;
   className?: string;
+  /** Fired on success so the editor's availability toggle can follow the 86 state. */
+  onOutOfStockChange?: (outOfStock: boolean) => void;
 }) {
   const gatedLocationId = useGatedLocationId();
   const { data: userInfo } = useUserInfo();
@@ -90,18 +93,19 @@ export function ItemSnoozeControl({
   if (!clerkOrgId) return null;
 
   const do86 = (duration: SnoozeDuration) => {
-    snoozeItem.mutate({
-      clerkOrgId,
-      menuItemId,
-      locationId: gatedLocationId,
-      duration,
-    });
+    snoozeItem.mutate(
+      { clerkOrgId, menuItemId, locationId: gatedLocationId, duration },
+      { onSuccess: (res) => res?.success && onOutOfStockChange?.(true) },
+    );
     setOpen(false);
     setCustomValue("");
   };
 
   const restore = () =>
-    restoreItem.mutate({ clerkOrgId, menuItemId, locationId: gatedLocationId });
+    restoreItem.mutate(
+      { clerkOrgId, menuItemId, locationId: gatedLocationId },
+      { onSuccess: (res) => res?.success && onOutOfStockChange?.(false) },
+    );
 
   const applyCustom = () => {
     if (!customValue) return;

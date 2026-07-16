@@ -91,8 +91,12 @@ export function AvailabilitySection({ itemId, item, scope }: SectionRenderCtx) {
           </Button>
         </div>
 
-        {/* 86 / out-of-stock (per-location snooze, orthogonal to the toggle above) */}
-        <ItemSnoozeControl menuItemId={itemId} />
+        {/* 86 / out-of-stock — marking out of stock also switches availability off
+            (and restore switches it back on). */}
+        <ItemSnoozeControl
+          menuItemId={itemId}
+          onOutOfStockChange={(oos) => setAvailable(!oos)}
+        />
       </div>
     </div>
   );
