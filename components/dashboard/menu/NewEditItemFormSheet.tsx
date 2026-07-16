@@ -123,6 +123,7 @@ import { AffectsTag } from "./AffectsTag";
 import { DisabledFieldBanner } from "./DisabledFieldBanner";
 import { CascadeLadder } from "./CascadeLadder";
 import { ItemSnoozeControl } from "./item-edit/ItemSnoozeControl";
+import { ModifierStockToggle } from "./ModifierStockToggle";
 import {
   TAX_CATEGORIES,
   TAX_CATEGORY_LABELS,
@@ -2483,6 +2484,18 @@ export function NewEditItemFormSheet({
                                                             </span>
                                                           </div>
                                                         </div>
+                                                      </div>
+
+                                                      {/* Out of stock (86) — per-location, interactive
+                                                          (price/status above stay read-only). item.id is
+                                                          the modifier_group_items.id the snooze keys on. */}
+                                                      <div className="flex items-center justify-between gap-2 border-t pt-2">
+                                                        <span className="text-xs text-muted-foreground">
+                                                          Out of stock (86)
+                                                        </span>
+                                                        <ModifierStockToggle
+                                                          modifierGroupItemId={item.id}
+                                                        />
                                                       </div>
                                                     </div>
                                                   );

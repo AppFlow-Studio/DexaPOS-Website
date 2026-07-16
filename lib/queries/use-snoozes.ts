@@ -9,6 +9,7 @@ import {
   snoozeItemUntilEndOfDay,
   snoozeItemForHours,
   snoozeItemUntilManual,
+  snoozeModifier,
   unsnoozeItem,
   unsnoozeModifier,
   type ActiveSnoozes,
@@ -136,6 +137,38 @@ export function useRestoreItem() {
       }
     },
     onError: (e: Error) => toast.error(e.message || 'Failed to restore item'),
+  })
+}
+
+export function useSnoozeModifier() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      clerkOrgId,
+      modifierGroupItemId,
+      locationId,
+      snoozedUntil,
+      reason,
+    }: {
+      clerkOrgId: string
+      modifierGroupItemId: string
+      locationId: string
+      // ISO instant | 'infinity' (until manually restored). Mirrors the item
+      // snooze contract; the modifier toggle uses 'infinity' for a simple
+      // out-of-stock switch.
+      snoozedUntil: string
+      reason?: string
+    }) =>
+      snoozeModifier(clerkOrgId, modifierGroupItemId, locationId, snoozedUntil, reason),
+    onSuccess: (result, { clerkOrgId }) => {
+      if (result.success) {
+        invalidate(queryClient, clerkOrgId)
+        toast.success('Modifier marked out of stock')
+      } else {
+        toast.error(result.error || 'Failed to 86 modifier')
+      }
+    },
+    onError: (e: Error) => toast.error(e.message || 'Failed to 86 modifier'),
   })
 }
 
