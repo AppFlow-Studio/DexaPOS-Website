@@ -173,6 +173,27 @@ export async function addSavedAddress(
     return { success: false, error: "No customer linked" };
   }
 
+  // Reject duplicates: same location fields (normalized) already saved for this
+  // customer. Label/delivery notes are ignored — those don't define uniqueness.
+  const norm = (v: string | null | undefined) => (v ?? "").trim().toLowerCase();
+  const { data: existing } = await supabase
+    .from("customer_saved_addresses")
+    .select("address_line1, address_line2, city, state, postal_code")
+    .eq("customer_id", session.customer_id);
+
+  const isDuplicate = (existing ?? []).some(
+    (a) =>
+      norm(a.address_line1) === norm(address.addressLine1) &&
+      norm(a.address_line2) === norm(address.addressLine2) &&
+      norm(a.city) === norm(address.city) &&
+      norm(a.state) === norm(address.state) &&
+      norm(a.postal_code) === norm(address.postalCode)
+  );
+
+  if (isDuplicate) {
+    return { success: false, error: "This address is already saved." };
+  }
+
   // If this is being set as default, unset other defaults first
   if (address.isDefault) {
     await supabase
@@ -232,6 +253,61 @@ export async function deleteSavedAddress(
 
   if (error) {
     return { success: false, error: "Failed to delete address" };
+  }
+
+  return { success: true };
+}
+
+export async function setDefaultAddress(
+  sessionToken: string,
+  addressId: string
+): Promise<{ success: boolean; error?: string }> {
+  if (!sessionToken) return { success: false, error: "Not authenticated" };
+
+  const supabase = createServiceRoleClient();
+
+  const { data: session } = await supabase
+    .from("online_order_sessions")
+    .select("customer_id")
+    .eq("session_token", sessionToken)
+    .gt("expires_at", new Date().toISOString())
+    .single();
+
+  if (!session?.customer_id) {
+    return { success: false, error: "No customer linked" };
+  }
+
+  // Promote the target first, scoped to this customer, and confirm it actually
+  // matched a row. Supabase update() does not error when zero rows match, so a
+  // stale/deleted/foreign id would otherwise "succeed" — and clearing the old
+  // default first would have left the customer with no default at all.
+  const { data: promoted, error: promoteError } = await supabase
+    .from("customer_saved_addresses")
+    .update({ is_default: true })
+    .eq("id", addressId)
+    .eq("customer_id", session.customer_id)
+    .select("id")
+    .maybeSingle();
+
+  if (promoteError) {
+    return { success: false, error: "Failed to update default address" };
+  }
+
+  if (!promoted) {
+    return { success: false, error: "Address not found" };
+  }
+
+  // Only now demote the previous default(s). Excluding the row we just promoted
+  // keeps this safe if it was already the default.
+  const { error: demoteError } = await supabase
+    .from("customer_saved_addresses")
+    .update({ is_default: false })
+    .eq("customer_id", session.customer_id)
+    .eq("is_default", true)
+    .neq("id", promoted.id);
+
+  if (demoteError) {
+    return { success: false, error: "Failed to update default address" };
   }
 
   return { success: true };

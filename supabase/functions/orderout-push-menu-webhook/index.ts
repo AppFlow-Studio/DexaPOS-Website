@@ -13,16 +13,6 @@ import { createClient } from 'npm:@supabase/supabase-js'
 const WEBHOOK_SECRET = Deno.env.get('ORDEROUT_WEBHOOK_SECRET')
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-// Flag for the new single-service callback shape (OrderOut rollout).
-// When set to '1'/'true', the webhook accepts per-service callbacks carrying
-// { delivery_service, status_code, response }. Legacy array-style payloads
-// continue to work regardless of this flag.
-const PUSH_CHANNELS_V2_ENABLED = ((): boolean => {
-  const raw = Deno.env.get('ORDEROUT_PUSH_CHANNELS_V2')
-  if (!raw) return false
-  const v = raw.trim().toLowerCase()
-  return v === '1' || v === 'true' || v === 'yes'
-})()
 
 // ============================================================================
 // RESPONSE HELPERS
@@ -374,27 +364,13 @@ Deno.serve(async (req: Request): Promise<Response> => {
     return errorResponse('Invalid JSON body', 400)
   }
 
-  // 3a. Shape detection — route new single-service callbacks when enabled.
+  // 3a. Shape detection — OrderOut sends one single-service callback per
+  // delivery platform ({ delivery_service, status_code, response }). Route
+  // those to the channels correlator. Legacy array-`results` payloads fall
+  // through to the handler below.
   const bodyAsRecord = body as unknown as Record<string, unknown>
-  if (PUSH_CHANNELS_V2_ENABLED && isChannelsShape(bodyAsRecord)) {
+  if (isChannelsShape(bodyAsRecord)) {
     return await handleChannelsCallback(supabase, bodyAsRecord, replayId)
-  }
-
-  // If we got a shape we don't understand (neither results[] nor delivery_service)
-  // and the flag is off but it still smells like the new shape, DLQ for visibility.
-  if (
-    !PUSH_CHANNELS_V2_ENABLED &&
-    isChannelsShape(bodyAsRecord) &&
-    !Array.isArray(body.results)
-  ) {
-    await insertDeadLetter(
-      supabase,
-      body,
-      'unknown_payload_shape: channels shape received but V2 flag disabled',
-      'push_menu_channels',
-      replayId
-    )
-    return successResponse(null, 'Channels shape received but V2 disabled; stored in DLQ')
   }
 
   logEvent('PUSH_MENU_WEBHOOK', 'Received push_menu callback', {

@@ -135,8 +135,13 @@ function OrderDetailItem({
         <div className="flex items-center justify-between mt-2">
           <button
             onClick={() => onRemoveItem(item.cartItemId)}
-            className="p-1 transition-colors"
-            style={{ color: "#6b7280" }}
+            className="h-7 px-2.5 flex items-center justify-center transition-colors"
+            style={{
+              color: "#6b7280",
+              border: "1px solid #e5e7eb",
+              borderRadius: "var(--radius)",
+              backgroundColor: "#ffffff",
+            }}
             aria-label="Remove item"
           >
             <X className="h-3.5 w-3.5" />
@@ -146,9 +151,11 @@ function OrderDetailItem({
             style={{ border: "1px solid #e5e7eb", borderRadius: "var(--radius)" }}
           >
             <button
-              className="w-7 h-full flex items-center justify-center"
+              className="w-7 h-full flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed"
               style={{ color: "#111827" }}
               onClick={() => onUpdateQuantity(item.cartItemId, item.quantity - 1)}
+              disabled={item.quantity <= 1}
+              aria-label="Decrease quantity"
             >
               <Minus className="h-3 w-3" />
             </button>

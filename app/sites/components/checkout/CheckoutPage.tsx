@@ -16,6 +16,7 @@ import { CheckoutHeader } from "./CheckoutHeader";
 import { ContactSection } from "./ContactSection";
 import { OrderTypeSection } from "./OrderTypeSection";
 import { OrderDetailsSection } from "./OrderDetailsSection";
+import { Switch } from "@/components/ui/switch";
 import { TipSection } from "./TipSection";
 import { OrderSummarySection } from "./OrderSummarySection";
 import { PromoCodeSection } from "./PromoCodeSection";
@@ -24,6 +25,7 @@ import { isValidPhone, normalizePhone } from "@/lib/phone";
 import { PlaceOrderButton } from "./PlaceOrderButton";
 import { OrderConfirmation } from "./OrderConfirmation";
 import { PaymentCardForm, type PaymentCardFormHandle } from "./PaymentCardForm";
+import { ConfirmDialog } from "../ConfirmDialog";
 import {
   type PlaceOrderItem,
   checkDeliveryZone,
@@ -96,6 +98,7 @@ export function CheckoutPage({
   useQrFunnelTracking({ trackCheckout: true });
 
   const { items, clearCart, updateQuantity, removeItem, getSubtotal } = useCart();
+  const [pendingRemove, setPendingRemove] = useState<string | null>(null);
   const { isAuthenticated, customer, qrTableLabel } = useSession();
   const storePath = useStorefrontPath(slug);
   const router = useRouter();
@@ -857,41 +860,10 @@ export function CheckoutPage({
                         Pay at the counter when you pick up
                       </p>
                     </div>
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={payCashInStore}
-                      onClick={() => setPayCashInStore((v) => !v)}
-                      style={{
-                        position: "relative",
-                        display: "inline-flex",
-                        alignItems: "center",
-                        flexShrink: 0,
-                        cursor: "pointer",
-                        width: "44px",
-                        height: "24px",
-                        borderRadius: "9999px",
-                        border: "none",
-                        padding: 0,
-                        backgroundColor: payCashInStore ? "var(--primary)" : "#94a3b8",
-                        transition: "background-color 0.2s ease",
-                        outline: "none",
-                      }}
-                    >
-                      <span
-                        style={{
-                          position: "absolute",
-                          top: "2px",
-                          left: payCashInStore ? "22px" : "2px",
-                          width: "20px",
-                          height: "20px",
-                          borderRadius: "9999px",
-                          backgroundColor: "#ffffff",
-                          boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
-                          transition: "left 0.2s ease",
-                        }}
-                      />
-                    </button>
+                    <Switch
+                      checked={payCashInStore}
+                      onCheckedChange={setPayCashInStore}
+                    />
                   </div>
                 )}
                 {!payCashInStore && (
@@ -946,8 +918,8 @@ export function CheckoutPage({
 
           {/* Right: one sticky sidebar — follows scroll like Square / Butter Smashburgers (single page scrollbar) */}
           <aside
-            className="min-w-0 mt-10 space-y-6 rounded-xl border p-5 shadow-sm lg:mt-0 lg:sticky lg:top-20 lg:z-10 lg:self-start order-2"
-            style={{ borderColor: "var(--border)", backgroundColor: "var(--card)" }}
+            className="min-w-0 mt-10 space-y-6 rounded-xl p-5 lg:mt-0 lg:sticky lg:top-20 lg:z-10 lg:self-start order-2"
+            style={{ backgroundColor: "var(--card)" }}
             aria-label="Order summary"
           >
             <div className="lg:-mx-1">
@@ -976,7 +948,7 @@ export function CheckoutPage({
                 deliveryPricingEnabled={deliveryPricingEnabled}
                 useCashPrice={payCashInStore}
                 onUpdateQuantity={updateQuantity}
-                onRemoveItem={removeItem}
+                onRemoveItem={(cartItemId) => setPendingRemove(cartItemId)}
               />
             </div>
 
@@ -1067,6 +1039,16 @@ export function CheckoutPage({
         storeConfigId={storeConfigId}
         defaultMode={authMode}
         onSuccess={() => setShowAuth(false)}
+      />
+
+      <ConfirmDialog
+        open={pendingRemove !== null}
+        onOpenChange={(open) => { if (!open) setPendingRemove(null); }}
+        title="Remove item?"
+        description="Are you sure you want to remove this item from your order?"
+        confirmLabel="Remove"
+        cancelLabel="Keep"
+        onConfirm={() => { if (pendingRemove) removeItem(pendingRemove); setPendingRemove(null); }}
       />
     </>
   );

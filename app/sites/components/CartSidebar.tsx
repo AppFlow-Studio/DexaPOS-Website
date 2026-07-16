@@ -9,6 +9,7 @@ import * as SheetPrimitive from "@radix-ui/react-dialog";
 import { OnlineOrderingConfig } from "@/types/site";
 import { StorefrontItem } from "@/types/storefront";
 import { useStorefrontPath } from "../lib/use-storefront-path";
+import { ConfirmDialog } from "./ConfirmDialog";
 
 interface CartSidebarProps {
   config?: Partial<OnlineOrderingConfig>;
@@ -44,6 +45,8 @@ export function CartSidebar({ config, storeConfigId, slug, taxRate = 0, allItems
     requestOpenModal,
   } = useCart();
 
+  const [pendingRemove, setPendingRemove] = useState<string | null>(null);
+
   const subtotal = getSubtotal();
   const tax = Math.round(subtotal * taxRate * 100) / 100;
   const total = subtotal + tax;
@@ -68,7 +71,7 @@ export function CartSidebar({ config, storeConfigId, slug, taxRate = 0, allItems
     width: "400px",
     maxWidth: "40vw",
     maxHeight: "100vh",
-    backgroundColor: "var(--bg)",
+    backgroundColor: "var(--card)",
     borderRadius: "16px 0 0 16px",
     fontFamily: "var(--font)",
     boxShadow: "-8px 0 40px rgba(0,0,0,0.15)",
@@ -83,7 +86,7 @@ export function CartSidebar({ config, storeConfigId, slug, taxRate = 0, allItems
     width: "auto",
     maxWidth: "none",
     maxHeight: "85vh",
-    backgroundColor: "var(--bg)",
+    backgroundColor: "var(--card)",
     borderRadius: "20px 20px 0 0",
     fontFamily: "var(--font)",
     boxShadow: "0 -8px 40px rgba(0,0,0,0.15)",
@@ -222,7 +225,7 @@ export function CartSidebar({ config, storeConfigId, slug, taxRate = 0, allItems
 
                         <div className="flex items-center justify-between mt-3">
                           <button
-                            onClick={() => removeItem(item.cartItemId)}
+                            onClick={() => setPendingRemove(item.cartItemId)}
                             className="p-1 transition-colors"
                             style={{ color: "var(--text-secondary)" }}
                             aria-label="Remove item"
@@ -237,9 +240,11 @@ export function CartSidebar({ config, storeConfigId, slug, taxRate = 0, allItems
                             }}
                           >
                             <button
-                              className="w-8 h-full flex items-center justify-center transition-colors"
+                              className="w-8 h-full flex items-center justify-center transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                               style={{ color: "var(--text)" }}
                               onClick={() => updateQuantity(item.cartItemId, item.quantity - 1)}
+                              disabled={item.quantity <= 1}
+                              aria-label="Decrease quantity"
                             >
                               <Minus className="h-3 w-3" />
                             </button>
@@ -273,9 +278,16 @@ export function CartSidebar({ config, storeConfigId, slug, taxRate = 0, allItems
                     <p className="mb-3 text-sm font-semibold" style={{ color: "var(--text)" }}>
                       Customers also ordered
                     </p>
+                    <div className="relative -mr-6">
                     <div
-                      className="flex gap-3 overflow-x-auto pb-1"
-                      style={{ scrollbarWidth: "none" } as React.CSSProperties}
+                      className="flex gap-3 overflow-x-auto pb-1 pr-6"
+                      style={{
+                        scrollbarWidth: "none",
+                        maskImage:
+                          "linear-gradient(to right, transparent 0, #000 12px, #000 calc(100% - 40px), transparent 100%)",
+                        WebkitMaskImage:
+                          "linear-gradient(to right, transparent 0, #000 12px, #000 calc(100% - 40px), transparent 100%)",
+                      } as React.CSSProperties}
                     >
                       {upsellItems.map((upsellItem) => (
                         <button
@@ -326,6 +338,7 @@ export function CartSidebar({ config, storeConfigId, slug, taxRate = 0, allItems
                           </div>
                         </button>
                       ))}
+                    </div>
                     </div>
                   </div>
                 )}
@@ -382,6 +395,16 @@ export function CartSidebar({ config, storeConfigId, slug, taxRate = 0, allItems
           )}
         </SheetPrimitive.Content>
       </SheetPrimitive.Portal>
+
+      <ConfirmDialog
+        open={pendingRemove !== null}
+        onOpenChange={(open) => { if (!open) setPendingRemove(null); }}
+        title="Remove item?"
+        description="Are you sure you want to remove this item from your cart?"
+        confirmLabel="Remove"
+        cancelLabel="Keep"
+        onConfirm={() => { if (pendingRemove) removeItem(pendingRemove); setPendingRemove(null); }}
+      />
     </SheetPrimitive.Root>
   );
 }

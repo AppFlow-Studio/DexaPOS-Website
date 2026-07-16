@@ -29,42 +29,40 @@ export function StoreInfoPageContent({ site, location, slug }: StoreInfoPageCont
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: "#FFFFFF", color: "#111827" }}>
-      {/* Header */}
-      <div
-        className="sticky top-0 z-10 border-b"
+      {/* Header — matches the checkout header (cream bar, circular bordered back button) */}
+      <header
+        className="sticky top-0 z-50"
         style={{
-          backgroundColor: "#FFFFFF",
-          borderColor: "#E5E7EB",
+          backgroundColor: "var(--bg)",
+          borderBottom: "1px solid var(--border)",
         }}
       >
         <div className="container mx-auto flex items-center gap-3 px-4 py-3">
           <button
             onClick={() => router.push(storefrontPath())}
-            className="flex items-center justify-center h-9 w-9 rounded-full transition-colors"
-            style={{ color: "var(--primary)" }}
-            onMouseEnter={(e) =>
-              (e.currentTarget.style.backgroundColor = "color-mix(in srgb, var(--primary) 10%, transparent)")
-            }
-            onMouseLeave={(e) =>
-              (e.currentTarget.style.backgroundColor = "transparent")
-            }
+            className="p-2 rounded-full transition-colors hover:opacity-80 shrink-0"
+            style={{ backgroundColor: "var(--card)", border: "1px solid var(--border)" }}
             aria-label="Back to menu"
           >
-            <ArrowLeft className="h-5 w-5" />
+            <ArrowLeft className="h-4 w-4" style={{ color: "var(--text)" }} />
           </button>
-          <div>
-            <h1
-              className="text-base font-bold leading-tight"
-              style={{ fontFamily: "var(--font-display)", color: "#111827" }}
-            >
-              Store Menu
-            </h1>
-            <p className="text-xs" style={{ color: "#6B7280" }}>
-              {storeName}
-            </p>
-          </div>
+
+          {site?.logo_url && (
+            <img
+              src={site.logo_url}
+              alt={storeName}
+              className="h-8 w-8 rounded-full object-cover shrink-0"
+            />
+          )}
+
+          <h1
+            className="text-lg font-bold truncate"
+            style={{ fontFamily: "var(--font-display)", color: "var(--text)" }}
+          >
+            {storeName}
+          </h1>
         </div>
-      </div>
+      </header>
 
       {/* Content */}
       <div className="container mx-auto px-4 py-6 max-w-4xl">

@@ -489,10 +489,10 @@ html:has([data-template]) body[data-scroll-locked] {
   to   { transform: translateY(100%); }
 }
 
-.cart-slide-right[data-state="open"]  { animation: slide-in-from-right 0.32s cubic-bezier(0.32,0.72,0,1) both; }
+.cart-slide-right[data-state="open"]  { animation: slide-in-from-right 0.34s cubic-bezier(0.32,0.72,0,1) both; }
 .cart-slide-right[data-state="closed"] { animation: slide-out-to-right 0.22s cubic-bezier(0.32,0.72,0,1) both; }
 
-.cart-slide-bottom[data-state="open"]  { animation: slide-in-from-bottom 0.32s cubic-bezier(0.32,0.72,0,1) both; }
+.cart-slide-bottom[data-state="open"]  { animation: slide-in-from-bottom 0.34s cubic-bezier(0.32,0.72,0,1) both; }
 .cart-slide-bottom[data-state="closed"] { animation: slide-out-to-bottom 0.22s cubic-bezier(0.32,0.72,0,1) both; }
 
 @keyframes overlay-in {

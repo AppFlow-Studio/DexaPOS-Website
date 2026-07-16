@@ -15,6 +15,7 @@ import {
 } from "@/stores/location-store";
 import { AffectsTag } from "../../AffectsTag";
 import { SectionHeader } from "./OverviewSection";
+import { ItemSnoozeControl } from "../ItemSnoozeControl";
 import type { SectionRenderCtx } from "@/app/dashboard/menu/items/[itemId]/edit/ItemEditLayout";
 
 export function AvailabilitySection({ itemId, item, scope }: SectionRenderCtx) {
@@ -89,6 +90,9 @@ export function AvailabilitySection({ itemId, item, scope }: SectionRenderCtx) {
             )}
           </Button>
         </div>
+
+        {/* 86 / out-of-stock (per-location snooze, orthogonal to the toggle above) */}
+        <ItemSnoozeControl menuItemId={itemId} />
       </div>
     </div>
   );
