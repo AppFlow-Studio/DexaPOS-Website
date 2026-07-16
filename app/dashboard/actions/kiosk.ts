@@ -424,6 +424,46 @@ export async function publishKioskProfile(profileId: string): Promise<ActionResu
   }
 }
 
+export async function unpublishKioskProfile(profileId: string): Promise<ActionResult<KioskProfile>> {
+  try {
+    const impersonation = await resolveImpersonationFromCookies().catch(() => null);
+    if (impersonation) {
+      return { success: false, error: "Carrier impersonation sessions can review kiosk profiles but cannot unpublish them." };
+    }
+
+    const id = uuidSchema.parse(profileId);
+    const before = await getProfileForAudit(id);
+    if (!before) return { success: false, error: "Profile not found" };
+    const { role } = await assertLocationAccess(before.location_id, true);
+    const supabase = createServerSupabaseClient();
+
+    const { data, error } = await supabase
+      .from("kiosk_profiles")
+      .update({ is_active: false })
+      .eq("id", id)
+      .select("*")
+      .single();
+
+    if (error || !data) return { success: false, error: error?.message ?? "Unpublish failed" };
+    const profile = normalizeProfile(data);
+    await LogAuditEvent({
+      merchantId: role.merchantId,
+      locationId: profile.location_id,
+      action: `Unpublished kiosk profile: ${profile.profile_name}`,
+      actionCategory: "settings",
+      resourceType: "kiosk_profile",
+      resourceId: profile.id,
+      resourceName: profile.profile_name,
+      changes: { before: auditRecord(before), after: auditRecord(profile) },
+    });
+
+    revalidatePath(`/dashboard/kiosk/${profile.location_id}`);
+    return { success: true, data: profile };
+  } catch (error) {
+    return { success: false, error: asError(error) };
+  }
+}
+
 export async function cloneKioskProfile(profileId: string, profileName: string): Promise<ActionResult<KioskProfile>> {
   try {
     const id = uuidSchema.parse(profileId);

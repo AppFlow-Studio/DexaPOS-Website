@@ -28,6 +28,7 @@ import {
   KioskTemplateId,
   listKioskProfiles,
   publishKioskProfile,
+  unpublishKioskProfile,
   setAdminPin,
   uploadKioskAsset,
   upsertKioskProfile,
@@ -672,6 +673,19 @@ export function KioskEditor({ initialData }: { initialData: KioskEditorData }) {
     });
   }
 
+  function unpublishDraft() {
+    if (!isExistingProfile) return;
+    startTransition(async () => {
+      const result = await unpublishKioskProfile(draft.id);
+      if (!result.success) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success("Kiosk profile unpublished");
+      await refresh(result.data.id);
+    });
+  }
+
   function cloneDraft() {
     if (!isExistingProfile) {
       toast.error("Save the profile before cloning.");
@@ -826,15 +840,27 @@ export function KioskEditor({ initialData }: { initialData: KioskEditorData }) {
               {saveState === "saving" ? "Saving…" : saveState === "dirty" ? "Save" : "Saved"}
             </Button>
 
-            <Button
-              onClick={() => setPublishOpen(true)}
-              disabled={isPending || !isExistingProfile || isDirty}
-              className="gap-1.5"
-              title={isDirty ? "Save your changes before publishing" : undefined}
-            >
-              <Send className="h-4 w-4" />
-              Publish
-            </Button>
+            {draft.is_active ? (
+              <Button
+                variant="outline"
+                onClick={unpublishDraft}
+                disabled={isPending || !isExistingProfile}
+                className="gap-1.5"
+              >
+                <Send className="h-4 w-4" />
+                Unpublish
+              </Button>
+            ) : (
+              <Button
+                onClick={() => setPublishOpen(true)}
+                disabled={isPending || !isExistingProfile || isDirty}
+                className="gap-1.5"
+                title={isDirty ? "Save your changes before publishing" : undefined}
+              >
+                <Send className="h-4 w-4" />
+                Publish
+              </Button>
+            )}
           </div>
         </div>
 
@@ -1169,12 +1195,6 @@ export function KioskEditor({ initialData }: { initialData: KioskEditorData }) {
                 <ToggleRow label="SMS receipt prompt" checked={draft.receipt_sms_prompt} onCheckedChange={(value) => updateDraft({ receipt_sms_prompt: value })} />
                 <ToggleRow label="Show calories" checked={draft.show_calorie_info} onCheckedChange={(value) => updateDraft({ show_calorie_info: value })} />
                 <ToggleRow label="Show allergens" checked={draft.show_allergens} onCheckedChange={(value) => updateDraft({ show_allergens: value })} />
-                <ToggleRow
-                  label="Active kill-switch"
-                  description="Turns the kiosk off without unpublishing it"
-                  checked={draft.is_active}
-                  onCheckedChange={(value) => updateDraft({ is_active: value })}
-                />
               </div>
             </CardContent>
           </Card>
