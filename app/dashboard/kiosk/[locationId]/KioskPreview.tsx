@@ -202,7 +202,7 @@ function PreviewTemplateC({ profile, sections }: { profile: KioskProfile; sectio
   const items = activeCategory?.items ?? [];
   const bannerImages = orderBannerImages(profile);
   const hasMedia = bannerImages.length > 0;
-  const numColumns = isVertical ? 4 : 5;
+  const numColumns = 4;
 
   const menuContent = (
     <div className="flex h-full flex-col overflow-hidden">

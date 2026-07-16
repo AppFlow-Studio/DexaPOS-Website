@@ -110,11 +110,24 @@ export function PreviewCategoryPillBar({
   resolvedKey: string | null;
   onSelect: (key: string) => void;
 }) {
+  // Deduped by category name — the pill bar has no per-menu grouping to
+  // disambiguate repeats the way PreviewCategoryRail's menu-name headers
+  // do, so two menus sharing a category name (e.g. both have "Drinks")
+  // would otherwise show as two identical, unexplained pills. First
+  // occurrence wins; the pill still only selects that one category.
+  const seen = new Set<string>();
   const pills = sections.flatMap((section) =>
-    section.categories.map((category) => ({
-      key: `${section.menuId}:${category.id}`,
-      name: category.category.name,
-    })),
+    section.categories
+      .filter((category) => {
+        const name = category.category.name;
+        if (seen.has(name)) return false;
+        seen.add(name);
+        return true;
+      })
+      .map((category) => ({
+        key: `${section.menuId}:${category.id}`,
+        name: category.category.name,
+      })),
   );
 
   return (
