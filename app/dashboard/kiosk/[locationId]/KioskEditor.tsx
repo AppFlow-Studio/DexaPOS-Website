@@ -55,6 +55,7 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { KioskPreview } from "./KioskPreview";
 
 const NONE_VALUE = "__none__";
 
@@ -1279,6 +1280,16 @@ export function KioskEditor({ initialData }: { initialData: KioskEditorData }) {
           </Card>
         </TabsContent>
       </Tabs>
+
+      <div className="space-y-4 border-t pt-6">
+        <div>
+          <h2 className="text-lg font-semibold tracking-tight">Preview</h2>
+          <p className="text-sm text-muted-foreground">
+            A live preview of what customers see on the kiosk, built from this profile's real menu and settings.
+          </p>
+        </div>
+        <KioskPreview profile={draft} />
+      </div>
 
       <AlertDialog open={contrastOpen} onOpenChange={setContrastOpen}>
         <AlertDialogContent>
