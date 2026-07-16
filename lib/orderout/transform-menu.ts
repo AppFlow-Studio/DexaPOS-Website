@@ -37,11 +37,13 @@ function priceToCents(price: number): number {
 
 // "Until manually restored" (snoozed_until = 'infinity') has no representable
 // timestamp — use a far-future one so Uber keeps it Sold Out until we clear it.
-const INDEFINITE_SUSPEND_UNTIL = 4102444800; // 2100-01-01 UTC, seconds
+export const INDEFINITE_SUSPEND_UNTIL = 4102444800; // 2100-01-01 UTC, seconds
 
 // Map a snooze (location_item_overrides.snoozed_until) to Uber Eats suspend_until
-// (unix SECONDS). Returns null when not currently snoozed (available).
-function snoozeToSuspendUntil(
+// (unix SECONDS). Returns null when not currently snoozed (available). Shared with
+// the surgical per-item suspension push (app/dashboard/actions/orderout.ts) so the
+// full-menu transform and the single-item toggle agree on one mapping.
+export function snoozeToSuspendUntil(
   snoozedUntil: string | null | undefined,
 ): number | null {
   if (!snoozedUntil) return null;
