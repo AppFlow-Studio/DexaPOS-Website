@@ -474,7 +474,12 @@ function KioskGallerySlot({
   );
 }
 
-/** Single idle-only video slot (no gallery — one video per orientation). */
+/**
+ * Single idle-only video slot (no gallery — one video per orientation).
+ * Currently unused — video upload is disabled, see the comment in the Assets
+ * tab's Idle screen card. Kept here ready to reconnect once uploadKioskAsset
+ * moves off the Server Action body path.
+ */
 function KioskVideoSlot({
   title,
   helper,
@@ -756,6 +761,8 @@ export function KioskEditor({ initialData }: { initialData: KioskEditorData }) {
     });
   }
 
+  // Currently unused — video upload is disabled, see the comment in the
+  // Assets tab's Idle screen card.
   function uploadIdleVideo(file: File, orientation: "vertical" | "horizontal") {
     if (file.size > 30 * 1024 * 1024) {
       toast.error("Idle video must be 30MB or smaller.");
@@ -1014,28 +1021,38 @@ export function KioskEditor({ initialData }: { initialData: KioskEditorData }) {
                 />
               </div>
 
-              <Separator />
+              {/*
+                Video upload disabled for now: uploadKioskAsset routes the
+                raw file through a Next.js Server Action, which base64-encodes
+                it (~1.33x size) and is capped by next.config.ts's
+                bodySizeLimit (6mb) — a 30MB video encodes to ~40MB and fails
+                outright. Needs a direct client -> Supabase Edge Function
+                upload (see lib/cdn/use-merchant-cdn-image-upload.ts for the
+                existing pattern) before this can come back.
 
-              <div className="grid gap-6 lg:grid-cols-2">
-                <KioskVideoSlot
-                  title="Video — Vertical"
-                  helper="MP4, up to 30MB"
-                  value={draft.idle_video_vertical}
-                  disabled={isPending}
-                  uploading={uploadingAsset === "idle_video_vertical"}
-                  onUpload={(file) => uploadIdleVideo(file, "vertical")}
-                  onClear={() => updateDraft({ idle_video_vertical: null })}
-                />
-                <KioskVideoSlot
-                  title="Video — Horizontal"
-                  helper="MP4, up to 30MB"
-                  value={draft.idle_video_horizontal}
-                  disabled={isPending}
-                  uploading={uploadingAsset === "idle_video_horizontal"}
-                  onUpload={(file) => uploadIdleVideo(file, "horizontal")}
-                  onClear={() => updateDraft({ idle_video_horizontal: null })}
-                />
-              </div>
+                <Separator />
+
+                <div className="grid gap-6 lg:grid-cols-2">
+                  <KioskVideoSlot
+                    title="Video — Vertical"
+                    helper="MP4, up to 30MB"
+                    value={draft.idle_video_vertical}
+                    disabled={isPending}
+                    uploading={uploadingAsset === "idle_video_vertical"}
+                    onUpload={(file) => uploadIdleVideo(file, "vertical")}
+                    onClear={() => updateDraft({ idle_video_vertical: null })}
+                  />
+                  <KioskVideoSlot
+                    title="Video — Horizontal"
+                    helper="MP4, up to 30MB"
+                    value={draft.idle_video_horizontal}
+                    disabled={isPending}
+                    uploading={uploadingAsset === "idle_video_horizontal"}
+                    onUpload={(file) => uploadIdleVideo(file, "horizontal")}
+                    onClear={() => updateDraft({ idle_video_horizontal: null })}
+                  />
+                </div>
+              */}
             </CardContent>
           </Card>
 
