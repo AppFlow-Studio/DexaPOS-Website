@@ -310,7 +310,7 @@ export async function listKioskProfiles(locationId: string): Promise<ActionResul
         .from("stations")
         .select("id, station_name, station_code, station_number, is_online, kiosk_profile_id")
         .eq("location_id", parsedLocationId)
-        .eq("station_type", "kiosk")
+        .eq("station_type", "self_service")
         .order("station_number", { ascending: true, nullsFirst: false }),
       supabase
         .from("payment_terminals")

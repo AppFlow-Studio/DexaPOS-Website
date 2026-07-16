@@ -29,7 +29,6 @@ import {
   listKioskProfiles,
   publishKioskProfile,
   unpublishKioskProfile,
-  setAdminPin,
   uploadKioskAsset,
   upsertKioskProfile,
 } from "@/app/dashboard/actions/kiosk";
@@ -545,7 +544,6 @@ export function KioskEditor({ initialData }: { initialData: KioskEditorData }) {
   const [data, setData] = useState(initialData);
   const [selectedProfileId, setSelectedProfileId] = useState(initialProfile.id);
   const [draft, setDraft] = useState<KioskProfile>(initialProfile);
-  const [pin, setPin] = useState("");
   const [cloneName, setCloneName] = useState("");
   const [publishOpen, setPublishOpen] = useState(false);
   const [contrastOpen, setContrastOpen] = useState(false);
@@ -712,23 +710,6 @@ export function KioskEditor({ initialData }: { initialData: KioskEditorData }) {
       }
       toast.success("Station binding updated");
       await refresh();
-    });
-  }
-
-  function savePin() {
-    if (!isExistingProfile) {
-      toast.error("Save the profile before setting a PIN.");
-      return;
-    }
-    startTransition(async () => {
-      const result = await setAdminPin(draft.id, pin);
-      if (!result.success) {
-        toast.error(result.error);
-        return;
-      }
-      toast.success("Admin PIN saved");
-      setPin("");
-      await refresh(draft.id);
     });
   }
 
@@ -1289,28 +1270,6 @@ export function KioskEditor({ initialData }: { initialData: KioskEditorData }) {
                 <Button variant="outline" onClick={cloneDraft} disabled={isPending || !isExistingProfile} className="gap-1.5">
                   <Copy className="h-4 w-4" />
                   Clone
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Admin PIN</CardTitle>
-              <CardDescription>Required to exit lock-task mode on the kiosk device.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-col gap-2 sm:flex-row">
-                <Input
-                  value={pin}
-                  onChange={(event) => setPin(event.target.value.replace(/\D/g, "").slice(0, 8))}
-                  placeholder={draft.admin_pin_hash ? "PIN is set" : "4-8 digit PIN"}
-                  type="password"
-                  className="sm:max-w-xs"
-                />
-                <Button onClick={savePin} disabled={isPending || !isExistingProfile || pin.length < 4} className="gap-1.5">
-                  <ShieldCheck className="h-4 w-4" />
-                  Set PIN
                 </Button>
               </div>
             </CardContent>
