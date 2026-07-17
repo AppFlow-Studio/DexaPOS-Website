@@ -11,6 +11,7 @@ import { LogAuditEvent } from "./audit-logs";
 import {
   transformMenuToOrderOut,
   canonicalStringify,
+  snoozeToSuspendUntil,
 } from "@/lib/orderout/transform-menu";
 import type { MenuWithCategories } from "@/types/menu";
 import {
@@ -1740,6 +1741,167 @@ export async function getLocationOnlineMenu(
     primaryMenuId: rows.find((l) => l.is_primary)?.menu_id ?? null,
     linkedMenuIds: rows.map((l) => l.menu_id),
   };
+}
+
+// ============================================================================
+// Surgical per-item suspension (86 fast-path)
+// ----------------------------------------------------------------------------
+// OrderOut exposes a per-item "out of stock" toggle:
+//   PUT /pos/restaurant/{restaurant}/menu/{oo_menu}/item/{item}/suspension
+//   body: { suspend_until: <unix SECONDS> }   // 0 restores availability
+// Because our menu_item.id is pushed verbatim as the OrderOut item id (see
+// transform-menu.ts) and the snooze already maps 1:1 to Uber's suspend_until,
+// a single 86/restore becomes ONE surgical PUT — no full menu rebuild and no
+// push_menu channel fan-out. OrderOut propagates the suspension to the connected
+// marketplaces itself.
+//
+// NOTE: this is items-only. OrderOut has no per-modifier suspension endpoint yet,
+// so modifier 86ing stays on the full-menu resync path (see item-snooze.ts).
+// ============================================================================
+
+export interface SuspendOrderOutItemParams {
+  clerkOrgId: string;
+  locationId: string;
+  /** menu_items.id — pushed verbatim as the OrderOut item id. */
+  menuItemId: string;
+  /** location_item_overrides.snoozed_until: ISO | "infinity" | null (restore). */
+  snoozedUntil: string | null;
+  /** Server-to-server (DB trigger / POS-origin route): use the service-role client. */
+  internal?: boolean;
+}
+
+export interface SuspendOrderOutItemResult {
+  success: boolean;
+  /**
+   * True when we couldn't take the surgical path because the location's menu
+   * isn't live on OrderOut yet (no oo_menu_id). The caller should fall back to a
+   * full push, which stages the menu with suspension_info already embedded.
+   */
+  skipped?: boolean;
+  /**
+   * The canonical online menu id the suspension was applied to (present on
+   * success). Lets the caller fan the change out to connected channels without
+   * re-resolving the link.
+   */
+  menuId?: string;
+  error: string | null;
+}
+
+/**
+ * Mark a single item out-of-stock (or restore it) on OrderOut via the per-item
+ * suspension endpoint. Best-effort and self-contained: resolves the restaurant +
+ * canonical online menu, computes suspend_until from the snooze, and PUTs.
+ * Returns `skipped: true` (not an error) when the menu isn't live yet so the
+ * caller can fall back to a full push.
+ */
+export async function suspendOrderOutItem(
+  params: SuspendOrderOutItemParams
+): Promise<SuspendOrderOutItemResult> {
+  const { clerkOrgId, locationId, menuItemId, snoozedUntil, internal = false } =
+    params;
+
+  if (!clerkOrgId || !locationId || !menuItemId) {
+    return { success: false, error: "Missing required parameters" };
+  }
+
+  try {
+    const supabase = internal
+      ? createServiceRoleClient()
+      : createServerSupabaseClient();
+
+    // Resolve the OrderOut restaurant (must be active).
+    const { data: restaurant } = await supabase
+      .from("orderout_restaurants")
+      .select("id, oo_restaurant_id, status")
+      .eq("location_id", locationId)
+      .maybeSingle();
+
+    if (!restaurant?.oo_restaurant_id || restaurant.status !== "active") {
+      return { success: false, skipped: true, error: null };
+    }
+
+    // OrderOut serves one menu per store — target only the canonical online menu.
+    const online = await resolvePrimaryOnlineMenu(
+      createServiceRoleClient(),
+      restaurant.id
+    );
+    if (!online?.oo_menu_id) {
+      // Menu never pushed / no OrderOut menu id yet — nothing to suspend against.
+      return { success: false, skipped: true, error: null };
+    }
+
+    const orderOutApiUrl = process.env.NEXT_PUBLIC_ORDEROUT_API_URL;
+    const orderOutApiKey = process.env.ORDEROUT_API_KEY;
+    if (!orderOutApiUrl || !orderOutApiKey) {
+      return { success: false, error: "OrderOut API configuration missing" };
+    }
+
+    // suspend_until: unix seconds while snoozed, 0 to restore (available).
+    const suspendUntil = snoozeToSuspendUntil(snoozedUntil) ?? 0;
+
+    const url = `${orderOutApiUrl}/pos/restaurant/${restaurant.oo_restaurant_id}/menu/${online.oo_menu_id}/item/${menuItemId}/suspension`;
+
+    let httpStatus = 0;
+    let errMsg: string | null = null;
+    try {
+      const resp = await fetch(url, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "api-key": orderOutApiKey,
+        },
+        body: JSON.stringify({ suspend_until: suspendUntil }),
+      });
+      httpStatus = resp.status;
+      if (!resp.ok) {
+        try {
+          const body = await resp.json();
+          errMsg =
+            (body?.error as string) ||
+            (body?.message as string) ||
+            `OrderOut API returned ${resp.status}`;
+        } catch {
+          errMsg = `OrderOut API returned ${resp.status}`;
+        }
+      }
+    } catch (e) {
+      errMsg = e instanceof Error ? e.message : "Network error";
+    }
+
+    const ok = httpStatus >= 200 && httpStatus < 300;
+
+    await LogAuditEvent({
+      clerkOrgId,
+      locationId,
+      action: ok
+        ? "orderout_item_suspension"
+        : "orderout_item_suspension_failed",
+      actionCategory: "integrations",
+      severity: ok ? "info" : "warning",
+      resourceType: "menu_item",
+      resourceId: menuItemId,
+      metadata: {
+        oo_restaurant_id: restaurant.oo_restaurant_id,
+        oo_menu_id: online.oo_menu_id,
+        suspend_until: suspendUntil,
+        restored: suspendUntil === 0,
+        http_status: httpStatus,
+        ...(errMsg ? { error_message: errMsg } : {}),
+      },
+    });
+
+    if (!ok) {
+      return { success: false, error: errMsg ?? "Failed to suspend item" };
+    }
+
+    return { success: true, menuId: online.menu_id, error: null };
+  } catch (error) {
+    console.error("[suspendOrderOutItem] Exception:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+  }
 }
 
 /**
