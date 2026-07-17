@@ -244,25 +244,25 @@ export function StoreInfoBar({
           </div>
 
           {/* Right: fulfillment badge + Order Now */}
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2 w-full sm:w-auto sm:shrink-0">
             {/* Pickup / Delivery toggle — only shown when both are enabled */}
             {pickupEnabled && deliveryEnabled && (
               <div
-                className="flex items-center overflow-hidden text-sm font-medium"
+                className="flex items-center flex-1 sm:flex-none text-sm font-medium"
                 style={{ border: "1px solid #E5E7EB", borderRadius: "20px" }}
               >
                 <span
-                  className="inline-flex items-center gap-1.5 px-4 py-2"
+                  className="inline-flex items-center justify-center gap-1.5 flex-1 sm:flex-none px-3 sm:px-4 py-2 whitespace-nowrap"
                   style={{ backgroundColor: "var(--primary)", color: "var(--primary-text)", borderRadius: "20px 0 0 20px" }}
                 >
-                  <Store className="h-3.5 w-3.5" />
+                  <Store className="h-3.5 w-3.5 shrink-0" />
                   Pickup
                 </span>
                 <span
-                  className="inline-flex items-center gap-1.5 px-4 py-2"
-                  style={{ backgroundColor: "#FFFFFF", color: "#6B7280" }}
+                  className="inline-flex items-center justify-center gap-1.5 flex-1 sm:flex-none px-3 sm:px-4 py-2 whitespace-nowrap"
+                  style={{ backgroundColor: "#FFFFFF", color: "#6B7280", borderRadius: "0 20px 20px 0" }}
                 >
-                  <Truck className="h-3.5 w-3.5" />
+                  <Truck className="h-3.5 w-3.5 shrink-0" />
                   Delivery
                 </span>
               </div>
@@ -291,7 +291,7 @@ export function StoreInfoBar({
             <button
               type="button"
               onClick={handleOrderNow}
-              className="inline-flex items-center px-4 py-2 text-sm font-semibold transition-opacity hover:opacity-90"
+              className="inline-flex items-center justify-center flex-1 sm:flex-none px-3 sm:px-4 py-2 text-sm font-semibold whitespace-nowrap transition-opacity hover:opacity-90"
               style={{
                 backgroundColor: "var(--primary)",
                 color: "var(--primary-text)",

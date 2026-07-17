@@ -35,22 +35,12 @@ import { useReportingQueryRange } from "@/app/dashboard/hooks/useReportingDateRa
 import { DollarSign, ShoppingCart, TrendingUp, Truck, Ban } from "lucide-react";
 import type { PlatformSummary } from "../../actions/online-ordering-analytics";
 import {
-  platformLabel,
-  platformColor,
+  getPlatformLabel,
+  getPlatformColor,
   PLATFORM_DISPLAY_ORDER,
   type PlatformSlug,
 } from "@/lib/orderout/platform";
 import { formatCurrency } from "@/lib/utils";
-
-// Thin aliases over the shared platform vocabulary (lib/orderout/platform.ts) so
-// this report and the Orders list/detail/filters can't drift apart.
-function getPlatformLabel(platform: string): string {
-  return platformLabel(platform);
-}
-
-function getPlatformColor(platform: string): string {
-  return platformColor(platform);
-}
 
 function parseDateParam(value: string | null): Date | null {
   if (!value) return null;

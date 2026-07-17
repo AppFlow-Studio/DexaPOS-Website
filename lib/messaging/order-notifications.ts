@@ -69,9 +69,21 @@ function escapeHtml(input: string): string {
 }
 
 function getBaseUrl(): string {
-  if (process.env.NEXT_PUBLIC_APP_URL) return process.env.NEXT_PUBLIC_APP_URL;
-  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
-  return "http://localhost:3000";
+  const url =
+    process.env.NEXT_PUBLIC_APP_URL ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "") ||
+    "http://localhost:3000";
+
+  // Phones only auto-linkify real, publicly-resolvable URLs. A localhost/private
+  // base produces a tracking link that can't be tapped (or opened) from an SMS,
+  // so surface the misconfiguration instead of silently sending a dead link.
+  if (/^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0|\[?::1\]?)(:|\/|$)/i.test(url)) {
+    console.warn(
+      `[order-notifications] NEXT_PUBLIC_APP_URL is "${url}". Tracking links in SMS/email will not be tappable — set it to the public https:// origin.`
+    );
+  }
+
+  return url.replace(/\/+$/, "");
 }
 
 async function loadOrderContext(orderId: string): Promise<OrderContext | null> {
@@ -264,7 +276,20 @@ function statusCopy(event: OrderEvent, ctx: OrderContext): { subject: string; he
         body: ctx.cancellationReason
           ? `Your order was cancelled. Reason: ${ctx.cancellationReason}. Any authorization will be voided.`
           : `Your order was cancelled before it was accepted. Any authorization will be voided.`,
-        sms: `${store}: Order ${num} was cancelled. ${ctx.cancellationReason ? `Reason: ${ctx.cancellationReason}` : ""}`.trim(),
+        // Mirror the email: include the reason and a tracking link so the customer
+        // can open the order and see its status/reason. The URL goes on its own
+        // line — SMS has no markup, so phones auto-linkify bare URLs, and keeping
+        // it unglued from surrounding text makes that detection reliable.
+        sms: [
+          [
+            `${store}: Order ${num} was cancelled.`,
+            ctx.cancellationReason ? `Reason: ${ctx.cancellationReason}.` : "",
+          ]
+            .filter(Boolean)
+            .join(" "),
+          `Track your order:`,
+          ctx.trackingUrl,
+        ].join("\n"),
       };
     case "declined":
       return {
