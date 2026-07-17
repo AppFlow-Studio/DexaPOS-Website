@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
 import { Barlow, Barlow_Condensed } from "next/font/google";
 import "./marketing.css";
-import RevealObserver from "./_components/RevealObserver";
+import Nav from "@/components/marketing/Nav";
+import Footer from "@/components/marketing/Footer";
+import Analytics from "@/components/marketing/Analytics";
+import { getSiteSettings } from "@/lib/cms/site-settings";
 
 const barlow = Barlow({
   subsets: ["latin"],
@@ -48,18 +51,35 @@ export const metadata: Metadata = {
   },
 };
 
-export default function MarketingLayout({
+export default async function MarketingLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const siteSettings = await getSiteSettings();
+
   return (
     <div
       className={`${barlow.variable} ${barlowCondensed.variable}`}
       style={{ fontFamily: "var(--font)" }}
     >
-      <RevealObserver />
-      {children}
+      <Analytics />
+      <Nav settings={siteSettings} />
+      <main>{children}</main>
+      <Footer settings={siteSettings} />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "Organization",
+            name: siteSettings.organization.name,
+            url: siteSettings.organization.url,
+            description: siteSettings.organization.description,
+            sameAs: siteSettings.organization.sameAs,
+          }),
+        }}
+      />
     </div>
   );
 }
