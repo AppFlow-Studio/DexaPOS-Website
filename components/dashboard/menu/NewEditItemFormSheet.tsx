@@ -124,6 +124,7 @@ import { DisabledFieldBanner } from "./DisabledFieldBanner";
 import { CascadeLadder } from "./CascadeLadder";
 import { ItemSnoozeControl } from "./item-edit/ItemSnoozeControl";
 import { ModifierStockToggle } from "./ModifierStockToggle";
+import { ModifierGroupStockToggle } from "./ModifierGroupStockToggle";
 import {
   TAX_CATEGORIES,
   TAX_CATEGORY_LABELS,
@@ -2337,6 +2338,16 @@ export function NewEditItemFormSheet({
                                               {group.max_selections || "∞"}
                                             </div>
                                           </div>
+
+                                          {/* Group-level out of stock (86) — per-location,
+                                              fans out to every option. Self-gates on location. */}
+                                          <ModifierGroupStockToggle
+                                            modifierGroupId={group.id}
+                                            optionIds={(
+                                              group.modifier_group_items ?? []
+                                            ).map((o: any) => o.id)}
+                                            className="shrink-0"
+                                          />
 
                                           {/* Reorder / Remove Controls */}
                                           {canManageModifierLinks && (

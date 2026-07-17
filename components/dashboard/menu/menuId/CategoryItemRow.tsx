@@ -9,7 +9,7 @@ import {
     TooltipProvider,
     TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { Info, Utensils, Star, DollarSign, CircleSlash } from 'lucide-react'
+import { Info, Utensils, Star, DollarSign, CircleSlash, Layers } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { MenuCategoryItem } from '@/types/menu'
 import { PriceSourcePopover } from '@/components/dashboard/menu/PriceSourcePopover'
@@ -75,6 +75,14 @@ export function CategoryItemRow({
         activeSnoozes?.items.find((s) => s.menu_item_id === item.menu_item_id)
             ?.snoozed_until ?? null
     const isOutOfStock = isActivelySnoozed(snoozedUntil)
+
+    // Any of this item's modifier OPTIONS 86'd (a whole-group 86 fans out to all
+    // its options, so this catches both). Derived from data already on the row —
+    // no extra fetch. Option-level snooze only, so a deliberately-inactive group
+    // isn't mistaken for out-of-stock.
+    const hasOutOfStockModifier = (menuItem?.modifier_groups ?? []).some((g) =>
+        (g.items ?? []).some((o) => isActivelySnoozed(o.snoozed_until)),
+    )
 
     const getPriceSourceBadge = () => {
         if (priceSource === 'base') return null
@@ -212,10 +220,20 @@ export function CategoryItemRow({
 
                 {/* Badges — full width below, free to wrap */}
                 {(isOutOfStock ||
+                    hasOutOfStockModifier ||
                     !menuItem?.effective_availability ||
                     (menuItem?.allergens && menuItem.allergens.length > 0) ||
                     (showLocationPricing && priceSource !== 'base')) && (
                     <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+                        {hasOutOfStockModifier && (
+                            <Badge
+                                variant="outline"
+                                className="text-[10px] gap-1 border-amber-300 bg-amber-50 text-amber-700"
+                            >
+                                <Layers className="h-2.5 w-2.5 shrink-0" />
+                                <span>Modifier out of stock</span>
+                            </Badge>
+                        )}
                         {isOutOfStock ? (
                             <Badge
                                 variant="outline"

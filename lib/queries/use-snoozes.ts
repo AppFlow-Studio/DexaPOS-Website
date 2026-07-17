@@ -10,8 +10,10 @@ import {
   snoozeItemForHours,
   snoozeItemUntilManual,
   snoozeModifier,
+  snoozeModifierGroup,
   unsnoozeItem,
   unsnoozeModifier,
+  unsnoozeModifierGroup,
   type ActiveSnoozes,
 } from '@/app/dashboard/actions/item-snooze'
 
@@ -193,6 +195,64 @@ export function useRestoreModifier() {
       }
     },
     onError: (e: Error) => toast.error(e.message || 'Failed to restore modifier'),
+  })
+}
+
+// ============================================================================
+// Modifier GROUP 86 — snoozes/restores every option in the group at once.
+// ============================================================================
+
+export function useSnoozeModifierGroup() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      clerkOrgId,
+      modifierGroupId,
+      locationId,
+      snoozedUntil,
+      reason,
+    }: {
+      clerkOrgId: string
+      modifierGroupId: string
+      locationId: string
+      // ISO instant | 'infinity' (until manually restored).
+      snoozedUntil: string
+      reason?: string
+    }) =>
+      snoozeModifierGroup(clerkOrgId, modifierGroupId, locationId, snoozedUntil, reason),
+    onSuccess: (result, { clerkOrgId }) => {
+      if (result.success) {
+        invalidate(queryClient, clerkOrgId)
+        toast.success('Modifier group marked out of stock')
+      } else {
+        toast.error(result.error || 'Failed to 86 modifier group')
+      }
+    },
+    onError: (e: Error) => toast.error(e.message || 'Failed to 86 modifier group'),
+  })
+}
+
+export function useRestoreModifierGroup() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      clerkOrgId,
+      modifierGroupId,
+      locationId,
+    }: {
+      clerkOrgId: string
+      modifierGroupId: string
+      locationId: string
+    }) => unsnoozeModifierGroup(clerkOrgId, modifierGroupId, locationId),
+    onSuccess: (result, { clerkOrgId }) => {
+      if (result.success) {
+        invalidate(queryClient, clerkOrgId)
+        toast.success('Modifier group restored')
+      } else {
+        toast.error(result.error || 'Failed to restore modifier group')
+      }
+    },
+    onError: (e: Error) => toast.error(e.message || 'Failed to restore modifier group'),
   })
 }
 

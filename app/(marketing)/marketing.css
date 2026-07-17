@@ -180,21 +180,18 @@ p, li, .hero-lede, .section-sub {
 .nav-cta:hover {
   background: transparent; color: var(--matte-black);
 }
-/* Secondary/ghost "Sign In" link beside the primary CTA */
+/* Compact "Sign In" text link beside the primary CTA */
 .nav-signin {
   display: inline-flex; align-items: center;
-  padding: 12px 18px; min-height: 44px;
-  border-radius: 2px;
   font-family: var(--font-display);
-  font-size: clamp(11px, 1vw, 13px);
-  font-weight: 600;
-  text-transform: uppercase; letter-spacing: 0.16em;
-  color: var(--ink);
-  background: transparent;
-  border: 1px solid var(--slate-300);
-  transition: all 0.2s;
+  font-size: clamp(11px, 0.75vw, 13px);
+  font-weight: 500;
+  text-transform: uppercase; letter-spacing: 0.14em;
+  color: var(--graphite);
+  padding: 6px 10px;
+  transition: color 0.2s;
 }
-.nav-signin:hover { border-color: var(--matte-black); color: var(--matte-black); }
+.nav-signin:hover { color: var(--ink); }
 .menu-toggle { display: none; }
 @media (hover: none) and (pointer: coarse) {
   .btn, .nav-cta, .menu-toggle, button, input, select, textarea, a { cursor: default; }
