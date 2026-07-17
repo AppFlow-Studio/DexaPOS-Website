@@ -7,8 +7,7 @@ import type { KioskProfile } from "@/app/dashboard/actions/kiosk";
  * Web port of Dexa-POS's components/kiosk/shared/KioskMenuItem.tsx — exact
  * px values from that component at kiosk scale 1.0: radius 16, divider
  * height 1 with 12px side margin, content padding 12/8 with 4px gap, name
- * 15px/600, price 15px/700, cash pill 13px/700 with 8px radius, modifier
- * corner 22px triangle.
+ * 15px/600, price 15px/700, modifier corner 22px triangle.
  */
 export function PreviewMenuItem({
   item,
@@ -20,7 +19,6 @@ export function PreviewMenuItem({
   const disabled = !item.effective_availability;
   const hasModifiers = item.modifier_groups.length > 0;
   const accent = profile.accent_color || profile.primary_color;
-  const cashColor = "#16A34A";
 
   return (
     <div
@@ -64,21 +62,6 @@ export function PreviewMenuItem({
           <span style={{ fontSize: 15, fontWeight: 700, color: profile.text_color }}>
             ${item.effective_price.toFixed(2)}
           </span>
-          {item.effective_cash_price != null ? (
-            <span
-              style={{
-                fontSize: 13,
-                fontWeight: 700,
-                borderRadius: 8,
-                padding: "2px 6px",
-                backgroundColor: `${cashColor}18`,
-                border: `1px solid ${cashColor}40`,
-                color: cashColor,
-              }}
-            >
-              ${item.effective_cash_price.toFixed(2)}
-            </span>
-          ) : null}
         </div>
       </div>
     </div>
