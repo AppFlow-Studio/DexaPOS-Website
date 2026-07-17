@@ -291,6 +291,13 @@ function renderEmail(event: OrderEvent, ctx: OrderContext): string {
     ctx.tip > 0
       ? `<div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span>Tip</span><span>$${ctx.tip.toFixed(2)}</span></div>`
       : "";
+  // Grand total = tip-exclusive order total + tip. Ships WITH the migration that
+  // makes orders.total_amount tip-EXCLUSIVE for online orders (matching POS);
+  // ctx.total already nets discount/surcharge/delivery, so adding the separately
+  // displayed tip yields the actual charged amount. (Pre-migration this order was
+  // tip-inclusive and would have shown tip twice — so migration + this change must
+  // ship together. See tasks/BUG-online-order-total_amount-tip-inclusive-inconsistency.md)
+  const grandTotal = ctx.total + ctx.tip;
   const paymentRow = ctx.cardLastFour
     ? `<div style="margin:16px 0;padding:12px 16px;background:#f9fafb;border-radius:8px;display:flex;justify-content:space-between;align-items:center;"><span style="color:#666;font-size:14px;">Payment</span><span style="font-size:14px;font-weight:600;">${escapeHtml(ctx.cardType ?? "Card")} •••• ${escapeHtml(ctx.cardLastFour)}</span></div>`
     : "";
@@ -316,7 +323,7 @@ function renderEmail(event: OrderEvent, ctx: OrderContext): string {
               <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span>Subtotal</span><span>$${ctx.subtotal.toFixed(2)}</span></div>
               <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span>Tax</span><span>$${ctx.tax.toFixed(2)}</span></div>
               ${tipRow}
-              <div style="display:flex;justify-content:space-between;font-weight:600;font-size:16px;padding-top:8px;border-top:1px solid #e5e7eb;"><span>Total</span><span>$${ctx.total.toFixed(2)}</span></div>
+              <div style="display:flex;justify-content:space-between;font-weight:600;font-size:16px;padding-top:8px;border-top:1px solid #e5e7eb;"><span>Total</span><span>$${grandTotal.toFixed(2)}</span></div>
             </div>
             ${paymentRow}`
           : ""

@@ -404,6 +404,10 @@ export const useOnlineOrderingSettings = create<OnlineOrderingStore>(
           baseDeliveryFee: currentSettings.baseDeliveryFee,
           freeDeliveryThreshold: currentSettings.freeDeliveryThreshold,
           deliveryRadiusMiles: currentSettings.deliveryRadiusMiles,
+          // Was omitted from the save payload, so toggling a notification switch
+          // updated local state but never persisted — on reload loadSettings
+          // re-read the unchanged DB value and the switch "returned on".
+          notificationPrefs: currentSettings.notificationPrefs,
         });
         await get().loadSettings(locationId);
         if (saveResult.domainWhitelistError) {

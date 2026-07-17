@@ -450,6 +450,11 @@ export function renderReceiptHtml(
               <tr><td>
                 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
                   ${lineRow("Order", String(orderNumber), { strong: true })}
+                  ${
+                    order.table_number != null && String(order.table_number).trim() !== ""
+                      ? lineRow("Table", escapeHtml(String(order.table_number)), { strong: true })
+                      : ""
+                  }
                   ${lineRow("Ordered", fmtDatetime(order.created_at))}
                 </table>
               </td></tr>

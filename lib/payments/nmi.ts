@@ -241,16 +241,36 @@ export async function createNmiSale(
   };
 }
 
+/**
+ * NMI v5 accepts `void_reason` only as an enum — free text is rejected with
+ * E_INVALID_SUBMISSION ("The provided data is invalid.") and the void fails.
+ * https://docs.nmi.com/reference/void-payment-v5
+ */
+export const NMI_VOID_REASONS = [
+  "fraud",
+  "user_cancel",
+  "icc_rejected",
+  "icc_card_removed",
+  "icc_no_confirmation",
+  "pos_timeout",
+] as const;
+
+export type NmiVoidReason = (typeof NMI_VOID_REASONS)[number];
+
 export async function voidNmiSale(
   config: NmiRequestConfig,
   transactionId: string,
-  voidReason?: string
+  voidReason?: NmiVoidReason
 ) {
+  // Only send the field when it is a valid enum member; NMI rejects anything else.
+  const isValidReason =
+    !!voidReason && (NMI_VOID_REASONS as readonly string[]).includes(voidReason);
+
   const result = await callNmi(
     `/api/v5/payments/${transactionId}/void`,
     {
       method: "POST",
-      body: JSON.stringify(voidReason ? { void_reason: voidReason } : {}),
+      body: JSON.stringify(isValidReason ? { void_reason: voidReason } : {}),
     },
     config
   );
