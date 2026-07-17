@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
 import { CircleSlash, RotateCcw, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -9,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useGatedLocationId } from "@/stores/location-store";
 import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
+import { isActivelySnoozed, snoozeLabel } from "@/lib/snooze";
 import {
   useItemSnooze,
   useSnoozeItem,
@@ -27,22 +27,10 @@ import {
  *
  * Uses an inline panel (not a Radix dropdown) because this renders inside the
  * item-editor Dialog, where a nested modal popover fights the Dialog focus scope.
+ *
+ * isActivelySnoozed/snoozeLabel live in @/lib/snooze so the menus-page row and
+ * modifier toggle share the exact same semantics.
  */
-function isActivelySnoozed(snoozedUntil: string | null): boolean {
-  if (!snoozedUntil) return false;
-  if (snoozedUntil === "infinity") return true;
-  const t = new Date(snoozedUntil).getTime();
-  return Number.isFinite(t) && t > Date.now();
-}
-
-function snoozeLabel(snoozedUntil: string): string {
-  if (snoozedUntil === "infinity") return "Out of stock — until you restore it";
-  const t = new Date(snoozedUntil).getTime();
-  if (!Number.isFinite(t)) return "Out of stock — until you restore it";
-  return `Out of stock — back ${formatDistanceToNow(new Date(snoozedUntil), {
-    addSuffix: true,
-  })}`;
-}
 
 /** Current local time as a value for <input type="datetime-local"> (min bound). */
 function nowLocalInput(): string {
