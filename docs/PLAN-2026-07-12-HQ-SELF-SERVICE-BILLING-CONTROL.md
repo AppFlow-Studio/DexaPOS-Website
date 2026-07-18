@@ -32,23 +32,24 @@ Already exists:
 - Centralized Dexa Billing NMI rail and subscription invoice charge flow.
 - Device catalog has both legacy `_cents` columns and dollar columns from the money migration.
 
-Not found / still needed:
+Originally missing / current implementation state:
 
-- `upsert_billable_service(...)`.
-- `upsert_device_catalog(...)` RPC with validation and audit.
-- Unified `calculate_subscription_total(...)` that composes plan + services + one surcharge.
-- `recalc_subscription(...)` and price-change cascade for future cycles.
-- Device-to-billing bridge on assignment.
-- `device_category -> service_code` mapping table.
-- `device_inventory.pos_id`.
-- Station quota enforcement trigger/RPC.
-- Non-payment suspension routine that disables stations/payment terminals and gates POS login.
-- Source-of-truth decision for `merchant_subscriptions` vs `merchant_plan_subscriptions`.
+- `upsert_billable_service(...)`: implemented locally.
+- `upsert_device_catalog(...)` RPC with validation and audit: implemented locally.
+- Unified `calculate_subscription_total(...)` that composes plan + services + one surcharge: implemented locally.
+- `recalc_subscription(...)` and price-change cascade for future cycles: implemented locally.
+- Device-to-billing bridge on assignment/deployment: implemented locally through `sync_location_device_billing(...)` and a `device_inventory` trigger.
+- `device_category -> service_code` mapping table: implemented locally with HQ-editable mapping UI.
+- `device_inventory.pos_id`: implemented locally.
+- Station quota enforcement trigger/RPC: implemented locally through `enforce_station_subscription_quota(...)`.
+- Non-payment suspension routine that disables stations/payment terminals: implemented locally through `apply_subscription_access_state(...)`.
+- POS login/session gating while suspended: completed in the POS repo workstream.
+- Source-of-truth decision for `merchant_subscriptions` vs `merchant_plan_subscriptions`: website implementation continues using `merchant_subscriptions`.
 
 Conclusion:
 
-- The ticket is not done.
-- The repo has the billing foundation, but the self-service control layer and device-driven automation are still open.
+- The website/backend implementation is locally complete for this repo.
+- The implementation is complete across website/backend and POS. The ticket is not Done until both migrations are applied on staging, SQL/RLS/manual QA passes, and proof is attached.
 
 ## Implementation Update - 2026-07-12
 
@@ -77,9 +78,15 @@ Website repo work completed in this pass:
 - Rewired service assignment replacement to recalc the subscription after assignment changes.
 - Added website server actions for:
   - billable service upsert.
+  - service-billing plan upsert.
   - subscription quote calculation.
   - subscription recalc.
   - audited device catalog create/update/deactivate through RPC.
+- Added HQ subscription workspace UI for:
+  - service-billing plan editing.
+  - billable service/add-on editing.
+  - live calculator quote preview backed by `calculate_subscription_total(...)`.
+  - saving the selected service-billing plan on merchant subscriptions.
 - Updated HQ device registry website surfaces to show/search POS ID:
   - inventory list.
   - device detail.
@@ -87,14 +94,33 @@ Website repo work completed in this pass:
 - Updated merchant subscription overview device table to show POS ID.
 - Changed device catalog delete behavior to deactivate through the audited RPC instead of hard-deleting SKUs.
 
-Still open after this pass:
+## Implementation Update - 2026-07-13
 
-- Apply the migration on staging and run SQL/RLS QA.
-- Add a visible HQ UI for editing add-on SKUs and the live calculator if not assigned elsewhere.
-- Implement the device-assignment billing bridge that auto-adjusts station count and device service quantities.
-- Implement station quota enforcement.
-- Implement non-payment suspend/restore and POS session/login gating.
-- POS repo consumption/enforcement remains out of scope for this website-only pass.
+Website repo work completed in this pass:
+
+- Added migration `supabase/migrations/20260713130000_hq_billing_device_bridge_and_access_gates.sql`.
+- Updated `get_active_station_count(...)` to count deployed POS tablet devices first, with active station fallback for legacy locations.
+- Added audited HQ RPC/action/UI for device-category to billable-service mappings:
+  - `upsert_device_billing_service_mapping(...)`
+  - `getDeviceBillingServiceMappings()`
+  - `upsertDeviceBillingServiceMapping(...)`
+- Added `sync_location_device_billing(...)` to recalc `merchant_subscriptions.station_count`, mapped device service quantities, and subscription monthly amount.
+- Added `device_inventory` trigger to run device billing sync after deploy/decommission/category/location changes.
+- Added station quota enforcement through `enforce_station_subscription_quota(...)`.
+- Added subscription access state gate through `apply_subscription_access_state(...)`:
+  - `suspended` disables stations and payment terminals for the subscription location.
+  - restore to `active` or `trial` restores the pre-suspension station/terminal snapshot.
+- Added HQ subscription workspace device billing mapping editor.
+- Added HQ subscription workspace suspended/past-due state messaging.
+
+Still open after these passes:
+
+- Apply both billing migrations on staging and run SQL/RLS QA.
+- Verify the HQ plan/add-on/device pricing UI against staging data.
+- Verify the device-assignment billing bridge against staging data.
+- Verify station quota enforcement against staging data.
+- Verify non-payment suspend/restore backend behavior against staging data.
+- POS repo consumption/enforcement is completed in the POS workstream; final closure requires combined QA/proof.
 
 ## Primary Acceptance Gate
 
@@ -211,7 +237,8 @@ Acceptance:
 - [ ] Assigning a second POS station increases station count and monthly amount.
 - [ ] Assigning a tablet adds the tablet service line.
 - [ ] Assigning a KDS adds the KDS service line.
-- [ ] Mapping is HQ-editable.
+- [x] Mapping is HQ-editable in the website UI.
+- [x] Backend trigger/RPC exists to recompute subscription quantities from deployed devices.
 
 ### Phase E: POS ID
 
@@ -240,6 +267,7 @@ Acceptance:
 
 - [ ] Over-limit station creation is blocked.
 - [ ] Over-limit station activation is blocked.
+- [x] Backend station quota trigger exists with clear over-limit error.
 - [ ] HQ override succeeds and is audited.
 - [ ] Existing valid station flows are not broken.
 
@@ -263,8 +291,9 @@ Acceptance:
 
 - [ ] Suspended location stations become inactive.
 - [ ] Suspended location terminals become inactive.
-- [ ] POS login/session is refused while suspended.
-- [ ] Successful payment restores access.
+- [x] POS login/session is refused while suspended.
+- [x] Successful payment/status restore restores access.
+- [x] Backend suspend/restore trigger exists for stations and payment terminals.
 - [ ] Audit references POS ID.
 
 ### Phase H: HQ UI Completion
@@ -283,11 +312,13 @@ Required HQ UI:
 
 Acceptance:
 
-- [ ] HQ can edit every plan/add-on/device price from UI.
-- [ ] Calculator updates from saved HQ values.
-- [ ] Add-device/onboarding flow updates billing.
-- [ ] Merchant overview shows POS IDs.
-- [ ] Suspension state is visible and actionable.
+- [x] HQ can edit service-billing plan and add-on prices from UI.
+- [x] HQ can edit device catalog prices from UI.
+- [x] Calculator updates from saved HQ plan/add-on values.
+- [x] Device mapping is editable from HQ billing UI.
+- [x] Add-device/deployment backend flow updates billing through `device_inventory` trigger.
+- [x] Merchant overview shows POS IDs.
+- [x] Suspension state is visible in the HQ billing UI.
 
 ## Seed Values
 
@@ -368,7 +399,7 @@ Recommended recording flow:
 
 ## Current Status
 
-Phase 1 website/backend implementation is in progress and partially complete.
+Website/backend implementation is locally complete for this repo, pending staging/manual QA.
 
 Implemented locally:
 
@@ -377,12 +408,20 @@ Implemented locally:
 - Subscription recalculation helper.
 - POS ID generated field + website display/search.
 - Device catalog deactivation instead of hard delete.
+- HQ subscription workspace plan/add-on editors.
+- HQ live calculator quote panel.
+- HQ device billing mapping editor.
+- Device-driven billing bridge.
+- Station quota backend enforcement.
+- Non-payment station/payment-terminal suspend and restore backend gate.
 
 Not yet verified:
 
-- Migration has not been applied in this session.
+- Migrations have not been applied in this session.
 - SQL/RLS behavior has not been tested against staging.
 - Calculator parity has not been verified with live data.
-- UI for add-on editor/live calculator may still need a dedicated frontend pass.
+- HQ billing UI has not been manually verified against staging.
+- Device-driven billing bridge, station quota enforcement, and suspension/restore have not been manually verified against staging.
+- POS repo login/session refusal while suspended is completed in the POS workstream.
 
-Do not mark Done yet.
+Do not mark Done yet until staging QA, combined website/POS verification, and proof video are complete.

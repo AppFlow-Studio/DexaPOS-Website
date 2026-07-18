@@ -33,9 +33,13 @@ import {
   useOrderOutSyncedMenus,
   useRecentOrderOutOrders,
   useOnboardOrderOut,
+  useOrderOutWebhookHealth,
 } from "@/app/dashboard/online-ordering/hooks/useOrderOutStatus";
 import { OrderOutOnboardingForm, type OnboardingFormData } from "./OrderOutOnboardingForm";
-import type { OrderOutLocationStatus } from "@/app/dashboard/actions/orderout";
+import type {
+  OrderOutLocationStatus,
+  OrderOutWebhookHealth,
+} from "@/app/dashboard/actions/orderout";
 import {
   extractConnectedPlatforms,
   formatRelativeTime,
@@ -68,6 +72,36 @@ interface OrderOutTabProps {
 // ============================================================================
 
 const KNOWN_PLATFORMS = ["UberEats", "DoorDash", "GrubHub"] as const;
+
+// Compact status of the push_menu webhook: is OrderOut delivering results,
+// when was the last one, and are any callbacks dead-lettering.
+function WebhookHealthIndicator({ health }: { health: OrderOutWebhookHealth }) {
+  const receiving = !!health.lastResultReceivedAt;
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+      <span className="flex items-center gap-1.5">
+        <span
+          aria-hidden
+          className={`inline-block h-2 w-2 rounded-full ${
+            receiving ? "bg-green-500" : "bg-yellow-400"
+          }`}
+        />
+        <span className="text-muted-foreground">
+          {receiving
+            ? `Receiving results — last ${formatRelativeTime(
+                health.lastResultReceivedAt as string
+              )}`
+            : "No results received yet"}
+        </span>
+      </span>
+      {health.dlqCount > 0 && (
+        <Badge variant="destructive" className="text-[10px]">
+          {health.dlqCount} failed callback{health.dlqCount === 1 ? "" : "s"}
+        </Badge>
+      )}
+    </div>
+  );
+}
 
 // Logo comes from the single platform vocabulary (lib/orderout/platform.ts).
 function PlatformLogo({ platform, className = "h-6 w-6" }: { platform: string; className?: string }) {
@@ -133,8 +167,10 @@ export function OrderOutTab({
 }: OrderOutTabProps) {
   const { data: syncedMenusData } = useOrderOutSyncedMenus(clerkOrgId, locationId);
   const { data: recentOrdersData } = useRecentOrderOutOrders(clerkOrgId, locationId);
+  const { data: webhookHealthData } = useOrderOutWebhookHealth(clerkOrgId, locationId);
   const syncedMenus = syncedMenusData?.data || [];
   const recentOrders = recentOrdersData?.data || [];
+  const webhookHealth = webhookHealthData?.data ?? null;
 
   // Union: webhook-verified ∪ merchant self-confirmed.
   // This one derivation unlocks every downstream gate — Setup Progress, the
@@ -294,6 +330,9 @@ export function OrderOutTab({
             <div>
               <CardTitle className="text-base">Connected Channels</CardTitle>
               <CardDescription>Delivery platforms linked to this location</CardDescription>
+              {isOnboarded && webhookHealth && (
+                <WebhookHealthIndicator health={webhookHealth} />
+              )}
             </div>
             <Button variant="outline" size="sm" asChild className="shrink-0 self-start">
               <a href={dashboardUrl} target="_blank" rel="noopener noreferrer">

@@ -31,17 +31,25 @@ import {
   Loader2,
   Plug,
   RefreshCw,
+  Star,
   Upload,
   XCircle,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Empty } from "@/components/ui/empty";
 import {
   useOrderOutMenuSync,
   useMenuPayloadDiff,
 } from "@/app/dashboard/hooks/useOrderOutMenuSync";
-import { usePushMenuToOrderOut } from "@/app/dashboard/online-ordering/hooks/useOrderOutStatus";
+import {
+  usePushMenuToOrderOut,
+  usePushMenuToChannels,
+  usePushChannelsLiveStatus,
+  useSetPrimaryOnlineMenu,
+} from "@/app/dashboard/online-ordering/hooks/useOrderOutStatus";
 import { SyncStatusBadge, formatTimeAgo } from "./OrderOutMenuStatus";
+import { MenuChannelsCard } from "@/components/dashboard/orderout/MenuChannelsCard";
 import Link from "next/link";
 
 interface MenuOrderOutTabProps {
@@ -81,6 +89,10 @@ export function MenuOrderOutTab({
     menuId
   );
   const pushMenuMutation = usePushMenuToOrderOut(clerkOrgId);
+  const pushChannelsMutation = usePushMenuToChannels(clerkOrgId);
+  const setPrimaryMutation = useSetPrimaryOnlineMenu(clerkOrgId);
+  const [activeSyncId, setActiveSyncId] = useState<string | null>(null);
+  const channelsLive = usePushChannelsLiveStatus(clerkOrgId, activeSyncId);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [showPayload, setShowPayload] = useState(false);
@@ -88,7 +100,21 @@ export function MenuOrderOutTab({
   const syncStatus = syncResult?.data ?? null;
   const lastSync = syncStatus?.lastSync;
   const ooMenuId = syncStatus?.ooMenuId ?? null;
+  const isPrimaryOnlineMenu = syncStatus?.isPrimaryOnlineMenu ?? false;
   const syncHistory = syncStatus?.syncHistory ?? [];
+  const platformStatuses = syncStatus?.platformStatuses ?? [];
+  const connectedChannels = syncStatus?.connectedChannels ?? [];
+
+  const handlePushChannels = () => {
+    pushChannelsMutation.mutate(
+      { clerkOrgId, menuId, locationId },
+      {
+        onSuccess: (res) => {
+          if (res.success && res.data?.syncId) setActiveSyncId(res.data.syncId);
+        },
+      }
+    );
+  };
 
   const diffData = diffResult?.data ?? null;
   const hasChanges = diffData?.hasChanges ?? false;
@@ -234,8 +260,67 @@ export function MenuOrderOutTab({
               </p>
             </div>
           </div>
+
+          {/* Canonical online-ordering menu designation */}
+          {ooMenuId && (
+            <div className="mt-4 flex items-center justify-between gap-3 rounded-lg border p-3">
+              <div className="flex min-w-0 items-start gap-2">
+                <Star
+                  className={cn(
+                    "mt-0.5 h-4 w-4 shrink-0",
+                    isPrimaryOnlineMenu
+                      ? "fill-amber-400 text-amber-500"
+                      : "text-muted-foreground"
+                  )}
+                />
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">Online ordering menu</p>
+                  <p className="text-xs text-muted-foreground">
+                    {isPrimaryOnlineMenu
+                      ? "OrderOut serves this menu. Out-of-stock (86) changes re-push it automatically."
+                      : "OrderOut serves one menu per store. Make this the menu that 86 changes re-push."}
+                  </p>
+                </div>
+              </div>
+              {isPrimaryOnlineMenu ? (
+                <Badge variant="default" className="shrink-0 bg-green-600">
+                  <CheckCircle2 className="mr-1 h-3 w-3" />
+                  Online menu
+                </Badge>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="shrink-0"
+                  onClick={() =>
+                    setPrimaryMutation.mutate({ locationId, menuId })
+                  }
+                  disabled={setPrimaryMutation.isPending}
+                >
+                  {setPrimaryMutation.isPending ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <>
+                      <Star className="mr-1.5 h-3.5 w-3.5" />
+                      Set as online menu
+                    </>
+                  )}
+                </Button>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
+
+      {/* Section 1b: Delivery Channels — per-menu status + push */}
+      <MenuChannelsCard
+        ooMenuId={ooMenuId}
+        platformStatuses={platformStatuses}
+        connectedChannels={connectedChannels}
+        onPush={handlePushChannels}
+        isPushing={pushChannelsMutation.isPending}
+        live={channelsLive.data?.data ?? null}
+      />
 
       {/* Section 2: Diff-based Sync Card */}
       {isDiffLoading ? (

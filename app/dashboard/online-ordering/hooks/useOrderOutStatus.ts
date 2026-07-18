@@ -10,7 +10,10 @@ import {
   pushMenuToConnectedChannels,
   getPushChannelsHistory,
   getPushChannelsLiveStatus,
+  getOrderOutWebhookHealth,
   setOrderOutChannelsConfirmed,
+  setPrimaryOnlineMenu,
+  getLocationOnlineMenu,
   type OnboardOrderOutParams,
   type PushMenuToOrderOutParams,
   type PushMenuToChannelsParams,
@@ -25,6 +28,51 @@ export function useOrderOutStatus(clerkOrgId: string, locationId: string) {
   return useQuery({
     queryKey: ["orderout-status", clerkOrgId, locationId],
     queryFn: () => getOrderOutStatus(clerkOrgId, locationId),
+    enabled: !!clerkOrgId && !!locationId && locationId !== "all",
+    staleTime: 30 * 1000,
+  });
+}
+
+/**
+ * Designate a menu as the location's canonical online-ordering menu — the single
+ * OrderOut push target for availability/86 re-pushes.
+ */
+export function useSetPrimaryOnlineMenu(clerkOrgId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      locationId,
+      menuId,
+    }: {
+      locationId: string;
+      menuId: string;
+    }) => setPrimaryOnlineMenu(clerkOrgId, locationId, menuId),
+    onSuccess: (result) => {
+      if (result.success) {
+        toast.success("Set as the online ordering menu");
+        queryClient.invalidateQueries({ queryKey: ["orderout-menu-sync"] });
+        queryClient.invalidateQueries({ queryKey: ["orderout-synced-menus"] });
+        queryClient.invalidateQueries({ queryKey: ["orderout-online-menu"] });
+      } else {
+        toast.error(result.error || "Failed to set online menu");
+      }
+    },
+    onError: (e: Error) =>
+      toast.error(e.message || "Failed to set online menu"),
+  });
+}
+
+/**
+ * The location's canonical online menu + its active-linked menus — powers the
+ * "Online menu" designation on the menus list.
+ */
+export function useLocationOnlineMenu(
+  clerkOrgId: string,
+  locationId: string | null,
+) {
+  return useQuery({
+    queryKey: ["orderout-online-menu", clerkOrgId, locationId],
+    queryFn: () => getLocationOnlineMenu(clerkOrgId, locationId as string),
     enabled: !!clerkOrgId && !!locationId && locationId !== "all",
     staleTime: 30 * 1000,
   });
@@ -244,5 +292,22 @@ export function usePushChannelsLiveStatus(
         data.syncStatus === "pending" || data.syncStatus === "syncing";
       return active ? 3000 : false;
     },
+  });
+}
+
+/**
+ * Merchant-scoped health of the push_menu webhook for a location: whether
+ * OrderOut is delivering results, when the last one arrived, and any failing
+ * callbacks in the dead-letter queue.
+ */
+export function useOrderOutWebhookHealth(
+  clerkOrgId: string,
+  locationId: string
+) {
+  return useQuery({
+    queryKey: ["orderout-webhook-health", clerkOrgId, locationId],
+    queryFn: () => getOrderOutWebhookHealth(clerkOrgId, locationId),
+    enabled: !!clerkOrgId && !!locationId && locationId !== "all",
+    staleTime: 30 * 1000,
   });
 }

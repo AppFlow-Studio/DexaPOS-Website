@@ -15,6 +15,7 @@ import {
 } from "@/stores/location-store";
 import { AffectsTag } from "../../AffectsTag";
 import { SectionHeader } from "./OverviewSection";
+import { ItemSnoozeControl } from "../ItemSnoozeControl";
 import type { SectionRenderCtx } from "@/app/dashboard/menu/items/[itemId]/edit/ItemEditLayout";
 
 export function AvailabilitySection({ itemId, item, scope }: SectionRenderCtx) {
@@ -89,6 +90,13 @@ export function AvailabilitySection({ itemId, item, scope }: SectionRenderCtx) {
             )}
           </Button>
         </div>
+
+        {/* 86 / out-of-stock — marking out of stock also switches availability off
+            (and restore switches it back on). */}
+        <ItemSnoozeControl
+          menuItemId={itemId}
+          onOutOfStockChange={(oos) => setAvailable(!oos)}
+        />
       </div>
     </div>
   );

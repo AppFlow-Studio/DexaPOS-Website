@@ -125,7 +125,9 @@ export async function getOrderOutPushMenuWebhookStatus(): Promise<{
         .from('webhook_dead_letter_queue')
         .select('id', { count: 'exact', head: true })
         .eq('source', 'orderout')
-        .eq('event_type', 'push_menu'),
+        // Single-service channel callbacks are logged as 'push_menu_channels';
+        // legacy array-shape results as 'push_menu'. Count both.
+        .in('event_type', ['push_menu', 'push_menu_channels']),
     ])
 
     return {
