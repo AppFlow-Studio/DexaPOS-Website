@@ -60,7 +60,7 @@ export default async function MarketingLayout({
 
   return (
     <div
-      className={`${barlow.variable} ${barlowCondensed.variable}`}
+      className={`mk-site ${barlow.variable} ${barlowCondensed.variable}`}
       style={{ fontFamily: "var(--font)" }}
     >
       <Analytics />
