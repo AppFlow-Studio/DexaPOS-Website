@@ -2,13 +2,14 @@
 -- correlate_push_channels_callback.
 --
 -- The function RETURNS TABLE(sync_id uuid, ...), so `sync_id` is an OUT
--- variable. Step 6 recomputed the reported/success/failed counts with an
--- UNqualified `WHERE sync_id = v_sync.id`, which Postgres could not resolve
--- between the OUT variable and orderout_menu_sync_results.sync_id — so every
--- non-orphan push_channels callback threw and the webhook returned
--- "Internal correlator error" (500). Fix: alias the results table and qualify
--- the column refs. OUT column names are unchanged (the edge function reads
--- row.sync_id / row.final_status / ...). Everything else is verbatim from prod.
+-- variable that collided with orderout_menu_sync_results.sync_id in TWO spots,
+-- each raising 42702 on a non-orphan push_channels callback (webhook then
+-- returned "Internal correlator error" 500):
+--   * step 6: unqualified `WHERE sync_id = v_sync.id` -> alias + qualify (res.sync_id).
+--   * step 4: `ON CONFLICT (sync_id, delivery_service)` inference column ->
+--     reference the unique constraint by name (ON CONSTRAINT uq_sync_result).
+-- OUT column names are unchanged (the edge function reads row.sync_id /
+-- row.final_status / ...). Everything else is verbatim from prod.
 --
 -- Idempotent: CREATE OR REPLACE only.
 
@@ -117,7 +118,10 @@ BEGIN
   VALUES (
     v_sync.id, p_delivery_service, p_status, p_status_code, p_error_message, p_raw_response
   )
-  ON CONFLICT (sync_id, delivery_service) DO NOTHING;
+  -- Reference the unique constraint by NAME, not (sync_id, delivery_service):
+  -- an ON CONFLICT inference column named `sync_id` also collides with the
+  -- RETURNS TABLE out-variable (42702), same root cause as step 6.
+  ON CONFLICT ON CONSTRAINT uq_sync_result DO NOTHING;
 
   GET DIAGNOSTICS v_rows_inserted = ROW_COUNT;
   v_was_duplicate := (v_rows_inserted = 0);
