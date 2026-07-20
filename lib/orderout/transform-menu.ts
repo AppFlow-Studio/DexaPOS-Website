@@ -175,7 +175,15 @@ function collectModifierGroup(
   const modifierOptions: OrderOutModifierOption[] = [];
 
   for (const item of mg.items) {
-    if (!item.is_active) continue;
+    // A 86'd modifier option arrives with is_active=false (get_menu_with_categories
+    // folds the snooze into is_active) but keeps its raw snoozed_until. Mirror the
+    // regular-item path above: keep it on the menu marked "Sold Out" via
+    // suspension_info rather than dropping it — Uber auto-restores at suspend_until,
+    // and dropping/re-adding options churns the menu and can break a required
+    // group's min_selections. Only a genuinely-inactive (non-snoozed) option is dropped.
+    const suspendUntil = snoozeToSuspendUntil(item.snoozed_until);
+    const isSnoozed = suspendUntil !== null;
+    if (!item.is_active && !isSnoozed) continue;
 
     // Add modifier item (deduplicated)
     if (!modifierItemMap.has(item.id)) {
@@ -187,6 +195,16 @@ function collectModifierGroup(
         },
         price_info: { price: priceToCents(item.price_modifier) },
         modifier_group_ids: { ids: [] },
+        ...(isSnoozed
+          ? {
+              suspension_info: {
+                suspension: {
+                  suspend_until: suspendUntil,
+                  reason: item.snooze_reason || "Out of stock",
+                },
+              },
+            }
+          : {}),
       });
     }
 
