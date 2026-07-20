@@ -26,9 +26,13 @@ const isAuthRoute = createRouteMatcher(['/sign-in(.*)', '/sign-up(.*)'])
 // Marketing CMS admin — gated to the internal HQ team (like /manage).
 const isCmsAdminRoute = createRouteMatcher(['/admin(.*)'])
 // Public/self-authorizing API routes: /api/contact is an anonymous public form;
-// /api/cms/* enforces HQ auth inside each handler (requireHqUser → 401). Both
-// must skip the middleware sign-in redirect so the handler owns authorization.
-const isPublicApiRoute = createRouteMatcher(['/api/contact(.*)', '/api/cms(.*)'])
+// /api/cms/* enforces HQ auth inside each handler (requireHqUser → 401);
+// /api/internal/* are server-to-server webhooks (DB pg_net triggers / edge
+// functions) that authenticate via the x-internal-secret header (401 on mismatch)
+// and have NO Clerk session — so they must skip the middleware sign-in redirect,
+// which would otherwise bounce them to /sign-in and silently break the callers
+// (e.g. the snooze → OrderOut resync). All three own their own authorization.
+const isPublicApiRoute = createRouteMatcher(['/api/contact(.*)', '/api/cms(.*)', '/api/internal(.*)'])
 // The set of gated / app-owned route prefixes. Anything NOT in this set (and not
 // already handled as public above) is treated as public marketing so the
 // (marketing) [...slug] CMS catch-all can serve pages published at arbitrary
