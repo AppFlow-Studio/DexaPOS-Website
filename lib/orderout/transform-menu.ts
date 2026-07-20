@@ -175,15 +175,14 @@ function collectModifierGroup(
   const modifierOptions: OrderOutModifierOption[] = [];
 
   for (const item of mg.items) {
-    // A 86'd modifier option arrives with is_active=false (get_menu_with_categories
-    // folds the snooze into is_active) but keeps its raw snoozed_until. Mirror the
-    // regular-item path above: keep it on the menu marked "Sold Out" via
-    // suspension_info rather than dropping it — Uber auto-restores at suspend_until,
-    // and dropping/re-adding options churns the menu and can break a required
-    // group's min_selections. Only a genuinely-inactive (non-snoozed) option is dropped.
-    const suspendUntil = snoozeToSuspendUntil(item.snoozed_until);
-    const isSnoozed = suspendUntil !== null;
-    if (!item.is_active && !isSnoozed) continue;
+    // OrderOut has NO per-modifier out-of-stock mechanism. Unlike items (which support
+    // suspension_info / a suspend endpoint), a modifier option can only be made
+    // unavailable by REMOVING it from the menu payload and re-uploading the whole menu
+    // — which the 86 full-resync already does. get_menu_with_categories folds the snooze
+    // into is_active, so an 86'd option arrives is_active=false and is dropped here
+    // alongside genuinely-inactive ones. (Do NOT emit suspension_info for modifiers; it
+    // is a no-op on OrderOut and leaves the option orderable.)
+    if (!item.is_active) continue;
 
     // Add modifier item (deduplicated)
     if (!modifierItemMap.has(item.id)) {
@@ -195,28 +194,24 @@ function collectModifierGroup(
         },
         price_info: { price: priceToCents(item.price_modifier) },
         modifier_group_ids: { ids: [] },
-        ...(isSnoozed
-          ? {
-              suspension_info: {
-                suspension: {
-                  suspend_until: suspendUntil,
-                  reason: item.snooze_reason || "Out of stock",
-                },
-              },
-            }
-          : {}),
       });
     }
 
     modifierOptions.push({ type: "ITEM", id: item.id });
   }
 
+  // Removing 86'd options can push a required group below its configured
+  // min_selections and make the re-upload invalid. Clamp min_permitted to the number
+  // of options that actually survive (0 when the whole group is 86'd, leaving an empty
+  // group rather than a dangling reference from the parent item).
+  const minPermitted = Math.min(mg.min_selections, modifierOptions.length);
+
   modifierGroupMap.set(mg.id, {
     id: mg.id,
     title: { translations: { en_us: mg.name } },
     modifier_options: modifierOptions,
     quantity_info: {
-      min_permitted: mg.min_selections,
+      min_permitted: minPermitted,
       max_permitted: mg.max_selections,
     },
   });
