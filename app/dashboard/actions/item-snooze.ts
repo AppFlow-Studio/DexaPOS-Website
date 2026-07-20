@@ -490,9 +490,20 @@ export interface ActiveSnoozeModifier {
   updated_at: string;
 }
 
+export interface ActiveSnoozeCategory {
+  kind: "category";
+  category_id: string;
+  name: string;
+  image: string | null;
+  snoozed_until: string;
+  snooze_reason: string | null;
+  updated_at: string;
+}
+
 export interface ActiveSnoozes {
   items: ActiveSnoozeItem[];
   modifiers: ActiveSnoozeModifier[];
+  categories: ActiveSnoozeCategory[];
 }
 
 export async function getActiveSnoozes(
@@ -513,7 +524,7 @@ export async function getActiveSnoozes(
 
   return {
     success: true,
-    data: (data as ActiveSnoozes) ?? { items: [], modifiers: [] },
+    data: (data as ActiveSnoozes) ?? { items: [], modifiers: [], categories: [] },
   };
 }
 
