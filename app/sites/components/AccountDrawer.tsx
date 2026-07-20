@@ -22,6 +22,7 @@ import {
   Edit2,
   Check,
   CheckCircle2,
+  ArrowLeft,
 } from "lucide-react";
 import { useSession } from "../hooks/useSession";
 import { clearSession } from "../session-actions";
@@ -365,10 +366,11 @@ export function AccountDrawer({
         <div className="px-6 py-4 space-y-4">
           <button
             onClick={() => setSection("main")}
-            className="text-sm flex items-center gap-1"
-            style={{ color: "var(--primary)" }}
+            className="p-2 rounded-full transition-colors hover:opacity-80 shrink-0"
+            style={{ backgroundColor: "var(--card)", border: "1px solid var(--border)" }}
+            aria-label="Back"
           >
-            &larr; Back
+            <ArrowLeft className="h-4 w-4" style={{ color: "var(--text)" }} />
           </button>
           <h3 className="text-lg font-bold" style={{ fontFamily: "var(--font-display)" }}>
             Profile
@@ -478,10 +480,11 @@ export function AccountDrawer({
         <div className="px-6 py-4 space-y-4">
           <button
             onClick={() => setSection("main")}
-            className="text-sm flex items-center gap-1"
-            style={{ color: "var(--primary)" }}
+            className="p-2 rounded-full transition-colors hover:opacity-80 shrink-0"
+            style={{ backgroundColor: "var(--card)", border: "1px solid var(--border)" }}
+            aria-label="Back"
           >
-            &larr; Back
+            <ArrowLeft className="h-4 w-4" style={{ color: "var(--text)" }} />
           </button>
           <h3 className="text-lg font-bold" style={{ fontFamily: "var(--font-display)" }}>
             Order History
@@ -586,10 +589,11 @@ export function AccountDrawer({
         <div className="px-6 py-4 space-y-4">
           <button
             onClick={() => setSection("main")}
-            className="text-sm flex items-center gap-1"
-            style={{ color: "var(--primary)" }}
+            className="p-2 rounded-full transition-colors hover:opacity-80 shrink-0"
+            style={{ backgroundColor: "var(--card)", border: "1px solid var(--border)" }}
+            aria-label="Back"
           >
-            &larr; Back
+            <ArrowLeft className="h-4 w-4" style={{ color: "var(--text)" }} />
           </button>
           <div className="flex justify-between items-center">
             <h3 className="text-lg font-bold" style={{ fontFamily: "var(--font-display)" }}>
@@ -792,10 +796,11 @@ export function AccountDrawer({
         <div className="px-6 py-4 space-y-4">
           <button
             onClick={() => setSection("main")}
-            className="text-sm flex items-center gap-1"
-            style={{ color: "var(--primary)" }}
+            className="p-2 rounded-full transition-colors hover:opacity-80 shrink-0"
+            style={{ backgroundColor: "var(--card)", border: "1px solid var(--border)" }}
+            aria-label="Back"
           >
-            &larr; Back
+            <ArrowLeft className="h-4 w-4" style={{ color: "var(--text)" }} />
           </button>
           <h3 className="text-lg font-bold" style={{ fontFamily: "var(--font-display)" }}>
             Rewards
