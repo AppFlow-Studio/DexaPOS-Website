@@ -200,19 +200,30 @@ function collectModifierGroup(
     modifierOptions.push({ type: "ITEM", id: item.id });
   }
 
-  // Removing 86'd options can push a required group below its configured
-  // min_selections and make the re-upload invalid. Clamp min_permitted to the number
-  // of options that actually survive (0 when the whole group is 86'd, leaving an empty
-  // group rather than a dangling reference from the parent item).
-  const minPermitted = Math.min(mg.min_selections, modifierOptions.length);
+  // Required groups must enforce at least one selection even if min_selections is 0.
+  const baseMin = mg.is_required
+    ? Math.max(mg.min_selections, 1)
+    : mg.min_selections;
+  // Removing 86'd options can push a group above its surviving option count and make
+  // the re-upload invalid. Clamp both bounds to the number of options that actually
+  // survive (0 when the whole group is 86'd, leaving an empty group rather than a
+  // dangling reference from the parent item).
+  const minPermitted = Math.min(baseMin, modifierOptions.length);
+  // Null max_selections = "no limit" -> represent as "select up to all options".
+  const maxPermitted = Math.min(
+    mg.max_selections ?? modifierOptions.length,
+    modifierOptions.length,
+  );
 
   modifierGroupMap.set(mg.id, {
     id: mg.id,
     title: { translations: { en_us: mg.name } },
     modifier_options: modifierOptions,
     quantity_info: {
-      min_permitted: minPermitted,
-      max_permitted: mg.max_selections,
+      quantity: {
+        min_permitted: minPermitted,
+        max_permitted: maxPermitted,
+      },
     },
   });
 }
