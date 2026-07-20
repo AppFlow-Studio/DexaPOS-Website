@@ -22,6 +22,7 @@ import {
   type BulkMenuDeliveryOp,
   type BulkMenuDeliveryRounding,
 } from "@/app/dashboard/actions/bulk-menu-delivery-price-adjustment";
+import { invalidateOrderOutSync } from "@/app/dashboard/hooks/useOrderOutMenuSync";
 
 type Scope = "all_locations" | "this_location";
 
@@ -128,6 +129,7 @@ export function BulkMenuDeliveryPriceAdjustDialog({
       toast.success(`${res.data.updated} updated · ${res.data.skipped} skipped`);
       queryClient.invalidateQueries({ queryKey: ["menu-with-categories"] });
       queryClient.invalidateQueries({ queryKey: ["menu-items"] });
+      invalidateOrderOutSync(queryClient);
       onSuccess?.();
       onOpenChange(false);
       setValue("");
