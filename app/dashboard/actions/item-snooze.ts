@@ -292,6 +292,84 @@ export async function snoozeModifier(
 }
 
 // ----------------------------------------------------------------------------
+// Modifier GROUP snooze — 86 a whole group by fanning out to all its options.
+// One atomic RPC (set_modifier_group_snooze_v1), one audit entry, one resync.
+// No group-level snooze column: per-option snooze already folds into
+// get_menu_with_categories, so this reaches POS/storefront/OrderOut for free.
+// ----------------------------------------------------------------------------
+
+export async function snoozeModifierGroup(
+  clerkOrgId: string,
+  modifierGroupId: string,
+  locationId: string,
+  snoozedUntil: SnoozeUntil,
+  reason?: string,
+): Promise<SnoozeResult> {
+  if (!locationId || locationId === "all") {
+    return {
+      success: false,
+      error: "A specific location is required to 86 a modifier group.",
+    };
+  }
+
+  const supabase = createServerSupabaseClient();
+
+  const { error } = await supabase.rpc("set_modifier_group_snooze_v1", {
+    p_location_id: locationId,
+    p_modifier_group_id: modifierGroupId,
+    p_snoozed_until: snoozedUntil,
+    p_reason: reason ?? null,
+  });
+
+  if (error) {
+    return { success: false, error: error.message };
+  }
+
+  const { data: group } = await supabase
+    .from("modifier_groups")
+    .select("name")
+    .eq("id", modifierGroupId)
+    .maybeSingle();
+
+  const groupName = group?.name ?? modifierGroupId;
+
+  await LogAuditEvent({
+    clerkOrgId,
+    locationId,
+    action: snoozedUntil
+      ? `86'd Modifier Group: ${groupName}`
+      : `Restored Modifier Group: ${groupName}`,
+    actionCategory: "menu",
+    severity: "info",
+    resourceType: "modifier_group",
+    resourceId: modifierGroupId,
+    resourceName: groupName,
+    changes: {
+      after: { snoozed_until: snoozedUntil },
+      reason,
+    },
+    metadata: {
+      snooze_mode: snoozeMode(snoozedUntil),
+      source: "dashboard",
+      scope: "group",
+    },
+  });
+
+  await triggerOrderOutFullResync(clerkOrgId, locationId);
+
+  return { success: true };
+}
+
+/** Clear a modifier group's 86 (restore all its options). */
+export async function unsnoozeModifierGroup(
+  clerkOrgId: string,
+  modifierGroupId: string,
+  locationId: string,
+): Promise<SnoozeResult> {
+  return snoozeModifierGroup(clerkOrgId, modifierGroupId, locationId, null);
+}
+
+// ----------------------------------------------------------------------------
 // Duration presets — computed server-side (never trust client clocks).
 // ----------------------------------------------------------------------------
 
@@ -404,6 +482,7 @@ export interface ActiveSnoozeItem {
 export interface ActiveSnoozeModifier {
   kind: "modifier";
   modifier_group_item_id: string;
+  modifier_group_id: string;
   name: string;
   group_name: string;
   snoozed_until: string;

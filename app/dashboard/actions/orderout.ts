@@ -1710,16 +1710,20 @@ export async function setPrimaryOnlineMenu(
 }
 
 /**
- * The location's canonical online menu + all its active-linked menus, for
- * surfacing the designation on the menus list. Empty when the location isn't
- * onboarded to OrderOut.
+ * The location's canonical online menu (id + name) + all its active-linked menus,
+ * for surfacing the designation on the menus list and OrderOut tab. Empty when the
+ * location isn't onboarded to OrderOut.
  */
 export async function getLocationOnlineMenu(
   clerkOrgId: string,
   locationId: string,
-): Promise<{ primaryMenuId: string | null; linkedMenuIds: string[] }> {
+): Promise<{
+  primaryMenuId: string | null;
+  primaryMenuName: string | null;
+  linkedMenuIds: string[];
+}> {
   if (!clerkOrgId || !locationId || locationId === "all") {
-    return { primaryMenuId: null, linkedMenuIds: [] };
+    return { primaryMenuId: null, primaryMenuName: null, linkedMenuIds: [] };
   }
 
   const supabase = createServerSupabaseClient();
@@ -1728,7 +1732,8 @@ export async function getLocationOnlineMenu(
     .select("id")
     .eq("location_id", locationId)
     .maybeSingle();
-  if (!restaurant) return { primaryMenuId: null, linkedMenuIds: [] };
+  if (!restaurant)
+    return { primaryMenuId: null, primaryMenuName: null, linkedMenuIds: [] };
 
   const { data: links } = await supabase
     .from("orderout_menu_links")
@@ -1737,9 +1742,140 @@ export async function getLocationOnlineMenu(
     .eq("is_active", true);
 
   const rows = links ?? [];
+  const primaryMenuId = rows.find((l) => l.is_primary)?.menu_id ?? null;
+
+  let primaryMenuName: string | null = null;
+  if (primaryMenuId) {
+    const { data: menu } = await supabase
+      .from("menus")
+      .select("name")
+      .eq("id", primaryMenuId)
+      .maybeSingle();
+    primaryMenuName = menu?.name ?? null;
+  }
+
   return {
-    primaryMenuId: rows.find((l) => l.is_primary)?.menu_id ?? null,
+    primaryMenuId,
+    primaryMenuName,
     linkedMenuIds: rows.map((l) => l.menu_id),
+  };
+}
+
+// ============================================================================
+// Publish the ONE online menu (foolproof push target)
+// ----------------------------------------------------------------------------
+// Merchant-facing publishing always resolves to the location's single designated
+// online menu, so a merchant can never accidentally push a non-online menu (which
+// would create a competing OrderOut link and serve the wrong data). Because item
+// data is global/location-scoped — not per-menu — publishing the online menu
+// always carries edits made from ANY menu.
+//
+//   - designateMenuId omitted → publish the currently-designated online menu.
+//   - designateMenuId provided → make that menu the online menu (first-time pick
+//     or a deliberate switch), then publish it. The DB partial-unique index +
+//     atomic set_primary_online_menu_v1 keep exactly one online menu per store.
+// ============================================================================
+
+export interface PublishOnlineMenuResult {
+  success: boolean;
+  /** True when no online menu is designated yet and none was chosen to designate. */
+  needsDesignation?: boolean;
+  data?: {
+    publishedMenuId: string;
+    publishedMenuName: string | null;
+    itemsSynced: number;
+    /** True when this call changed which menu is the online menu. */
+    redesignated: boolean;
+  };
+  error: string | null;
+}
+
+export async function publishOnlineMenu(
+  clerkOrgId: string,
+  locationId: string,
+  designateMenuId?: string,
+): Promise<PublishOnlineMenuResult> {
+  if (!clerkOrgId || !locationId || locationId === "all") {
+    return { success: false, error: "A specific location is required." };
+  }
+
+  const supabase = createServerSupabaseClient();
+
+  const { data: restaurant } = await supabase
+    .from("orderout_restaurants")
+    .select("id")
+    .eq("location_id", locationId)
+    .maybeSingle();
+  if (!restaurant) {
+    return { success: false, error: "Location is not onboarded to OrderOut" };
+  }
+
+  // The currently-designated online menu (if any).
+  const primary = await resolvePrimaryOnlineMenu(
+    createServiceRoleClient(),
+    restaurant.id,
+  );
+
+  // Always publish the online menu. Only fall back to the caller's chosen menu
+  // when there's no designation yet (or the caller is deliberately switching).
+  const targetMenuId = primary?.menu_id ?? designateMenuId ?? null;
+  if (!targetMenuId) {
+    return {
+      success: false,
+      needsDesignation: true,
+      error: "No online menu selected. Choose which menu handles online orders.",
+    };
+  }
+
+  const willDesignate =
+    !!designateMenuId && designateMenuId !== primary?.menu_id;
+  const publishMenuId = willDesignate ? designateMenuId! : targetMenuId;
+
+  // 1) Push the menu to OrderOut (creates/updates its link).
+  const push = await pushMenuToOrderOut({
+    clerkOrgId,
+    menuId: publishMenuId,
+    locationId,
+  });
+  if (!push.success) {
+    return { success: false, error: push.error ?? "Failed to publish menu" };
+  }
+
+  // 2) Designate it as THE online menu when this is a first pick or a switch.
+  //    (Now that it's linked, set_primary_online_menu_v1 can flag it primary.)
+  const redesignated = willDesignate || !primary;
+  if (redesignated && designateMenuId) {
+    const setRes = await setPrimaryOnlineMenu(clerkOrgId, locationId, designateMenuId);
+    if (!setRes.success) {
+      console.warn("[publishOnlineMenu] designation failed:", setRes.error);
+    }
+  }
+
+  // 3) Fan out to connected channels (best-effort; "no channels" is a no-op).
+  const fan = await pushMenuToConnectedChannels({
+    clerkOrgId,
+    menuId: publishMenuId,
+    locationId,
+  });
+  if (!fan.success) {
+    console.info("[publishOnlineMenu] channel fan-out skipped:", fan.error);
+  }
+
+  const { data: menu } = await supabase
+    .from("menus")
+    .select("name")
+    .eq("id", publishMenuId)
+    .maybeSingle();
+
+  return {
+    success: true,
+    data: {
+      publishedMenuId: publishMenuId,
+      publishedMenuName: menu?.name ?? null,
+      itemsSynced: push.data?.itemsSynced ?? 0,
+      redesignated,
+    },
+    error: null,
   };
 }
 

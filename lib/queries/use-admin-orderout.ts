@@ -12,6 +12,8 @@ import {
   getAdminPushChannelsHistory,
   getAdminPushChannelsLiveStatus,
   getAdminOrderOutSyncedMenusForLocation,
+  getAdminLocationOnlineMenu,
+  adminPublishOnlineMenu,
   type AdminOnboardOrderOutParams,
   type AdminPushMenuToChannelsParams,
 } from '@/app/manage/actions/admin-merchant/orderout'
@@ -192,6 +194,74 @@ export function useAdminPushChannelsLiveStatus(
         data.syncStatus === 'pending' || data.syncStatus === 'syncing'
       return active ? 3000 : false
     },
+  })
+}
+
+/**
+ * The location's designated online menu (HQ view) — powers the OnlineMenuControlCard.
+ */
+export function useAdminLocationOnlineMenu(merchantId: string, locationId: string) {
+  return useQuery({
+    queryKey: ['admin-orderout-online-menu', merchantId, locationId],
+    queryFn: () => getAdminLocationOnlineMenu(merchantId, locationId),
+    enabled: !!merchantId && !!locationId,
+    staleTime: 30 * 1000,
+  })
+}
+
+/**
+ * Publish the location's ONE designated online menu (HQ). Pass designateMenuId to
+ * make a menu the online menu before publishing. Foolproof: never pushes a
+ * non-online menu by accident.
+ */
+export function useAdminPublishOnlineMenu(merchantId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      locationId,
+      designateMenuId,
+    }: {
+      locationId: string
+      designateMenuId?: string
+    }) => adminPublishOnlineMenu(merchantId, locationId, designateMenuId),
+    onSuccess: (result, variables) => {
+      if (result.success) {
+        const name = result.data?.publishedMenuName ?? 'online menu'
+        toast.success(
+          result.data?.redesignated
+            ? `${name} is now the online menu — published`
+            : `Published ${name} to online ordering`,
+          { description: `${result.data?.itemsSynced ?? 0} items synced.` }
+        )
+        queryClient.invalidateQueries({
+          queryKey: ['admin-orderout-online-menu', merchantId, variables.locationId],
+        })
+        queryClient.invalidateQueries({
+          queryKey: adminKeys.merchantOrderOutStatus(merchantId),
+        })
+        // Prefix invalidation — any menuId's sync status for this location.
+        queryClient.invalidateQueries({
+          queryKey: [
+            ...adminKeys.merchants(),
+            merchantId,
+            'orderout-menu-sync',
+            variables.locationId,
+          ],
+        })
+        queryClient.invalidateQueries({
+          queryKey: adminKeys.merchantOrderOutPushChannelsHistory(
+            merchantId,
+            variables.locationId,
+            'all'
+          ),
+        })
+      } else if (result.needsDesignation) {
+        toast.error(result.error || 'Choose which menu handles online orders.')
+      } else {
+        toast.error(result.error || 'Failed to publish online menu')
+      }
+    },
+    onError: (e: Error) => toast.error(e.message || 'Failed to publish online menu'),
   })
 }
 
