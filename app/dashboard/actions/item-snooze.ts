@@ -2,7 +2,13 @@
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { LogAuditEvent } from "./audit-logs";
-import { pushMenuToConnectedChannels } from "./orderout";
+import {
+  pushMenuToOrderOut,
+  pushMenuToConnectedChannels,
+  resolvePrimaryOnlineMenu,
+  suspendOrderOutItem,
+} from "./orderout";
+import { setItemAvailability } from "./menu-items-rpc";
 
 // ============================================================================
 // 86ing (out-of-stock snooze) — item + modifier, per location.
@@ -32,13 +38,16 @@ function snoozeMode(snoozedUntil: SnoozeUntil): "timed" | "until_manual" | "clea
 }
 
 /**
- * Best-effort OrderOut re-push so 86ing reaches connected delivery apps
- * (UberEats/DoorDash/Grubhub) within seconds. Availability-only change, so we
- * bypass the manual cooldown. Never throws — a failed re-push must not fail the
- * snooze itself. NOTE: POS-direct RPC calls do not pass through here; that
- * propagation path is a documented follow-up.
+ * Full-menu OrderOut re-push so 86ing reaches connected delivery apps
+ * (UberEats/DoorDash/Grubhub). Rebuilds and re-pushes the whole menu, then fans
+ * out to channels. This is the heavy path — used for modifiers (no per-modifier
+ * suspension endpoint exists) and as the item fast-path's fallback when the menu
+ * isn't live on OrderOut yet. Availability-only change, so we bypass the manual
+ * cooldown. Never throws — a failed re-push must not fail the snooze itself.
+ * NOTE: POS-direct RPC calls do not pass through here; that propagation path is a
+ * documented follow-up.
  */
-async function triggerOrderOutResyncForLocation(
+async function triggerOrderOutFullResync(
   clerkOrgId: string,
   locationId: string,
 ): Promise<void> {
@@ -53,29 +62,76 @@ async function triggerOrderOutResyncForLocation(
 
     if (!restaurant || restaurant.status !== "active") return;
 
-    const { data: links } = await supabase
-      .from("orderout_menu_links")
-      .select("menu_id")
-      .eq("orderout_restaurant_id", restaurant.id)
-      .eq("is_active", true);
+    // OrderOut serves one menu per store — target only the canonical online menu.
+    const online = await resolvePrimaryOnlineMenu(supabase, restaurant.id);
+    if (!online) return;
 
-    if (!links?.length) return;
+    // 1) Update the menu OrderOut stores so it reflects the 86. This works even
+    //    when no delivery channels are connected yet, so the corrected menu is
+    //    ready to fan out later. Awaited-but-swallowed (best-effort).
+    await pushMenuToOrderOut({ clerkOrgId, menuId: online.menu_id, locationId });
 
-    // Re-push each active menu. Awaited-but-swallowed: guarantees it runs in the
-    // server action while never surfacing an error to the caller. skipCooldown so
-    // a burst of 86s all propagate (availability changes, not spammy menu edits).
-    await Promise.allSettled(
-      links.map((l) =>
-        pushMenuToConnectedChannels({
-          clerkOrgId,
-          menuId: l.menu_id,
-          locationId,
-          skipCooldown: true,
-        }),
-      ),
-    );
+    // 2) Best-effort fan-out to any connected channels (no-ops if none). skipCooldown
+    //    so a burst of 86s all propagate.
+    await pushMenuToConnectedChannels({
+      clerkOrgId,
+      menuId: online.menu_id,
+      locationId,
+      skipCooldown: true,
+    });
   } catch (e) {
-    console.warn("[item-snooze] OrderOut resync (non-fatal):", e);
+    console.warn("[item-snooze] OrderOut full resync (non-fatal):", e);
+  }
+}
+
+/**
+ * Item 86 fast-path: a single surgical per-item suspension PUT instead of a full
+ * menu rebuild + channel fan-out. Falls back to a full resync only when the menu
+ * isn't live on OrderOut yet (skipped) or the surgical call fails, so out-of-stock
+ * still propagates. Best-effort — never throws.
+ */
+async function triggerOrderOutItemSuspension(
+  clerkOrgId: string,
+  locationId: string,
+  menuItemId: string,
+  snoozedUntil: SnoozeUntil,
+): Promise<void> {
+  try {
+    const res = await suspendOrderOutItem({
+      clerkOrgId,
+      locationId,
+      menuItemId,
+      snoozedUntil,
+    });
+
+    // Surgical path unavailable (no live menu) or errored — stage via full push so
+    // the 86 still reaches OrderOut with suspension_info embedded in the payload.
+    if (!res.success) {
+      await triggerOrderOutFullResync(clerkOrgId, locationId);
+      return;
+    }
+
+    // Suspension is staged on OrderOut. Best-effort fan-out so the "Sold Out"
+    // reaches the connected marketplaces promptly (skipCooldown for a burst of
+    // 86s). A "no connected channels" result is a normal no-op here, NOT a
+    // failure — never fall back to a full resync or surface an error for it.
+    if (res.menuId) {
+      const fan = await pushMenuToConnectedChannels({
+        clerkOrgId,
+        menuId: res.menuId,
+        locationId,
+        skipCooldown: true,
+      });
+      if (!fan.success) {
+        console.info(
+          "[item-snooze] channel fan-out after suspension skipped (non-fatal):",
+          fan.error,
+        );
+      }
+    }
+  } catch (e) {
+    console.warn("[item-snooze] OrderOut item suspension (non-fatal):", e);
+    await triggerOrderOutFullResync(clerkOrgId, locationId);
   }
 }
 
@@ -115,6 +171,21 @@ export async function snoozeItem(
     return { success: false, error: error.message };
   }
 
+  // Couple availability with 86 (product decision): marking out of stock also
+  // turns the item unavailable at this location; restore turns it back on. Scoped
+  // to the same location as the snooze (L2). Best-effort — the snooze already
+  // succeeded, so a hiccup here shouldn't fail the whole action.
+  try {
+    const availRes = await setItemAvailability(menuItemId, !snoozedUntil, {
+      locationId,
+    });
+    if (availRes && availRes.success === false) {
+      console.warn("[item-snooze] availability coupling failed:", availRes.error);
+    }
+  } catch (e) {
+    console.warn("[item-snooze] availability coupling threw (non-fatal):", e);
+  }
+
   const { data: item } = await supabase
     .from("menu_items")
     .select("name")
@@ -140,7 +211,12 @@ export async function snoozeItem(
     metadata: { snooze_mode: snoozeMode(snoozedUntil), source: "dashboard" },
   });
 
-  await triggerOrderOutResyncForLocation(clerkOrgId, locationId);
+  await triggerOrderOutItemSuspension(
+    clerkOrgId,
+    locationId,
+    menuItemId,
+    snoozedUntil,
+  );
 
   return { success: true };
 }
@@ -207,9 +283,90 @@ export async function snoozeModifier(
     metadata: { snooze_mode: snoozeMode(snoozedUntil), source: "dashboard" },
   });
 
-  await triggerOrderOutResyncForLocation(clerkOrgId, locationId);
+  // Modifiers have no per-item OrderOut suspension endpoint (items-only), so a
+  // modifier 86 still requires a full menu resync. Follow-up: a dedicated
+  // modifier-availability flow once OrderOut exposes one.
+  await triggerOrderOutFullResync(clerkOrgId, locationId);
 
   return { success: true };
+}
+
+// ----------------------------------------------------------------------------
+// Modifier GROUP snooze — 86 a whole group by fanning out to all its options.
+// One atomic RPC (set_modifier_group_snooze_v1), one audit entry, one resync.
+// No group-level snooze column: per-option snooze already folds into
+// get_menu_with_categories, so this reaches POS/storefront/OrderOut for free.
+// ----------------------------------------------------------------------------
+
+export async function snoozeModifierGroup(
+  clerkOrgId: string,
+  modifierGroupId: string,
+  locationId: string,
+  snoozedUntil: SnoozeUntil,
+  reason?: string,
+): Promise<SnoozeResult> {
+  if (!locationId || locationId === "all") {
+    return {
+      success: false,
+      error: "A specific location is required to 86 a modifier group.",
+    };
+  }
+
+  const supabase = createServerSupabaseClient();
+
+  const { error } = await supabase.rpc("set_modifier_group_snooze_v1", {
+    p_location_id: locationId,
+    p_modifier_group_id: modifierGroupId,
+    p_snoozed_until: snoozedUntil,
+    p_reason: reason ?? null,
+  });
+
+  if (error) {
+    return { success: false, error: error.message };
+  }
+
+  const { data: group } = await supabase
+    .from("modifier_groups")
+    .select("name")
+    .eq("id", modifierGroupId)
+    .maybeSingle();
+
+  const groupName = group?.name ?? modifierGroupId;
+
+  await LogAuditEvent({
+    clerkOrgId,
+    locationId,
+    action: snoozedUntil
+      ? `86'd Modifier Group: ${groupName}`
+      : `Restored Modifier Group: ${groupName}`,
+    actionCategory: "menu",
+    severity: "info",
+    resourceType: "modifier_group",
+    resourceId: modifierGroupId,
+    resourceName: groupName,
+    changes: {
+      after: { snoozed_until: snoozedUntil },
+      reason,
+    },
+    metadata: {
+      snooze_mode: snoozeMode(snoozedUntil),
+      source: "dashboard",
+      scope: "group",
+    },
+  });
+
+  await triggerOrderOutFullResync(clerkOrgId, locationId);
+
+  return { success: true };
+}
+
+/** Clear a modifier group's 86 (restore all its options). */
+export async function unsnoozeModifierGroup(
+  clerkOrgId: string,
+  modifierGroupId: string,
+  locationId: string,
+): Promise<SnoozeResult> {
+  return snoozeModifierGroup(clerkOrgId, modifierGroupId, locationId, null);
 }
 
 // ----------------------------------------------------------------------------
@@ -325,6 +482,7 @@ export interface ActiveSnoozeItem {
 export interface ActiveSnoozeModifier {
   kind: "modifier";
   modifier_group_item_id: string;
+  modifier_group_id: string;
   name: string;
   group_name: string;
   snoozed_until: string;

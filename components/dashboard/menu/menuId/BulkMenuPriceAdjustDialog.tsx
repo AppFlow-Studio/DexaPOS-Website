@@ -22,6 +22,7 @@ import {
   type BulkMenuPriceOp,
   type BulkMenuPriceRounding,
 } from "@/app/dashboard/actions/bulk-menu-price-adjustment";
+import { invalidateOrderOutSync } from "@/app/dashboard/hooks/useOrderOutMenuSync";
 
 function applyOp(price: number, op: BulkMenuPriceOp, value: number): number {
   switch (op) {
@@ -136,6 +137,7 @@ export function BulkMenuPriceAdjustDialog({
       toast.success(`${res.data.updated} updated · ${res.data.skipped} skipped`);
       queryClient.invalidateQueries({ queryKey: ["menu-with-categories"] });
       queryClient.invalidateQueries({ queryKey: ["menu-items"] });
+      invalidateOrderOutSync(queryClient);
       onSuccess?.();
       onOpenChange(false);
       setValue("");

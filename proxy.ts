@@ -23,6 +23,31 @@ const isMarketingRoute = createRouteMatcher([
   '/pos-demo(.*)',
 ])
 const isAuthRoute = createRouteMatcher(['/sign-in(.*)', '/sign-up(.*)'])
+// Marketing CMS admin — gated to the internal HQ team (like /manage).
+const isCmsAdminRoute = createRouteMatcher(['/admin(.*)'])
+// Public/self-authorizing API routes: /api/contact is an anonymous public form;
+// /api/cms/* enforces HQ auth inside each handler (requireHqUser → 401);
+// /api/internal/* are server-to-server webhooks (DB pg_net triggers / edge
+// functions) that authenticate via the x-internal-secret header (401 on mismatch)
+// and have NO Clerk session — so they must skip the middleware sign-in redirect,
+// which would otherwise bounce them to /sign-in and silently break the callers
+// (e.g. the snooze → OrderOut resync). All three own their own authorization.
+const isPublicApiRoute = createRouteMatcher(['/api/contact(.*)', '/api/cms(.*)', '/api/internal(.*)'])
+// The set of gated / app-owned route prefixes. Anything NOT in this set (and not
+// already handled as public above) is treated as public marketing so the
+// (marketing) [...slug] CMS catch-all can serve pages published at arbitrary
+// paths. Keep this in sync when adding new gated top-level segments.
+const isKnownAppRoute = createRouteMatcher([
+  '/dashboard(.*)',
+  '/manage(.*)',
+  '/admin(.*)',
+  '/merchant(.*)',
+  '/office(.*)',
+  '/kiosk-preview(.*)',
+  '/join-organization(.*)',
+  '/api(.*)',
+  '/trpc(.*)',
+])
 
 function extractStoreSlug(hostname: string): string | null {
   const hostWithoutPort = hostname.split(':')[0];
@@ -158,12 +183,13 @@ const clerkProxy = clerkMiddleware(async (auth, req) => {
 
   // Public marketing + auth routes — never gate
   if (isMarketingRoute(req) || isAuthRoute(req)) {
-    // Signed-in user landing on `/` → punt to dashboard/manage
-    if (req.nextUrl.pathname === '/' && userId) {
-      const dest = orgId && orgId === process.env.DEXA_POS_INTERNAL_TEAM_ID
-        ? '/manage'
-        : '/dashboard'
-      return NextResponse.redirect(new URL(dest, req.url))
+    // Punt signed-in MERCHANTS from the root to their dashboard, but let HQ
+    // admins (who own the marketing CMS) and any explicit CMS preview actually
+    // view the site — otherwise "View Site" / preview bounce straight back.
+    const isHqUser = orgId === process.env.DEXA_POS_INTERNAL_TEAM_ID
+    const wantsCmsPreview = req.nextUrl.searchParams.has('cmsPreview')
+    if (req.nextUrl.pathname === '/' && userId && !isHqUser && !wantsCmsPreview) {
+      return NextResponse.redirect(new URL('/dashboard', req.url))
     }
     return NextResponse.next();
   }
@@ -172,8 +198,16 @@ const clerkProxy = clerkMiddleware(async (auth, req) => {
     isAcceptInvitationRoute(req) ||
     isStorefrontRoutes(req) ||
     isReceiptRoutes(req) ||
-    isPublicInvoiceRoute(req)
+    isPublicInvoiceRoute(req) ||
+    isPublicApiRoute(req)
   ) {
+    return NextResponse.next();
+  }
+
+  // Public-by-default: any path that isn't a known gated app route is public
+  // marketing — served by the (marketing) [...slug] CMS catch-all, or a 404.
+  // This lets HQ publish CMS pages at arbitrary paths without a middleware change.
+  if (!isKnownAppRoute(req)) {
     return NextResponse.next();
   }
 
@@ -191,6 +225,15 @@ const clerkProxy = clerkMiddleware(async (auth, req) => {
 
   if (isInternalTeamRoutes(req)) {
     if( UserSession.orgId !== process.env.DEXA_POS_INTERNAL_TEAM_ID) {
+      return NextResponse.redirect(new URL('/dashboard', req.url));
+    }
+    return NextResponse.next();
+  }
+
+  // Marketing CMS admin — internal HQ team only (handled before the HQ
+  // redirect-to-/manage rule so HQ users aren't bounced off /admin).
+  if (isCmsAdminRoute(req)) {
+    if (UserSession.orgId !== process.env.DEXA_POS_INTERNAL_TEAM_ID) {
       return NextResponse.redirect(new URL('/dashboard', req.url));
     }
     return NextResponse.next();

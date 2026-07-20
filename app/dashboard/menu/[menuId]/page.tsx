@@ -40,6 +40,7 @@ import {
   RemoveScheduleFromMenu,
 } from "../../actions/schedules";
 import { useQueryClient } from "@tanstack/react-query";
+import { invalidateOrderOutSync } from "@/app/dashboard/hooks/useOrderOutMenuSync";
 import { Empty } from "@/components/ui/empty";
 import { toast } from "sonner";
 import {
@@ -494,6 +495,7 @@ export default function MenuDetailPage() {
       queryClient.invalidateQueries({
         queryKey: ["menu-with-categories", menuId],
       });
+      invalidateOrderOutSync(queryClient);
       refetchMenu();
     } catch {
       toast.error("Update Failed", {
@@ -531,6 +533,7 @@ export default function MenuDetailPage() {
       queryClient.invalidateQueries({
         queryKey: ["menu-schedules", menuId],
       });
+      invalidateOrderOutSync(queryClient);
       refetchMenu();
       setIsScheduleWizardOpen(false);
       setScheduleWizardId(null);
@@ -581,6 +584,7 @@ export default function MenuDetailPage() {
       queryClient.invalidateQueries({
         queryKey: ["menu-with-categories", menuId],
       });
+      invalidateOrderOutSync(queryClient);
       refetchMenu();
       setHasSettingsChanges(false);
     } catch {
@@ -665,6 +669,7 @@ export default function MenuDetailPage() {
         description: `"${menu?.name}" has been permanently deleted.`,
       });
       queryClient.invalidateQueries({ queryKey: ["menus"] });
+      invalidateOrderOutSync(queryClient);
       router.push("/dashboard/menu");
     } catch {
       toast.error("Delete Failed", {
@@ -716,6 +721,7 @@ export default function MenuDetailPage() {
     queryClient.invalidateQueries({
       queryKey: ["menu-schedules", menuId],
     });
+    invalidateOrderOutSync(queryClient);
     refetchMenu();
 
     return { data: createResult.data };
@@ -739,6 +745,7 @@ export default function MenuDetailPage() {
     queryClient.invalidateQueries({
       queryKey: ["menu-schedules", menuId],
     });
+    invalidateOrderOutSync(queryClient);
     refetchMenu();
 
     return {};
@@ -770,6 +777,7 @@ export default function MenuDetailPage() {
       queryClient.invalidateQueries({
         queryKey: ["menu-schedules", menuId],
       });
+      invalidateOrderOutSync(queryClient);
       refetchMenu();
     } catch {
       toast.error("Remove Failed", {
@@ -812,6 +820,7 @@ export default function MenuDetailPage() {
       queryClient.invalidateQueries({
         queryKey: ["menu-with-categories", menuId],
       });
+      invalidateOrderOutSync(queryClient);
       refetchMenu();
     } catch {
       toast.error("Update Failed", {
@@ -843,6 +852,7 @@ export default function MenuDetailPage() {
       queryClient.invalidateQueries({
         queryKey: ["menu-with-categories", menuId],
       });
+      invalidateOrderOutSync(queryClient);
       refetchMenu();
     } catch {
       toast.error("Reset Failed", {
@@ -938,6 +948,7 @@ export default function MenuDetailPage() {
       await queryClient.invalidateQueries({
         queryKey: ["menu-with-categories", menuId],
       });
+      invalidateOrderOutSync(queryClient);
       await refetchMenu();
 
       // Update the reordered state to reflect the saved order as the "new baseline"
@@ -1028,6 +1039,7 @@ export default function MenuDetailPage() {
       await queryClient.invalidateQueries({
         queryKey: ["menu-with-categories", menuId],
       });
+      invalidateOrderOutSync(queryClient);
       await refetchMenu();
 
       // Update local state to reflect saved changes
@@ -1092,6 +1104,7 @@ export default function MenuDetailPage() {
       queryClient.invalidateQueries({
         queryKey: ["menu-with-categories", menuId],
       });
+      invalidateOrderOutSync(queryClient);
       refetchMenu();
     } catch {
       toast.error("Remove Failed", {
@@ -1537,6 +1550,7 @@ export default function MenuDetailPage() {
           queryClient.invalidateQueries({
             queryKey: ["menu-with-categories", menuId],
           });
+          invalidateOrderOutSync(queryClient);
           refetchMenu();
         }}
       />
@@ -1588,6 +1602,7 @@ export default function MenuDetailPage() {
           queryClient.invalidateQueries({
             queryKey: ["menu-with-categories", menuId],
           });
+          invalidateOrderOutSync(queryClient);
           refetchMenu();
         }}
       />
@@ -1616,6 +1631,7 @@ export default function MenuDetailPage() {
           queryClient.invalidateQueries({
             queryKey: ["menu-with-categories", menuId],
           });
+          invalidateOrderOutSync(queryClient);
           refetchMenu();
         }}
       />

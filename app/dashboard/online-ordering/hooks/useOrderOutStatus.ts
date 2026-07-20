@@ -12,6 +12,9 @@ import {
   getPushChannelsLiveStatus,
   getOrderOutWebhookHealth,
   setOrderOutChannelsConfirmed,
+  setPrimaryOnlineMenu,
+  getLocationOnlineMenu,
+  publishOnlineMenu,
   type OnboardOrderOutParams,
   type PushMenuToOrderOutParams,
   type PushMenuToChannelsParams,
@@ -28,6 +31,99 @@ export function useOrderOutStatus(clerkOrgId: string, locationId: string) {
     queryFn: () => getOrderOutStatus(clerkOrgId, locationId),
     enabled: !!clerkOrgId && !!locationId && locationId !== "all",
     staleTime: 30 * 1000,
+  });
+}
+
+/**
+ * Designate a menu as the location's canonical online-ordering menu — the single
+ * OrderOut push target for availability/86 re-pushes.
+ */
+export function useSetPrimaryOnlineMenu(clerkOrgId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      locationId,
+      menuId,
+    }: {
+      locationId: string;
+      menuId: string;
+    }) => setPrimaryOnlineMenu(clerkOrgId, locationId, menuId),
+    onSuccess: (result) => {
+      if (result.success) {
+        toast.success("Set as the online ordering menu");
+        queryClient.invalidateQueries({ queryKey: ["orderout-menu-sync"] });
+        queryClient.invalidateQueries({ queryKey: ["orderout-synced-menus"] });
+        queryClient.invalidateQueries({ queryKey: ["orderout-online-menu"] });
+      } else {
+        toast.error(result.error || "Failed to set online menu");
+      }
+    },
+    onError: (e: Error) =>
+      toast.error(e.message || "Failed to set online menu"),
+  });
+}
+
+/**
+ * The location's canonical online menu + its active-linked menus — powers the
+ * "Online menu" designation on the menus list.
+ */
+export function useLocationOnlineMenu(
+  clerkOrgId: string,
+  locationId: string | null,
+) {
+  return useQuery({
+    queryKey: ["orderout-online-menu", clerkOrgId, locationId],
+    queryFn: () => getLocationOnlineMenu(clerkOrgId, locationId as string),
+    enabled: !!clerkOrgId && !!locationId && locationId !== "all",
+    staleTime: 30 * 1000,
+  });
+}
+
+/**
+ * Publish the location's ONE designated online menu (foolproof push target).
+ * Pass `designateMenuId` to make a menu the online menu (first pick or switch)
+ * before publishing; omit it to publish the current online menu. All merchant
+ * publishing routes through here so a non-online menu can never be pushed by
+ * accident.
+ */
+export function usePublishOnlineMenu(clerkOrgId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      locationId,
+      designateMenuId,
+    }: {
+      locationId: string;
+      designateMenuId?: string;
+    }) => publishOnlineMenu(clerkOrgId, locationId, designateMenuId),
+    onSuccess: (result, variables) => {
+      if (result.success) {
+        const name = result.data?.publishedMenuName ?? "online menu";
+        toast.success(
+          result.data?.redesignated
+            ? `${name} is now your online menu — published`
+            : `Published ${name} to online ordering`,
+          { description: `${result.data?.itemsSynced ?? 0} items synced.` },
+        );
+        for (const key of [
+          ["orderout-status", clerkOrgId, variables.locationId],
+          ["orderout-online-menu"],
+          ["orderout-menu-sync"],
+          ["orderout-menu-link"],
+          ["orderout-payload-diff"],
+          ["orderout-synced-menus"],
+          ["orderout-push-channels-history", clerkOrgId, variables.locationId],
+        ]) {
+          queryClient.invalidateQueries({ queryKey: key });
+        }
+      } else if (result.needsDesignation) {
+        toast.error(result.error || "Choose which menu handles online orders.");
+      } else {
+        toast.error(result.error || "Failed to publish online menu");
+      }
+    },
+    onError: (e: Error) =>
+      toast.error(e.message || "Failed to publish online menu"),
   });
 }
 

@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { invalidateOrderOutSync } from '@/app/dashboard/hooks/useOrderOutMenuSync'
 import {
   getActiveSnoozes,
   getItemSnooze,
@@ -9,8 +10,11 @@ import {
   snoozeItemUntilEndOfDay,
   snoozeItemForHours,
   snoozeItemUntilManual,
+  snoozeModifier,
+  snoozeModifierGroup,
   unsnoozeItem,
   unsnoozeModifier,
+  unsnoozeModifierGroup,
   type ActiveSnoozes,
 } from '@/app/dashboard/actions/item-snooze'
 
@@ -59,12 +63,18 @@ function invalidate(
   clerkOrgId: string,
 ) {
   queryClient.invalidateQueries({ queryKey: ['snoozed-items', clerkOrgId] })
-  // Per-item control state + menu views that surface availability.
+  // Per-item control state + every menu view that surfaces effective_availability.
   queryClient.invalidateQueries({ queryKey: ['item-snooze'] })
   queryClient.invalidateQueries({ queryKey: ['menu-items'] })
   queryClient.invalidateQueries({ queryKey: ['menu-item'] })
   queryClient.invalidateQueries({ queryKey: ['menu-items-flat'] })
   queryClient.invalidateQueries({ queryKey: ['categories-with-items'] })
+  // Menu builder (/dashboard/menu/[menuId]) reads effective_availability from here;
+  // without this the 86'd item stays "green" until a manual refresh.
+  queryClient.invalidateQueries({ queryKey: ['menu-with-categories'] })
+  // A 86 changes suspension_info in the OrderOut payload — refresh the sync/diff
+  // so the "out of sync" badge reflects the re-pushed state instead of a stale diff.
+  invalidateOrderOutSync(queryClient)
 }
 
 export type SnoozeDuration =
@@ -136,6 +146,38 @@ export function useRestoreItem() {
   })
 }
 
+export function useSnoozeModifier() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      clerkOrgId,
+      modifierGroupItemId,
+      locationId,
+      snoozedUntil,
+      reason,
+    }: {
+      clerkOrgId: string
+      modifierGroupItemId: string
+      locationId: string
+      // ISO instant | 'infinity' (until manually restored). Mirrors the item
+      // snooze contract; the modifier toggle uses 'infinity' for a simple
+      // out-of-stock switch.
+      snoozedUntil: string
+      reason?: string
+    }) =>
+      snoozeModifier(clerkOrgId, modifierGroupItemId, locationId, snoozedUntil, reason),
+    onSuccess: (result, { clerkOrgId }) => {
+      if (result.success) {
+        invalidate(queryClient, clerkOrgId)
+        toast.success('Modifier marked out of stock')
+      } else {
+        toast.error(result.error || 'Failed to 86 modifier')
+      }
+    },
+    onError: (e: Error) => toast.error(e.message || 'Failed to 86 modifier'),
+  })
+}
+
 export function useRestoreModifier() {
   const queryClient = useQueryClient()
   return useMutation({
@@ -157,6 +199,64 @@ export function useRestoreModifier() {
       }
     },
     onError: (e: Error) => toast.error(e.message || 'Failed to restore modifier'),
+  })
+}
+
+// ============================================================================
+// Modifier GROUP 86 — snoozes/restores every option in the group at once.
+// ============================================================================
+
+export function useSnoozeModifierGroup() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      clerkOrgId,
+      modifierGroupId,
+      locationId,
+      snoozedUntil,
+      reason,
+    }: {
+      clerkOrgId: string
+      modifierGroupId: string
+      locationId: string
+      // ISO instant | 'infinity' (until manually restored).
+      snoozedUntil: string
+      reason?: string
+    }) =>
+      snoozeModifierGroup(clerkOrgId, modifierGroupId, locationId, snoozedUntil, reason),
+    onSuccess: (result, { clerkOrgId }) => {
+      if (result.success) {
+        invalidate(queryClient, clerkOrgId)
+        toast.success('Modifier group marked out of stock')
+      } else {
+        toast.error(result.error || 'Failed to 86 modifier group')
+      }
+    },
+    onError: (e: Error) => toast.error(e.message || 'Failed to 86 modifier group'),
+  })
+}
+
+export function useRestoreModifierGroup() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      clerkOrgId,
+      modifierGroupId,
+      locationId,
+    }: {
+      clerkOrgId: string
+      modifierGroupId: string
+      locationId: string
+    }) => unsnoozeModifierGroup(clerkOrgId, modifierGroupId, locationId),
+    onSuccess: (result, { clerkOrgId }) => {
+      if (result.success) {
+        invalidate(queryClient, clerkOrgId)
+        toast.success('Modifier group restored')
+      } else {
+        toast.error(result.error || 'Failed to restore modifier group')
+      }
+    },
+    onError: (e: Error) => toast.error(e.message || 'Failed to restore modifier group'),
   })
 }
 

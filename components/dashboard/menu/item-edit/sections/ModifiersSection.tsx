@@ -32,6 +32,7 @@ import {
   useSelectedLocation,
   useIsSingleLocation,
 } from "@/stores/location-store";
+import { invalidateOrderOutSync } from "@/app/dashboard/hooks/useOrderOutMenuSync";
 
 type ModifierGroupEntry = {
   id: string;
@@ -175,6 +176,7 @@ export function ModifiersSection({ item, itemId, globalScope }: SectionRenderCtx
       setHasChanges(false);
       queryClient.invalidateQueries({ queryKey: ["menu-item", itemId] });
       queryClient.invalidateQueries({ queryKey: ["menu-items"] });
+      invalidateOrderOutSync(queryClient);
     } catch (e: any) {
       toast.error("Failed to save order", { description: e?.message });
     } finally {
