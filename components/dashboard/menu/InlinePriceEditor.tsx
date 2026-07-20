@@ -13,6 +13,7 @@ import type { ScopeContext } from "@/lib/menu/cascade-labels";
 import { useClerkOrgId } from "@/app/dashboard/hooks/useLocationScoped";
 import { UpdateMenuItem } from "@/app/dashboard/actions/menu-items";
 import { updateLocationMenuCategoryItemOverride } from "@/app/dashboard/actions/menu-items-rpc";
+import { invalidateOrderOutSync } from "@/app/dashboard/hooks/useOrderOutMenuSync";
 
 interface InlinePriceEditorProps {
   itemId: string;
@@ -106,6 +107,7 @@ export function InlinePriceEditor({
       queryClient.invalidateQueries({ queryKey: ["categories-with-items"] });
       queryClient.invalidateQueries({ queryKey: ["item-price-matrix", itemId] });
       queryClient.invalidateQueries({ queryKey: ["menu-item", itemId] });
+      invalidateOrderOutSync(queryClient);
       onSaved?.();
       onClose?.();
     },

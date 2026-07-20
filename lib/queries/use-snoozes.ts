@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { invalidateOrderOutSync } from '@/app/dashboard/hooks/useOrderOutMenuSync'
 import {
   getActiveSnoozes,
   getItemSnooze,
@@ -71,6 +72,9 @@ function invalidate(
   // Menu builder (/dashboard/menu/[menuId]) reads effective_availability from here;
   // without this the 86'd item stays "green" until a manual refresh.
   queryClient.invalidateQueries({ queryKey: ['menu-with-categories'] })
+  // A 86 changes suspension_info in the OrderOut payload — refresh the sync/diff
+  // so the "out of sync" badge reflects the re-pushed state instead of a stale diff.
+  invalidateOrderOutSync(queryClient)
 }
 
 export type SnoozeDuration =

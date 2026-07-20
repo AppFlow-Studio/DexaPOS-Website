@@ -14,6 +14,7 @@ import { useMerchantCdnImageUpload } from "@/lib/cdn/use-merchant-cdn-image-uplo
 import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
 import { AffectsTag } from "../../AffectsTag";
 import type { SectionRenderCtx } from "@/app/dashboard/menu/items/[itemId]/edit/ItemEditLayout";
+import { invalidateOrderOutSync } from "@/app/dashboard/hooks/useOrderOutMenuSync";
 
 export function OverviewSection({ itemId, item, globalScope }: SectionRenderCtx) {
   const queryClient = useQueryClient();
@@ -53,6 +54,7 @@ export function OverviewSection({ itemId, item, globalScope }: SectionRenderCtx)
       queryClient.invalidateQueries({ queryKey: ["menu-items"] });
       queryClient.invalidateQueries({ queryKey: ["menu-items-flat"] });
       queryClient.invalidateQueries({ queryKey: ["categories-with-items"] });
+      invalidateOrderOutSync(queryClient);
     },
     onError: (err) =>
       toast.error("Save failed", {

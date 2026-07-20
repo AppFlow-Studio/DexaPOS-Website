@@ -17,6 +17,7 @@ import {
   useIsAllLocations,
   useLocationStore,
 } from "@/stores/location-store";
+import { invalidateOrderOutSync } from "@/app/dashboard/hooks/useOrderOutMenuSync";
 
 interface ItemQuickActionsProps {
   itemId: string;
@@ -47,6 +48,7 @@ export function ItemQuickActions({ itemId, item }: ItemQuickActionsProps) {
       toast.success("Availability updated");
       queryClient.invalidateQueries({ queryKey: ["menu-item", itemId] });
       queryClient.invalidateQueries({ queryKey: ["menu-items"] });
+      invalidateOrderOutSync(queryClient);
     },
     onError: (err) =>
       toast.error("Update failed", {
