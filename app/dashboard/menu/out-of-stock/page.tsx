@@ -7,13 +7,14 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Empty } from '@/components/ui/empty'
-import { CircleSlash, MapPin, AlertTriangle, RotateCcw, Loader2 } from 'lucide-react'
+import { CircleSlash, MapPin, AlertTriangle, RotateCcw, Loader2, Layers } from 'lucide-react'
 import { useGatedLocationId, useGatedLocation } from '@/stores/location-store'
 import { useUserInfo } from '@/app/manage/hooks/useUserInfo.'
 import {
   useActiveSnoozes,
   useRestoreItem,
   useRestoreModifier,
+  useRestoreModifierGroup,
 } from '@/lib/queries/use-snoozes'
 
 /** "infinity" (until-manual) vs a real timestamp. */
@@ -38,6 +39,7 @@ export default function OutOfStockPage() {
 
   const restoreItem = useRestoreItem()
   const restoreModifier = useRestoreModifier()
+  const restoreModifierGroup = useRestoreModifierGroup()
 
   const [mounted, setMounted] = useState(false)
   useEffect(() => setMounted(true), [])
@@ -46,7 +48,25 @@ export default function OutOfStockPage() {
   const modifiers = data?.modifiers ?? []
   const total = items.length + modifiers.length
 
-  const isRestoring = restoreItem.isPending || restoreModifier.isPending
+  // Collapse snoozed options under their parent modifier group so a whole-group
+  // 86 reads as one block (with a "Restore group" action), not N loose rows.
+  const modifierGroups = Array.from(
+    modifiers
+      .reduce((map, m) => {
+        const g = map.get(m.modifier_group_id) ?? {
+          groupId: m.modifier_group_id,
+          groupName: m.group_name,
+          options: [] as typeof modifiers,
+        }
+        g.options.push(m)
+        map.set(m.modifier_group_id, g)
+        return map
+      }, new Map<string, { groupId: string; groupName: string; options: typeof modifiers }>())
+      .values(),
+  )
+
+  const isRestoring =
+    restoreItem.isPending || restoreModifier.isPending || restoreModifierGroup.isPending
 
   const handleRestoreItem = (menuItemId: string) => {
     if (!clerkOrgId || isAllLocations) return
@@ -55,6 +75,10 @@ export default function OutOfStockPage() {
   const handleRestoreModifier = (modifierGroupItemId: string) => {
     if (!clerkOrgId || isAllLocations) return
     restoreModifier.mutate({ clerkOrgId, modifierGroupItemId, locationId: selectedLocationId })
+  }
+  const handleRestoreGroup = (modifierGroupId: string) => {
+    if (!clerkOrgId || isAllLocations) return
+    restoreModifierGroup.mutate({ clerkOrgId, modifierGroupId, locationId: selectedLocationId })
   }
   const handleRestoreAll = () => {
     if (!clerkOrgId || isAllLocations) return
@@ -171,15 +195,41 @@ export default function OutOfStockPage() {
               <h3 className="text-sm font-semibold text-muted-foreground">
                 Modifiers ({modifiers.length})
               </h3>
-              {modifiers.map((m) => (
-                <SnoozeRow
-                  key={m.modifier_group_item_id}
-                  title={m.name}
-                  subtitle={m.group_name}
-                  snoozedUntil={m.snoozed_until}
-                  disabled={isRestoring}
-                  onRestore={() => handleRestoreModifier(m.modifier_group_item_id)}
-                />
+              {modifierGroups.map((grp) => (
+                <div
+                  key={grp.groupId}
+                  className="space-y-2 rounded-lg border bg-muted/30 p-3"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <Layers className="h-4 w-4 shrink-0 text-purple-600" />
+                      <span className="truncate font-medium">{grp.groupName}</span>
+                      <Badge variant="secondary" className="shrink-0">
+                        {grp.options.length} out of stock
+                      </Badge>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleRestoreGroup(grp.groupId)}
+                      disabled={isRestoring}
+                      className="shrink-0"
+                    >
+                      <RotateCcw className="mr-2 h-4 w-4" />
+                      Restore group
+                    </Button>
+                  </div>
+                  {grp.options.map((m) => (
+                    <SnoozeRow
+                      key={m.modifier_group_item_id}
+                      title={m.name}
+                      subtitle={m.snooze_reason}
+                      snoozedUntil={m.snoozed_until}
+                      disabled={isRestoring}
+                      onRestore={() => handleRestoreModifier(m.modifier_group_item_id)}
+                    />
+                  ))}
+                </div>
               ))}
             </section>
           )}

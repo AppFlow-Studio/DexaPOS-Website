@@ -21,7 +21,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  AlertTriangle,
   ArrowRight,
   CheckCircle2,
   ChevronDown,
@@ -43,10 +42,10 @@ import {
   useMenuPayloadDiff,
 } from "@/app/dashboard/hooks/useOrderOutMenuSync";
 import {
-  usePushMenuToOrderOut,
   usePushMenuToChannels,
   usePushChannelsLiveStatus,
-  useSetPrimaryOnlineMenu,
+  useLocationOnlineMenu,
+  usePublishOnlineMenu,
 } from "@/app/dashboard/online-ordering/hooks/useOrderOutStatus";
 import { SyncStatusBadge, formatTimeAgo } from "./OrderOutMenuStatus";
 import { MenuChannelsCard } from "@/components/dashboard/orderout/MenuChannelsCard";
@@ -88,22 +87,37 @@ export function MenuOrderOutTab({
     locationId,
     menuId
   );
-  const pushMenuMutation = usePushMenuToOrderOut(clerkOrgId);
   const pushChannelsMutation = usePushMenuToChannels(clerkOrgId);
-  const setPrimaryMutation = useSetPrimaryOnlineMenu(clerkOrgId);
+  const publishMutation = usePublishOnlineMenu(clerkOrgId);
+  const { data: onlineMenu } = useLocationOnlineMenu(clerkOrgId, locationId);
   const [activeSyncId, setActiveSyncId] = useState<string | null>(null);
   const channelsLive = usePushChannelsLiveStatus(clerkOrgId, activeSyncId);
-  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+  // Confirm dialog: 'publish' = push the current online menu; 'designate' = make
+  // THIS menu the online menu, then publish it. Both end at the ONE online menu.
+  const [confirmAction, setConfirmAction] = useState<
+    null | "publish" | "designate"
+  >(null);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [showPayload, setShowPayload] = useState(false);
 
   const syncStatus = syncResult?.data ?? null;
   const lastSync = syncStatus?.lastSync;
   const ooMenuId = syncStatus?.ooMenuId ?? null;
-  const isPrimaryOnlineMenu = syncStatus?.isPrimaryOnlineMenu ?? false;
   const syncHistory = syncStatus?.syncHistory ?? [];
   const platformStatuses = syncStatus?.platformStatuses ?? [];
   const connectedChannels = syncStatus?.connectedChannels ?? [];
+
+  // Which menu handles online orders for this location (the single push target).
+  const primaryMenuId = onlineMenu?.primaryMenuId ?? null;
+  const primaryMenuName = onlineMenu?.primaryMenuName ?? null;
+  const hasOnlineMenu = !!primaryMenuId;
+  const isThisOnline =
+    (syncStatus?.isPrimaryOnlineMenu ?? false) || primaryMenuId === menuId;
+
+  const diffData = diffResult?.data ?? null;
+  const hasChanges = diffData?.hasChanges ?? false;
+  const isNewMenu = diffData?.isNewMenu ?? false;
+  const itemCount = diffData?.currentItemCount ?? lastSync?.itemsSynced ?? 0;
 
   const handlePushChannels = () => {
     pushChannelsMutation.mutate(
@@ -116,16 +130,17 @@ export function MenuOrderOutTab({
     );
   };
 
-  const diffData = diffResult?.data ?? null;
-  const hasChanges = diffData?.hasChanges ?? false;
-  const isNewMenu = diffData?.isNewMenu ?? false;
-
-  const handleSync = () => {
-    pushMenuMutation.mutate(
-      { clerkOrgId, menuId, locationId },
-      { onSuccess: () => refetch() }
+  // Publishing always resolves to the ONE designated online menu. 'designate'
+  // makes THIS menu the online menu first (first pick or a deliberate switch).
+  const runPublish = () => {
+    publishMutation.mutate(
+      {
+        locationId,
+        ...(confirmAction === "designate" ? { designateMenuId: menuId } : {}),
+      },
+      { onSuccess: () => refetch() },
     );
-    setIsConfirmOpen(false);
+    setConfirmAction(null);
   };
 
   const toggleRow = (id: string) => {
@@ -261,147 +276,39 @@ export function MenuOrderOutTab({
             </div>
           </div>
 
-          {/* Canonical online-ordering menu designation */}
-          {ooMenuId && (
-            <div className="mt-4 flex items-center justify-between gap-3 rounded-lg border p-3">
-              <div className="flex min-w-0 items-start gap-2">
-                <Star
-                  className={cn(
-                    "mt-0.5 h-4 w-4 shrink-0",
-                    isPrimaryOnlineMenu
-                      ? "fill-amber-400 text-amber-500"
-                      : "text-muted-foreground"
-                  )}
-                />
-                <div className="min-w-0">
-                  <p className="text-sm font-medium">Online ordering menu</p>
-                  <p className="text-xs text-muted-foreground">
-                    {isPrimaryOnlineMenu
-                      ? "OrderOut serves this menu. Out-of-stock (86) changes re-push it automatically."
-                      : "OrderOut serves one menu per store. Make this the menu that 86 changes re-push."}
-                  </p>
-                </div>
-              </div>
-              {isPrimaryOnlineMenu ? (
-                <Badge variant="default" className="shrink-0 bg-green-600">
-                  <CheckCircle2 className="mr-1 h-3 w-3" />
-                  Online menu
-                </Badge>
-              ) : (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="shrink-0"
-                  onClick={() =>
-                    setPrimaryMutation.mutate({ locationId, menuId })
-                  }
-                  disabled={setPrimaryMutation.isPending}
-                >
-                  {setPrimaryMutation.isPending ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <>
-                      <Star className="mr-1.5 h-3.5 w-3.5" />
-                      Set as online menu
-                    </>
-                  )}
-                </Button>
-              )}
-            </div>
-          )}
         </CardContent>
       </Card>
 
-      {/* Section 1b: Delivery Channels — per-menu status + push */}
-      <MenuChannelsCard
-        ooMenuId={ooMenuId}
-        platformStatuses={platformStatuses}
-        connectedChannels={connectedChannels}
-        onPush={handlePushChannels}
-        isPushing={pushChannelsMutation.isPending}
-        live={channelsLive.data?.data ?? null}
+      {/* Section 1a: THE online menu control — one clear place to publish, always
+          targeting the single designated online menu (foolproof). */}
+      <OnlineMenuControlCard
+        state={
+          isThisOnline ? "this" : hasOnlineMenu ? "other" : "none"
+        }
+        thisMenuName={menuName}
+        onlineMenuHref={primaryMenuId ? `/dashboard/menu/${primaryMenuId}` : null}
+        primaryMenuName={primaryMenuName}
+        itemCount={itemCount}
+        hasChanges={hasChanges}
+        isNewMenu={isNewMenu}
+        isPublishing={publishMutation.isPending}
+        onPublish={() => setConfirmAction("publish")}
+        onMakeOnline={() => setConfirmAction("designate")}
       />
 
-      {/* Section 2: Diff-based Sync Card */}
-      {isDiffLoading ? (
-        <Skeleton className="h-16 w-full" />
-      ) : hasChanges ? (
-        isNewMenu ? (
-          // New menu - blue styling
-          <Card className="border-blue-500/50 bg-blue-50 dark:bg-blue-950/20">
-            <CardContent className="flex items-center gap-3 py-3">
-              <Upload className="h-5 w-5 text-blue-600 shrink-0" />
-              <div className="flex-1">
-                <p className="text-sm font-medium text-blue-800 dark:text-blue-200">
-                  Menu hasn&apos;t been uploaded to OrderOut yet
-                </p>
-                <p className="text-xs text-blue-600 dark:text-blue-400">
-                  {diffData?.currentItemCount ?? 0} items ready to upload.
-                </p>
-              </div>
-              <Button
-                size="sm"
-                className="bg-blue-600 hover:bg-blue-700 text-white"
-                onClick={() => setIsConfirmOpen(true)}
-                disabled={pushMenuMutation.isPending}
-              >
-                {pushMenuMutation.isPending ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
-                ) : (
-                  <Upload className="h-3.5 w-3.5 mr-1" />
-                )}
-                Upload to OrderOut
-              </Button>
-            </CardContent>
-          </Card>
-        ) : (
-          // Changed menu - amber styling
-          <Card className="border-amber-500/50 bg-amber-50 dark:bg-amber-950/20">
-            <CardContent className="flex items-center gap-3 py-3">
-              <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0" />
-              <div className="flex-1">
-                <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
-                  Menu has changed since last sync
-                </p>
-                <p className="text-xs text-amber-600 dark:text-amber-400">
-                  Local changes haven&apos;t been pushed to OrderOut yet.
-                </p>
-              </div>
-              <Button
-                size="sm"
-                variant="outline"
-                className="border-amber-500 text-amber-700 hover:bg-amber-100 dark:text-amber-300 dark:hover:bg-amber-950"
-                onClick={() => setIsConfirmOpen(true)}
-                disabled={pushMenuMutation.isPending}
-              >
-                {pushMenuMutation.isPending ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
-                ) : (
-                  <RefreshCw className="h-3.5 w-3.5 mr-1" />
-                )}
-                Sync to OrderOut
-              </Button>
-            </CardContent>
-          </Card>
-        )
-      ) : lastSync?.status === "success" ? (
-        // In sync - green confirmation
-        <Card className="border-green-500/50 bg-green-50 dark:bg-green-950/20">
-          <CardContent className="flex items-center gap-3 py-3">
-            <CheckCircle2 className="h-5 w-5 text-green-600 shrink-0" />
-            <div className="flex-1">
-              <p className="text-sm font-medium text-green-800 dark:text-green-200">
-                Menu is in sync with OrderOut
-              </p>
-              <p className="text-xs text-green-600 dark:text-green-400">
-                {lastSync.itemsSynced} items synced
-                {lastSync.completedAt &&
-                  ` \u2022 Last synced ${formatTimeAgo(lastSync.completedAt)}`}
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      ) : null}
+      {/* Section 1b: Delivery Channels — only the online menu fans out to channels */}
+      {isThisOnline && (
+        <MenuChannelsCard
+          ooMenuId={ooMenuId}
+          platformStatuses={platformStatuses}
+          connectedChannels={connectedChannels}
+          onPush={handlePushChannels}
+          isPushing={pushChannelsMutation.isPending}
+          live={channelsLive.data?.data ?? null}
+        />
+      )}
+
+      {/* (Publish + changes-pending live in OnlineMenuControlCard above.) */}
 
       {/* Section 3: Sync History Table */}
       <Card>
@@ -552,40 +459,222 @@ export function MenuOrderOutTab({
         </Card>
       )}
 
-      {/* Sync Confirmation Dialog */}
-      <Dialog open={isConfirmOpen} onOpenChange={setIsConfirmOpen}>
+      {/* Publish Confirmation — names the exact menu that will go live so a
+          merchant always sees what customers will get (dummy-proof). */}
+      <Dialog
+        open={confirmAction !== null}
+        onOpenChange={(open) => !open && setConfirmAction(null)}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {isNewMenu
-                ? "Upload Menu to OrderOut"
-                : "Sync Menu to OrderOut"}
+              {confirmAction === "designate"
+                ? "Make this your online menu?"
+                : "Publish your online menu?"}
             </DialogTitle>
-            <DialogDescription>
-              This will {isNewMenu ? "upload" : "update"} &quot;{menuName}&quot;
-              to OrderOut and update delivery platforms. Continue?
+            <DialogDescription asChild>
+              <div className="space-y-2">
+                <p>
+                  Publishing your online menu:{" "}
+                  <span className="font-semibold text-foreground">
+                    {confirmAction === "designate"
+                      ? menuName
+                      : primaryMenuName ?? menuName}
+                  </span>{" "}
+                  — <span className="font-semibold text-foreground">{itemCount} items</span>.
+                </p>
+                <p>
+                  This is exactly what customers see on your online store and
+                  connected delivery apps (Uber Eats, DoorDash, Grubhub).
+                </p>
+                {confirmAction === "designate" && hasOnlineMenu && (
+                  <p className="text-amber-700">
+                    This replaces{" "}
+                    <span className="font-medium">{primaryMenuName}</span> as your
+                    online menu. Only one menu can handle online orders.
+                  </p>
+                )}
+              </div>
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button
               variant="outline"
-              onClick={() => setIsConfirmOpen(false)}
-              disabled={pushMenuMutation.isPending}
+              onClick={() => setConfirmAction(null)}
+              disabled={publishMutation.isPending}
             >
               Cancel
             </Button>
-            <Button
-              onClick={handleSync}
-              disabled={pushMenuMutation.isPending}
-            >
-              {pushMenuMutation.isPending ? (
+            <Button onClick={runPublish} disabled={publishMutation.isPending}>
+              {publishMutation.isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin mr-1" />
               ) : null}
-              {isNewMenu ? "Upload" : "Sync"}
+              {confirmAction === "designate" ? "Make online & publish" : "Publish"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+/**
+ * The single, unambiguous "online menu" control. Three states so a merchant is
+ * never confused about which menu customers see:
+ *   this  — this menu IS the online menu → publish it (the only push here)
+ *   other — a different menu is the online menu → point to it; publishing lives there
+ *   none  — no online menu yet → make this one the online menu
+ * Publishing always resolves to the ONE designated online menu server-side, so a
+ * non-online menu can't be pushed by accident.
+ */
+export function OnlineMenuControlCard({
+  state,
+  thisMenuName,
+  onlineMenuHref,
+  primaryMenuName,
+  itemCount,
+  hasChanges,
+  isNewMenu,
+  isPublishing,
+  onPublish,
+  onMakeOnline,
+}: {
+  state: "this" | "other" | "none";
+  thisMenuName: string;
+  /** Link to the designated online menu (route differs merchant vs HQ admin). */
+  onlineMenuHref: string | null;
+  primaryMenuName: string | null;
+  itemCount: number;
+  hasChanges: boolean;
+  isNewMenu: boolean;
+  isPublishing: boolean;
+  onPublish: () => void;
+  onMakeOnline: () => void;
+}) {
+  if (state === "this") {
+    return (
+      <Card className="border-green-500/40 bg-green-50/60 dark:bg-green-950/20">
+        <CardContent className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-start gap-3">
+            <Star className="mt-0.5 h-5 w-5 shrink-0 fill-amber-400 text-amber-500" />
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-sm font-semibold">This is your online menu</p>
+                <Badge variant="default" className="bg-green-600">
+                  <CheckCircle2 className="mr-1 h-3 w-3" /> Online menu
+                </Badge>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Your online store and delivery apps serve this menu ({itemCount}{" "}
+                items). Edits to any item anywhere — price, name, out of stock —
+                show up here; publish to push them live.
+                {hasChanges ? (
+                  <span className="font-medium text-amber-700">
+                    {" "}
+                    Changes are waiting to publish.
+                  </span>
+                ) : null}
+              </p>
+            </div>
+          </div>
+          <Button
+            size="sm"
+            className="shrink-0"
+            onClick={onPublish}
+            disabled={isPublishing}
+          >
+            {isPublishing ? (
+              <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <RefreshCw className="mr-1 h-3.5 w-3.5" />
+            )}
+            {isNewMenu
+              ? "Publish online menu"
+              : hasChanges
+                ? "Publish changes"
+                : "Re-publish"}
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (state === "other") {
+    return (
+      <Card className="border-muted-foreground/20">
+        <CardContent className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-start gap-3">
+            <Star className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold">
+                Online orders use{" "}
+                <span className="text-primary">
+                  {primaryMenuName ?? "another menu"}
+                </span>
+              </p>
+              <p className="text-xs text-muted-foreground">
+                <span className="font-medium">{thisMenuName}</span> is not your
+                online menu. Item edits here still appear online — you publish them
+                from your online menu, not this one.
+              </p>
+            </div>
+          </div>
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            {onlineMenuHref && (
+              <Button asChild size="sm" variant="outline">
+                <Link href={onlineMenuHref}>
+                  Go to online menu
+                  <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+                </Link>
+              </Button>
+            )}
+            <Button
+              size="sm"
+              variant="ghost"
+              className="text-muted-foreground"
+              onClick={onMakeOnline}
+              disabled={isPublishing}
+            >
+              Make this the online menu
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // state === "none"
+  return (
+    <Card className="border-blue-500/40 bg-blue-50/60 dark:bg-blue-950/20">
+      <CardContent className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-start gap-3">
+          <Upload className="mt-0.5 h-5 w-5 shrink-0 text-blue-600" />
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-blue-900 dark:text-blue-100">
+              Choose your online menu
+            </p>
+            <p className="text-xs text-blue-700/80 dark:text-blue-300/80">
+              OrderOut serves one menu per store. Make{" "}
+              <span className="font-medium">{thisMenuName}</span> your online menu
+              to publish it to your online store and delivery apps. You can switch
+              later.
+            </p>
+          </div>
+        </div>
+        <Button
+          size="sm"
+          className="shrink-0 bg-blue-600 text-white hover:bg-blue-700"
+          onClick={onMakeOnline}
+          disabled={isPublishing}
+        >
+          {isPublishing ? (
+            <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Star className="mr-1 h-3.5 w-3.5" />
+          )}
+          Make this my online menu
+        </Button>
+      </CardContent>
+    </Card>
   );
 }
