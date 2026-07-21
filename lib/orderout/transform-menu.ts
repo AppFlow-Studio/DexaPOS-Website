@@ -31,6 +31,16 @@ function formatTime(timeStr: string): string {
   return `${parts[0]}:${parts[1]}`;
 }
 
+// End times need one extra rule shared by BOTH the schedule path and the
+// operating-hours path: a window that ends at midnight ("00:00" / "24:00")
+// means "end of day". OrderOut/Uber require start < end within the day, so map
+// it to "23:59". This mirrors the CreateSchedule server-side conversion
+// (end "00:00" -> "23:59:59") so schedules and business hours stay uniform.
+function formatEndTime(timeStr: string): string {
+  const hm = formatTime(timeStr);
+  return hm === "00:00" || hm === "24:00" ? "23:59" : hm;
+}
+
 function priceToCents(price: number): number {
   return Math.round(price * 100);
 }
@@ -315,7 +325,7 @@ export function weeklyScheduleToServiceAvailability(
     out.push({
       day_of_week: day,
       time_periods: [
-        { start_time: formatTime(d.from), end_time: formatTime(d.to) },
+        { start_time: formatTime(d.from), end_time: formatEndTime(d.to) },
       ],
     });
   }
@@ -356,7 +366,7 @@ function buildServiceAvailability(
       const existing = daySlots.get(dayName) || [];
       existing.push({
         start_time: formatTime(slot.start_time),
-        end_time: formatTime(slot.end_time),
+        end_time: formatEndTime(slot.end_time),
       });
       daySlots.set(dayName, existing);
     }

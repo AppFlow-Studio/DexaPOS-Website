@@ -158,6 +158,18 @@ describe("weeklyScheduleToServiceAvailability", () => {
     expect(weeklyScheduleToServiceAvailability(null)).toEqual([]);
     expect(weeklyScheduleToServiceAvailability({})).toEqual([]);
   });
+
+  it("maps an end-of-day close (00:00 / 24:00) to 23:59 (uniform with schedules)", () => {
+    expect(
+      weeklyScheduleToServiceAvailability({
+        monday: { enabled: true, from: "12:00", to: "00:00" },
+        tuesday: { enabled: true, from: "12:00", to: "24:00" },
+      })
+    ).toEqual([
+      { day_of_week: "monday", time_periods: [{ start_time: "12:00", end_time: "23:59" }] },
+      { day_of_week: "tuesday", time_periods: [{ start_time: "12:00", end_time: "23:59" }] },
+    ]);
+  });
 });
 
 describe("transformMenuToOrderOut service_availability fallback", () => {
