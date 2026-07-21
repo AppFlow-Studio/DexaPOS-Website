@@ -6,18 +6,17 @@ import {
   useLocationStore,
   useIsAllLocations,
 } from "@/stores/location-store";
-import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
 import {
   GetMenuSchedules,
   AssignScheduleToMenu,
   RemoveScheduleFromMenu,
 } from "../actions/schedules";
 import { invalidateOrderOutSync } from "@/app/dashboard/hooks/useOrderOutMenuSync";
-
-function useClerkOrgId() {
-  const { data: userInfo } = useUserInfo();
-  return userInfo?.members?.[0]?.organizations?.id || "";
-}
+// Impersonation-aware org resolver: while an HQ admin impersonates a merchant it
+// returns the merchant's clerk_org_id (not the raw HQ org). The old local resolver
+// read userInfo.members[0] and stayed HQ, so AssignScheduleToMenu looked up the HQ
+// org and failed with "Merchant not found".
+import { useClerkOrgId } from "./useLocationScoped";
 
 function useEffectiveLocationId() {
   const { selectedLocationId } = useLocationStore();

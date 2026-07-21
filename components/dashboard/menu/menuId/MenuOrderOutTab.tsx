@@ -48,6 +48,7 @@ import {
   usePublishOnlineMenu,
 } from "@/app/dashboard/online-ordering/hooks/useOrderOutStatus";
 import { SyncStatusBadge, formatTimeAgo } from "./OrderOutMenuStatus";
+import { OrderOutLiveMenuCheck } from "./OrderOutLiveMenuCheck";
 import { MenuChannelsCard } from "@/components/dashboard/orderout/MenuChannelsCard";
 import Link from "next/link";
 
@@ -278,6 +279,9 @@ export function MenuOrderOutTab({
 
         </CardContent>
       </Card>
+
+      {/* Section 1.5: verify a 86 actually reached the delivery apps. */}
+      <OrderOutLiveMenuCheck clerkOrgId={clerkOrgId} locationId={locationId} />
 
       {/* Section 1a: THE online menu control — one clear place to publish, always
           targeting the single designated online menu (foolproof). */}

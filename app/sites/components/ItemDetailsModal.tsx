@@ -16,6 +16,7 @@ import {
   StorefrontModifierOption,
 } from "@/types/storefront";
 import { useCart } from "../hooks/useCart";
+import { useEdgeFade } from "../hooks/useEdgeFade";
 import {
   getStorefrontBrowsePrice,
   getStorefrontDeliveryPriceLabel,
@@ -210,6 +211,7 @@ export function ItemDetailsModal({
 }: ItemDetailsModalProps) {
   const { addItem } = useCart();
   const [quantity, setQuantity] = useState(1);
+  const suggestionsFade = useEdgeFade();
   const [imageError, setImageError] = useState(false);
   const [selectedModifiers, setSelectedModifiers] = useState<Record<string, string[]>>({});
   const [notes, setNotes] = useState("");
@@ -461,14 +463,9 @@ export function ItemDetailsModal({
                   You might also like
                 </p>
                 <div
+                  ref={suggestionsFade.ref}
                   className="flex gap-3 overflow-x-auto pb-1 pr-5 -mr-5"
-                  style={{
-                    scrollbarWidth: "none",
-                    maskImage:
-                      "linear-gradient(to right, transparent 0, #000 12px, #000 calc(100% - 40px), transparent 100%)",
-                    WebkitMaskImage:
-                      "linear-gradient(to right, transparent 0, #000 12px, #000 calc(100% - 40px), transparent 100%)",
-                  } as React.CSSProperties}
+                  style={{ scrollbarWidth: "none", ...suggestionsFade.maskStyle } as React.CSSProperties}
                 >
                   {upsellSuggestions.map((suggestion) => (
                     <button

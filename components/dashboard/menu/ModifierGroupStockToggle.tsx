@@ -1,9 +1,9 @@
 "use client";
 
 import * as React from "react";
-import { Loader2 } from "lucide-react";
+import { CircleSlash, Loader2, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Switch } from "@/components/ui/switch";
+import { Button } from "@/components/ui/button";
 import { useGatedLocationId } from "@/stores/location-store";
 import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
 import { isActivelySnoozed } from "@/lib/snooze";
@@ -11,16 +11,18 @@ import {
   useActiveSnoozes,
   useSnoozeModifierGroup,
   useRestoreModifierGroup,
+  type SnoozeDuration,
 } from "@/lib/queries/use-snoozes";
+import { SnoozeDurationButtons } from "@/components/dashboard/menu/SnoozeDurationButtons";
 
 /**
- * Group-level "out of stock (86)" toggle for a whole modifier group, used on the
+ * Group-level "out of stock (86)" control for a whole modifier group, used on the
  * modifier group header in the item editor.
  *
  * A group 86 is a fan-out: it snoozes every option in the group (one atomic RPC).
  * So "whole group out of stock" is derived as: every option id in the group is
- * currently snoozed. Toggling off snoozes the group until manual restore; on
- * restores all options. Uses a Switch (dialog-safe, no Radix popover).
+ * currently snoozed. Now duration-aware (parity with items). Uses an inline button
+ * row (dialog-safe, no Radix popover).
  */
 export function ModifierGroupStockToggle({
   modifierGroupId,
@@ -28,7 +30,7 @@ export function ModifierGroupStockToggle({
   className,
 }: {
   modifierGroupId: string;
-  /** All modifier_group_item ids in this group — used to derive whole-group state. */
+  /** All modifier_group_item ids in this group — derives whole-group state + fan-out. */
   optionIds: string[];
   className?: string;
 }) {
@@ -43,6 +45,8 @@ export function ModifierGroupStockToggle({
   );
   const snoozeGroup = useSnoozeModifierGroup();
   const restoreGroup = useRestoreModifierGroup();
+
+  const [open, setOpen] = React.useState(false);
 
   // Whole group is out of stock when it has options and every one is snoozed.
   const snoozedOptionIds = new Set(
@@ -65,39 +69,73 @@ export function ModifierGroupStockToggle({
 
   if (!clerkOrgId || optionIds.length === 0) return null;
 
-  const onToggle = (nextInStock: boolean) => {
-    if (nextInStock) {
-      restoreGroup.mutate({ clerkOrgId, modifierGroupId, locationId: gatedLocationId });
-    } else {
-      snoozeGroup.mutate({
-        clerkOrgId,
-        modifierGroupId,
-        locationId: gatedLocationId,
-        snoozedUntil: "infinity",
-      });
-    }
+  const do86 = (duration: SnoozeDuration) => {
+    snoozeGroup.mutate({
+      clerkOrgId,
+      modifierGroupId,
+      locationId: gatedLocationId,
+      duration,
+      optionIds,
+    });
+    setOpen(false);
   };
 
-  return (
-    <div className={cn("flex items-center gap-2", className)}>
-      {busy ? (
-        <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
-      ) : (
-        <span
-          className={cn(
-            "text-[11px] font-medium whitespace-nowrap",
-            isOutOfStock ? "text-amber-700" : "text-muted-foreground",
-          )}
-        >
-          {isOutOfStock ? "Group out of stock" : "Group in stock"}
+  const restore = () =>
+    restoreGroup.mutate({
+      clerkOrgId,
+      modifierGroupId,
+      locationId: gatedLocationId,
+      optionIds,
+    });
+
+  if (isOutOfStock) {
+    return (
+      <div className={cn("flex items-center gap-2", className)}>
+        <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-700">
+          <CircleSlash className="h-3 w-3" />
+          Group out of stock
         </span>
-      )}
-      <Switch
-        checked={!isOutOfStock}
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-7"
+          disabled={busy}
+          onClick={restore}
+        >
+          {busy ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <>
+              <RotateCcw className="mr-1 h-3.5 w-3.5" />
+              Restore
+            </>
+          )}
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className={cn("flex flex-col items-end gap-1.5", className)}>
+      <Button
+        type="button"
+        variant={open ? "secondary" : "outline"}
+        size="sm"
+        className="h-7"
         disabled={busy}
-        onCheckedChange={(checked) => onToggle(checked)}
-        aria-label="Toggle whole modifier group out of stock"
-      />
+        onClick={() => setOpen((v) => !v)}
+      >
+        {busy ? (
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        ) : (
+          <>
+            <CircleSlash className="mr-1 h-3.5 w-3.5" />
+            86 whole group
+          </>
+        )}
+      </Button>
+      {open && <SnoozeDurationButtons onPick={do86} disabled={busy} />}
     </div>
   );
 }
