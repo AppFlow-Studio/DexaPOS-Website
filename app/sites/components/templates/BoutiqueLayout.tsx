@@ -164,15 +164,19 @@ export function BoutiqueLayout({
 
     const updateActiveCategory = () => {
       const boundary = headerHeight + 16 + 8;
+      // Highlight the section owning the boundary line (top at/above it, bottom
+      // still below it) so a pill activates only once the previous section has
+      // fully scrolled off the top, not when its heading first appears.
       let current = allCategories[0].id;
       for (const c of allCategories) {
         const el = document.getElementById(`boutique-cat-${c.id}`);
         if (!el) continue;
-        if (el.getBoundingClientRect().top - boundary <= 1) {
+        const rect = el.getBoundingClientRect();
+        if (rect.top - boundary <= 1 && rect.bottom - boundary > 1) {
           current = c.id;
-        } else {
           break;
         }
+        if (rect.top - boundary <= 1) current = c.id;
       }
       // Near the page bottom, trailing sections may be too short to ever reach
       // the boundary line. Promote to the last section whose heading is visible.
