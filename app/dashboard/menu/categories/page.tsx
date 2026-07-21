@@ -68,6 +68,7 @@ import {
 } from "@/stores/location-store";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
+import { invalidateOrderOutSync } from "@/app/dashboard/hooks/useOrderOutMenuSync";
 import {
   Dialog,
   DialogContent,
@@ -376,6 +377,7 @@ export default function CategoriesPage() {
 
       queryClient.invalidateQueries({ queryKey: ["categories"] });
       queryClient.invalidateQueries({ queryKey: ["categories-with-items"] });
+      invalidateOrderOutSync(queryClient);
       refetch();
     } catch {
       toast.error("Update Failed", {
@@ -413,6 +415,7 @@ export default function CategoriesPage() {
 
       queryClient.invalidateQueries({ queryKey: ["categories"] });
       queryClient.invalidateQueries({ queryKey: ["categories-with-items"] });
+      invalidateOrderOutSync(queryClient);
       refetch();
     } catch {
       toast.error("Reset Failed", {
@@ -469,6 +472,7 @@ export default function CategoriesPage() {
       });
       queryClient.invalidateQueries({ queryKey: ["categories"] });
       queryClient.invalidateQueries({ queryKey: ["categories-with-items"] });
+      invalidateOrderOutSync(queryClient);
       refetch();
     } catch (error) {
       toast.error("Delete Failed", {
@@ -521,6 +525,7 @@ export default function CategoriesPage() {
       });
       queryClient.invalidateQueries({ queryKey: ["categories-with-items"] });
       queryClient.invalidateQueries({ queryKey: ["menu-items"] });
+      invalidateOrderOutSync(queryClient);
       refetch();
     } catch {
       toast.error("Remove Failed", {
@@ -617,6 +622,7 @@ export default function CategoriesPage() {
       await queryClient.invalidateQueries({
         queryKey: ["categories-with-items"],
       });
+      invalidateOrderOutSync(queryClient);
       await refetch();
 
       // Clear changes for this category
@@ -1705,6 +1711,7 @@ export default function CategoriesPage() {
           queryClient.invalidateQueries({
             queryKey: ["categories-with-items"],
           });
+          invalidateOrderOutSync(queryClient);
           refetch();
         }}
       />
@@ -1753,6 +1760,7 @@ export default function CategoriesPage() {
           queryClient.invalidateQueries({
             queryKey: ["categories-with-items"],
           });
+          invalidateOrderOutSync(queryClient);
           refetch();
         }}
       />
@@ -1776,6 +1784,7 @@ export default function CategoriesPage() {
           queryClient.invalidateQueries({
             queryKey: ["categories-with-items"],
           });
+          invalidateOrderOutSync(queryClient);
           refetch();
         }}
       />
@@ -1805,6 +1814,7 @@ export default function CategoriesPage() {
         onSuccess={() => {
           exitSelectionMode();
           queryClient.invalidateQueries({ queryKey: ["categories-with-items"] });
+          invalidateOrderOutSync(queryClient);
           refetch();
         }}
       />
@@ -1833,6 +1843,7 @@ export default function CategoriesPage() {
         onSuccess={() => {
           exitSelectionMode();
           queryClient.invalidateQueries({ queryKey: ["categories-with-items"] });
+          invalidateOrderOutSync(queryClient);
           refetch();
         }}
       />

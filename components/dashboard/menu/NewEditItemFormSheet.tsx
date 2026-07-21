@@ -8,6 +8,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { toast } from "sonner";
 import { useQueryClient, useQuery, useMutation } from "@tanstack/react-query";
+import { invalidateOrderOutSync } from "@/app/dashboard/hooks/useOrderOutMenuSync";
 import {
   Dialog,
   DialogContent,
@@ -1359,6 +1360,7 @@ export function NewEditItemFormSheet({
       queryClient.invalidateQueries({ queryKey: ["menu-item", editItem.id] });
       queryClient.invalidateQueries({ queryKey: ["menus"] });
       queryClient.invalidateQueries({ queryKey: ["categories-with-items"] });
+      invalidateOrderOutSync(queryClient);
       onOpenChange(false);
       onSuccess?.();
     } catch (error) {
@@ -1558,6 +1560,7 @@ export function NewEditItemFormSheet({
       queryClient.invalidateQueries({ queryKey: ["menu-item", editItem?.id] });
       queryClient.invalidateQueries({ queryKey: ["menus"] });
       queryClient.invalidateQueries({ queryKey: ["categories-with-items"] });
+      invalidateOrderOutSync(queryClient);
 
       form.reset();
       setSelectedCategories([]);

@@ -1,4 +1,4 @@
-import { getStorefrontData } from "../../../actions";
+import { getStorefrontMetaData } from "../../../actions";
 import { getOrderTracking, getStoreTaxRateByLocationId } from "../../../order-actions";
 import { notFound } from "next/navigation";
 import { TEMPLATE_DEFAULTS, buildThemeVars } from "../../../lib/theme-utils";
@@ -14,16 +14,16 @@ interface PageProps {
 
 export default async function OrderTrackingRoute({ params }: PageProps) {
   const { slug, orderId } = await params;
-  const { site, location } = await getStorefrontData(slug);
+  // Fetch store meta (site + location) and the order in parallel — the tracking
+  // page only needs theme/store info, never the menu tree, so skip fetchMenus.
+  const [{ site, location }, { data: orderData }] = await Promise.all([
+    getStorefrontMetaData(slug),
+    getOrderTracking(orderId),
+  ]);
 
   if (!location) {
     notFound();
   }
-
-  // Fetch order first so we can use its location_id for the tax rate lookup.
-  // This is more reliable than going through site.id since the order already
-  // knows its location — no dependency on site being non-null.
-  const { data: orderData } = await getOrderTracking(orderId);
 
   if (!orderData) {
     notFound();

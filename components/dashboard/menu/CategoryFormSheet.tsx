@@ -79,6 +79,7 @@ import {
   useRemoveCategoryPrepDefault,
 } from "@/app/dashboard/hooks/usePrepStations";
 import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
+import { invalidateOrderOutSync } from "@/app/dashboard/hooks/useOrderOutMenuSync";
 
 // Form schema
 const categorySchema = z.object({
@@ -328,6 +329,7 @@ export function CategoryFormSheet({
       queryClient.invalidateQueries({ queryKey: ["categories"] });
       queryClient.invalidateQueries({ queryKey: ["categories-with-items"] });
       queryClient.invalidateQueries({ queryKey: ["menus"] });
+      invalidateOrderOutSync(queryClient);
       form.reset();
       setSelectedMenu(null);
       setSelectedSchedules([]);

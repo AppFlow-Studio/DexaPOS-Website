@@ -23,6 +23,7 @@ import {
   GetLocationModifierItemIds,
 } from "@/app/dashboard/actions/modifier-assignments";
 import { MenuItemsModel } from "@/types/db-modles";
+import { invalidateOrderOutSync } from "@/app/dashboard/hooks/useOrderOutMenuSync";
 
 interface ModifierGroupForAssignment {
   id: string;
@@ -149,6 +150,7 @@ export function AssignModifierToItemsDialog({
 
       queryClient.invalidateQueries({ queryKey: ["modifier-groups"] });
       queryClient.invalidateQueries({ queryKey: ["menu-items"] });
+      invalidateOrderOutSync(queryClient);
       onSuccess?.();
     } catch (e: any) {
       toast.error("Assignment failed", {

@@ -36,19 +36,32 @@ export function useEdgeFade(
       cleanupRef.current = null;
 
       if (!node) {
-        setEdges({ left: false, right: false });
+        // Bail if already cleared — returning a fresh object here would change
+        // state on every detach, re-render, re-attach the callback ref, and loop.
+        setEdges((prev) =>
+          !prev.left && !prev.right ? prev : { left: false, right: false }
+        );
         return;
       }
 
-      const onScroll = () => measure(node);
-      node.addEventListener("scroll", onScroll, { passive: true });
-      const ro = new ResizeObserver(() => measure(node));
+      // rAF-throttle so a fast scroll can't queue a setState per scroll event.
+      let ticking = false;
+      const schedule = () => {
+        if (ticking) return;
+        ticking = true;
+        requestAnimationFrame(() => {
+          measure(node);
+          ticking = false;
+        });
+      };
+
+      node.addEventListener("scroll", schedule, { passive: true });
+      const ro = new ResizeObserver(schedule);
       ro.observe(node);
-      // Initial measure once layout is ready.
-      requestAnimationFrame(() => measure(node));
+      schedule();
 
       cleanupRef.current = () => {
-        node.removeEventListener("scroll", onScroll);
+        node.removeEventListener("scroll", schedule);
         ro.disconnect();
       };
     },
