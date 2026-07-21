@@ -343,9 +343,13 @@ function buildServiceAvailability(
 
   for (const scheduleWrapper of menu.schedules) {
     const schedule = scheduleWrapper.schedule;
-    if (!schedule?.is_active) continue;
+    // get_menu_with_categories does NOT return schedule.is_active, so only skip a
+    // schedule that is EXPLICITLY inactive. Treating undefined as inactive dropped
+    // every slot -> empty service_availability -> the marketplace shows all days
+    // Closed and refuses to publish the menu.
+    if (schedule?.is_active === false) continue;
 
-    for (const slot of schedule.time_slots) {
+    for (const slot of schedule?.time_slots ?? []) {
       const dayName = DAY_NAMES[slot.day_of_week];
       if (!dayName) continue;
 
@@ -358,8 +362,21 @@ function buildServiceAvailability(
     }
   }
 
-  return Array.from(daySlots.entries()).map(([day, periods]) => ({
+  const result = Array.from(daySlots.entries()).map(([day, periods]) => ({
     day_of_week: day,
     time_periods: periods,
   }));
+
+  // An empty service_availability is unpublishable (all days Closed). If the
+  // assigned schedule(s) yielded nothing usable, fall back to the location's
+  // operating hours, then to 24/7 — never push an empty window.
+  if (result.length === 0) {
+    if (fallback && fallback.length > 0) return fallback;
+    return DAY_NAMES.map((day) => ({
+      day_of_week: day,
+      time_periods: [{ start_time: "00:00", end_time: "23:59" }],
+    }));
+  }
+
+  return result;
 }

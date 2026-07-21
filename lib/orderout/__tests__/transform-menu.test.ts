@@ -190,4 +190,33 @@ describe("transformMenuToOrderOut service_availability fallback", () => {
       { day_of_week: "friday", time_periods: [{ start_time: "10:00", end_time: "14:00" }] },
     ]);
   });
+
+  it("processes a schedule whose is_active is absent (RPC omits it)", () => {
+    // get_menu_with_categories returns { id, name, time_slots } with no is_active.
+    const wrapper = {
+      id: "ms-1",
+      schedule: {
+        id: "s-1",
+        name: "Online Ordering Menu",
+        time_slots: [
+          { day_of_week: 1, start_time: "12:00:00", end_time: "23:59:59" },
+        ],
+      },
+    };
+    const payload = transformMenuToOrderOut(menuWithSchedules([wrapper]));
+    expect(payload.menus[0].service_availability).toEqual([
+      { day_of_week: "monday", time_periods: [{ start_time: "12:00", end_time: "23:59" }] },
+    ]);
+  });
+
+  it("explicitly inactive schedule falls back instead of pushing empty []", () => {
+    const payload = transformMenuToOrderOut(
+      menuWithSchedules([
+        scheduleWith([{ day_of_week: 1, start_time: "12:00:00", end_time: "23:59:59" }], false),
+      ]),
+      { fallbackAvailability: fallback }
+    );
+    // Schedule inactive -> no windows -> never emit [], use the fallback.
+    expect(payload.menus[0].service_availability).toEqual(fallback);
+  });
 });
