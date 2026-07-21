@@ -8,6 +8,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { toast } from "sonner";
 import { useQueryClient, useQuery, useMutation } from "@tanstack/react-query";
+import { invalidateOrderOutSync } from "@/app/dashboard/hooks/useOrderOutMenuSync";
 import {
   Dialog,
   DialogContent,
@@ -124,6 +125,7 @@ import { DisabledFieldBanner } from "./DisabledFieldBanner";
 import { CascadeLadder } from "./CascadeLadder";
 import { ItemSnoozeControl } from "./item-edit/ItemSnoozeControl";
 import { ModifierStockToggle } from "./ModifierStockToggle";
+import { ModifierGroupStockToggle } from "./ModifierGroupStockToggle";
 import {
   TAX_CATEGORIES,
   TAX_CATEGORY_LABELS,
@@ -1358,6 +1360,7 @@ export function NewEditItemFormSheet({
       queryClient.invalidateQueries({ queryKey: ["menu-item", editItem.id] });
       queryClient.invalidateQueries({ queryKey: ["menus"] });
       queryClient.invalidateQueries({ queryKey: ["categories-with-items"] });
+      invalidateOrderOutSync(queryClient);
       onOpenChange(false);
       onSuccess?.();
     } catch (error) {
@@ -1557,6 +1560,7 @@ export function NewEditItemFormSheet({
       queryClient.invalidateQueries({ queryKey: ["menu-item", editItem?.id] });
       queryClient.invalidateQueries({ queryKey: ["menus"] });
       queryClient.invalidateQueries({ queryKey: ["categories-with-items"] });
+      invalidateOrderOutSync(queryClient);
 
       form.reset();
       setSelectedCategories([]);
@@ -2337,6 +2341,16 @@ export function NewEditItemFormSheet({
                                               {group.max_selections || "∞"}
                                             </div>
                                           </div>
+
+                                          {/* Group-level out of stock (86) — per-location,
+                                              fans out to every option. Self-gates on location. */}
+                                          <ModifierGroupStockToggle
+                                            modifierGroupId={group.id}
+                                            optionIds={(
+                                              group.modifier_group_items ?? []
+                                            ).map((o: any) => o.id)}
+                                            className="shrink-0"
+                                          />
 
                                           {/* Reorder / Remove Controls */}
                                           {canManageModifierLinks && (

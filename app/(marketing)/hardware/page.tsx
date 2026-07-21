@@ -1,20 +1,26 @@
 import type { Metadata } from "next";
-import MarketingNav from "../_components/MarketingNav";
-import MarketingFooter from "../_components/MarketingFooter";
-import "../hardware.css";
+import Link from "next/link";
+import SectionRenderer from "@/components/cms/SectionRenderer";
+import { getCmsPage } from "@/lib/cms/get-cms-page";
+import "./hardware.css";
 
-export const metadata: Metadata = {
-  title: "Hardware",
-  description:
-    "Run DEXA on the gear that fits your floor. iPad, Android, Castles, Dejavoo, Star Micronics, Landi.",
-  alternates: { canonical: "/hardware" },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const cms = await getCmsPage("/hardware");
+  return {
+    title: cms?.title || "Hardware",
+    description: cms?.description || "Purpose-built restaurant hardware from DEXA — terminals, printers, tablets, payment devices, and kiosks designed for your front-of-house and back-of-house.",
+    openGraph: { title: cms?.title || "DEXA Hardware", url: "/hardware" },
+  };
+}
 
-export default function HardwarePage() {
+export default async function HardwarePage() {
+  const cms = await getCmsPage("/hardware");
+  if (cms?.sections?.length) {
+    return <SectionRenderer route="/hardware" sections={cms.sections} />;
+  }
+
   return (
-    <main className="mk-hardware">
-      <MarketingNav current="hardware" />
-
+    <>
       <section className="page-head">
         <div className="wrap">
           <div className="eyebrow reveal in">Hardware</div>
@@ -23,7 +29,6 @@ export default function HardwarePage() {
         </div>
       </section>
 
-      {/* HARDWARE CATEGORIES */}
       <section className="hw-cats">
         <div className="wrap">
           <div className="section-head reveal in">
@@ -90,7 +95,6 @@ export default function HardwarePage() {
         </div>
       </section>
 
-      {/* PRINCIPLES */}
       <section className="principles">
         <div className="wrap">
           <div className="section-head reveal in">
@@ -124,17 +128,16 @@ export default function HardwarePage() {
         </div>
       </section>
 
-      {/* COMPATIBILITY */}
       <section className="compat">
         <div className="wrap">
           <div className="compat-card reveal in">
             <div>
               <h3>Already own gear? You probably keep most of it.</h3>
               <p>Send us a list of your current hardware. We&apos;ll come back with a compatibility report within one business day. Most operators reuse 60–80% of their existing gear when migrating to DEXA.</p>
-              <a href="/contact" className="btn btn-primary" style={{ background: "var(--paper)", color: "var(--ink)" }}>
+              <Link href="/contact" className="btn btn-request-a-demo" style={{ background: "var(--paper)", color: "var(--ink)" }}>
                 Check Compatibility
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M5 12h14M13 5l7 7-7 7" /></svg>
-              </a>
+              </Link>
             </div>
             <div className="compat-stats">
               <div className="compat-stat">
@@ -158,23 +161,21 @@ export default function HardwarePage() {
         </div>
       </section>
 
-      {/* CTA */}
       <section className="cta-strip">
         <div className="wrap">
           <div className="section-eyebrow" style={{ color: "var(--brand-300)", justifyContent: "center" }}>See it on real hardware</div>
           <h2>The right gear for your concept.</h2>
           <p>We&apos;ll bring the right hardware to your demo — Castles for high-volume, Dejavoo handhelds for tableside, Landi C20Pro for compact setups.</p>
           <div className="actions">
-            <a href="/contact" className="btn btn-primary" style={{ background: "var(--paper)", color: "var(--ink)" }}>
+            <Link href="/contact" className="btn btn-request-a-demo" style={{ background: "var(--paper)", color: "var(--ink)" }}>
               Request a Demo
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M5 12h14M13 5l7 7-7 7" /></svg>
-            </a>
-            <a href="/industries" className="btn btn-ghost-light">See by industry</a>
+            </Link>
+            <Link href="/industries" className="btn btn-ghost-light">See by industry</Link>
           </div>
         </div>
       </section>
 
-      <MarketingFooter />
-    </main>
+    </>
   );
 }

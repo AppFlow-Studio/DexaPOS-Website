@@ -175,6 +175,13 @@ function collectModifierGroup(
   const modifierOptions: OrderOutModifierOption[] = [];
 
   for (const item of mg.items) {
+    // OrderOut has NO per-modifier out-of-stock mechanism. Unlike items (which support
+    // suspension_info / a suspend endpoint), a modifier option can only be made
+    // unavailable by REMOVING it from the menu payload and re-uploading the whole menu
+    // — which the 86 full-resync already does. get_menu_with_categories folds the snooze
+    // into is_active, so an 86'd option arrives is_active=false and is dropped here
+    // alongside genuinely-inactive ones. (Do NOT emit suspension_info for modifiers; it
+    // is a no-op on OrderOut and leaves the option orderable.)
     if (!item.is_active) continue;
 
     // Add modifier item (deduplicated)
@@ -193,13 +200,30 @@ function collectModifierGroup(
     modifierOptions.push({ type: "ITEM", id: item.id });
   }
 
+  // Required groups must enforce at least one selection even if min_selections is 0.
+  const baseMin = mg.is_required
+    ? Math.max(mg.min_selections, 1)
+    : mg.min_selections;
+  // Removing 86'd options can push a group above its surviving option count and make
+  // the re-upload invalid. Clamp both bounds to the number of options that actually
+  // survive (0 when the whole group is 86'd, leaving an empty group rather than a
+  // dangling reference from the parent item).
+  const minPermitted = Math.min(baseMin, modifierOptions.length);
+  // Null max_selections = "no limit" -> represent as "select up to all options".
+  const maxPermitted = Math.min(
+    mg.max_selections ?? modifierOptions.length,
+    modifierOptions.length,
+  );
+
   modifierGroupMap.set(mg.id, {
     id: mg.id,
     title: { translations: { en_us: mg.name } },
     modifier_options: modifierOptions,
     quantity_info: {
-      min_permitted: mg.min_selections,
-      max_permitted: mg.max_selections,
+      quantity: {
+        min_permitted: minPermitted,
+        max_permitted: maxPermitted,
+      },
     },
   });
 }

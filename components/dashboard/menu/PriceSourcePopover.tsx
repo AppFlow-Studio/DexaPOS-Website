@@ -21,6 +21,7 @@ import {
 import { InlinePriceEditor } from "./InlinePriceEditor";
 import { useItemPriceMatrix } from "@/app/dashboard/hooks/useLocationScoped";
 import { ResetMenuItemToGlobal } from "@/app/dashboard/actions/menu-items";
+import { invalidateOrderOutSync } from "@/app/dashboard/hooks/useOrderOutMenuSync";
 
 interface PriceSourcePopoverProps {
   itemId: string;
@@ -83,6 +84,7 @@ export function PriceSourcePopover({
       queryClient.invalidateQueries({ queryKey: ["categories-with-items"] });
       queryClient.invalidateQueries({ queryKey: ["item-price-matrix", itemId] });
       queryClient.invalidateQueries({ queryKey: ["menu-item", itemId] });
+      invalidateOrderOutSync(queryClient);
       setOpen(false);
     },
     onError: (err) => {
