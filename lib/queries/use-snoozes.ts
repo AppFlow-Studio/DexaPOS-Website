@@ -17,6 +17,14 @@ import {
   unsnoozeModifierGroup,
   type ActiveSnoozes,
 } from '@/app/dashboard/actions/item-snooze'
+import {
+  getCategorySnooze,
+  snoozeCategory,
+  snoozeCategoryUntilEndOfDay,
+  snoozeCategoryForHours,
+  snoozeCategoryUntilManual,
+  unsnoozeCategory,
+} from '@/app/dashboard/actions/category-snooze'
 
 export type { ActiveSnoozes }
 
@@ -51,7 +59,7 @@ export function useActiveSnoozes(
     queryFn: async () => {
       const result = await getActiveSnoozes(locationId)
       if (!result.success) throw new Error(result.error)
-      return result.data ?? { items: [], modifiers: [] }
+      return result.data ?? { items: [], modifiers: [], categories: [] }
     },
     enabled: !!clerkOrgId && !!locationId && locationId !== 'all',
     staleTime: 30 * 1000,
@@ -63,8 +71,10 @@ function invalidate(
   clerkOrgId: string,
 ) {
   queryClient.invalidateQueries({ queryKey: ['snoozed-items', clerkOrgId] })
-  // Per-item control state + every menu view that surfaces effective_availability.
+  // Per-item / per-category control state + every menu view that surfaces
+  // effective_availability or category snooze.
   queryClient.invalidateQueries({ queryKey: ['item-snooze'] })
+  queryClient.invalidateQueries({ queryKey: ['category-snooze'] })
   queryClient.invalidateQueries({ queryKey: ['menu-items'] })
   queryClient.invalidateQueries({ queryKey: ['menu-item'] })
   queryClient.invalidateQueries({ queryKey: ['menu-items-flat'] })
@@ -257,6 +267,93 @@ export function useRestoreModifierGroup() {
       }
     },
     onError: (e: Error) => toast.error(e.message || 'Failed to restore modifier group'),
+  })
+}
+
+// ============================================================================
+// Category 86 — temporary "Sold Out" for a whole category, per location.
+// Keeps the category's items on the delivery menu marked Sold Out (does NOT
+// hide the category). Mirrors the item snooze hooks.
+// ============================================================================
+
+// Per-category snooze state at a location (drives the category 86 control).
+export function useCategorySnooze(
+  categoryId: string | undefined,
+  locationId: string | null,
+) {
+  return useQuery<{ snoozed_until: string | null; snooze_reason: string | null }>({
+    queryKey: ['category-snooze', categoryId ?? null, locationId ?? null],
+    queryFn: async () => {
+      if (!categoryId || !locationId) {
+        return { snoozed_until: null, snooze_reason: null }
+      }
+      return getCategorySnooze(categoryId, locationId)
+    },
+    enabled: !!categoryId && !!locationId,
+    staleTime: 30 * 1000,
+  })
+}
+
+export function useSnoozeCategory() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      clerkOrgId,
+      categoryId,
+      locationId,
+      duration,
+      reason,
+    }: {
+      clerkOrgId: string
+      categoryId: string
+      locationId: string
+      duration: SnoozeDuration
+      reason?: string
+    }) => {
+      switch (duration.kind) {
+        case 'end_of_day':
+          return snoozeCategoryUntilEndOfDay(clerkOrgId, categoryId, locationId, reason)
+        case 'hours':
+          return snoozeCategoryForHours(clerkOrgId, categoryId, locationId, duration.hours, reason)
+        case 'until_manual':
+          return snoozeCategoryUntilManual(clerkOrgId, categoryId, locationId, reason)
+        case 'until':
+          return snoozeCategory(clerkOrgId, categoryId, locationId, duration.iso, reason)
+      }
+    },
+    onSuccess: (result, { clerkOrgId }) => {
+      if (result.success) {
+        invalidate(queryClient, clerkOrgId)
+        toast.success('Category marked out of stock')
+      } else {
+        toast.error(result.error || 'Failed to 86 category')
+      }
+    },
+    onError: (e: Error) => toast.error(e.message || 'Failed to 86 category'),
+  })
+}
+
+export function useRestoreCategory() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      clerkOrgId,
+      categoryId,
+      locationId,
+    }: {
+      clerkOrgId: string
+      categoryId: string
+      locationId: string
+    }) => unsnoozeCategory(clerkOrgId, categoryId, locationId),
+    onSuccess: (result, { clerkOrgId }) => {
+      if (result.success) {
+        invalidate(queryClient, clerkOrgId)
+        toast.success('Category restored')
+      } else {
+        toast.error(result.error || 'Failed to restore category')
+      }
+    },
+    onError: (e: Error) => toast.error(e.message || 'Failed to restore category'),
   })
 }
 
