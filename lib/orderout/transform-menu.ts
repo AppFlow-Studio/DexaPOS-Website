@@ -76,21 +76,38 @@ export function transformMenuToOrderOut(
   for (const menuCategory of menu.categories) {
     if (!menuCategory.is_active) continue;
 
+    // Category-level 86: a snoozed category stays on the menu but marks all of its
+    // (otherwise-visible) items "Sold Out" via suspension_info instead of dropping
+    // them. Auto-restores at suspend_until (same as items). Deliberate hide is
+    // orthogonal — is_active=false already dropped the category above.
+    const catSuspendUntil = snoozeToSuspendUntil(
+      (menuCategory as any).snoozed_until
+    );
+
     const categoryEntities: OrderOutCategoryEntity[] = [];
 
     for (const catItem of menuCategory.items) {
       const mi = catItem.menu_item;
 
       // Out-of-stock (86) vs deliberately unavailable are different:
-      //  - 86'd item -> keep it on the menu, marked "Sold Out" via suspension_info
-      //    (Uber auto-restores at suspend_until).
-      //  - unavailable for any OTHER reason (manager hid it / not sold here) -> drop.
+      //  - 86'd item OR item in a 86'd category -> keep it, marked "Sold Out" via
+      //    suspension_info (Uber auto-restores at suspend_until).
+      //  - unavailable for any OTHER reason (manager hid it / not sold here) -> drop,
+      //    even under a category snooze.
       // Treat a missing/undefined effective_availability as available so a dropped
       // RPC field can never again silently zero out the entire menu (migration
       // 20260625000000_restore_effective_availability_in_get_menu_with_categories).
-      const suspendUntil = snoozeToSuspendUntil((mi as any).snoozed_until);
+      const itemSuspendUntil = snoozeToSuspendUntil((mi as any).snoozed_until);
+      const itemSnoozed = itemSuspendUntil !== null;
+      if (mi.effective_availability === false && !itemSnoozed) continue;
+
+      // Item's own snooze wins; otherwise the category snooze cascades down.
+      const suspendUntil = itemSuspendUntil ?? catSuspendUntil;
       const isSnoozed = suspendUntil !== null;
-      if (mi.effective_availability === false && !isSnoozed) continue;
+      const suspendReason =
+        (mi as any).snooze_reason ||
+        (menuCategory as any).snooze_reason ||
+        "Out of stock";
 
       // Deduplicate regular items by menu_item.id
       if (!itemMap.has(mi.id)) {
@@ -115,7 +132,7 @@ export function transformMenuToOrderOut(
                 suspension_info: {
                   suspension: {
                     suspend_until: suspendUntil,
-                    reason: (mi as any).snooze_reason || "Out of stock",
+                    reason: suspendReason,
                   },
                 },
               }

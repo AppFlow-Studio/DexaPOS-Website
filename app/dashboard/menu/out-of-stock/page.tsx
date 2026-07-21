@@ -15,6 +15,7 @@ import {
   useRestoreItem,
   useRestoreModifier,
   useRestoreModifierGroup,
+  useRestoreCategory,
 } from '@/lib/queries/use-snoozes'
 
 /** "infinity" (until-manual) vs a real timestamp. */
@@ -40,13 +41,15 @@ export default function OutOfStockPage() {
   const restoreItem = useRestoreItem()
   const restoreModifier = useRestoreModifier()
   const restoreModifierGroup = useRestoreModifierGroup()
+  const restoreCategory = useRestoreCategory()
 
   const [mounted, setMounted] = useState(false)
   useEffect(() => setMounted(true), [])
 
   const items = data?.items ?? []
   const modifiers = data?.modifiers ?? []
-  const total = items.length + modifiers.length
+  const categories = data?.categories ?? []
+  const total = items.length + modifiers.length + categories.length
 
   // Collapse snoozed options under their parent modifier group so a whole-group
   // 86 reads as one block (with a "Restore group" action), not N loose rows.
@@ -66,7 +69,10 @@ export default function OutOfStockPage() {
   )
 
   const isRestoring =
-    restoreItem.isPending || restoreModifier.isPending || restoreModifierGroup.isPending
+    restoreItem.isPending ||
+    restoreModifier.isPending ||
+    restoreModifierGroup.isPending ||
+    restoreCategory.isPending
 
   const handleRestoreItem = (menuItemId: string) => {
     if (!clerkOrgId || isAllLocations) return
@@ -80,6 +86,10 @@ export default function OutOfStockPage() {
     if (!clerkOrgId || isAllLocations) return
     restoreModifierGroup.mutate({ clerkOrgId, modifierGroupId, locationId: selectedLocationId })
   }
+  const handleRestoreCategory = (categoryId: string) => {
+    if (!clerkOrgId || isAllLocations) return
+    restoreCategory.mutate({ clerkOrgId, categoryId, locationId: selectedLocationId })
+  }
   const handleRestoreAll = () => {
     if (!clerkOrgId || isAllLocations) return
     items.forEach((i) =>
@@ -92,6 +102,9 @@ export default function OutOfStockPage() {
         locationId: selectedLocationId,
       }),
     )
+    categories.forEach((c) =>
+      restoreCategory.mutate({ clerkOrgId, categoryId: c.category_id, locationId: selectedLocationId }),
+    )
   }
 
   if (!mounted) return <PageSkeleton />
@@ -101,7 +114,7 @@ export default function OutOfStockPage() {
       <div>
         <h2 className="text-2xl font-bold tracking-tight">86&rsquo;d Items</h2>
         <p className="text-muted-foreground">
-          Items and modifiers currently marked out of stock
+          Items, modifiers, and categories currently marked out of stock
           {selectedLocation?.name ? (
             <>
               {' '}at <span className="font-medium">{selectedLocation.name}</span>
@@ -172,6 +185,24 @@ export default function OutOfStockPage() {
         />
       ) : (
         <div className="space-y-6">
+          {categories.length > 0 && (
+            <section className="space-y-3">
+              <h3 className="text-sm font-semibold text-muted-foreground">
+                Categories ({categories.length})
+              </h3>
+              {categories.map((c) => (
+                <SnoozeRow
+                  key={c.category_id}
+                  title={c.name}
+                  subtitle={c.snooze_reason ?? 'Every item in this category is Sold Out'}
+                  snoozedUntil={c.snoozed_until}
+                  disabled={isRestoring}
+                  onRestore={() => handleRestoreCategory(c.category_id)}
+                />
+              ))}
+            </section>
+          )}
+
           {items.length > 0 && (
             <section className="space-y-3">
               <h3 className="text-sm font-semibold text-muted-foreground">
