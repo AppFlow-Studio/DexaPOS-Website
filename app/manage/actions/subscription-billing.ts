@@ -45,6 +45,70 @@ export interface BillableServiceRecord {
   updated_at: string
 }
 
+export interface DeviceBillingServiceMappingRecord {
+  id: string
+  device_category: string
+  service_code: string
+  is_active: boolean
+  metadata: Record<string, unknown>
+  created_at: string
+  updated_at: string
+}
+
+export interface UpsertDeviceBillingServiceMappingParams {
+  deviceCategory: string
+  serviceCode: string
+  isActive?: boolean
+  metadata?: Record<string, unknown>
+}
+
+export interface UpsertBillableServiceParams {
+  serviceId?: string | null
+  serviceCode: string
+  displayName: string
+  serviceCategory: 'hardware' | 'software' | 'service'
+  pricingModel: 'flat' | 'per_unit' | 'tiered'
+  basePriceMonthly: number
+  additionalUnitPrice?: number | null
+  includedQuantity?: number
+  cardSurchargePct?: number
+  unitLabel?: string
+  isActive?: boolean
+  metadata?: Record<string, unknown>
+}
+
+export interface UpsertSubscriptionPlanParams {
+  planId?: string | null
+  planCode: string
+  displayName: string
+  basePriceMonthly: number
+  includedStations: number
+  perExtraStationPrice: number
+  cardSurchargePct: number
+  isActive?: boolean
+  metadata?: Record<string, unknown>
+}
+
+export interface SubscriptionQuoteResult {
+  station_count: number
+  billing_method: 'ach' | 'card'
+  line_items: Array<Record<string, unknown>>
+  subtotal: number
+  card_surcharge: number
+  total_amount: number
+}
+
+export interface CalculateSubscriptionTotalParams {
+  planId?: string | null
+  stationCount: number
+  billingMethod?: 'ach' | 'card'
+  services?: Array<{
+    serviceId?: string | null
+    serviceCode?: string | null
+    quantity: number
+  }>
+}
+
 export interface SubscriptionServiceAssignmentRecord {
   id: string
   subscription_id: string
@@ -580,6 +644,43 @@ export async function getSubscriptionPlans(): Promise<SubscriptionPlanRecord[]> 
   return (data ?? []) as SubscriptionPlanRecord[]
 }
 
+export async function upsertSubscriptionPlan(
+  params: UpsertSubscriptionPlanParams
+): Promise<{ success: boolean; planId?: string; error?: string }> {
+  await assertHQPermission('system.billing.manage')
+
+  if (!params.planCode?.trim()) {
+    return { success: false, error: 'Plan code is required.' }
+  }
+
+  if (!params.displayName?.trim()) {
+    return { success: false, error: 'Display name is required.' }
+  }
+
+  const supabase = createServerSupabaseClient() as any
+  const { data, error } = await supabase.rpc('upsert_subscription_plan', {
+    p_plan_id: params.planId ?? null,
+    p_plan_code: params.planCode,
+    p_display_name: params.displayName,
+    p_base_price_monthly: params.basePriceMonthly,
+    p_included_stations: params.includedStations,
+    p_per_extra_station_price: params.perExtraStationPrice,
+    p_card_surcharge_pct: params.cardSurchargePct,
+    p_is_active: params.isActive ?? true,
+    p_metadata: params.metadata ?? {},
+  })
+
+  if (error) {
+    console.error('[upsertSubscriptionPlan] Error:', error)
+    return { success: false, error: error.message }
+  }
+
+  revalidatePath('/manage/subscriptions')
+  revalidatePath('/dashboard/subscriptions')
+
+  return { success: true, planId: data as string }
+}
+
 export async function getMerchantTierPlans(): Promise<MerchantTierPlanRecord[]> {
   await assertHQPermission('system.billing.manage')
 
@@ -795,16 +896,24 @@ export async function upsertMerchantTierSubscription(
   }
 }
 
-export async function getBillableServices(): Promise<BillableServiceRecord[]> {
+export async function getBillableServices(includeInactive = false): Promise<BillableServiceRecord[]> {
   await assertHQPermission('system.billing.manage')
 
-  const supabase = createServerSupabaseClient()
-  const { data, error } = await supabase
-    .from('billable_services')
-    .select('*')
-    .eq('is_active', true)
-    .order('service_category', { ascending: true })
-    .order('display_name', { ascending: true })
+  const supabase = createServerSupabaseClient() as any
+  let { data, error } = await supabase.rpc('list_billable_services', {
+    p_include_inactive: includeInactive,
+  })
+
+  if (
+    error &&
+    !includeInactive &&
+    typeof error.message === 'string' &&
+    error.message.includes('Could not find the function')
+  ) {
+    const fallbackResult = await supabase.rpc('list_billable_services')
+    data = fallbackResult.data
+    error = fallbackResult.error
+  }
 
   if (error) {
     console.error('[getBillableServices] Error:', error)
@@ -818,6 +927,174 @@ export async function getBillableServices(): Promise<BillableServiceRecord[]> {
     included_quantity: Number(row.included_quantity || 0),
     card_surcharge_pct: Number(row.card_surcharge_pct || 0),
   }))
+}
+
+export async function upsertBillableService(
+  params: UpsertBillableServiceParams
+): Promise<{ success: boolean; serviceId?: string; error?: string }> {
+  await assertHQPermission('system.billing.manage')
+
+  if (!params.serviceCode?.trim()) {
+    return { success: false, error: 'Service code is required.' }
+  }
+
+  if (!params.displayName?.trim()) {
+    return { success: false, error: 'Display name is required.' }
+  }
+
+  const supabase = createServerSupabaseClient() as any
+  const { data, error } = await supabase.rpc('upsert_billable_service', {
+    p_service_id: params.serviceId ?? null,
+    p_service_code: params.serviceCode,
+    p_display_name: params.displayName,
+    p_service_category: params.serviceCategory,
+    p_pricing_model: params.pricingModel,
+    p_base_price_monthly: params.basePriceMonthly,
+    p_additional_unit_price: params.additionalUnitPrice ?? null,
+    p_included_quantity: params.includedQuantity ?? 0,
+    p_card_surcharge_pct: params.cardSurchargePct ?? 4,
+    p_unit_label: params.unitLabel ?? 'unit',
+    p_is_active: params.isActive ?? true,
+    p_metadata: params.metadata ?? {},
+  })
+
+  if (error) {
+    console.error('[upsertBillableService] Error:', error)
+    return { success: false, error: error.message }
+  }
+
+  revalidatePath('/manage/subscriptions')
+
+  return { success: true, serviceId: data as string }
+}
+
+export async function getDeviceBillingServiceMappings(): Promise<DeviceBillingServiceMappingRecord[]> {
+  await assertHQPermission('system.billing.manage')
+
+  const supabase = createServerSupabaseClient() as any
+  const { data, error } = await supabase
+    .from('device_billing_service_mappings')
+    .select('*')
+    .order('device_category', { ascending: true })
+
+  if (error) {
+    console.error('[getDeviceBillingServiceMappings] Error:', error)
+    throw new Error('Failed to load device billing mappings.')
+  }
+
+  return (data ?? []) as DeviceBillingServiceMappingRecord[]
+}
+
+export async function upsertDeviceBillingServiceMapping(
+  params: UpsertDeviceBillingServiceMappingParams
+): Promise<{ success: boolean; mappingId?: string; error?: string }> {
+  await assertHQPermission('system.billing.manage')
+
+  if (!params.deviceCategory?.trim()) {
+    return { success: false, error: 'Device category is required.' }
+  }
+
+  if (!params.serviceCode?.trim()) {
+    return { success: false, error: 'Billable service is required.' }
+  }
+
+  const supabase = createServerSupabaseClient() as any
+  const { data, error } = await supabase.rpc('upsert_device_billing_service_mapping', {
+    p_device_category: params.deviceCategory,
+    p_service_code: params.serviceCode,
+    p_is_active: params.isActive ?? true,
+    p_metadata: params.metadata ?? {},
+  })
+
+  if (error) {
+    console.error('[upsertDeviceBillingServiceMapping] Error:', error)
+    return { success: false, error: error.message }
+  }
+
+  revalidatePath('/manage/subscriptions')
+  revalidatePath('/dashboard/subscriptions')
+
+  return { success: true, mappingId: data as string }
+}
+
+export async function calculateSubscriptionTotal(
+  params: CalculateSubscriptionTotalParams
+): Promise<{ success: boolean; data?: SubscriptionQuoteResult; error?: string }> {
+  await assertHQPermission('system.billing.manage')
+
+  const supabase = createServerSupabaseClient() as any
+  const { data, error } = await supabase.rpc('calculate_subscription_total', {
+    p_plan_id: params.planId ?? null,
+    p_station_count: params.stationCount,
+    p_services: (params.services ?? []).map((service) => ({
+      service_id: service.serviceId ?? undefined,
+      service_code: service.serviceCode ?? undefined,
+      quantity: service.quantity,
+    })),
+    p_billing_method: params.billingMethod ?? 'card',
+  })
+
+  if (error) {
+    console.error('[calculateSubscriptionTotal] Error:', error)
+    return { success: false, error: error.message }
+  }
+
+  const row = Array.isArray(data) ? data[0] : data
+  if (!row) {
+    return { success: false, error: 'No subscription quote returned.' }
+  }
+
+  return {
+    success: true,
+    data: {
+      station_count: Number(row.station_count || 0),
+      billing_method: (row.billing_method || 'card') as 'ach' | 'card',
+      line_items: Array.isArray(row.line_items) ? row.line_items : [],
+      subtotal: Number(row.subtotal || 0),
+      card_surcharge: Number(row.card_surcharge || 0),
+      total_amount: Number(row.total_amount || 0),
+    },
+  }
+}
+
+export async function recalculateMerchantSubscription(
+  subscriptionId: string
+): Promise<{ success: boolean; data?: SubscriptionQuoteResult; error?: string }> {
+  await assertHQPermission('system.billing.manage')
+
+  if (!subscriptionId?.trim()) {
+    return { success: false, error: 'subscriptionId is required.' }
+  }
+
+  const supabase = createServerSupabaseClient() as any
+  const { data, error } = await supabase.rpc('recalc_subscription', {
+    p_subscription_id: subscriptionId,
+  })
+
+  if (error) {
+    console.error('[recalculateMerchantSubscription] Error:', error)
+    return { success: false, error: error.message }
+  }
+
+  const row = Array.isArray(data) ? data[0] : data
+  if (!row) {
+    return { success: false, error: 'No recalculation result returned.' }
+  }
+
+  revalidatePath('/manage/subscriptions')
+  revalidatePath('/dashboard/subscriptions')
+
+  return {
+    success: true,
+    data: {
+      station_count: Number(row.station_count || 0),
+      billing_method: 'card',
+      line_items: Array.isArray(row.line_items) ? row.line_items : [],
+      subtotal: Number(row.subtotal || 0),
+      card_surcharge: Number(row.card_surcharge || 0),
+      total_amount: Number(row.monthly_amount || 0),
+    },
+  }
 }
 
 export async function getMerchantSubscriptions(

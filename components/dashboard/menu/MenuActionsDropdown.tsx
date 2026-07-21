@@ -10,7 +10,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { MoreVertical, Eye, Trash2, Power, Settings, Copy, ExternalLink, Lock, Globe } from 'lucide-react'
+import { MoreVertical, Eye, Trash2, Power, Settings, Copy, ExternalLink, Lock, Globe, Star } from 'lucide-react'
 import { useLocationStore, useIsSingleLocation } from '@/stores/location-store'
 
 interface MenuActionsDropdownProps {
@@ -24,6 +24,11 @@ interface MenuActionsDropdownProps {
     /** Duplicate menu - passes menuId and target locationId (null = global) */
     onDuplicate?: (menuId: string, targetLocationId: string | null) => void
     onSettings?: (menuId: string) => void
+    /** True when this menu is the location's canonical online-ordering menu */
+    isOnlineMenu?: boolean
+    /** True when this menu is linked to OrderOut for the location (eligible to become primary) */
+    canSetOnlineMenu?: boolean
+    onSetOnlineMenu?: (menuId: string) => void
     align?: 'start' | 'end' | 'center'
     triggerClassName?: string
 }
@@ -37,6 +42,9 @@ export function MenuActionsDropdown({
     onDelete,
     onDuplicate,
     onSettings,
+    isOnlineMenu,
+    canSetOnlineMenu,
+    onSetOnlineMenu,
     align = 'end',
     triggerClassName,
 }: MenuActionsDropdownProps) {
@@ -85,6 +93,11 @@ export function MenuActionsDropdown({
     const handleSettings = (e: React.MouseEvent) => {
         e.stopPropagation()
         onSettings?.(menuId)
+    }
+
+    const handleSetOnlineMenu = (e: React.MouseEvent) => {
+        e.stopPropagation()
+        onSetOnlineMenu?.(menuId)
     }
 
 
@@ -166,6 +179,19 @@ export function MenuActionsDropdown({
                         Menu Settings
                     </DropdownMenuItem>
                 )}
+
+                {/* OrderOut online-ordering menu designation */}
+                {isOnlineMenu ? (
+                    <DropdownMenuItem disabled className="opacity-70">
+                        <Star className="mr-2 h-4 w-4 fill-amber-400 text-amber-500" />
+                        Online ordering menu
+                    </DropdownMenuItem>
+                ) : canSetOnlineMenu && onSetOnlineMenu ? (
+                    <DropdownMenuItem onClick={handleSetOnlineMenu}>
+                        <Star className="mr-2 h-4 w-4" />
+                        Set as online menu
+                    </DropdownMenuItem>
+                ) : null}
 
                 <DropdownMenuSeparator />
 

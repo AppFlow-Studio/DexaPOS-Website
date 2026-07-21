@@ -12,6 +12,7 @@ import {
   AssignScheduleToMenu,
   RemoveScheduleFromMenu,
 } from "../actions/schedules";
+import { invalidateOrderOutSync } from "@/app/dashboard/hooks/useOrderOutMenuSync";
 
 function useClerkOrgId() {
   const { data: userInfo } = useUserInfo();
@@ -76,6 +77,7 @@ export function useAssignScheduleToMenuMutation(menuId: string) {
       queryClient.invalidateQueries({
         queryKey: ["menu-with-categories", menuId],
       });
+      invalidateOrderOutSync(queryClient);
     },
     onError: () => {
       toast.error("Add Failed", { description: "Unable to add schedule" });
@@ -118,6 +120,7 @@ export function useRemoveScheduleFromMenuMutation(menuId: string) {
       queryClient.invalidateQueries({
         queryKey: ["menu-with-categories", menuId],
       });
+      invalidateOrderOutSync(queryClient);
     },
     onError: () => {
       toast.error("Remove Failed", {

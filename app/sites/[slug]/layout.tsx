@@ -1,14 +1,15 @@
 import { cache } from "react";
 import type { Metadata } from "next";
-import { getStorefrontData } from "../actions";
+import { getStorefrontMetaData } from "../actions";
 
 interface Props {
   children: React.ReactNode;
   params: Promise<{ slug: string }>;
 }
 
-// Deduplicate DB calls: layout + page both call this, cache() ensures one round-trip per request.
-const getCachedStorefrontData = cache(getStorefrontData);
+// Metadata only needs site (favicon) — use the meta-only fetcher (no menu tree).
+// cache() dedupes repeated calls within a single request.
+const getCachedStorefrontMeta = cache(getStorefrontMetaData);
 
 export async function generateMetadata({
   params,
@@ -16,7 +17,7 @@ export async function generateMetadata({
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
   const { slug } = await params;
-  const { site } = await getCachedStorefrontData(slug);
+  const { site } = await getCachedStorefrontMeta(slug);
   const faviconUrl = site?.theme_config?.faviconUrl;
   if (!faviconUrl) return {};
   return {

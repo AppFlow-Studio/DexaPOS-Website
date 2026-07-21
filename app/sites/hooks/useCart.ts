@@ -93,18 +93,26 @@ export const useCart = create<CartStore>()(
           const basePrice = getStorefrontBrowsePrice(item);
           const unitPrice = basePrice + modifiersPrice;
 
-          // Generate a signature for comparison
-          // We assume modifiers are sorted or stable enough for JSON stringify comparison for now
-          // A better way is sorting IDs
+          // Signature that decides whether an add merges into an existing line.
+          // Price is part of it: the same menu_item can appear in several menus at
+          // different prices (e.g. Americano $6 on one menu, $10 on another). Those
+          // are genuinely different line items and must not collapse into one — the
+          // merged line would otherwise silently bill both at the first line's price.
+          const priceKey = [
+            item.price,
+            item.cash_price,
+            item.delivery_price,
+          ].join("/");
           const sortedModIds = modifiers
             .map((m) => m.id)
             .sort()
             .join(",");
-          const itemSignature = `${item.id}|${sortedModIds}|${notes}`;
+          const itemSignature = `${item.id}|${priceKey}|${sortedModIds}|${notes}`;
 
-          // Check if exactly same item configuration exists
+          // Check if exactly same item configuration (incl. price) exists
           const existingItemIndex = state.items.findIndex((i) => {
-            const iSignature = `${i.id}|${i.selectedModifiers
+            const iPriceKey = [i.price, i.cash_price, i.delivery_price].join("/");
+            const iSignature = `${i.id}|${iPriceKey}|${i.selectedModifiers
               .map((m) => m.id)
               .sort()
               .join(",")}|${i.notes || ""}`;

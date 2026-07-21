@@ -164,11 +164,22 @@ export function OrderTypeSection({
         onValueChange={(v) => onOrderTypeChange(v as "pickup" | "delivery")}
         className="w-full"
       >
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="pickup" disabled={!pickupEnabled}>
+        <TabsList
+          className="grid w-full grid-cols-2 h-auto p-1"
+          style={{ backgroundColor: "var(--bg)", border: "1px solid var(--border)" }}
+        >
+          <TabsTrigger
+            value="pickup"
+            disabled={!pickupEnabled}
+            className="py-2 data-[state=active]:!bg-[var(--primary)] data-[state=active]:!text-[var(--primary-text)]"
+          >
             Pickup
           </TabsTrigger>
-          <TabsTrigger value="delivery" disabled={!deliveryEnabled}>
+          <TabsTrigger
+            value="delivery"
+            disabled={!deliveryEnabled}
+            className="py-2 data-[state=active]:!bg-[var(--primary)] data-[state=active]:!text-[var(--primary-text)]"
+          >
             Delivery
           </TabsTrigger>
         </TabsList>
@@ -254,28 +265,29 @@ export function OrderTypeSection({
                   })
                 }
                 placeholder="Street address"
+                inputStyle={{ borderColor: "var(--border)", backgroundColor: "var(--bg)", color: "var(--text)" }}
               />
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 <Input
                   value={newAddress.city}
                   onChange={(e) => onNewAddressChange({ ...newAddress, city: e.target.value })}
                   placeholder="City"
                   autoComplete="address-level2"
-                  style={{ borderColor: "var(--border)", backgroundColor: "var(--card)", color: "var(--text)" }}
+                  style={{ borderColor: "var(--border)", backgroundColor: "var(--bg)", color: "var(--text)" }}
                 />
                 <Input
                   value={newAddress.state}
                   onChange={(e) => onNewAddressChange({ ...newAddress, state: e.target.value })}
                   placeholder="State"
                   autoComplete="address-level1"
-                  style={{ borderColor: "var(--border)", backgroundColor: "var(--card)", color: "var(--text)" }}
+                  style={{ borderColor: "var(--border)", backgroundColor: "var(--bg)", color: "var(--text)" }}
                 />
                 <Input
                   value={newAddress.zip}
                   onChange={(e) => onNewAddressChange({ ...newAddress, zip: e.target.value })}
                   placeholder="ZIP"
                   autoComplete="postal-code"
-                  style={{ borderColor: "var(--border)", backgroundColor: "var(--card)", color: "var(--text)" }}
+                  style={{ borderColor: "var(--border)", backgroundColor: "var(--bg)", color: "var(--text)" }}
                 />
               </div>
               <Input
@@ -283,7 +295,7 @@ export function OrderTypeSection({
                 onChange={(e) => onNewAddressChange({ ...newAddress, notes: e.target.value })}
                 placeholder="Delivery notes (apt #, gate code...)"
                 autoComplete="off"
-                style={{ borderColor: "var(--border)", backgroundColor: "var(--card)", color: "var(--text)" }}
+                style={{ borderColor: "var(--border)", backgroundColor: "var(--bg)", color: "var(--text)" }}
               />
               {/* Zone eligibility feedback */}
               {zoneCheckState !== "idle" && (

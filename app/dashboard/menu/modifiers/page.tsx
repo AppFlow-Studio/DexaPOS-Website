@@ -53,6 +53,7 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useModifierGroups } from "@/app/dashboard/hooks/useModifierGroups";
+import { invalidateOrderOutSync } from "@/app/dashboard/hooks/useOrderOutMenuSync";
 import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
 import { useSelectedLocation, useLocationStore } from "@/stores/location-store";
 import { ModifierGroupFormSheet } from "@/components/dashboard/menu/ModifierGroupFormSheet";
@@ -315,6 +316,7 @@ const sensors = useSensors(
         queryClient.invalidateQueries({ queryKey: ["modifier-groups"] });
       queryClient.invalidateQueries({ queryKey: ["menu-items"] });
       queryClient.invalidateQueries({ queryKey: ["categories-with-items"] });
+      invalidateOrderOutSync(queryClient);
       }
     } finally {
       setDeletingGroup(null);
@@ -345,6 +347,7 @@ const sensors = useSensors(
       queryClient.invalidateQueries({ queryKey: ["modifier-groups"] });
       queryClient.invalidateQueries({ queryKey: ["menu-items"] });
       queryClient.invalidateQueries({ queryKey: ["categories-with-items"] });
+      invalidateOrderOutSync(queryClient);
     } catch (e: any) {
       toast.error("Update failed", { description: e?.message || "Try again" });
     } finally {
@@ -364,6 +367,7 @@ const sensors = useSensors(
       queryClient.invalidateQueries({ queryKey: ["modifier-groups"] });
       queryClient.invalidateQueries({ queryKey: ["menu-items"] });
       queryClient.invalidateQueries({ queryKey: ["categories-with-items"] });
+      invalidateOrderOutSync(queryClient);
     } catch (e: any) {
       toast.error("Reset failed", { description: e?.message || "Try again" });
     }
@@ -423,6 +427,7 @@ const sensors = useSensors(
       queryClient.invalidateQueries({ queryKey: ["modifier-groups"] });
       queryClient.invalidateQueries({ queryKey: ["menu-items"] });
       queryClient.invalidateQueries({ queryKey: ["categories-with-items"] });
+      invalidateOrderOutSync(queryClient);
     } catch (e: any) {
       toast.error("Save failed", { description: e?.message || "Try again" });
     } finally {
@@ -442,6 +447,7 @@ const sensors = useSensors(
       queryClient.invalidateQueries({ queryKey: ["modifier-groups"] });
       queryClient.invalidateQueries({ queryKey: ["menu-items"] });
       queryClient.invalidateQueries({ queryKey: ["categories-with-items"] });
+      invalidateOrderOutSync(queryClient);
     } catch (e: any) {
       toast.error("Reset failed", { description: e?.message || "Try again" });
     }
@@ -463,6 +469,7 @@ const sensors = useSensors(
       queryClient.invalidateQueries({ queryKey: ["modifier-groups"] });
       queryClient.invalidateQueries({ queryKey: ["menu-items"] });
       queryClient.invalidateQueries({ queryKey: ["categories-with-items"] });
+      invalidateOrderOutSync(queryClient);
     } catch (e: any) {
       toast.error("Delete failed", { description: e?.message || "Try again" });
     }
@@ -500,6 +507,7 @@ const sensors = useSensors(
       queryClient.invalidateQueries({ queryKey: ["modifier-groups"] });
       queryClient.invalidateQueries({ queryKey: ["menu-items"] });
       queryClient.invalidateQueries({ queryKey: ["categories-with-items"] });
+      invalidateOrderOutSync(queryClient);
       setNewItemDrafts((prev) => ({
         ...prev,
         [group.id]: { name: "", price: 0, isDefault: false, description: "" },
@@ -518,6 +526,7 @@ const sensors = useSensors(
     setIsSheetOpen(false);
     setEditingGroup(undefined);
     queryClient.invalidateQueries({ queryKey: ["modifier-groups"] });
+    invalidateOrderOutSync(queryClient);
   };
 
   const handleGroupDragStart = (event: DragStartEvent) => {
@@ -579,6 +588,7 @@ const sensors = useSensors(
       }
       toast.success("Modifier group order updated");
       queryClient.invalidateQueries({ queryKey: ["modifier-groups"] });
+      invalidateOrderOutSync(queryClient);
     } catch (e: any) {
       setLocalGroupOrder(null);
       toast.error("Failed to reorder modifier groups", { description: e?.message || "Try again" });
@@ -614,6 +624,7 @@ const sensors = useSensors(
       queryClient.invalidateQueries({ queryKey: ["modifier-groups"] });
       queryClient.invalidateQueries({ queryKey: ["menu-items"] });
       queryClient.invalidateQueries({ queryKey: ["categories-with-items"] });
+      invalidateOrderOutSync(queryClient);
     } catch (e: any) {
       toast.error("Failed to save option order", { description: e?.message });
     } finally {
@@ -1290,6 +1301,7 @@ const sensors = useSensors(
             queryClient.invalidateQueries({ queryKey: ["modifier-groups"] });
       queryClient.invalidateQueries({ queryKey: ["menu-items"] });
       queryClient.invalidateQueries({ queryKey: ["categories-with-items"] });
+      invalidateOrderOutSync(queryClient);
           }}
         />
       )}
@@ -1312,6 +1324,7 @@ const sensors = useSensors(
             queryClient.invalidateQueries({
               queryKey: ["categories-with-items"],
             });
+            invalidateOrderOutSync(queryClient);
           }}
         />
       )}

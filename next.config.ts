@@ -16,9 +16,6 @@ const nextConfig: NextConfig = {
   },
   transpilePackages: ["zustand"],
   serverExternalPackages: ["resend", "twilio", "telnyx"],
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
   typescript: {
     ignoreBuildErrors: true,
   },

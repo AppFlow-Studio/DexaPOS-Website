@@ -1,0 +1,84 @@
+/* CMS design tokens + base resets for /admin.
+   EVERYTHING is scoped to `.admin-shell` (tokens as inherited custom props +
+   element resets) so none of it leaks globally. Bare element selectors here
+   (body, star, a, button) previously bled into /manage and /dashboard during
+   client-side navigation and only cleared on a hard refresh. */
+
+.admin-shell {
+  /* ───── Primary brand colors (ORIGINAL — blue + white) ───── */
+  --matte-black:   #0F1424;
+  --warm-white:    #FAFBFD;
+  --graphite:      #1E2536;
+  --muted-gold:    #5B6CFF;
+
+  /* ───── Secondary UI colors ───── */
+  --deep-navy:     #0F1424;
+  --slate:         #475569;
+  --success:       #10A34A;
+  --alert:         #F97316;
+  --gold-light:    #8B98FF;
+
+  /* ───── Aliased tokens ───── */
+  --brand-700: #3D4ACC;
+  --brand-600: #4A58E0;
+  --brand-500: #5B6CFF;
+  --brand-400: #7A88FF;
+  --brand-300: #A4ADFF;
+  --brand-100: #DDE1FF;
+  --brand-50:  #EEF0FF;
+
+  --ink:        #0F1424;
+  --slate-700: #1E2536;
+  --slate-600: #2D3548;
+  --slate-500: #64748B;
+  --slate-400: #94A3B8;
+  --slate-300: #CBD5E1;
+  --slate-200: #E2E8F0;
+  --slate-100: #F1F5F9;
+  --slate-50:  #FAFBFD;
+
+  --canvas:    #FAFBFD;
+  --paper:     #FFFFFF;
+
+  --success-soft: #D6F0E0;
+  --warning:      #F97316;
+  --warning-soft: #FDE3CD;
+  --danger:       #DC2626;
+  --danger-soft:  #FBE3E3;
+
+  /* ───── Type ───── */
+  --font:         var(--font-barlow), -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-display: var(--font-barlow-condensed), -apple-system, BlinkMacSystemFont, sans-serif;
+  --maxw: 1200px;
+  --gutter: 32px;
+
+  /* ───── Elevation ───── */
+  --shadow-xs: 0 1px 2px rgba(15, 20, 36, 0.04);
+  --shadow-sm: 0 2px 6px rgba(15, 20, 36, 0.05);
+  --shadow-md: 0 6px 18px rgba(15, 20, 36, 0.07);
+  --shadow-lg: 0 14px 36px rgba(15, 20, 36, 0.10);
+  --shadow-xl: 0 28px 64px rgba(15, 20, 36, 0.13);
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+
+  /* base surface (mirrors the marketing body) */
+  font-family: var(--font);
+  font-weight: 400;
+  color: var(--ink);
+  background: var(--warm-white);
+  line-height: 1.65;
+  letter-spacing: -0.003em;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.admin-shell, .admin-shell *, .admin-shell *::before, .admin-shell *::after { box-sizing: border-box; }
+.admin-shell * { margin: 0; padding: 0; }
+.admin-shell a { color: inherit; text-decoration: none; }
+.admin-shell ul, .admin-shell ol { list-style: none; }
+.admin-shell button { font-family: inherit; cursor: pointer; border: none; background: none; color: inherit; }
+.admin-shell img { max-width: 100%; display: block; }
+.admin-shell ::selection { background: var(--muted-gold); color: var(--matte-black); }

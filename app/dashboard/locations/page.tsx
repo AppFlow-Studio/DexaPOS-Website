@@ -29,7 +29,7 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog'
 import { US_TIMEZONES, Location } from '@/types/merchant_locations'
-import { useLocationStore } from '@/stores/location-store'
+import { useLocationStore, useIsSingleLocation } from '@/stores/location-store'
 import { LocationDetailSheet } from '@/components/dashboard/locations/LocationDetailSheet'
 import { formatPhoneForDisplay } from '@/lib/phone'
 
@@ -50,6 +50,7 @@ export default function LocationsPage() {
     const canCreateLocation = userRole === 'merchant.admin' || isOwner
 
     const { selectedLocationId, setSelectedLocation } = useLocationStore()
+    const isSingleLocation = useIsSingleLocation()
 
     const [searchTerm, setSearchTerm] = useState('')
     const [viewMode, setViewMode] = useState<ViewMode>('grid')
@@ -216,6 +217,94 @@ export default function LocationsPage() {
                         <Archive className="h-4 w-4" />
                     </Button>
                 )}
+            </div>
+        )
+    }
+
+    // ─── Single-location detail view ──────────────────────────────────────────
+    // A one-active-location account gets a focused view of that store (matching
+    // the singular "Location" nav) instead of the list-with-add. No Add Location,
+    // no list/search/multi-stats. Multi-location accounts fall through unchanged.
+    if (!isLoading && isSingleLocation && activeLocations.length === 1) {
+        const store = activeLocations[0]
+        return (
+            <div className="space-y-6 animate-in fade-in duration-500 w-full min-w-0">
+                <div>
+                    <h1 className="text-2xl font-semibold tracking-tight">Location</h1>
+                    <p className="text-sm text-muted-foreground mt-0.5">
+                        Manage your store&apos;s details and settings
+                    </p>
+                </div>
+
+                <div className="rounded-xl border bg-card p-5 sm:p-6 max-w-2xl">
+                    <div className="flex items-start justify-between gap-3 mb-5">
+                        <div className="flex items-center gap-3 min-w-0">
+                            <div className="h-11 w-11 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                                <MapPin className="h-5 w-5 text-primary" />
+                            </div>
+                            <div className="min-w-0">
+                                <p className="font-semibold text-lg leading-tight truncate">{store.name}</p>
+                                {store.code && (
+                                    <p className="text-xs text-muted-foreground font-mono mt-0.5">{store.code}</p>
+                                )}
+                            </div>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5 justify-end shrink-0">
+                            <Badge variant="default" className="text-xs px-2 py-0">Active</Badge>
+                            {store.is_accepting_orders && (
+                                <Badge className="text-xs px-2 py-0 bg-emerald-600 hover:bg-emerald-600">Taking Orders</Badge>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="space-y-3 text-sm">
+                        <div className="flex items-start gap-2">
+                            <Building2 className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+                            <div className="text-muted-foreground leading-snug min-w-0">
+                                <p>{store.address_line1}</p>
+                                <p>{store.city}, {store.state} {store.postal_code}</p>
+                            </div>
+                        </div>
+                        {store.phone && (
+                            <div className="flex items-center gap-2 text-muted-foreground">
+                                <Phone className="h-4 w-4 shrink-0" />{formatPhoneForDisplay(store.phone)}
+                            </div>
+                        )}
+                        {store.email && (
+                            <div className="flex items-center gap-2 text-muted-foreground">
+                                <Mail className="h-4 w-4 shrink-0" />{store.email}
+                            </div>
+                        )}
+                        {store.timezone && (
+                            <div className="flex items-center gap-2 text-muted-foreground">
+                                <Clock className="h-4 w-4 shrink-0" />{getTimezoneLabel(store.timezone)}
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="flex flex-wrap gap-2 mt-6">
+                        <Button size="sm" className="gap-2" onClick={() => handleEditLocation(store)}>
+                            <Edit className="h-4 w-4" />
+                            Edit details
+                        </Button>
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            className="gap-2"
+                            onClick={() => router.push(`/dashboard/locations/${store.id}/settings`)}
+                        >
+                            <Settings className="h-4 w-4" />
+                            Tax &amp; banking
+                        </Button>
+                    </div>
+                </div>
+
+                <LocationDetailSheet
+                    location={editingLocation}
+                    open={isSheetOpen}
+                    onOpenChange={handleSheetClose}
+                    onUpdate={refetch}
+                />
             </div>
         )
     }

@@ -24,6 +24,7 @@ import {
   type BulkPriceRounding,
 } from "@/app/dashboard/actions/bulk-price-adjustment";
 import { useMerchantPricingStrategies } from "@/app/dashboard/hooks/useMerchantPricingStrategies";
+import { invalidateOrderOutSync } from "@/app/dashboard/hooks/useOrderOutMenuSync";
 
 type Direction = "increase" | "decrease" | "set_fixed";
 type Unit = "pct" | "amt";
@@ -167,6 +168,7 @@ export function BulkPriceAdjustDialog({
       );
       queryClient.invalidateQueries({ queryKey: ["menu-items"] });
       queryClient.invalidateQueries({ queryKey: ["menu-items-categories"] });
+      invalidateOrderOutSync(queryClient);
       onSuccess?.();
       onOpenChange(false);
       // reset

@@ -13,16 +13,6 @@ import { createClient } from 'npm:@supabase/supabase-js'
 const WEBHOOK_SECRET = Deno.env.get('ORDEROUT_WEBHOOK_SECRET')
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-// Flag for the new single-service callback shape (OrderOut rollout).
-// When set to '1'/'true', the webhook accepts per-service callbacks carrying
-// { delivery_service, status_code, response }. Legacy array-style payloads
-// continue to work regardless of this flag.
-const PUSH_CHANNELS_V2_ENABLED = ((): boolean => {
-  const raw = Deno.env.get('ORDEROUT_PUSH_CHANNELS_V2')
-  if (!raw) return false
-  const v = raw.trim().toLowerCase()
-  return v === '1' || v === 'true' || v === 'yes'
-})()
 
 // ============================================================================
 // RESPONSE HELPERS
@@ -191,6 +181,20 @@ function isChannelsShape(body: Record<string, unknown>): boolean {
   return true
 }
 
+// OrderOut IDs arrive as JSON numbers OR strings. Coerce to a non-empty string,
+// or null if genuinely absent/empty. Numbers are stringified without exponent
+// notation (all current OrderOut IDs are < 2^53, so JSON.parse keeps them exact).
+function coerceIdToString(raw: unknown): string | null {
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim()
+    return trimmed === '' ? null : trimmed
+  }
+  if (typeof raw === 'number' && Number.isFinite(raw)) {
+    return String(raw)
+  }
+  return null
+}
+
 function deriveStatusFromCode(
   code: unknown
 ): 'success' | 'failed' | 'unknown' {
@@ -224,20 +228,20 @@ async function handleChannelsCallback(
   body: Record<string, unknown>,
   replayId: string | null
 ): Promise<Response> {
-  // 1. Required-field validation
+  // 1. Required-field validation. OrderOut sends restaurant_id / menu_id as JSON
+  // NUMBERS (e.g. { restaurant_id: 5608314721402880, menu_id: 5846643043860480 }),
+  // so accept string-or-number and coerce to string — a strict typeof==='string'
+  // check silently dead-lettered every real callback.
   const rawRestaurantId = body.restaurant_id
   const rawMenuId = body.menu_id
   const rawStatusCode = body.status_code
   const rawDeliveryService = body.delivery_service
   const rawResponse = body.response
 
-  if (
-    typeof rawRestaurantId !== 'string' ||
-    rawRestaurantId.trim() === '' ||
-    rawMenuId === undefined ||
-    rawMenuId === null ||
-    rawMenuId === ''
-  ) {
+  const restaurantId = coerceIdToString(rawRestaurantId)
+  const menuId = coerceIdToString(rawMenuId)
+
+  if (restaurantId === null || menuId === null) {
     await insertDeadLetter(
       supabase,
       body,
@@ -270,8 +274,8 @@ async function handleChannelsCallback(
   const errorMessage = extractErrorMessage(derivedStatus, rawStatusCode, rawResponse)
 
   logEvent('PUSH_MENU_CHANNELS', 'Received channel callback', {
-    restaurant_id: rawRestaurantId,
-    menu_id: rawMenuId,
+    restaurant_id: restaurantId,
+    menu_id: menuId,
     delivery_service: normalizedService,
     status_code: statusCode,
     status: derivedStatus,
@@ -279,8 +283,8 @@ async function handleChannelsCallback(
 
   // 4. Call the atomic correlator RPC
   const { data, error } = await supabase.rpc('correlate_push_channels_callback', {
-    p_oo_menu_id: String(rawMenuId),
-    p_oo_restaurant_id: String(rawRestaurantId),
+    p_oo_menu_id: menuId,
+    p_oo_restaurant_id: restaurantId,
     p_delivery_service: normalizedService,
     p_status: derivedStatus,
     p_status_code: statusCode,
@@ -295,7 +299,7 @@ async function handleChannelsCallback(
       await insertDeadLetter(
         supabase,
         body,
-        `No menu link for oo_menu_id=${rawMenuId} restaurant_id=${rawRestaurantId}`,
+        `No menu link for oo_menu_id=${menuId} restaurant_id=${restaurantId}`,
         'push_menu_channels',
         replayId
       )
@@ -374,27 +378,13 @@ Deno.serve(async (req: Request): Promise<Response> => {
     return errorResponse('Invalid JSON body', 400)
   }
 
-  // 3a. Shape detection — route new single-service callbacks when enabled.
+  // 3a. Shape detection — OrderOut sends one single-service callback per
+  // delivery platform ({ delivery_service, status_code, response }). Route
+  // those to the channels correlator. Legacy array-`results` payloads fall
+  // through to the handler below.
   const bodyAsRecord = body as unknown as Record<string, unknown>
-  if (PUSH_CHANNELS_V2_ENABLED && isChannelsShape(bodyAsRecord)) {
+  if (isChannelsShape(bodyAsRecord)) {
     return await handleChannelsCallback(supabase, bodyAsRecord, replayId)
-  }
-
-  // If we got a shape we don't understand (neither results[] nor delivery_service)
-  // and the flag is off but it still smells like the new shape, DLQ for visibility.
-  if (
-    !PUSH_CHANNELS_V2_ENABLED &&
-    isChannelsShape(bodyAsRecord) &&
-    !Array.isArray(body.results)
-  ) {
-    await insertDeadLetter(
-      supabase,
-      body,
-      'unknown_payload_shape: channels shape received but V2 flag disabled',
-      'push_menu_channels',
-      replayId
-    )
-    return successResponse(null, 'Channels shape received but V2 disabled; stored in DLQ')
   }
 
   logEvent('PUSH_MENU_WEBHOOK', 'Received push_menu callback', {

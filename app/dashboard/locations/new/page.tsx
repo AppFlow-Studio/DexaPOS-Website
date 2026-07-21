@@ -2,6 +2,8 @@
 
 import { useUserInfo } from '@/app/manage/hooks/useUserInfo.'
 import { CreateLocationWizard } from '@/components/dashboard/locations/CreateLocationWizard'
+import { AddLocationUpsellGate } from '@/components/dashboard/locations/AddLocationUpsellGate'
+import { useLocationGateStatus } from '@/app/dashboard/hooks/useLocationGateStatus'
 import { Skeleton } from '@/components/ui/skeleton'
 
 export default function NewLocationPage() {
@@ -9,7 +11,12 @@ export default function NewLocationPage() {
     const clerkOrgId = userInfo?.members?.[0]?.organizations?.id
     const actorUserId = userInfo?.id
 
-    if (isLoading) {
+    // Add Location is the single chokepoint for the multi-location paywall: a
+    // tier without location headroom (Basic, or no tier row => Basic) sees the
+    // upsell gate here instead of the creation wizard.
+    const { data: gate, isLoading: gateLoading } = useLocationGateStatus(clerkOrgId || '')
+
+    if (isLoading || (clerkOrgId && gateLoading)) {
         return (
             <div className="min-h-screen flex">
                 <div className="w-72 border-r bg-muted/30 p-6">
@@ -38,6 +45,15 @@ export default function NewLocationPage() {
             <div className="min-h-screen flex items-center justify-center">
                 <p className="text-muted-foreground">Unable to load organization information.</p>
             </div>
+        )
+    }
+
+    if (gate && !gate.canAddLocation) {
+        return (
+            <AddLocationUpsellGate
+                resolvedTier={gate.resolvedTier}
+                upgradeTarget={gate.upgradeTarget}
+            />
         )
     }
 

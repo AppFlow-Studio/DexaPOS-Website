@@ -22,6 +22,7 @@ export interface AdminDeviceInventoryRow {
   id: string
   catalog_id: string
   serial_number: string
+  pos_id: string | null
   mac_address: string | null
   status: DeviceLifecycleStatus
   condition: string
@@ -217,6 +218,7 @@ export interface DeviceOverviewData {
 export interface DeviceRegistryCommandResult {
   id: string
   serial_number: string
+  pos_id: string | null
   status: DeviceLifecycleStatus
   device_category: DeviceCategory
   manufacturer: string

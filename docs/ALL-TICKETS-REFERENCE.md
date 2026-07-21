@@ -243,6 +243,39 @@ Single index for active ticket streams and their source trackers.
 - Separates website/dashboard work, POS work, Supabase/data repair, and tickets not ready to claim done.
 - Use this before moving those tickets from In Progress to Done.
 
+## Stream R: [BILLING][HIGH] DEXA HQ Self-Service Billing Control
+
+1. Plan:
+- `docs/PLAN-2026-07-12-HQ-SELF-SERVICE-BILLING-CONTROL.md`
+
+2. Scope notes:
+- Follow-up to Device Inventory & Registry and NMI SaaS Subscription Billing.
+- Backend-first billing/device automation stream with HQ UI completion required before Done unless explicitly split.
+- Existing repo has billing foundation, subscription workspace, service catalog, device catalog, and NMI billing rail.
+- 2026-07-12 website/backend phase added:
+  - `supabase/migrations/20260712120000_hq_self_service_billing_control_phase1.sql`
+  - audited HQ pricing/catalog RPCs,
+  - unified subscription calculator,
+  - subscription recalculation helper,
+  - invoice generation alignment,
+  - POS ID generation/exposure,
+  - website POS ID display/search,
+  - device catalog deactivate-instead-of-delete behavior,
+  - HQ service-billing plan editor,
+  - HQ billable service/add-on editor,
+  - live calculator quote backed by the unified calculator.
+- 2026-07-13 website/backend phase added:
+  - `supabase/migrations/20260713130000_hq_billing_device_bridge_and_access_gates.sql`
+  - HQ-editable device billing mappings,
+  - device inventory to subscription billing sync,
+  - deployed POS tablet station-count bridge,
+  - station quota enforcement,
+  - suspended-subscription station/payment-terminal access gate,
+  - HQ suspended/past-due billing status messaging.
+- Website/backend code is locally complete and POS implementation is complete; remaining work is staging migration apply, SQL/RLS QA, live calculator parity, invoice parity, device billing sync QA, quota QA, suspend/restore QA, and proof attachment.
+- POS repo implementation completed: suspended login/session refusal, clean quota/suspended error handling, and local device/station state sync after suspend/restore.
+- Do not mark Done until calculator parity, next-invoice cascade, device-driven billing, quota blocking, suspension/restore, RLS checks, combined POS verification, and proof video pass.
+
 ## Notes
 
 1. Keep this file updated whenever a new ticket stream starts.
@@ -253,3 +286,10 @@ Single index for active ticket streams and their source trackers.
 
 5. Latest senior handoff:
 - `docs/HANDOFF-2026-06-30-LATEST-TICKETS-SENIOR-REVIEW.md`
+
+6. Latest billing-control handoff:
+- `docs/HANDOFF-2026-07-13-HQ-BILLING-CONTROL-FINAL.md`
+- `docs/HANDOFF-2026-07-13-BILLING-CONTROL-REMAINING-POS-ITEMS.md`
+
+7. Next 16 upgrade handoff:
+- `docs/HANDOFF-2026-07-13-NEXT-16-UPGRADE.md`

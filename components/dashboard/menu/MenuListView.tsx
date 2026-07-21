@@ -30,6 +30,7 @@ import {
   GripVertical,
   ChevronUp,
   ChevronDown,
+  Star,
 } from "lucide-react";
 import { MenuActionsDropdown } from "./MenuActionsDropdown";
 import { useIsSingleLocation } from "@/stores/location-store";
@@ -87,6 +88,11 @@ interface MenuListViewProps {
   hasOrderChanges?: boolean;
   onReorder?: (newMenus: MenuWithLocation[]) => void;
   isFiltered?: boolean;
+  /** The location's canonical OrderOut online-ordering menu id (null = none/n-a) */
+  onlineMenuId?: string | null;
+  /** Menu ids linked+active on OrderOut for the location (eligible to become primary) */
+  linkedMenuIds?: string[];
+  onSetOnlineMenu?: (menuId: string) => void;
 }
 
 // Internal Helper Interface for Actions
@@ -95,6 +101,7 @@ interface MenuActions {
   onDelete: (menuId: string) => void;
   onDuplicate?: (menuId: string, targetLocationId: string | null) => void;
   onSettings?: (menuId: string) => void;
+  onSetOnlineMenu?: (menuId: string) => void;
 }
 
 function SortableGridCard({
@@ -102,12 +109,18 @@ function SortableGridCard({
   handleRowClick,
   actions,
   isFiltered,
+  onlineMenuId,
+  linkedMenuIds,
 }: {
   menu: MenuWithLocation;
   handleRowClick: (id: string) => void;
   actions: MenuActions;
   isFiltered?: boolean;
+  onlineMenuId?: string | null;
+  linkedMenuIds?: string[];
 }) {
+  const isOnlineMenu = !!onlineMenuId && onlineMenuId === menu.id;
+  const canSetOnlineMenu = linkedMenuIds?.includes(menu.id) ?? false;
   const {
     attributes,
     listeners,
@@ -168,6 +181,8 @@ function SortableGridCard({
                 menuName={menu.name}
                 isActive={menu.is_active}
                 menuLocationId={menu.location_id}
+                isOnlineMenu={isOnlineMenu}
+                canSetOnlineMenu={canSetOnlineMenu}
                 {...actions}
               />
             </div>
@@ -179,6 +194,7 @@ function SortableGridCard({
               <Badge variant={menu.is_active ? "default" : "secondary"}>
                 {menu.is_active ? "Active" : "Inactive"}
               </Badge>
+              {isOnlineMenu && <OnlineMenuBadge />}
               <LocationBadge menu={menu} />
             </div>
             <span className="text-xs text-muted-foreground shrink-0">
@@ -200,6 +216,8 @@ function SortableTableRow({
   actions,
   isLast,
   isFiltered,
+  onlineMenuId,
+  linkedMenuIds,
 }: {
   menu: MenuWithLocation;
   index: number;
@@ -209,7 +227,11 @@ function SortableTableRow({
   actions: MenuActions;
   isLast: boolean;
   isFiltered?: boolean;
+  onlineMenuId?: string | null;
+  linkedMenuIds?: string[];
 }) {
+  const isOnlineMenu = !!onlineMenuId && onlineMenuId === menu.id;
+  const canSetOnlineMenu = linkedMenuIds?.includes(menu.id) ?? false;
   const {
     attributes,
     listeners,
@@ -305,9 +327,12 @@ function SortableTableRow({
         <LocationBadge menu={menu} />
       </TableCell>
       <TableCell>
-        <Badge variant={menu.is_active ? "default" : "secondary"}>
-          {menu.is_active ? "Active" : "Inactive"}
-        </Badge>
+        <div className="flex items-center gap-1.5">
+          <Badge variant={menu.is_active ? "default" : "secondary"}>
+            {menu.is_active ? "Active" : "Inactive"}
+          </Badge>
+          {isOnlineMenu && <OnlineMenuBadge />}
+        </div>
       </TableCell>
       <TableCell className="text-muted-foreground">
         {new Date(menu.created_at).toLocaleDateString()}
@@ -318,6 +343,8 @@ function SortableTableRow({
           menuName={menu.name}
           isActive={menu.is_active}
           menuLocationId={menu.location_id}
+          isOnlineMenu={isOnlineMenu}
+          canSetOnlineMenu={canSetOnlineMenu}
           {...actions}
         />
       </TableCell>
@@ -341,9 +368,12 @@ export function MenuListView({
   hasOrderChanges = false,
   onReorder,
   isFiltered = false,
+  onlineMenuId,
+  linkedMenuIds,
+  onSetOnlineMenu,
 }: MenuListViewProps) {
   const router = useRouter();
-  const actions = { onToggleActive, onDelete, onDuplicate, onSettings };
+  const actions = { onToggleActive, onDelete, onDuplicate, onSettings, onSetOnlineMenu };
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -430,6 +460,8 @@ export function MenuListView({
                 handleRowClick={handleRowClick}
                 actions={actions}
                 isFiltered={isFiltered}
+                onlineMenuId={onlineMenuId}
+                linkedMenuIds={linkedMenuIds}
               />
             ))}
           </div>
@@ -464,6 +496,8 @@ export function MenuListView({
                     actions={actions}
                     isLast={index === menus.length - 1}
                     isFiltered={isFiltered}
+                    onlineMenuId={onlineMenuId}
+                    linkedMenuIds={linkedMenuIds}
                   />
                 ))}
               </SortableContext>
@@ -472,6 +506,19 @@ export function MenuListView({
         </div>
       )}
     </DndContext>
+  );
+}
+
+// The location's canonical OrderOut online-ordering menu.
+function OnlineMenuBadge() {
+  return (
+    <Badge
+      variant="outline"
+      className="gap-1 border-amber-200 bg-amber-50 text-amber-700 shrink-0"
+    >
+      <Star className="h-3 w-3 fill-amber-400 text-amber-500" />
+      Online menu
+    </Badge>
   );
 }
 

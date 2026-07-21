@@ -32,6 +32,7 @@ import {
   type BulkDeliveryOp,
   type BulkDeliveryRounding,
 } from "@/app/dashboard/actions/bulk-delivery-price-adjustment";
+import { invalidateOrderOutSync } from "@/app/dashboard/hooks/useOrderOutMenuSync";
 
 type Operation = "markup_pct" | "markup_amt" | "set_fixed" | "reset";
 
@@ -173,6 +174,7 @@ export function BulkDeliveryPriceAdjustDialog({
       queryClient.invalidateQueries({ queryKey: ["menu-items"] });
       queryClient.invalidateQueries({ queryKey: ["menu-items-flat"] });
       queryClient.invalidateQueries({ queryKey: ["categories-with-items"] });
+      invalidateOrderOutSync(queryClient);
       onSuccess?.();
       onOpenChange(false);
       setValue("");

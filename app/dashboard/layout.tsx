@@ -50,6 +50,7 @@ import {
   User,
   LogOut,
   Utensils,
+  CircleSlash,
   Coffee,
   Receipt,
   Calendar,
@@ -158,6 +159,11 @@ const navMain = [
         icon: List,
       },
       {
+        title: "86'd Items",
+        url: "/dashboard/menu/out-of-stock",
+        icon: CircleSlash,
+      },
+      {
         title: "Categories",
         url: "/dashboard/menu/categories",
         icon: Tag,
@@ -191,6 +197,11 @@ const navMain = [
         title: "Online Ordering",
         url: "/dashboard/online-ordering",
         icon: Globe,
+      },
+      {
+        title: "Kiosk",
+        url: "/dashboard/kiosk",
+        icon: MonitorPlay,
       },
       {
         title: "Customers",
@@ -329,6 +340,10 @@ function MerchantSidebar() {
   const pathname = usePathname();
   const { signOut } = useClerk();
   const queryClient = useQueryClient();
+
+  // Single-location accounts see a singular "Location" nav item; the locations
+  // page renders that one store's detail instead of the list-with-add view.
+  const isSingleLocation = useIsSingleLocation();
 
   const handleSignOut = async () => {
     await resetClientSession(queryClient);
@@ -588,7 +603,14 @@ function MerchantSidebar() {
                           );
                         }
 
-                        // Regular menu item
+                        // Regular menu item — the Locations item reads singular
+                        // "Location" for single-location accounts; the locations
+                        // page itself renders that one store's detail (no list).
+                        const isSingleLocationNav =
+                          menuItem.title === "Locations" && isSingleLocation;
+                        const navTitle = isSingleLocationNav
+                          ? "Location"
+                          : menuItem.title;
                         return (
                           <SidebarMenuItem key={menuItem.title}>
                             <SidebarMenuButton
@@ -600,7 +622,7 @@ function MerchantSidebar() {
                             >
                               <Link href={menuItem.url}>
                                 <menuItem.icon className="h-4 w-4" />
-                                <span>{menuItem.title}</span>
+                                <span>{navTitle}</span>
                               </Link>
                             </SidebarMenuButton>
                           </SidebarMenuItem>
@@ -1295,8 +1317,14 @@ export default function MerchantDashboardLayout({
     { id: "staff", label: "Staff", icon: Users, url: "/dashboard/staff" },
   ];
 
+  // Mirror the sidebar's singular-"Location" label for the mobile menu; the
+  // locations page renders the single-store detail itself.
   const dashboardMoreItems: MoreNavItem[] = [
-    { title: "Locations", url: "/dashboard/locations", icon: MapPin },
+    {
+      title: activeLocationCount === 1 ? "Location" : "Locations",
+      url: "/dashboard/locations",
+      icon: MapPin,
+    },
     { title: "Tables", url: "/dashboard/tables", icon: Coffee },
     { title: "Reservations", url: "/dashboard/reservations", icon: CalendarClock },
     { title: "Schedules", url: "/dashboard/schedules", icon: Calendar },

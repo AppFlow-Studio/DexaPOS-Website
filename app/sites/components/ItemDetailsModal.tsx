@@ -298,7 +298,7 @@ export function ItemDetailsModal({
         style={{
           maxWidth: "min(680px, calc(100vw - 2rem))",
           maxHeight: "92vh",
-          borderRadius: "8px",
+          borderRadius: "20px",
           backgroundColor: "#ffffff",
         }}
       >
@@ -461,8 +461,14 @@ export function ItemDetailsModal({
                   You might also like
                 </p>
                 <div
-                  className="flex gap-3 overflow-x-auto pb-1"
-                  style={{ scrollbarWidth: "none" } as React.CSSProperties}
+                  className="flex gap-3 overflow-x-auto pb-1 pr-5 -mr-5"
+                  style={{
+                    scrollbarWidth: "none",
+                    maskImage:
+                      "linear-gradient(to right, transparent 0, #000 12px, #000 calc(100% - 40px), transparent 100%)",
+                    WebkitMaskImage:
+                      "linear-gradient(to right, transparent 0, #000 12px, #000 calc(100% - 40px), transparent 100%)",
+                  } as React.CSSProperties}
                 >
                   {upsellSuggestions.map((suggestion) => (
                     <button

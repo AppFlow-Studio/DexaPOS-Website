@@ -11,11 +11,14 @@ import { LogAuditEvent } from "./audit-logs";
 import {
   transformMenuToOrderOut,
   canonicalStringify,
+  snoozeToSuspendUntil,
 } from "@/lib/orderout/transform-menu";
 import type { MenuWithCategories } from "@/types/menu";
 import {
   extractConnectedPlatforms,
+  extractChannelStatuses,
   normalizeDeliveryChannels,
+  type PlatformChannelStatus,
 } from "@/lib/orderout/helpers";
 import { auth } from "@clerk/nextjs/server";
 
@@ -368,6 +371,8 @@ export interface PushMenuToOrderOutParams {
   clerkOrgId: string;
   menuId: string;
   locationId: string;
+  /** Server-to-server (DB trigger / internal route): use the service-role client. */
+  internal?: boolean;
 }
 
 /**
@@ -389,7 +394,9 @@ export async function pushMenuToOrderOut(
   let syncRecord: { id: string } | null = null;
 
   try {
-    const supabase = createServerSupabaseClient();
+    const supabase = params.internal
+      ? createServiceRoleClient()
+      : createServerSupabaseClient();
 
     // 1. Resolve merchant
     const { data: merchant, error: merchantError } = await supabase
@@ -802,6 +809,16 @@ export interface OrderOutMenuSyncStatus {
   } | null;
   totalSyncs: number;
   ooMenuId: string | null;
+  // Whether this menu is the canonical online-ordering menu for the location
+  // (the single OrderOut push target for availability/86 re-pushes).
+  isPrimaryOnlineMenu: boolean;
+  // Per-platform delivery-channel status for this menu, from the menu link's
+  // platform_statuses (populated by the push-menu webhook). Empty until a
+  // channel callback lands.
+  platformStatuses: PlatformChannelStatus[];
+  // Platforms currently reporting "success" on the restaurant's
+  // connected_channels — the channels a push would fan out to.
+  connectedChannels: string[];
   syncHistory: Array<{
     id: string;
     menuId: string | null;
@@ -849,29 +866,47 @@ export async function getOrderOutMenuSyncStatus(
     // Get restaurant for this location
     const { data: restaurant } = await supabase
       .from("orderout_restaurants")
-      .select("id")
+      .select("id, connected_channels")
       .eq("location_id", locationId)
       .single();
 
     if (!restaurant) {
       return {
         success: true,
-        data: { lastSync: null, totalSyncs: 0, ooMenuId: null, syncHistory: [] },
+        data: {
+          lastSync: null,
+          totalSyncs: 0,
+          ooMenuId: null,
+          isPrimaryOnlineMenu: false,
+          platformStatuses: [],
+          connectedChannels: [],
+          syncHistory: [],
+        },
         error: null,
       };
     }
 
-    // 4a. Query orderout_menu_links for the canonical oo_menu_id
+    // Channels this restaurant would fan a push out to (reporting "success").
+    const connectedChannels = extractConnectedPlatforms(
+      restaurant.connected_channels
+    );
+
+    // 4a. Query orderout_menu_links for the canonical oo_menu_id + per-platform
+    // push status for this menu.
     let ooMenuId: string | null = null;
+    let isPrimaryOnlineMenu = false;
+    let platformStatuses: PlatformChannelStatus[] = [];
     if (menuId) {
       const { data: link } = await supabase
         .from("orderout_menu_links")
-        .select("oo_menu_id")
+        .select("oo_menu_id, platform_statuses, is_primary")
         .eq("orderout_restaurant_id", restaurant.id)
         .eq("menu_id", menuId)
         .eq("is_active", true)
         .single();
       ooMenuId = link?.oo_menu_id || null;
+      isPrimaryOnlineMenu = link?.is_primary ?? false;
+      platformStatuses = extractChannelStatuses(link?.platform_statuses);
     }
 
     // Get all sync records for this restaurant
@@ -953,12 +988,140 @@ export async function getOrderOutMenuSyncStatus(
           : null,
         totalSyncs: filteredSyncs.length,
         ooMenuId,
+        isPrimaryOnlineMenu,
+        platformStatuses,
+        connectedChannels,
         syncHistory,
       },
       error: null,
     };
   } catch (error) {
     console.error("[getOrderOutMenuSyncStatus] Exception:", error);
+    return {
+      success: false,
+      data: null,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+  }
+}
+
+export interface OrderOutWebhookHealth {
+  /** The restaurant's oo_restaurant_id, or null if not onboarded. */
+  ooRestaurantId: string | null;
+  /**
+   * Most recent time OrderOut delivered a push_menu result for this
+   * restaurant. Derived from the max platform_statuses.last_updated across the
+   * restaurant's menu links — bumped by both correlated and orphan callbacks.
+   */
+  lastResultReceivedAt: string | null;
+  /** Any delivery platform currently reporting "success". */
+  anyChannelLive: boolean;
+  /** Unresolved push_menu dead-letters attributed to this restaurant. */
+  dlqCount: number;
+}
+
+/**
+ * Merchant-scoped health of the OrderOut push_menu webhook for a location:
+ * is OrderOut delivering results, when was the last one, and are any callbacks
+ * failing into the dead-letter queue. Scoped strictly to the merchant's own
+ * restaurant — unlike the HQ-gated getOrderOutPushMenuWebhookStatus.
+ */
+export async function getOrderOutWebhookHealth(
+  clerkOrgId: string,
+  locationId: string
+): Promise<{
+  success: boolean;
+  data: OrderOutWebhookHealth | null;
+  error: string | null;
+}> {
+  if (!clerkOrgId || !locationId) {
+    return { success: false, data: null, error: "Missing required parameters" };
+  }
+
+  try {
+    const supabase = createServerSupabaseClient();
+
+    const { data: merchant, error: merchantError } = await supabase
+      .from("merchants")
+      .select("id")
+      .eq("clerk_org_id", clerkOrgId)
+      .single();
+
+    if (merchantError || !merchant) {
+      return { success: false, data: null, error: "Merchant not found" };
+    }
+
+    const { data: restaurant } = await supabase
+      .from("orderout_restaurants")
+      .select("id, oo_restaurant_id, connected_channels")
+      .eq("location_id", locationId)
+      .single();
+
+    if (!restaurant) {
+      return {
+        success: true,
+        data: {
+          ooRestaurantId: null,
+          lastResultReceivedAt: null,
+          anyChannelLive: false,
+          dlqCount: 0,
+        },
+        error: null,
+      };
+    }
+
+    // Max platform_statuses.last_updated across this restaurant's menu links.
+    // Both the correlated and orphan webhook paths merge platform_statuses, so
+    // this timestamp advances on every result OrderOut delivers.
+    const { data: links } = await supabase
+      .from("orderout_menu_links")
+      .select("platform_statuses")
+      .eq("orderout_restaurant_id", restaurant.id);
+
+    let lastResultReceivedAt: string | null = null;
+    for (const link of links ?? []) {
+      for (const s of extractChannelStatuses(link.platform_statuses)) {
+        if (
+          s.last_updated &&
+          (!lastResultReceivedAt || s.last_updated > lastResultReceivedAt)
+        ) {
+          lastResultReceivedAt = s.last_updated;
+        }
+      }
+    }
+
+    const anyChannelLive =
+      extractConnectedPlatforms(restaurant.connected_channels).length > 0;
+
+    // Unresolved push_menu dead-letters attributed to this restaurant.
+    let dlqCount = 0;
+    if (restaurant.oo_restaurant_id) {
+      const { count } = await supabase
+        .from("webhook_dead_letter_queue")
+        .select("id", { count: "exact", head: true })
+        .eq("source", "orderout")
+        .in("event_type", ["push_menu", "push_menu_channels"])
+        .eq("status", "pending")
+        .filter(
+          "raw_payload->>restaurant_id",
+          "eq",
+          String(restaurant.oo_restaurant_id)
+        );
+      dlqCount = count ?? 0;
+    }
+
+    return {
+      success: true,
+      data: {
+        ooRestaurantId: restaurant.oo_restaurant_id ?? null,
+        lastResultReceivedAt,
+        anyChannelLive,
+        dlqCount,
+      },
+      error: null,
+    };
+  } catch (error) {
+    console.error("[getOrderOutWebhookHealth] Exception:", error);
     return {
       success: false,
       data: null,
@@ -1443,6 +1606,17 @@ export interface PushMenuToChannelsParams {
   clerkOrgId: string;
   menuId: string;
   locationId: string;
+  /**
+   * Skip the 30s cooldown + 5/hour ceiling. Used for availability-only re-pushes
+   * (86ing) where propagating an out-of-stock change promptly matters more than
+   * throttling. Human-triggered menu pushes still get the throttles.
+   */
+  skipCooldown?: boolean;
+  /**
+   * Server-to-server invocation (DB trigger / internal route) with no Clerk
+   * session: use the service-role client and a null audit actor.
+   */
+  internal?: boolean;
 }
 
 export interface PushMenuToChannelsResult {
@@ -1456,6 +1630,417 @@ const PUSH_CHANNELS_COOLDOWN_SECONDS = 30;
 const PUSH_CHANNELS_HOURLY_LIMIT = 5;
 
 /**
+ * Resolve the canonical online-ordering menu link for an OrderOut restaurant.
+ * OrderOut serves one menu per store, so availability re-pushes (86ing) target
+ * this single link. Prefers the primary flag; falls back to the single / most-
+ * recent active link so pre-backfill or freshly-linked restaurants still work.
+ * Returns null when the restaurant has no active link.
+ */
+export async function resolvePrimaryOnlineMenu(
+  client: ReturnType<typeof createServiceRoleClient>,
+  orderoutRestaurantId: string,
+): Promise<{ menu_id: string; oo_menu_id: string | null } | null> {
+  const { data: primary } = await client
+    .from("orderout_menu_links")
+    .select("menu_id, oo_menu_id")
+    .eq("orderout_restaurant_id", orderoutRestaurantId)
+    .eq("is_active", true)
+    .eq("is_primary", true)
+    .maybeSingle();
+  if (primary) return primary;
+
+  const { data: fallback } = await client
+    .from("orderout_menu_links")
+    .select("menu_id, oo_menu_id")
+    .eq("orderout_restaurant_id", orderoutRestaurantId)
+    .eq("is_active", true)
+    .order("last_pushed_at", { ascending: false, nullsFirst: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (fallback) {
+    console.warn(
+      `[orderout] no primary online menu for restaurant ${orderoutRestaurantId}; using most-recent active link (menu ${fallback.menu_id})`,
+    );
+    return fallback;
+  }
+  return null;
+}
+
+/**
+ * Designate a menu as the location's canonical online-ordering menu (the single
+ * OrderOut push target for availability/86 re-pushes). The menu must already be
+ * linked + active on OrderOut; the swap is atomic in set_primary_online_menu_v1.
+ */
+export async function setPrimaryOnlineMenu(
+  clerkOrgId: string,
+  locationId: string,
+  menuId: string,
+): Promise<{ success: boolean; error: string | null }> {
+  if (!clerkOrgId || !locationId || !menuId) {
+    return { success: false, error: "Missing required parameters" };
+  }
+
+  const supabase = createServerSupabaseClient();
+  const { error } = await supabase.rpc("set_primary_online_menu_v1", {
+    p_location_id: locationId,
+    p_menu_id: menuId,
+  });
+  if (error) return { success: false, error: error.message };
+
+  const { data: menu } = await supabase
+    .from("menus")
+    .select("name")
+    .eq("id", menuId)
+    .maybeSingle();
+
+  await LogAuditEvent({
+    clerkOrgId,
+    locationId,
+    action: `Set OrderOut online menu: ${menu?.name ?? menuId}`,
+    actionCategory: "integrations",
+    severity: "info",
+    resourceType: "menu",
+    resourceId: menuId,
+    resourceName: menu?.name ?? undefined,
+    metadata: { orderout: true },
+  });
+
+  return { success: true, error: null };
+}
+
+/**
+ * The location's canonical online menu (id + name) + all its active-linked menus,
+ * for surfacing the designation on the menus list and OrderOut tab. Empty when the
+ * location isn't onboarded to OrderOut.
+ */
+export async function getLocationOnlineMenu(
+  clerkOrgId: string,
+  locationId: string,
+): Promise<{
+  primaryMenuId: string | null;
+  primaryMenuName: string | null;
+  linkedMenuIds: string[];
+}> {
+  if (!clerkOrgId || !locationId || locationId === "all") {
+    return { primaryMenuId: null, primaryMenuName: null, linkedMenuIds: [] };
+  }
+
+  const supabase = createServerSupabaseClient();
+  const { data: restaurant } = await supabase
+    .from("orderout_restaurants")
+    .select("id")
+    .eq("location_id", locationId)
+    .maybeSingle();
+  if (!restaurant)
+    return { primaryMenuId: null, primaryMenuName: null, linkedMenuIds: [] };
+
+  const { data: links } = await supabase
+    .from("orderout_menu_links")
+    .select("menu_id, is_primary")
+    .eq("orderout_restaurant_id", restaurant.id)
+    .eq("is_active", true);
+
+  const rows = links ?? [];
+  const primaryMenuId = rows.find((l) => l.is_primary)?.menu_id ?? null;
+
+  let primaryMenuName: string | null = null;
+  if (primaryMenuId) {
+    const { data: menu } = await supabase
+      .from("menus")
+      .select("name")
+      .eq("id", primaryMenuId)
+      .maybeSingle();
+    primaryMenuName = menu?.name ?? null;
+  }
+
+  return {
+    primaryMenuId,
+    primaryMenuName,
+    linkedMenuIds: rows.map((l) => l.menu_id),
+  };
+}
+
+// ============================================================================
+// Publish the ONE online menu (foolproof push target)
+// ----------------------------------------------------------------------------
+// Merchant-facing publishing always resolves to the location's single designated
+// online menu, so a merchant can never accidentally push a non-online menu (which
+// would create a competing OrderOut link and serve the wrong data). Because item
+// data is global/location-scoped — not per-menu — publishing the online menu
+// always carries edits made from ANY menu.
+//
+//   - designateMenuId omitted → publish the currently-designated online menu.
+//   - designateMenuId provided → make that menu the online menu (first-time pick
+//     or a deliberate switch), then publish it. The DB partial-unique index +
+//     atomic set_primary_online_menu_v1 keep exactly one online menu per store.
+// ============================================================================
+
+export interface PublishOnlineMenuResult {
+  success: boolean;
+  /** True when no online menu is designated yet and none was chosen to designate. */
+  needsDesignation?: boolean;
+  data?: {
+    publishedMenuId: string;
+    publishedMenuName: string | null;
+    itemsSynced: number;
+    /** True when this call changed which menu is the online menu. */
+    redesignated: boolean;
+  };
+  error: string | null;
+}
+
+export async function publishOnlineMenu(
+  clerkOrgId: string,
+  locationId: string,
+  designateMenuId?: string,
+): Promise<PublishOnlineMenuResult> {
+  if (!clerkOrgId || !locationId || locationId === "all") {
+    return { success: false, error: "A specific location is required." };
+  }
+
+  const supabase = createServerSupabaseClient();
+
+  const { data: restaurant } = await supabase
+    .from("orderout_restaurants")
+    .select("id")
+    .eq("location_id", locationId)
+    .maybeSingle();
+  if (!restaurant) {
+    return { success: false, error: "Location is not onboarded to OrderOut" };
+  }
+
+  // The currently-designated online menu (if any).
+  const primary = await resolvePrimaryOnlineMenu(
+    createServiceRoleClient(),
+    restaurant.id,
+  );
+
+  // Always publish the online menu. Only fall back to the caller's chosen menu
+  // when there's no designation yet (or the caller is deliberately switching).
+  const targetMenuId = primary?.menu_id ?? designateMenuId ?? null;
+  if (!targetMenuId) {
+    return {
+      success: false,
+      needsDesignation: true,
+      error: "No online menu selected. Choose which menu handles online orders.",
+    };
+  }
+
+  const willDesignate =
+    !!designateMenuId && designateMenuId !== primary?.menu_id;
+  const publishMenuId = willDesignate ? designateMenuId! : targetMenuId;
+
+  // 1) Push the menu to OrderOut (creates/updates its link).
+  const push = await pushMenuToOrderOut({
+    clerkOrgId,
+    menuId: publishMenuId,
+    locationId,
+  });
+  if (!push.success) {
+    return { success: false, error: push.error ?? "Failed to publish menu" };
+  }
+
+  // 2) Designate it as THE online menu when this is a first pick or a switch.
+  //    (Now that it's linked, set_primary_online_menu_v1 can flag it primary.)
+  const redesignated = willDesignate || !primary;
+  if (redesignated && designateMenuId) {
+    const setRes = await setPrimaryOnlineMenu(clerkOrgId, locationId, designateMenuId);
+    if (!setRes.success) {
+      console.warn("[publishOnlineMenu] designation failed:", setRes.error);
+    }
+  }
+
+  // 3) Fan out to connected channels (best-effort; "no channels" is a no-op).
+  const fan = await pushMenuToConnectedChannels({
+    clerkOrgId,
+    menuId: publishMenuId,
+    locationId,
+  });
+  if (!fan.success) {
+    console.info("[publishOnlineMenu] channel fan-out skipped:", fan.error);
+  }
+
+  const { data: menu } = await supabase
+    .from("menus")
+    .select("name")
+    .eq("id", publishMenuId)
+    .maybeSingle();
+
+  return {
+    success: true,
+    data: {
+      publishedMenuId: publishMenuId,
+      publishedMenuName: menu?.name ?? null,
+      itemsSynced: push.data?.itemsSynced ?? 0,
+      redesignated,
+    },
+    error: null,
+  };
+}
+
+// ============================================================================
+// Surgical per-item suspension (86 fast-path)
+// ----------------------------------------------------------------------------
+// OrderOut exposes a per-item "out of stock" toggle:
+//   PUT /pos/restaurant/{restaurant}/menu/{oo_menu}/item/{item}/suspension
+//   body: { suspend_until: <unix SECONDS> }   // 0 restores availability
+// Because our menu_item.id is pushed verbatim as the OrderOut item id (see
+// transform-menu.ts) and the snooze already maps 1:1 to Uber's suspend_until,
+// a single 86/restore becomes ONE surgical PUT — no full menu rebuild and no
+// push_menu channel fan-out. OrderOut propagates the suspension to the connected
+// marketplaces itself.
+//
+// NOTE: this is items-only. OrderOut has no per-modifier suspension endpoint yet,
+// so modifier 86ing stays on the full-menu resync path (see item-snooze.ts).
+// ============================================================================
+
+export interface SuspendOrderOutItemParams {
+  clerkOrgId: string;
+  locationId: string;
+  /** menu_items.id — pushed verbatim as the OrderOut item id. */
+  menuItemId: string;
+  /** location_item_overrides.snoozed_until: ISO | "infinity" | null (restore). */
+  snoozedUntil: string | null;
+  /** Server-to-server (DB trigger / POS-origin route): use the service-role client. */
+  internal?: boolean;
+}
+
+export interface SuspendOrderOutItemResult {
+  success: boolean;
+  /**
+   * True when we couldn't take the surgical path because the location's menu
+   * isn't live on OrderOut yet (no oo_menu_id). The caller should fall back to a
+   * full push, which stages the menu with suspension_info already embedded.
+   */
+  skipped?: boolean;
+  /**
+   * The canonical online menu id the suspension was applied to (present on
+   * success). Lets the caller fan the change out to connected channels without
+   * re-resolving the link.
+   */
+  menuId?: string;
+  error: string | null;
+}
+
+/**
+ * Mark a single item out-of-stock (or restore it) on OrderOut via the per-item
+ * suspension endpoint. Best-effort and self-contained: resolves the restaurant +
+ * canonical online menu, computes suspend_until from the snooze, and PUTs.
+ * Returns `skipped: true` (not an error) when the menu isn't live yet so the
+ * caller can fall back to a full push.
+ */
+export async function suspendOrderOutItem(
+  params: SuspendOrderOutItemParams
+): Promise<SuspendOrderOutItemResult> {
+  const { clerkOrgId, locationId, menuItemId, snoozedUntil, internal = false } =
+    params;
+
+  if (!clerkOrgId || !locationId || !menuItemId) {
+    return { success: false, error: "Missing required parameters" };
+  }
+
+  try {
+    const supabase = internal
+      ? createServiceRoleClient()
+      : createServerSupabaseClient();
+
+    // Resolve the OrderOut restaurant (must be active).
+    const { data: restaurant } = await supabase
+      .from("orderout_restaurants")
+      .select("id, oo_restaurant_id, status")
+      .eq("location_id", locationId)
+      .maybeSingle();
+
+    if (!restaurant?.oo_restaurant_id || restaurant.status !== "active") {
+      return { success: false, skipped: true, error: null };
+    }
+
+    // OrderOut serves one menu per store — target only the canonical online menu.
+    const online = await resolvePrimaryOnlineMenu(
+      createServiceRoleClient(),
+      restaurant.id
+    );
+    if (!online?.oo_menu_id) {
+      // Menu never pushed / no OrderOut menu id yet — nothing to suspend against.
+      return { success: false, skipped: true, error: null };
+    }
+
+    const orderOutApiUrl = process.env.NEXT_PUBLIC_ORDEROUT_API_URL;
+    const orderOutApiKey = process.env.ORDEROUT_API_KEY;
+    if (!orderOutApiUrl || !orderOutApiKey) {
+      return { success: false, error: "OrderOut API configuration missing" };
+    }
+
+    // suspend_until: unix seconds while snoozed, 0 to restore (available).
+    const suspendUntil = snoozeToSuspendUntil(snoozedUntil) ?? 0;
+
+    const url = `${orderOutApiUrl}/pos/restaurant/${restaurant.oo_restaurant_id}/menu/${online.oo_menu_id}/item/${menuItemId}/suspension`;
+
+    let httpStatus = 0;
+    let errMsg: string | null = null;
+    try {
+      const resp = await fetch(url, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "api-key": orderOutApiKey,
+        },
+        body: JSON.stringify({ suspend_until: suspendUntil }),
+      });
+      httpStatus = resp.status;
+      if (!resp.ok) {
+        try {
+          const body = await resp.json();
+          errMsg =
+            (body?.error as string) ||
+            (body?.message as string) ||
+            `OrderOut API returned ${resp.status}`;
+        } catch {
+          errMsg = `OrderOut API returned ${resp.status}`;
+        }
+      }
+    } catch (e) {
+      errMsg = e instanceof Error ? e.message : "Network error";
+    }
+
+    const ok = httpStatus >= 200 && httpStatus < 300;
+
+    await LogAuditEvent({
+      clerkOrgId,
+      locationId,
+      action: ok
+        ? "orderout_item_suspension"
+        : "orderout_item_suspension_failed",
+      actionCategory: "integrations",
+      severity: ok ? "info" : "warning",
+      resourceType: "menu_item",
+      resourceId: menuItemId,
+      metadata: {
+        oo_restaurant_id: restaurant.oo_restaurant_id,
+        oo_menu_id: online.oo_menu_id,
+        suspend_until: suspendUntil,
+        restored: suspendUntil === 0,
+        http_status: httpStatus,
+        ...(errMsg ? { error_message: errMsg } : {}),
+      },
+    });
+
+    if (!ok) {
+      return { success: false, error: errMsg ?? "Failed to suspend item" };
+    }
+
+    return { success: true, menuId: online.menu_id, error: null };
+  } catch (error) {
+    console.error("[suspendOrderOutItem] Exception:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+  }
+}
+
+/**
  * Push an already-synced menu to all connected delivery channels via OrderOut's
  * async fan-out endpoint. Per-service results come back via
  * orderout-push-menu-webhook.
@@ -1467,14 +2052,16 @@ export async function pushMenuToConnectedChannels(
   data?: PushMenuToChannelsResult;
   error: string | null;
 }> {
-  const { clerkOrgId, menuId, locationId } = params;
+  const { clerkOrgId, menuId, locationId, skipCooldown = false, internal = false } = params;
 
   if (!clerkOrgId || !menuId || !locationId) {
     return { success: false, error: "Missing required parameters" };
   }
 
   try {
-    const supabase = createServerSupabaseClient();
+    const supabase = internal
+      ? createServiceRoleClient()
+      : createServerSupabaseClient();
 
     // Best-effort reconcile of stuck rows. Never fail the action on reconcile error.
     try {
@@ -1492,8 +2079,10 @@ export async function pushMenuToConnectedChannels(
       console.warn("[pushMenuToConnectedChannels] reconcile threw (non-fatal):", e);
     }
 
-    // Clerk user id for audit + trigger tracking
-    const { userId: clerkUserId } = await auth();
+    // Clerk user id for audit + trigger tracking (none for server-to-server)
+    const { userId: clerkUserId } = internal
+      ? { userId: null }
+      : await auth();
 
     // Resolve merchant
     const { data: merchant, error: merchantError } = await supabase
@@ -1556,6 +2145,9 @@ export async function pushMenuToConnectedChannels(
       };
     }
 
+    // Availability-only re-pushes (86ing) skip both throttles so out-of-stock
+    // changes propagate promptly. Human-triggered pushes keep the throttles.
+    if (!skipCooldown) {
     // Rate limit — 30-second cooldown
     const cooldownSince = new Date(
       Date.now() - PUSH_CHANNELS_COOLDOWN_SECONDS * 1000
@@ -1628,6 +2220,7 @@ export async function pushMenuToConnectedChannels(
         error: `Hourly push limit reached (${PUSH_CHANNELS_HOURLY_LIMIT}). Try again later.`,
       };
     }
+    } // end !skipCooldown throttles
 
     // Insert the sync row (pending)
     const { data: syncRow, error: insertErr } = await supabase

@@ -24,6 +24,7 @@ import {
   GetModifierGroupCategories,
 } from "@/app/dashboard/actions/modifier-assignments";
 import { CategoriesModel } from "@/types/db-modles";
+import { invalidateOrderOutSync } from "@/app/dashboard/hooks/useOrderOutMenuSync";
 
 interface ModifierGroupForAssignment {
   id: string;
@@ -188,6 +189,7 @@ export function AssignModifierToCategoryDialog({
       queryClient.invalidateQueries({ queryKey: ["modifier-groups"] });
       queryClient.invalidateQueries({ queryKey: ["categories-with-items"] });
       queryClient.invalidateQueries({ queryKey: ["menu-items"] });
+      invalidateOrderOutSync(queryClient);
       onSuccess?.();
     } catch (e: any) {
       toast.error("Operation failed", {

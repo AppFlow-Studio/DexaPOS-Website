@@ -17,6 +17,7 @@ import { InlinePriceEditor } from "./InlinePriceEditor";
 import { scopeColor, type CascadeLevel } from "@/lib/menu/cascade-labels";
 import { resetItemToLevel } from "@/app/dashboard/actions/menu-items-rpc";
 import type { PriceMatrixRow } from "@/app/dashboard/actions/menu-items";
+import { invalidateOrderOutSync } from "@/app/dashboard/hooks/useOrderOutMenuSync";
 
 interface PriceMatrixGridProps {
   itemId: string;
@@ -447,6 +448,7 @@ function L5MatrixCell({
       queryClient.invalidateQueries({ queryKey: ["menu-items-flat"] });
       queryClient.invalidateQueries({ queryKey: ["categories-with-items"] });
       queryClient.invalidateQueries({ queryKey: ["menu-item", itemId] });
+      invalidateOrderOutSync(queryClient);
       setOpen(false);
     },
     onError: (err) => {
