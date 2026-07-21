@@ -40,6 +40,8 @@ export function ItemStockToggle({
   clerkOrgId,
   locationId,
   isOutOfStock,
+  itemName,
+  image,
   className,
 }: {
   menuItemId: string;
@@ -47,6 +49,9 @@ export function ItemStockToggle({
   /** Gated (concrete) location id, or null when viewing "All locations". */
   locationId: string | null;
   isOutOfStock: boolean;
+  /** Row data threaded into the optimistic snooze entry so the 86'd list renders. */
+  itemName?: string;
+  image?: string | null;
   className?: string;
 }) {
   const snoozeItem = useSnoozeItem();
@@ -83,7 +88,7 @@ export function ItemStockToggle({
   if (!clerkOrgId) return null;
 
   const do86 = (duration: SnoozeDuration) =>
-    snoozeItem.mutate({ clerkOrgId, menuItemId, locationId, duration });
+    snoozeItem.mutate({ clerkOrgId, menuItemId, locationId, duration, itemName, image });
 
   const restore = () =>
     restoreItem.mutate({ clerkOrgId, menuItemId, locationId });

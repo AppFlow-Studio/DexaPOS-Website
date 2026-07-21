@@ -81,12 +81,22 @@
     ]
   },
   "hooks": {
-    "SessionStart": [
+    "Stop": [
       {
         "hooks": [
           {
             "type": "command",
-            "command": "node .claude/hooks/gsd-check-update.js"
+            "command": "node ~/.claude/notify.js"
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ~/.claude/notify.js"
           }
         ]
       }

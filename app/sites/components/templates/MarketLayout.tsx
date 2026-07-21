@@ -271,15 +271,19 @@ export function MarketLayout({
       }
       const isDesktop = window.matchMedia("(min-width: 1024px)").matches;
       const boundary = headerHeight + (isDesktop ? 16 : navHeight + 8) + 8;
+      // Highlight the section owning the boundary line (top at/above it, bottom
+      // still below it) so a pill activates only once the previous section has
+      // fully scrolled off the top, not when its heading first appears.
       let current = sections[0].cat.id;
       for (const { cat } of sections) {
         const el = document.getElementById(`market-cat-${cat.id}`);
         if (!el) continue;
-        if (el.getBoundingClientRect().top - boundary <= 1) {
+        const rect = el.getBoundingClientRect();
+        if (rect.top - boundary <= 1 && rect.bottom - boundary > 1) {
           current = cat.id;
-        } else {
           break;
         }
+        if (rect.top - boundary <= 1) current = cat.id;
       }
       // While locked to a click target, keep it highlighted regardless of
       // sections passed (or slightly overshot) during the smooth scroll. The

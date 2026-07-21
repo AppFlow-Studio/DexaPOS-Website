@@ -192,6 +192,8 @@ export function CategoryItemRow({
                                     clerkOrgId={clerkOrgId}
                                     locationId={gatedLocationId}
                                     isOutOfStock={isOutOfStock}
+                                    itemName={menuItem?.name}
+                                    image={menuItem?.image}
                                 />
                                 <TooltipProvider>
                                     <Tooltip>

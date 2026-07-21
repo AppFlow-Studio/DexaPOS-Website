@@ -302,15 +302,22 @@ export function MenuBrowser({
         return;
       }
       const boundary = getBoundary();
+      // Highlight the section that owns the boundary line — its top is at/above
+      // the line and its bottom is still below it. A section only becomes active
+      // once the previous one has fully scrolled off the top (its bottom crosses
+      // the line), rather than the moment its own heading appears.
       let current = cats[0].id;
       for (const c of cats) {
         const el = document.getElementById(`category-${c.id}`);
         if (!el) continue;
-        if (el.getBoundingClientRect().top - boundary <= 1) {
+        const rect = el.getBoundingClientRect();
+        if (rect.top - boundary <= 1 && rect.bottom - boundary > 1) {
           current = c.id;
-        } else {
           break;
         }
+        // Fallback for sub-viewport sections: keep advancing while tops are above
+        // the line so we don't stall between two short sections.
+        if (rect.top - boundary <= 1) current = c.id;
       }
       setActiveCategory(current);
     };

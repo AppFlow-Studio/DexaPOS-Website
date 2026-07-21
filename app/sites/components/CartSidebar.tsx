@@ -10,6 +10,7 @@ import { OnlineOrderingConfig } from "@/types/site";
 import { StorefrontItem } from "@/types/storefront";
 import { useStorefrontPath } from "../lib/use-storefront-path";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { useEdgeFade } from "../hooks/useEdgeFade";
 
 interface CartSidebarProps {
   config?: Partial<OnlineOrderingConfig>;
@@ -46,6 +47,7 @@ export function CartSidebar({ config, storeConfigId, slug, taxRate = 0, allItems
   } = useCart();
 
   const [pendingRemove, setPendingRemove] = useState<string | null>(null);
+  const upsellFade = useEdgeFade();
 
   const subtotal = getSubtotal();
   const tax = Math.round(subtotal * taxRate * 100) / 100;
@@ -280,14 +282,9 @@ export function CartSidebar({ config, storeConfigId, slug, taxRate = 0, allItems
                     </p>
                     <div className="relative -mr-6">
                     <div
+                      ref={upsellFade.ref}
                       className="flex gap-3 overflow-x-auto pb-1 pr-6"
-                      style={{
-                        scrollbarWidth: "none",
-                        maskImage:
-                          "linear-gradient(to right, transparent 0, #000 12px, #000 calc(100% - 40px), transparent 100%)",
-                        WebkitMaskImage:
-                          "linear-gradient(to right, transparent 0, #000 12px, #000 calc(100% - 40px), transparent 100%)",
-                      } as React.CSSProperties}
+                      style={{ scrollbarWidth: "none", ...upsellFade.maskStyle } as React.CSSProperties}
                     >
                       {upsellItems.map((upsellItem) => (
                         <button

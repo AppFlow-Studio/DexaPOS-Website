@@ -72,9 +72,14 @@ export interface OrderOutModifierGroup {
   id: string;
   title: OrderOutTranslation;
   modifier_options: OrderOutModifierOption[];
+  // OrderOut/Uber nest the selection constraints under `quantity`. Emitting these
+  // flat (min_permitted/max_permitted directly on quantity_info) is silently ignored
+  // and the group defaults to "No limit".
   quantity_info: {
-    min_permitted: number;
-    max_permitted: number | null;
+    quantity: {
+      min_permitted: number;
+      max_permitted: number;
+    };
   };
 }
 
