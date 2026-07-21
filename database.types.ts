@@ -12,31 +12,6 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
   public: {
     Tables: {
       admin_merchant_access: {
@@ -1408,6 +1383,81 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      contact_submissions: {
+        Row: {
+          business: string
+          concept: string
+          contact_name: string
+          created_at: string
+          current_pos: string
+          email: string
+          id: string
+          locations: string
+          message: string
+          phone: string
+          read: boolean
+        }
+        Insert: {
+          business: string
+          concept: string
+          contact_name: string
+          created_at?: string
+          current_pos?: string
+          email: string
+          id?: string
+          locations: string
+          message?: string
+          phone: string
+          read?: boolean
+        }
+        Update: {
+          business?: string
+          concept?: string
+          contact_name?: string
+          created_at?: string
+          current_pos?: string
+          email?: string
+          id?: string
+          locations?: string
+          message?: string
+          phone?: string
+          read?: boolean
+        }
+        Relationships: []
+      }
+      content_blocks: {
+        Row: {
+          body_html: string
+          content_json: Json
+          id: string
+          key: string
+          published: boolean
+          title: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          body_html?: string
+          content_json?: Json
+          id?: string
+          key: string
+          published?: boolean
+          title?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          body_html?: string
+          content_json?: Json
+          id?: string
+          key?: string
+          published?: boolean
+          title?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
       }
       customer_activities: {
         Row: {
@@ -3521,6 +3571,27 @@ export type Database = {
           },
         ]
       }
+      form_rate_limits: {
+        Row: {
+          action: string
+          created_at: string
+          id: string
+          ip: string
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          id?: string
+          ip: string
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          id?: string
+          ip?: string
+        }
+        Relationships: []
+      }
       idempotency_keys: {
         Row: {
           completed_at: string | null
@@ -4908,22 +4979,25 @@ export type Database = {
         Row: {
           accent_color: string | null
           admin_pin_hash: string | null
-          attract_image_urls: Json
-          attract_video_url: string | null
           auto_print_receipt: boolean
           background_color: string
           cart_reset_timeout_seconds: number
           created_at: string
           font_family: string | null
           header_text_color: string | null
-          hero_image_url: string | null
           id: string
+          idle_images_horizontal: Json
+          idle_images_vertical: Json
           idle_timeout_seconds: number
+          idle_video_horizontal: string | null
+          idle_video_vertical: string | null
           is_active: boolean
           location_id: string
           logo_url: string | null
           loyalty_enrollment_enabled: boolean
           merchant_id: string
+          order_banner_images_horizontal: Json
+          order_banner_images_vertical: Json
           orientation: string
           payment_terminal_id: string | null
           pickup_number_prefix: string | null
@@ -4945,22 +5019,25 @@ export type Database = {
         Insert: {
           accent_color?: string | null
           admin_pin_hash?: string | null
-          attract_image_urls?: Json
-          attract_video_url?: string | null
           auto_print_receipt?: boolean
           background_color?: string
           cart_reset_timeout_seconds?: number
           created_at?: string
           font_family?: string | null
           header_text_color?: string | null
-          hero_image_url?: string | null
           id?: string
+          idle_images_horizontal?: Json
+          idle_images_vertical?: Json
           idle_timeout_seconds?: number
+          idle_video_horizontal?: string | null
+          idle_video_vertical?: string | null
           is_active?: boolean
           location_id: string
           logo_url?: string | null
           loyalty_enrollment_enabled?: boolean
           merchant_id: string
+          order_banner_images_horizontal?: Json
+          order_banner_images_vertical?: Json
           orientation?: string
           payment_terminal_id?: string | null
           pickup_number_prefix?: string | null
@@ -4982,22 +5059,25 @@ export type Database = {
         Update: {
           accent_color?: string | null
           admin_pin_hash?: string | null
-          attract_image_urls?: Json
-          attract_video_url?: string | null
           auto_print_receipt?: boolean
           background_color?: string
           cart_reset_timeout_seconds?: number
           created_at?: string
           font_family?: string | null
           header_text_color?: string | null
-          hero_image_url?: string | null
           id?: string
+          idle_images_horizontal?: Json
+          idle_images_vertical?: Json
           idle_timeout_seconds?: number
+          idle_video_horizontal?: string | null
+          idle_video_vertical?: string | null
           is_active?: boolean
           location_id?: string
           logo_url?: string | null
           loyalty_enrollment_enabled?: boolean
           merchant_id?: string
+          order_banner_images_horizontal?: Json
+          order_banner_images_vertical?: Json
           orientation?: string
           payment_terminal_id?: string | null
           pickup_number_prefix?: string | null
@@ -5262,6 +5342,8 @@ export type Database = {
           id: string
           is_active: boolean
           location_id: string
+          snooze_reason: string | null
+          snoozed_until: string | null
           updated_at: string
         }
         Insert: {
@@ -5274,6 +5356,8 @@ export type Database = {
           id?: string
           is_active?: boolean
           location_id: string
+          snooze_reason?: string | null
+          snoozed_until?: string | null
           updated_at?: string
         }
         Update: {
@@ -5286,6 +5370,8 @@ export type Database = {
           id?: string
           is_active?: boolean
           location_id?: string
+          snooze_reason?: string | null
+          snoozed_until?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -13203,6 +13289,89 @@ export type Database = {
           name?: string | null
           public_metadata?: Json | null
           updated_at?: string | null
+        }
+        Relationships: []
+      }
+      page_categories: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          parent_id: string | null
+          slug: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          parent_id?: string | null
+          slug: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          parent_id?: string | null
+          slug?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "page_categories_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "page_categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      page_content: {
+        Row: {
+          category: string
+          cms_title: string
+          description: string
+          hero_subtitle: string
+          hero_title: string
+          id: string
+          published: boolean
+          route: string
+          sections: Json
+          title: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          category?: string
+          cms_title?: string
+          description?: string
+          hero_subtitle?: string
+          hero_title?: string
+          id?: string
+          published?: boolean
+          route: string
+          sections?: Json
+          title?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          category?: string
+          cms_title?: string
+          description?: string
+          hero_subtitle?: string
+          hero_title?: string
+          id?: string
+          published?: boolean
+          route?: string
+          sections?: Json
+          title?: string
+          updated_at?: string
+          updated_by?: string | null
         }
         Relationships: []
       }
@@ -21889,6 +22058,15 @@ export type Database = {
         Args: { required_permission?: string; target_merchant_id: string }
         Returns: boolean
       }
+      check_rate_limit: {
+        Args: {
+          p_action: string
+          p_ip: string
+          p_max: number
+          p_window_seconds: number
+        }
+        Returns: boolean
+      }
       check_recent_payment: {
         Args: {
           p_amount_cents?: number
@@ -22001,6 +22179,26 @@ export type Database = {
           p_target_schedule_id: string
         }
         Returns: undefined
+      }
+      correlate_push_channels_callback: {
+        Args: {
+          p_delivery_service: string
+          p_error_message: string
+          p_oo_menu_id: string
+          p_oo_restaurant_id: string
+          p_raw_response: Json
+          p_status: string
+          p_status_code: number
+        }
+        Returns: {
+          expected_count: number
+          final_status: string
+          link_id: string
+          orderout_restaurant_id: string
+          reported_count: number
+          sync_id: string
+          was_duplicate: boolean
+        }[]
       }
       create_adhoc_expense: {
         Args: {
@@ -23144,6 +23342,10 @@ export type Database = {
         Args: { p_location_id?: string; p_menu_id: string }
         Returns: Json
       }
+      get_menus_for_location: {
+        Args: { p_location_id: string; p_merchant_id: string }
+        Returns: Json
+      }
       get_merchant_acquisition: {
         Args: { p_from: string; p_to: string }
         Returns: {
@@ -23559,6 +23761,10 @@ export type Database = {
           p_station_id?: string
         }
         Returns: Json
+      }
+      has_active_impersonation: {
+        Args: { p_merchant_id: string }
+        Returns: boolean
       }
       hq_can_impersonate_merchant: {
         Args: { p_merchant_id: string }
@@ -24876,6 +25082,7 @@ export type Database = {
         Args: { p_slug: string; p_table_token: string }
         Returns: Json
       }
+      restore_expired_item_snoozes: { Args: never; Returns: undefined }
       restore_location: { Args: { p_location_id: string }; Returns: Json }
       safe_jsonb_int: {
         Args: { p_default?: number; p_value: Json }
@@ -24983,6 +25190,24 @@ export type Database = {
         }
         Returns: Json
       }
+      set_items_snooze_batch_v1: {
+        Args: {
+          p_location_id: string
+          p_menu_item_ids: string[]
+          p_reason?: string
+          p_snoozed_until: string
+        }
+        Returns: number
+      }
+      set_location_category_snooze_v1: {
+        Args: {
+          p_category_id: string
+          p_location_id: string
+          p_reason?: string
+          p_snoozed_until: string
+        }
+        Returns: Json
+      }
       set_location_pos_config_v1: {
         Args: { p_location_id: string; p_pos_config: Json }
         Returns: Json
@@ -24994,6 +25219,15 @@ export type Database = {
           p_quantity: number
         }
         Returns: undefined
+      }
+      set_modifier_group_snooze_v1: {
+        Args: {
+          p_location_id: string
+          p_modifier_group_id: string
+          p_reason?: string
+          p_snoozed_until: string
+        }
+        Returns: Json
       }
       set_modifier_snooze_v1: {
         Args: {
@@ -25876,9 +26110,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {
       device_lifecycle_status: [
