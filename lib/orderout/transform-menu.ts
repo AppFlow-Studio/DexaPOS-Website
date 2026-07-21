@@ -55,8 +55,17 @@ export function snoozeToSuspendUntil(
   return sec > Math.floor(Date.now() / 1000) ? sec : null;
 }
 
+export interface TransformMenuOptions {
+  // Per-day availability to fall back to when the menu has NO assigned schedule.
+  // Sourced from the location's operating hours (see lib/orderout/hours.ts). When
+  // omitted/empty, buildServiceAvailability keeps the legacy 24/7 default so a
+  // missing hours config never hides the menu.
+  fallbackAvailability?: OrderOutServiceAvailability[];
+}
+
 export function transformMenuToOrderOut(
-  menu: MenuWithCategories
+  menu: MenuWithCategories,
+  options?: TransformMenuOptions
 ): OrderOutMenuPayload {
   const itemMap = new Map<string, OrderOutItem>();
   const modifierGroupMap = new Map<string, OrderOutModifierGroup>();
@@ -136,8 +145,11 @@ export function transformMenuToOrderOut(
     }
   }
 
-  // Build service availability from schedules
-  const serviceAvailability = buildServiceAvailability(menu);
+  // Build service availability from schedules (falling back to location hours)
+  const serviceAvailability = buildServiceAvailability(
+    menu,
+    options?.fallbackAvailability
+  );
 
   // Build the single menu entry
   const orderOutMenus: OrderOutMenu[] = [
@@ -246,11 +258,63 @@ export function canonicalStringify(obj: unknown): string {
   });
 }
 
+// One day of a stored WeeklySchedule (online_store_config.operating_hours /
+// locations.business_hours). Kept structural so this pure module doesn't import
+// the "use client" hook that declares WeeklySchedule.
+interface WeeklyScheduleDay {
+  enabled?: boolean;
+  from?: string;
+  to?: string;
+  is24Hours?: boolean;
+}
+type WeeklyScheduleLike = Partial<
+  Record<(typeof DAY_NAMES)[number], WeeklyScheduleDay>
+>;
+
+/**
+ * Convert a stored WeeklySchedule (operating hours) into OrderOut per-day
+ * service availability. Disabled days are omitted (OrderOut treats a missing
+ * day as closed). Returns [] when nothing usable is configured.
+ */
+export function weeklyScheduleToServiceAvailability(
+  hours: WeeklyScheduleLike | null | undefined
+): OrderOutServiceAvailability[] {
+  if (!hours) return [];
+
+  const out: OrderOutServiceAvailability[] = [];
+  for (const day of DAY_NAMES) {
+    const d = hours[day];
+    if (!d || !d.enabled) continue; // closed / unset -> omit the day
+
+    if (d.is24Hours) {
+      out.push({
+        day_of_week: day,
+        time_periods: [{ start_time: "00:00", end_time: "23:59" }],
+      });
+      continue;
+    }
+
+    if (!d.from || !d.to) continue; // incomplete window -> skip
+    out.push({
+      day_of_week: day,
+      time_periods: [
+        { start_time: formatTime(d.from), end_time: formatTime(d.to) },
+      ],
+    });
+  }
+  return out;
+}
+
 function buildServiceAvailability(
-  menu: MenuWithCategories
+  menu: MenuWithCategories,
+  fallback?: OrderOutServiceAvailability[]
 ): OrderOutServiceAvailability[] {
   if (!menu.schedules || menu.schedules.length === 0) {
-    // No schedules = available all day every day
+    // No assigned schedule: prefer the location's operating hours, else default
+    // to available all day every day (never hide the menu on a missing config).
+    if (fallback && fallback.length > 0) {
+      return fallback;
+    }
     return DAY_NAMES.map((day) => ({
       day_of_week: day,
       time_periods: [{ start_time: "00:00", end_time: "23:59" }],
