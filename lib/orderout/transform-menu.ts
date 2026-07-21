@@ -31,6 +31,16 @@ function formatTime(timeStr: string): string {
   return `${parts[0]}:${parts[1]}`;
 }
 
+// End times need one extra rule shared by BOTH the schedule path and the
+// operating-hours path: a window that ends at midnight ("00:00" / "24:00")
+// means "end of day". OrderOut/Uber require start < end within the day, so map
+// it to "23:59". This mirrors the CreateSchedule server-side conversion
+// (end "00:00" -> "23:59:59") so schedules and business hours stay uniform.
+function formatEndTime(timeStr: string): string {
+  const hm = formatTime(timeStr);
+  return hm === "00:00" || hm === "24:00" ? "23:59" : hm;
+}
+
 function priceToCents(price: number): number {
   return Math.round(price * 100);
 }
@@ -315,7 +325,7 @@ export function weeklyScheduleToServiceAvailability(
     out.push({
       day_of_week: day,
       time_periods: [
-        { start_time: formatTime(d.from), end_time: formatTime(d.to) },
+        { start_time: formatTime(d.from), end_time: formatEndTime(d.to) },
       ],
     });
   }
@@ -343,23 +353,40 @@ function buildServiceAvailability(
 
   for (const scheduleWrapper of menu.schedules) {
     const schedule = scheduleWrapper.schedule;
-    if (!schedule?.is_active) continue;
+    // get_menu_with_categories does NOT return schedule.is_active, so only skip a
+    // schedule that is EXPLICITLY inactive. Treating undefined as inactive dropped
+    // every slot -> empty service_availability -> the marketplace shows all days
+    // Closed and refuses to publish the menu.
+    if (schedule?.is_active === false) continue;
 
-    for (const slot of schedule.time_slots) {
+    for (const slot of schedule?.time_slots ?? []) {
       const dayName = DAY_NAMES[slot.day_of_week];
       if (!dayName) continue;
 
       const existing = daySlots.get(dayName) || [];
       existing.push({
         start_time: formatTime(slot.start_time),
-        end_time: formatTime(slot.end_time),
+        end_time: formatEndTime(slot.end_time),
       });
       daySlots.set(dayName, existing);
     }
   }
 
-  return Array.from(daySlots.entries()).map(([day, periods]) => ({
+  const result = Array.from(daySlots.entries()).map(([day, periods]) => ({
     day_of_week: day,
     time_periods: periods,
   }));
+
+  // An empty service_availability is unpublishable (all days Closed). If the
+  // assigned schedule(s) yielded nothing usable, fall back to the location's
+  // operating hours, then to 24/7 — never push an empty window.
+  if (result.length === 0) {
+    if (fallback && fallback.length > 0) return fallback;
+    return DAY_NAMES.map((day) => ({
+      day_of_week: day,
+      time_periods: [{ start_time: "00:00", end_time: "23:59" }],
+    }));
+  }
+
+  return result;
 }
