@@ -32,6 +32,7 @@ import {
 } from "../actions/location-menu-overrides";
 import { toast } from "sonner";
 import { getItemsForLocationFlat } from "../actions/menu-items-rpc";
+import { invalidateOrderOutSync } from "@/app/dashboard/hooks/useOrderOutMenuSync";
 
 // ============================================================================
 // Hook helpers
@@ -262,6 +263,7 @@ export function useLocationAwareMenuItemMutation() {
         queryKey: ["menu-item", variables.itemId],
       });
       queryClient.invalidateQueries({ queryKey: ["menus"] });
+      invalidateOrderOutSync(queryClient);
     },
     onError: (error) => {
       toast.error("Update Failed", {
@@ -311,6 +313,7 @@ export function useLocationMenuItemOverrideMutation() {
         queryKey: ["menu-item", variables.itemId],
       });
       queryClient.invalidateQueries({ queryKey: ["menus"] });
+      invalidateOrderOutSync(queryClient);
     },
     onError: (error) => {
       toast.error("Override Failed", {
@@ -350,6 +353,7 @@ export function useResetToGlobalMutation() {
       queryClient.invalidateQueries({ queryKey: ["menu-items"] });
       queryClient.invalidateQueries({ queryKey: ["menu-item", itemId] });
       queryClient.invalidateQueries({ queryKey: ["menus"] });
+      invalidateOrderOutSync(queryClient);
     },
     onError: (error) => {
       toast.error("Reset Failed", {

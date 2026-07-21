@@ -79,6 +79,8 @@ import {
   useRemoveCategoryPrepDefault,
 } from "@/app/dashboard/hooks/usePrepStations";
 import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
+import { invalidateOrderOutSync } from "@/app/dashboard/hooks/useOrderOutMenuSync";
+import { CategorySnoozeControl } from "./CategorySnoozeControl";
 
 // Form schema
 const categorySchema = z.object({
@@ -328,6 +330,7 @@ export function CategoryFormSheet({
       queryClient.invalidateQueries({ queryKey: ["categories"] });
       queryClient.invalidateQueries({ queryKey: ["categories-with-items"] });
       queryClient.invalidateQueries({ queryKey: ["menus"] });
+      invalidateOrderOutSync(queryClient);
       form.reset();
       setSelectedMenu(null);
       setSelectedSchedules([]);
@@ -822,6 +825,16 @@ export function CategoryFormSheet({
                           </FormItem>
                         )}
                       />
+
+                      {/* Temporary category-wide 86 (Sold Out) — edit mode only.
+                          Self-gates to a specific location; distinct from the
+                          permanent Active toggle above. */}
+                      {editCategory?.id && (
+                        <CategorySnoozeControl
+                          categoryId={editCategory.id}
+                          className="mt-1"
+                        />
+                      )}
                     </CollapsibleContent>
                   </Collapsible>
                 </div>

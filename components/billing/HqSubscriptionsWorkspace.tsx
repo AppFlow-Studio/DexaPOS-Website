@@ -56,22 +56,31 @@ import {
   getMerchantTierStatus,
   getMerchantTierSubscription,
   chargeSubscriptionInvoiceManually,
+  calculateSubscriptionTotal,
   generateSubscriptionInvoiceManually,
   getBillableServices,
+  getDeviceBillingServiceMappings,
+  getSubscriptionPlans,
   getSubscriptionInvoiceDocument,
   getMerchantSubscriptions,
   getSubscriptionInvoices,
   getSubscriptionServiceAssignments,
   replaceSubscriptionServiceAssignments,
   type BillableServiceRecord,
+  type DeviceBillingServiceMappingRecord,
+  type SubscriptionPlanRecord,
+  type SubscriptionQuoteResult,
   type MerchantTierPlanRecord,
   type MerchantTierStatusRecord,
   type MerchantTierSubscriptionRecord,
   type MerchantSubscriptionRecord,
   type SubscriptionInvoiceRecord,
   type SubscriptionServiceAssignmentRecord,
+  upsertBillableService,
+  upsertDeviceBillingServiceMapping,
   upsertMerchantTierSubscription,
   upsertMerchantSubscription,
+  upsertSubscriptionPlan,
 } from '@/app/manage/actions/subscription-billing'
 import {
   getMerchantNmiAccountsSummary,
@@ -90,6 +99,101 @@ import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, XAxis, YAxis } fro
 
 type SubscriptionStatus = 'trial' | 'active' | 'past_due' | 'suspended' | 'canceled'
 type ServiceFormState = Record<string, { enabled: boolean; quantity: string }>
+type BillingMethod = 'ach' | 'card'
+
+const BILLABLE_DEVICE_CATEGORIES = [
+  'pos_tablet',
+  'cfd',
+  'kds',
+  'payment_terminal',
+  'receipt_printer',
+  'kitchen_printer',
+  'cash_drawer',
+] as const
+
+type ServicePlanFormState = {
+  planId: string | null
+  planCode: string
+  displayName: string
+  basePriceMonthly: string
+  includedStations: string
+  perExtraStationPrice: string
+  cardSurchargePct: string
+  isActive: boolean
+}
+
+type BillableServiceFormState = {
+  serviceId: string | null
+  serviceCode: string
+  displayName: string
+  serviceCategory: BillableServiceRecord['service_category']
+  pricingModel: BillableServiceRecord['pricing_model']
+  basePriceMonthly: string
+  additionalUnitPrice: string
+  includedQuantity: string
+  cardSurchargePct: string
+  unitLabel: string
+  isActive: boolean
+}
+
+type DeviceBillingMappingFormState = {
+  deviceCategory: string
+  serviceCode: string
+  isActive: boolean
+}
+
+function planToFormState(plan?: SubscriptionPlanRecord | null): ServicePlanFormState {
+  return {
+    planId: plan?.id ?? null,
+    planCode: plan?.plan_code ?? 'SERVICE_CATALOG',
+    displayName: plan?.display_name ?? 'Dexa POS Base',
+    basePriceMonthly: String(plan?.base_price_monthly ?? 99),
+    includedStations: String(plan?.included_stations ?? 1),
+    perExtraStationPrice: String(plan?.per_extra_station_price ?? 49),
+    cardSurchargePct: String(plan?.card_surcharge_pct ?? 4),
+    isActive: plan?.is_active ?? true,
+  }
+}
+
+function serviceToFormState(service?: BillableServiceRecord | null): BillableServiceFormState {
+  return {
+    serviceId: service?.id ?? null,
+    serviceCode: service?.service_code ?? '',
+    displayName: service?.display_name ?? '',
+    serviceCategory: service?.service_category ?? 'software',
+    pricingModel: service?.pricing_model ?? 'flat',
+    basePriceMonthly: String(service?.base_price_monthly ?? 0),
+    additionalUnitPrice: service?.additional_unit_price === null || service?.additional_unit_price === undefined
+      ? ''
+      : String(service.additional_unit_price),
+    includedQuantity: String(service?.included_quantity ?? 0),
+    cardSurchargePct: String(service?.card_surcharge_pct ?? 4),
+    unitLabel: service?.unit_label ?? 'unit',
+    isActive: service?.is_active ?? true,
+  }
+}
+
+function mappingToFormState(
+  mapping?: DeviceBillingServiceMappingRecord | null,
+  fallbackServiceCode = ''
+): DeviceBillingMappingFormState {
+  return {
+    deviceCategory: mapping?.device_category ?? 'pos_tablet',
+    serviceCode: mapping?.service_code ?? fallbackServiceCode,
+    isActive: mapping?.is_active ?? true,
+  }
+}
+
+function parseMoneyInput(value: string): number {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? Math.max(0, Number(parsed.toFixed(2))) : 0
+}
+
+function parsePercentInput(value: string): number {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) return 0
+  return Math.min(100, Math.max(0, Number(parsed.toFixed(4))))
+}
 
 function startOfMonthIso(date = new Date()): string {
   return new Date(date.getFullYear(), date.getMonth(), 1).toISOString().slice(0, 10)
@@ -108,6 +212,27 @@ function formatMoney(amount: number): string {
     style: 'currency',
     currency: 'USD',
   }).format(amount)
+}
+
+function readQuoteLineString(item: Record<string, unknown>, keys: string[], fallback = ''): string {
+  for (const key of keys) {
+    const value = item[key]
+    if (typeof value === 'string' && value.trim().length > 0) return value.trim()
+    if (typeof value === 'number' && Number.isFinite(value)) return String(value)
+  }
+  return fallback
+}
+
+function readQuoteLineNumber(item: Record<string, unknown>, keys: string[], fallback = 0): number {
+  for (const key of keys) {
+    const value = item[key]
+    if (typeof value === 'number' && Number.isFinite(value)) return value
+    if (typeof value === 'string' && value.trim().length > 0) {
+      const parsed = Number(value)
+      if (Number.isFinite(parsed)) return parsed
+    }
+  }
+  return fallback
 }
 
 function formatDate(date: string | null | undefined): string {
@@ -312,12 +437,25 @@ export function HqSubscriptionsWorkspace({
   const [isLoading, setIsLoading] = useState(true)
   const [isPending, startTransition] = useTransition()
   const [services, setServices] = useState<BillableServiceRecord[]>([])
+  const [deviceBillingMappings, setDeviceBillingMappings] = useState<DeviceBillingServiceMappingRecord[]>([])
+  const [servicePlans, setServicePlans] = useState<SubscriptionPlanRecord[]>([])
   const [subscriptions, setSubscriptions] = useState<MerchantSubscriptionRecord[]>([])
   const [invoices, setInvoices] = useState<SubscriptionInvoiceRecord[]>([])
   const [subscriptionServiceMap, setSubscriptionServiceMap] = useState<Record<string, SubscriptionServiceAssignmentRecord[]>>({})
   const [locationEligibilityMap, setLocationEligibilityMap] = useState<Record<string, MerchantNmiAccountRow>>({})
   const [billingProfilesByLocation, setBillingProfilesByLocation] = useState<Record<string, MerchantBillingProfileRecord>>({})
   const [serviceFormState, setServiceFormState] = useState<ServiceFormState>({})
+  const [selectedServicePlanId, setSelectedServicePlanId] = useState('')
+  const [servicePlanForm, setServicePlanForm] = useState<ServicePlanFormState>(() => planToFormState(null))
+  const [selectedCatalogServiceId, setSelectedCatalogServiceId] = useState('')
+  const [billableServiceForm, setBillableServiceForm] = useState<BillableServiceFormState>(() => serviceToFormState(null))
+  const [selectedDeviceMappingCategory, setSelectedDeviceMappingCategory] = useState('pos_tablet')
+  const [deviceMappingForm, setDeviceMappingForm] = useState<DeviceBillingMappingFormState>(() => mappingToFormState(null))
+  const [quoteBillingMethod, setQuoteBillingMethod] = useState<BillingMethod>('card')
+  const [quoteStationCount, setQuoteStationCount] = useState('1')
+  const [quote, setQuote] = useState<SubscriptionQuoteResult | null>(null)
+  const [quoteError, setQuoteError] = useState<string | null>(null)
+  const [isQuoteLoading, setIsQuoteLoading] = useState(false)
   const [selectedLocationId, setSelectedLocationId] = useState('')
   const [status, setStatus] = useState<SubscriptionStatus>('active')
   const [currentPeriodStart, setCurrentPeriodStart] = useState(startOfMonthIso())
@@ -371,6 +509,23 @@ export function HqSubscriptionsWorkspace({
   const selectedBillingProfile = useMemo(
     () => (selectedLocation?.id ? billingProfilesByLocation[selectedLocation.id] ?? null : null),
     [billingProfilesByLocation, selectedLocation]
+  )
+
+  const selectedServicePlan = useMemo(
+    () => servicePlans.find((plan) => plan.id === selectedServicePlanId) ?? servicePlans[0] ?? null,
+    [selectedServicePlanId, servicePlans]
+  )
+
+  const selectedCatalogService = useMemo(
+    () => (selectedCatalogServiceId ? services.find((service) => service.id === selectedCatalogServiceId) ?? null : null),
+    [selectedCatalogServiceId, services]
+  )
+
+  const selectedDeviceMapping = useMemo(
+    () =>
+      deviceBillingMappings.find((mapping) => mapping.device_category === selectedDeviceMappingCategory) ??
+      null,
+    [deviceBillingMappings, selectedDeviceMappingCategory]
   )
 
   const invoicePreviewHtml = useMemo(
@@ -510,11 +665,50 @@ export function HqSubscriptionsWorkspace({
     [serviceFormState, services]
   )
 
+  useEffect(() => {
+    let cancelled = false
+    const timeout = window.setTimeout(async () => {
+      setIsQuoteLoading(true)
+      setQuoteError(null)
+
+      const result = await calculateSubscriptionTotal({
+        planId: selectedServicePlan?.id ?? null,
+        stationCount: Math.max(0, parsePositiveInteger(quoteStationCount)),
+        billingMethod: quoteBillingMethod,
+        services: selectedServiceRows
+          .filter((row) => row.enabled && row.quantity > 0)
+          .map((row) => ({
+            serviceId: row.service.id,
+            serviceCode: row.service.service_code,
+            quantity: row.quantity,
+          })),
+      })
+
+      if (cancelled) return
+
+      if (!result.success || !result.data) {
+        setQuote(null)
+        setQuoteError(result.error || 'Unable to calculate quote.')
+      } else {
+        setQuote(result.data)
+      }
+
+      setIsQuoteLoading(false)
+    }, 350)
+
+    return () => {
+      cancelled = true
+      window.clearTimeout(timeout)
+    }
+  }, [quoteBillingMethod, quoteStationCount, selectedServicePlan?.id, selectedServiceRows])
+
   const refresh = () => {
     startTransition(async () => {
       try {
         const [
           nextServices,
+          nextDeviceBillingMappings,
+          nextServicePlans,
           nextSubscriptions,
           nextInvoices,
           nmiSummary,
@@ -524,6 +718,8 @@ export function HqSubscriptionsWorkspace({
           nextMerchantTierSubscription,
         ] = await Promise.all([
           getBillableServices(),
+          getDeviceBillingServiceMappings(),
+          getSubscriptionPlans(),
           getMerchantSubscriptions(merchant.id),
           getSubscriptionInvoices(merchant.id, null, 100),
           getMerchantNmiAccountsSummary(merchant.id),
@@ -552,6 +748,8 @@ export function HqSubscriptionsWorkspace({
         )
 
         setServices(nextServices)
+        setDeviceBillingMappings(nextDeviceBillingMappings)
+        setServicePlans(nextServicePlans)
         setSubscriptions(nextSubscriptions)
         setInvoices(nextInvoices)
         setSubscriptionServiceMap(nextAssignmentMap)
@@ -560,6 +758,33 @@ export function HqSubscriptionsWorkspace({
         setMerchantTierPlans(nextMerchantTierPlans)
         setMerchantTierStatus(nextMerchantTierStatus)
         setMerchantTierSubscription(nextMerchantTierSubscription)
+
+        const defaultServicePlan =
+          nextServicePlans.find((plan) => plan.id === selectedServicePlanId) ??
+          nextServicePlans.find((plan) => plan.plan_code === 'SERVICE_CATALOG') ??
+          nextServicePlans[0] ??
+          null
+        setSelectedServicePlanId(defaultServicePlan?.id || '')
+        setServicePlanForm(planToFormState(defaultServicePlan))
+
+        const defaultCatalogService =
+          nextServices.find((service) => service.id === selectedCatalogServiceId) ??
+          nextServices[0] ??
+          null
+        setSelectedCatalogServiceId(defaultCatalogService?.id || '')
+        setBillableServiceForm(serviceToFormState(defaultCatalogService))
+
+        const defaultMappingCategory = selectedDeviceMappingCategory || 'pos_tablet'
+        const defaultDeviceMapping =
+          nextDeviceBillingMappings.find((mapping) => mapping.device_category === defaultMappingCategory) ??
+          nextDeviceBillingMappings[0] ??
+          null
+        const fallbackServiceCode =
+          nextServices.find((service) => service.service_code === defaultMappingCategory)?.service_code ??
+          nextServices[0]?.service_code ??
+          ''
+        setSelectedDeviceMappingCategory(defaultDeviceMapping?.device_category ?? defaultMappingCategory)
+        setDeviceMappingForm(mappingToFormState(defaultDeviceMapping, fallbackServiceCode))
 
         const defaultLocationId =
           selectedLocationId && sortedLocations.some((location) => location.id === selectedLocationId)
@@ -646,6 +871,34 @@ export function HqSubscriptionsWorkspace({
     setServiceFormState(buildInitialServiceFormState(services))
   }, [selectedLocation, selectedLocationSubscription, selectedAssignments, services])
 
+  useEffect(() => {
+    if (selectedServicePlan) {
+      setServicePlanForm(planToFormState(selectedServicePlan))
+    }
+  }, [selectedServicePlan])
+
+  useEffect(() => {
+    if (selectedCatalogService) {
+      setBillableServiceForm(serviceToFormState(selectedCatalogService))
+    }
+  }, [selectedCatalogService])
+
+  useEffect(() => {
+    const fallbackServiceCode =
+      services.find((service) => service.service_code === selectedDeviceMappingCategory)?.service_code ??
+      services[0]?.service_code ??
+      ''
+    setDeviceMappingForm(mappingToFormState(selectedDeviceMapping, fallbackServiceCode))
+  }, [selectedDeviceMapping, selectedDeviceMappingCategory, services])
+
+  useEffect(() => {
+    setQuoteBillingMethod(selectedBillingProfile?.billing_method === 'ach' ? 'ach' : 'card')
+  }, [selectedBillingProfile?.billing_method])
+
+  useEffect(() => {
+    setQuoteStationCount(String(Math.max(1, selectedLocationSubscription?.station_count ?? 1)))
+  }, [selectedLocationSubscription?.id, selectedLocationSubscription?.station_count])
+
   const updateServiceState = (serviceId: string, patch: Partial<{ enabled: boolean; quantity: string }>) => {
     setServiceFormState((current) => ({
       ...current,
@@ -694,7 +947,7 @@ export function HqSubscriptionsWorkspace({
         subscriptionId: selectedLocationSubscription?.id,
         merchantId: merchant.id,
         locationId: selectedLocation.id,
-        planId: null,
+        planId: selectedServicePlan?.id ?? selectedLocationSubscription?.plan_id ?? null,
         currentPeriodStart,
         currentPeriodEnd,
         nextBillingDate,
@@ -831,6 +1084,93 @@ export function HqSubscriptionsWorkspace({
           ? 'Merchant tier updated and invoice generated.'
           : 'Merchant tier updated.',
       )
+      refresh()
+    })
+  }
+
+  const handleSaveServicePlan = () => {
+    startTransition(async () => {
+      const result = await upsertSubscriptionPlan({
+        planId: servicePlanForm.planId,
+        planCode: servicePlanForm.planCode.trim(),
+        displayName: servicePlanForm.displayName.trim(),
+        basePriceMonthly: parseMoneyInput(servicePlanForm.basePriceMonthly),
+        includedStations: parsePositiveInteger(servicePlanForm.includedStations),
+        perExtraStationPrice: parseMoneyInput(servicePlanForm.perExtraStationPrice),
+        cardSurchargePct: parsePercentInput(servicePlanForm.cardSurchargePct),
+        isActive: servicePlanForm.isActive,
+        metadata: {
+          source: 'hq_subscriptions_workspace',
+          pricingModel: 'service_catalog',
+        },
+      })
+
+      if (!result.success) {
+        toast.error(result.error || 'Failed to save subscription plan.')
+        return
+      }
+
+      if (result.planId) {
+        setSelectedServicePlanId(result.planId)
+      }
+      toast.success('Subscription plan pricing saved.')
+      refresh()
+    })
+  }
+
+  const handleSaveBillableService = () => {
+    startTransition(async () => {
+      const result = await upsertBillableService({
+        serviceId: billableServiceForm.serviceId,
+        serviceCode: billableServiceForm.serviceCode.trim(),
+        displayName: billableServiceForm.displayName.trim(),
+        serviceCategory: billableServiceForm.serviceCategory,
+        pricingModel: billableServiceForm.pricingModel,
+        basePriceMonthly: parseMoneyInput(billableServiceForm.basePriceMonthly),
+        additionalUnitPrice:
+          billableServiceForm.additionalUnitPrice.trim().length > 0
+            ? parseMoneyInput(billableServiceForm.additionalUnitPrice)
+            : null,
+        includedQuantity: parsePositiveInteger(billableServiceForm.includedQuantity),
+        cardSurchargePct: parsePercentInput(billableServiceForm.cardSurchargePct),
+        unitLabel: billableServiceForm.unitLabel.trim() || 'unit',
+        isActive: billableServiceForm.isActive,
+        metadata: {
+          source: 'hq_subscriptions_workspace',
+        },
+      })
+
+      if (!result.success) {
+        toast.error(result.error || 'Failed to save billable service.')
+        return
+      }
+
+      if (result.serviceId) {
+        setSelectedCatalogServiceId(result.serviceId)
+      }
+      toast.success('Billable service pricing saved.')
+      refresh()
+    })
+  }
+
+  const handleSaveDeviceBillingMapping = () => {
+    startTransition(async () => {
+      const result = await upsertDeviceBillingServiceMapping({
+        deviceCategory: deviceMappingForm.deviceCategory,
+        serviceCode: deviceMappingForm.serviceCode,
+        isActive: deviceMappingForm.isActive,
+        metadata: {
+          source: 'hq_subscriptions_workspace',
+        },
+      })
+
+      if (!result.success) {
+        toast.error(result.error || 'Failed to save device billing mapping.')
+        return
+      }
+
+      setSelectedDeviceMappingCategory(deviceMappingForm.deviceCategory)
+      toast.success('Device billing mapping saved.')
       refresh()
     })
   }
@@ -1068,6 +1408,382 @@ export function HqSubscriptionsWorkspace({
       </Card>
 
       <Card>
+        <CardHeader>
+          <CardTitle>Billing Catalog Controls</CardTitle>
+          <CardDescription>
+            HQ-owned pricing controls for the service-billing plan and billable add-ons. Saves go through audited RPCs
+            and recalculate affected active subscriptions for future cycles.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-6 xl:grid-cols-2">
+          <div className="space-y-4 rounded-xl border p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div className="font-medium">Service Billing Plan</div>
+                <p className="text-xs text-muted-foreground">
+                  Base station price, included stations, extra-station price, and card surcharge.
+                </p>
+              </div>
+              <Badge variant={servicePlanForm.isActive ? 'default' : 'secondary'}>
+                {servicePlanForm.isActive ? 'Active' : 'Inactive'}
+              </Badge>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Plan</Label>
+                <Select value={selectedServicePlanId} onValueChange={setSelectedServicePlanId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select plan" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {servicePlans.map((plan) => (
+                      <SelectItem key={plan.id} value={plan.id}>
+                        {plan.display_name} ({plan.plan_code})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Plan Code</Label>
+                <Input
+                  value={servicePlanForm.planCode}
+                  onChange={(event) => setServicePlanForm((current) => ({ ...current, planCode: event.target.value }))}
+                />
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <Label>Display Name</Label>
+                <Input
+                  value={servicePlanForm.displayName}
+                  onChange={(event) => setServicePlanForm((current) => ({ ...current, displayName: event.target.value }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>First Station Price</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={servicePlanForm.basePriceMonthly}
+                  onChange={(event) =>
+                    setServicePlanForm((current) => ({ ...current, basePriceMonthly: event.target.value }))
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Included Stations</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  step="1"
+                  value={servicePlanForm.includedStations}
+                  onChange={(event) =>
+                    setServicePlanForm((current) => ({ ...current, includedStations: event.target.value }))
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Additional Station Price</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={servicePlanForm.perExtraStationPrice}
+                  onChange={(event) =>
+                    setServicePlanForm((current) => ({ ...current, perExtraStationPrice: event.target.value }))
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Card Surcharge %</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  max={100}
+                  step="0.01"
+                  value={servicePlanForm.cardSurchargePct}
+                  onChange={(event) =>
+                    setServicePlanForm((current) => ({ ...current, cardSurchargePct: event.target.value }))
+                  }
+                />
+              </div>
+            </div>
+
+            <label className="flex items-center gap-2 text-sm">
+              <Checkbox
+                checked={servicePlanForm.isActive}
+                onCheckedChange={(checked) =>
+                  setServicePlanForm((current) => ({ ...current, isActive: Boolean(checked) }))
+                }
+              />
+              Active plan
+            </label>
+
+            <Button onClick={handleSaveServicePlan} disabled={isPending}>
+              {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Save Plan Pricing
+            </Button>
+          </div>
+
+          <div className="space-y-4 rounded-xl border p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div className="font-medium">Billable Services & Add-ons</div>
+                <p className="text-xs text-muted-foreground">
+                  Edit POS tablet, KDS, online ordering, loyalty, delivery integration, franchise, and future services.
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setSelectedCatalogServiceId('')
+                  setBillableServiceForm(serviceToFormState(null))
+                }}
+              >
+                New Service
+              </Button>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Service</Label>
+                <Select value={selectedCatalogServiceId} onValueChange={setSelectedCatalogServiceId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select service" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {services.map((service) => (
+                      <SelectItem key={service.id} value={service.id}>
+                        {service.display_name} ({service.service_code})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Service Code</Label>
+                <Input
+                  value={billableServiceForm.serviceCode}
+                  onChange={(event) =>
+                    setBillableServiceForm((current) => ({ ...current, serviceCode: event.target.value }))
+                  }
+                />
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <Label>Display Name</Label>
+                <Input
+                  value={billableServiceForm.displayName}
+                  onChange={(event) =>
+                    setBillableServiceForm((current) => ({ ...current, displayName: event.target.value }))
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Category</Label>
+                <Select
+                  value={billableServiceForm.serviceCategory}
+                  onValueChange={(value) =>
+                    setBillableServiceForm((current) => ({
+                      ...current,
+                      serviceCategory: value as BillableServiceRecord['service_category'],
+                    }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="hardware">Hardware</SelectItem>
+                    <SelectItem value="software">Software</SelectItem>
+                    <SelectItem value="service">Service</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Pricing Model</Label>
+                <Select
+                  value={billableServiceForm.pricingModel}
+                  onValueChange={(value) =>
+                    setBillableServiceForm((current) => ({
+                      ...current,
+                      pricingModel: value as BillableServiceRecord['pricing_model'],
+                    }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="flat">Flat</SelectItem>
+                    <SelectItem value="per_unit">Per unit</SelectItem>
+                    <SelectItem value="tiered">Tiered</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Base Monthly Price</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={billableServiceForm.basePriceMonthly}
+                  onChange={(event) =>
+                    setBillableServiceForm((current) => ({ ...current, basePriceMonthly: event.target.value }))
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Additional Unit Price</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={billableServiceForm.additionalUnitPrice}
+                  onChange={(event) =>
+                    setBillableServiceForm((current) => ({ ...current, additionalUnitPrice: event.target.value }))
+                  }
+                  placeholder="Only for tiered pricing"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Included Quantity</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  step="1"
+                  value={billableServiceForm.includedQuantity}
+                  onChange={(event) =>
+                    setBillableServiceForm((current) => ({ ...current, includedQuantity: event.target.value }))
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Unit Label</Label>
+                <Input
+                  value={billableServiceForm.unitLabel}
+                  onChange={(event) =>
+                    setBillableServiceForm((current) => ({ ...current, unitLabel: event.target.value }))
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Card Surcharge %</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  max={100}
+                  step="0.01"
+                  value={billableServiceForm.cardSurchargePct}
+                  onChange={(event) =>
+                    setBillableServiceForm((current) => ({ ...current, cardSurchargePct: event.target.value }))
+                  }
+                />
+              </div>
+            </div>
+
+            <label className="flex items-center gap-2 text-sm">
+              <Checkbox
+                checked={billableServiceForm.isActive}
+                onCheckedChange={(checked) =>
+                  setBillableServiceForm((current) => ({ ...current, isActive: Boolean(checked) }))
+                }
+              />
+              Active service
+            </label>
+
+            <Button onClick={handleSaveBillableService} disabled={isPending}>
+              {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Save Service Pricing
+            </Button>
+          </div>
+
+          <div className="space-y-4 rounded-xl border p-4 xl:col-span-2">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div className="font-medium">Device Billing Mappings</div>
+                <p className="text-xs text-muted-foreground">
+                  Controls which deployed device categories automatically adjust billable service quantities.
+                </p>
+              </div>
+              <Badge variant={deviceMappingForm.isActive ? 'default' : 'secondary'}>
+                {deviceMappingForm.isActive ? 'Active mapping' : 'Inactive mapping'}
+              </Badge>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-3">
+              <div className="space-y-2">
+                <Label>Device Category</Label>
+                <Select
+                  value={deviceMappingForm.deviceCategory}
+                  onValueChange={(value) => {
+                    setSelectedDeviceMappingCategory(value)
+                    setDeviceMappingForm((current) => ({ ...current, deviceCategory: value }))
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {BILLABLE_DEVICE_CATEGORIES.map((category) => (
+                      <SelectItem key={category} value={category}>
+                        {category.replace(/_/g, ' ')}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <Label>Billable Service</Label>
+                <Select
+                  value={deviceMappingForm.serviceCode}
+                  onValueChange={(value) =>
+                    setDeviceMappingForm((current) => ({ ...current, serviceCode: value }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select billable service" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {services.map((service) => (
+                      <SelectItem key={service.id} value={service.service_code}>
+                        {service.display_name} ({service.service_code})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <label className="flex items-center gap-2 text-sm">
+                <Checkbox
+                  checked={deviceMappingForm.isActive}
+                  onCheckedChange={(checked) =>
+                    setDeviceMappingForm((current) => ({ ...current, isActive: Boolean(checked) }))
+                  }
+                />
+                Active mapping
+              </label>
+              <div className="text-xs text-muted-foreground">
+                Device assignment sync recalculates subscription quantities after deployed device changes.
+              </div>
+            </div>
+
+            <Button
+              onClick={handleSaveDeviceBillingMapping}
+              disabled={isPending || !deviceMappingForm.serviceCode}
+            >
+              {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Save Device Mapping
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
         <CardHeader className="gap-4">
           <div className="space-y-4">
             <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-5">
@@ -1143,6 +1859,30 @@ export function HqSubscriptionsWorkspace({
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
+          {selectedLocationSubscription?.status === 'suspended' ? (
+            <div className="flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm">
+              <AlertTriangle className="mt-0.5 h-4 w-4 text-destructive" />
+              <div className="space-y-1">
+                <div className="font-medium text-destructive">Subscription access is suspended for this location.</div>
+                <p className="text-muted-foreground">
+                  The backend access gate disables stations and payment terminals while the subscription is suspended.
+                  Change status back to Active or Trial after payment is restored.
+                </p>
+              </div>
+            </div>
+          ) : selectedLocationSubscription?.status === 'past_due' ? (
+            <div className="flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
+              <AlertTriangle className="mt-0.5 h-4 w-4 text-amber-600" />
+              <div className="space-y-1">
+                <div className="font-medium">Subscription payment is past due.</div>
+                <p className="text-amber-800">
+                  Review billing before moving this subscription to Suspended. Suspension triggers station and terminal
+                  deactivation through the backend access gate.
+                </p>
+              </div>
+            </div>
+          ) : null}
+
           <div className="overflow-x-auto rounded-xl border">
             <table className="w-full min-w-[860px] text-sm">
               <thead className="bg-muted/35 text-left text-xs uppercase tracking-[0.08em] text-muted-foreground">
@@ -1232,6 +1972,139 @@ export function HqSubscriptionsWorkspace({
                 })}
               </tbody>
             </table>
+          </div>
+
+          <div className="grid gap-4 rounded-xl border bg-background p-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <div className="font-medium">Live Calculator Quote</div>
+                  <p className="text-xs text-muted-foreground">
+                    Authoritative preview from `calculate_subscription_total`; invoice generation uses the same pricing path.
+                  </p>
+                </div>
+                {isQuoteLoading ? (
+                  <Badge variant="outline" className="gap-1">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    Calculating
+                  </Badge>
+                ) : quoteError ? (
+                  <Badge variant="destructive">Quote error</Badge>
+                ) : (
+                  <Badge variant="default">Live</Badge>
+                )}
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-3">
+                <div className="space-y-2">
+                  <Label>Base Plan</Label>
+                  <Select value={selectedServicePlanId} onValueChange={setSelectedServicePlanId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select base plan" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {servicePlans.map((plan) => (
+                        <SelectItem key={plan.id} value={plan.id}>
+                          {plan.display_name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Station Count</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    step="1"
+                    value={quoteStationCount}
+                    onChange={(event) => setQuoteStationCount(event.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Billing Method</Label>
+                  <Select value={quoteBillingMethod} onValueChange={(value) => setQuoteBillingMethod(value as BillingMethod)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ach">ACH</SelectItem>
+                      <SelectItem value="card">Card</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {quoteError ? (
+                <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+                  {quoteError}
+                </div>
+              ) : quote?.line_items?.length ? (
+                <div className="overflow-x-auto rounded-lg border">
+                  <table className="w-full min-w-[620px] text-sm">
+                    <thead className="bg-muted/35 text-left text-xs uppercase tracking-[0.08em] text-muted-foreground">
+                      <tr>
+                        <th className="px-3 py-2 font-medium">Line</th>
+                        <th className="px-3 py-2 font-medium">Qty</th>
+                        <th className="px-3 py-2 font-medium">Unit</th>
+                        <th className="px-3 py-2 text-right font-medium">Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {quote.line_items.map((item, index) => {
+                        const description = readQuoteLineString(item, ['description', 'display_name', 'code'], `Line ${index + 1}`)
+                        const code = readQuoteLineString(item, ['code', 'service_code'])
+                        const quantity = readQuoteLineNumber(item, ['quantity'], 1)
+                        const unitPrice = readQuoteLineNumber(item, ['unit_price'], 0)
+                        const amount = readQuoteLineNumber(item, ['amount', 'subtotal', 'total_amount'], 0)
+
+                        return (
+                          <tr key={`${code || description}-${index}`} className="border-t">
+                            <td className="px-3 py-2">
+                              <div className="font-medium">{description}</div>
+                              {code ? <div className="text-xs text-muted-foreground">{code}</div> : null}
+                            </td>
+                            <td className="px-3 py-2">{quantity}</td>
+                            <td className="px-3 py-2">{unitPrice ? formatMoney(unitPrice) : '-'}</td>
+                            <td className="px-3 py-2 text-right font-medium">{formatMoney(amount)}</td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
+                  Select a base plan or service to calculate a quote.
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-3 rounded-xl border bg-muted/25 p-4">
+              <div className="text-xs uppercase tracking-[0.08em] text-muted-foreground">Quote Total</div>
+              <div className="text-3xl font-semibold">{formatMoney(quote?.total_amount ?? 0)}</div>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between gap-3">
+                  <span className="text-muted-foreground">Subtotal</span>
+                  <span>{formatMoney(quote?.subtotal ?? 0)}</span>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <span className="text-muted-foreground">Card surcharge</span>
+                  <span>{formatMoney(quote?.card_surcharge ?? 0)}</span>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <span className="text-muted-foreground">Method</span>
+                  <span className="uppercase">{quote?.billing_method ?? quoteBillingMethod}</span>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <span className="text-muted-foreground">Stations</span>
+                  <span>{quote?.station_count ?? parsePositiveInteger(quoteStationCount)}</span>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Saving the subscription persists the selected base plan and services. Active station count is recalculated by the backend from deployed stations.
+              </p>
+            </div>
           </div>
 
           <div className="grid gap-4 rounded-xl border bg-muted/20 p-4 md:grid-cols-3">

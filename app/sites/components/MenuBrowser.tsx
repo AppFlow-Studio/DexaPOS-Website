@@ -107,6 +107,14 @@ export function MenuBrowser({
   const [headerHeight, setHeaderHeight] = useState(56);
   const suggestionsRef = useRef<HTMLDivElement>(null);
   const desktopSuggestionsRef = useRef<HTMLDivElement>(null);
+  const mobilePillsRef = useRef<HTMLDivElement>(null);
+  const desktopPillsRef = useRef<HTMLDivElement>(null);
+  // While a pill click is smooth-scrolling, lock the highlight to the target so
+  // the scroll-spy doesn't flicker through sections passed en route. Released
+  // when the user next scrolls meaningfully away from where the scroll settles.
+  const scrollLockRef = useRef<string | null>(null);
+  const scrollLockTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scrollLockSettleYRef = useRef<number | null>(null);
 
 
   const { pendingModalItem, clearPendingModalItem } = useCart();
@@ -223,6 +231,11 @@ export function MenuBrowser({
     setActiveCategory(categoryId);
     const element = document.getElementById(`category-${categoryId}`);
     if (element) {
+      // Lock the highlight to this target; released when the user next scrolls
+      // meaningfully away from where this scroll settles (see scroll handler).
+      scrollLockRef.current = categoryId;
+      scrollLockSettleYRef.current = null;
+      if (scrollLockTimerRef.current) clearTimeout(scrollLockTimerRef.current);
       const offset = headerHeight + navHeight + 8;
       const elementPosition = element.getBoundingClientRect().top;
       const offsetPosition = elementPosition + window.pageYOffset - offset;
@@ -264,23 +277,101 @@ export function MenuBrowser({
   useEffect(() => {
     const cats = searchQuery.trim() || dietaryFilter ? filteredCategories : (activeMenu?.categories ?? []);
     if (cats.length === 0) return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const e of entries) {
-          if (e.isIntersecting) {
-            const id = e.target.getAttribute("id")?.replace("category-", "");
-            if (id) setActiveCategory(id);
-          }
+
+    // Detection line just below the sticky header + category nav.
+    const getBoundary = () => headerHeight + navHeight + 8;
+
+    // Pick the last section whose top has scrolled above the boundary line —
+    // i.e. the section currently filling the viewport. Deterministic and works
+    // whether scrolling up or down (unlike an isIntersecting-only observer,
+    // which never re-selects when scrolling back up).
+    const updateActiveCategory = () => {
+      // A click-lock wins over the scroll position until it's released, so the
+      // clicked pill never flickers to a section passed during the smooth scroll.
+      if (scrollLockRef.current) {
+        setActiveCategory(scrollLockRef.current);
+        return;
+      }
+      // Once scrolled to the bottom, force the last category — trailing sections
+      // may be too short to ever push their top past the boundary line.
+      const atBottom =
+        window.innerHeight + window.scrollY >=
+        document.documentElement.scrollHeight - 2;
+      if (atBottom) {
+        setActiveCategory(cats[cats.length - 1].id);
+        return;
+      }
+      const boundary = getBoundary();
+      // Highlight the section that owns the boundary line — its top is at/above
+      // the line and its bottom is still below it. A section only becomes active
+      // once the previous one has fully scrolled off the top (its bottom crosses
+      // the line), rather than the moment its own heading appears.
+      let current = cats[0].id;
+      for (const c of cats) {
+        const el = document.getElementById(`category-${c.id}`);
+        if (!el) continue;
+        const rect = el.getBoundingClientRect();
+        if (rect.top - boundary <= 1 && rect.bottom - boundary > 1) {
+          current = c.id;
+          break;
         }
-      },
-      { rootMargin: `-${headerHeight + navHeight + 8}px 0px -50% 0px`, threshold: 0 }
-    );
-    cats.forEach((c) => {
-      const el = document.getElementById(`category-${c.id}`);
-      if (el) observer.observe(el);
-    });
-    return () => observer.disconnect();
+        // Fallback for sub-viewport sections: keep advancing while tops are above
+        // the line so we don't stall between two short sections.
+        if (rect.top - boundary <= 1) current = c.id;
+      }
+      setActiveCategory(current);
+    };
+
+    updateActiveCategory();
+    let ticking = false;
+    const onScroll = () => {
+      if (scrollLockRef.current) {
+        if (scrollLockSettleYRef.current === null) {
+          // Still animating toward the target: once it stops moving, record the
+          // settle position rather than releasing (the target may sit at the page
+          // bottom and never reach the boundary line).
+          if (scrollLockTimerRef.current) clearTimeout(scrollLockTimerRef.current);
+          scrollLockTimerRef.current = setTimeout(() => {
+            scrollLockSettleYRef.current = window.scrollY;
+          }, 120);
+        } else if (Math.abs(window.scrollY - scrollLockSettleYRef.current) > 40) {
+          // User scrolled away from the settled target — release the lock.
+          scrollLockRef.current = null;
+          scrollLockSettleYRef.current = null;
+        }
+      }
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        updateActiveCategory();
+        ticking = false;
+      });
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+      if (scrollLockTimerRef.current) clearTimeout(scrollLockTimerRef.current);
+    };
   }, [filteredCategories, activeMenu?.categories, searchQuery, dietaryFilter, navHeight, headerHeight]);
+
+  // Keep the active category pill visible within its horizontal scroll strip
+  // (both mobile and desktop rows), so scroll-spy never highlights an off-screen pill.
+  useEffect(() => {
+    if (!activeCategory) return;
+    for (const container of [mobilePillsRef.current, desktopPillsRef.current]) {
+      if (!container) continue;
+      const pill = container.querySelector<HTMLElement>(`[data-category-pill="${activeCategory}"]`);
+      if (!pill) continue;
+      const cRect = container.getBoundingClientRect();
+      const pRect = pill.getBoundingClientRect();
+      if (pRect.left < cRect.left || pRect.right > cRect.right) {
+        const delta = pRect.left - cRect.left - (cRect.width - pRect.width) / 2;
+        container.scrollBy({ left: delta, behavior: "smooth" });
+      }
+    }
+  }, [activeCategory]);
 
   const popularItems = useMemo(() => {
     if (!activeMenu || searchQuery.trim() || dietaryFilter) return [];
@@ -328,7 +419,7 @@ export function MenuBrowser({
       <nav
         id="sticky-category-nav"
         aria-label="Menu categories"
-        className={`${searchQuery ? "sticky" : ""} lg:sticky z-40 -mx-4 px-4`}
+        className="sticky z-40 -mx-4 px-4"
         style={{
           top: headerHeight,
           backgroundColor: "#FFFFFF",
@@ -514,11 +605,11 @@ export function MenuBrowser({
           )}
 
           {/* Category pills — mobile */}
-          <div className="flex overflow-x-auto no-scrollbar gap-2 pb-1">
+          <div ref={mobilePillsRef} className="flex overflow-x-auto no-scrollbar gap-2 pb-1">
             {categories.map((cat) => {
               const isActive = activeCategory === cat.id;
               return (
-                <button key={cat.id} onClick={() => scrollToCategory(cat.id)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-all duration-200 shrink-0 rounded-full" style={{ backgroundColor: isActive ? "var(--primary)" : "#FFFFFF", color: isActive ? "var(--primary-text)" : "#6B7280", border: `1px solid ${isActive ? "var(--primary)" : "#E5E7EB"}` }}>
+                <button key={cat.id} data-category-pill={cat.id} onClick={() => scrollToCategory(cat.id)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-all duration-200 shrink-0 rounded-full" style={{ backgroundColor: isActive ? "var(--primary)" : "#FFFFFF", color: isActive ? "var(--primary-text)" : "#6B7280", border: `1px solid ${isActive ? "var(--primary)" : "#E5E7EB"}` }}>
                   {cat.name}
                 </button>
               );
@@ -543,11 +634,11 @@ export function MenuBrowser({
               })}
             </div>
           )}
-          <div className="flex overflow-x-auto no-scrollbar gap-2 pb-2">
+          <div ref={desktopPillsRef} className="flex overflow-x-auto no-scrollbar gap-2 pb-2">
             {categories.map((cat) => {
               const isActive = activeCategory === cat.id;
               return (
-                <button key={cat.id} onClick={() => scrollToCategory(cat.id)} className="px-3.5 py-1.5 text-xs font-medium whitespace-nowrap transition-all duration-200 shrink-0 rounded-full" style={{ backgroundColor: isActive ? "var(--primary)" : "#FFFFFF", color: isActive ? "var(--primary-text)" : "#6B7280", border: `1px solid ${isActive ? "var(--primary)" : "#E5E7EB"}` }}>
+                <button key={cat.id} data-category-pill={cat.id} onClick={() => scrollToCategory(cat.id)} className="px-3.5 py-1.5 text-xs font-medium whitespace-nowrap transition-all duration-200 shrink-0 rounded-full" style={{ backgroundColor: isActive ? "var(--primary)" : "#FFFFFF", color: isActive ? "var(--primary-text)" : "#6B7280", border: `1px solid ${isActive ? "var(--primary)" : "#E5E7EB"}` }}>
                   {cat.name}
                 </button>
               );

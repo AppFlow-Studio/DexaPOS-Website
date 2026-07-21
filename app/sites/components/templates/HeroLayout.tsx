@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Site } from "@/types/site";
@@ -88,6 +88,16 @@ export function HeroLayout({
   const [selectedCategoryItems, setSelectedCategoryItems] = useState<StorefrontItem[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [failedImageIds, setFailedImageIds] = useState<Set<string>>(new Set());
+  // While a pill click is smooth-scrolling, lock the highlight to the target so
+  // the scroll-spy doesn't flip to a section passed en route or to the last
+  // pill via the near-bottom heuristic.
+  const scrollLockRef = useRef<string | null>(null);
+  const scrollLockTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Scroll position where the click-scroll settled; the lock is held until the
+  // user scrolls meaningfully away from it (handles short trailing sections that
+  // can never reach the boundary because the page bottom stops the scroll).
+  const scrollLockSettleYRef = useRef<number | null>(null);
+  const categoryNavRef = useRef<HTMLElement>(null);
 
   const { setOpen: setCartOpen, pendingModalItem, clearPendingModalItem } = useCart();
 
@@ -123,25 +133,85 @@ export function HeroLayout({
 
   const allCategories = activeMenu?.categories ?? [];
 
-  // IntersectionObserver for active category highlighting
+  // Scroll-spy: highlight the category currently filling the viewport. Picks the
+  // last section whose top has passed the boundary line (works scrolling up or
+  // down), with a bottom-of-page guard so short trailing sections — which can't
+  // push their top to the boundary — still highlight the last pill.
   useEffect(() => {
     if (!allCategories.length) return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const e of entries) {
-          if (e.isIntersecting) {
-            const id = e.target.getAttribute("id")?.replace("hero-category-", "");
-            if (id) setActiveCategory(id);
+
+    const updateActiveCategory = () => {
+      const boundary = headerHeight + 56 + 8;
+      // Highlight the section owning the boundary line (top at/above it, bottom
+      // still below it) so a pill activates only once the previous section has
+      // fully scrolled off the top, not when its heading first appears.
+      let current = allCategories[0].id;
+      for (const c of allCategories) {
+        const el = document.getElementById(`hero-category-${c.id}`);
+        if (!el) continue;
+        const rect = el.getBoundingClientRect();
+        if (rect.top - boundary <= 1 && rect.bottom - boundary > 1) {
+          current = c.id;
+          break;
+        }
+        if (rect.top - boundary <= 1) current = c.id;
+      }
+      // Near the page bottom, trailing sections may be too short to ever reach
+      // the boundary line. Promote to the last section whose heading is visible
+      // above the fold so those final pills still get highlighted.
+      const nearBottom =
+        window.innerHeight + window.scrollY >=
+        document.documentElement.scrollHeight - 4;
+      if (nearBottom) {
+        for (const c of allCategories) {
+          const el = document.getElementById(`hero-category-${c.id}`);
+          if (!el) continue;
+          if (el.getBoundingClientRect().top < window.innerHeight) {
+            current = c.id;
           }
         }
-      },
-      { rootMargin: `-${headerHeight + 60}px 0px -60% 0px`, threshold: 0 }
-    );
-    allCategories.forEach((c) => {
-      const el = document.getElementById(`hero-category-${c.id}`);
-      if (el) observer.observe(el);
-    });
-    return () => observer.disconnect();
+      }
+      // A click-lock keeps the clicked pill highlighted until the smooth scroll
+      // settles, overriding the near-bottom heuristic for that target.
+      if (scrollLockRef.current) {
+        setActiveCategory(scrollLockRef.current);
+        return;
+      }
+      setActiveCategory(current);
+    };
+
+    updateActiveCategory();
+    let ticking = false;
+    const onScroll = () => {
+      if (scrollLockRef.current) {
+        if (scrollLockSettleYRef.current === null) {
+          // Still animating toward the target: once it stops moving, record the
+          // settle position rather than releasing (the target may sit at the
+          // page bottom and never reach the boundary line).
+          if (scrollLockTimerRef.current) clearTimeout(scrollLockTimerRef.current);
+          scrollLockTimerRef.current = setTimeout(() => {
+            scrollLockSettleYRef.current = window.scrollY;
+          }, 120);
+        } else if (Math.abs(window.scrollY - scrollLockSettleYRef.current) > 40) {
+          // User scrolled away from the settled target — release the lock.
+          scrollLockRef.current = null;
+          scrollLockSettleYRef.current = null;
+        }
+      }
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        updateActiveCategory();
+        ticking = false;
+      });
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+      if (scrollLockTimerRef.current) clearTimeout(scrollLockTimerRef.current);
+    };
   }, [allCategories, headerHeight]);
 
   const handleImageError = useCallback((itemId: string) => {
@@ -165,10 +235,30 @@ export function HeroLayout({
     if (pendingModalItem) { handleItemClick(pendingModalItem); clearPendingModalItem(); }
   }, [pendingModalItem, handleItemClick, clearPendingModalItem]);
 
+  // Keep the active category pill visible within its horizontal nav strip, so
+  // scroll-spy never highlights a pill scrolled off-screen (mobile/tablet).
+  useEffect(() => {
+    if (!activeCategory) return;
+    const container = categoryNavRef.current;
+    if (!container) return;
+    const pill = container.querySelector<HTMLElement>(`[data-cat-pill="${activeCategory}"]`);
+    if (!pill) return;
+    const cRect = container.getBoundingClientRect();
+    const pRect = pill.getBoundingClientRect();
+    if (pRect.left < cRect.left || pRect.right > cRect.right) {
+      container.scrollBy({ left: pRect.left - cRect.left - (cRect.width - pRect.width) / 2, behavior: "smooth" });
+    }
+  }, [activeCategory]);
+
   const scrollToCategory = (categoryId: string) => {
     setActiveCategory(categoryId);
     const el = document.getElementById(`hero-category-${categoryId}`);
     if (el) {
+      // Lock the highlight to this target; released when the user next scrolls
+      // meaningfully away from where this scroll settles (see scroll handler).
+      scrollLockRef.current = categoryId;
+      scrollLockSettleYRef.current = null;
+      if (scrollLockTimerRef.current) clearTimeout(scrollLockTimerRef.current);
       const offset = headerHeight + 56 + 8;
       const top = el.getBoundingClientRect().top + window.pageYOffset - offset;
       window.scrollTo({ top, behavior: "smooth" });
@@ -263,13 +353,14 @@ export function HeroLayout({
 
             {/* Category nav + search */}
             <div className="container mx-auto px-4 flex items-center gap-2">
-              <nav className="flex overflow-x-auto py-3 gap-6 flex-1 min-w-0" style={{ scrollbarWidth: "none" }}>
+              <nav ref={categoryNavRef} className="flex overflow-x-auto py-3 gap-6 flex-1 min-w-0" style={{ scrollbarWidth: "none" }}>
                 {allCategories.map((cat) => {
                   const isActive = activeCategory === cat.id;
                   return (
                     <button
                       key={cat.id}
                       type="button"
+                      data-cat-pill={cat.id}
                       onClick={() => scrollToCategory(cat.id)}
                       className="relative text-sm font-medium whitespace-nowrap transition-colors pb-1 shrink-0"
                       style={{ color: isActive ? "var(--primary)" : "#666666" }}

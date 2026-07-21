@@ -177,6 +177,60 @@ export async function getStorefrontData(
   return { site, location, menus, pricingDisclosureText };
 }
 
+/**
+ * Lightweight variant for routes that need only store meta (site + location),
+ * not the menu tree — e.g. checkout (cart lives in client state) and the info
+ * page. Skips fetchMenus, which issues one RPC per menu, so it avoids the
+ * dominant cost of getStorefrontData.
+ */
+export async function getStorefrontMetaData(
+  slugOrId: string
+): Promise<Omit<StorefrontData, "menus">> {
+  const supabase = createServiceRoleClient();
+  const isUuid = UUID_REGEX.test(slugOrId);
+
+  let storeConfigQuery = supabase.from("online_store_config").select("*");
+  if (isUuid) {
+    storeConfigQuery = storeConfigQuery.eq("location_id", slugOrId);
+  } else {
+    storeConfigQuery = storeConfigQuery.eq("slug", slugOrId);
+  }
+
+  const { data: storeConfig, error: configError } =
+    await storeConfigQuery.single();
+
+  // Fallback to the full path (legacy sites table) — rare, correctness over speed.
+  if (configError || !storeConfig) {
+    const { site, location, pricingDisclosureText } =
+      await getStorefrontDataLegacy(slugOrId, isUuid);
+    return { site, location, pricingDisclosureText };
+  }
+
+  if (storeConfig.is_active === false) {
+    return { site: null, location: null, pricingDisclosureText: null };
+  }
+
+  const site = mapStoreConfigToSite(storeConfig);
+
+  const { data: location, error: locationError } = await supabase
+    .from("locations")
+    .select(
+      "id, name, address_line1, city, state, postal_code, phone, email, business_hours, merchant_id, latitude, longitude, timezone"
+    )
+    .eq("id", storeConfig.location_id)
+    .single();
+
+  if (locationError || !location) {
+    return { site, location: null, pricingDisclosureText: null };
+  }
+
+  return {
+    site,
+    location,
+    pricingDisclosureText: storeConfig.pricing_disclosure_text ?? null,
+  };
+}
+
 async function getStorefrontDataLegacy(
   slugOrId: string,
   isUuid: boolean
@@ -227,6 +281,31 @@ async function fetchMenus(
   merchantId: string,
   locationId: string
 ): Promise<StorefrontMenu[]> {
+  // Fast path: a single round-trip that runs the per-menu logic inside Postgres
+  // and returns every menu at once, instead of one RPC per menu.
+  const { data, error } = await supabase.rpc("get_menus_for_location", {
+    p_merchant_id: merchantId,
+    p_location_id: locationId,
+  });
+
+  if (!error) {
+    const rpcMenus = Array.isArray(data) ? data : [];
+    return rpcMenus
+      .map((rpcMenu: any) => (rpcMenu ? mapRpcMenuToStorefront(rpcMenu) : null))
+      .filter((m: StorefrontMenu | null): m is StorefrontMenu => m !== null);
+  }
+
+  // Fallback (e.g. batch RPC not yet deployed): the original per-menu loop.
+  // Keeps the storefront working regardless of app/DB deploy ordering.
+  console.warn("get_menus_for_location unavailable, falling back to per-menu fetch:", error?.message);
+  return fetchMenusPerMenu(supabase, merchantId, locationId);
+}
+
+async function fetchMenusPerMenu(
+  supabase: any,
+  merchantId: string,
+  locationId: string
+): Promise<StorefrontMenu[]> {
   const { data: rawMenus, error: menuError } = await supabase
     .from("menus")
     .select("id, name, display_order")
@@ -247,10 +326,7 @@ async function fetchMenus(
   );
 
   return rpcResults
-    .map(({ data }: any) => {
-      if (!data) return null;
-      return mapRpcMenuToStorefront(data);
-    })
+    .map(({ data }: any) => (data ? mapRpcMenuToStorefront(data) : null))
     .filter((m): m is StorefrontMenu => m !== null);
 }
 

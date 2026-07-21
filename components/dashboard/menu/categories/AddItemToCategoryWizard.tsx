@@ -74,6 +74,7 @@ import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
 import { useEffectivePricing } from "@/app/dashboard/hooks/useEffectivePricing";
 import { useModifierGroups } from "@/app/dashboard/hooks/useModifierGroups";
 import { ItemPreviewCard } from "@/components/dashboard/menu/ItemPreviewCard";
+import { invalidateOrderOutSync } from "@/app/dashboard/hooks/useOrderOutMenuSync";
 
 // ============================================================================
 // CONSTANTS
@@ -391,6 +392,7 @@ export function AddItemToCategoryWizard({
 
       queryClient.invalidateQueries({ queryKey: ["categories-with-items"] });
       queryClient.invalidateQueries({ queryKey: ["menu-items"] });
+      invalidateOrderOutSync(queryClient);
       onSuccess?.();
       onOpenChange(false);
     } catch (error) {
@@ -465,6 +467,7 @@ export function AddItemToCategoryWizard({
       queryClient.invalidateQueries({ queryKey: ["categories-with-items"] });
       queryClient.invalidateQueries({ queryKey: ["menu-items"] });
       queryClient.invalidateQueries({ queryKey: ["modifier-groups"] });
+      invalidateOrderOutSync(queryClient);
       onSuccess?.();
       onOpenChange(false);
     } catch (error) {

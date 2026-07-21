@@ -53,6 +53,7 @@ import { toast } from "sonner";
 import { Empty } from "@/components/ui/empty";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
+import { invalidateOrderOutSync } from "@/app/dashboard/hooks/useOrderOutMenuSync";
 import { cn, isValidImageUrl } from "@/lib/utils";
 import {
   DropdownMenu,
@@ -1368,6 +1369,7 @@ export default function MenuItemsPage() {
       queryClient.invalidateQueries({ queryKey: ["menu-items"] });
       queryClient.invalidateQueries({ queryKey: ["menu-items-flat"] });
       queryClient.invalidateQueries({ queryKey: ["categories-with-items"] });
+      invalidateOrderOutSync(queryClient);
       refetch();
     } catch (error) {
       toast.error("Delete Failed", {
@@ -1418,6 +1420,7 @@ export default function MenuItemsPage() {
       queryClient.invalidateQueries({ queryKey: ["menu-items"] });
       queryClient.invalidateQueries({ queryKey: ["menu-items-flat"] });
       queryClient.invalidateQueries({ queryKey: ["categories-with-items"] });
+      invalidateOrderOutSync(queryClient);
       refetch();
     } catch (error) {
       toast.error("Delete Failed", {
@@ -2097,6 +2100,7 @@ export default function MenuItemsPage() {
           queryClient.invalidateQueries({ queryKey: ["menu-items"] });
           queryClient.invalidateQueries({ queryKey: ["menu-items-flat"] });
           queryClient.invalidateQueries({ queryKey: ["categories-with-items"] });
+          invalidateOrderOutSync(queryClient);
           refetch();
         }}
       />
@@ -2180,6 +2184,7 @@ export default function MenuItemsPage() {
             queryClient.invalidateQueries({ queryKey: ["menu-items"] });
             queryClient.invalidateQueries({ queryKey: ["menu-items-flat"] });
             queryClient.invalidateQueries({ queryKey: ["categories-with-items"] });
+            invalidateOrderOutSync(queryClient);
             refetch();
           }}
         />
@@ -2207,6 +2212,7 @@ export default function MenuItemsPage() {
           queryClient.invalidateQueries({
             queryKey: ["categories-with-items"],
           });
+          invalidateOrderOutSync(queryClient);
           refetch();
         }}
       />
@@ -2234,6 +2240,7 @@ export default function MenuItemsPage() {
           queryClient.invalidateQueries({
             queryKey: ["categories-with-items"],
           });
+          invalidateOrderOutSync(queryClient);
           refetch();
         }}
       />

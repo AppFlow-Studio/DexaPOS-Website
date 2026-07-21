@@ -75,6 +75,7 @@ import {
 import { ModifierItemOverrideDialog } from "./ModifierItemOverrideDialog";
 import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
 import { ModifierRecipeManager } from "@/app/dashboard/menu/components/ModifierRecipeManager";
+import { invalidateOrderOutSync } from "@/app/dashboard/hooks/useOrderOutMenuSync";
 
 // Form schema for modifier group
 const modifierGroupSchema = z.object({
@@ -556,6 +557,7 @@ export function ModifierGroupFormSheet({
       queryClient.invalidateQueries({ queryKey: ["modifier-groups"] });
       queryClient.invalidateQueries({ queryKey: ["menu-items"] });
       queryClient.invalidateQueries({ queryKey: ["categories-with-items"] });
+      invalidateOrderOutSync(queryClient);
       form.reset();
       setOptions([]);
       onOpenChange(false);
@@ -655,6 +657,7 @@ export function ModifierGroupFormSheet({
                             });
                             queryClient.invalidateQueries({ queryKey: ["menu-items"] });
                             queryClient.invalidateQueries({ queryKey: ["categories-with-items"] });
+                            invalidateOrderOutSync(queryClient);
                           } catch (error) {
                             setLocationIsActive(!checked); // Revert on error
                             toast.error("Update Failed");
