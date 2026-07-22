@@ -18,6 +18,7 @@ import { AffectsTag } from "../../AffectsTag";
 import { CascadeLadder } from "../../CascadeLadder";
 import { SectionHeader } from "./OverviewSection";
 import type { SectionRenderCtx } from "@/app/dashboard/menu/items/[itemId]/edit/ItemEditLayout";
+import { invalidateOrderOutSync } from "@/app/dashboard/hooks/useOrderOutMenuSync";
 
 export function PricingSection({ itemId, item, scope }: SectionRenderCtx) {
   const queryClient = useQueryClient();
@@ -69,6 +70,7 @@ export function PricingSection({ itemId, item, scope }: SectionRenderCtx) {
       queryClient.invalidateQueries({ queryKey: ["menu-items-flat"] });
       queryClient.invalidateQueries({ queryKey: ["categories-with-items"] });
       queryClient.invalidateQueries({ queryKey: ["item-price-matrix", itemId] });
+      invalidateOrderOutSync(queryClient);
     },
     onError: (err) =>
       toast.error("Save failed", {

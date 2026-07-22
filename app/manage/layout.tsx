@@ -52,6 +52,7 @@ import {
     AlertOctagon,
     Receipt,
     CircleDollarSign,
+    Globe,
     LucideIcon,
 } from 'lucide-react'
 import Link from 'next/link'
@@ -198,6 +199,12 @@ const navMain: NavGroup[] = [
                 title: 'Device Catalog',
                 url: '/manage/device-catalog',
                 icon: Monitor,
+                requiredPermission: 'system.config.manage' as PermissionCode,
+            },
+            {
+                title: 'Website Editor',
+                url: '/admin',
+                icon: Globe,
                 requiredPermission: 'system.config.manage' as PermissionCode,
             },
         ]

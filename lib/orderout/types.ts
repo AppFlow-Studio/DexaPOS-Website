@@ -9,6 +9,17 @@ export interface OrderOutTranslation {
   };
 }
 
+// Uber Eats item suspension ("Sold Out"). suspend_until is unix SECONDS;
+// null/past = available, a future timestamp = suspended/out of stock.
+export interface OrderOutSuspension {
+  suspend_until: number | null;
+  reason?: string;
+}
+
+export interface OrderOutSuspensionInfo {
+  suspension: OrderOutSuspension;
+}
+
 export interface OrderOutItem {
   id: string;
   title: OrderOutTranslation;
@@ -19,6 +30,9 @@ export interface OrderOutItem {
   modifier_group_ids: {
     ids: string[];
   };
+  // Present only when the item is out of stock (86'd) — keeps it on the menu as
+  // "Sold Out" rather than removing it. Uber auto-restores at suspend_until.
+  suspension_info?: OrderOutSuspensionInfo;
 }
 
 export interface OrderOutCategoryEntity {
@@ -58,9 +72,14 @@ export interface OrderOutModifierGroup {
   id: string;
   title: OrderOutTranslation;
   modifier_options: OrderOutModifierOption[];
+  // OrderOut/Uber nest the selection constraints under `quantity`. Emitting these
+  // flat (min_permitted/max_permitted directly on quantity_info) is silently ignored
+  // and the group defaults to "No limit".
   quantity_info: {
-    min_permitted: number;
-    max_permitted: number | null;
+    quantity: {
+      min_permitted: number;
+      max_permitted: number;
+    };
   };
 }
 

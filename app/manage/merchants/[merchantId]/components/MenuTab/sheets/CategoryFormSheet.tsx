@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { invalidateOrderOutSync } from '@/app/dashboard/hooks/useOrderOutMenuSync'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -415,6 +416,9 @@ export function CategoryFormSheet({
         }
       }
 
+      // Category name/active/membership feed the OrderOut menu payload — flag the
+      // merchant's online menu out-of-sync (parity with the dashboard form).
+      invalidateOrderOutSync(queryClient)
       onSuccess()
       onClose()
     } catch (error) {
@@ -464,6 +468,8 @@ export function CategoryFormSheet({
         }),
       ])
 
+      // Schedule changes alter the menu's service_availability in the OrderOut payload.
+      invalidateOrderOutSync(queryClient)
       onSuccess()
       toast.success(isAssigned ? 'Schedule removed from category' : 'Schedule assigned to category')
     } catch (error) {
@@ -488,6 +494,7 @@ export function CategoryFormSheet({
 
       toast.success('Reset to global settings')
       setHasLocationOverride(false)
+      invalidateOrderOutSync(queryClient)
       onSuccess()
       onClose()
     } catch (error) {

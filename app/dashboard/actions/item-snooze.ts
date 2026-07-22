@@ -1,8 +1,16 @@
 "use server";
 
+import { after } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { LogAuditEvent } from "./audit-logs";
-import { pushMenuToConnectedChannels } from "./orderout";
+import {
+  pushMenuToOrderOut,
+  pushMenuToConnectedChannels,
+  resolvePrimaryOnlineMenu,
+  suspendOrderOutItem,
+} from "./orderout";
+import { setItemAvailability } from "./menu-items-rpc";
 
 // ============================================================================
 // 86ing (out-of-stock snooze) — item + modifier, per location.
@@ -32,18 +40,24 @@ function snoozeMode(snoozedUntil: SnoozeUntil): "timed" | "until_manual" | "clea
 }
 
 /**
- * Best-effort OrderOut re-push so 86ing reaches connected delivery apps
- * (UberEats/DoorDash/Grubhub) within seconds. Availability-only change, so we
- * bypass the manual cooldown. Never throws — a failed re-push must not fail the
- * snooze itself. NOTE: POS-direct RPC calls do not pass through here; that
- * propagation path is a documented follow-up.
+ * Full-menu OrderOut re-push so 86ing reaches connected delivery apps
+ * (UberEats/DoorDash/Grubhub). Rebuilds and re-pushes the whole menu, then fans
+ * out to channels. This is the heavy path — used for modifiers (no per-modifier
+ * suspension endpoint exists) and as the item fast-path's fallback when the menu
+ * isn't live on OrderOut yet. Availability-only change, so we bypass the manual
+ * cooldown. Never throws — a failed re-push must not fail the snooze itself.
+ * NOTE: POS-direct RPC calls do not pass through here; that propagation path is a
+ * documented follow-up.
  */
-async function triggerOrderOutResyncForLocation(
+async function triggerOrderOutFullResync(
   clerkOrgId: string,
   locationId: string,
+  internal = false,
 ): Promise<void> {
   try {
-    const supabase = createServerSupabaseClient();
+    const supabase = internal
+      ? createServiceRoleClient()
+      : createServerSupabaseClient();
 
     const { data: restaurant } = await supabase
       .from("orderout_restaurants")
@@ -53,29 +67,80 @@ async function triggerOrderOutResyncForLocation(
 
     if (!restaurant || restaurant.status !== "active") return;
 
-    const { data: links } = await supabase
-      .from("orderout_menu_links")
-      .select("menu_id")
-      .eq("orderout_restaurant_id", restaurant.id)
-      .eq("is_active", true);
+    // OrderOut serves one menu per store — target only the canonical online menu.
+    const online = await resolvePrimaryOnlineMenu(supabase, restaurant.id);
+    if (!online) return;
 
-    if (!links?.length) return;
+    // 1) Update the menu OrderOut stores so it reflects the 86. This works even
+    //    when no delivery channels are connected yet, so the corrected menu is
+    //    ready to fan out later. Awaited-but-swallowed (best-effort).
+    await pushMenuToOrderOut({ clerkOrgId, menuId: online.menu_id, locationId, internal });
 
-    // Re-push each active menu. Awaited-but-swallowed: guarantees it runs in the
-    // server action while never surfacing an error to the caller. skipCooldown so
-    // a burst of 86s all propagate (availability changes, not spammy menu edits).
-    await Promise.allSettled(
-      links.map((l) =>
-        pushMenuToConnectedChannels({
-          clerkOrgId,
-          menuId: l.menu_id,
-          locationId,
-          skipCooldown: true,
-        }),
-      ),
-    );
+    // 2) Best-effort fan-out to any connected channels (no-ops if none). skipCooldown
+    //    so a burst of 86s all propagate.
+    await pushMenuToConnectedChannels({
+      clerkOrgId,
+      menuId: online.menu_id,
+      locationId,
+      skipCooldown: true,
+      internal,
+    });
   } catch (e) {
-    console.warn("[item-snooze] OrderOut resync (non-fatal):", e);
+    console.warn("[item-snooze] OrderOut full resync (non-fatal):", e);
+  }
+}
+
+/**
+ * Item 86 fast-path: a single surgical per-item suspension PUT instead of a full
+ * menu rebuild + channel fan-out. Falls back to a full resync only when the menu
+ * isn't live on OrderOut yet (skipped) or the surgical call fails, so out-of-stock
+ * still propagates. Best-effort — never throws.
+ */
+async function triggerOrderOutItemSuspension(
+  clerkOrgId: string,
+  locationId: string,
+  menuItemId: string,
+  snoozedUntil: SnoozeUntil,
+  internal = false,
+): Promise<void> {
+  try {
+    const res = await suspendOrderOutItem({
+      clerkOrgId,
+      locationId,
+      menuItemId,
+      snoozedUntil,
+      internal,
+    });
+
+    // Surgical path unavailable (no live menu) or errored — stage via full push so
+    // the 86 still reaches OrderOut with suspension_info embedded in the payload.
+    if (!res.success) {
+      await triggerOrderOutFullResync(clerkOrgId, locationId, internal);
+      return;
+    }
+
+    // Suspension is staged on OrderOut. Best-effort fan-out so the "Sold Out"
+    // reaches the connected marketplaces promptly (skipCooldown for a burst of
+    // 86s). A "no connected channels" result is a normal no-op here, NOT a
+    // failure — never fall back to a full resync or surface an error for it.
+    if (res.menuId) {
+      const fan = await pushMenuToConnectedChannels({
+        clerkOrgId,
+        menuId: res.menuId,
+        locationId,
+        skipCooldown: true,
+        internal,
+      });
+      if (!fan.success) {
+        console.info(
+          "[item-snooze] channel fan-out after suspension skipped (non-fatal):",
+          fan.error,
+        );
+      }
+    }
+  } catch (e) {
+    console.warn("[item-snooze] OrderOut item suspension (non-fatal):", e);
+    await triggerOrderOutFullResync(clerkOrgId, locationId, internal);
   }
 }
 
@@ -115,6 +180,21 @@ export async function snoozeItem(
     return { success: false, error: error.message };
   }
 
+  // Couple availability with 86 (product decision): marking out of stock also
+  // turns the item unavailable at this location; restore turns it back on. Scoped
+  // to the same location as the snooze (L2). Best-effort — the snooze already
+  // succeeded, so a hiccup here shouldn't fail the whole action.
+  try {
+    const availRes = await setItemAvailability(menuItemId, !snoozedUntil, {
+      locationId,
+    });
+    if (availRes && availRes.success === false) {
+      console.warn("[item-snooze] availability coupling failed:", availRes.error);
+    }
+  } catch (e) {
+    console.warn("[item-snooze] availability coupling threw (non-fatal):", e);
+  }
+
   const { data: item } = await supabase
     .from("menu_items")
     .select("name")
@@ -140,7 +220,13 @@ export async function snoozeItem(
     metadata: { snooze_mode: snoozeMode(snoozedUntil), source: "dashboard" },
   });
 
-  await triggerOrderOutResyncForLocation(clerkOrgId, locationId);
+  // OrderOut propagation runs AFTER the response is sent — the DB write above is
+  // already durable, so the 86 persists (and the UI reflects it optimistically)
+  // without waiting on the delivery-app round-trip. `internal` (service role) so
+  // it doesn't depend on the request's Clerk auth context surviving into after().
+  after(() =>
+    triggerOrderOutItemSuspension(clerkOrgId, locationId, menuItemId, snoozedUntil, true),
+  );
 
   return { success: true };
 }
@@ -207,9 +293,91 @@ export async function snoozeModifier(
     metadata: { snooze_mode: snoozeMode(snoozedUntil), source: "dashboard" },
   });
 
-  await triggerOrderOutResyncForLocation(clerkOrgId, locationId);
+  // Modifiers have no per-item OrderOut suspension endpoint (items-only), so a
+  // modifier 86 still requires a full menu resync. Follow-up: a dedicated
+  // modifier-availability flow once OrderOut exposes one. Runs post-response so
+  // the request isn't blocked on the heavy re-push.
+  after(() => triggerOrderOutFullResync(clerkOrgId, locationId, true));
 
   return { success: true };
+}
+
+// ----------------------------------------------------------------------------
+// Modifier GROUP snooze — 86 a whole group by fanning out to all its options.
+// One atomic RPC (set_modifier_group_snooze_v1), one audit entry, one resync.
+// No group-level snooze column: per-option snooze already folds into
+// get_menu_with_categories, so this reaches POS/storefront/OrderOut for free.
+// ----------------------------------------------------------------------------
+
+export async function snoozeModifierGroup(
+  clerkOrgId: string,
+  modifierGroupId: string,
+  locationId: string,
+  snoozedUntil: SnoozeUntil,
+  reason?: string,
+): Promise<SnoozeResult> {
+  if (!locationId || locationId === "all") {
+    return {
+      success: false,
+      error: "A specific location is required to 86 a modifier group.",
+    };
+  }
+
+  const supabase = createServerSupabaseClient();
+
+  const { error } = await supabase.rpc("set_modifier_group_snooze_v1", {
+    p_location_id: locationId,
+    p_modifier_group_id: modifierGroupId,
+    p_snoozed_until: snoozedUntil,
+    p_reason: reason ?? null,
+  });
+
+  if (error) {
+    return { success: false, error: error.message };
+  }
+
+  const { data: group } = await supabase
+    .from("modifier_groups")
+    .select("name")
+    .eq("id", modifierGroupId)
+    .maybeSingle();
+
+  const groupName = group?.name ?? modifierGroupId;
+
+  await LogAuditEvent({
+    clerkOrgId,
+    locationId,
+    action: snoozedUntil
+      ? `86'd Modifier Group: ${groupName}`
+      : `Restored Modifier Group: ${groupName}`,
+    actionCategory: "menu",
+    severity: "info",
+    resourceType: "modifier_group",
+    resourceId: modifierGroupId,
+    resourceName: groupName,
+    changes: {
+      after: { snoozed_until: snoozedUntil },
+      reason,
+    },
+    metadata: {
+      snooze_mode: snoozeMode(snoozedUntil),
+      source: "dashboard",
+      scope: "group",
+    },
+  });
+
+  after(() => triggerOrderOutFullResync(clerkOrgId, locationId, true));
+
+  return { success: true };
+}
+
+/** Clear a modifier group's 86 (restore all its options). */
+export async function unsnoozeModifierGroup(
+  clerkOrgId: string,
+  modifierGroupId: string,
+  locationId: string,
+): Promise<SnoozeResult> {
+  return snoozeModifierGroup(clerkOrgId, modifierGroupId, locationId, null);
 }
 
 // ----------------------------------------------------------------------------
@@ -299,6 +467,115 @@ export async function unsnoozeItem(
   return snoozeItem(clerkOrgId, menuItemId, locationId, null);
 }
 
+// ----------------------------------------------------------------------------
+// Batch item 86 — one RPC write + one OrderOut resync for N items, so bulk
+// out-of-stock doesn't fan out into N slow requests + N delivery re-pushes.
+// ----------------------------------------------------------------------------
+
+type BatchDuration =
+  | { kind: "end_of_day" }
+  | { kind: "hours"; hours: number }
+  | { kind: "until_manual" }
+  | { kind: "until"; iso: string };
+
+async function resolveDurationIso(
+  duration: BatchDuration,
+  locationId: string,
+): Promise<string> {
+  switch (duration.kind) {
+    case "until_manual":
+      return "infinity";
+    case "hours":
+      return new Date(Date.now() + duration.hours * 3600_000).toISOString();
+    case "until":
+      return duration.iso;
+    case "end_of_day":
+      return localEndOfDayISO(await locationTimezone(locationId));
+  }
+}
+
+/**
+ * 86 (or, with snoozedUntil=null, restore) many items at a location in a single
+ * statement. Availability coupling is folded into the RPC so it's atomic, and the
+ * statement-level resync trigger fires ONE OrderOut re-push for the whole batch.
+ */
+async function setItemsSnoozeBatch(
+  clerkOrgId: string,
+  menuItemIds: string[],
+  locationId: string,
+  snoozedUntil: SnoozeUntil,
+  reason?: string,
+): Promise<SnoozeResult> {
+  if (!locationId || locationId === "all") {
+    return { success: false, error: "A specific location is required to 86 items." };
+  }
+  if (menuItemIds.length === 0) {
+    return { success: true };
+  }
+
+  const supabase = createServerSupabaseClient();
+
+  const { error } = await supabase.rpc("set_items_snooze_batch_v1", {
+    p_location_id: locationId,
+    p_menu_item_ids: menuItemIds,
+    p_snoozed_until: snoozedUntil,
+    p_reason: reason ?? null,
+  });
+
+  if (error) {
+    return { success: false, error: error.message };
+  }
+
+  await LogAuditEvent({
+    clerkOrgId,
+    locationId,
+    action: snoozedUntil
+      ? `86'd ${menuItemIds.length} Items`
+      : `Restored ${menuItemIds.length} Items`,
+    actionCategory: "menu",
+    severity: "info",
+    resourceType: "menu_item",
+    resourceName: `${menuItemIds.length} items`,
+    changes: {
+      after: { snoozed_until: snoozedUntil, menu_item_ids: menuItemIds },
+      reason,
+    },
+    metadata: {
+      snooze_mode: snoozeMode(snoozedUntil),
+      source: "dashboard",
+      scope: "batch",
+      count: menuItemIds.length,
+    },
+  });
+
+  // One resync for the whole batch (post-response). The statement-level trigger
+  // also debounces to one push; this is the belt-and-suspenders in-request path.
+  after(() => triggerOrderOutFullResync(clerkOrgId, locationId, true));
+
+  return { success: true };
+}
+
+/** Batch 86: mark many items out of stock with a shared duration. */
+export async function snoozeItemsBatch(
+  clerkOrgId: string,
+  menuItemIds: string[],
+  locationId: string,
+  duration: BatchDuration,
+  reason?: string,
+): Promise<SnoozeResult> {
+  const snoozedUntil = await resolveDurationIso(duration, locationId);
+  return setItemsSnoozeBatch(clerkOrgId, menuItemIds, locationId, snoozedUntil, reason);
+}
+
+/** Batch restore: clear the 86 on many items. */
+export async function unsnoozeItemsBatch(
+  clerkOrgId: string,
+  menuItemIds: string[],
+  locationId: string,
+): Promise<SnoozeResult> {
+  return setItemsSnoozeBatch(clerkOrgId, menuItemIds, locationId, null);
+}
+
 /** Clear a modifier's 86 (restore). */
 export async function unsnoozeModifier(
   clerkOrgId: string,
@@ -306,6 +583,77 @@ export async function unsnoozeModifier(
   locationId: string,
 ): Promise<SnoozeResult> {
   return snoozeModifier(clerkOrgId, modifierGroupItemId, locationId, null);
+}
+
+// ----------------------------------------------------------------------------
+// Modifier duration presets — parity with the item presets above. The rich
+// duration picker in the modifier toggles dispatches to these.
+// ----------------------------------------------------------------------------
+
+/** 86 a modifier until the end of the location's business day. */
+export async function snoozeModifierUntilEndOfDay(
+  clerkOrgId: string,
+  modifierGroupItemId: string,
+  locationId: string,
+  reason?: string,
+): Promise<SnoozeResult> {
+  const tz = await locationTimezone(locationId);
+  return snoozeModifier(clerkOrgId, modifierGroupItemId, locationId, localEndOfDayISO(tz), reason);
+}
+
+/** 86 a modifier for a fixed number of hours from now. */
+export async function snoozeModifierForHours(
+  clerkOrgId: string,
+  modifierGroupItemId: string,
+  locationId: string,
+  hours: number,
+  reason?: string,
+): Promise<SnoozeResult> {
+  const until = new Date(Date.now() + hours * 3600_000).toISOString();
+  return snoozeModifier(clerkOrgId, modifierGroupItemId, locationId, until, reason);
+}
+
+/** 86 a modifier until manually restored. */
+export async function snoozeModifierUntilManual(
+  clerkOrgId: string,
+  modifierGroupItemId: string,
+  locationId: string,
+  reason?: string,
+): Promise<SnoozeResult> {
+  return snoozeModifier(clerkOrgId, modifierGroupItemId, locationId, "infinity", reason);
+}
+
+/** 86 a whole modifier group until the end of the location's business day. */
+export async function snoozeModifierGroupUntilEndOfDay(
+  clerkOrgId: string,
+  modifierGroupId: string,
+  locationId: string,
+  reason?: string,
+): Promise<SnoozeResult> {
+  const tz = await locationTimezone(locationId);
+  return snoozeModifierGroup(clerkOrgId, modifierGroupId, locationId, localEndOfDayISO(tz), reason);
+}
+
+/** 86 a whole modifier group for a fixed number of hours from now. */
+export async function snoozeModifierGroupForHours(
+  clerkOrgId: string,
+  modifierGroupId: string,
+  locationId: string,
+  hours: number,
+  reason?: string,
+): Promise<SnoozeResult> {
+  const until = new Date(Date.now() + hours * 3600_000).toISOString();
+  return snoozeModifierGroup(clerkOrgId, modifierGroupId, locationId, until, reason);
+}
+
+/** 86 a whole modifier group until manually restored. */
+export async function snoozeModifierGroupUntilManual(
+  clerkOrgId: string,
+  modifierGroupId: string,
+  locationId: string,
+  reason?: string,
+): Promise<SnoozeResult> {
+  return snoozeModifierGroup(clerkOrgId, modifierGroupId, locationId, "infinity", reason);
 }
 
 // ----------------------------------------------------------------------------
@@ -325,8 +673,19 @@ export interface ActiveSnoozeItem {
 export interface ActiveSnoozeModifier {
   kind: "modifier";
   modifier_group_item_id: string;
+  modifier_group_id: string;
   name: string;
   group_name: string;
+  snoozed_until: string;
+  snooze_reason: string | null;
+  updated_at: string;
+}
+
+export interface ActiveSnoozeCategory {
+  kind: "category";
+  category_id: string;
+  name: string;
+  image: string | null;
   snoozed_until: string;
   snooze_reason: string | null;
   updated_at: string;
@@ -335,6 +694,7 @@ export interface ActiveSnoozeModifier {
 export interface ActiveSnoozes {
   items: ActiveSnoozeItem[];
   modifiers: ActiveSnoozeModifier[];
+  categories: ActiveSnoozeCategory[];
 }
 
 export async function getActiveSnoozes(
@@ -355,7 +715,7 @@ export async function getActiveSnoozes(
 
   return {
     success: true,
-    data: (data as ActiveSnoozes) ?? { items: [], modifiers: [] },
+    data: (data as ActiveSnoozes) ?? { items: [], modifiers: [], categories: [] },
   };
 }
 

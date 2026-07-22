@@ -38,6 +38,7 @@ import { useRoleAwareScopeCopy } from "@/lib/menu/useRoleAwareScope";
 import { useManagerPermissions } from "@/app/dashboard/hooks/useManagerPermissions";
 import { useMerchantCdnImageUpload } from "@/lib/cdn/use-merchant-cdn-image-upload";
 import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
+import { invalidateOrderOutSync } from "@/app/dashboard/hooks/useOrderOutMenuSync";
 
 interface QuickCreateItemDialogProps {
   open: boolean;
@@ -167,6 +168,7 @@ export function QuickCreateItemDialog({
       queryClient.invalidateQueries({ queryKey: ["menu-items"] });
       queryClient.invalidateQueries({ queryKey: ["menu-items-flat"] });
       queryClient.invalidateQueries({ queryKey: ["categories-with-items"] });
+      invalidateOrderOutSync(queryClient);
       onCreated?.(itemId);
       onOpenChange(false);
       if (redirectToEdit) {
