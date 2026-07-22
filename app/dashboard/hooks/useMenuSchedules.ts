@@ -6,17 +6,17 @@ import {
   useLocationStore,
   useIsAllLocations,
 } from "@/stores/location-store";
-import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
 import {
   GetMenuSchedules,
   AssignScheduleToMenu,
   RemoveScheduleFromMenu,
 } from "../actions/schedules";
-
-function useClerkOrgId() {
-  const { data: userInfo } = useUserInfo();
-  return userInfo?.members?.[0]?.organizations?.id || "";
-}
+import { invalidateOrderOutSync } from "@/app/dashboard/hooks/useOrderOutMenuSync";
+// Impersonation-aware org resolver: while an HQ admin impersonates a merchant it
+// returns the merchant's clerk_org_id (not the raw HQ org). The old local resolver
+// read userInfo.members[0] and stayed HQ, so AssignScheduleToMenu looked up the HQ
+// org and failed with "Merchant not found".
+import { useClerkOrgId } from "./useLocationScoped";
 
 function useEffectiveLocationId() {
   const { selectedLocationId } = useLocationStore();
@@ -76,6 +76,7 @@ export function useAssignScheduleToMenuMutation(menuId: string) {
       queryClient.invalidateQueries({
         queryKey: ["menu-with-categories", menuId],
       });
+      invalidateOrderOutSync(queryClient);
     },
     onError: () => {
       toast.error("Add Failed", { description: "Unable to add schedule" });
@@ -118,6 +119,7 @@ export function useRemoveScheduleFromMenuMutation(menuId: string) {
       queryClient.invalidateQueries({
         queryKey: ["menu-with-categories", menuId],
       });
+      invalidateOrderOutSync(queryClient);
     },
     onError: () => {
       toast.error("Remove Failed", {

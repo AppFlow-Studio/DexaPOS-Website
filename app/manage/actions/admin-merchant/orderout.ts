@@ -6,6 +6,7 @@
 // ============================================================================
 
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { assertHQPermission } from '@/lib/admin/auth'
 import { LogAuditEvent } from '@/app/dashboard/actions/audit-logs'
 import {
@@ -13,10 +14,11 @@ import {
   extractChannelStatuses,
   type PlatformChannelStatus,
 } from '@/lib/orderout/helpers'
-import type {
-  PushMenuToChannelsResult,
-  PushChannelsHistoryEntry,
-  PushChannelsLiveStatus,
+import {
+  resolvePrimaryOnlineMenu,
+  type PushMenuToChannelsResult,
+  type PushChannelsHistoryEntry,
+  type PushChannelsLiveStatus,
 } from '@/app/dashboard/actions/orderout'
 
 // ============================================================================
@@ -192,6 +194,7 @@ export async function getAdminOrderOutMenuSyncStatus(
           lastSync: null,
           totalSyncs: 0,
           ooMenuId: null,
+          isPrimaryOnlineMenu: false,
           platformStatuses: [],
           connectedChannels: [],
           syncHistory: [],
@@ -208,16 +211,18 @@ export async function getAdminOrderOutMenuSyncStatus(
     // Query orderout_menu_links for the canonical oo_menu_id + per-platform
     // push status for this menu.
     let ooMenuId: string | null = null
+    let isPrimaryOnlineMenu = false
     let platformStatuses: PlatformChannelStatus[] = []
     if (menuId) {
       const { data: link } = await supabase
         .from('orderout_menu_links')
-        .select('oo_menu_id, platform_statuses')
+        .select('oo_menu_id, platform_statuses, is_primary')
         .eq('orderout_restaurant_id', restaurant.id)
         .eq('menu_id', menuId)
         .eq('is_active', true)
         .single()
       ooMenuId = link?.oo_menu_id || null
+      isPrimaryOnlineMenu = link?.is_primary ?? false
       platformStatuses = extractChannelStatuses(link?.platform_statuses)
     }
 
@@ -290,6 +295,7 @@ export async function getAdminOrderOutMenuSyncStatus(
           : null,
         totalSyncs: filteredSyncs.length,
         ooMenuId,
+        isPrimaryOnlineMenu,
         platformStatuses,
         connectedChannels,
         syncHistory,
@@ -326,6 +332,7 @@ export async function adminCheckMenuPayloadDiff(
     await assertHQPermission('hq.merchant.view')
 
     const { transformMenuToOrderOut, canonicalStringify } = await import('@/lib/orderout/transform-menu')
+    const { fetchOperatingHoursFallback } = await import('@/lib/orderout/hours')
     type MenuWithCategories = import('@/types/menu').MenuWithCategories
 
     const supabase = createServerSupabaseClient()
@@ -359,7 +366,12 @@ export async function adminCheckMenuPayloadDiff(
       }
     }
 
-    const currentPayload = transformMenuToOrderOut(menuData as MenuWithCategories)
+    // Same operating-hours fallback as the push path, so the out-of-sync badge
+    // doesn't drift for menus without an assigned schedule.
+    const fallbackAvailability = await fetchOperatingHoursFallback(supabase, locationId)
+    const currentPayload = transformMenuToOrderOut(menuData as MenuWithCategories, {
+      fallbackAvailability,
+    })
     const currentItemCount = currentPayload.items.length
 
     // Get last successful sync's payload snapshot
@@ -433,6 +445,7 @@ export async function adminPushMenuToOrderOut(
     const { userId } = await assertHQPermission('hq.merchant.update')
 
     const { transformMenuToOrderOut } = await import('@/lib/orderout/transform-menu')
+    const { fetchOperatingHoursFallback } = await import('@/lib/orderout/hours')
     type MenuWithCategories = import('@/types/menu').MenuWithCategories
 
     const supabase = createServerSupabaseClient()
@@ -464,8 +477,12 @@ export async function adminPushMenuToOrderOut(
       }
     }
 
-    // Transform menu to OrderOut format
-    const menuPayload = transformMenuToOrderOut(menuData as MenuWithCategories)
+    // Transform menu to OrderOut format. No assigned schedule -> fall back to the
+    // location's operating hours instead of 24/7.
+    const fallbackAvailability = await fetchOperatingHoursFallback(supabase, locationId)
+    const menuPayload = transformMenuToOrderOut(menuData as MenuWithCategories, {
+      fallbackAvailability,
+    })
     const itemCount = menuPayload.items.length
 
     // Check for existing link (determines if this is an update)
@@ -1305,6 +1322,172 @@ export async function getAdminPushChannelsLiveStatus(
     return {
       success: false,
       data: null,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    }
+  }
+}
+
+// ============================================================================
+// Admin: online-menu designation + foolproof publish
+// ----------------------------------------------------------------------------
+// HQ mirror of getLocationOnlineMenu / publishOnlineMenu. Publishing always
+// resolves to the location's ONE designated online menu, so HQ can't push a
+// non-online menu by accident either. Item data is global, so publishing the
+// online menu carries edits made from any menu.
+// ============================================================================
+
+/**
+ * The location's designated online menu (id + name) + active-linked menus (HQ view).
+ */
+export async function getAdminLocationOnlineMenu(
+  merchantId: string,
+  locationId: string,
+): Promise<{
+  primaryMenuId: string | null
+  primaryMenuName: string | null
+  linkedMenuIds: string[]
+}> {
+  if (!merchantId || !locationId) {
+    return { primaryMenuId: null, primaryMenuName: null, linkedMenuIds: [] }
+  }
+  try {
+    await assertHQPermission('hq.merchant.view')
+    const supabase = createServerSupabaseClient()
+
+    const { data: restaurant } = await supabase
+      .from('orderout_restaurants')
+      .select('id')
+      .eq('location_id', locationId)
+      .maybeSingle()
+    if (!restaurant)
+      return { primaryMenuId: null, primaryMenuName: null, linkedMenuIds: [] }
+
+    const { data: links } = await supabase
+      .from('orderout_menu_links')
+      .select('menu_id, is_primary')
+      .eq('orderout_restaurant_id', restaurant.id)
+      .eq('is_active', true)
+
+    const rows = links ?? []
+    const primaryMenuId = rows.find((l) => l.is_primary)?.menu_id ?? null
+
+    let primaryMenuName: string | null = null
+    if (primaryMenuId) {
+      const { data: menu } = await supabase
+        .from('menus')
+        .select('name')
+        .eq('id', primaryMenuId)
+        .maybeSingle()
+      primaryMenuName = menu?.name ?? null
+    }
+
+    return { primaryMenuId, primaryMenuName, linkedMenuIds: rows.map((l) => l.menu_id) }
+  } catch {
+    return { primaryMenuId: null, primaryMenuName: null, linkedMenuIds: [] }
+  }
+}
+
+export interface AdminPublishOnlineMenuResult {
+  success: boolean
+  needsDesignation?: boolean
+  data?: {
+    publishedMenuId: string
+    publishedMenuName: string | null
+    itemsSynced: number
+    redesignated: boolean
+  }
+  error: string | null
+}
+
+/**
+ * Publish the location's ONE designated online menu (HQ). Pass designateMenuId to
+ * make a menu the online menu (first pick / switch) before publishing.
+ */
+export async function adminPublishOnlineMenu(
+  merchantId: string,
+  locationId: string,
+  designateMenuId?: string,
+): Promise<AdminPublishOnlineMenuResult> {
+  if (!merchantId || !locationId) {
+    return { success: false, error: 'Missing required parameters' }
+  }
+
+  try {
+    await assertHQPermission('hq.merchant.update')
+    const supabase = createServerSupabaseClient()
+
+    const { data: restaurant } = await supabase
+      .from('orderout_restaurants')
+      .select('id')
+      .eq('location_id', locationId)
+      .maybeSingle()
+    if (!restaurant) {
+      return { success: false, error: 'Location is not onboarded to OrderOut' }
+    }
+
+    const service = createServiceRoleClient()
+    const primary = await resolvePrimaryOnlineMenu(service, restaurant.id)
+
+    const targetMenuId = primary?.menu_id ?? designateMenuId ?? null
+    if (!targetMenuId) {
+      return {
+        success: false,
+        needsDesignation: true,
+        error: 'No online menu selected. Choose which menu handles online orders.',
+      }
+    }
+
+    const willDesignate = !!designateMenuId && designateMenuId !== primary?.menu_id
+    const publishMenuId = willDesignate ? designateMenuId! : targetMenuId
+
+    const push = await adminPushMenuToOrderOut({
+      merchantId,
+      menuId: publishMenuId,
+      locationId,
+    })
+    if (!push.success) {
+      return { success: false, error: push.error ?? 'Failed to publish menu' }
+    }
+
+    const redesignated = willDesignate || !primary
+    if (redesignated && designateMenuId) {
+      // service-role satisfies set_primary_online_menu_v1's auth check.
+      const { error: setErr } = await service.rpc('set_primary_online_menu_v1', {
+        p_location_id: locationId,
+        p_menu_id: designateMenuId,
+      })
+      if (setErr) console.warn('[adminPublishOnlineMenu] designation failed:', setErr.message)
+    }
+
+    const fan = await adminPushMenuToConnectedChannels({
+      merchantId,
+      menuId: publishMenuId,
+      locationId,
+    })
+    if (!fan.success) {
+      console.info('[adminPublishOnlineMenu] channel fan-out skipped:', fan.error)
+    }
+
+    const { data: menu } = await supabase
+      .from('menus')
+      .select('name')
+      .eq('id', publishMenuId)
+      .maybeSingle()
+
+    return {
+      success: true,
+      data: {
+        publishedMenuId: publishMenuId,
+        publishedMenuName: menu?.name ?? null,
+        itemsSynced: push.data?.itemsSynced ?? 0,
+        redesignated,
+      },
+      error: null,
+    }
+  } catch (error) {
+    console.error('[adminPublishOnlineMenu] Exception:', error)
+    return {
+      success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
     }
   }

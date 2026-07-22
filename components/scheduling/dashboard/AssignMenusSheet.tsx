@@ -27,6 +27,7 @@ import {
 import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
 import { useSelectedLocation } from "@/stores/location-store";
 import { SchedulesModel, MenusModel } from "@/types/db-modles";
+import { invalidateOrderOutSync } from "@/app/dashboard/hooks/useOrderOutMenuSync";
 
 interface AssignMenusSheetProps {
   open: boolean;
@@ -166,6 +167,7 @@ export function AssignMenusSheet({
       queryClient.invalidateQueries({ queryKey: ["schedule-menus"] });
       queryClient.invalidateQueries({ queryKey: ["menu-schedules"] });
       queryClient.invalidateQueries({ queryKey: ["schedules"] });
+      invalidateOrderOutSync(queryClient);
 
       onOpenChange(false);
     } catch (error) {

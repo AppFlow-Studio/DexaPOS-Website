@@ -9,10 +9,11 @@ import {
     TooltipProvider,
     TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { Info, Utensils, Star, DollarSign } from 'lucide-react'
+import { Info, Utensils, Star, DollarSign, CircleSlash, Layers } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { MenuCategoryItem } from '@/types/menu'
 import { PriceSourcePopover } from '@/components/dashboard/menu/PriceSourcePopover'
+import { ItemStockToggle } from '@/components/dashboard/menu/menuId/ItemStockToggle'
 import {
     priceSourceToLevel,
     scopeColor,
@@ -22,7 +23,11 @@ import {
 import {
     useIsAllLocations,
     useSelectedLocation,
+    useGatedLocationId,
 } from '@/stores/location-store'
+import { useClerkOrgId } from '@/app/dashboard/hooks/useLocationScoped'
+import { useActiveSnoozes } from '@/lib/queries/use-snoozes'
+import { isActivelySnoozed, snoozeShortLabel } from '@/lib/snooze'
 
 interface CategoryItemRowProps {
     item: MenuCategoryItem
@@ -57,6 +62,27 @@ export function CategoryItemRow({
     const sourceLevel = priceSourceToLevel(priceSource)
     const isAllLocations = useIsAllLocations()
     const selectedLocation = useSelectedLocation()
+
+    // 86 / out-of-stock state. All rows share ONE useActiveSnoozes fetch (React
+    // Query dedupes by key), so this is a single request per location, not per row.
+    const clerkOrgId = useClerkOrgId()
+    const gatedLocationId = useGatedLocationId()
+    const { data: activeSnoozes } = useActiveSnoozes(
+        clerkOrgId,
+        gatedLocationId ?? 'all',
+    )
+    const snoozedUntil =
+        activeSnoozes?.items.find((s) => s.menu_item_id === item.menu_item_id)
+            ?.snoozed_until ?? null
+    const isOutOfStock = isActivelySnoozed(snoozedUntil)
+
+    // Any of this item's modifier OPTIONS 86'd (a whole-group 86 fans out to all
+    // its options, so this catches both). Derived from data already on the row —
+    // no extra fetch. Option-level snooze only, so a deliberately-inactive group
+    // isn't mistaken for out-of-stock.
+    const hasOutOfStockModifier = (menuItem?.modifier_groups ?? []).some((g) =>
+        (g.items ?? []).some((o) => isActivelySnoozed(o.snoozed_until)),
+    )
 
     const getPriceSourceBadge = () => {
         if (priceSource === 'base') return null
@@ -160,39 +186,72 @@ export function CategoryItemRow({
                             )}
                         </div>
                         {!isSelectionMode && (
-                            <TooltipProvider>
-                                <Tooltip>
-                                    <TooltipTrigger asChild>
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            className="hidden sm:inline-flex h-8 w-8"
-                                            onClick={(e) => {
-                                                e.stopPropagation()
-                                                onEdit()
-                                            }}
-                                        >
-                                            <DollarSign className="h-4 w-4" />
-                                        </Button>
-                                    </TooltipTrigger>
-                                    <TooltipContent>
-                                        <p>Edit state of this item in this menu/category context</p>
-                                    </TooltipContent>
-                                </Tooltip>
-                            </TooltipProvider>
+                            <>
+                                <ItemStockToggle
+                                    menuItemId={item.menu_item_id}
+                                    clerkOrgId={clerkOrgId}
+                                    locationId={gatedLocationId}
+                                    isOutOfStock={isOutOfStock}
+                                    itemName={menuItem?.name}
+                                    image={menuItem?.image}
+                                />
+                                <TooltipProvider>
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="hidden sm:inline-flex h-8 w-8"
+                                                onClick={(e) => {
+                                                    e.stopPropagation()
+                                                    onEdit()
+                                                }}
+                                            >
+                                                <DollarSign className="h-4 w-4" />
+                                            </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                            <p>Edit state of this item in this menu/category context</p>
+                                        </TooltipContent>
+                                    </Tooltip>
+                                </TooltipProvider>
+                            </>
                         )}
                     </div>
                 </div>
 
                 {/* Badges — full width below, free to wrap */}
-                {(!menuItem?.effective_availability ||
+                {(isOutOfStock ||
+                    hasOutOfStockModifier ||
+                    !menuItem?.effective_availability ||
                     (menuItem?.allergens && menuItem.allergens.length > 0) ||
                     (showLocationPricing && priceSource !== 'base')) && (
                     <div className="flex flex-wrap items-center gap-1.5 min-w-0">
-                        {!menuItem?.effective_availability && (
-                            <Badge variant="destructive" className="text-[10px]">
-                                Unavailable
+                        {hasOutOfStockModifier && (
+                            <Badge
+                                variant="outline"
+                                className="text-[10px] gap-1 border-amber-300 bg-amber-50 text-amber-700"
+                            >
+                                <Layers className="h-2.5 w-2.5 shrink-0" />
+                                <span>Modifier out of stock</span>
                             </Badge>
+                        )}
+                        {isOutOfStock ? (
+                            <Badge
+                                variant="outline"
+                                className="text-[10px] gap-1 border-amber-300 bg-amber-50 text-amber-700"
+                            >
+                                <CircleSlash className="h-2.5 w-2.5 shrink-0" />
+                                <span className="truncate">
+                                    {snoozeShortLabel(snoozedUntil as string)}
+                                </span>
+                            </Badge>
+                        ) : (
+                            !menuItem?.effective_availability && (
+                                <Badge variant="destructive" className="text-[10px]">
+                                    Unavailable
+                                </Badge>
+                            )
                         )}
                         {menuItem?.allergens && menuItem.allergens.length > 0 && (
                             <Badge variant="outline" className="text-[10px]">

@@ -117,6 +117,12 @@ export interface ModifierItem {
   // Stock Logic
   stock_tracking_mode: StockTrackingMode;
   current_stock: number | null;
+
+  // 86 / out-of-stock snooze (per-location). get_menu_with_categories surfaces the
+  // raw snooze and folds it into is_active. Optional: only the menu-builder view
+  // populates these.
+  snoozed_until?: string | null;
+  snooze_reason?: string | null;
 }
 
 export interface ModifierGroup {

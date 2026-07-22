@@ -66,6 +66,7 @@ import {
   readLocalStorageDraft,
   writeLocalStorageDraft,
 } from "@/lib/browser/local-storage-draft";
+import { invalidateOrderOutSync } from "@/app/dashboard/hooks/useOrderOutMenuSync";
 
 // ============================================================================
 // CONSTANTS
@@ -521,6 +522,7 @@ export function CreateItemWizard({
       queryClient.invalidateQueries({ queryKey: ["categories-with-items"] });
       queryClient.invalidateQueries({ queryKey: ["menu-items"] });
       queryClient.invalidateQueries({ queryKey: ["menu-items-flat"] });
+      invalidateOrderOutSync(queryClient);
 
       onSuccess?.();
       onOpenChange(false);
