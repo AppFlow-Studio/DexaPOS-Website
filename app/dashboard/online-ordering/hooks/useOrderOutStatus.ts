@@ -14,6 +14,7 @@ import {
   setOrderOutChannelsConfirmed,
   setPrimaryOnlineMenu,
   getLocationOnlineMenu,
+  publishOnlineMenu,
   type OnboardOrderOutParams,
   type PushMenuToOrderOutParams,
   type PushMenuToChannelsParams,
@@ -75,6 +76,54 @@ export function useLocationOnlineMenu(
     queryFn: () => getLocationOnlineMenu(clerkOrgId, locationId as string),
     enabled: !!clerkOrgId && !!locationId && locationId !== "all",
     staleTime: 30 * 1000,
+  });
+}
+
+/**
+ * Publish the location's ONE designated online menu (foolproof push target).
+ * Pass `designateMenuId` to make a menu the online menu (first pick or switch)
+ * before publishing; omit it to publish the current online menu. All merchant
+ * publishing routes through here so a non-online menu can never be pushed by
+ * accident.
+ */
+export function usePublishOnlineMenu(clerkOrgId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      locationId,
+      designateMenuId,
+    }: {
+      locationId: string;
+      designateMenuId?: string;
+    }) => publishOnlineMenu(clerkOrgId, locationId, designateMenuId),
+    onSuccess: (result, variables) => {
+      if (result.success) {
+        const name = result.data?.publishedMenuName ?? "online menu";
+        toast.success(
+          result.data?.redesignated
+            ? `${name} is now your online menu — published`
+            : `Published ${name} to online ordering`,
+          { description: `${result.data?.itemsSynced ?? 0} items synced.` },
+        );
+        for (const key of [
+          ["orderout-status", clerkOrgId, variables.locationId],
+          ["orderout-online-menu"],
+          ["orderout-menu-sync"],
+          ["orderout-menu-link"],
+          ["orderout-payload-diff"],
+          ["orderout-synced-menus"],
+          ["orderout-push-channels-history", clerkOrgId, variables.locationId],
+        ]) {
+          queryClient.invalidateQueries({ queryKey: key });
+        }
+      } else if (result.needsDesignation) {
+        toast.error(result.error || "Choose which menu handles online orders.");
+      } else {
+        toast.error(result.error || "Failed to publish online menu");
+      }
+    },
+    onError: (e: Error) =>
+      toast.error(e.message || "Failed to publish online menu"),
   });
 }
 

@@ -17,6 +17,7 @@ import { AffectsTag } from "../../AffectsTag";
 import { SectionHeader } from "./OverviewSection";
 import { ItemSnoozeControl } from "../ItemSnoozeControl";
 import type { SectionRenderCtx } from "@/app/dashboard/menu/items/[itemId]/edit/ItemEditLayout";
+import { invalidateOrderOutSync } from "@/app/dashboard/hooks/useOrderOutMenuSync";
 
 export function AvailabilitySection({ itemId, item, scope }: SectionRenderCtx) {
   const queryClient = useQueryClient();
@@ -52,6 +53,7 @@ export function AvailabilitySection({ itemId, item, scope }: SectionRenderCtx) {
       queryClient.invalidateQueries({ queryKey: ["menu-items"] });
       queryClient.invalidateQueries({ queryKey: ["menu-items-flat"] });
       queryClient.invalidateQueries({ queryKey: ["categories-with-items"] });
+      invalidateOrderOutSync(queryClient);
     },
     onError: (err) =>
       toast.error("Save failed", {
