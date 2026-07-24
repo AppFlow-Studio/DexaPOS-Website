@@ -41,6 +41,8 @@ import { cn } from "@/lib/utils";
 import { useSelectedLocation } from "@/stores/location-store";
 import { SalesByItemReportItem } from "@/app/dashboard/actions/order-analytics";
 import { useReportingQueryRange } from "@/app/dashboard/hooks/useReportingDateRange";
+import { ReportExportButtons } from "../components/ReportExportButtons";
+import type { ExportColumn } from "@/utils/export";
 
 type SortKey = keyof Pick<
   SalesByItemReportItem,
@@ -70,6 +72,14 @@ function categoryColor(category: string): string {
   }
   return palette[Math.abs(hash) % palette.length];
 }
+
+const exportColumns: ExportColumn<SalesByItemReportItem>[] = [
+  { key: "item_name", header: "Item Name" },
+  { key: "category", header: "Category", format: (v: string | null) => v || "—" },
+  { key: "quantity_sold", header: "Qty Sold", format: (v: number) => v.toLocaleString() },
+  { key: "gross_sales", header: "Gross Sales", format: (v: number) => `$${v.toFixed(2)}` },
+  { key: "net_sales", header: "Net Sales", format: (v: number) => `$${v.toFixed(2)}` },
+];
 
 function SortIcon({
   column,
@@ -326,6 +336,31 @@ export default function SalesByItemsPage() {
                 ? "Loading…"
                 : `${processed.length} item${processed.length !== 1 ? "s" : ""}`}
             </span>
+            <ReportExportButtons
+              data={processed}
+              columns={exportColumns}
+              filenameBase="sales-by-items"
+              pdfTitle="Sales by Items"
+              dateFrom={dateRange.from}
+              dateTo={dateRange.to}
+              locationName={
+                selectedLocation && !Array.isArray(selectedLocation)
+                  ? selectedLocation.name
+                  : "All Locations"
+              }
+              summaryCards={[
+                { label: "Total Qty Sold", value: summary.totalQty.toLocaleString() },
+                {
+                  label: "Gross Sales",
+                  value: `$${summary.totalGross.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                },
+                {
+                  label: "Net Sales",
+                  value: `$${summary.totalNet.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                },
+              ]}
+              disabled={isLoading || isError}
+            />
           </div>
         </div>
 

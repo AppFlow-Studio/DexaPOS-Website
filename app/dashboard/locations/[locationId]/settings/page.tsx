@@ -5,6 +5,7 @@ import { auth } from '@clerk/nextjs/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { LocationTaxComplianceCard } from '@/components/dashboard/locations/LocationTaxComplianceCard'
 import { LocationBankingProfileCard } from '@/components/dashboard/locations/LocationBankingProfileCard'
+import { LocationBatchEmailCard } from '@/components/dashboard/locations/LocationBatchEmailCard'
 import type { Location } from '@/types/merchant_locations'
 import type {
   AccountType,
@@ -102,6 +103,20 @@ export default async function LocationSettingsPage({ params }: LocationSettingsP
         clerkOrgId={orgId ?? ''}
         locationId={locationId}
         initialProfile={initialProfile}
+      />
+
+      <LocationBatchEmailCard
+        clerkOrgId={orgId ?? ''}
+        locationId={locationId}
+        initialEnabled={Boolean(
+          (location as { batch_summary_email_enabled?: boolean | null })
+            .batch_summary_email_enabled
+        )}
+        initialRecipient={
+          (location as { batch_summary_email_recipient?: string | null })
+            .batch_summary_email_recipient ?? null
+        }
+        locationEmail={(location as { email?: string | null }).email ?? null}
       />
     </div>
   )
