@@ -5,7 +5,12 @@ import { subDays } from "date-fns";
 import { CreditCard, FileSpreadsheet } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useFinancialKPIs, useWaterfallReport } from "../../hooks/useOrderAnalytics";
+import {
+  useFinancialKPIs,
+  useWaterfallReport,
+  useRevenueBreakdown,
+  useDualPricingComparison,
+} from "../../hooks/useOrderAnalytics";
 import { useOrders } from "../../hooks/useOrder";
 import { FinancialHeroChart } from "@/app/dashboard/transactions/components/FinancialHeroChart";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -20,6 +25,15 @@ import {
 } from "@/components/dashboard/orders/DateRangePicker";
 import { useReportingQueryRange } from "@/app/dashboard/hooks/useReportingDateRange";
 import { fillDailyFinancialStats } from "@/lib/reporting/date-range";
+import { ReportExportButtons } from "../components/ReportExportButtons";
+import type { ExportColumn } from "@/utils/export";
+
+type FinancialSummaryRow = { metric: string; amount: number };
+
+const financialSummaryColumns: ExportColumn<FinancialSummaryRow>[] = [
+  { key: "metric", header: "Metric" },
+  { key: "amount", header: "Amount", format: (v: number) => `$${v.toFixed(2)}` },
+];
 
 export default function FinancialsPage() {
   const [dateRange, setDateRange] = useState<{ from: Date; to: Date }>({
@@ -42,6 +56,16 @@ export default function FinancialsPage() {
 
   // Fetch waterfall report data
   const { data: waterfallReport, isLoading: isLoadingWaterfall, isError: isErrorWaterfall } = useWaterfallReport(
+    queryDateRange.from,
+    queryDateRange.to
+  );
+
+  // Service charge + dual-pricing totals for a complete financial export
+  const { data: revenueBreakdown } = useRevenueBreakdown(
+    queryDateRange.from,
+    queryDateRange.to
+  );
+  const { data: dualPricing } = useDualPricingComparison(
     queryDateRange.from,
     queryDateRange.to
   );
@@ -102,8 +126,33 @@ export default function FinancialsPage() {
     paid_in_total: 0,
   };
 
-  // Calculated Total Amount (Revenue)
-  const totalAmount = summary.net_sales + summary.tax_total + summary.tip_total;
+  const serviceCharges = revenueBreakdown?.serviceCharges ?? 0;
+
+  // Calculated Total Amount (Revenue) — net sales + tax + service charge + tips
+  const totalAmount =
+    summary.net_sales + summary.tax_total + serviceCharges + summary.tip_total;
+
+  const exportRows: FinancialSummaryRow[] = [
+    { metric: "Gross sales", amount: summary.gross_sales },
+    { metric: "Discounts", amount: -summary.discounts_total },
+    { metric: "Net sales", amount: summary.net_sales },
+    { metric: "Tax collected", amount: summary.tax_total },
+    { metric: "Service charge", amount: serviceCharges },
+    { metric: "Tips", amount: summary.tip_total },
+    { metric: "Refunds", amount: summary.refunds_total },
+    { metric: "Total collected", amount: totalAmount },
+    // Dual-pricing (cash discount) breakdown — only when enabled for this merchant
+    ...(dualPricing?.hasDualPricing
+      ? [
+          { metric: "Card-priced revenue", amount: dualPricing.cardRevenue },
+          { metric: "Cash-priced revenue", amount: dualPricing.cashRevenue },
+          {
+            metric: "Cash discount savings",
+            amount: dualPricing.cashDiscountSavings,
+          },
+        ]
+      : []),
+  ];
 
   return (
     // Desktop (xl): height-constrained so inner panels scroll. Mobile/tablet: natural height, page scrolls.
@@ -121,7 +170,7 @@ export default function FinancialsPage() {
             </p>
           </div>
 
-          <div className="w-full">
+          <div className="flex flex-col gap-2 w-full sm:flex-row sm:items-center">
             <DateRangePicker
               dateFrom={dateRange.from}
               dateTo={dateRange.to}
@@ -133,6 +182,30 @@ export default function FinancialsPage() {
               preset={preset}
               onPresetChange={setPreset}
               className="w-full"
+            />
+            <ReportExportButtons
+              data={exportRows}
+              columns={financialSummaryColumns}
+              filenameBase="financial-summary"
+              pdfTitle="Financial Summary"
+              dateFrom={dateRange.from}
+              dateTo={dateRange.to}
+              locationName={selectedLocation?.name || "All Locations"}
+              summaryCards={[
+                {
+                  label: "Net Sales",
+                  value: summary.net_sales.toLocaleString("en-US", { style: "currency", currency: "USD" }),
+                },
+                {
+                  label: "Tax",
+                  value: summary.tax_total.toLocaleString("en-US", { style: "currency", currency: "USD" }),
+                },
+                {
+                  label: "Total Amount",
+                  value: totalAmount.toLocaleString("en-US", { style: "currency", currency: "USD" }),
+                },
+              ]}
+              disabled={!kpis}
             />
           </div>
 
@@ -209,6 +282,18 @@ export default function FinancialsPage() {
                     </span>
                     <span className="font-mono font-bold text-gray-900 text-base">
                       {summary.tax_total.toLocaleString("en-US", {
+                        style: "currency",
+                        currency: "USD",
+                      })}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between items-center group">
+                    <span className="font-medium text-sm text-gray-500">
+                      Service charge
+                    </span>
+                    <span className="font-mono font-bold text-gray-900 text-base">
+                      {serviceCharges.toLocaleString("en-US", {
                         style: "currency",
                         currency: "USD",
                       })}

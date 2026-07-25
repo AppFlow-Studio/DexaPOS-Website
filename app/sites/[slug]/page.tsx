@@ -1,5 +1,5 @@
 import { getStorefrontData, getStorefrontMetaData } from "../actions";
-import { getStoreTaxRate } from "../order-actions";
+import { getStoreTaxRateByLocationId } from "../order-actions";
 import { notFound } from "next/navigation";
 import { AnalyticsScripts } from "../components/AnalyticsScripts";
 import { CartSidebar } from "../components/CartSidebar";
@@ -114,7 +114,9 @@ export default async function StorefrontPage({ params }: PageProps) {
     notFound();
   }
 
-  const taxRate = site?.id ? await getStoreTaxRate(site.id) : 0;
+  // Use the location we already have — avoids the redundant online_store_config
+  // lookup that getStoreTaxRate(site.id) would otherwise do.
+  const taxRate = await getStoreTaxRateByLocationId(location.id);
 
   const theme = site?.theme_config;
   const templateId = theme?.templateId || "classic";

@@ -13,6 +13,7 @@ import {
   canonicalStringify,
   snoozeToSuspendUntil,
 } from "@/lib/orderout/transform-menu";
+import { fetchOperatingHoursFallback } from "@/lib/orderout/hours";
 import type { MenuWithCategories } from "@/types/menu";
 import {
   extractConnectedPlatforms,
@@ -436,8 +437,15 @@ export async function pushMenuToOrderOut(
       };
     }
 
-    // 4. Transform menu to OrderOut format
-    const menuPayload = transformMenuToOrderOut(menuData as MenuWithCategories);
+    // 4. Transform menu to OrderOut format. When the menu has no assigned
+    //    schedule, fall back to the location's operating hours instead of 24/7.
+    const fallbackAvailability = await fetchOperatingHoursFallback(
+      supabase,
+      locationId
+    );
+    const menuPayload = transformMenuToOrderOut(menuData as MenuWithCategories, {
+      fallbackAvailability,
+    });
     const itemCount = menuPayload.items.length;
 
     // 4b. Check for existing link (determines if this is an update)
@@ -785,6 +793,141 @@ export async function getOrderOutMenus(
     return { success: true, data: formatted, error: null };
   } catch (error) {
     console.error("[getOrderOutMenus] Exception:", error);
+    return {
+      success: false,
+      data: null,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+  }
+}
+
+// ============================================================================
+// Live menu verification — GET the menu OrderOut is actually serving, so a 86
+// can be confirmed to have landed on the delivery side (not just written locally).
+// ============================================================================
+
+export interface OrderOutLiveMenuItem {
+  id: string;
+  name: string | null;
+  /** Unix SECONDS OrderOut will keep the item suspended until (0/null = live). */
+  suspendUntil: number | null;
+  /** Currently sold-out on OrderOut (suspend_until in the future / indefinite). */
+  suspended: boolean;
+}
+
+export interface OrderOutLiveMenu {
+  ooMenuId: string;
+  itemCount: number;
+  suspendedCount: number;
+  items: OrderOutLiveMenuItem[];
+  fetchedAt: string;
+}
+
+/**
+ * Fetch the live menu OrderOut is serving for a location (get-menu endpoint) and
+ * flatten it to items + their suspension state. Read-only verification tool for
+ * the OrderOut tab — reuses the merchant/restaurant resolver + env pattern from
+ * getOrderOutMenus, but returns item-level detail (which the list GET omits).
+ */
+export async function getOrderOutLiveMenu(
+  clerkOrgId: string,
+  locationId: string
+): Promise<{ success: boolean; data: OrderOutLiveMenu | null; error: string | null }> {
+  if (!clerkOrgId || !locationId || locationId === "all") {
+    return { success: false, data: null, error: "A specific location is required" };
+  }
+
+  try {
+    const supabase = createServerSupabaseClient();
+
+    const { data: merchant } = await supabase
+      .from("merchants")
+      .select("id")
+      .eq("clerk_org_id", clerkOrgId)
+      .single();
+    if (!merchant) {
+      return { success: false, data: null, error: "Merchant not found" };
+    }
+
+    const { data: restaurant } = await supabase
+      .from("orderout_restaurants")
+      .select("id, oo_restaurant_id")
+      .eq("location_id", locationId)
+      .single();
+    if (!restaurant?.oo_restaurant_id) {
+      return { success: false, data: null, error: "Location is not onboarded to OrderOut" };
+    }
+
+    // OrderOut serves one menu per store — verify the canonical online menu.
+    const online = await resolvePrimaryOnlineMenu(supabase, restaurant.id);
+    if (!online?.oo_menu_id) {
+      return { success: false, data: null, error: "No online menu has been pushed to OrderOut yet" };
+    }
+
+    const orderOutApiUrl = process.env.NEXT_PUBLIC_ORDEROUT_API_URL;
+    const orderOutApiKey = process.env.ORDEROUT_API_KEY;
+    if (!orderOutApiUrl || !orderOutApiKey) {
+      return { success: false, data: null, error: "OrderOut API configuration missing" };
+    }
+
+    const response = await fetch(
+      `${orderOutApiUrl}/pos/restaurant/${restaurant.oo_restaurant_id}/menu/${online.oo_menu_id}`,
+      { method: "GET", headers: { "api-key": orderOutApiKey, accept: "application/json" } }
+    );
+    if (!response.ok) {
+      return { success: false, data: null, error: `OrderOut API returned ${response.status}` };
+    }
+
+    const body = await response.json();
+    const nowSec = Math.floor(Date.now() / 1000);
+    const items: OrderOutLiveMenuItem[] = [];
+
+    const readSuspendUntil = (it: Record<string, unknown>): number | null => {
+      const info = it.suspension_info as { suspend_until?: unknown } | undefined;
+      const raw =
+        typeof info?.suspend_until === "number"
+          ? info.suspend_until
+          : typeof (it as { suspend_until?: unknown }).suspend_until === "number"
+            ? (it as { suspend_until: number }).suspend_until
+            : null;
+      return raw;
+    };
+
+    const pushItem = (it: Record<string, unknown>) => {
+      const suspendUntil = readSuspendUntil(it);
+      items.push({
+        id: String(it.id ?? it.item_id ?? ""),
+        name: (it.name as string) ?? null,
+        suspendUntil,
+        // >now (or the year-2100 indefinite sentinel) means sold out; 0/null = live.
+        suspended: suspendUntil !== null && suspendUntil !== 0 && suspendUntil > nowSec,
+      });
+    };
+
+    // get-menu nests items under categories; flatten defensively across shapes.
+    const menu = (Array.isArray(body) ? body[0] : body) as Record<string, any> | undefined;
+    const categories = (menu?.categories ?? menu?.menu?.categories) as any[] | undefined;
+    if (Array.isArray(categories) && categories.length) {
+      for (const c of categories) {
+        for (const it of (c?.items ?? c?.entities ?? [])) pushItem(it);
+      }
+    } else if (Array.isArray(menu?.items)) {
+      for (const it of menu.items) pushItem(it);
+    }
+
+    return {
+      success: true,
+      data: {
+        ooMenuId: String(online.oo_menu_id),
+        itemCount: items.length,
+        suspendedCount: items.filter((i) => i.suspended).length,
+        items,
+        fetchedAt: new Date().toISOString(),
+      },
+      error: null,
+    };
+  } catch (error) {
+    console.error("[getOrderOutLiveMenu] Exception:", error);
     return {
       success: false,
       data: null,
@@ -1342,8 +1485,16 @@ export async function checkMenuPayloadDiff(
       };
     }
 
+    // Use the same operating-hours fallback as the push path, otherwise the
+    // recomputed "expected" payload would always differ from the pushed one and
+    // the out-of-sync badge would be stuck for menus without a schedule.
+    const fallbackAvailability = await fetchOperatingHoursFallback(
+      supabase,
+      locationId
+    );
     const currentPayload = transformMenuToOrderOut(
-      menuData as MenuWithCategories
+      menuData as MenuWithCategories,
+      { fallbackAvailability }
     );
     const currentItemCount = currentPayload.items.length;
 

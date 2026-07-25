@@ -279,8 +279,25 @@ Deno.serve(async (req: Request): Promise<Response> => {
       })
 
       if (refundApplyError) {
-        console.error('[CANCEL_ORDER] Failed to persist reversal on payment row:', refundApplyError)
-        return jsonResponse({ success: false, error: 'Payment reversal applied but could not be recorded locally.' }, 500)
+        console.error('[CANCEL_ORDER] Failed to persist reversal on payment row:', {
+          paymentId: payment.id,
+          orderId: body.order_id,
+          reversalType: shouldRefund ? 'refund' : 'void',
+          gatewayReference:
+            reversalResult.details.transactionId ||
+            reversalDetails.referenceNumber ||
+            null,
+          error: refundApplyError,
+        })
+        return jsonResponse(
+          {
+            success: false,
+            error:
+              `Payment reversal was accepted by NMI but could not be recorded locally. ` +
+              `Do not retry. Contact support with order ${body.order_id}.`,
+          },
+          500,
+        )
       }
 
       if (!shouldRefund) {
