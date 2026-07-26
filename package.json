@@ -86,7 +86,7 @@
     "twilio": "^6.0.2",
     "use-places-autocomplete": "^4.0.1",
     "uuid": "^14.0.1",
-    "xlsx": "^0.18.5",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
     "zod": "^4.4.3",
     "zustand": "^5.0.14"
   },
@@ -98,7 +98,11 @@
     "flatted": ">=3.4.2",
     "@xmldom/xmldom": ">=0.8.13",
     "minimatch": ">=9.0.3",
-    "picomatch": ">=4.0.2"
+    "picomatch": ">=4.0.2",
+    "next": {
+      "postcss": "8.5.22",
+      "sharp": "0.35.3"
+    }
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",
