@@ -26,17 +26,8 @@ import {
   type ChartConfig,
 } from "@/components/ui/chart";
 import { PaymentSummary } from "@/types/payment";
-
-const METHOD_COLORS: Record<string, string> = {
-  cash: "hsl(142, 71%, 45%)",
-  card: "hsl(221, 83%, 53%)",
-  card_spinapi: "hsl(221, 83%, 53%)",
-  card_dvpaylite: "hsl(262, 83%, 58%)",
-  card_manual: "hsl(24, 95%, 53%)",
-  gift_card: "hsl(330, 81%, 60%)",
-  house_account: "hsl(173, 58%, 39%)",
-  external: "hsl(48, 96%, 53%)",
-};
+import { buildMethodBreakdown } from "@/lib/payments/method-breakdown";
+import { normalizeCardBrand } from "@/lib/payments/method-display";
 
 const CARD_COLORS: Record<string, string> = {
   visa: "hsl(221, 83%, 53%)",
@@ -53,20 +44,6 @@ const FALLBACK_COLORS = [
   "hsl(199, 89%, 48%)",
 ];
 
-function formatMethodLabel(method: string): string {
-  const labels: Record<string, string> = {
-    cash: "Cash",
-    card: "Card",
-    card_spinapi: "Card (SpinAPI)",
-    card_dvpaylite: "Card (DvPayLite)",
-    card_manual: "Card (Manual)",
-    gift_card: "Gift Card",
-    house_account: "House Account",
-    external: "External",
-  };
-  return labels[method] || method;
-}
-
 function formatCurrency(amount: number): string {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
@@ -76,26 +53,37 @@ function formatCurrency(amount: number): string {
   }).format(amount);
 }
 
+/** Cent-exact currency for the legend, so its rows reconcile with the payments table. */
+function formatCurrencyExact(amount: number): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(amount);
+}
+
 interface PaymentChartsProps {
   summary?: PaymentSummary;
   isLoading: boolean;
 }
 
 export function PaymentCharts({ summary, isLoading }: PaymentChartsProps) {
-  // Payment Method Donut data
-  const methodData = (summary?.byMethod || []).map((m) => ({
-    name: formatMethodLabel(m.method),
+  // Payment Method Donut + legend — one source, so both always agree.
+  // Zero-amount methods are already dropped by buildMethodBreakdown.
+  const methodBreakdown = buildMethodBreakdown(summary?.byMethod);
+
+  const methodData = methodBreakdown.map((m) => ({
+    name: m.label,
     value: m.amount,
-    fill: METHOD_COLORS[m.method] || "hsl(215, 16%, 47%)",
+    percent: m.percent,
+    fill: m.color,
   }));
 
   const methodChartConfig: ChartConfig = {
     value: { label: "Amount" },
     ...Object.fromEntries(
-      methodData.map((d) => [
-        d.name,
-        { label: d.name, color: d.fill },
-      ])
+      methodBreakdown.map((m) => [m.label, { label: m.label, color: m.color }])
     ),
   };
 
@@ -106,7 +94,7 @@ export function PaymentCharts({ summary, isLoading }: PaymentChartsProps) {
       name: c.cardType,
       count: c.count,
       fill:
-        CARD_COLORS[c.cardType?.toLowerCase()] ||
+        CARD_COLORS[normalizeCardBrand(c.cardType ?? "")] ||
         FALLBACK_COLORS[index % FALLBACK_COLORS.length],
     }));
 
@@ -164,34 +152,71 @@ export function PaymentCharts({ summary, isLoading }: PaymentChartsProps) {
         <CardContent>
           {methodData.length === 0 ? (
             <div className="flex h-[200px] items-center justify-center text-sm text-muted-foreground">
-              No payment data
+              No payments in this date range
             </div>
           ) : (
-            <ChartContainer config={methodChartConfig} className="aspect-auto h-[200px] w-full">
-              <PieChart>
-                <ChartTooltip
-                  content={
-                    <ChartTooltipContent
-                      formatter={(value) =>
-                        formatCurrency(value as number)
-                      }
+            <>
+              <ChartContainer config={methodChartConfig} className="aspect-auto h-[200px] w-full">
+                <PieChart>
+                  <ChartTooltip
+                    content={
+                      <ChartTooltipContent
+                        hideLabel
+                        // Recharts gives a Pie no axis label, so the default row
+                        // renders the dataKey's config label ("Amount"). Format the
+                        // whole row instead so the method name always travels with
+                        // the value.
+                        formatter={(value, _name, item) => (
+                          <span className="text-foreground">
+                            {item?.payload?.name} —{" "}
+                            <span className="font-mono font-medium tabular-nums">
+                              {formatCurrencyExact(value as number)}
+                            </span>{" "}
+                            · {item?.payload?.percent}%
+                          </span>
+                        )}
+                      />
+                    }
+                  />
+                  <Pie
+                    data={methodData}
+                    dataKey="value"
+                    nameKey="name"
+                    innerRadius={50}
+                    outerRadius={80}
+                    paddingAngle={2}
+                  >
+                    {methodData.map((entry) => (
+                      <Cell key={entry.name} fill={entry.fill} />
+                    ))}
+                  </Pie>
+                </PieChart>
+              </ChartContainer>
+
+              {/* Legend as real text, not canvas — readable by screen readers and
+                  never relying on color alone to identify a method. */}
+              <ul className="mt-3 space-y-1.5">
+                {methodBreakdown.map((m) => (
+                  <li
+                    key={m.method}
+                    className="flex min-w-0 items-center gap-2 text-sm"
+                  >
+                    <span
+                      aria-hidden="true"
+                      className="h-2.5 w-2.5 flex-shrink-0 rounded-[2px]"
+                      style={{ backgroundColor: m.color }}
                     />
-                  }
-                />
-                <Pie
-                  data={methodData}
-                  dataKey="value"
-                  nameKey="name"
-                  innerRadius={50}
-                  outerRadius={80}
-                  paddingAngle={2}
-                >
-                  {methodData.map((entry, index) => (
-                    <Cell key={index} fill={entry.fill} />
-                  ))}
-                </Pie>
-              </PieChart>
-            </ChartContainer>
+                    <span className="min-w-0 flex-1 truncate">{m.label}</span>
+                    <span className="flex-shrink-0 font-mono tabular-nums">
+                      {formatCurrencyExact(m.amount)}
+                    </span>
+                    <span className="w-12 flex-shrink-0 text-right tabular-nums text-muted-foreground">
+                      {m.percent}%
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </>
           )}
         </CardContent>
       </Card>
