@@ -27,9 +27,12 @@ export interface KioskProfile {
   header_text_color: string | null;
   font_family: string | null;
   logo_url: string | null;
-  hero_image_url: string | null;
-  attract_video_url: string | null;
-  attract_image_urls: string[];
+  idle_images_vertical: string[];
+  idle_images_horizontal: string[];
+  idle_video_vertical: string | null;
+  idle_video_horizontal: string | null;
+  order_banner_images_vertical: string[];
+  order_banner_images_horizontal: string[];
   orientation: KioskOrientation;
   idle_timeout_seconds: number;
   cart_reset_timeout_seconds: number;
@@ -103,9 +106,12 @@ const profileInputSchema = z.object({
   header_text_color: hexColorSchema.nullable(),
   font_family: z.string().trim().min(1).max(80).nullable(),
   logo_url: z.string().url().nullable(),
-  hero_image_url: z.string().url().nullable(),
-  attract_video_url: z.string().url().nullable(),
-  attract_image_urls: z.array(z.string().url()).max(5),
+  idle_images_vertical: z.array(z.string().url()).max(5),
+  idle_images_horizontal: z.array(z.string().url()).max(5),
+  idle_video_vertical: z.string().url().nullable(),
+  idle_video_horizontal: z.string().url().nullable(),
+  order_banner_images_vertical: z.array(z.string().url()).max(5),
+  order_banner_images_horizontal: z.array(z.string().url()).max(5),
   orientation: orientationSchema,
   idle_timeout_seconds: z.coerce.number().int().min(15).max(600),
   cart_reset_timeout_seconds: z.coerce.number().int().min(10).max(300),
@@ -129,11 +135,12 @@ function asError(error: unknown, fallback = "Something went wrong") {
   return error instanceof Error ? error.message : fallback;
 }
 
+function asStringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((url): url is string => typeof url === "string") : [];
+}
+
 function normalizeProfile(row: unknown): KioskProfile {
   const record = row as Record<string, unknown>;
-  const attractImages = Array.isArray(record.attract_image_urls)
-    ? record.attract_image_urls.filter((url): url is string => typeof url === "string")
-    : [];
   const tipPresets = Array.isArray(record.tip_presets)
     ? record.tip_presets.filter((value): value is number => typeof value === "number")
     : [15, 18, 20, 25];
@@ -152,9 +159,12 @@ function normalizeProfile(row: unknown): KioskProfile {
     header_text_color: typeof record.header_text_color === "string" ? record.header_text_color : null,
     font_family: typeof record.font_family === "string" ? record.font_family : "Inter",
     logo_url: typeof record.logo_url === "string" ? record.logo_url : null,
-    hero_image_url: typeof record.hero_image_url === "string" ? record.hero_image_url : null,
-    attract_video_url: typeof record.attract_video_url === "string" ? record.attract_video_url : null,
-    attract_image_urls: attractImages,
+    idle_images_vertical: asStringArray(record.idle_images_vertical),
+    idle_images_horizontal: asStringArray(record.idle_images_horizontal),
+    idle_video_vertical: typeof record.idle_video_vertical === "string" ? record.idle_video_vertical : null,
+    idle_video_horizontal: typeof record.idle_video_horizontal === "string" ? record.idle_video_horizontal : null,
+    order_banner_images_vertical: asStringArray(record.order_banner_images_vertical),
+    order_banner_images_horizontal: asStringArray(record.order_banner_images_horizontal),
     orientation: orientationSchema.parse(record.orientation ?? "vertical"),
     idle_timeout_seconds: Number(record.idle_timeout_seconds ?? 60),
     cart_reset_timeout_seconds: Number(record.cart_reset_timeout_seconds ?? 30),
@@ -300,7 +310,7 @@ export async function listKioskProfiles(locationId: string): Promise<ActionResul
         .from("stations")
         .select("id, station_name, station_code, station_number, is_online, kiosk_profile_id")
         .eq("location_id", parsedLocationId)
-        .eq("station_type", "kiosk")
+        .eq("station_type", "self_service")
         .order("station_number", { ascending: true, nullsFirst: false }),
       supabase
         .from("payment_terminals")
@@ -414,6 +424,46 @@ export async function publishKioskProfile(profileId: string): Promise<ActionResu
   }
 }
 
+export async function unpublishKioskProfile(profileId: string): Promise<ActionResult<KioskProfile>> {
+  try {
+    const impersonation = await resolveImpersonationFromCookies().catch(() => null);
+    if (impersonation) {
+      return { success: false, error: "Carrier impersonation sessions can review kiosk profiles but cannot unpublish them." };
+    }
+
+    const id = uuidSchema.parse(profileId);
+    const before = await getProfileForAudit(id);
+    if (!before) return { success: false, error: "Profile not found" };
+    const { role } = await assertLocationAccess(before.location_id, true);
+    const supabase = createServerSupabaseClient();
+
+    const { data, error } = await supabase
+      .from("kiosk_profiles")
+      .update({ is_active: false })
+      .eq("id", id)
+      .select("*")
+      .single();
+
+    if (error || !data) return { success: false, error: error?.message ?? "Unpublish failed" };
+    const profile = normalizeProfile(data);
+    await LogAuditEvent({
+      merchantId: role.merchantId,
+      locationId: profile.location_id,
+      action: `Unpublished kiosk profile: ${profile.profile_name}`,
+      actionCategory: "settings",
+      resourceType: "kiosk_profile",
+      resourceId: profile.id,
+      resourceName: profile.profile_name,
+      changes: { before: auditRecord(before), after: auditRecord(profile) },
+    });
+
+    revalidatePath(`/dashboard/kiosk/${profile.location_id}`);
+    return { success: true, data: profile };
+  } catch (error) {
+    return { success: false, error: asError(error) };
+  }
+}
+
 export async function cloneKioskProfile(profileId: string, profileName: string): Promise<ActionResult<KioskProfile>> {
   try {
     const id = uuidSchema.parse(profileId);
@@ -436,9 +486,12 @@ export async function cloneKioskProfile(profileId: string, profileName: string):
       header_text_color: source.header_text_color,
       font_family: source.font_family,
       logo_url: source.logo_url,
-      hero_image_url: source.hero_image_url,
-      attract_video_url: source.attract_video_url,
-      attract_image_urls: source.attract_image_urls,
+      idle_images_vertical: source.idle_images_vertical,
+      idle_images_horizontal: source.idle_images_horizontal,
+      idle_video_vertical: source.idle_video_vertical,
+      idle_video_horizontal: source.idle_video_horizontal,
+      order_banner_images_vertical: source.order_banner_images_vertical,
+      order_banner_images_horizontal: source.order_banner_images_horizontal,
       orientation: source.orientation,
       idle_timeout_seconds: source.idle_timeout_seconds,
       cart_reset_timeout_seconds: source.cart_reset_timeout_seconds,
@@ -563,9 +616,18 @@ export async function setAdminPin(profileId: string, pin: string): Promise<Actio
   }
 }
 
+export type KioskAssetType =
+  | "logo"
+  | "idle_image_vertical"
+  | "idle_image_horizontal"
+  | "idle_video_vertical"
+  | "idle_video_horizontal"
+  | "order_banner_image_vertical"
+  | "order_banner_image_horizontal";
+
 export async function uploadKioskAsset(
   formData: FormData,
-  options: { locationId: string; assetType: "logo" | "hero" | "attract_image" | "attract_video" },
+  options: { locationId: string; assetType: KioskAssetType },
 ): Promise<ActionResult<{ url: string }>> {
   try {
     const locationId = uuidSchema.parse(options.locationId);
@@ -573,11 +635,16 @@ export async function uploadKioskAsset(
     const file = formData.get("file");
     if (!(file instanceof File)) return { success: false, error: "No file provided" };
 
+    const imageRule = { max: 5 * 1024 * 1024, types: ["image/png", "image/jpeg"], label: "PNG or JPG up to 5MB" };
+    const videoRule = { max: 30 * 1024 * 1024, types: ["video/mp4"], label: "MP4 up to 30MB" };
     const rules = {
       logo: { max: 2 * 1024 * 1024, types: ["image/svg+xml", "image/png"], label: "SVG or PNG up to 2MB" },
-      hero: { max: 5 * 1024 * 1024, types: ["image/png", "image/jpeg"], label: "PNG or JPG up to 5MB" },
-      attract_image: { max: 5 * 1024 * 1024, types: ["image/png", "image/jpeg"], label: "PNG or JPG up to 5MB" },
-      attract_video: { max: 30 * 1024 * 1024, types: ["video/mp4"], label: "MP4 up to 30MB" },
+      idle_image_vertical: imageRule,
+      idle_image_horizontal: imageRule,
+      idle_video_vertical: videoRule,
+      idle_video_horizontal: videoRule,
+      order_banner_image_vertical: imageRule,
+      order_banner_image_horizontal: imageRule,
     }[options.assetType];
 
     if (!rules.types.includes(file.type)) {
