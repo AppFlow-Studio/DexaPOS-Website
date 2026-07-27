@@ -287,6 +287,8 @@ Single index for active ticket streams and their source trackers.
 - Every `support_tickets` insert, including POS and merchant-dashboard tickets, triggers the same asynchronous notification path.
 - Resend recipients are configured through `SUPPORT_TICKET_NOTIFICATION_EMAILS`.
 - Delivery attempts are recorded in `support_ticket_notification_deliveries`; email failure never rolls back the ticket.
+- Platform Admin receives `hq.support.view` and `hq.support.manage` through the
+  companion role-permission migration.
 - Local implementation is complete. Migration/Vault configuration and cross-source staging QA remain.
 
 ## Notes

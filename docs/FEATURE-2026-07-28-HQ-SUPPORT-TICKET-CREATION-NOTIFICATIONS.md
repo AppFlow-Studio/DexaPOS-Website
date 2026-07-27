@@ -30,6 +30,8 @@ dashboard, HQ dashboard, or another future writer all pass through the same
   `hq.support.view` for reads and `hq.support.manage` for writes.
 - The HQ navigation item uses `hq.support.view` rather than the unrelated
   audit-log permission.
+- `hq.platform_admin` receives both support permissions through an idempotent
+  role-permission migration.
 
 ### New-ticket email notification
 
@@ -64,6 +66,7 @@ dashboard, HQ dashboard, or another future writer all pass through the same
 - `lib/support/ticket-notifications.ts`
 - `lib/messaging/resend.ts`
 - `supabase/migrations/20260728120000_hq_support_ticket_creation_notifications.sql`
+- `supabase/migrations/20260728123000_platform_admin_support_permissions.sql`
 
 ## Required Application Environment
 
@@ -87,6 +90,7 @@ recipients other than the Resend account's own test address.
 
 ```text
 supabase/migrations/20260728120000_hq_support_ticket_creation_notifications.sql
+supabase/migrations/20260728123000_platform_admin_support_permissions.sql
 ```
 
 2. Store the endpoint URL in Supabase Vault:
@@ -125,6 +129,8 @@ instead of creating a duplicate. Never paste secret values into migrations.
    - `metadata.source = hq_admin`
    - `metadata.audience = developers`
    - `metadata.hq_created = true`
+9. Sign in as `hq.platform_admin` and confirm Support is visible and the
+   developer-ticket form is available.
 
 ### Merchant/POS ticket
 
