@@ -3,6 +3,9 @@
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { currentUser } from "@clerk/nextjs/server";
+import { z } from "zod";
+import { assertHQPermission } from "@/lib/admin/auth";
+import { LogAuditEvent } from "@/app/dashboard/actions/audit-logs";
 import {
   SupportTicket,
   SupportTicketWithMessages,
@@ -15,6 +18,27 @@ import {
   TicketCategory,
 } from "@/types/support-ticket";
 
+const createHQSupportTicketSchema = z.object({
+  subject: z.string().trim().min(5).max(150),
+  description: z.string().trim().min(10).max(3000),
+  category: z.enum([
+    "general",
+    "billing",
+    "hardware",
+    "pos_app",
+    "menu",
+    "payments",
+    "kitchen",
+    "feature_request",
+    "onboarding",
+  ]),
+  priority: z.enum(["low", "normal", "high", "urgent"]),
+});
+
+export type CreateHQSupportTicketInput = z.infer<
+  typeof createHQSupportTicketSchema
+>;
+
 // ============================================================================
 // GET ALL TICKETS (Admin)
 // ============================================================================
@@ -24,6 +48,8 @@ export async function GetAllTickets(
   limit: number = 30,
   offset: number = 0
 ): Promise<{ data?: SupportTicket[]; total?: number; error?: string }> {
+  await assertHQPermission("hq.support.view");
+
   const supabase = createServiceRoleClient();
 
   let query = supabase
@@ -100,12 +126,124 @@ export async function GetAllTickets(
 }
 
 // ============================================================================
+// CREATE DEXA HQ DEVELOPER TICKET
+// ============================================================================
+
+export async function CreateHQSupportTicket(
+  input: CreateHQSupportTicketInput,
+): Promise<{
+  data?: {
+    ticket_id: string;
+    ticket_number: string;
+    merchant_id: string;
+    location_id: string;
+  };
+  error?: string;
+}> {
+  try {
+    const { userId } = await assertHQPermission("hq.support.manage");
+    const parsed = createHQSupportTicketSchema.safeParse(input);
+    if (!parsed.success) {
+      return {
+        error: parsed.error.issues[0]?.message || "Invalid ticket details",
+      };
+    }
+
+    const locationId = process.env.DEXA_HQ_SUPPORT_LOCATION_ID?.trim();
+    if (!locationId || !z.string().uuid().safeParse(locationId).success) {
+      return {
+        error:
+          "DEXA HQ support location is not configured. Set DEXA_HQ_SUPPORT_LOCATION_ID.",
+      };
+    }
+
+    const supabase = createServiceRoleClient();
+    const { data: location, error: locationError } = await supabase
+      .from("locations")
+      .select("id, merchant_id, name")
+      .eq("id", locationId)
+      .maybeSingle();
+
+    if (locationError || !location) {
+      return {
+        error:
+          "The configured DEXA HQ support location does not exist in this environment.",
+      };
+    }
+
+    const user = await currentUser();
+    const submittedByName =
+      user?.fullName || user?.firstName || "DEXA HQ Admin";
+    const submittedByEmail =
+      user?.primaryEmailAddress?.emailAddress ||
+      user?.emailAddresses?.[0]?.emailAddress ||
+      null;
+
+    const { data, error } = await supabase.rpc("create_hq_support_ticket", {
+      p_location_id: locationId,
+      p_subject: parsed.data.subject,
+      p_description: parsed.data.description,
+      p_category: parsed.data.category,
+      p_submitted_by: userId,
+      p_submitted_by_name: submittedByName,
+      p_submitted_by_email: submittedByEmail,
+      p_priority: parsed.data.priority,
+      p_metadata: {
+        created_from: "manage_support",
+      },
+    });
+
+    if (error || !data) {
+      return { error: error?.message || "Failed to create support ticket" };
+    }
+
+    const result = data as {
+      ticket_id: string;
+      ticket_number: string;
+      merchant_id: string;
+      location_id: string;
+    };
+
+    try {
+      await LogAuditEvent({
+        merchantId: location.merchant_id,
+        locationId,
+        action: "created",
+        actionCategory: "support",
+        severity: "info",
+        resourceType: "support_ticket",
+        resourceId: result.ticket_id,
+        resourceName: parsed.data.subject,
+        metadata: {
+          source: "hq_admin",
+          ticket_number: result.ticket_number,
+          priority: parsed.data.priority,
+          category: parsed.data.category,
+          configured_location_name: location.name,
+        },
+      });
+    } catch (auditError) {
+      console.error("[CreateHQSupportTicket] Audit logging failed", auditError);
+    }
+
+    return { data: result };
+  } catch (error) {
+    return {
+      error:
+        error instanceof Error ? error.message : "Failed to create support ticket",
+    };
+  }
+}
+
+// ============================================================================
 // GET TICKET DETAIL (Admin — includes internal notes)
 // ============================================================================
 
 export async function GetAdminTicketDetail(
   ticketId: string
 ): Promise<{ data?: SupportTicketWithMessages; error?: string }> {
+  await assertHQPermission("hq.support.view");
+
   const supabase = createServiceRoleClient();
 
   const { data: ticket, error: ticketError } = await supabase
@@ -188,6 +326,8 @@ export async function GetAdminSupportUploadUrl(
   fileName: string,
   fileId: string
 ): Promise<{ signedUrl?: string; path?: string; error?: string }> {
+  await assertHQPermission("hq.support.manage");
+
   const supabase = createServiceRoleClient();
   const user = await currentUser();
   if (!user) return { error: "Authentication required" };
@@ -213,6 +353,8 @@ export async function AdminAddMessage(
   isInternal: boolean = false,
   attachments: AttachmentInput[] = []
 ): Promise<{ data?: { message_id: string }; error?: string }> {
+  await assertHQPermission("hq.support.manage");
+
   const supabase = createServiceRoleClient();
   const user = await currentUser();
 
@@ -243,6 +385,8 @@ export async function AdminUpdateTicketStatus(
   status: TicketStatus,
   resolutionNotes?: string
 ): Promise<{ success?: boolean; error?: string }> {
+  await assertHQPermission("hq.support.manage");
+
   const supabase = createServiceRoleClient();
   const user = await currentUser();
 
@@ -266,6 +410,8 @@ export async function AssignTicket(
   assignedTo: string | null,
   assignedToName: string | null
 ): Promise<{ success?: boolean; error?: string }> {
+  await assertHQPermission("hq.support.manage");
+
   const supabase = createServiceRoleClient();
 
   const { error } = await supabase
@@ -290,6 +436,8 @@ export async function UpdateTicketPriority(
   ticketId: string,
   priority: TicketPriority
 ): Promise<{ success?: boolean; error?: string }> {
+  await assertHQPermission("hq.support.manage");
+
   const supabase = createServiceRoleClient();
 
   const { error } = await supabase
@@ -309,6 +457,8 @@ export async function UpdateTicketCategory(
   ticketId: string,
   category: TicketCategory
 ): Promise<{ success?: boolean; error?: string }> {
+  await assertHQPermission("hq.support.manage");
+
   const supabase = createServiceRoleClient();
 
   const { error } = await supabase
@@ -328,6 +478,8 @@ export async function GetHQTeamMembers(): Promise<{
   data?: { id: string; name: string }[];
   error?: string;
 }> {
+  await assertHQPermission("hq.support.manage");
+
   const supabase = createServiceRoleClient();
   // organizations.id IS the Clerk org ID (text primary key) — no lookup needed
   const hqOrgId = process.env.DEXA_POS_INTERNAL_TEAM_ID!;
@@ -359,6 +511,8 @@ export async function GetSupportStats(): Promise<{
   data?: SupportDashboardStats;
   error?: string;
 }> {
+  await assertHQPermission("hq.support.view");
+
   const supabase = createServiceRoleClient();
 
   const { data, error } = await supabase.rpc("get_support_dashboard_stats");

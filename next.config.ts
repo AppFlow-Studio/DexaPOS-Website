@@ -28,6 +28,7 @@ const nextConfig: NextConfig = {
     ],
   },
   experimental: {
+    useTypeScriptCli: true,
     serverActions: {
       bodySizeLimit: '6mb',
     },
