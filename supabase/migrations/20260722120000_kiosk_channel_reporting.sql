@@ -3,6 +3,12 @@
 -- Ticket: [Reporting - Kiosk] Kiosk orders reported separately from in-store POS.
 -- Reporting channel key: orders.order_source.
 -- Canonical set: pos | kiosk | online_store | orderout.
+--
+-- Wrapped in one transaction (BEGIN/COMMIT) so the enforce_order_math trigger
+-- toggle around the order_source backfill (below) is atomic: a failure anywhere
+-- can never leave the payment-math trigger disabled.
+
+BEGIN;
 
 CREATE OR REPLACE FUNCTION public.normalize_order_source(p_order_source text)
 RETURNS text
@@ -59,18 +65,39 @@ AS $$
     AND COALESCE(p_total_amount, 0) >= 0
 $$;
 
+-- Normalize order_source on EVERY existing row so the NOT NULL + canonical CHECK
+-- below can be validated. `orders` carries TWO deferrable-initially-deferred
+-- constraint triggers, and both must be suspended for the backfill:
+--   1. enforce_order_math (20260501000006) — a pre-existing payment-inconsistent
+--      row (e.g. an abandoned $0 test order: payment_status='paid', amount_paid=0.00)
+--      raises P0005 the instant it is touched, aborting the migration. That row's
+--      payment math is out of scope here (repaired separately).
+--   2. orders_broadcast_trigger_deferred (20260413215901) — queues a deferred
+--      Realtime broadcast event per touched row. Those pending events make the table
+--      refuse EVERY subsequent ALTER TABLE with SQLSTATE 55006 ("has pending trigger
+--      events") — which is exactly what blocks the ENABLE/ALTER statements below.
+-- Suspending both means the UPDATEs queue ZERO deferred events: order_source is
+-- corrected on all rows, the ALTERs run cleanly (no SET CONSTRAINTS flush needed),
+-- and both triggers are restored before commit. Payment columns are never modified,
+-- and the one-time backfill is intentionally not broadcast to Realtime subscribers.
+ALTER TABLE public.orders DISABLE TRIGGER enforce_order_math;
+ALTER TABLE public.orders DISABLE TRIGGER orders_broadcast_trigger_deferred;
+
+-- First-party online orders keep their channel.
 UPDATE public.orders
 SET order_source = 'online_store'
 WHERE lower(order_source) = 'online';
 
+-- Everything else that is not already canonical collapses to in-store POS
+-- (kiosk / online_store / orderout are written by their own ingestion paths). This is
+-- a catch-all so VALIDATE below can never trip on an unforeseen legacy or NULL value.
 UPDATE public.orders
 SET order_source = 'pos'
 WHERE order_source IS NULL
-   OR lower(order_source) IN ('in_store', 'instore', 'phone');
+   OR order_source NOT IN ('pos', 'kiosk', 'online_store', 'orderout');
 
--- Flush any pending deferred constraint-trigger events (RI_ConstraintTrigger_*)
--- so the ALTER COLUMN below is not blocked with SQLSTATE 55006.
-SET CONSTRAINTS ALL IMMEDIATE;
+ALTER TABLE public.orders ENABLE TRIGGER enforce_order_math;
+ALTER TABLE public.orders ENABLE TRIGGER orders_broadcast_trigger_deferred;
 
 ALTER TABLE public.orders
   ALTER COLUMN order_source SET DEFAULT 'pos';
@@ -740,3 +767,5 @@ COMMENT ON FUNCTION public.get_payment_summary_stats_v2(timestamptz, timestamptz
 
 COMMENT ON FUNCTION public.get_admin_transaction_summary_v2(text, timestamptz, timestamptz, uuid[], numeric, uuid[], numeric, text[], text[], text, text, text, uuid, text[]) IS
   'HQ transaction summary segmented by canonical orders.order_source channel.';
+
+COMMIT;
