@@ -332,6 +332,7 @@ export async function adminCheckMenuPayloadDiff(
     await assertHQPermission('hq.merchant.view')
 
     const { transformMenuToOrderOut, canonicalStringify } = await import('@/lib/orderout/transform-menu')
+    const { fetchOperatingHoursFallback } = await import('@/lib/orderout/hours')
     type MenuWithCategories = import('@/types/menu').MenuWithCategories
 
     const supabase = createServerSupabaseClient()
@@ -365,7 +366,12 @@ export async function adminCheckMenuPayloadDiff(
       }
     }
 
-    const currentPayload = transformMenuToOrderOut(menuData as MenuWithCategories)
+    // Same operating-hours fallback as the push path, so the out-of-sync badge
+    // doesn't drift for menus without an assigned schedule.
+    const fallbackAvailability = await fetchOperatingHoursFallback(supabase, locationId)
+    const currentPayload = transformMenuToOrderOut(menuData as MenuWithCategories, {
+      fallbackAvailability,
+    })
     const currentItemCount = currentPayload.items.length
 
     // Get last successful sync's payload snapshot
@@ -439,6 +445,7 @@ export async function adminPushMenuToOrderOut(
     const { userId } = await assertHQPermission('hq.merchant.update')
 
     const { transformMenuToOrderOut } = await import('@/lib/orderout/transform-menu')
+    const { fetchOperatingHoursFallback } = await import('@/lib/orderout/hours')
     type MenuWithCategories = import('@/types/menu').MenuWithCategories
 
     const supabase = createServerSupabaseClient()
@@ -470,8 +477,12 @@ export async function adminPushMenuToOrderOut(
       }
     }
 
-    // Transform menu to OrderOut format
-    const menuPayload = transformMenuToOrderOut(menuData as MenuWithCategories)
+    // Transform menu to OrderOut format. No assigned schedule -> fall back to the
+    // location's operating hours instead of 24/7.
+    const fallbackAvailability = await fetchOperatingHoursFallback(supabase, locationId)
+    const menuPayload = transformMenuToOrderOut(menuData as MenuWithCategories, {
+      fallbackAvailability,
+    })
     const itemCount = menuPayload.items.length
 
     // Check for existing link (determines if this is an update)
