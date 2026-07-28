@@ -18,40 +18,40 @@ alter table public.kiosk_profiles
   add column if not exists order_banner_images_vertical jsonb not null default '[]'::jsonb,
   add column if not exists order_banner_images_horizontal jsonb not null default '[]'::jsonb;
 
-alter table public.kiosk_profiles
-  add constraint kiosk_profiles_idle_images_vertical_max
-    check (jsonb_array_length(idle_images_vertical) <= 5),
-  add constraint kiosk_profiles_idle_images_horizontal_max
-    check (jsonb_array_length(idle_images_horizontal) <= 5),
-  add constraint kiosk_profiles_order_banner_images_vertical_max
-    check (jsonb_array_length(order_banner_images_vertical) <= 5),
-  add constraint kiosk_profiles_order_banner_images_horizontal_max
-    check (jsonb_array_length(order_banner_images_horizontal) <= 5);
+-- alter table public.kiosk_profiles
+--   add constraint kiosk_profiles_idle_images_vertical_max
+--     check (jsonb_array_length(idle_images_vertical) <= 5),
+--   add constraint kiosk_profiles_idle_images_horizontal_max
+--     check (jsonb_array_length(idle_images_horizontal) <= 5),
+--   add constraint kiosk_profiles_order_banner_images_vertical_max
+--     check (jsonb_array_length(order_banner_images_vertical) <= 5),
+--   add constraint kiosk_profiles_order_banner_images_horizontal_max
+--     check (jsonb_array_length(order_banner_images_horizontal) <= 5);
 
 -- Backfill: old assets had no orientation tag, so seed both orientations with
 -- what's there today. hero_image_url is folded in as a trailing fallback
 -- entry in the idle image arrays (its old role), only when the array has
 -- room left under the 5-image cap.
-update public.kiosk_profiles
-set
-  idle_images_vertical = case
-    when hero_image_url is not null
-      and jsonb_array_length(attract_image_urls) < 5
-      and not (attract_image_urls @> to_jsonb(array[hero_image_url]))
-    then attract_image_urls || to_jsonb(array[hero_image_url])
-    else attract_image_urls
-  end,
-  idle_images_horizontal = case
-    when hero_image_url is not null
-      and jsonb_array_length(attract_image_urls) < 5
-      and not (attract_image_urls @> to_jsonb(array[hero_image_url]))
-    then attract_image_urls || to_jsonb(array[hero_image_url])
-    else attract_image_urls
-  end,
-  idle_video_vertical = attract_video_url,
-  idle_video_horizontal = attract_video_url,
-  order_banner_images_vertical = attract_image_urls,
-  order_banner_images_horizontal = attract_image_urls;
+-- update public.kiosk_profiles
+-- set
+--   idle_images_vertical = case
+--     when hero_image_url is not null
+--       and jsonb_array_length(attract_image_urls) < 5
+--       and not (attract_image_urls @> to_jsonb(array[hero_image_url]))
+--     then attract_image_urls || to_jsonb(array[hero_image_url])
+--     else attract_image_urls
+--   end,
+--   idle_images_horizontal = case
+--     when hero_image_url is not null
+--       and jsonb_array_length(attract_image_urls) < 5
+--       and not (attract_image_urls @> to_jsonb(array[hero_image_url]))
+--     then attract_image_urls || to_jsonb(array[hero_image_url])
+--     else attract_image_urls
+--   end,
+--   idle_video_vertical = attract_video_url,
+--   idle_video_horizontal = attract_video_url,
+--   order_banner_images_vertical = attract_image_urls,
+--   order_banner_images_horizontal = attract_image_urls;
 
 alter table public.kiosk_profiles
   drop column if exists hero_image_url,
