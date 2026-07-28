@@ -182,7 +182,7 @@ const navMain: NavGroup[] = [
                 title: 'Support',
                 url: '/manage/support',
                 icon: MessageSquare,
-                requiredPermission: 'audit.view',
+                requiredPermission: 'hq.support.view',
             }
         ]
     },
