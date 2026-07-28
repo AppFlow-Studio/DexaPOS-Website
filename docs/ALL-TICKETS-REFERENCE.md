@@ -276,6 +276,23 @@ Single index for active ticket streams and their source trackers.
 - POS repo implementation completed: suspended login/session refusal, clean quota/suspended error handling, and local device/station state sync after suspend/restore.
 - Do not mark Done until calculator parity, next-invoice cascade, device-driven billing, quota blocking, suspension/restore, RLS checks, combined POS verification, and proof video pass.
 
+## Stream S: HQ Developer Ticket Creation + New-Ticket Email Notifications
+
+1. Feature and deployment guide:
+- `docs/FEATURE-2026-07-28-HQ-SUPPORT-TICKET-CREATION-NOTIFICATIONS.md`
+
+2. Scope notes:
+- Authorized HQ support admins can create developer tickets from `/manage/support`.
+- HQ-created tickets are forced to the server-configured DEXA HQ location.
+- HQ-created tickets accept up to 3 initial image/PDF attachments, linked to
+  the first admin message.
+- Every `support_tickets` insert, including POS and merchant-dashboard tickets, triggers the same asynchronous notification path.
+- Resend recipients are configured through `SUPPORT_TICKET_NOTIFICATION_EMAILS`.
+- Delivery attempts are recorded in `support_ticket_notification_deliveries`; email failure never rolls back the ticket.
+- Platform Admin receives `hq.support.view` and `hq.support.manage` through the
+  companion role-permission migration.
+- Local implementation is complete. Migration/Vault configuration and cross-source staging QA remain.
+
 ## Notes
 
 1. Keep this file updated whenever a new ticket stream starts.
