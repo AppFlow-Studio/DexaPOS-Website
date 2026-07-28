@@ -18,11 +18,15 @@ export type OrderType =
   | "online"
   | "catering";
 
+// Mirrors the `payment_method` Postgres enum
+// (Database["public"]["Enums"]["payment_method"]).
 export type PaymentMethod =
   | "cash"
+  | "card"
   | "card_spinapi"
   | "card_dvpaylite"
   | "card_manual"
+  | "card_online"
   | "gift_card"
   | "house_account"
   | "external";
