@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/select";
 import {
   CreateHQSupportTicket,
+  GetHQSupportDraftUploadUrl,
   type CreateHQSupportTicketInput,
 } from "../../actions/support";
 import {
@@ -31,9 +32,16 @@ import {
   TICKET_PRIORITY_LABELS,
   type TicketCategory,
   type TicketPriority,
+  type AttachmentInput,
 } from "@/types/support-ticket";
+import FileUploadInput from "@/components/support/FileUploadInput";
 
-const DEFAULT_FORM: CreateHQSupportTicketInput = {
+type HQSupportTicketForm = Pick<
+  CreateHQSupportTicketInput,
+  "subject" | "description" | "category" | "priority"
+>;
+
+const DEFAULT_FORM: HQSupportTicketForm = {
   subject: "",
   description: "",
   category: "general",
@@ -44,10 +52,13 @@ export default function NewHQSupportTicketPage() {
   const router = useRouter();
   const [form, setForm] = useState(DEFAULT_FORM);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [attachments, setAttachments] = useState<AttachmentInput[]>([]);
+  const [uploadSessionId] = useState(() => crypto.randomUUID());
 
-  const update = <K extends keyof CreateHQSupportTicketInput>(
+  const update = <K extends keyof HQSupportTicketForm>(
     key: K,
-    value: CreateHQSupportTicketInput[K],
+    value: HQSupportTicketForm[K],
   ) => {
     setForm((current) => ({ ...current, [key]: value }));
   };
@@ -57,7 +68,16 @@ export default function NewHQSupportTicketPage() {
     setIsSubmitting(true);
 
     try {
-      const result = await CreateHQSupportTicket(form);
+      if (isUploading) {
+        toast.error("Wait for attachments to finish uploading");
+        return;
+      }
+
+      const result = await CreateHQSupportTicket({
+        ...form,
+        attachments,
+        uploadSessionId,
+      });
       if (result.error || !result.data) {
         toast.error(result.error || "Failed to create ticket");
         return;
@@ -189,17 +209,31 @@ export default function NewHQSupportTicketPage() {
           />
         </div>
 
+        <div className="space-y-2">
+          <Label>Screenshots or files (optional)</Label>
+          <p className="text-xs text-muted-foreground">
+            PNG, JPG, WebP, or PDF. Maximum 3 files and 5 MB per file.
+          </p>
+          <FileUploadInput
+            onUploadsChange={setAttachments}
+            onUploadStateChange={setIsUploading}
+            getUploadUrl={GetHQSupportDraftUploadUrl}
+            sessionId={uploadSessionId}
+            disabled={isSubmitting}
+          />
+        </div>
+
         <div className="flex flex-col-reverse gap-3 border-t pt-5 sm:flex-row sm:items-center sm:justify-between">
           <Button type="button" variant="outline" asChild>
             <Link href="/manage/support">Cancel</Link>
           </Button>
-          <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting ? (
+          <Button type="submit" disabled={isSubmitting || isUploading}>
+            {isSubmitting || isUploading ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : (
               <Bug className="mr-2 h-4 w-4" />
             )}
-            Create Developer Ticket
+            {isUploading ? "Uploading files..." : "Create Developer Ticket"}
           </Button>
         </div>
       </form>

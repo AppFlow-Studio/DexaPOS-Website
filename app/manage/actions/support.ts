@@ -33,11 +33,33 @@ const createHQSupportTicketSchema = z.object({
     "onboarding",
   ]),
   priority: z.enum(["low", "normal", "high", "urgent"]),
+  uploadSessionId: z.string().uuid().optional(),
+  attachments: z
+    .array(
+      z.object({
+        file_name: z.string().trim().min(1).max(255),
+        file_path: z.string().trim().min(1).max(1000),
+        file_size: z.number().int().positive().max(5 * 1024 * 1024),
+        file_type: z.enum([
+          "image/png",
+          "image/jpeg",
+          "image/webp",
+          "application/pdf",
+        ]),
+      }),
+    )
+    .max(3)
+    .optional(),
 });
 
-export type CreateHQSupportTicketInput = z.infer<
-  typeof createHQSupportTicketSchema
->;
+export type CreateHQSupportTicketInput = {
+  subject: string;
+  description: string;
+  category: TicketCategory;
+  priority: TicketPriority;
+  uploadSessionId?: string;
+  attachments?: AttachmentInput[];
+};
 
 // ============================================================================
 // GET ALL TICKETS (Admin)
@@ -178,6 +200,23 @@ export async function CreateHQSupportTicket(
       user?.primaryEmailAddress?.emailAddress ||
       user?.emailAddresses?.[0]?.emailAddress ||
       null;
+    const attachments = parsed.data.attachments ?? [];
+
+    if (attachments.length > 0 && !parsed.data.uploadSessionId) {
+      return { error: "Attachment upload session is missing" };
+    }
+
+    if (attachments.length > 0) {
+      const expectedPathPrefix =
+        `admin/drafts/${userId}/${parsed.data.uploadSessionId}/`;
+      const hasInvalidPath = attachments.some(
+        (attachment) => !attachment.file_path.startsWith(expectedPathPrefix),
+      );
+
+      if (hasInvalidPath) {
+        return { error: "One or more attachment paths are invalid" };
+      }
+    }
 
     const { data, error } = await supabase.rpc("create_hq_support_ticket", {
       p_location_id: locationId,
@@ -191,6 +230,7 @@ export async function CreateHQSupportTicket(
       p_metadata: {
         created_from: "manage_support",
       },
+      p_attachments: attachments,
     });
 
     if (error || !data) {
@@ -231,6 +271,61 @@ export async function CreateHQSupportTicket(
     return {
       error:
         error instanceof Error ? error.message : "Failed to create support ticket",
+    };
+  }
+}
+
+// ============================================================================
+// GET SIGNED DRAFT UPLOAD URL (HQ ticket creation)
+// ============================================================================
+
+export async function GetHQSupportDraftUploadUrl(
+  fileName: string,
+  fileId: string,
+  uploadSessionId: string,
+): Promise<{ signedUrl?: string; path?: string; error?: string }> {
+  try {
+    const { userId } = await assertHQPermission("hq.support.manage");
+    const idSchema = z.string().uuid();
+    const fileNameSchema = z
+      .string()
+      .trim()
+      .min(1)
+      .max(255)
+      .regex(/\.(png|jpe?g|webp|pdf)$/i, "Unsupported attachment type");
+
+    if (
+      !idSchema.safeParse(fileId).success ||
+      !idSchema.safeParse(uploadSessionId).success
+    ) {
+      return { error: "Invalid upload session" };
+    }
+
+    const parsedFileName = fileNameSchema.safeParse(fileName);
+    if (!parsedFileName.success) {
+      return {
+        error:
+          parsedFileName.error.issues[0]?.message || "Invalid attachment name",
+      };
+    }
+
+    const sanitizedName = parsedFileName.data.replace(
+      /[^a-zA-Z0-9._-]/g,
+      "_",
+    );
+    const path =
+      `admin/drafts/${userId}/${uploadSessionId}/${fileId}_${sanitizedName}`;
+    const supabase = createServiceRoleClient();
+    const { data, error } = await supabase.storage
+      .from("support-attachments")
+      .createSignedUploadUrl(path);
+
+    if (error) return { error: error.message };
+    return { signedUrl: data.signedUrl, path };
+  } catch (error) {
+    return {
+      error:
+        error instanceof Error ? error.message : "Failed to prepare attachment",
     };
   }
 }

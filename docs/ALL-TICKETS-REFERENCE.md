@@ -284,6 +284,8 @@ Single index for active ticket streams and their source trackers.
 2. Scope notes:
 - Authorized HQ support admins can create developer tickets from `/manage/support`.
 - HQ-created tickets are forced to the server-configured DEXA HQ location.
+- HQ-created tickets accept up to 3 initial image/PDF attachments, linked to
+  the first admin message.
 - Every `support_tickets` insert, including POS and merchant-dashboard tickets, triggers the same asynchronous notification path.
 - Resend recipients are configured through `SUPPORT_TICKET_NOTIFICATION_EMAILS`.
 - Delivery attempts are recorded in `support_ticket_notification_deliveries`; email failure never rolls back the ticket.

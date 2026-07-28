@@ -18,12 +18,15 @@ dashboard, HQ dashboard, or another future writer all pass through the same
 - Form route: `/manage/support/new`
 - Required permission: `hq.support.manage`
 - Inputs: category, priority, subject, and developer details
+- Optional initial attachments: up to 3 PNG, JPEG, WebP, or PDF files at
+  5 MB each
 - Location: always the server-configured DEXA HQ location
 - Metadata:
   - `source = hq_admin`
   - `audience = developers`
   - `hq_created = true`
 - The first conversation message is stored with `sender_role = admin`.
+- Initial attachments are linked to that first admin message transactionally.
 - The dedicated `create_hq_support_ticket` RPC is executable only by
   `service_role`; browsers and POS clients cannot invoke it directly.
 - HQ support routes and service-role support actions enforce
@@ -67,6 +70,7 @@ dashboard, HQ dashboard, or another future writer all pass through the same
 - `lib/messaging/resend.ts`
 - `supabase/migrations/20260728120000_hq_support_ticket_creation_notifications.sql`
 - `supabase/migrations/20260728123000_platform_admin_support_permissions.sql`
+- `supabase/migrations/20260728130000_hq_support_ticket_initial_attachments.sql`
 
 ## Required Application Environment
 
@@ -91,6 +95,7 @@ recipients other than the Resend account's own test address.
 ```text
 supabase/migrations/20260728120000_hq_support_ticket_creation_notifications.sql
 supabase/migrations/20260728123000_platform_admin_support_permissions.sql
+supabase/migrations/20260728130000_hq_support_ticket_initial_attachments.sql
 ```
 
 2. Store the endpoint URL in Supabase Vault:
@@ -122,14 +127,17 @@ instead of creating a duplicate. Never paste secret values into migrations.
 2. Open `/manage/support`.
 3. Confirm **New Developer Ticket** is visible.
 4. Create a ticket with a recognizable subject and priority.
-5. Confirm the new detail page opens.
-6. Confirm merchant/location resolve to DEXA HQ.
-7. Confirm the first message is displayed as a DEXA/admin message.
-8. Confirm the row contains:
+5. Attach a PNG/JPEG/WebP screenshot and create the ticket.
+6. Confirm the new detail page opens.
+7. Confirm merchant/location resolve to DEXA HQ.
+8. Confirm the first message is displayed as a DEXA/admin message.
+9. Confirm the uploaded image appears on the first message and opens through
+   the audited attachment route.
+10. Confirm the row contains:
    - `metadata.source = hq_admin`
    - `metadata.audience = developers`
    - `metadata.hq_created = true`
-9. Sign in as `hq.platform_admin` and confirm Support is visible and the
+11. Sign in as `hq.platform_admin` and confirm Support is visible and the
    developer-ticket form is available.
 
 ### Merchant/POS ticket
