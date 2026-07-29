@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import {
   ColumnDef,
   SortingState,
@@ -37,10 +38,23 @@ import {
   ChevronsRight,
   Wifi,
   Smartphone,
+  X,
   CreditCard as ChipIcon,
 } from "lucide-react";
 import { PaymentRecord, EmvData } from "@/types/payment";
 import { CardBrandIcon } from "./CardBrandIcon";
+import { PaymentFacetFilter, type FacetOption } from "./PaymentFacetFilter";
+import { PaymentAmountFilter, type AmountRange } from "./PaymentAmountFilter";
+import {
+  getCardBrandLabel,
+  getPaymentMethodLabel,
+  normalizeCardBrand,
+  normalizeEntryMode,
+  resolveCardBrand,
+  resolveEntryMode,
+  getEntryModeLabel as getCanonicalEntryModeLabel,
+} from "@/lib/payments/method-display";
+import { filterPayments } from "@/lib/payments/filter-payments";
 import { cn } from "@/lib/utils";
 
 // ============================================================================
@@ -151,16 +165,7 @@ function getStatusConfig(status: string) {
 
 function getEntryModeLabel(mode?: string): string {
   if (!mode) return "";
-  const labels: Record<string, string> = {
-    contactless: "Contactless",
-    emvcl: "Contactless",
-    chip: "Chip",
-    emv: "Chip",
-    swipe: "Swipe",
-    manual: "Manual",
-    keyed: "Keyed",
-  };
-  return labels[mode.toLowerCase()] || mode;
+  return getCanonicalEntryModeLabel(mode);
 }
 
 function getCastlesData(p: PaymentRecord) {
@@ -586,6 +591,88 @@ export function PaymentsTable({ data, isLoading }: PaymentsTableProps) {
   const [globalFilter, setGlobalFilter] = React.useState("");
   const [expanded, setExpanded] = React.useState<ExpandedState>({});
 
+  const [methodFilter, setMethodFilter] = React.useState<string[]>([]);
+  const [brandFilter, setBrandFilter] = React.useState<string[]>([]);
+  const [entryFilter, setEntryFilter] = React.useState<string[]>([]);
+  const [amountFilter, setAmountFilter] = React.useState<AmountRange>({});
+
+  // Facet options come from the rows in view, so every option returns results.
+  // Counts are computed over the unfiltered data, matching the usual faceted-
+  // filter convention where counts describe the dataset, not the current result.
+  const { methodOptions, brandOptions, entryOptions } = React.useMemo(() => {
+    const tally = (
+      rows: PaymentRecord[],
+      key: (p: PaymentRecord) => string | undefined,
+      label: (raw: string) => string
+    ): FacetOption[] => {
+      const counts = new Map<string, { label: string; count: number }>();
+      for (const p of rows) {
+        const raw = key(p);
+        if (!raw) continue;
+        const existing = counts.get(raw);
+        if (existing) {
+          existing.count++;
+        } else {
+          counts.set(raw, { label: label(raw), count: 1 });
+        }
+      }
+      return [...counts.entries()]
+        .map(([value, v]) => ({ value, ...v }))
+        .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+    };
+
+    return {
+      methodOptions: tally(
+        data,
+        (p) => p.payment_method,
+        (raw) => getPaymentMethodLabel(raw)
+      ),
+      // Normalized so "Visa" and "VISA" are one option, not two.
+      brandOptions: tally(
+        data,
+        (p) => {
+          const brand = resolveCardBrand(p);
+          return brand ? normalizeCardBrand(brand) : undefined;
+        },
+        (raw) => getCardBrandLabel(raw)
+      ),
+      entryOptions: tally(
+        data,
+        (p) => {
+          const mode = resolveEntryMode(p);
+          return mode ? normalizeEntryMode(mode) : undefined;
+        },
+        (raw) => getCanonicalEntryModeLabel(raw)
+      ),
+    };
+  }, [data]);
+
+  const activeFilterCount =
+    methodFilter.length +
+    brandFilter.length +
+    entryFilter.length +
+    (amountFilter.min !== undefined || amountFilter.max !== undefined ? 1 : 0);
+
+  const clearAllFilters = () => {
+    setMethodFilter([]);
+    setBrandFilter([]);
+    setEntryFilter([]);
+    setAmountFilter({});
+  };
+
+  // Applied before the table sees the rows: brand and entry mode are derived from
+  // several processor fields, so there is no single column to filter on.
+  const filteredData = React.useMemo(
+    () =>
+      filterPayments(data, {
+        methods: methodFilter,
+        brands: brandFilter,
+        entryModes: entryFilter,
+        amount: amountFilter,
+      }),
+    [data, methodFilter, brandFilter, entryFilter, amountFilter]
+  );
+
   const columns: ColumnDef<PaymentRecord>[] = [
     // Expand toggle
     {
@@ -644,13 +731,28 @@ export function PaymentsTable({ data, isLoading }: PaymentsTableProps) {
           <ArrowUpDown className="ml-2 h-3 w-3" />
         </Button>
       ),
-      cell: ({ row }) => (
-        <div className="font-medium text-xs">
-          {row.original.orders?.order_number ||
-            row.original.orders?.display_number ||
-            "—"}
-        </div>
-      ),
+      cell: ({ row }) => {
+        const label =
+          row.original.orders?.order_number ||
+          row.original.orders?.display_number;
+        // The route resolves orders by UUID, not by the human-readable number.
+        const orderId = row.original.order_id;
+
+        if (!label || !orderId) {
+          return <div className="font-medium text-xs">{label || "—"}</div>;
+        }
+
+        return (
+          <Link
+            href={`/dashboard/orders/${orderId}`}
+            // Rows toggle their detail panel on click; keep that from firing.
+            onClick={(e) => e.stopPropagation()}
+            className="font-medium text-xs text-primary hover:underline"
+          >
+            {label}
+          </Link>
+        );
+      },
     },
     // Method
     {
@@ -853,7 +955,7 @@ export function PaymentsTable({ data, isLoading }: PaymentsTableProps) {
   ];
 
   const table = useReactTable({
-    data,
+    data: filteredData,
     columns,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
@@ -874,11 +976,20 @@ export function PaymentsTable({ data, isLoading }: PaymentsTableProps) {
     },
   });
 
+  // Narrowing the results can strand the view on a page that no longer exists.
+  const pageIndex = table.getState().pagination.pageIndex;
+  const pageCount = table.getPageCount();
+  React.useEffect(() => {
+    if (pageCount > 0 && pageIndex > pageCount - 1) {
+      table.setPageIndex(0);
+    }
+  }, [pageCount, pageIndex, table]);
+
   return (
     <div className="space-y-4 min-w-0">
-      {/* Search */}
-      <div className="flex items-center gap-2">
-        <div className="relative flex-1 max-w-sm">
+      {/* Search + filters */}
+      <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
+        <div className="relative w-full min-w-0 lg:max-w-sm">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="Search by order #, auth code, card, customer..."
@@ -887,7 +998,49 @@ export function PaymentsTable({ data, isLoading }: PaymentsTableProps) {
             className="pl-9"
           />
         </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <PaymentFacetFilter
+            title="Method"
+            options={methodOptions}
+            selected={methodFilter}
+            onChange={setMethodFilter}
+          />
+          <PaymentFacetFilter
+            title="Card Type"
+            options={brandOptions}
+            selected={brandFilter}
+            onChange={setBrandFilter}
+            searchable
+          />
+          <PaymentFacetFilter
+            title="Entry"
+            options={entryOptions}
+            selected={entryFilter}
+            onChange={setEntryFilter}
+          />
+          <PaymentAmountFilter
+            value={amountFilter}
+            onChange={setAmountFilter}
+          />
+          {activeFilterCount > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-9 px-2"
+              onClick={clearAllFilters}
+            >
+              Clear all
+              <X className="ml-1 h-4 w-4" />
+            </Button>
+          )}
+        </div>
       </div>
+
+      {activeFilterCount > 0 && (
+        <p className="text-sm text-muted-foreground" aria-live="polite">
+          Showing {filteredData.length} of {data.length} payments
+        </p>
+      )}
 
       {/* Table */}
       <div className="rounded-md border">

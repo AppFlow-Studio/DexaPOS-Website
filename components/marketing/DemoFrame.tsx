@@ -18,7 +18,7 @@ export default function DemoFrame() {
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg>
             Reset Demo
           </button>
-          <a href="/pos-demo/pos-app" target="_blank" className="demo-action-btn">
+          <a href="/pos-demo/pos-app.html" target="_blank" className="demo-action-btn">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M15 3h6v6M10 14L21 3M21 14v7H3V3h7" /></svg>
             Open full screen
           </a>
@@ -36,7 +36,7 @@ export default function DemoFrame() {
           </span>
         </div>
         <div className="device-iframe-wrap">
-          <iframe key={key} src="/pos-demo/pos-app" className="pos-iframe" title="DEXA Live Demo" loading="lazy" />
+          <iframe key={key} src="/pos-demo/pos-app.html" className="pos-iframe" title="DEXA Live Demo" loading="lazy" />
         </div>
       </div>
     </>
