@@ -7,6 +7,8 @@ export type TicketStatus =
 
 export type TicketPriority = 'low' | 'normal' | 'high' | 'urgent'
 
+export type TicketScope = 'merchant' | 'hq_internal'
+
 export type TicketCategory =
   | 'general'
   | 'billing'
@@ -23,7 +25,8 @@ export type MessageSenderRole = 'merchant' | 'carrier' | 'admin'
 export interface SupportTicket {
   id: string
   ticket_number: string
-  merchant_id: string
+  ticket_scope: TicketScope
+  merchant_id: string | null
   location_id: string | null
   submitted_by: string
   submitted_by_name: string
@@ -104,6 +107,7 @@ export interface SupportDashboardStats {
 
 export interface TicketFilters {
   status?: TicketStatus | 'all'
+  ticket_scope?: TicketScope | 'all'
   category?: TicketCategory | 'all'
   priority?: TicketPriority | 'all'
   assigned_to?: string | 'unassigned' | 'all'
@@ -132,6 +136,17 @@ export const TICKET_STATUS_LABELS: Record<TicketStatus, string> = {
   waiting_on_merchant: 'Waiting on Merchant',
   resolved: 'Resolved',
   closed: 'Closed',
+}
+
+export function getTicketStatusLabel(
+  status: TicketStatus,
+  scope: TicketScope,
+): string {
+  if (scope === 'hq_internal' && status === 'waiting_on_merchant') {
+    return 'Waiting on Reporter'
+  }
+
+  return TICKET_STATUS_LABELS[status]
 }
 
 export const TICKET_PRIORITY_LABELS: Record<TicketPriority, string> = {

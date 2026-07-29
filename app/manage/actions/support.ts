@@ -94,6 +94,10 @@ export async function GetAllTickets(
     }
   }
 
+  if (filters?.ticket_scope && filters.ticket_scope !== "all") {
+    query = query.eq("ticket_scope", filters.ticket_scope);
+  }
+
   if (filters?.category && filters.category !== "all") {
     query = query.eq("category", filters.category);
   }
@@ -157,13 +161,14 @@ export async function CreateHQSupportTicket(
   data?: {
     ticket_id: string;
     ticket_number: string;
-    merchant_id: string;
-    location_id: string;
+    ticket_scope: "hq_internal";
+    merchant_id: null;
+    location_id: null;
   };
   error?: string;
 }> {
   try {
-    const { userId } = await assertHQPermission("hq.support.manage");
+    const { userId, orgId } = await assertHQPermission("hq.support.manage");
     const parsed = createHQSupportTicketSchema.safeParse(input);
     if (!parsed.success) {
       return {
@@ -171,28 +176,7 @@ export async function CreateHQSupportTicket(
       };
     }
 
-    const locationId = process.env.DEXA_HQ_SUPPORT_LOCATION_ID?.trim();
-    if (!locationId || !z.string().uuid().safeParse(locationId).success) {
-      return {
-        error:
-          "DEXA HQ support location is not configured. Set DEXA_HQ_SUPPORT_LOCATION_ID.",
-      };
-    }
-
     const supabase = createServiceRoleClient();
-    const { data: location, error: locationError } = await supabase
-      .from("locations")
-      .select("id, merchant_id, name")
-      .eq("id", locationId)
-      .maybeSingle();
-
-    if (locationError || !location) {
-      return {
-        error:
-          "The configured DEXA HQ support location does not exist in this environment.",
-      };
-    }
-
     const user = await currentUser();
     const submittedByName =
       user?.fullName || user?.firstName || "DEXA HQ Admin";
@@ -219,7 +203,6 @@ export async function CreateHQSupportTicket(
     }
 
     const { data, error } = await supabase.rpc("create_hq_support_ticket", {
-      p_location_id: locationId,
       p_subject: parsed.data.subject,
       p_description: parsed.data.description,
       p_category: parsed.data.category,
@@ -229,6 +212,7 @@ export async function CreateHQSupportTicket(
       p_priority: parsed.data.priority,
       p_metadata: {
         created_from: "manage_support",
+        source_org_id: orgId,
       },
       p_attachments: attachments,
     });
@@ -240,14 +224,16 @@ export async function CreateHQSupportTicket(
     const result = data as {
       ticket_id: string;
       ticket_number: string;
-      merchant_id: string;
-      location_id: string;
+      ticket_scope: "hq_internal";
+      merchant_id: null;
+      location_id: null;
     };
 
     try {
       await LogAuditEvent({
-        merchantId: location.merchant_id,
-        locationId,
+        clerkOrgId: orgId,
+        locationId: null,
+        platformScoped: true,
         action: "created",
         actionCategory: "support",
         severity: "info",
@@ -259,7 +245,7 @@ export async function CreateHQSupportTicket(
           ticket_number: result.ticket_number,
           priority: parsed.data.priority,
           category: parsed.data.category,
-          configured_location_name: location.name,
+          ticket_scope: "hq_internal",
         },
       });
     } catch (auditError) {

@@ -117,11 +117,10 @@ export default function NewHQSupportTicketPage() {
             <LockKeyhole className="h-4 w-4 text-blue-700" />
           </div>
           <div>
-            <p className="text-sm font-semibold">Location fixed to DEXA HQ</p>
+            <p className="text-sm font-semibold">DEXA HQ internal ticket</p>
             <p className="mt-1 text-xs leading-relaxed text-blue-800">
-              Website-created tickets are developer work items. The server
-              assigns the configured DEXA HQ location automatically; it cannot
-              be changed from this form.
+              Website-created developer tickets are platform-scoped. They are
+              not assigned to a merchant, location, or carrier.
             </p>
           </div>
         </div>

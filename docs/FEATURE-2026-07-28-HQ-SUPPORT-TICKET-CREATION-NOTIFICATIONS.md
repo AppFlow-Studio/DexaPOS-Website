@@ -1,14 +1,35 @@
-# HQ Developer Ticket Creation + New-Ticket Email Notifications
+# HQ Internal Developer Tickets + New-Ticket Email Notifications
 
 ## Purpose
 
-Allow authorized DEXA HQ support administrators to create developer tickets
-from the HQ Support Inbox while notifying the configured developer email list
-whenever any support ticket is created.
+Allow authorized DEXA HQ administrators to create internal developer tickets
+without inventing a DEXA HQ merchant or location row. Merchant and POS support
+tickets continue to use their real tenant ownership.
 
-The notification is source-independent. Tickets created by the POS, merchant
-dashboard, HQ dashboard, or another future writer all pass through the same
-`support_tickets` insert trigger.
+Every new support ticket still uses the same source-independent notification
+trigger, whether it originates from POS, a merchant dashboard, or DEXA HQ.
+
+## Data Model
+
+`support_tickets.ticket_scope` defines ownership:
+
+- `merchant`: requires `merchant_id`; `location_id` remains optional.
+- `hq_internal`: requires `merchant_id`, `location_id`, and `carrier_id` to be
+  null.
+
+The append-only migration
+`supabase/migrations/20260729120000_hq_internal_support_ticket_scope.sql`:
+
+- adds and constrains `ticket_scope`;
+- makes `merchant_id` nullable for platform-scoped records;
+- converts earlier `metadata.hq_created = true` tickets to `hq_internal`;
+- replaces location-dependent `create_hq_support_ticket` overloads with one
+  location-free, service-role-only RPC;
+- keeps merchant ticket RLS tenant-scoped and gives authenticated HQ users
+  access to both scopes;
+- prevents internal tickets from generating merchant unread state.
+
+No fake DEXA HQ merchant, location, or carrier is required.
 
 ## Implemented Scope
 
@@ -20,145 +41,202 @@ dashboard, HQ dashboard, or another future writer all pass through the same
 - Inputs: category, priority, subject, and developer details
 - Optional initial attachments: up to 3 PNG, JPEG, WebP, or PDF files at
   5 MB each
-- Location: always the server-configured DEXA HQ location
+- Scope: always `hq_internal`
+- Tenant fields: `merchant_id = NULL`, `location_id = NULL`,
+  `carrier_id = NULL`
 - Metadata:
   - `source = hq_admin`
   - `audience = developers`
   - `hq_created = true`
-- The first conversation message is stored with `sender_role = admin`.
-- Initial attachments are linked to that first admin message transactionally.
-- The dedicated `create_hq_support_ticket` RPC is executable only by
-  `service_role`; browsers and POS clients cannot invoke it directly.
-- HQ support routes and service-role support actions enforce
-  `hq.support.view` for reads and `hq.support.manage` for writes.
-- The HQ navigation item uses `hq.support.view` rather than the unrelated
-  audit-log permission.
-- `hq.platform_admin` receives both support permissions through an idempotent
-  role-permission migration.
+  - `source_org_id = <active HQ Clerk organization>`
+- The first conversation message is stored as an admin message and is already
+  read for both HQ and the nonexistent merchant recipient.
+- Initial attachments are linked to the first message transactionally.
+- Creation is authorized by `assertHQPermission("hq.support.manage")`.
+- The active Clerk HQ organization comes from
+  `DEXA_POS_INTERNAL_TEAM_ID`, which is already used by HQ authentication.
+- Audit logging is platform-scoped and does not inherit impersonation or
+  location-cookie context.
+
+### Inbox and detail behavior
+
+- The support inbox can filter by **Merchant** or **HQ Internal**.
+- HQ rows display **DEXA HQ Internal**, never **Unknown Merchant**.
+- Internal detail pages use developer/reporting wording instead of merchant
+  reply wording.
+- Merchant links and location fields only render for merchant tickets.
+- Existing merchant and POS ticket behavior remains unchanged.
 
 ### New-ticket email notification
 
 - An `AFTER INSERT` trigger on `public.support_tickets` calls the protected
   `/api/internal/support-ticket-created` endpoint through `pg_net`.
-- The endpoint loads the ticket, merchant, and location from Supabase.
 - Resend emails the configured recipients in one delivery.
-- The email contains:
-  - ticket number and subject
-  - priority and category
-  - merchant and location
-  - submitter and source
-  - description
-  - direct HQ ticket link
+- Merchant ticket emails contain merchant and location context.
+- HQ internal ticket emails contain `Scope: DEXA HQ Internal` and do not show
+  fake merchant or location values.
 - Delivery state is stored in
   `public.support_ticket_notification_deliveries`.
-- A database-backed delivery claim prevents repeated or concurrent endpoint
-  calls from emailing the same ticket twice.
-- Failed deliveries and processing attempts older than five minutes can be
-  retried.
-- Missing configuration or Resend failure is recorded/logged but does not roll
-  back the support ticket.
+- A database-backed claim prevents duplicate or concurrent delivery.
+- Notification configuration or delivery failure never rolls back the ticket.
 
 ## Files
 
-- `app/manage/support/page.tsx`
-- `app/manage/support/layout.tsx`
-- `app/manage/support/new/page.tsx`
-- `app/manage/support/new/layout.tsx`
 - `app/manage/actions/support.ts`
-- `app/api/internal/support-ticket-created/route.ts`
+- `app/manage/support/page.tsx`
+- `app/manage/support/new/page.tsx`
+- `app/manage/support/[ticketId]/page.tsx`
+- `app/dashboard/actions/audit-logs.ts`
 - `lib/support/ticket-notifications.ts`
-- `lib/messaging/resend.ts`
+- `types/support-ticket.ts`
+- `app/database.types.ts`
 - `supabase/migrations/20260728120000_hq_support_ticket_creation_notifications.sql`
 - `supabase/migrations/20260728123000_platform_admin_support_permissions.sql`
 - `supabase/migrations/20260728130000_hq_support_ticket_initial_attachments.sql`
+- `supabase/migrations/20260729120000_hq_internal_support_ticket_scope.sql`
 
-## Required Application Environment
+## Required Website Environment
 
-Configure these values in the website deployment:
+Configure these in the website deployment environment:
 
 ```env
-DEXA_HQ_SUPPORT_LOCATION_ID=<uuid of the DEXA HQ location>
+# Existing HQ Clerk organization used by admin authentication.
+DEXA_POS_INTERNAL_TEAM_ID=<DEXA HQ Clerk organization ID>
+
+# New-ticket recipients.
 SUPPORT_TICKET_NOTIFICATION_EMAILS=alidexapos@gmail.com,alidika1000@gmail.com
+
+# Shared with Supabase Vault internal_notification_secret.
 INTERNAL_NOTIFICATION_SECRET=<strong random shared secret>
-RESEND_API_KEY=<resend api key>
+
+# Resend configuration used by the website notification endpoint.
+RESEND_API_KEY=<Resend API key>
 RESEND_FROM_EMAIL=<verified sender, for example support@dexapos.com>
+
+# Used to build links in notification emails.
 NEXT_PUBLIC_APP_URL=https://<website-host>
 ```
+
+Remove `DEXA_HQ_SUPPORT_LOCATION_ID` if it was added previously. It is obsolete.
 
 `RESEND_FROM_EMAIL` must use a domain verified in Resend when emailing
 recipients other than the Resend account's own test address.
 
-## Required Supabase Setup
+## Required Supabase Vault Secrets
 
-1. Apply:
+Only these two values are required in Supabase Vault for this notification
+flow:
 
-```text
-supabase/migrations/20260728120000_hq_support_ticket_creation_notifications.sql
-supabase/migrations/20260728123000_platform_admin_support_permissions.sql
-supabase/migrations/20260728130000_hq_support_ticket_initial_attachments.sql
+1. `support_ticket_notify_url`
+2. `internal_notification_secret`
+
+Inspect names without exposing secret values:
+
+```sql
+select id, name, created_at, updated_at
+from vault.secrets
+where name in (
+  'support_ticket_notify_url',
+  'internal_notification_secret'
+)
+order by name;
 ```
 
-2. Store the endpoint URL in Supabase Vault:
+Create missing values:
 
 ```sql
 select vault.create_secret(
   'https://<website-host>/api/internal/support-ticket-created',
   'support_ticket_notify_url'
 );
-```
 
-3. If `internal_notification_secret` does not already exist, create it:
-
-```sql
 select vault.create_secret(
   '<same value as website INTERNAL_NOTIFICATION_SECRET>',
   'internal_notification_secret'
 );
 ```
 
-If a secret with either name already exists, use `vault.update_secret(...)`
-instead of creating a duplicate. Never paste secret values into migrations.
+If a name already exists, update it instead of creating a duplicate:
+
+```sql
+select vault.update_secret(
+  '<existing secret UUID>',
+  '<new secret value>',
+  '<secret name>'
+);
+```
+
+Never paste real secret values into a migration or commit.
+
+## Deployment
+
+Apply these migrations in order if the earlier support feature has not yet
+been deployed:
+
+```text
+20260728120000_hq_support_ticket_creation_notifications.sql
+20260728123000_platform_admin_support_permissions.sql
+20260728130000_hq_support_ticket_initial_attachments.sql
+20260729120000_hq_internal_support_ticket_scope.sql
+```
+
+For an environment where the first three are already applied, apply only
+`20260729120000_hq_internal_support_ticket_scope.sql`.
+
+Use the approved staging SQL-editor and migration-repair process before
+production. Do not run raw Markdown in the SQL editor.
 
 ## Manual QA
 
-### HQ-created ticket
+### HQ internal ticket
 
-1. Sign into DEXA HQ as a user with `hq.support.manage`.
-2. Open `/manage/support`.
-3. Confirm **New Developer Ticket** is visible.
-4. Create a ticket with a recognizable subject and priority.
-5. Attach a PNG/JPEG/WebP screenshot and create the ticket.
-6. Confirm the new detail page opens.
-7. Confirm merchant/location resolve to DEXA HQ.
-8. Confirm the first message is displayed as a DEXA/admin message.
-9. Confirm the uploaded image appears on the first message and opens through
-   the audited attachment route.
-10. Confirm the row contains:
-   - `metadata.source = hq_admin`
-   - `metadata.audience = developers`
-   - `metadata.hq_created = true`
-11. Sign in as `hq.platform_admin` and confirm Support is visible and the
-   developer-ticket form is available.
+1. Sign into DEXA HQ with `hq.support.manage`.
+2. Open `/manage/support` and create a developer ticket with an image.
+3. Confirm the detail page opens and shows **DEXA HQ Internal**.
+4. Confirm there is no merchant/location link or `Unknown Merchant` label.
+5. Add a developer update and a private HQ note.
+6. Assign, change priority, change category, and resolve the ticket.
+7. Filter the inbox to **HQ Internal** and confirm the ticket appears.
+8. Verify the database record:
 
-### Merchant/POS ticket
+```sql
+select
+  ticket_number,
+  ticket_scope,
+  merchant_id,
+  location_id,
+  carrier_id,
+  metadata->>'source' as source,
+  metadata->>'source_org_id' as source_org_id
+from public.support_tickets
+where ticket_number = '<created ticket number>';
+```
 
-1. Create a ticket from the merchant dashboard or POS.
-2. Confirm it appears in `/manage/support`.
-3. Confirm its original merchant and location remain unchanged.
+Expected: `ticket_scope = 'hq_internal'`, all three tenant IDs are null, and
+source metadata identifies the HQ flow.
+
+### Merchant/POS regression
+
+1. Create a support ticket from a merchant dashboard or POS.
+2. Confirm it appears under the **Merchant** scope filter.
+3. Confirm its merchant and location values remain unchanged.
+4. Confirm a user from another merchant cannot read it.
+5. Confirm a merchant user cannot read the HQ internal ticket.
 
 ### Email delivery
 
-For both ticket sources:
+For one HQ internal ticket and one merchant ticket:
 
-1. Confirm one email reaches:
-   - `alidexapos@gmail.com`
-   - `alidika1000@gmail.com`
-2. Confirm the email values and HQ link are correct.
-3. Verify the delivery ledger:
+1. Confirm one email reaches each configured test recipient.
+2. Confirm the HQ email says **DEXA HQ Internal** and has no fake tenant.
+3. Confirm the merchant email includes the real merchant/location.
+4. Confirm both links open the correct HQ detail route.
+5. Verify delivery state:
 
 ```sql
 select
   st.ticket_number,
+  st.ticket_scope,
   d.status,
   d.recipient_emails,
   d.resend_message_ids,
@@ -171,33 +249,10 @@ order by d.created_at desc
 limit 20;
 ```
 
-Expected: `status = 'sent'` and both test recipients are present.
-
-### Duplicate-delivery protection
-
-1. Re-send the internal notification request for the same ticket ID using the
-   configured internal secret.
-2. Confirm the response reports `already_sent` after a successful delivery.
-3. Confirm the ledger still has one row and neither recipient receives a
-   second email.
-
-### Failure isolation
-
-1. Temporarily use an invalid Resend key in a non-production environment.
-2. Create a ticket.
-3. Confirm the ticket still exists and opens normally.
-4. Confirm the delivery ledger records `status = 'failed'` and `last_error`.
-
-## Deployment Order
-
-1. Deploy the website code and application environment variables.
-2. Apply the migration in staging.
-3. Create/update the two Vault secrets in staging.
-4. Complete staging QA for HQ and merchant/POS ticket sources.
-5. Repeat the migration and Vault configuration through the approved
-   production deployment process.
+Expected: `status = 'sent'` and both recipients are present.
 
 ## Status
 
-Implementation is complete locally. Staging migration, environment
-configuration, Resend delivery, and cross-source manual QA remain.
+Website and migration implementation are complete locally. Remaining work is
+staging migration application, website/Vault configuration, cross-scope RLS
+QA, email delivery QA, and production promotion through the approved process.

@@ -17648,7 +17648,7 @@ export type Database = {
           id: string
           last_message_at: string | null
           location_id: string | null
-          merchant_id: string
+          merchant_id: string | null
           metadata: Json | null
           priority: string
           resolution_notes: string | null
@@ -17660,6 +17660,7 @@ export type Database = {
           submitted_by_email: string | null
           submitted_by_name: string
           tags: string[] | null
+          ticket_scope: string
           ticket_number: string
           updated_at: string | null
         }
@@ -17675,7 +17676,7 @@ export type Database = {
           id?: string
           last_message_at?: string | null
           location_id?: string | null
-          merchant_id: string
+          merchant_id?: string | null
           metadata?: Json | null
           priority?: string
           resolution_notes?: string | null
@@ -17687,6 +17688,7 @@ export type Database = {
           submitted_by_email?: string | null
           submitted_by_name: string
           tags?: string[] | null
+          ticket_scope?: string
           ticket_number: string
           updated_at?: string | null
         }
@@ -17702,7 +17704,7 @@ export type Database = {
           id?: string
           last_message_at?: string | null
           location_id?: string | null
-          merchant_id?: string
+          merchant_id?: string | null
           metadata?: Json | null
           priority?: string
           resolution_notes?: string | null
@@ -17714,6 +17716,7 @@ export type Database = {
           submitted_by_email?: string | null
           submitted_by_name?: string
           tags?: string[] | null
+          ticket_scope?: string
           ticket_number?: string
           updated_at?: string | null
         }

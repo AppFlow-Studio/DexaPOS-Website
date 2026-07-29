@@ -283,7 +283,14 @@ Single index for active ticket streams and their source trackers.
 
 2. Scope notes:
 - Authorized HQ support admins can create developer tickets from `/manage/support`.
-- HQ-created tickets are forced to the server-configured DEXA HQ location.
+- HQ-created tickets use `ticket_scope = hq_internal` and have no merchant,
+  location, or carrier ownership.
+- `DEXA_HQ_SUPPORT_LOCATION_ID` is obsolete; HQ identity comes from the Clerk
+  org already enforced through `DEXA_POS_INTERNAL_TEAM_ID`.
+- The corrective append-only migration is
+  `supabase/migrations/20260729120000_hq_internal_support_ticket_scope.sql`.
+- Existing HQ-created rows are converted away from the previous fake-location
+  model while merchant and POS tickets retain tenant ownership.
 - HQ-created tickets accept up to 3 initial image/PDF attachments, linked to
   the first admin message.
 - Every `support_tickets` insert, including POS and merchant-dashboard tickets, triggers the same asynchronous notification path.
@@ -291,7 +298,8 @@ Single index for active ticket streams and their source trackers.
 - Delivery attempts are recorded in `support_ticket_notification_deliveries`; email failure never rolls back the ticket.
 - Platform Admin receives `hq.support.view` and `hq.support.manage` through the
   companion role-permission migration.
-- Local implementation is complete. Migration/Vault configuration and cross-source staging QA remain.
+- Local implementation is complete. Migration/Vault configuration,
+  cross-scope RLS checks, cross-source email checks, and staging QA remain.
 
 ## Notes
 

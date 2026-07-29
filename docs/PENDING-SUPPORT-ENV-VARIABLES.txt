@@ -1,0 +1,55 @@
+DEXA POS SUPPORT ENVIRONMENT SETUP
+==================================
+
+Website environment variables
+-----------------------------
+
+DEXA_POS_INTERNAL_TEAM_ID=<DEXA HQ Clerk organization ID>
+SUPPORT_TICKET_NOTIFICATION_EMAILS=alidexapos@gmail.com,alidika1000@gmail.com,ajaffal126@gmail.com
+INTERNAL_NOTIFICATION_SECRET=<paste generated secret here>
+
+The existing NEXT_PUBLIC_DEXA_POS_INTERNAL_TEAM_ID value must match
+DEXA_POS_INTERNAL_TEAM_ID.
+
+
+Generate INTERNAL_NOTIFICATION_SECRET in PowerShell
+---------------------------------------------------
+
+$bytes = New-Object byte[] 48
+[Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
+[Convert]::ToBase64String($bytes)
+
+
+Where to use the generated secret
+---------------------------------
+
+1. Website environment:
+
+INTERNAL_NOTIFICATION_SECRET=<same generated secret>
+
+2. Supabase Vault:
+
+select vault.create_secret(
+  '<same generated secret>',
+  'internal_notification_secret'
+);
+
+If the Vault secret already exists, update it instead:
+
+select vault.update_secret(
+  '<existing secret UUID>',
+  '<same generated secret>',
+  'internal_notification_secret'
+);
+
+3. Supabase Edge Function secrets, if not already configured:
+
+INTERNAL_NOTIFICATION_SECRET=<same generated secret>
+
+
+Important
+---------
+
+- Configure the website variables in Preview and Production as needed.
+- Redeploy the website after changing its environment variables.
+- Never commit real secret values to Git.

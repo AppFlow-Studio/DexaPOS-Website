@@ -8,6 +8,7 @@ import {
   TICKET_PRIORITY_LABELS,
   type TicketCategory,
   type TicketPriority,
+  type TicketScope,
 } from "@/types/support-ticket";
 
 const NOTIFICATION_RECIPIENTS_ENV = "SUPPORT_TICKET_NOTIFICATION_EMAILS";
@@ -15,6 +16,7 @@ const NOTIFICATION_RECIPIENTS_ENV = "SUPPORT_TICKET_NOTIFICATION_EMAILS";
 type TicketNotificationRecord = {
   id: string;
   ticket_number: string;
+  ticket_scope: TicketScope;
   subject: string;
   description: string;
   category: TicketCategory;
@@ -77,6 +79,7 @@ function buildNotificationHtml(
 ): string {
   const merchantName = getRelationName(ticket.merchant);
   const locationName = getRelationName(ticket.location);
+  const isHQInternal = ticket.ticket_scope === "hq_internal";
   const category = TICKET_CATEGORY_LABELS[ticket.category] ?? ticket.category;
   const priority = TICKET_PRIORITY_LABELS[ticket.priority] ?? ticket.priority;
   const submitter = ticket.submitted_by_email
@@ -95,8 +98,12 @@ function buildNotificationHtml(
         <table style="width:100%;border-collapse:collapse;font-size:14px">
           <tr><td style="padding:7px 0;color:#64748b;width:150px">Priority</td><td style="padding:7px 0;font-weight:700">${escapeHtml(priority)}</td></tr>
           <tr><td style="padding:7px 0;color:#64748b">Category</td><td style="padding:7px 0">${escapeHtml(category)}</td></tr>
-          <tr><td style="padding:7px 0;color:#64748b">Merchant</td><td style="padding:7px 0">${escapeHtml(merchantName)}</td></tr>
-          <tr><td style="padding:7px 0;color:#64748b">Location</td><td style="padding:7px 0">${escapeHtml(locationName)}</td></tr>
+          ${
+            isHQInternal
+              ? '<tr><td style="padding:7px 0;color:#64748b">Scope</td><td style="padding:7px 0">DEXA HQ Internal</td></tr>'
+              : `<tr><td style="padding:7px 0;color:#64748b">Merchant</td><td style="padding:7px 0">${escapeHtml(merchantName)}</td></tr>
+          <tr><td style="padding:7px 0;color:#64748b">Location</td><td style="padding:7px 0">${escapeHtml(locationName)}</td></tr>`
+          }
           <tr><td style="padding:7px 0;color:#64748b">Submitted by</td><td style="padding:7px 0">${escapeHtml(submitter)}</td></tr>
           <tr><td style="padding:7px 0;color:#64748b">Source</td><td style="padding:7px 0">${escapeHtml(getTicketSource(ticket.metadata))}</td></tr>
         </table>
@@ -129,6 +136,7 @@ export async function sendSupportTicketCreatedNotification(
       `
         id,
         ticket_number,
+        ticket_scope,
         subject,
         description,
         category,
