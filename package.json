@@ -115,7 +115,7 @@
     "@types/sanitize-html": "^2.16.1",
     "@vitest/ui": "^4.1.10",
     "axe-core": "^4.12.1",
-    "eslint": "^10.8.0",
+    "eslint": "^9.39.0",
     "eslint-config-next": "^16.2.12",
     "happy-dom": "^20.11.1",
     "tailwindcss": "^4.3.3",
