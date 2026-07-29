@@ -38,6 +38,7 @@ export interface SupportTicket {
   priority: TicketPriority
   status: TicketStatus
   assigned_to: string | null
+  assigned_to_emails: string[]
   assigned_to_name: string | null
   assigned_at: string | null
   resolved_at: string | null

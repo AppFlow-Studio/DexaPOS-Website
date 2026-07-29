@@ -7,6 +7,10 @@ import { z } from "zod";
 import { assertHQPermission } from "@/lib/admin/auth";
 import { LogAuditEvent } from "@/app/dashboard/actions/audit-logs";
 import {
+  parseSupportAssigneeEmails,
+  validateSupportAssigneeSelection,
+} from "@/lib/support/assignees";
+import {
   SupportTicket,
   SupportTicketWithMessages,
   SupportTicketAttachmentWithUrl,
@@ -33,6 +37,7 @@ const createHQSupportTicketSchema = z.object({
     "onboarding",
   ]),
   priority: z.enum(["low", "normal", "high", "urgent"]),
+  assignedToEmails: z.array(z.string().trim().email()).max(50).optional(),
   uploadSessionId: z.string().uuid().optional(),
   attachments: z
     .array(
@@ -57,6 +62,7 @@ export type CreateHQSupportTicketInput = {
   description: string;
   category: TicketCategory;
   priority: TicketPriority;
+  assignedToEmails?: string[];
   uploadSessionId?: string;
   attachments?: AttachmentInput[];
 };
@@ -155,6 +161,27 @@ export async function GetAllTickets(
 // CREATE DEXA HQ DEVELOPER TICKET
 // ============================================================================
 
+export async function GetConfiguredSupportAssignees(): Promise<{
+  data?: string[];
+  error?: string;
+}> {
+  try {
+    await assertHQPermission("hq.support.manage");
+    return {
+      data: parseSupportAssigneeEmails(
+        process.env.SUPPORT_TICKET_NOTIFICATION_EMAILS ?? "",
+      ),
+    };
+  } catch (error) {
+    return {
+      error:
+        error instanceof Error
+          ? error.message
+          : "Failed to load support assignees",
+    };
+  }
+}
+
 export async function CreateHQSupportTicket(
   input: CreateHQSupportTicketInput,
 ): Promise<{
@@ -185,6 +212,21 @@ export async function CreateHQSupportTicket(
       user?.emailAddresses?.[0]?.emailAddress ||
       null;
     const attachments = parsed.data.attachments ?? [];
+    let assignedToEmails: string[];
+
+    try {
+      assignedToEmails = validateSupportAssigneeSelection(
+        parsed.data.assignedToEmails ?? [],
+        process.env.SUPPORT_TICKET_NOTIFICATION_EMAILS ?? "",
+      );
+    } catch (error) {
+      return {
+        error:
+          error instanceof Error
+            ? error.message
+            : "Invalid support assignee selection",
+      };
+    }
 
     if (attachments.length > 0 && !parsed.data.uploadSessionId) {
       return { error: "Attachment upload session is missing" };
@@ -213,6 +255,7 @@ export async function CreateHQSupportTicket(
       p_metadata: {
         created_from: "manage_support",
         source_org_id: orgId,
+        assigned_to_emails: assignedToEmails,
       },
       p_attachments: attachments,
     });
@@ -246,6 +289,7 @@ export async function CreateHQSupportTicket(
           priority: parsed.data.priority,
           category: parsed.data.category,
           ticket_scope: "hq_internal",
+          assigned_to_emails: assignedToEmails,
         },
       });
     } catch (auditError) {

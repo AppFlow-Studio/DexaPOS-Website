@@ -545,36 +545,69 @@ export default function AdminTicketDetailPage() {
               </Select>
             </div>
 
-            <div>
-              <p className="text-xs text-muted-foreground mb-1">Assigned To</p>
-              <div className="flex gap-1.5">
-                <Select
-                  value={ticket.assigned_to ?? "unassigned"}
-                  onValueChange={(v) => {
-                    if (v === "unassigned") {
-                      assignMutation.mutate({ to: null, name: null });
-                    } else {
-                      const member = teamMembers.find((m) => m.id === v);
-                      assignMutation.mutate({ to: v, name: member?.name ?? null });
-                    }
-                  }}
-                >
-                  <SelectTrigger className="h-8 text-xs flex-1">
-                    <SelectValue placeholder="Unassigned" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="unassigned" className="text-xs text-muted-foreground">
-                      Unassigned
-                    </SelectItem>
-                    {teamMembers.map((m) => (
-                      <SelectItem key={m.id} value={m.id} className="text-xs">
-                        {m.id === userInfo?.id ? `${m.name} (you)` : m.name}
+            {!isHQInternal && (
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">
+                  Assigned To
+                </p>
+                <div className="flex gap-1.5">
+                  <Select
+                    value={ticket.assigned_to ?? "unassigned"}
+                    onValueChange={(v) => {
+                      if (v === "unassigned") {
+                        assignMutation.mutate({ to: null, name: null });
+                      } else {
+                        const member = teamMembers.find((m) => m.id === v);
+                        assignMutation.mutate({
+                          to: v,
+                          name: member?.name ?? null,
+                        });
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="h-8 text-xs flex-1">
+                      <SelectValue placeholder="Unassigned" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem
+                        value="unassigned"
+                        className="text-xs text-muted-foreground"
+                      >
+                        Unassigned
                       </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                      {teamMembers.map((m) => (
+                        <SelectItem key={m.id} value={m.id} className="text-xs">
+                          {m.id === userInfo?.id ? `${m.name} (you)` : m.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
-            </div>
+            )}
+
+            {isHQInternal && (
+              <div>
+                <p className="text-xs text-muted-foreground mb-1.5">
+                  Developer assignees
+                </p>
+                {ticket.assigned_to_emails?.length ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    {ticket.assigned_to_emails.map((email) => (
+                      <Badge
+                        key={email}
+                        variant="secondary"
+                        className="max-w-full truncate text-[11px] font-normal"
+                      >
+                        {email}
+                      </Badge>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">Unassigned</p>
+                )}
+              </div>
+            )}
           </div>
         </SidebarSection>
 

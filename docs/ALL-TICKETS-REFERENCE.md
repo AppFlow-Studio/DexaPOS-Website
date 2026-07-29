@@ -293,13 +293,33 @@ Single index for active ticket streams and their source trackers.
   model while merchant and POS tickets retain tenant ownership.
 - HQ-created tickets accept up to 3 initial image/PDF attachments, linked to
   the first admin message.
-- Every `support_tickets` insert, including POS and merchant-dashboard tickets, triggers the same asynchronous notification path.
+- HQ creation exposes a multi-select assignee dropdown sourced exclusively
+  from `SUPPORT_TICKET_NOTIFICATION_EMAILS`.
+- Selected developer emails persist in
+  `support_tickets.assigned_to_emails`; server validation rejects values not
+  present in the environment list.
+- Assignment is optional and does not change notification recipients: the
+  complete configured list still receives every ticket, reply, and private
+  note.
+- Every `support_tickets` insert, including POS and merchant-dashboard tickets,
+  triggers the same asynchronous notification path.
+- Every later support-ticket reply or private note triggers that same endpoint;
+  the initial description message is suppressed to prevent duplicate creation
+  emails.
 - Resend recipients are configured through `SUPPORT_TICKET_NOTIFICATION_EMAILS`.
-- Delivery attempts are recorded in `support_ticket_notification_deliveries`; email failure never rolls back the ticket.
+- New-ticket attempts are recorded in
+  `support_ticket_notification_deliveries`; reply/note attempts are recorded in
+  `support_ticket_message_notification_deliveries`. Email failure never rolls
+  back the ticket or message.
+- The thread-notification migration is
+  `supabase/migrations/20260729130000_support_ticket_thread_notifications.sql`.
+- The multi-assignee migration is
+  `supabase/migrations/20260729140000_hq_support_ticket_email_assignees.sql`.
 - Platform Admin receives `hq.support.view` and `hq.support.manage` through the
   companion role-permission migration.
 - Local implementation is complete. Migration/Vault configuration,
-  cross-scope RLS checks, cross-source email checks, and staging QA remain.
+  cross-scope RLS checks, cross-source ticket/reply/private-note email checks,
+  and staging QA remain.
 
 ## Notes
 

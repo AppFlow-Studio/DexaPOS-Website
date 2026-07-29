@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/select";
 import {
   CreateHQSupportTicket,
+  GetConfiguredSupportAssignees,
   GetHQSupportDraftUploadUrl,
   type CreateHQSupportTicketInput,
 } from "../../actions/support";
@@ -35,6 +36,7 @@ import {
   type AttachmentInput,
 } from "@/types/support-ticket";
 import FileUploadInput from "@/components/support/FileUploadInput";
+import { AssigneeEmailMultiSelect } from "@/components/support/AssigneeEmailMultiSelect";
 
 type HQSupportTicketForm = Pick<
   CreateHQSupportTicketInput,
@@ -54,7 +56,34 @@ export default function NewHQSupportTicketPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [attachments, setAttachments] = useState<AttachmentInput[]>([]);
+  const [availableAssignees, setAvailableAssignees] = useState<string[]>([]);
+  const [selectedAssignees, setSelectedAssignees] = useState<string[]>([]);
+  const [isLoadingAssignees, setIsLoadingAssignees] = useState(true);
   const [uploadSessionId] = useState(() => crypto.randomUUID());
+
+  useEffect(() => {
+    let active = true;
+
+    GetConfiguredSupportAssignees()
+      .then((result) => {
+        if (!active) return;
+        if (result.error) {
+          toast.error(result.error);
+          return;
+        }
+        setAvailableAssignees(result.data ?? []);
+      })
+      .catch(() => {
+        if (active) toast.error("Failed to load support assignees");
+      })
+      .finally(() => {
+        if (active) setIsLoadingAssignees(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const update = <K extends keyof HQSupportTicketForm>(
     key: K,
@@ -75,6 +104,7 @@ export default function NewHQSupportTicketPage() {
 
       const result = await CreateHQSupportTicket({
         ...form,
+        assignedToEmails: selectedAssignees,
         attachments,
         uploadSessionId,
       });
@@ -176,6 +206,20 @@ export default function NewHQSupportTicketPage() {
               </SelectContent>
             </Select>
           </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label>Assignees (optional)</Label>
+          <AssigneeEmailMultiSelect
+            emails={availableAssignees}
+            value={selectedAssignees}
+            onChange={setSelectedAssignees}
+            disabled={isSubmitting || isLoadingAssignees}
+          />
+          <p className="text-xs text-muted-foreground">
+            Select one or more developers from the configured support
+            notification list. Notifications still go to the entire list.
+          </p>
         </div>
 
         <div className="space-y-2">
