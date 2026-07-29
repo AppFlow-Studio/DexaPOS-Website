@@ -67,7 +67,12 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { useLocationStore, useIsAllLocations } from "@/stores/location-store";
+import {
+  useLocationStore,
+  useIsAllLocations,
+  useGatedLocationId,
+  useGatedLocation,
+} from "@/stores/location-store";
 import { LocationLibraryItem } from "@/types/menu";
 import { Switch } from "@/components/ui/switch";
 import { GetItemIsPopular, SetItemPopular, GetItemIsNew, SetItemNew } from "../../../actions/location-menu-overrides";
@@ -467,9 +472,16 @@ export default function MenuItemDetailPage() {
   const { data: allCategories } = useCategories(clerkOrgId || "");
   const { data: allModifierGroups } = useModifierGroups(clerkOrgId);
 
-  // Location context
-  const { selectedLocationId, locations } = useLocationStore();
+  // Location context. Location Badges are inherently per-location, so they use
+  // the gated resolver: a single-location account stays locked to the 'all'
+  // core scope (correct for pricing) but still has exactly one place the badge
+  // can live. Without this, single-location merchants could never set a badge.
+  const { locations } = useLocationStore();
   const isAllLocations = useIsAllLocations();
+  const gatedLocationId = useGatedLocationId();
+  const gatedLocation = useGatedLocation();
+  const selectedLocationId = gatedLocationId;
+  const badgesDisabled = !gatedLocationId;
 
   const currentLocation = React.useMemo(
     () => locations.find((l) => l.id === selectedLocationId) ?? null,
@@ -489,8 +501,8 @@ export default function MenuItemDetailPage() {
   // Stock quantity — only meaningful when mode is 'quantity' and a location is selected
   const { data: stockRecords } = useQuery({
     queryKey: ["item-stock", itemId, selectedLocationId],
-    queryFn: () => GetItemStock(selectedLocationId, itemId),
-    enabled: !!itemId && !isAllLocations && !!selectedLocationId,
+    queryFn: () => GetItemStock(selectedLocationId!, itemId),
+    enabled: !!itemId && !!selectedLocationId,
   });
   const stockRecord = stockRecords?.[0] ?? null;
 
@@ -505,7 +517,7 @@ export default function MenuItemDetailPage() {
   const { data: isPopular = false } = useQuery({
     queryKey: ["item-popular", itemId, selectedLocationId],
     queryFn: () => GetItemIsPopular(itemId, selectedLocationId!),
-    enabled: !!itemId && !isAllLocations && !!selectedLocationId,
+    enabled: !!itemId && !!selectedLocationId,
   });
 
   const popularMutation = useMutation({
@@ -525,7 +537,7 @@ export default function MenuItemDetailPage() {
   const { data: isNew = false } = useQuery({
     queryKey: ["item-new", itemId, selectedLocationId],
     queryFn: () => GetItemIsNew(itemId, selectedLocationId!),
-    enabled: !!itemId && !isAllLocations && !!selectedLocationId,
+    enabled: !!itemId && !!selectedLocationId,
   });
 
   const newMutation = useMutation({
@@ -1108,7 +1120,8 @@ export default function MenuItemDetailPage() {
                 Location Badges
               </CardTitle>
               <CardDescription className="text-xs">
-                Badges shown on the storefront for {currentLocationName}
+                Badges shown on the storefront for{" "}
+                {gatedLocation?.name ?? currentLocationName}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -1121,7 +1134,7 @@ export default function MenuItemDetailPage() {
                           🔥 Popular
                         </div>
                         <p className="text-xs text-muted-foreground">
-                          {isAllLocations
+                          {badgesDisabled
                             ? "Select a location to manage"
                             : "Auto-detected or manually set"}
                         </p>
@@ -1129,11 +1142,11 @@ export default function MenuItemDetailPage() {
                       <Switch
                         checked={isPopular}
                         onCheckedChange={(v) => popularMutation.mutate(v)}
-                        disabled={isAllLocations || popularMutation.isPending}
+                        disabled={badgesDisabled || popularMutation.isPending}
                       />
                     </div>
                   </TooltipTrigger>
-                  {isAllLocations && (
+                  {badgesDisabled && (
                     <TooltipContent>
                       Select a specific location to manage this badge
                     </TooltipContent>
@@ -1150,7 +1163,7 @@ export default function MenuItemDetailPage() {
                           ✨ New
                         </div>
                         <p className="text-xs text-muted-foreground">
-                          {isAllLocations
+                          {badgesDisabled
                             ? "Select a location to manage"
                             : "Mark as new at this branch"}
                         </p>
@@ -1158,11 +1171,11 @@ export default function MenuItemDetailPage() {
                       <Switch
                         checked={isNew}
                         onCheckedChange={(v) => newMutation.mutate(v)}
-                        disabled={isAllLocations || newMutation.isPending}
+                        disabled={badgesDisabled || newMutation.isPending}
                       />
                     </div>
                   </TooltipTrigger>
-                  {isAllLocations && (
+                  {badgesDisabled && (
                     <TooltipContent>
                       Select a specific location to manage this badge
                     </TooltipContent>
