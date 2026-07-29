@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef, useState, useCallback } from "react";
+import React, { useRef, useState, useCallback, useEffect } from "react";
 import { Paperclip, X, Loader2, CheckCircle2, AlertCircle, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AttachmentInput } from "@/types/support-ticket";
@@ -28,6 +28,7 @@ interface FileUploadInputProps {
   sessionId: string;
   disabled?: boolean;
   className?: string;
+  onUploadStateChange?: (isUploading: boolean) => void;
 }
 
 export default function FileUploadInput({
@@ -36,10 +37,15 @@ export default function FileUploadInput({
   sessionId,
   disabled,
   className,
+  onUploadStateChange,
 }: FileUploadInputProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [files, setFiles] = useState<UploadedFileState[]>([]);
   const [isDragging, setIsDragging] = useState(false);
+
+  useEffect(() => {
+    onUploadStateChange?.(files.some((file) => file.status === "uploading"));
+  }, [files, onUploadStateChange]);
 
   const notifyParent = useCallback(
     (updated: UploadedFileState[]) => {

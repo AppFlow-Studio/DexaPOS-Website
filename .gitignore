@@ -63,3 +63,5 @@ tasks/T-21-responsive-layout.md
 
 # Playwright MCP test artifacts
 .playwright-mcp/
+# Orderout documentation
+/orderout-docs*

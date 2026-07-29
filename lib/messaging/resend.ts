@@ -97,7 +97,7 @@ export function buildEmailTemplate(
  * Send an email via Resend
  */
 export async function sendEmail(
-  to: string,
+  to: string | string[],
   subject: string,
   html: string,
   headers?: Record<string, string>
@@ -122,7 +122,7 @@ export async function sendEmail(
     return { error };
   }
 
-  if (!to) {
+  if (!to || (Array.isArray(to) && to.length === 0)) {
     const error = "Recipient email (to) is missing";
     console.error("[sendEmail]", error);
     return { error };

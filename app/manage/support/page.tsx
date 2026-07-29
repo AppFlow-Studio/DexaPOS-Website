@@ -3,8 +3,10 @@
 import React, { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   MessageSquare,
+  MessageSquarePlus,
   Clock,
   Users,
   TrendingUp,
@@ -40,6 +42,7 @@ import {
 } from "@/types/support-ticket";
 import { formatDistanceToNow } from "date-fns";
 import { useUserInfo } from "../hooks/useUserInfo.";
+import { useAdminPermissions } from "@/lib/hooks/useAdminPermissions";
 
 const STATUS_TABS = [
   { key: "open", label: "Open" },
@@ -142,6 +145,8 @@ export default function AdminSupportPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { data: userInfo } = useUserInfo();
+  const { hasPermission } = useAdminPermissions();
+  const canCreateTicket = hasPermission("hq.support.manage");
 
   const [activeStatus, setActiveStatus] = useState<string>("open");
   const [filters, setFilters] = useState<Omit<TicketFilters, "status">>({});
@@ -188,17 +193,27 @@ export default function AdminSupportPage() {
             Manage merchant support tickets
           </p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          className="self-start sm:self-auto flex-shrink-0"
-          onClick={() =>
-            queryClient.invalidateQueries({ queryKey: ["admin-support-tickets"] })
-          }
-        >
-          <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
-          Refresh
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="flex-shrink-0"
+            onClick={() =>
+              queryClient.invalidateQueries({ queryKey: ["admin-support-tickets"] })
+            }
+          >
+            <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+            Refresh
+          </Button>
+          {canCreateTicket && (
+            <Button size="sm" className="flex-shrink-0" asChild>
+              <Link href="/manage/support/new">
+                <MessageSquarePlus className="mr-1.5 h-3.5 w-3.5" />
+                New Developer Ticket
+              </Link>
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* KPI Cards */}
