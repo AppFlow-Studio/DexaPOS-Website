@@ -41,13 +41,14 @@ import type {
   RevenueBreakdown,
   DualPricingComparison,
   DiscountImpact,
-  SalesSummaryRow,
+  SalesSummaryReportData,
   HourlySalesRow,
   KitchenPerformanceStats,
   TablePerformanceStats,
   StaffPerformanceStats,
   OrderFlowStats,
 } from "@/types/analytics";
+import type { OrderSource } from "@/lib/orderout/platform";
 import {
   GetWaterfallReport,
   WaterfallReport,
@@ -277,6 +278,7 @@ export function useVoidsReport(
 export function useSalesByItemReport(
   dateFrom: Date,
   dateTo: Date,
+  orderSource: OrderSource | null = null,
   orgIdOverride?: string,
   locationIdOverride?: string | null
 ) {
@@ -295,9 +297,16 @@ export function useSalesByItemReport(
       effectiveLocationId,
       dateFrom.toISOString(),
       dateTo.toISOString(),
+      orderSource,
     ],
     queryFn: () =>
-      GetSalesByItemReport(clerkOrgId, effectiveLocationId, dateFrom, dateTo),
+      GetSalesByItemReport(
+        clerkOrgId,
+        effectiveLocationId,
+        dateFrom,
+        dateTo,
+        orderSource
+      ),
     enabled: !!clerkOrgId,
     staleTime: 2 * 60 * 1000,
     refetchOnWindowFocus: false,
@@ -667,6 +676,7 @@ export function useDiscountImpact(
 export function useSalesSummaryReport(
   dateFrom: Date,
   dateTo: Date,
+  orderSource: OrderSource | null = null,
   orgIdOverride?: string,
   locationIdOverride?: string | null
 ) {
@@ -679,16 +689,23 @@ export function useSalesSummaryReport(
   const effectiveLocationId =
     locationIdOverride !== undefined ? locationIdOverride : storeLocationId;
 
-  return useQuery<SalesSummaryRow[]>({
+  return useQuery<SalesSummaryReportData>({
     queryKey: [
       "sales-summary-report",
       clerkOrgId,
       effectiveLocationId,
       dateFrom.toISOString(),
       dateTo.toISOString(),
+      orderSource,
     ],
     queryFn: () =>
-      GetSalesSummaryReport(clerkOrgId, effectiveLocationId, dateFrom, dateTo),
+      GetSalesSummaryReport(
+        clerkOrgId,
+        effectiveLocationId,
+        dateFrom,
+        dateTo,
+        orderSource
+      ),
     enabled: !!clerkOrgId,
     staleTime: 2 * 60 * 1000,
     refetchOnWindowFocus: false,

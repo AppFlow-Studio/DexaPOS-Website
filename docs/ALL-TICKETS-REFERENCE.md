@@ -321,6 +321,28 @@ Single index for active ticket streams and their source trackers.
   cross-scope RLS checks, cross-source ticket/reply/private-note email checks,
   and staging QA remain.
 
+## Stream T: [Reporting - Kiosk] Website Channel-Segmented Reports
+
+1. Plan and QA tracker:
+- `docs/PLAN-2026-07-30-KIOSK-CHANNEL-REPORTING-WEB.md`
+
+2. Scope notes:
+- Website/dashboard portion of the shared POS/backend reporting ticket.
+- Canonical sources are `pos`, `kiosk`, `online_store`, and `orderout`.
+- Merchant Reports scope includes Sales Summary channel cards and compatible
+  channel filters.
+- HQ Payments & Banking must render the channel dimension from
+  `get_admin_transaction_summary_v2(...)`.
+- Revenue-by-Platform must exclude kiosk even if legacy routing metadata uses
+  a kiosk-like provider value.
+- The corrected shared migration was applied from the POS repository; the
+  website duplicate is synchronization-only and must not be executed again.
+- `get_payment_summary_stats_v2(...)` is HQ-only and must not be called by the
+  merchant Payment Summary tab without a new tenant-scoped backend contract.
+- Website code is complete and targeted automated verification passes.
+- Remaining closure work is staging/manual QA, SQL/screenshots, the merchant
+  Payment Summary backend contract follow-up, and Temur sign-off.
+
 ## Notes
 
 1. Keep this file updated whenever a new ticket stream starts.

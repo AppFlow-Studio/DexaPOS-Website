@@ -18,6 +18,8 @@ import { KitchenPerformanceReport } from '@/components/dashboard/orders/reports/
 import { TableTurnsReport } from '@/components/dashboard/orders/reports/TableTurnsReport'
 import { ServerPerformanceReport } from '@/components/dashboard/orders/reports/ServerPerformanceReport'
 import { VoidsReport } from '@/components/dashboard/orders/reports/VoidsReport'
+import { ReportChannelFilter } from '@/components/dashboard/orders/reports/ReportChannelFilter'
+import type { OrderSource } from '@/lib/orderout/platform'
 
 export default function ReportsPage() {
   const { orgSlug } = useAuth()
@@ -33,6 +35,7 @@ export default function ReportsPage() {
   })
   const [dateTo, setDateTo] = useState<Date>(new Date())
   const [activeTab, setActiveTab] = useState('sales-summary')
+  const [orderSource, setOrderSource] = useState<OrderSource | null>(null)
 
   // Get merchant and location names for PDF exports
   const merchantName = orgSlug || 'Merchant'
@@ -78,6 +81,15 @@ export default function ReportsPage() {
         preset={preset}
         onPresetChange={setPreset}
       />
+
+      {(activeTab === 'sales-summary' || activeTab === 'item-sales') && (
+        <div className="flex justify-end">
+          <ReportChannelFilter
+            value={orderSource}
+            onChange={setOrderSource}
+          />
+        </div>
+      )}
 
       {/* Tab Navigation */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
@@ -136,7 +148,7 @@ export default function ReportsPage() {
         <TabsContent value="sales-summary">
           <Card className="border-blue-200 dark:border-blue-900/50 shadow-lg dark:shadow-blue-900/10 bg-white dark:bg-slate-900">
             <CardContent className="pt-6 dark:text-gray-100">
-              <SalesSummaryReport dateFrom={dateFrom} dateTo={dateTo} merchantName={merchantName} locationName={locationName} />
+              <SalesSummaryReport dateFrom={dateFrom} dateTo={dateTo} merchantName={merchantName} locationName={locationName} orderSource={orderSource} />
             </CardContent>
           </Card>
         </TabsContent>
@@ -154,7 +166,7 @@ export default function ReportsPage() {
         <TabsContent value="item-sales">
           <Card className="border-blue-200 dark:border-blue-900/50 shadow-lg dark:shadow-blue-900/10 bg-white dark:bg-slate-900">
             <CardContent className="pt-6 dark:text-gray-100">
-              <ItemSalesReport dateFrom={dateFrom} dateTo={dateTo} merchantName={merchantName} locationName={locationName} />
+              <ItemSalesReport dateFrom={dateFrom} dateTo={dateTo} merchantName={merchantName} locationName={locationName} orderSource={orderSource} />
             </CardContent>
           </Card>
         </TabsContent>
