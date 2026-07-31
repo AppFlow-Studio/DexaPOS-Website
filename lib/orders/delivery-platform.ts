@@ -119,6 +119,9 @@ export function resolveDeliveryPlatformLogo(
   const normalizedOrderSource = orderSource
     ? normalizePlatformSlug(orderSource)
     : null;
+  if (normalizedOrderSource === "kiosk") {
+    return null;
+  }
 
   const candidates: Array<{ value: string | null; sourceField: string }> = [
     { value: readString(order.delivery_platform), sourceField: "delivery_platform" },
@@ -131,10 +134,16 @@ export function resolveDeliveryPlatformLogo(
     { value: orderSource, sourceField: "order_source" },
   ];
 
+  let encounteredKioskIdentity = false;
+
   for (const candidate of candidates) {
     if (!candidate.value) continue;
 
     const normalized = normalizePlatformSlug(candidate.value);
+    if (normalized === "kiosk") {
+      encounteredKioskIdentity = true;
+      continue;
+    }
     if (POS_ALIASES.has(normalized) || AGGREGATOR_PLACEHOLDER_ALIASES.has(normalized)) {
       continue;
     }
@@ -152,6 +161,9 @@ export function resolveDeliveryPlatformLogo(
     }
 
     if (slug === FIRST_PARTY_SLUG || FIRST_PARTY_ALIASES.has(normalized)) {
+      if (encounteredKioskIdentity) {
+        return null;
+      }
       return buildOnlineFallback("Online Order", candidate.sourceField);
     }
 
@@ -161,6 +173,10 @@ export function resolveDeliveryPlatformLogo(
   }
 
   if (normalizedOrderSource && POS_ALIASES.has(normalizedOrderSource)) {
+    return null;
+  }
+
+  if (encounteredKioskIdentity) {
     return null;
   }
 

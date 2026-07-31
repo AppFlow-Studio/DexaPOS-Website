@@ -2,6 +2,8 @@
 // DEXA POS: Multi-Location Analytics Types
 // ============================================================================
 
+import type { OrderSource } from "@/lib/orderout/platform";
+
 // ============================================================================
 // Base Types
 // ============================================================================
@@ -635,6 +637,20 @@ export interface SalesSummaryRow {
   tax: number;
   tips: number;
   refunds: number;
+}
+
+export interface SalesChannelSummary {
+  channel: OrderSource;
+  label: string;
+  orders: number;
+  gross: number;
+  net: number;
+  avgTicket: number;
+}
+
+export interface SalesSummaryReportData {
+  rows: SalesSummaryRow[];
+  byChannel: SalesChannelSummary[];
 }
 
 /** Hourly Sales Report Row */

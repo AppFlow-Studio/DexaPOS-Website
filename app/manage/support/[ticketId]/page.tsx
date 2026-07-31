@@ -48,7 +48,6 @@ import {
 } from "../../actions/support";
 import {
   TICKET_CATEGORY_LABELS,
-  TICKET_STATUS_LABELS,
   TICKET_STATUS_COLORS,
   TICKET_PRIORITY_COLORS,
   TICKET_PRIORITY_LABELS,
@@ -57,6 +56,7 @@ import {
   TicketStatus,
   TicketPriority,
   TicketCategory,
+  getTicketStatusLabel,
 } from "@/types/support-ticket";
 import { format, isToday, isYesterday, isSameDay } from "date-fns";
 import { useUserInfo } from "../../hooks/useUserInfo.";
@@ -219,7 +219,13 @@ export default function AdminTicketDetailPage() {
       AdminAddMessage(ticketId, msg, internal, atts),
     onSuccess: (res) => {
       if (res.error) { toast.error(res.error); return; }
-      toast.success(isInternal ? "Internal note added" : "Reply sent");
+      toast.success(
+        isInternal
+          ? "Internal note added"
+          : ticket?.ticket_scope === "hq_internal"
+            ? "Developer update added"
+            : "Reply sent",
+      );
       setReply("");
       setAttachments([]);
       setUploadKey((k) => k + 1);
@@ -310,6 +316,7 @@ export default function AdminTicketDetailPage() {
   const merchantInfo = ticket.merchant as any;
   const locationInfo = ticket.location as any;
   const metadata = ticket.metadata as any;
+  const isHQInternal = ticket.ticket_scope === "hq_internal";
 
   // Build messages with date separators
   const messagesWithSeparators: Array<
@@ -351,7 +358,7 @@ export default function AdminTicketDetailPage() {
                     TICKET_STATUS_COLORS[ticket.status]
                   )}
                 >
-                  {TICKET_STATUS_LABELS[ticket.status]}
+                  {getTicketStatusLabel(ticket.status, ticket.ticket_scope)}
                 </Badge>
                 <Badge
                   className={cn(
@@ -362,7 +369,9 @@ export default function AdminTicketDetailPage() {
                   {TICKET_PRIORITY_LABELS[ticket.priority]}
                 </Badge>
                 <span className="text-xs text-muted-foreground">
-                  {merchantInfo?.name} · {format(new Date(ticket.created_at), "MMM d, yyyy")}
+                  {isHQInternal ? "DEXA HQ Internal" : merchantInfo?.name}
+                  {" / "}
+                  {format(new Date(ticket.created_at), "MMM d, yyyy")}
                 </span>
               </div>
             </div>
@@ -404,7 +413,9 @@ export default function AdminTicketDetailPage() {
               {isInternal ? (
                 <span className="font-semibold text-amber-700">Internal Note</span>
               ) : (
-                <span className="text-muted-foreground">Reply to merchant</span>
+                <span className="text-muted-foreground">
+                  {isHQInternal ? "Developer update" : "Reply to merchant"}
+                </span>
               )}
             </Label>
           </div>
@@ -435,8 +446,12 @@ export default function AdminTicketDetailPage() {
               }}
               placeholder={
                 isInternal
-                  ? "Add an internal note (not visible to merchant)..."
-                  : "Type your reply…"
+                  ? isHQInternal
+                    ? "Add a private HQ note..."
+                    : "Add an internal note (not visible to merchant)..."
+                  : isHQInternal
+                    ? "Add a developer update..."
+                    : "Type your reply..."
               }
               className={cn(
                 "resize-none min-h-[80px] transition-colors",
@@ -486,7 +501,9 @@ export default function AdminTicketDetailPage() {
                 <SelectContent>
                   <SelectItem value="open">Open</SelectItem>
                   <SelectItem value="in_progress">In Progress</SelectItem>
-                  <SelectItem value="waiting_on_merchant">Waiting on Merchant</SelectItem>
+                  <SelectItem value="waiting_on_merchant">
+                    {isHQInternal ? "Waiting on Reporter" : "Waiting on Merchant"}
+                  </SelectItem>
                   <SelectItem value="resolved">Resolved</SelectItem>
                   <SelectItem value="closed">Closed</SelectItem>
                 </SelectContent>
@@ -528,36 +545,69 @@ export default function AdminTicketDetailPage() {
               </Select>
             </div>
 
-            <div>
-              <p className="text-xs text-muted-foreground mb-1">Assigned To</p>
-              <div className="flex gap-1.5">
-                <Select
-                  value={ticket.assigned_to ?? "unassigned"}
-                  onValueChange={(v) => {
-                    if (v === "unassigned") {
-                      assignMutation.mutate({ to: null, name: null });
-                    } else {
-                      const member = teamMembers.find((m) => m.id === v);
-                      assignMutation.mutate({ to: v, name: member?.name ?? null });
-                    }
-                  }}
-                >
-                  <SelectTrigger className="h-8 text-xs flex-1">
-                    <SelectValue placeholder="Unassigned" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="unassigned" className="text-xs text-muted-foreground">
-                      Unassigned
-                    </SelectItem>
-                    {teamMembers.map((m) => (
-                      <SelectItem key={m.id} value={m.id} className="text-xs">
-                        {m.id === userInfo?.id ? `${m.name} (you)` : m.name}
+            {!isHQInternal && (
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">
+                  Assigned To
+                </p>
+                <div className="flex gap-1.5">
+                  <Select
+                    value={ticket.assigned_to ?? "unassigned"}
+                    onValueChange={(v) => {
+                      if (v === "unassigned") {
+                        assignMutation.mutate({ to: null, name: null });
+                      } else {
+                        const member = teamMembers.find((m) => m.id === v);
+                        assignMutation.mutate({
+                          to: v,
+                          name: member?.name ?? null,
+                        });
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="h-8 text-xs flex-1">
+                      <SelectValue placeholder="Unassigned" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem
+                        value="unassigned"
+                        className="text-xs text-muted-foreground"
+                      >
+                        Unassigned
                       </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                      {teamMembers.map((m) => (
+                        <SelectItem key={m.id} value={m.id} className="text-xs">
+                          {m.id === userInfo?.id ? `${m.name} (you)` : m.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
-            </div>
+            )}
+
+            {isHQInternal && (
+              <div>
+                <p className="text-xs text-muted-foreground mb-1.5">
+                  Developer assignees
+                </p>
+                {ticket.assigned_to_emails?.length ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    {ticket.assigned_to_emails.map((email) => (
+                      <Badge
+                        key={email}
+                        variant="secondary"
+                        className="max-w-full truncate text-[11px] font-normal"
+                      >
+                        {email}
+                      </Badge>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">Unassigned</p>
+                )}
+              </div>
+            )}
           </div>
         </SidebarSection>
 
@@ -633,6 +683,27 @@ export default function AdminTicketDetailPage() {
             </div>
           </SidebarSection>
         )}
+        {isHQInternal && (
+          <SidebarSection title="Internal Ticket">
+            <div className="space-y-2 text-sm">
+              <div className="flex items-start gap-1.5">
+                <Building2 className="h-3.5 w-3.5 text-muted-foreground mt-0.5 shrink-0" />
+                <span className="text-xs font-medium">DEXA HQ</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <User className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                <span className="text-xs text-muted-foreground">
+                  {ticket.submitted_by_name}
+                </span>
+              </div>
+              {ticket.submitted_by_email && (
+                <p className="text-xs text-muted-foreground pl-5">
+                  {ticket.submitted_by_email}
+                </p>
+              )}
+            </div>
+          </SidebarSection>
+        )}
 
         {/* Context from metadata */}
         {metadata && Object.keys(metadata).length > 0 && (
@@ -656,19 +727,20 @@ export default function AdminTicketDetailPage() {
           </>
         )}
 
-        <Separator />
-
-        {/* Related Links */}
-        <SidebarSection title="Related">
-          {merchantInfo?.clerk_org_id && (
+        {merchantInfo?.clerk_org_id && (
+          <>
+            <Separator />
+            {/* Related Links */}
+            <SidebarSection title="Related">
             <Button size="sm" variant="outline" className="w-full h-7 text-xs justify-start" asChild>
               <Link href={`/manage/merchants/${merchantInfo.id}`}>
                 <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
                 View Merchant Dashboard
               </Link>
             </Button>
-          )}
-        </SidebarSection>
+            </SidebarSection>
+          </>
+        )}
       </div>
     </div>
   );
