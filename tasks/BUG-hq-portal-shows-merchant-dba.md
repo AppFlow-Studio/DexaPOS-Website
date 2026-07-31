@@ -6,7 +6,7 @@
 **Reported by:** Platform user — *"when logged in, sometimes it shows the merchant dba even though not logged as merchant."*
 **Investigated:** 2026-07-29, against `feat/orderout-status-relay` + live DB.
 **Verdict:** **Reproducible and confirmed.** The "sometimes" is real — there are **two independent causes**, one nondeterministic and one state-dependent.
-**Status:** **Fixed** 2026-07-29 on `feat/orderout-status-relay` — see [Resolution](#resolution). Live QA passed via Playwright (both triggers' user-visible symptoms confirmed gone; one sub-step deferred for lack of a super-admin login).
+**Status:** **Fixed** on PR #259 (`aliawdi-dev`) — see [Resolution](#resolution). Live QA passed via Playwright (both triggers' user-visible symptoms confirmed gone; one sub-step deferred for lack of a super-admin login).
 
 ---
 
@@ -225,14 +225,7 @@ const hqOrg = useMemo(
 
 then render `hqOrg?.name || 'Dexa POS HQ'` and `hqOrg?.imageURL`. When no HQ membership is present in the array — which is exactly the impersonation case — it falls through to the literal, so **this change also neutralizes Cause 2's visual symptom for free**.
 
-Belt-and-braces (recommended, cheap): add a deterministic order to the embed in [app/manage/actions/get-user-info.ts:23-32](../app/manage/actions/get-user-info.ts#L23-L32) so *every* consumer of this hook gets a stable array rather than a plan-dependent one:
-
-```ts
-.select(`*, members(...)`)
-.order('created_at', { referencedTable: 'members', ascending: true })
-```
-
-This is a correctness improvement in its own right — other call sites index into `members` positionally too (see [Follow-ups](#follow-ups)).
+Do not add a global sort to the `members` embed as a workaround. A stable order would only make positional consumers deterministically wrong when the first row is not the membership they intend. Each consumer must select a membership by organization, role, or other explicit intent.
 
 ### Fix 2 — decide what impersonation means on `/manage` (closes Cause 2 properly)
 
@@ -256,7 +249,7 @@ Optional hardening, not required: shorten `IMPERSONATION_TTL_SECONDS` (24h is ge
 ## Verification plan
 
 1. **Cause 1, before/after.** On a Supabase branch, run the `UPDATE members SET updated_at = now()` repro above against `support@dexaposai.com`'s HQ row. On `main` the `/manage` header flips to "Saucy INC"; with Fix 1 it stays "Dexa POS HQ". Repeat the update 3× to confirm stability across heap positions.
-2. **Ordering.** With the `.order()` added, assert `GetUserInfo().members[0].organization_id === 'org_33z36QibAMZy6kc2xZNYmDl5duh'` for that user across repeated calls and after an update.
+2. **Ordering independence.** Assert the HQ selector resolves the HQ organization with both HQ-first and merchant-first membership arrays.
 3. **Cause 2.** Impersonate → navigate to `/manage` without exiting. Expect: header reads "Dexa POS HQ", banner present (Option B), Exit works from `/manage`.
 3a. **Cause 2b — the browser-restart trap.** Impersonate → **fully close the browser** (clearing `sessionStorage`) → reopen → go straight to `/manage`. On `main`: merchant DBA in the header, no banner, no Exit anywhere. With Fix 1 + Option B: HQ name in the header, banner rehydrated from the cookie, Exit functional. Confirm the `impersonation_sessions` row closes with `end_reason = 'user_exit'` (not `superseded`).
 4. **No regression on `/dashboard`.** Impersonate → `/dashboard` must still show the merchant name, merchant logo, merchant location scope, and the countdown banner. Fix 1 touches only the `/manage` layout; confirm the dashboard header path is untouched.
@@ -267,7 +260,7 @@ Optional hardening, not required: shorten `IMPERSONATION_TTL_SECONDS` (24h is ge
 
 ## Follow-ups (out of scope for this fix, worth tickets)
 
-- **Positional `members[0]` elsewhere.** Same anti-pattern is known to appear in merchant-resolution paths (see the `members[0]`-derived merchant note in the test-env constraints). The `.order()` addition makes those deterministic but does not make them *correct* — each site should select by intent, not index. Worth an audit sweep.
+- **Positional `members[0]` elsewhere.** Same anti-pattern is known to appear in merchant-resolution paths (see the `members[0]`-derived merchant note in the test-env constraints). Each site should select by intent, not index. Worth an audit sweep.
 - **`useUserInfo` cache key is identity-free.** [app/manage/hooks/useUserInfo..ts:6](../app/manage/hooks/useUserInfo..ts#L6) uses `queryKey: ['userInfo']` with no user or impersonation discriminator. `resetClientSession` on sign-out ([app/manage/layout.tsx:237-241](../app/manage/layout.tsx#L237-L241)) covers the sign-out path, but any client-side transition that changes effective identity — notably starting/ending impersonation — relies on a hard navigation to avoid serving stale identity. Consider keying on `[userId, impersonationSessionId ?? 'none']`.
 - **Filename typo.** `app/manage/hooks/useUserInfo..ts` (double dot) — pre-existing, harmless, noted for cleanup.
 - **HQ admins holding merchant memberships.** `support@dexaposai.com` owning `Saucy INC` may itself be unintended (test-data residue vs. a real support account). Worth confirming with whoever provisioned it — if it's residue, deleting the row also removes the Cause 1 trigger, though the code fix should land regardless. **Decision taken:** leave the data alone; the code fix is correct for any number of memberships.
@@ -277,36 +270,26 @@ Optional hardening, not required: shorten `IMPERSONATION_TTL_SECONDS` (24h is ge
 
 ## Resolution
 
-**Applied 2026-07-29 on `feat/orderout-status-relay`.** Three files changed, one added. No migration, no schema change, no live-data change.
+**Implemented on PR #259 (`aliawdi-dev`).** No migration, schema change, live-data change, or dependency change.
 
 | File | Change |
 |---|---|
-| [lib/admin/hq-identity.ts](../lib/admin/hq-identity.ts) | **New.** Pure `selectHqOrganization(userInfo, hqOrgId)` selector. Kept out of the component so it is verifiable without a test runner. Returns `null` — never a guess — for: no HQ membership, empty `hqOrgId`, an `Error` payload (`GetUserInfo` returns rather than throws), loading/absent states, and malformed rows. |
+| [lib/admin/hq-identity.ts](../lib/admin/hq-identity.ts) | **New.** Pure, unit-tested `selectHqOrganization(userInfo, hqOrgId)` selector. Returns `null` — never a guess — for: no HQ membership, empty `hqOrgId`, an `Error` payload (`GetUserInfo` returns rather than throws), loading/absent states, and malformed rows. |
 | [app/manage/layout.tsx](../app/manage/layout.tsx) | Header renders `hqOrg?.name \|\| 'Dexa POS HQ'` and `hqOrg?.imageURL` instead of `members[0]`. Fallback string normalised `'DexaPOS HQ'` → `'Dexa POS HQ'` to match the org name in the DB. Mounted `<ImpersonationHydrator />` beside `<DeniedParamHandler />` and `<ImpersonationBanner />` as the first child of `<main>`. |
-| [app/manage/actions/get-user-info.ts](../app/manage/actions/get-user-info.ts) | Added `.order('created_at', { referencedTable: 'members', ascending: true })` to the embed. |
+| [lib/admin/__tests__/hq-identity.test.ts](../lib/admin/__tests__/hq-identity.test.ts) | **New.** Permanent regression coverage for mixed membership order, missing HQ membership, loading/error payloads, malformed rows, and missing organization joins. |
 
 `ImpersonationBanner` and `ImpersonationHydrator` were **reused as-is** — no new component, no file moves, and no change to `handleExit`, which triage confirmed already sound.
 
 ### What has been verified
 
-- **Selector logic — 13/13 checks pass** via `npx tsx` (vitest is unusable locally: corrupt win32 rolldown binding). Coverage includes the two cases that encode the bug — HQ+merchant with the merchant row **first** and with the HQ row first both resolve to `Dexa POS HQ` — plus the impersonation shape (merchant row only → `null`, so the header falls back to the literal), `Error`/`undefined`/`null` payloads, a non-array `members`, an empty `hqOrgId`, a null `organizations` join, and null entries inside the array.
-- **All three changed files typecheck clean** under the project's own `tsconfig.json` (`npx tsc --noEmit`). Verified as a real pass, not a skipped file: `tsc --listFilesOnly` confirms all three are members of the program, and `app/manage` was definitely compiled (160 pre-existing errors there from *other* files). Zero errors attributable to this change. `hq-identity.ts` additionally typechecks clean standalone under `--strict`.
-  - Note: the project as a whole emits **2544** type errors, which is why `next.config.ts` sets `ignoreBuildErrors: true`. That is the pre-existing baseline, unrelated to this fix.
-- **Production build — NOT run.** Blocked by two pre-existing environment faults, neither caused by this change (details below). What a build would add over `tsc` is Next-specific RSC/client-boundary validation; the risk there is minimal since `ImpersonationBanner` and `ImpersonationHydrator` are mounted exactly as they already are in the `'use client'` dashboard layout, and `/manage`'s layout is also `'use client'`. Module resolution of the new `@/lib/admin/hq-identity` import **is** covered by `tsc` (an unresolvable import would raise TS2307).
-
-### Blocked gates — pre-existing environment faults
-
-Both predate this work; `package-lock.json` was verified byte-identical (MD5) before and after, and nothing was installed.
-
-1. **`npm run build` fails on missing modules.** `sanitize-html` and `@tiptap/*` are declared in `package.json` but absent from `node_modules` — the checkout never re-installed after they were added. All failing traces run through `lib/cms/*` and `app/(marketing)/*`; none touch `/manage`.
-2. **`npm install` (the fix for #1) aborts on a peer conflict.** `package.json` pins `typescript@7.0.2`, but `@tanstack/eslint-plugin-query@5.101.4` declares `peerOptional typescript@"^5.4.0 || ^6.0.0"` — TS 7 is outside that range, so npm refuses the whole tree. Clearing it needs `--legacy-peer-deps`/`--force`, which npm warns yields a "potentially broken" resolution — not a change to make as a side effect of a bugfix. Proper resolution (own ticket): downgrade to TS 6.x, or drop/upgrade `@tanstack/eslint-plugin-query`.
-3. **Lint is unavailable repo-wide** (see tooling note below).
-
-> Operational gotcha worth carrying into CI: both failures above returned **exit code 0** because the commands were piped to `tail` — the pipeline reports `tail`'s status, not npm's. Use `set -o pipefail` or drop the pipe when the exit code matters.
+- **Selector regression suite — 10/10 tests pass** via `npx vitest run --config vitest.config.mts lib/admin/__tests__/hq-identity.test.ts`. The two cases encoding the bug — merchant-first and HQ-first mixed memberships — both resolve to `Dexa POS HQ`; absent or malformed HQ data returns `null` so the UI uses the safe literal fallback.
+- **Targeted TypeScript validation passes** for the HQ selector and `/manage` integration files.
+- **Production build passes** via `npm run build` on Next.js 16.2.12, including compilation and generation of all 118 static pages.
+- **Dependency files remain identical to preview.** `npm ci` currently reports that preview's committed `package.json` and `package-lock.json` are out of sync around transitive Next/webpack dependencies. That repository-baseline lockfile issue is not caused or modified by this focused bug fix.
 
 ### Tooling note (pre-existing, unrelated to this fix)
 
-`npm run lint` is broken repo-wide and could not be used as a gate: the script runs `next lint`, which this Next version removed (`Invalid project directory provided, no such directory: …\lint`), and invoking `npx eslint` directly also fails because ESLint 10 requires flat config while the repo ships `.eslintrc.json`. Worth its own ticket.
+`npm run lint` is broken repo-wide and could not be used as a gate: the script runs `next lint`, which Next 16 removed (`Invalid project directory provided, no such directory: …\lint`). Worth its own ticket.
 
 ### Live QA — run 2026-07-29 via Playwright against the dev environment
 

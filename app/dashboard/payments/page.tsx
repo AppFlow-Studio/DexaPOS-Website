@@ -27,12 +27,18 @@ import { PaymentStats } from "./components/PaymentStats";
 import { PaymentCharts } from "./components/PaymentCharts";
 import { PaymentsTable } from "./components/PaymentsTable";
 import { PaymentFilters, PaymentRecord, PaymentSummary } from "@/types/payment";
+import {
+  getCardBrandLabel,
+  normalizeCardBrand,
+} from "@/lib/payments/method-display";
 import { PaymentMethod, PaymentStatus } from "@/types/order-management";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { BatchesView } from "./components/BatchesView";
 import { Layers } from "lucide-react";
 
-function computePaymentSummary(payments: PaymentRecord[]): PaymentSummary {
+export function computePaymentSummary(
+  payments: PaymentRecord[]
+): PaymentSummary {
   if (!payments.length) {
     return {
       totalCount: 0,
@@ -54,7 +60,12 @@ function computePaymentSummary(payments: PaymentRecord[]): PaymentSummary {
   let refundCount = 0;
 
   const methodMap = new Map<string, { count: number; amount: number }>();
-  const cardTypeMap = new Map<string, { count: number; amount: number }>();
+  // Keyed by normalized brand; `label` keeps the first-seen original spelling so
+  // an unrecognized brand isn't displayed lowercased.
+  const cardTypeMap = new Map<
+    string,
+    { count: number; amount: number; label: string }
+  >();
   const statusMap = new Map<string, { count: number; amount: number }>();
   const dailyMap = new Map<string, { count: number; amount: number }>();
   const entryModeMap = new Map<string, { count: number; amount: number }>();
@@ -82,13 +93,20 @@ function computePaymentSummary(payments: PaymentRecord[]): PaymentSummary {
     mEntry.amount += pTotal;
     methodMap.set(p.payment_method, mEntry);
 
-    // By card type — fall back to Castles data
+    // By card type — fall back to Castles data. Group on the normalized brand:
+    // the two sources disagree on casing ("Visa" vs "VISA"), which would otherwise
+    // render the same brand as two separate series.
     const cardType = p.card_type || p.processor_response?.castles_transaction?.cardType;
     if (cardType) {
-      const cEntry = cardTypeMap.get(cardType) || { count: 0, amount: 0 };
+      const brandKey = normalizeCardBrand(cardType);
+      const cEntry = cardTypeMap.get(brandKey) || {
+        count: 0,
+        amount: 0,
+        label: cardType,
+      };
       cEntry.count++;
       cEntry.amount += pTotal;
-      cardTypeMap.set(cardType, cEntry);
+      cardTypeMap.set(brandKey, cEntry);
     }
 
     // By status
@@ -125,8 +143,8 @@ function computePaymentSummary(payments: PaymentRecord[]): PaymentSummary {
       method: method as PaymentMethod,
       ...v,
     })),
-    byCardType: Array.from(cardTypeMap.entries()).map(([cardType, v]) => ({
-      cardType,
+    byCardType: Array.from(cardTypeMap.values()).map(({ label, ...v }) => ({
+      cardType: getCardBrandLabel(label),
       ...v,
     })),
     byStatus: Array.from(statusMap.entries()).map(([status, v]) => ({

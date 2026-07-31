@@ -20,12 +20,6 @@ export async function GetUserInfo() {
     const { userId } = await auth()
     // await DebugUserRelationships()
     const supabase = createServerSupabaseClient()
-    // The `members` embed is ordered explicitly: without it Postgres is free to
-    // return the rows in any order, so for a user holding more than one
-    // membership (an HQ admin who also owns a merchant org) `members[0]` flips
-    // whenever a row is UPDATEd or the plan changes. Consumers should select by
-    // intent rather than by index (see lib/admin/hq-identity.ts), but a stable
-    // order keeps the remaining positional call sites from flapping.
     const { data, error } = await supabase.from('users').select(`
         *,
         members(
@@ -35,10 +29,7 @@ export async function GetUserInfo() {
             merchants(id,clerk_org_id, name)
             )
         )
-        `)
-        .eq('id', userId)
-        .order('created_at', { referencedTable: 'members', ascending: true })
-        .single()
+        `).eq('id', userId).single()
 
     if (error) {
         console.error('Error getting user info:', error)
