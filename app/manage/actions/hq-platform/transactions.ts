@@ -4,6 +4,11 @@ import { assertHQPermission } from '@/lib/admin/auth'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { refundAdminOrder } from '@/app/manage/actions/admin-merchant/transactions'
 import { headers } from 'next/headers'
+import {
+  aggregateAdminTransactionSummary,
+  type AdminTransactionSummaryV2Row,
+  type TransactionChannelSummary,
+} from '@/lib/reporting/order-channel'
 import type {
   PlatformChargebackStatus,
   PlatformPaymentAuditActionType,
@@ -217,6 +222,7 @@ export interface PlatformTransactionSummary {
     voidReturnAmount: number
     voidRatePct: number
   }
+  channels: TransactionChannelSummary[]
 }
 
 export interface PlatformSettlementBatchFilters {
@@ -1032,6 +1038,7 @@ function mapRpcRowToSummary(row: PlatformTransactionSummaryRpcRow): PlatformTran
       voidReturnAmount: Number(row.previous_void_return_amount || 0),
       voidRatePct: Number(row.previous_void_rate_pct || 0),
     },
+    channels: [],
   }
 }
 
@@ -1905,8 +1912,7 @@ export async function getPlatformTransactionSummary(
 
   const supabase = createServerSupabaseClient()
   const search = scopedFilters?.search?.trim()
-
-  const { data, error } = await supabase.rpc('get_admin_transaction_summary', {
+  const rpcArgs = {
     p_merchant_ids: scopedFilters?.merchantIds ?? null,
     p_location_ids: scopedFilters?.locationIds ?? null,
     p_status: scopedFilters?.orderStatuses ?? null,
@@ -1921,19 +1927,37 @@ export async function getPlatformTransactionSummary(
     p_staff_id: scopedFilters?.staffId ?? null,
     p_sort_by: normalizeSortByForRpc(scopedFilters),
     p_sort_dir: scopedFilters?.sortDir ?? 'desc',
-  })
-
-  if (error) {
-    console.error('[getPlatformTransactionSummary:rpc] Error:', error)
-    return null
   }
 
-  const row = ((data ?? []) as PlatformTransactionSummaryRpcRow[])[0]
-  if (!row) {
-    return null
+  const { data, error } = await (supabase as any).rpc(
+    'get_admin_transaction_summary_v2',
+    rpcArgs
+  )
+
+  if (!error) {
+    return aggregateAdminTransactionSummary(
+      (data ?? []) as AdminTransactionSummaryV2Row[]
+    )
   }
 
-  return mapRpcRowToSummary(row)
+  // Keep the existing overall cards available until v2 is promoted everywhere.
+  if (error.code === 'PGRST202' || error.code === '42883') {
+    const { data: legacyData, error: legacyError } = await supabase.rpc(
+      'get_admin_transaction_summary',
+      rpcArgs
+    )
+
+    if (legacyError) {
+      console.error('[getPlatformTransactionSummary:legacy-rpc] Error:', legacyError)
+      return null
+    }
+
+    const legacyRow = ((legacyData ?? []) as PlatformTransactionSummaryRpcRow[])[0]
+    return legacyRow ? mapRpcRowToSummary(legacyRow) : null
+  }
+
+  console.error('[getPlatformTransactionSummary:v2-rpc] Error:', error)
+  return null
 }
 
 export async function getPlatformSettlementBatches(

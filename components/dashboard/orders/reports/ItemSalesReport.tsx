@@ -10,6 +10,7 @@ import { Empty } from '@/components/ui/empty'
 import { formatReportDateRange } from '@/utils/export'
 import { DollarSign, ShoppingBag, TrendingUp } from 'lucide-react'
 import type { SalesByItemReportItem } from '@/app/dashboard/actions/order-analytics'
+import type { OrderSource } from '@/lib/orderout/platform'
 import type { ColumnDef } from '@tanstack/react-table'
 
 interface ItemSalesReportProps {
@@ -17,6 +18,7 @@ interface ItemSalesReportProps {
   dateTo: Date
   merchantName?: string
   locationName?: string
+  orderSource?: OrderSource | null
 }
 
 export function ItemSalesReport({
@@ -24,8 +26,13 @@ export function ItemSalesReport({
   dateTo,
   merchantName,
   locationName,
+  orderSource = null,
 }: ItemSalesReportProps) {
-  const { data, isLoading } = useSalesByItemReport(dateFrom, dateTo)
+  const { data, isLoading, isError } = useSalesByItemReport(
+    dateFrom,
+    dateTo,
+    orderSource
+  )
   const [searchQuery, setSearchQuery] = useState('')
 
   const filteredData = useMemo(() => {
@@ -87,6 +94,10 @@ export function ItemSalesReport({
 
   if (isLoading) {
     return <Skeleton className="h-[400px] w-full" />
+  }
+
+  if (isError) {
+    return <Empty description="Unable to load item sales data" />
   }
 
   if (!data || data.length === 0) {
