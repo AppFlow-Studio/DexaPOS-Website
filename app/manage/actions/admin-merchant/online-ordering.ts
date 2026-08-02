@@ -286,7 +286,7 @@ async function buildRequestedStoreSlug(
 // same code path is reused by the standalone backfill/audit scripts under
 // scripts/. Kept the type alias here for backward compatibility with anything
 // that imports `StorefrontWhitelistSyncResult` from this module.
-// See docs/RUNBOOK-PAYMENT-WHITELIST-SYNC.md.
+// See docs/features/online-ordering/RUNBOOK-PAYMENT-WHITELIST-SYNC.md.
 // ============================================================================
 
 export type StorefrontWhitelistSyncResult = WhitelistSyncResult

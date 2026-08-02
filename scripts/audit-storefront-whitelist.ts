@@ -9,7 +9,7 @@
  *
  * The columns this script prints — `expected`, `current`, `missing` — are
  * exactly what ops needs to paste into the NMI tokenization-key allowed-
- * origins box. See docs/RUNBOOK-PAYMENT-WHITELIST-SYNC.md.
+ * origins box. See docs/features/online-ordering/RUNBOOK-PAYMENT-WHITELIST-SYNC.md.
  *
  * Usage:
  *   npx tsx scripts/audit-storefront-whitelist.ts                 # all merchants
