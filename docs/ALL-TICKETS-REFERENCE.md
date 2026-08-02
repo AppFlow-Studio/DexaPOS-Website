@@ -343,6 +343,54 @@ Single index for active ticket streams and their source trackers.
 - Remaining closure work is staging/manual QA, SQL/screenshots, the merchant
   Payment Summary backend contract follow-up, and Temur sign-off.
 
+## Stream U: Shared Supabase/Postgres Performance and Architecture Audit
+
+1. Canonical combined POS and website principal-level audit:
+- `docs/AUDIT-2026-07-31-SHARED-DATABASE-PERFORMANCE-COMBINED.md`
+
+2. Website source/query-pattern audit:
+- `docs/AUDIT-2026-07-31-SHARED-DATABASE-PERFORMANCE-WEBSITE.md`
+
+3. Senior decision summary:
+- `docs/SENIOR-SUMMARY-2026-07-31-SHARED-DATABASE-PERFORMANCE.md`
+
+4. Prioritized implementation and ownership backlog:
+- `docs/IMPLEMENTATION-BACKLOG-2026-08-01-SHARED-DATABASE-PERFORMANCE.md`
+
+5. Read-only Supabase statistics and catalog queries:
+- `docs/SQL-READONLY-2026-07-31-DATABASE-PERFORMANCE-AUDIT.sql`
+
+6. Scope notes:
+- Investigation and documentation only; no fixes or database changes are part
+  of this phase.
+- The website static audit confirms high-impact request fan-out, unbounded
+  nested list reads, repeated raw report scans, HQ raw-row aggregation, and
+  unbounded recurring-job batches.
+- The sibling POS audit's staging statistics were incorporated: nested
+  order/item payloads dominate captured statement cost, Realtime is a
+  high-frequency workload, and the relevant modifier/discount indexes already
+  exist.
+- Existing repository indexes are extensive and historically duplicated, so
+  no index migration should be created until live catalog and
+  `pg_stat_statements` results are reviewed.
+- Redis is not recommended as the first remediation. Pagination, narrow
+  projections, aggregate RPCs, batching, polling reduction, and measured
+  Postgres/index improvements come first.
+- Shared RPC, business-day, reportability, and payment changes require POS and
+  website coordination.
+- The audit now records exact POS/website revisions, staging evidence lineage,
+  normalized workload context, consistent priorities, and provisional targets.
+- The 2026-08-02 principal-review expansion adds strict executive/critical
+  sections, specialist lenses, advanced architecture options, industry-pattern
+  comparisons, a 10x/100x model, and confidence-bounded gain estimates.
+- A read-only OpenAPI refresh reconfirmed 541 RPC paths, 239 exposed
+  relation/view definitions, and 3,855 documented properties without reading
+  table rows or executing an RPC.
+- Remaining work is to revalidate source references after the POS rollback,
+  run controlled workload deltas and approved production read-only statistics,
+  obtain the listed senior decisions, and open separately reviewed tickets
+  from the implementation backlog.
+
 ## Notes
 
 1. Keep this file updated whenever a new ticket stream starts.
