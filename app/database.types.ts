@@ -17635,10 +17635,121 @@ export type Database = {
           },
         ]
       }
+      support_ticket_message_notification_deliveries: {
+        Row: {
+          attempt_count: number
+          created_at: string
+          id: string
+          last_attempt_at: string | null
+          last_error: string | null
+          message_id: string
+          recipient_emails: string[]
+          resend_message_ids: string[]
+          sent_at: string | null
+          status: string
+          ticket_id: string
+          updated_at: string
+        }
+        Insert: {
+          attempt_count?: number
+          created_at?: string
+          id?: string
+          last_attempt_at?: string | null
+          last_error?: string | null
+          message_id: string
+          recipient_emails?: string[]
+          resend_message_ids?: string[]
+          sent_at?: string | null
+          status?: string
+          ticket_id: string
+          updated_at?: string
+        }
+        Update: {
+          attempt_count?: number
+          created_at?: string
+          id?: string
+          last_attempt_at?: string | null
+          last_error?: string | null
+          message_id?: string
+          recipient_emails?: string[]
+          resend_message_ids?: string[]
+          sent_at?: string | null
+          status?: string
+          ticket_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_ticket_message_notification_deliveries_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: true
+            referencedRelation: "support_ticket_messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "support_ticket_message_notification_deliveries_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "support_tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      support_ticket_notification_deliveries: {
+        Row: {
+          attempt_count: number
+          created_at: string
+          id: string
+          last_attempt_at: string | null
+          last_error: string | null
+          recipient_emails: string[]
+          resend_message_ids: string[]
+          sent_at: string | null
+          status: string
+          ticket_id: string
+          updated_at: string
+        }
+        Insert: {
+          attempt_count?: number
+          created_at?: string
+          id?: string
+          last_attempt_at?: string | null
+          last_error?: string | null
+          recipient_emails?: string[]
+          resend_message_ids?: string[]
+          sent_at?: string | null
+          status?: string
+          ticket_id: string
+          updated_at?: string
+        }
+        Update: {
+          attempt_count?: number
+          created_at?: string
+          id?: string
+          last_attempt_at?: string | null
+          last_error?: string | null
+          recipient_emails?: string[]
+          resend_message_ids?: string[]
+          sent_at?: string | null
+          status?: string
+          ticket_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_ticket_notification_deliveries_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: true
+            referencedRelation: "support_tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       support_tickets: {
         Row: {
           assigned_at: string | null
           assigned_to: string | null
+          assigned_to_emails: string[]
           assigned_to_name: string | null
           carrier_id: string | null
           category: string
@@ -17648,7 +17759,7 @@ export type Database = {
           id: string
           last_message_at: string | null
           location_id: string | null
-          merchant_id: string
+          merchant_id: string | null
           metadata: Json | null
           priority: string
           resolution_notes: string | null
@@ -17660,12 +17771,14 @@ export type Database = {
           submitted_by_email: string | null
           submitted_by_name: string
           tags: string[] | null
+          ticket_scope: string
           ticket_number: string
           updated_at: string | null
         }
         Insert: {
           assigned_at?: string | null
           assigned_to?: string | null
+          assigned_to_emails?: string[]
           assigned_to_name?: string | null
           carrier_id?: string | null
           category?: string
@@ -17675,7 +17788,7 @@ export type Database = {
           id?: string
           last_message_at?: string | null
           location_id?: string | null
-          merchant_id: string
+          merchant_id?: string | null
           metadata?: Json | null
           priority?: string
           resolution_notes?: string | null
@@ -17687,12 +17800,14 @@ export type Database = {
           submitted_by_email?: string | null
           submitted_by_name: string
           tags?: string[] | null
+          ticket_scope?: string
           ticket_number: string
           updated_at?: string | null
         }
         Update: {
           assigned_at?: string | null
           assigned_to?: string | null
+          assigned_to_emails?: string[]
           assigned_to_name?: string | null
           carrier_id?: string | null
           category?: string
@@ -17702,7 +17817,7 @@ export type Database = {
           id?: string
           last_message_at?: string | null
           location_id?: string | null
-          merchant_id?: string
+          merchant_id?: string | null
           metadata?: Json | null
           priority?: string
           resolution_notes?: string | null
@@ -17714,6 +17829,7 @@ export type Database = {
           submitted_by_email?: string | null
           submitted_by_name?: string
           tags?: string[] | null
+          ticket_scope?: string
           ticket_number?: string
           updated_at?: string | null
         }

@@ -59,4 +59,34 @@ describe("resolveDeliveryPlatformLogo", () => {
       }),
     ).toBeNull();
   });
+
+  it("never renders kiosk as a delivery platform", () => {
+    expect(resolveDeliveryPlatformLogo({ order_source: "kiosk" })).toBeNull();
+    expect(
+      resolveDeliveryPlatformLogo({
+        order_source: "online_store",
+        metadata: { online_order_provider: "KIOSK" },
+      }),
+    ).toBeNull();
+    expect(
+      resolveDeliveryPlatformLogo({
+        delivery_platform: "kiosk",
+        order_type: "online",
+      }),
+    ).toBeNull();
+  });
+
+  it("keeps a real marketplace when lower-priority provider metadata says kiosk", () => {
+    expect(
+      resolveDeliveryPlatformLogo({
+        delivery_platform: "Grubhub",
+        online_order_provider: "kiosk",
+        order_source: "orderout",
+      }),
+    ).toMatchObject({
+      key: "grubhub",
+      label: "Grubhub",
+      isFallback: false,
+    });
+  });
 });

@@ -1134,4 +1134,3 @@ GRANT EXECUTE ON FUNCTION public.process_payment_v17(
 
 COMMENT ON FUNCTION public.process_payment_v17 IS
   'Fork of process_payment_v16 (byte-identical body) adding a valor_transaction branch: a Valor terminal response sets order_payments.terminal_type=''valor'' and its reversal reference is TRAN_NO (the charge-slip "Trans" number), NOT rrn/stan; v_acquirer left unset (settlement/luqra recon deferred). All v16 math is verbatim. Idempotency op: ''process_payment_v17''.';
-

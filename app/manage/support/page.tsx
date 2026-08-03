@@ -35,10 +35,10 @@ import {
   SupportTicket,
   TicketFilters,
   TICKET_CATEGORY_LABELS,
-  TICKET_STATUS_LABELS,
   TICKET_STATUS_COLORS,
   TICKET_PRIORITY_COLORS,
   TICKET_PRIORITY_LABELS,
+  getTicketStatusLabel,
 } from "@/types/support-ticket";
 import { formatDistanceToNow } from "date-fns";
 import { useUserInfo } from "../hooks/useUserInfo.";
@@ -82,6 +82,7 @@ function StatCard({
 function TicketRow({ ticket, onOpen }: { ticket: any; onOpen: () => void }) {
   const isUrgent = ticket.priority === "urgent" || ticket.priority === "high";
   const isUnassigned = !ticket.assigned_to;
+  const isHQInternal = ticket.ticket_scope === "hq_internal";
 
   return (
     <div
@@ -102,7 +103,7 @@ function TicketRow({ ticket, onOpen }: { ticket: any; onOpen: () => void }) {
               TICKET_STATUS_COLORS[ticket.status as keyof typeof TICKET_STATUS_COLORS]
             )}
           >
-            {TICKET_STATUS_LABELS[ticket.status as keyof typeof TICKET_STATUS_LABELS]}
+            {getTicketStatusLabel(ticket.status, ticket.ticket_scope)}
           </Badge>
           <Badge
             className={cn(
@@ -112,12 +113,19 @@ function TicketRow({ ticket, onOpen }: { ticket: any; onOpen: () => void }) {
           >
             {TICKET_PRIORITY_LABELS[ticket.priority as keyof typeof TICKET_PRIORITY_LABELS]}
           </Badge>
+          {isHQInternal && (
+            <Badge variant="outline" className="rounded-full text-xs">
+              HQ Internal
+            </Badge>
+          )}
         </div>
         <p className="font-medium text-sm truncate">{ticket.subject}</p>
         <p className="text-xs text-muted-foreground mt-0.5">
-          {ticket.merchant?.name || "Unknown Merchant"}
-          {ticket.location?.name && ` · ${ticket.location.name}`}
-          {" · "}
+          {isHQInternal
+            ? "DEXA HQ Internal"
+            : ticket.merchant?.name || "Unknown Merchant"}
+          {!isHQInternal && ticket.location?.name && ` / ${ticket.location.name}`}
+          {" / "}
           {TICKET_CATEGORY_LABELS[ticket.category as keyof typeof TICKET_CATEGORY_LABELS]}
         </p>
       </div>
@@ -190,7 +198,7 @@ export default function AdminSupportPage() {
             Support Inbox
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Manage merchant support tickets
+            Manage merchant support requests and internal developer tickets
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -265,12 +273,26 @@ export default function AdminSupportPage() {
         <div className="relative flex-1 min-w-0 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search by merchant or ticket #..."
+            placeholder="Search by subject, submitter, or ticket #..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9"
           />
         </div>
+
+        <Select
+          value={(filters.ticket_scope as string) || "all"}
+          onValueChange={(v) => setFilter("ticket_scope", v as any)}
+        >
+          <SelectTrigger className="w-40">
+            <SelectValue placeholder="Ticket Scope" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Sources</SelectItem>
+            <SelectItem value="merchant">Merchant</SelectItem>
+            <SelectItem value="hq_internal">HQ Internal</SelectItem>
+          </SelectContent>
+        </Select>
 
         <Select
           value={(filters.category as string) || "all"}

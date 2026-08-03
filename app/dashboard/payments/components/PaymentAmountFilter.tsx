@@ -34,10 +34,10 @@ function formatBound(amount: number): string {
 
 function summarize({ min, max }: AmountRange): string | null {
   if (min !== undefined && max !== undefined) {
-    return `${formatBound(min)} – ${formatBound(max)}`;
+    return `${formatBound(min)} - ${formatBound(max)}`;
   }
-  if (min !== undefined) return `≥ ${formatBound(min)}`;
-  if (max !== undefined) return `≤ ${formatBound(max)}`;
+  if (min !== undefined) return `>= ${formatBound(min)}`;
+  if (max !== undefined) return `<= ${formatBound(max)}`;
   return null;
 }
 
@@ -60,14 +60,15 @@ export function PaymentAmountFilter({
   const [maxText, setMaxText] = React.useState(
     value.max !== undefined ? String(value.max) : ""
   );
+  const [open, setOpen] = React.useState(false);
 
-  // Resync when the range is cleared from outside (e.g. "Clear all").
-  React.useEffect(() => {
-    if (value.min === undefined && value.max === undefined) {
-      setMinText("");
-      setMaxText("");
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (nextOpen) {
+      setMinText(value.min !== undefined ? String(value.min) : "");
+      setMaxText(value.max !== undefined ? String(value.max) : "");
     }
-  }, [value.min, value.max]);
+    setOpen(nextOpen);
+  };
 
   const commit = (nextMin: string, nextMax: string) => {
     onChange({ min: parseBound(nextMin), max: parseBound(nextMax) });
@@ -76,7 +77,7 @@ export function PaymentAmountFilter({
   const summary = summarize(value);
 
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
         <Button variant="outline" size="sm" className="h-9 border-dashed">
           <PlusCircle className="mr-2 h-4 w-4" />
