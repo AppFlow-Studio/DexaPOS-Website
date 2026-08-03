@@ -179,12 +179,16 @@ export default async function ReceiptPage({ params }: PageProps) {
           {/* ── Header ──────────────────────────────────────────── */}
           <div className="flex flex-col items-center text-center">
             {logo_url ? (
+              // Height-driven, not a fixed square: `h-30 w-auto` (120px) scales
+              // a logo of any aspect up to the target height, while `max-w-[70%]`
+              // stops a wide mark from spanning the whole receipt. `max-h`
+              // alone would only cap — it never scales a small asset up.
               <Image
                 src={logo_url}
                 alt={location.name ?? "Store logo"}
-                width={72}
-                height={72}
-                className="object-contain w-16 h-16 mb-3"
+                width={240}
+                height={120}
+                className="object-contain h-30 w-auto max-w-[70%] mb-3"
                 unoptimized
               />
             ) : null}
