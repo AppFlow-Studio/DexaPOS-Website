@@ -322,7 +322,7 @@ export function renderReceiptHtml(
         options.merchantLogoUrl
       )}" alt="${escapeHtml(
         businessName
-      )}" width="64" height="64" style="display:inline-block;width:64px;height:64px;object-fit:contain;border:0;outline:none;text-decoration:none;margin-bottom:10px;">`
+      )}" height="120" style="display:inline-block;height:120px;width:auto;max-width:70%;object-fit:contain;border:0;outline:none;text-decoration:none;margin-bottom:10px;">`
     : "";
 
   // ── Items ──

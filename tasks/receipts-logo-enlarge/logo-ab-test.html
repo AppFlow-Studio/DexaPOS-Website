@@ -1,0 +1,232 @@
+<!doctype html><html><head><meta charset="utf-8">
+<title>Receipt logo — A/B test</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#0f1115;color:#e6e8ec;font:15px/1.6 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
+.wrap{max-width:1600px;margin:0 auto;padding:36px 24px 64px}
+h2.title{font-size:24px;margin:0 0 6px;letter-spacing:-.01em}
+p.lede{margin:0 0 8px;color:#9aa3b2;max-width:78ch}
+p.lede b{color:#e6e8ec}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:22px;margin-top:28px}
+.case{margin:0;background:#161a21;border:1px solid #242a34;border-radius:12px;padding:16px;display:flex;flex-direction:column}
+figcaption{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;margin-bottom:14px}
+.tag{font:700 12px/1 ui-monospace,monospace;padding:5px 8px;border-radius:5px}
+.tag.bad{background:#3b1d1d;color:#ff9b9b} .tag.warn{background:#3a301a;color:#f2c078} .tag.ok{background:#153126;color:#6ee7a8}
+.ct{font-weight:650} .cs{color:#8b94a3;font-size:12.5px}
+.stage{background:#e5e5e5;padding:18px 10px;border-radius:8px;display:flex;justify-content:center;overflow-x:auto}
+.note{margin:13px 2px 0;font-size:12.5px;color:#9aa3b2;line-height:1.55}
+.note b{color:#e6e8ec}
+
+/* ── receipt: values copied 1:1 from app/receipts/[t1]/[t2]/page.tsx ── */
+.paper{width:360px;flex:0 0 360px;background:#fff;color:#171717;padding:32px 28px 28px;
+  box-shadow:0 6px 24px rgba(0,0,0,.10);font:13px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
+.head{display:flex;flex-direction:column;align-items:center;text-align:center}
+.paper h1{font-size:18px;font-weight:700;letter-spacing:.025em;line-height:1.25;margin:0}
+.addr{font-size:13px;color:#525252;margin:6px 0 0;line-height:1.625}
+.rule{border:0;border-top:1px solid #e5e5e5;margin:14px 0}
+.rows{display:flex;flex-direction:column;gap:4px}
+.row{display:flex;justify-content:space-between;gap:12px}
+.b{font-weight:700} .m{color:#525252}
+.mods{color:#737373;font-size:12px;padding-left:14px}
+.tot{font-weight:700;font-size:15px}
+.thanks{text-align:center;color:#404040;margin:0}
+</style></head><body><div class="wrap">
+<h2 class="title">Receipt logo — where does the gray box come from?</h2>
+<p class="lede">Four renders of the same receipt. <b>A</b> and <b>C</b> use <b>byte-identical CSS</b> (the 64px box shipping today); only the image file differs.
+If the gray were our container styling, it would appear in C too.</p>
+<p class="lede">Logo assets are the <b>real pixels</b> lifted from the reported screenshot, so A is pixel-faithful to production.
+The "transparent" asset is that same mark with the gray field flood-filled out and trimmed &mdash; i.e. what a correct export looks like.</p>
+<div class="grid">
+  <figure class="case">
+    <figcaption>
+      <span class="tag bad">A</span>
+      <span class="ct">Live today</span>
+      <span class="cs">current 64px box &middot; merchant&rsquo;s real asset</span>
+    </figcaption>
+    <div class="stage">
+      <div class="paper">
+        <div class="head">
+          <img class="logo" style="width:64px;height:64px;object-fit:contain;margin-bottom:12px;" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMAAAABkCAYAAADQUT//AAAM6UlEQVR4nO2dB2yVVRvHzy0UGQoRZClTGUaWIlhBNgSFgCDIlCERAQ0CIjMBZCsbI0hkBQkEZO9ZlS0roCi4wAUBARFQRiuUmt/z+fa71A769t73bTnPL7mB3r69o33+5zzz3EBMTEy8URRLifD7BSiKn6gAFKtRAShWowJQrEYFoFiNCkCxGhWAYjUqAMVqVACK1agAFKtRAShWowJQrEYFoFiNCkCxGhWAYjVZ/X4BmY1AIHDbLfh+iI9PfbziTq5J7rmdf3kMbvz/1q1bCY/r9rFtRQWQChEREQm3YIPPSGTJkuW2rxGEc1NBpIwKIBkweAyLfzMbjmABEdy8eVOFkAwqgCTImjXrf1bVzApCyJYtm4mLixMhKLeT+Za3MIKLg7FkBOP/66+/zIYNG0xMTExIHo/3FBkZmWHdOL9QAfwLhpGRDGTVqlVmxIgRpnz58iETAbsB71H5PyqADGj8+OsHDhwwY8eOFXcslHGI816V/6ExwL8+v1/Gj1/+9ttvmz/++MNcvXrVPPfcc2KgO3bsMP379zfFihUTtyyUICje802NCVQAfmd69u3bZ7744gszdOhQkytXLjNz5ky5f+3ateann34yjzzySNjed1xcnPXZIRWAzwHv1q1bzcsvv2yioqJkF3r//fcTvhcdHW0efPDBsD13ZGSk+fvvv43NRNhu/H77/SdPnpRVPqnXcf36dZMnT56wPXcgEMiUdY5QYvW79/OPj8/fuXNns3fvXlOyZMkkr3nmmWfMp59+GtbXEaECsBc///j4+Pfcc49Zt26duf/++5O8hhTo2bNn72oX0G+sFYDfKx+B7wsvvJDs6g+///67ZGvCTSCDpH/9wFoB+P1H379/v6lSpUqy3ydF2bp1a7nd7YuBn1j7zv0UAMHtjRs3TL58+ZK95tSpUyZnzpymZ8+enr4221AB+MCJEydM2bJlU3wNFy5cMPnz5/fkdQbUBbIPP//otDk89dRTKb6G8+fPhzUFGkxABaB4Xf1FAClx+fJlkz17ds9ek62oAMIM7QbBMKBy6NAh89hjjyV5vTO84ow5JkVw+4LtrQzpxVoBeLHtv/fee2bixIkJX5PT5xYbG2u2bNlilixZIgUxwODnzp1rGjVqZJ599lmTO3fuJB+Tn2/VqpWI6N133zVPP/10ukUQUBdIccO1a9dM9+7dTYcOHczXX38thrhx40YxZiq8/fr1M/Xq1ZP76fgsXry46dWrl1z7wQcfmDNnzpg33njDfPTRRyKWbt26mU8++cQUKlTIfP/992b16tXmlVdekf87QzJ0iy5fvtzs2bPHjBs3zlSqVCkk7yXe0p3Eyma44BMV0pPKbNasmRgzAysPPPCAVFXXrFljvvvuO+nlf+ihh0zlypWlw3P06NEijPXr15uqVatKEQzxsBMsWLBABNO+fXvz+eefy+NOmjTJPPnkk+bee+81Q4YMMR9//LF58803za+//iqvmyIZcULLli2tXsHTi+4ALkA8AwcOlNWaqS1cGgRAJ2fz5s3FOOnybNq0qfn222/NW2+9ZUqUKCE/S3//V199JV2Ybdq0MZ999pkIiLrA8OHD5TFwcwiUeUxiiOPHj8t18+bNMy+99JII7dixYyZHjhymRo0afv86MjUqABewWuPCtG3bVgyQYhVGSQBbrVo1WeURBf48Lk7hwoVlVQeGXtg9cIl2795tli5dKgZev359aYuoVauW2b59u1xLn9C2bdvE0HkOCmMXL1409913n8wKVK9eXWYIFPdY6QKlF4yfKa133nlHVvTXXntNjB2IB5whG4baMWBW8oULF5qHH344ofmMNgh2BlZyVnxcGTo/+Xl2GHqAHn30UbN582a5nsdjQozdBQEQ/FIsQ0ykS9UNcofuAC7A7ye4xfhZ0fHd8fvx93/++WdTp04dcV2mT58uhn7kyBHx+8uUKSOrPcEwvj7t0LhKDKZcunTJvPjii6Zx48YSP/DzmzZtMg0aNJCqcd26deX+J554Qp7z4MGDsnsQMJM14msl7agAXNCpUydZdQl4cVlIWRLUlipVStoX8OlxjbiR2cGFofpL7w83dgYyOufOnZMVfvDgwZIxqlixosQAPD4imTVrllzL7oEQWOWJGwiucavIBv3yyy8iFMSnpJ1ATEyMdfkvXAx68d26DWRz8O3J3jz//PNm2rRp8nh0eNasWVNSl+wOLVq0kOsxVETASo7xlitX7jbfndWeoJfVnesQBwE07lPwNY77FPz/UP0+YmNjrXSjVADpNBp2Aiel6uTSf/vtN/PNN9+I24L7Q+4fV4e44U7Sr7hR7AqLFi1y/frcvJeAhQLQINglGIvTqxN8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" alt="Charcoal Gardenia">
+          <h1>CHARCOAL GARDENIA</h1>
+          <p class="addr">Charcoal gardenia<br>432 Manor Rd<br>Staten Island, NY 10314</p>
+          <p class="addr">(718) 887-0100</p>
+        </div>
+        
+  <hr class="rule">
+  <div class="rows">
+    <div class="row"><span class="b">Order</span><span class="b">#S1-0017</span></div>
+    <div class="row"><span class="m">Ordered</span><span>Fri, Jul 31, 2026, 11:18 PM</span></div>
+  </div>
+  <hr class="rule">
+  <div class="rows">
+    <div class="row"><span>6 NEW Crispy Shawarma Sandwich</span><span>$102.00</span></div>
+    <div class="mods">Fries<br>Chicken Shawarma</div>
+    <div class="row"><span>1 Fruity Pebbles Shake</span><span>$9.50</span></div>
+  </div>
+  <hr class="rule">
+  <div class="rows">
+    <div class="row"><span class="m">Subtotal</span><span>$111.50</span></div>
+    <div class="row"><span class="m">Tax</span><span>$9.90</span></div>
+  </div>
+  <hr class="rule">
+  <div class="row tot"><span>TOTAL (CARD)</span><span>$121.40</span></div>
+  <hr class="rule">
+  <div class="rows">
+    <div class="row"><span class="b">AMEX &middot;&middot;&middot;&middot;0448</span><span class="b">$121.40</span></div>
+    <div class="row"><span class="m">Transaction Type</span><span>Sale</span></div>
+    <div class="row"><span class="m">Authorization</span><span>Approved</span></div>
+  </div>
+  <hr class="rule">
+  <div class="row tot"><span>Amount Paid</span><span>$121.40</span></div>
+  <hr class="rule">
+  <p class="thanks">Thank you for your Dining with us!</p>
+
+      </div>
+    </div>
+    <p class="note">Reproduces the reported screenshot exactly. The gray tile is the <b>image file</b>, letterboxed into our 64&times;64 box.</p>
+  </figure>
+  <figure class="case">
+    <figcaption>
+      <span class="tag warn">B</span>
+      <span class="ct">Size fix only</span>
+      <span class="cs">120px tall &middot; merchant&rsquo;s real asset</span>
+    </figcaption>
+    <div class="stage">
+      <div class="paper">
+        <div class="head">
+          <img class="logo" style="height:120px;width:auto;max-width:70%;object-fit:contain;margin-bottom:12px;" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMAAAABkCAYAAADQUT//AAAM6UlEQVR4nO2dB2yVVRvHzy0UGQoRZClTGUaWIlhBNgSFgCDIlCERAQ0CIjMBZCsbI0hkBQkEZO9ZlS0roCi4wAUBARFQRiuUmt/z+fa71A769t73bTnPL7mB3r69o33+5zzz3EBMTEy8URRLifD7BSiKn6gAFKtRAShWowJQrEYFoFiNCkCxGhWAYjUqAMVqVACK1agAFKtRAShWowJQrEYFoFiNCkCxGhWAYjVZ/X4BmY1AIHDbLfh+iI9PfbziTq5J7rmdf3kMbvz/1q1bCY/r9rFtRQWQChEREQm3YIPPSGTJkuW2rxGEc1NBpIwKIBkweAyLfzMbjmABEdy8eVOFkAwqgCTImjXrf1bVzApCyJYtm4mLixMhKLeT+Za3MIKLg7FkBOP/66+/zIYNG0xMTExIHo/3FBkZmWHdOL9QAfwLhpGRDGTVqlVmxIgRpnz58iETAbsB71H5PyqADGj8+OsHDhwwY8eOFXcslHGI816V/6ExwL8+v1/Gj1/+9ttvmz/++MNcvXrVPPfcc2KgO3bsMP379zfFihUTtyyUICje802NCVQAfmd69u3bZ7744gszdOhQkytXLjNz5ky5f+3ateann34yjzzySNjed1xcnPXZIRWAzwHv1q1bzcsvv2yioqJkF3r//fcTvhcdHW0efPDBsD13ZGSk+fvvv43NRNhu/H77/SdPnpRVPqnXcf36dZMnT56wPXcgEMiUdY5QYvW79/OPj8/fuXNns3fvXlOyZMkkr3nmmWfMp59+GtbXEaECsBc///j4+Pfcc49Zt26duf/++5O8hhTo2bNn72oX0G+sFYDfKx+B7wsvvJDs6g+///67ZGvCTSCDpH/9wFoB+P1H379/v6lSpUqy3ydF2bp1a7nd7YuBn1j7zv0UAMHtjRs3TL58+ZK95tSpUyZnzpymZ8+enr4221AB+MCJEydM2bJlU3wNFy5cMPnz5/fkdQbUBbIPP//otDk89dRTKb6G8+fPhzUFGkxABaB4Xf1FAClx+fJlkz17ds9ek62oAMIM7QbBMKBy6NAh89hjjyV5vTO84ow5JkVw+4LtrQzpxVoBeLHtv/fee2bixIkJX5PT5xYbG2u2bNlilixZIgUxwODnzp1rGjVqZJ599lmTO3fuJB+Tn2/VqpWI6N133zVPP/10ukUQUBdIccO1a9dM9+7dTYcOHczXX38thrhx40YxZiq8/fr1M/Xq1ZP76fgsXry46dWrl1z7wQcfmDNnzpg33njDfPTRRyKWbt26mU8++cQUKlTIfP/992b16tXmlVdekf87QzJ0iy5fvtzs2bPHjBs3zlSqVCkk7yXe0p3Eyma44BMV0pPKbNasmRgzAysPPPCAVFXXrFljvvvuO+nlf+ihh0zlypWlw3P06NEijPXr15uqVatKEQzxsBMsWLBABNO+fXvz+eefy+NOmjTJPPnkk+bee+81Q4YMMR9//LF58803za+//iqvmyIZcULLli2tXsHTi+4ALkA8AwcOlNWaqS1cGgRAJ2fz5s3FOOnybNq0qfn222/NW2+9ZUqUKCE/S3//V199JV2Ybdq0MZ999pkIiLrA8OHD5TFwcwiUeUxiiOPHj8t18+bNMy+99JII7dixYyZHjhymRo0afv86MjUqABewWuPCtG3bVgyQYhVGSQBbrVo1WeURBf48Lk7hwoVlVQeGXtg9cIl2795tli5dKgZev359aYuoVauW2b59u1xLn9C2bdvE0HkOCmMXL1409913n8wKVK9eXWYIFPdY6QKlF4yfKa133nlHVvTXXntNjB2IB5whG4baMWBW8oULF5qHH344ofmMNgh2BlZyVnxcGTo/+Xl2GHqAHn30UbN582a5nsdjQozdBQEQ/FIsQ0ykS9UNcofuAC7A7ye4xfhZ0fHd8fvx93/++WdTp04dcV2mT58uhn7kyBHx+8uUKSOrPcEwvj7t0LhKDKZcunTJvPjii6Zx48YSP/DzmzZtMg0aNJCqcd26deX+J554Qp7z4MGDsnsQMJM14msl7agAXNCpUydZdQl4cVlIWRLUlipVStoX8OlxjbiR2cGFofpL7w83dgYyOufOnZMVfvDgwZIxqlixosQAPD4imTVrllzL7oEQWOWJGwiucavIBv3yyy8iFMSnpJ1ATEyMdfkvXAx68d26DWRz8O3J3jz//PNm2rRp8nh0eNasWVNSl+wOLVq0kOsxVETASo7xlitX7jbfndWeoJfVnesQBwE07lPwNY77FPz/UP0+YmNjrXSjVADpNBp2Aiel6uTSf/vtN/PNN9+I24L7Q+4fV4e44U7Sr7hR7AqLFi1y/frcvJeAhQLQINglGIvTqxN8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" alt="Charcoal Gardenia">
+          <h1>CHARCOAL GARDENIA</h1>
+          <p class="addr">Charcoal gardenia<br>432 Manor Rd<br>Staten Island, NY 10314</p>
+          <p class="addr">(718) 887-0100</p>
+        </div>
+        
+  <hr class="rule">
+  <div class="rows">
+    <div class="row"><span class="b">Order</span><span class="b">#S1-0017</span></div>
+    <div class="row"><span class="m">Ordered</span><span>Fri, Jul 31, 2026, 11:18 PM</span></div>
+  </div>
+  <hr class="rule">
+  <div class="rows">
+    <div class="row"><span>6 NEW Crispy Shawarma Sandwich</span><span>$102.00</span></div>
+    <div class="mods">Fries<br>Chicken Shawarma</div>
+    <div class="row"><span>1 Fruity Pebbles Shake</span><span>$9.50</span></div>
+  </div>
+  <hr class="rule">
+  <div class="rows">
+    <div class="row"><span class="m">Subtotal</span><span>$111.50</span></div>
+    <div class="row"><span class="m">Tax</span><span>$9.90</span></div>
+  </div>
+  <hr class="rule">
+  <div class="row tot"><span>TOTAL (CARD)</span><span>$121.40</span></div>
+  <hr class="rule">
+  <div class="rows">
+    <div class="row"><span class="b">AMEX &middot;&middot;&middot;&middot;0448</span><span class="b">$121.40</span></div>
+    <div class="row"><span class="m">Transaction Type</span><span>Sale</span></div>
+    <div class="row"><span class="m">Authorization</span><span>Approved</span></div>
+  </div>
+  <hr class="rule">
+  <div class="row tot"><span>Amount Paid</span><span>$121.40</span></div>
+  <hr class="rule">
+  <p class="thanks">Thank you for your Dining with us!</p>
+
+      </div>
+    </div>
+    <p class="note">Our CSS change alone. Bigger &mdash; and the gray tile is now <b>bigger too</b>. Same template, same gray.</p>
+  </figure>
+  <figure class="case">
+    <figcaption>
+      <span class="tag ok">C</span>
+      <span class="ct">Control</span>
+      <span class="cs">current 64px box &middot; transparent asset</span>
+    </figcaption>
+    <div class="stage">
+      <div class="paper">
+        <div class="head">
+          <img class="logo" style="width:64px;height:64px;object-fit:contain;margin-bottom:12px;" src="data:image/png;base64,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" alt="Charcoal Gardenia">
+          <h1>CHARCOAL GARDENIA</h1>
+          <p class="addr">Charcoal gardenia<br>432 Manor Rd<br>Staten Island, NY 10314</p>
+          <p class="addr">(718) 887-0100</p>
+        </div>
+        
+  <hr class="rule">
+  <div class="rows">
+    <div class="row"><span class="b">Order</span><span class="b">#S1-0017</span></div>
+    <div class="row"><span class="m">Ordered</span><span>Fri, Jul 31, 2026, 11:18 PM</span></div>
+  </div>
+  <hr class="rule">
+  <div class="rows">
+    <div class="row"><span>6 NEW Crispy Shawarma Sandwich</span><span>$102.00</span></div>
+    <div class="mods">Fries<br>Chicken Shawarma</div>
+    <div class="row"><span>1 Fruity Pebbles Shake</span><span>$9.50</span></div>
+  </div>
+  <hr class="rule">
+  <div class="rows">
+    <div class="row"><span class="m">Subtotal</span><span>$111.50</span></div>
+    <div class="row"><span class="m">Tax</span><span>$9.90</span></div>
+  </div>
+  <hr class="rule">
+  <div class="row tot"><span>TOTAL (CARD)</span><span>$121.40</span></div>
+  <hr class="rule">
+  <div class="rows">
+    <div class="row"><span class="b">AMEX &middot;&middot;&middot;&middot;0448</span><span class="b">$121.40</span></div>
+    <div class="row"><span class="m">Transaction Type</span><span>Sale</span></div>
+    <div class="row"><span class="m">Authorization</span><span>Approved</span></div>
+  </div>
+  <hr class="rule">
+  <div class="row tot"><span>Amount Paid</span><span>$121.40</span></div>
+  <hr class="rule">
+  <p class="thanks">Thank you for your Dining with us!</p>
+
+      </div>
+    </div>
+    <p class="note"><b>The proof.</b> Identical CSS to A &mdash; not one style changed. Swap only the file and the gray box is gone.</p>
+  </figure>
+  <figure class="case">
+    <figcaption>
+      <span class="tag ok">D</span>
+      <span class="ct">Both fixed</span>
+      <span class="cs">120px tall &middot; transparent asset</span>
+    </figcaption>
+    <div class="stage">
+      <div class="paper">
+        <div class="head">
+          <img class="logo" style="height:120px;width:auto;max-width:70%;object-fit:contain;margin-bottom:12px;" src="data:image/png;base64,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" alt="Charcoal Gardenia">
+          <h1>CHARCOAL GARDENIA</h1>
+          <p class="addr">Charcoal gardenia<br>432 Manor Rd<br>Staten Island, NY 10314</p>
+          <p class="addr">(718) 887-0100</p>
+        </div>
+        
+  <hr class="rule">
+  <div class="rows">
+    <div class="row"><span class="b">Order</span><span class="b">#S1-0017</span></div>
+    <div class="row"><span class="m">Ordered</span><span>Fri, Jul 31, 2026, 11:18 PM</span></div>
+  </div>
+  <hr class="rule">
+  <div class="rows">
+    <div class="row"><span>6 NEW Crispy Shawarma Sandwich</span><span>$102.00</span></div>
+    <div class="mods">Fries<br>Chicken Shawarma</div>
+    <div class="row"><span>1 Fruity Pebbles Shake</span><span>$9.50</span></div>
+  </div>
+  <hr class="rule">
+  <div class="rows">
+    <div class="row"><span class="m">Subtotal</span><span>$111.50</span></div>
+    <div class="row"><span class="m">Tax</span><span>$9.90</span></div>
+  </div>
+  <hr class="rule">
+  <div class="row tot"><span>TOTAL (CARD)</span><span>$121.40</span></div>
+  <hr class="rule">
+  <div class="rows">
+    <div class="row"><span class="b">AMEX &middot;&middot;&middot;&middot;0448</span><span class="b">$121.40</span></div>
+    <div class="row"><span class="m">Transaction Type</span><span>Sale</span></div>
+    <div class="row"><span class="m">Authorization</span><span>Approved</span></div>
+  </div>
+  <hr class="rule">
+  <div class="row tot"><span>Amount Paid</span><span>$121.40</span></div>
+  <hr class="rule">
+  <p class="thanks">Thank you for your Dining with us!</p>
+
+      </div>
+    </div>
+    <p class="note">Our size fix + a correctly exported logo. This is what the ticket actually wants. <i>(Blur is my extraction &mdash; the real Clerk asset is higher-res.)</i></p>
+  </figure></div>
+</div></body></html>
