@@ -283,15 +283,65 @@ Single index for active ticket streams and their source trackers.
 
 2. Scope notes:
 - Authorized HQ support admins can create developer tickets from `/manage/support`.
-- HQ-created tickets are forced to the server-configured DEXA HQ location.
+- HQ-created tickets use `ticket_scope = hq_internal` and have no merchant,
+  location, or carrier ownership.
+- `DEXA_HQ_SUPPORT_LOCATION_ID` is obsolete; HQ identity comes from the Clerk
+  org already enforced through `DEXA_POS_INTERNAL_TEAM_ID`.
+- The corrective append-only migration is
+  `supabase/migrations/20260729120000_hq_internal_support_ticket_scope.sql`.
+- Existing HQ-created rows are converted away from the previous fake-location
+  model while merchant and POS tickets retain tenant ownership.
 - HQ-created tickets accept up to 3 initial image/PDF attachments, linked to
   the first admin message.
-- Every `support_tickets` insert, including POS and merchant-dashboard tickets, triggers the same asynchronous notification path.
+- HQ creation exposes a multi-select assignee dropdown sourced exclusively
+  from `SUPPORT_TICKET_NOTIFICATION_EMAILS`.
+- Selected developer emails persist in
+  `support_tickets.assigned_to_emails`; server validation rejects values not
+  present in the environment list.
+- Assignment is optional and does not change notification recipients: the
+  complete configured list still receives every ticket, reply, and private
+  note.
+- Every `support_tickets` insert, including POS and merchant-dashboard tickets,
+  triggers the same asynchronous notification path.
+- Every later support-ticket reply or private note triggers that same endpoint;
+  the initial description message is suppressed to prevent duplicate creation
+  emails.
 - Resend recipients are configured through `SUPPORT_TICKET_NOTIFICATION_EMAILS`.
-- Delivery attempts are recorded in `support_ticket_notification_deliveries`; email failure never rolls back the ticket.
+- New-ticket attempts are recorded in
+  `support_ticket_notification_deliveries`; reply/note attempts are recorded in
+  `support_ticket_message_notification_deliveries`. Email failure never rolls
+  back the ticket or message.
+- The thread-notification migration is
+  `supabase/migrations/20260729130000_support_ticket_thread_notifications.sql`.
+- The multi-assignee migration is
+  `supabase/migrations/20260729140000_hq_support_ticket_email_assignees.sql`.
 - Platform Admin receives `hq.support.view` and `hq.support.manage` through the
   companion role-permission migration.
-- Local implementation is complete. Migration/Vault configuration and cross-source staging QA remain.
+- Local implementation is complete. Migration/Vault configuration,
+  cross-scope RLS checks, cross-source ticket/reply/private-note email checks,
+  and staging QA remain.
+
+## Stream T: [Reporting - Kiosk] Website Channel-Segmented Reports
+
+1. Plan and QA tracker:
+- `docs/PLAN-2026-07-30-KIOSK-CHANNEL-REPORTING-WEB.md`
+
+2. Scope notes:
+- Website/dashboard portion of the shared POS/backend reporting ticket.
+- Canonical sources are `pos`, `kiosk`, `online_store`, and `orderout`.
+- Merchant Reports scope includes Sales Summary channel cards and compatible
+  channel filters.
+- HQ Payments & Banking must render the channel dimension from
+  `get_admin_transaction_summary_v2(...)`.
+- Revenue-by-Platform must exclude kiosk even if legacy routing metadata uses
+  a kiosk-like provider value.
+- The corrected shared migration was applied from the POS repository; the
+  website duplicate is synchronization-only and must not be executed again.
+- `get_payment_summary_stats_v2(...)` is HQ-only and must not be called by the
+  merchant Payment Summary tab without a new tenant-scoped backend contract.
+- Website code is complete and targeted automated verification passes.
+- Remaining closure work is staging/manual QA, SQL/screenshots, the merchant
+  Payment Summary backend contract follow-up, and Temur sign-off.
 
 ## Notes
 

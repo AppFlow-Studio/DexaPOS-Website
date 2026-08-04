@@ -53,7 +53,7 @@ import {
     ChevronRight,
     ChevronsRight,
     Store,
-    Phone,
+    Monitor,
     SlidersHorizontal,
 } from 'lucide-react'
 import { Order, OrderResponse, OrderType } from '@/types/order-management'
@@ -158,8 +158,8 @@ function getChannelIcon(source: string | null | undefined) {
         case 'online_store':
         case 'online': // legacy pre-backfill value
             return <Globe className="h-3 w-3" />
-        case 'phone':
-            return <Phone className="h-3 w-3" />
+        case 'kiosk':
+            return <Monitor className="h-3 w-3" />
         case 'pos':
         default:
             return <Store className="h-3 w-3" />

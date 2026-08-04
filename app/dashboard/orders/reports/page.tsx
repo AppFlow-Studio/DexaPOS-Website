@@ -17,6 +17,8 @@ import { KitchenPerformanceReport } from '@/components/dashboard/orders/reports/
 import { TableTurnsReport } from '@/components/dashboard/orders/reports/TableTurnsReport'
 import { ServerPerformanceReport } from '@/components/dashboard/orders/reports/ServerPerformanceReport'
 import { VoidsReport } from '@/components/dashboard/orders/reports/VoidsReport'
+import { ReportChannelFilter } from '@/components/dashboard/orders/reports/ReportChannelFilter'
+import type { OrderSource } from '@/lib/orderout/platform'
 
 const TABS = [
   { value: 'sales-summary', label: 'Sales Summary' },
@@ -43,6 +45,7 @@ export default function ReportsPage() {
   })
   const [dateTo, setDateTo] = useState<Date>(new Date())
   const [activeTab, setActiveTab] = useState<string>('sales-summary')
+  const [orderSource, setOrderSource] = useState<OrderSource | null>(null)
 
   // Get merchant and location names for PDF exports
   const merchantName = orgSlug || 'Merchant'
@@ -56,6 +59,10 @@ export default function ReportsPage() {
   }
 
   const reportProps = { dateFrom, dateTo, merchantName, locationName }
+
+  /** Only these two reports can be split by order source. */
+  const supportsChannelFilter =
+    activeTab === 'sales-summary' || activeTab === 'item-sales'
 
   return (
     <main className="space-y-6">
@@ -142,8 +149,10 @@ export default function ReportsPage() {
           </TabsList>
         </div>
 
-        {/* One date range governing every tab below it. */}
-        <div className="mt-4">
+        {/* One date range governing every tab below it, plus the channel
+            filter for the two reports that can be split by order source. Both
+            live on one control row so the filters read as a single group. */}
+        <div className="mt-4 flex flex-wrap items-center gap-3">
           <DateRangePicker
             dateFrom={dateFrom}
             dateTo={dateTo}
@@ -153,11 +162,15 @@ export default function ReportsPage() {
             triggerClassName="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
             contentClassName="reports-date-popover"
           />
+
+          {supportsChannelFilter && (
+            <ReportChannelFilter value={orderSource} onChange={setOrderSource} />
+          )}
         </div>
 
         <TabsContent value="sales-summary" className="mt-6">
           <ReportPanel>
-            <SalesSummaryReport {...reportProps} />
+            <SalesSummaryReport {...reportProps} orderSource={orderSource} />
           </ReportPanel>
         </TabsContent>
 
@@ -169,7 +182,7 @@ export default function ReportsPage() {
 
         <TabsContent value="item-sales" className="mt-6">
           <ReportPanel>
-            <ItemSalesReport {...reportProps} />
+            <ItemSalesReport {...reportProps} orderSource={orderSource} />
           </ReportPanel>
         </TabsContent>
 

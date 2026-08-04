@@ -67,11 +67,14 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
 import Image from 'next/image'
 import type { PermissionCode } from '@/lib/admin/permission-codes'
+import { selectHqOrganization } from '@/lib/admin/hq-identity'
 import { toast } from 'sonner'
 import { DeviceRegistryCommandPaletteProvider } from '@/app/manage/devices/components/DeviceRegistryCommandPalette'
 import { NotificationBell } from '@/components/notifications/NotificationBell'
 import { GetUnreadTicketCounts } from '@/app/manage/actions/support'
 import { MobileBottomNav } from '@/components/dashboard/MobileBottomNav'
+import { ImpersonationBanner } from '@/components/dashboard/ImpersonationBanner'
+import { ImpersonationHydrator } from '@/components/dashboard/ImpersonationHydrator'
 import type { BottomNavTab, MoreNavItem } from '@/components/dashboard/MobileBottomNav'
 
 // Navigation item type with optional permission requirement
@@ -225,10 +228,23 @@ const navFooter = [
     },
 ]
 
+const DEXA_HQ_ORG_ID = process.env.NEXT_PUBLIC_DEXA_POS_INTERNAL_TEAM_ID ?? ''
+
 function AppSidebar() {
     const { data: userInfo, isLoading: userInfoLoading } = useUserInfo()
     const { role, hasPermission, hasAnyPermission, isAtLeast, isLoading: authLoading } = useAdminPermissions()
     const pathname = usePathname()
+
+    // Identify this console by the HQ membership specifically — never by
+    // members[0]. HQ admins may also hold a merchant membership, and the embed
+    // producing `members` has no ORDER BY, so index 0 is not stable. Under
+    // impersonation there is no HQ membership in the array at all, so this
+    // returns null and the header falls back to the HQ literal rather than
+    // branding /manage as the impersonated merchant.
+    const hqOrg = useMemo(
+        () => selectHqOrganization(userInfo, DEXA_HQ_ORG_ID),
+        [userInfo]
+    )
     
     const { signOut } = useClerk()
     const queryClient = useQueryClient()
@@ -283,14 +299,14 @@ function AppSidebar() {
                     ) : (
                         <>
                             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-                                {userInfo?.members?.[0]?.organizations?.imageURL ? (
-                                    <Image src={userInfo?.members?.[0]?.organizations?.imageURL} alt={userInfo?.members?.[0]?.organizations?.name || 'Organization'} width={32} height={32} className='rounded-lg' />
+                                {hqOrg?.imageURL ? (
+                                    <Image src={hqOrg.imageURL} alt={hqOrg.name || 'Dexa POS HQ'} width={32} height={32} className='rounded-lg' />
                                 ) : (
                                     <Shield className="h-4 w-4 text-primary-foreground" />
                                 )}
                             </div>
                             <div className="grid flex-1 text-left text-sm leading-tight">
-                                <span className="truncate font-semibold">{userInfo?.members?.[0]?.organizations?.name || 'DexaPOS HQ'}</span>
+                                <span className="truncate font-semibold">{hqOrg?.name || 'Dexa POS HQ'}</span>
                                 <span className="truncate text-xs text-muted-foreground">Admin Dashboard</span>
                             </div>
                         </>
@@ -495,8 +511,16 @@ export default function ManageLayout({
                 <Suspense>
                     <DeniedParamHandler />
                 </Suspense>
+                {/* An impersonation session outlives the tab (24h cookie) while the
+                    client store is sessionStorage-backed, so HQ admins could land
+                    back here still impersonating with nothing to tell them — and no
+                    Exit control, which lives only in the banner. Hydrating here
+                    re-syncs the store from the server-validated cookie so the banner
+                    (and its Exit button) are reachable from the admin console. */}
+                <ImpersonationHydrator />
                 <AppSidebar />
                 <main aria-label="Admin content" className="flex-1 flex flex-col min-w-0 bg-background">
+                    <ImpersonationBanner />
                     <header className="flex h-16 shrink-0 items-center gap-2 border-b px-3 sm:px-4">
                         <SidebarTrigger className="-ml-1 hidden sm:flex" />
                         <div className="flex items-center gap-2 min-w-0 flex-1">

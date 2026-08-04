@@ -157,6 +157,7 @@ interface LogAuditEventParams {
   clerkOrgId?: string;
   merchantId?: string; // Allow passing merchantId directly
   locationId?: string | null;
+  platformScoped?: boolean;
   action: string;
   actionCategory: string;
   severity?: "info" | "warning" | "critical";
@@ -224,14 +225,24 @@ export async function LogAuditEvent(
   let merchantId = params.merchantId;
   let locationId = params.locationId;
 
+  if (params.platformScoped) {
+    merchantId = undefined;
+    locationId = null;
+  }
+
   // Resolve impersonation context (httpOnly cookies + server-validated session).
   // When active, force merchantId to the impersonated merchant so callers can't
   // accidentally write a misattributed log row, and stamp impersonation fields
   // on the RPC call. Best-effort — never block the log on resolution errors.
-  const impersonation = await resolveImpersonationFromCookies().catch(() => null);
+  const impersonation = params.platformScoped
+    ? null
+    : await resolveImpersonationFromCookies().catch(() => null);
 
   // If locationId is not provided, try to get it from cookies
-  if (locationId === undefined || locationId === null) {
+  if (
+    !params.platformScoped &&
+    (locationId === undefined || locationId === null)
+  ) {
     const cookieStore = await cookies();
     const cookieLocationId = cookieStore.get("x-location-id")?.value;
     if (cookieLocationId && cookieLocationId !== "all") {
@@ -253,7 +264,7 @@ export async function LogAuditEvent(
   // If merchantId is not provided, try to look it up via Clerk Org ID.
   // Some HQ-only actions are org-scoped (no merchant row), so missing merchant
   // should not block audit logging.
-  if (!merchantId) {
+  if (!merchantId && !params.platformScoped) {
     const { orgId: dynamicOrgId } = await auth();
     const activeOrgId = params.clerkOrgId || dynamicOrgId;
 

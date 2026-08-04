@@ -665,6 +665,7 @@ function TransactionsPageInner() {
     const summaryUnavailable = !transactionSummary
     const currentSummary = transactionSummary?.current
     const previousSummary = transactionSummary?.previous
+    const channelSummaries = transactionSummary?.channels ?? []
 
     const currentCardAvgTicket =
         currentSummary && currentSummary.cardCount > 0
@@ -920,6 +921,48 @@ function TransactionsPageInner() {
                     </Card>
                 ))}
             </div>
+
+            <Card>
+                <CardHeader>
+                    <CardTitle>Revenue by Channel</CardTitle>
+                    <CardDescription>
+                        In-Store, Kiosk, Online, and Delivery Apps for the selected filters
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    {summaryLoading || summaryFetching ? (
+                        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                            {[0, 1, 2, 3].map((item) => (
+                                <Skeleton key={item} className="h-24 w-full" />
+                            ))}
+                        </div>
+                    ) : channelSummaries.length === 0 ? (
+                        <div className="rounded-md border border-dashed p-6 text-sm text-muted-foreground">
+                            Channel breakdown is unavailable until the kiosk reporting v2 migration is promoted.
+                        </div>
+                    ) : (
+                        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                            {channelSummaries.map((channel) => (
+                                <div
+                                    key={channel.channel}
+                                    className="rounded-lg border bg-muted/20 p-4"
+                                >
+                                    <p className="text-sm font-medium">{channel.label}</p>
+                                    <p className="mt-2 text-2xl font-bold">
+                                        {formatCurrencyValue(channel.current.totalRevenue)}
+                                    </p>
+                                    <p className="mt-1 text-xs text-muted-foreground">
+                                        {channel.current.totalTransactions.toLocaleString()} transactions
+                                    </p>
+                                    <p className="text-xs text-muted-foreground">
+                                        Card {formatCurrencyValue(channel.current.cardRevenue)} / Cash {formatCurrencyValue(channel.current.cashRevenue)}
+                                    </p>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
 
             <MerchantBreakdownSection filters={merchantBreakdownFilters} />
 

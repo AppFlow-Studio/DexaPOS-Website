@@ -4,6 +4,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { applyReportablePredicate } from "@/lib/reporting/recognized-order";
 import {
   canonicalizePlatform,
+  hasKioskPlatformIdentity,
   sortPlatformSlugs,
   type PlatformSlug,
 } from "@/lib/orderout/platform";
@@ -159,6 +160,19 @@ export async function GetOnlineOrderingAnalytics(
       | { provider?: string | null; delivery_company?: string | null; provider_status?: string | null }
       | null
       | undefined;
+
+    // Kiosk can be retained in provider metadata for KDS routing, but it is not
+    // an online marketplace and must never enter Revenue-by-Platform.
+    if (
+      hasKioskPlatformIdentity({
+        deliveryPlatform: order.delivery_platform,
+        deliveryCompany: link?.delivery_company,
+        provider: link?.provider,
+        orderSource: order.order_source,
+      })
+    ) {
+      continue;
+    }
 
     const platform = canonicalizePlatform({
       deliveryPlatform: order.delivery_platform,

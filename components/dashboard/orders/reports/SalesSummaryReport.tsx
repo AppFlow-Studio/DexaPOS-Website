@@ -4,12 +4,13 @@ import { useMemo, useState } from 'react'
 import { useSalesSummaryReport } from '@/app/dashboard/hooks/useOrderAnalytics'
 import { ReportDataTable } from './ReportDataTable'
 import { ReportToolbar } from './ReportToolbar'
-import { SummaryCard, SummaryCardRow } from './SummaryCard'
+import { ChannelCard, SummaryCard, SummaryCardRow } from './SummaryCard'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Empty } from '@/components/ui/empty'
 import { formatReportDateRange } from '@/utils/export'
-import { DollarSign, ShoppingBag, TrendingUp } from 'lucide-react'
+import { DollarSign, Globe, Monitor, ShoppingBag, Store, TrendingUp, Truck } from 'lucide-react'
 import type { SalesSummaryRow } from '@/types/analytics'
+import type { OrderSource } from '@/lib/orderout/platform'
 import type { ColumnDef } from '@tanstack/react-table'
 
 interface SalesSummaryReportProps {
@@ -17,19 +18,42 @@ interface SalesSummaryReportProps {
   dateTo: Date
   merchantName?: string
   locationName?: string
+  orderSource?: OrderSource | null
 }
 
-export function SalesSummaryReport({ dateFrom, dateTo, merchantName, locationName }: SalesSummaryReportProps) {
-  const { data, isLoading } = useSalesSummaryReport(dateFrom, dateTo)
+const channelIcons = {
+  pos: Store,
+  kiosk: Monitor,
+  online_store: Globe,
+  orderout: Truck,
+} satisfies Record<OrderSource, typeof Store>
+
+export function SalesSummaryReport({
+  dateFrom,
+  dateTo,
+  merchantName,
+  locationName,
+  orderSource = null,
+}: SalesSummaryReportProps) {
+  const { data, isLoading, isError } = useSalesSummaryReport(
+    dateFrom,
+    dateTo,
+    orderSource
+  )
   const [searchQuery, setSearchQuery] = useState('')
+  const rows = useMemo(() => data?.rows ?? [], [data?.rows])
+  const channelRows = useMemo(
+    () => data?.byChannel ?? [],
+    [data?.byChannel]
+  )
 
   // Improved date search – matches the formatted date shown in the table
   const filteredData = useMemo(() => {
-    if (!data) return []
+    if (!rows.length) return []
     const query = searchQuery.toLowerCase().trim()
-    if (!query) return data
+    if (!query) return rows
 
-    return data.filter((row) => {
+    return rows.filter((row) => {
       const formattedDate = new Date(row.date).toLocaleDateString('en-US', {
         weekday: 'short',
         month: 'short',
@@ -37,7 +61,7 @@ export function SalesSummaryReport({ dateFrom, dateTo, merchantName, locationNam
       }).toLowerCase()
       return formattedDate.includes(query)
     })
-  }, [data, searchQuery])
+  }, [rows, searchQuery])
 
   const formatCurrency = (amount: number) =>
     new Intl.NumberFormat('en-US', {
@@ -133,13 +157,13 @@ export function SalesSummaryReport({ dateFrom, dateTo, merchantName, locationNam
     return <Skeleton className="h-[400px] w-full" />
   }
 
-  if (!data || data.length === 0) {
-    return <Empty description="No sales data for selected period" />
+  if (isError) {
+    return <Empty description="Unable to load sales data" />
   }
 
   // Calculate summary metrics
-  const totalNetSales = data.reduce((sum, row) => sum + (row.netSales || 0), 0)
-  const totalOrders = data.reduce((sum, row) => sum + (row.orderCount || 0), 0)
+  const totalNetSales = rows.reduce((sum, row) => sum + (row.netSales || 0), 0)
+  const totalOrders = rows.reduce((sum, row) => sum + (row.orderCount || 0), 0)
   const avgOrderValue = totalOrders > 0 ? totalNetSales / totalOrders : 0
 
   const summaryCardsData = [
@@ -169,11 +193,34 @@ export function SalesSummaryReport({ dateFrom, dateTo, merchantName, locationNam
         />
       </SummaryCardRow>
 
+      {channelRows.length > 0 && (
+        <div>
+          <h3 className="mb-3 text-sm font-medium text-muted-foreground">
+            Sales by Channel
+          </h3>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {channelRows.map((channel) => {
+              const Icon = channelIcons[channel.channel]
+              return (
+                <ChannelCard
+                  key={channel.channel}
+                  label={channel.label}
+                  value={formatCurrency(channel.net)}
+                  description={`${channel.orders.toLocaleString()} orders · ${formatCurrency(channel.avgTicket)} avg`}
+                  icon={<Icon className="h-5 w-5" />}
+                  dimmed={orderSource !== null && orderSource !== channel.channel}
+                />
+              )
+            })}
+          </div>
+        </div>
+      )}
+
       <ReportToolbar
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
         filteredCount={filteredData.length}
-        totalCount={data.length}
+        totalCount={rows.length}
         data={filteredData}
         exportColumns={exportColumns}
         filename={`Sales Summary - ${formatReportDateRange(dateFrom, dateTo)}`}
@@ -185,7 +232,11 @@ export function SalesSummaryReport({ dateFrom, dateTo, merchantName, locationNam
         summaryCards={summaryCardsData}
       />
 
-      <ReportDataTable columns={columns} data={filteredData} />
+      {rows.length === 0 ? (
+        <Empty description="No sales data for selected period" />
+      ) : (
+        <ReportDataTable columns={columns} data={filteredData} />
+      )}
     </div>
   )
 }
