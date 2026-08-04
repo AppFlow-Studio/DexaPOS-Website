@@ -40,7 +40,7 @@ const PAGE_SIZE = 50
 
 const COMMON_ACTION_CATEGORIES = [
   'merchant', 'user_management', 'device', 'staff', 'notes',
-  'settings', 'authentication', 'order', 'inventory', 'system',
+  'settings', 'authentication', 'order', 'inventory', 'settlement', 'system',
 ]
 
 // ─── Anomaly Detection (client-side) ─────────────────────────────────────────
