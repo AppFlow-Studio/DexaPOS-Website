@@ -390,6 +390,61 @@ Single index for active ticket streams and their source trackers.
   run controlled workload deltas and approved production read-only statistics,
   obtain the listed senior decisions, and open separately reviewed tickets
   from the implementation backlog.
+- The 2026-08-03 current-branch pass revalidated the major static findings and
+  found six migration roots, 35 duplicate SQL basenames, and 13 same-named
+  files with different contents across the two repositories.
+- The read-only evidence pack now also covers connections/waits, locks,
+  function timing, Realtime publications, triggers, materialized views,
+  relevant server settings, applied migration history, replication slots,
+  churn, pg_cron metadata, and partition inventory.
+- Query 39 confirms a P0 shared-database authorization ticket: PUBLIC/`anon`
+  can execute `get_unified_staff_view`, `close_check`, `reopen_check`,
+  `record_cash_operation`, and `delete_floor_plan_cascade`, while the live
+  bodies do not validate caller, tenant, location, or permission scope.
+- `get_unified_staff_view` also returns staff contact data and raw/hashed/legacy
+  PIN material. The remediation must remove PIN material, add caller-derived
+  authorization, pin `search_path`, narrow grants, and preserve POS online and
+  offline-replay behavior.
+- The implementation backlog tracks this as `DB-P0-04`; no runtime or database
+  fix was applied during the audit.
+- Query 40 confirms a separate P0 table-access ticket: RLS is disabled on
+  `kiosk_pickup_sequences` and `luqra_sync_runs`, while `anon` and
+  `authenticated` have full privileges including `TRUNCATE`, `DELETE`, and
+  `UPDATE`.
+- The backlog tracks that containment as `DB-P0-05`. It must preserve an
+  authorized atomic kiosk-number allocator and HQ/service-role Luqra sync
+  access while removing direct anonymous/general-client access.
+- Query 41 confirms client roles have schema usage but no object-creation
+  privilege in `public` or `extensions`. The unpinned `search_path` work remains
+  required hardening, but no client-role object-shadowing path is currently
+  evidenced on staging.
+- Query 42 returned no live function dependency on either exposed table. No
+  direct application caller was found for `kiosk_pickup_sequences`; observed
+  `luqra_sync_runs` access uses HQ/service-role website actions.
+- Query 13 is now complete across six pages: 511 live, unique
+  `SECURITY DEFINER` signatures, all owned by `postgres`. Effective execute is
+  available to `anon` on 465 (91.0%), `authenticated` on 495 (96.9%), and
+  `service_role` on all 511; 396 ACLs explicitly include PUBLIC execute and
+  463 explicitly include `anon`.
+- Search paths are pinned on 500 signatures; the 11 unpinned signatures match
+  the body-reviewed Query 39 set. The broad execute inventory is not proof
+  that every body is exploitable, but it requires a signature-level
+  authorization/caller allowlist. The backlog tracks this as `DB-P0-06`, with
+  payment, secret/device, NMI, billing, staff, order, and platform mutations
+  reviewed before lower-consequence contracts.
+- The dedicated POS current-staging audit is complete at `a1c7a032`, matching
+  `origin/staging` at audit start. Its detailed and senior artifacts live under
+  `Dexa-POS/docs/engineering/database/` in the
+  `audit/pos-database-refresh` worktree.
+- POS source verification adds four shared/release blockers: nested conflict
+  markers in the station-status RPC reference; incomplete station/location
+  binding plus plaintext PIN persistence in canonical `pos_staff_login_v2`;
+  v16/v17 payment routing divergence across direct/service/replay paths; and a
+  reconnect fingerprint capable of skipping fresh active-order hydration.
+- End-of-Day date/state/query correctness, Previous Orders fan-out, KDS
+  convergence, raw analytics, and refund `2N` reads are also incorporated into
+  the combined audit and backlog. The POS collector's one standalone export is
+  cumulative only; paired workflow deltas remain open.
 
 ## Stream V: [DevEx] Feature-Based Documentation Restructure
 

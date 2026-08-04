@@ -2,13 +2,19 @@
 
 - **Date:** 2026-07-31
 - **Principal-review expansion:** 2026-08-02
+- **Current-branch static revalidation:** 2026-08-03
 - **Repositories and source revisions:**
-  - Dexa-POS: branch `databse-audit`, commit `7a6ab3069840de5da926e71a3b05caca3f2700ff`
-  - DexaPOS-Website: branch `dika-dev`, commit `1b53bc0846c149ce4d4b3008b23380a54d3a398b`
+  - Dexa-POS current staging audit: branch `audit/pos-database-refresh`, commit `a1c7a032479bdfc533f28e29eb983824077742c1` (equal to `origin/staging` at audit start)
+  - Dexa-POS prior evidence baseline: branch `databse-audit`, commit `7a6ab3069840de5da926e71a3b05caca3f2700ff`
+  - DexaPOS-Website current audit: branch `dika-dev`, commit `a2473d88933a90f8fcd46ddd8d4b11a1d1801e29`
 - **Database evidence:** staging project `dfwqakoyittmrwbqvxgw`; follow-up statistics captured `2026-07-31 10:22:56 UTC`; deployed OpenAPI contract refreshed read-only at `2026-08-01 21:15:50 UTC`
+- **August 3 statistics refresh:** staging read-only SQL observed at `2026-08-03 08:20:01 UTC`
 - **Phase:** Investigation and documentation only
 - **Database:** Shared by DexaPOS-Website and Dexa-POS
 - **Canonical status:** Combined senior-review audit; no performance fixes approved or applied
+- **Current evidence status:** Website and current-staging POS static findings
+  revalidated; one standalone cumulative POS collector export documented;
+  fresh production evidence and controlled workflow deltas remain pending
 
 ## 1. Executive Summary
 
@@ -40,6 +46,67 @@ mostly on cache-hot data.
    service-role helper-call occurrences bypass RLS when executed and need an
    explicit authorization inventory.
 
+### Immediate Security Exception
+
+The August 3 function-definition review found a security issue that takes
+precedence over the performance sequence. Five live `SECURITY DEFINER` RPCs
+are executable by PUBLIC/`anon`, perform sensitive reads or mutations, and do
+not enforce caller, merchant, location, or role authorization in their bodies:
+`get_unified_staff_view`, `close_check`, `reopen_check`,
+`record_cash_operation`, and `delete_floor_plan_cascade`.
+`get_unified_staff_view` also returns email, phone, and a `pin_code` derived
+from plaintext, hashed, or legacy PIN columns. This is a confirmed broken
+authorization contract in staging, not merely a missing-index or speculative
+static finding. Do not probe it against production or invoke the RPCs with
+unauthorized identities. A separately reviewed containment and replacement
+contract is required before performance work changes these shared functions.
+
+Query 40 confirms a second P0 database-access issue. RLS is disabled on
+`kiosk_pickup_sequences` and `luqra_sync_runs`, while `anon` and
+`authenticated` have full table privileges, including `TRUNCATE`, `DELETE`,
+`UPDATE`, and `INSERT`. `kiosk_pickup_sequences` is an operational counter;
+`luqra_sync_runs` is an HQ/service-role integration log containing tenant,
+processor MID, date-range, status, and error metadata. Both are in the exposed
+`public` schema. This is direct table exposure, independent of the definer-RPC
+finding.
+
+The completed Query 13 inventory adds a systemic authorization-governance
+exception. Staging contains 511 unique live `SECURITY DEFINER` signatures,
+all owned by `postgres`; 465 (91.0%) are executable by `anon`, 495 (96.9%) by
+`authenticated`, and all 511 by `service_role`. The ACL text explicitly names
+PUBLIC execute on 396 signatures and `anon` execute on 463. This metadata does
+not prove that every function is exploitable because authorization may be
+enforced inside a body, but it establishes an excessively broad privileged
+surface that must be classified before blanket grant changes or shared-RPC
+optimization. The five Query 39 functions remain the confirmed immediate P0
+subset.
+
+### POS Current-Staging Exceptions
+
+The dedicated POS pass revalidated `origin/staging` at `a1c7a032`. It found
+four additional release-blocking contract/correctness risks:
+
+1. `get_location_stations_with_status.sql` contains nested unresolved Git
+   conflict markers even though five current POS paths depend on the deployed
+   RPC. The repository cannot reproduce or safely compare that live contract.
+2. The current canonical `pos_staff_login_v2` source resolves staff in a
+   caller-supplied location but looks up the station only by station UUID and
+   active state. It does not bind station location/merchant to the staff
+   context before session mutation, and it writes the submitted PIN into
+   `location_members.pin_plain`. Live-body/grant equivalence still needs an
+   export before production remediation.
+3. Idempotent payment routing is split: `OrderService` selects
+   `process_payment_v16`, the direct order store selects v17 and says the
+   versions must match, and offline replay follows the v16 service path.
+4. Reconnect can fetch a fresh active-order snapshot and skip hydration because
+   the fingerprint uses only row count and the first order's `opened_at`.
+
+The POS pass also confirms End-of-Day correctness defects: device-local day
+bounds, an order-payment predicate without an upper bound, case-mismatched
+check states, direct close writes that bypass the authoritative RPC, and
+raw/N+1 report work. These are source-confirmed issues; their runtime frequency
+and latency impact remain unmeasured.
+
 ### Top Five Highest-Impact Improvements
 
 1. Bound Orders and Payments lists, move filters into SQL, and return explicit
@@ -66,6 +133,14 @@ Static website evidence does not prove that a candidate index is missing or usef
 | CI-5 | Confirmed static application path | Checkout performs one pricing RPC per cart item | A bursty latency-sensitive path creates O(line items) PostgREST/function overhead | Resolve the complete cart set-wise inside the authoritative create-order transaction |
 | CI-6 | Confirmed static application path | Abandoned-cart and billing jobs fetch all eligible records and process per record | Backlogs can exceed function duration, cause retry amplification, and leave partial progress | Add bounded claims, idempotency, retry state, continuation, and queue-age metrics |
 | CI-7 | Static security surface | Service-role use appears in 285 helper-call occurrences across 89 website files | Missing tenant filters can become both platform-wide scans and data exposure | Inventory every executable caller and centralize merchant/location scope assertions |
+| CI-8 | Confirmed staging function definitions and grants | Five PUBLIC/`anon` executable `SECURITY DEFINER` RPCs expose staff/PIN data or mutate orders, cash operations, and floor plans without caller or tenant authorization | RLS is bypassed by the function owner; knowledge of an object UUID is not authorization, and caller-supplied staff IDs allow actor spoofing | Treat as P0: design a POS-compatible authenticated station/user contract, remove raw PIN material, add tenant/permission checks, pin `search_path`, narrow grants, and roll out with cross-repo regression coverage |
+| CI-9 | Confirmed staging RLS and effective grants | `kiosk_pickup_sequences` and `luqra_sync_runs` have RLS disabled while `anon` and `authenticated` hold all table privileges | Anonymous clients can read or corrupt kiosk counters and Luqra synchronization metadata; `TRUNCATE`/`DELETE` can erase operational or audit state | Treat as a separate P0 containment migration: revoke unintended grants, enable appropriate RLS, preserve service-role jobs, and expose kiosk allocation only through an authorized atomic contract |
+| CI-10 | Confirmed staging function/grant inventory; body authorization pending | 465 of 511 live `SECURITY DEFINER` signatures are effectively executable by `anon`; sensitive families include payment, void/refund/preauth, payment-device secrets, NMI provisioning, billing/subscription, staff, order, inventory, and platform operations | Any body missing caller-derived authorization runs with `postgres` ownership and bypasses table RLS; broad revocation could also break valid storefront, QR, OTP, and POS/offline paths | Create a signature-level allowlist, inspect body authorization and callers by risk family, remove PUBLIC/default execute where unnecessary, and version incompatible contract changes |
+| CI-11 | Confirmed current POS staging source | The committed `get_location_stations_with_status` SQL contains nested conflict markers while active POS settings/access paths call the deployed RPC | The shared contract is unreproducible, and an unsafe copy could overwrite the live function | Export the live definition, choose one canonical root, ship a forward-only authorized version, and reject conflict markers in deployable SQL CI |
+| CI-12 | Confirmed current POS canonical source; live equivalence pending | `pos_staff_login_v2` does not consistently bind staff, location, merchant, and station and persists submitted PIN input in `pin_plain` | Cross-location/station session mutation and plaintext credential retention are security and audit-integrity risks | Export the live body/grants, version the pre-login contract, enforce atomic tenant/station binding and rate limits, and remove plaintext PIN persistence |
+| CI-13 | Confirmed current POS source | Direct, service, and replay payment paths disagree between `process_payment_v16` and v17; preauthorization routing also varies by path | Conditional flags or offline replay can produce different provider metadata and behavior for the same operation | Centralize one payment/preauth router, export the selected live definitions, regenerate types, and preserve old versions through a measured compatibility window |
+| CI-14 | Confirmed current POS source | Active-order hydration fingerprints only result length and the first `opened_at` | Reconnect may download authoritative changes but decline to merge them, leaving stale item/payment/status state | Use a server revision/max update discriminator or always perform an identity-preserving merge; test missed-broadcast recovery |
+| CI-15 | Confirmed current POS source | End-of-Day uses inconsistent check-state casing, device-local day bounds, an unbounded payment-time predicate, direct close writes, raw fact transfer, and per-session variance calls | Historical totals and closure state can be wrong before performance is considered | Establish one location-timezone EOD contract, canonical state vocabulary, authoritative close mutations, grouped summaries, and paged drill-down |
 
 No finding above justifies a speculative index migration. Existing modifier and
 discount indexes disproved the first missing-index hypothesis; every new or
@@ -190,16 +265,22 @@ YouTube internals.
 
 ### Immediate: Bounds, Evidence, And Ownership
 
-1. Revalidate all source references against the post-SDK-rollback POS branch and
+1. Open and sequence the P0 definer-RPC containment ticket before unrelated
+   performance migrations. Do not revoke grants in isolation because current
+   POS check, cash-drawer, and floor-plan flows depend on these RPCs.
+2. Open a separate P0 table-containment ticket for
+   `kiosk_pickup_sequences` and `luqra_sync_runs`; verify live dependencies
+   before changing grants or policies.
+3. Revalidate all source references against the post-SDK-rollback POS branch and
    current website branch.
-2. Add bounded Orders and Payments pagination, explicit list projections, and
+4. Add bounded Orders and Payments pagination, explicit list projections, and
    database-side filters.
-3. Reduce confirmed duplicate polling and pause nonessential hidden-tab reads.
-4. Run controlled POS and website workload deltas and collect approved
+5. Reduce confirmed duplicate polling and pause nonessential hidden-tab reads.
+6. Run controlled POS and website workload deltas and collect approved
    production read-only statistics.
-5. Declare one canonical migration root and export missing live critical RPC
+7. Declare one canonical migration root and export missing live critical RPC
    definitions.
-6. Create an executable inventory of service-role callers and tenant checks.
+8. Create an executable inventory of service-role callers and tenant checks.
 
 ### Mid-Term: Version Shared Contracts
 
@@ -334,6 +415,96 @@ metadata only and performed no table read, RPC execution, or mutation.
 - Historical migration text cannot be treated as the live schema because many
   functions and policies are replaced across competing roots.
 
+### 2026-08-03 Current-Branch Revalidation
+
+The master-audit pass rechecked the current local branches without executing
+SQL or changing application code:
+
+- DexaPOS-Website: `dika-dev` at
+  `a2473d88933a90f8fcd46ddd8d4b11a1d1801e29`.
+- Dexa-POS dedicated current-staging audit: `audit/pos-database-refresh` at
+  `a1c7a032479bdfc533f28e29eb983824077742c1`, matching `origin/staging` at
+  audit start.
+- Both worktrees were clean at the start of the revalidation.
+
+Current literal-call inventory, excluding generated types, migrations,
+documentation, build output, and dependencies:
+
+| Repository | `.from(...)` | Distinct literal relations | `.rpc(...)` | Distinct literal RPCs | Literal `select('*')` | `.range(...)` | `.limit(...)` |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Website | 2,580 | 196 | 328 | 229 | 234 | 25 | 103 |
+| POS | 370 | 70 | 214 | 151 | 25 | 4 | 35 |
+
+These counts use a stricter literal-call parser than the earlier broad
+occurrence inventory, so they are a current surface map rather than a trend
+comparison. The website still has 285 literal
+`createServiceRoleClient()` calls across 89 files; 23 Edge Function files and
+11 Next.js API route files also reference service-role access. This remains a
+review surface, not proof that every call is unsafe or frequently executed.
+
+The major application findings remain present on the current website branch:
+
+- Checkout still resolves `get_effective_price` inside a `Promise.all` over
+  cart items in `supabase/functions/create-online-order/index.ts`.
+- Location Comparison still starts five independent fallback queries in
+  `app/dashboard/reports/comparison/hooks/useComparisonData.ts`, and each
+  fallback independently resolves the merchant and scans `orders`.
+- Merchant Orders and Payments still retrieve nested history without a
+  `.range()` or `.limit()` list contract in
+  `app/dashboard/actions/order.ts` and
+  `app/dashboard/actions/payments.ts`.
+- HQ dashboard actions still perform sequential raw-row reads while the
+  corresponding hooks poll at 30-60 second intervals.
+- The website has no `unstable_cache` use and no Redis client dependency;
+  React Query caching is the dominant cross-render cache layer.
+
+The dedicated POS staging pass additionally confirms:
+
+- Four of the five body-proven authless definer functions have active POS
+  callers: `close_check`, `reopen_check`, `record_cash_operation`, and
+  `delete_floor_plan_cascade`.
+- Payment routing differs between v16 and v17 across direct/service/replay
+  paths; online and replay preauthorization generations also diverge.
+- Active-order and order-detail paths still expose whole-row nested graphs;
+  KDS scopes location after expensive aggregation; floor bootstrap remains
+  approximately one plan-list request plus four requests per plan.
+- Previous Orders combines business-day resolution, summary work, a nested
+  page, exact count, and up to 5,000 discriminator rows. Analytics and EOD
+  still transfer raw facts for JavaScript aggregation, while refund allocation
+  performs a sequential two-read pattern per requested item.
+- Current Realtime code uses targeted private Broadcast channels and one
+  authenticated singleton socket; no duplicate client `postgres_changes`
+  subscription was confirmed. Controlled trigger/message and reconnect
+  evidence is still required before assigning shared Realtime cost to POS.
+
+The shared migration-authority risk is stronger than the earlier qualitative
+finding. The current repositories contain six SQL roots with 999 unique SQL
+file paths in total: 481 website canonical migrations, 143 website utility
+migrations (including 17 under the nested `migrations_v2` history), 36 POS
+top-level migrations, and 339 POS utility migrations. Across those roots, 35
+filenames are duplicated; 22 copies are byte-identical and 13
+same-named migrations have different SHA-256 content. Divergent examples
+include payment, KDS/course lifecycle, terminal/device, cash-discount, online
+order, and station-status definitions. The current POS branch also omits the
+kiosk migrations that existed at the POS audit revision while the website
+retains a synchronized copy. This does not establish live database state, but
+it confirms that file order or an uncoordinated replay can replace a shared
+function with different behavior.
+
+The read-only SQL pack was expanded during this pass to collect connection and
+wait summaries, function timing, Realtime publication state, user triggers,
+materialized views, relevant server settings, Supabase migration history,
+replication-slot retention, and pg_cron job metadata. Production results are
+required before changing indexes, RLS, function grants, pooling, publications,
+or infrastructure.
+
+The POS audit restored a SELECT-only focused workload collector and supplied a
+ten-workflow capture runbook. One standalone export at
+`2026-08-03 12:50:18 UTC` contains 945 raw rows and 925 normalized query IDs,
+but it has no matching after-export. It corroborates the cumulative nested
+orders, nested modifier, Realtime, and PIN-login ranking; it cannot establish
+idle/workflow deltas, current-POS attribution, or before/after benefit.
+
 ### Evidence Tiers
 
 | Tier | Meaning | Permitted conclusion |
@@ -370,9 +541,12 @@ metadata only and performed no table read, RPC execution, or mutation.
 
 ## Shared Database Evidence From the POS Audit
 
-The sibling artifact `Dexa-POS/tasks/database-performance-architecture-audit.md`
-contains staging statistics captured on 2026-07-31, including a follow-up
-snapshot at 2026-07-31 10:22:56 UTC. This combined audit treats those values as
+The current sibling artifacts are
+`Dexa-POS/docs/engineering/database/POS-SUPABASE-PERFORMANCE-AUDIT-2026-08-03.md`
+and
+`Dexa-POS/docs/engineering/database/POS-SUPABASE-PERFORMANCE-PARTIAL-RUNTIME-EVIDENCE-2026-08-03.md`.
+They retain the staging statistics captured on 2026-07-31 and the standalone
+August 3 export described above. This combined audit treats those values as
 shared-database evidence while avoiding attribution of a normalized SQL
 statement to one client until a controlled workload delta is captured.
 
@@ -391,6 +565,38 @@ statement to one client until a controlled workload delta is captured.
 | `staff_shifts` | 128 |
 
 ### Measured Workload Signals
+
+#### August 3 Read-Only Refresh
+
+- PostgreSQL is `17.6`, the database timezone is UTC, and
+  `track_io_timing` is off. The enabled audit-relevant extensions include
+  `pg_stat_statements 1.11`, `pg_cron 1.6.4`, and `hypopg 1.4.1`.
+- The statement-statistics window runs from `2026-05-07 23:24:09 UTC` to
+  `2026-08-03 08:20:01 UTC`, or approximately 87.37 days. Nine statement
+  deallocations still make the retained set incomplete for low-frequency
+  statements.
+- The refreshed top 100 statements account for 15.65 database-hours, or a
+  scale-normalized 10.75 execution minutes/day across only those retained
+  statements. Nested order graphs account for 44.62%, nested
+  order-item/modifier graphs 22.40%, and Realtime change polling 17.12%.
+  Together these three families account for 84.14% of top-100 execution time.
+- In the slowest-frequently-called export, nested order graphs account for
+  57.39% and nested order-item/modifier graphs 29.21%. Their combined 86.60%
+  share confirms that broad nested payload construction, not storage cache
+  misses, is the first query-design target.
+- `pg_stat_database` reports 13,679,471,046 shared-buffer hits and 9,951
+  reads, an exact hit ratio of approximately 99.9999%. Its 252,323 temporary
+  files and reported 1.36 TB of temporary bytes are cumulative with no reset
+  boundary, so they cannot be converted into a valid daily rate.
+- Four of the five largest temp-block statements in the top-100 export are
+  catalog/audit introspection. The remaining identified statement is Realtime
+  change polling. The 1.36 TB database counter therefore must not be assigned
+  to application reporting without a controlled delta or query-specific
+  evidence.
+- The cumulative rollback share is approximately 7.93% and four deadlocks are
+  recorded. High-call output includes Realtime transaction rollback behavior,
+  so these values require error- and workload-attributed evidence before they
+  are treated as application failures.
 
 - The manual `pg_stat_database` check returned `stats_reset = NULL` on
   2026-07-31. PostgreSQL therefore provides no reset boundary for these
@@ -423,16 +629,231 @@ statement to one client until a controlled workload delta is captured.
 
 ### Measured Relation and Index Signals
 
-- `order_item_modifiers` recorded 6.83 million sequential scans and 47.9 billion sequential rows examined.
-- `order_discounts` recorded 5.11 million sequential scans on a very small relation.
-- `orders`, `kds_item_status`, and `table_sessions` also show material sequential-scan volume.
-- The relevant `order_item_modifiers(order_item_id)` and active `order_discounts(order_id)` indexes already exist and are heavily used. More indexes are not the first fix for those statement families.
+- The August 3 refresh reports 8,554 live `order_item_modifiers` rows, 6.83
+  million sequential scans, and 47.91 billion sequential rows examined. Its
+  `order_item_id` index also has 68.73 million scans, confirming that an index
+  exists and is heavily used while broad/repeated query shapes remain.
+- `order_discounts` reports only 175 live rows but 5.12 million sequential
+  scans. A sequential scan can be rational for a relation this small; adding
+  another index without a plan is unlikely to address the dominant cost.
+- `orders` reports 39,231 sequential scans over 134.14 million rows and 258.06
+  million index scans. `kds_item_status` reports 23,902 sequential scans over
+  128.71 million rows. Their exact statements and predicates need plans before
+  any index proposal.
+- `members` has only 15 estimated live rows but approximately 685 million index
+  scans; `idx_members_user_org` alone records about 569.85 million scans.
+  `location_members` also has several indexes with hundreds of thousands to
+  millions of scans. This is a strong RLS/membership-probe investigation lead,
+  not proof of a policy defect; live policy definitions and role-realistic
+  plans are required.
+- `order_payments` has approximately 13.2% dead tuples and its last recorded
+  autovacuum in this snapshot is `2026-05-08`. `device_login_history`,
+  `station_sessions`, and `station_devices` also have elevated dead-tuple
+  ratios. These are maintenance-review candidates, but table size and churn
+  must be considered before changing autovacuum settings.
+- Query 7's relation-size export was not received: the submitted Query 7 file
+  was initially byte-for-byte identical to Query 6; the corrected export is
+  now incorporated. Query 8 was completed with a focused continuation for the
+  later order, refund, shift, and subscription index families.
+- The largest 100 public relations total approximately 74 MB in this staging
+  export. `orders` is the largest at 14 MB including indexes, followed by
+  `audit_logs` at about 9.2 MB, `order_items` at about 7.5 MB, and
+  `order_payments` at about 7.5 MB. Current staging size does not justify
+  partitioning, sharding, a read replica, or Redis.
+- The structural duplicate-index query found 25 exact key/predicate groups,
+  including duplicate definitions on `orders(location_id, created_at)`,
+  `orders(order_number, merchant_id)`, multiple location override tables,
+  `location_members` PIN indexes, and several uniqueness keys paired with a
+  non-unique index. No index should be removed until constraint ownership,
+  uniqueness, usage, and migration provenance are joined into one review.
+- The ownership follow-up classifies those 25 groups as 13
+  constraint-plus-redundant-index pairs, five duplicate-constraint pairs, four
+  duplicate non-unique pairs, and three standalone-unique-plus-redundant
+  pairs. Twenty non-constraint indexes form a preliminary consolidation set
+  totaling only about 1.53 MB on staging.
+- Duplicate constraints must be removed through constraint-aware migrations,
+  not by dropping their backing indexes directly. The five affected relations
+  are `location_inventory_stock`, `location_modifier_group_overrides`,
+  `location_modifier_item_overrides`, `menu_categories`, and
+  `menu_item_modifier_groups`.
+- The strongest non-constraint review candidates include one of the two
+  unused cash-drawer indexes, the lower-use duplicate location/inventory and
+  PIN indexes, and `idx_orders_location_created_at` beside the identically
+  shaped higher-use `_desc` index. Unique standalone or constraint-owned
+  copies must remain unless the corresponding business constraint is
+  intentionally changed.
+- Scan counts on equivalent indexes are planner choices, not proof that the
+  lower-use copy is unnecessary. Each consolidation requires a canonical
+  survivor, representative plans, write-path regression testing, and a
+  forward-only rollback strategy. The expected benefit is lower write and
+  maintenance amplification plus migration hygiene, not material storage
+  recovery at current scale.
+- The foreign-key support query returned 206 conservative candidates. It
+  intentionally excludes partial indexes, so this is not a recommendation to
+  create 206 indexes. Query 8 already proves that some listed keys, including
+  `location_members` staff/merchant references, have partial leading indexes.
+  The set must be reconciled against partial predicates, relation size, parent
+  update/delete behavior, and actual join predicates.
+- Higher-value candidates for that reconciliation include four references on
+  the 9.2 MB `audit_logs` relation, four on the 2.8 MB
+  `device_login_history` relation, five on device alerts, five on loyalty
+  transactions, and several online-order/session, payment-event, station,
+  shift, and support-ticket references. Staging size is still too small to
+  justify blanket index creation.
+- `orders` has 35 indexes totaling approximately 9.5 MB against a 4.96 MB
+  table; `order_payments` has 31 indexes totaling approximately 4.3 MB against
+  a 3.04 MB table. This is material write-maintenance overhead at larger scale,
+  but many indexes are actively used and staging is currently small.
+- The exact duplicate `orders(location_id, created_at desc)` indexes both have
+  recorded usage (approximately 173,248 and 18,592 scans). The duplicate
+  `(merchant_id, order_number)` unique indexes also both have usage. Constraint
+  ownership and workload attribution must precede removal.
+- `orders_pkey` records approximately 257 million scans and
+  `order_payments(order_id)` approximately 33 million. These values align with
+  the retained nested-order graph workload and reinforce payload/query-shape
+  work over speculative indexing.
+- The relevant `order_item_modifiers(order_item_id)` index is confirmed and
+  heavily used. More indexes are not the first fix for that statement family.
 - Probable duplicate/overlapping indexes include the two location/created-at order indexes and duplicate merchant/order-number uniqueness definitions. Removal still requires a clean usage window and constraint-ownership review.
 - Dead tuples were approximately 16.5% for `order_items`, 13.2% for `order_payments`, and 12.2% for `orders` at collection time. Table-specific autovacuum tuning is a review item, not an immediate change.
 
 ### Combined Interpretation
 
 The live statistics validate the website priorities that reduce nested order graphs and repeated raw fact scans. They do not prove that every expensive normalized statement came from the website. Run the POS workload-delta collector around website-only QA, or capture application-name/request telemetry, before assigning statement ownership.
+
+### Staging Function And RLS Review
+
+- Query 13 is complete across six ordered result pages: 511 rows, 511 unique
+  signatures, and no duplicate signatures. Every live definer is owned by
+  `postgres`.
+- Effective execute access is broad: 465 signatures (91.0%) for `anon`, 495
+  (96.9%) for `authenticated`, and 511 (100%) for `service_role`. The stored
+  ACL text explicitly includes PUBLIC execute on 396 signatures and `anon`
+  execute on 463. Two additional functions are anonymous-executable through
+  PUBLIC rather than an explicit `anon` ACL:
+  `get_categories_for_location` and `get_menu_with_categories`.
+- Search-path pinning is substantially better than grant discipline: 500 of
+  511 signatures have a `search_path` setting. The 11 unpinned signatures are
+  exactly the Query 12/39 set. Function volatility is 444 volatile, 66 stable,
+  and one immutable (`safe_jsonb_int`).
+- The broad inventory is not equivalent to 465 confirmed vulnerabilities.
+  Some anonymous entry points may be intentional for storefront, QR, OTP, or
+  device workflows, and some bodies may authenticate internally. It is,
+  however, a confirmed least-privilege and reviewability problem because each
+  signature executes with the `postgres` owner's privileges.
+- Prioritize body/caller review by consequence: payment and reversal functions
+  (`process_payment` versions, refunds, preauthorizations, voids, settlement,
+  and cash); payment-device and secret functions; NMI provisioning; billing
+  and subscription mutations; HQ/platform administration; then order, staff,
+  timeclock, station, menu, inventory, and floor-plan mutations. Public read
+  contracts, QR token verification, OTP, and customer self-service paths need
+  an explicit allowlist rather than assumptions.
+- Historical version families, especially multiple payment RPC generations,
+  expand both attack surface and maintenance cost. Confirm callers in both
+  repositories, Edge Functions, jobs, webhooks, and offline replay before
+  revoking grants or retiring versions.
+- Eleven live `SECURITY DEFINER` functions have no pinned `search_path`.
+  They include order/check mutations, cash operations, pricing, staff views,
+  floor-plan deletion, and refund-status maintenance. All are owned by
+  `postgres`; several grant execute to PUBLIC (`=X`), `anon`, and
+  `authenticated`.
+- Query 39 supplied the complete live definitions. Five functions are a
+  confirmed P0 authorization class because they are definer-privileged,
+  PUBLIC/`anon` executable, and contain no caller/tenant/role check:
+  `get_unified_staff_view`, `close_check`, `reopen_check`,
+  `record_cash_operation`, and `delete_floor_plan_cascade`.
+- `get_unified_staff_view` accepts an arbitrary merchant UUID and returns staff
+  email, phone, account data, assignments, and a `pin_code` built with
+  `COALESCE(lm.pin_plain, lm.pin_hashed, lm.pin_code)`. Raw, legacy, or hashed
+  PIN material must not be returned by a general staff-list contract.
+- `close_check` and `reopen_check` lock and mutate an order selected only by
+  caller-supplied order UUID. They also accept caller-supplied staff identity
+  for audit attribution. Neither verifies that the caller belongs to the
+  order's merchant/location or has the required permission.
+- `record_cash_operation` locks an open cash session, inserts caller-supplied
+  cash/actor/approval data, updates expected cash, and can create a no-sale
+  audit record without authenticating or scoping the caller.
+- `delete_floor_plan_cascade` performs multi-table destructive cleanup and
+  deletes a floor plan selected only by UUID, without tenant or permission
+  authorization.
+- Current POS code depends directly on these mutation RPCs at
+  `services/sessionEffects/closeCheckEffect.ts:28`,
+  `services/sessionEffects/reopenCheckEffect.ts:26`,
+  `services/cashDrawerService.ts:243`, and
+  `stores/useFloorPlanStore.ts:1009`. POS Supabase clients normally attach a
+  Clerk token, but the database functions do not validate that identity. Grant
+  revocation alone would break valid tablet workflows; authorization must be
+  added and validated with online and offline replay paths.
+- `admin_get_unified_staff_view` does call `is_dexapos_admin()`, but it still
+  returns PIN material, has an unpinned `search_path`, and carries broad
+  execute grants. It requires output minimization and grant hardening even
+  though its HQ authorization check reduces immediate exposure.
+- `update_order_item_v2`, `update_order_payment_status_after_refund`, and its
+  v3 replacement constrain the target through `user_merchant_id()` and
+  `user_location_ids()`. They are not in the authless P0 set, but still need a
+  pinned `search_path`, qualified references, narrower grants, and role-realistic
+  tests. The v3 refund function should authorize before claiming an
+  idempotency key.
+- `get_categories_for_location` and `get_effective_price` are read-only but
+  accept arbitrary object/tenant identifiers without internal caller checks.
+  Their intended public-storefront contract must be documented; current
+  website use is server-side, and checkout calls effective pricing from an
+  Edge Function. Prefer a narrow public read model or server-only grant rather
+  than exposing internal menu structures by default.
+- None of the eleven definitions uses dynamic SQL. Query 41 confirms that
+  PUBLIC, `anon`, `authenticated`, and `service_role` cannot create objects in
+  either `public` or `extensions`; the application roles have schema usage
+  only. Untrusted client object-shadowing through those schemas is therefore
+  not demonstrated by current staging privileges. Missing `search_path` pins
+  remain a defense-in-depth and migration-safety defect, but they are lower
+  urgency than the independently confirmed authless function bodies and table
+  grants.
+- Only two public tables are RLS-disabled in the ordered staging result:
+  `kiosk_pickup_sequences` and `luqra_sync_runs`. Query 40 confirms that
+  `anon`, `authenticated`, `service_role`, and `postgres` each hold
+  `SELECT`, `INSERT`, `UPDATE`, `DELETE`, `TRUNCATE`, `REFERENCES`, and
+  `TRIGGER` privileges on both tables. Because they are in the exposed
+  `public` schema and RLS is off, the anonymous and authenticated grants are a
+  confirmed direct-access defect.
+- `kiosk_pickup_sequences` stores one mutable `current_value` per location and
+  business date. The defining migration creates the table but does not enable
+  RLS or define a policy. No direct website/POS TypeScript caller was found,
+  and Query 42 returned no live function that references the table. It appears
+  unused or incomplete in the reviewed staging/repository contract; confirm
+  the intended kiosk allocation flow before deciding whether to retain it.
+  If retained, the target contract is an authorized, atomic allocator rather
+  than direct client writes.
+- `luqra_sync_runs` records merchant/location IDs, processor MID, resource,
+  ingestion date range, row/page counts, status, and error details. Current
+  application callers use `createServiceRoleClient()` after HQ permission
+  checks at `app/manage/actions/admin-merchant/luqra-sync.ts:12` and
+  `app/manage/actions/hq-platform/payments.ts:263`. Direct `anon` or general
+  authenticated access is not required by the observed website contract, and
+  Query 42 found no live database function dependency.
+- Remediate the two tables separately from definer-function hardening. Revoke
+  unintended grants and enable appropriate RLS in a focused forward-only
+  migration, preserve service-role sync and HQ reads, verify kiosk allocation
+  dependencies, and do not bundle unrelated index or policy changes.
+- The completed staging policy inventory contains 436 unique policies across
+  204 tables. The direct regex heuristic flags 187 policies containing
+  subqueries, membership relations, or role-permission relations.
+- Helper-based policies make 187 a lower bound for plan review. Across the
+  complete corpus, `is_merchant_admin` appears in 142 policies,
+  `is_dexapos_admin` in 133, `user_merchant_id` in 70,
+  `current_user_id` in 33, `user_has_location_permission` in 24, and
+  `user_belongs_to_merchant` in 22.
+- Core hot-table examples include an `order_item_modifiers` policy that joins
+  `order_items` to `orders`, an `order_items` policy that probes its parent
+  order, and `orders` policies that call merchant/admin helpers. These may be
+  optimized by the planner or cached as init plans; only role-realistic plans
+  can determine actual per-row amplification.
+- Of the 436 policies, 264 target PostgreSQL role `{public}` and 173 of those
+  cover mutation commands (`ALL`, `INSERT`, `UPDATE`, or `DELETE`). This is a
+  grant-review priority, not proof of public mutation access: policies permit
+  rows only after table privileges permit the operation.
+- Seven policies explicitly include `anon`; five are public-read policies and
+  two are deny-all policies. Their matching relation grants and intended
+  storefront contracts still require verification.
 
 ## Static Inventory
 
@@ -1103,6 +1524,12 @@ These are hypotheses based on website filters. The POS live inventory already ru
 
 The migration corpus contains many policies and historical function versions. Static review cannot confirm the live definitions or planner behavior.
 
+The staging catalog is no longer entirely speculative: Query 40 confirms two
+public tables with RLS disabled and full anonymous privileges. Contain
+`kiosk_pickup_sequences` and `luqra_sync_runs` before planner-oriented RLS
+optimization. Their issue is missing access control, not policy execution
+cost.
+
 Review live policies for:
 
 - Per-row subqueries against `members`, `location_members`, roles, or merchant mappings.
@@ -1123,7 +1550,14 @@ All live `SECURITY DEFINER` functions require:
 - Revoked default `PUBLIC` execute and explicit grants to intended roles.
 - Review of dynamic SQL and role switching.
 
-The SQL pack lists live definers missing any `search_path` setting and their grants. Repository occurrence counts are not sufficient because migrations replace functions over time.
+The SQL pack lists live definers missing any `search_path` setting and their
+grants. Repository occurrence counts are not sufficient because migrations
+replace functions over time. Query 39 confirms that five current definitions
+fail both the authorization and grant requirements; this must be handled as a
+focused security remediation, not folded into a general performance migration.
+The replacement design must preserve authenticated POS use, offline replay,
+idempotency, and audit attribution while deriving authority from the validated
+caller rather than caller-supplied staff IDs.
 
 ### JSON/JSONB Payloads
 
@@ -1192,14 +1626,18 @@ Redis introduces tenant-key discipline, invalidation, warm-up behavior, failure 
 
 ### Phase 0 - Measure and Establish Baselines
 
-1. Run the companion read-only SQL pack in staging and production.
-2. Export results as JSON with environment and timestamp labels.
-3. Capture p50/p95/p99 action duration, PostgREST request count, response bytes, database CPU, and statement call/row statistics.
-4. Reproduce representative merchant and HQ report loads using the same date/location scope.
-5. Run the POS workload-delta collector around active-order, order-detail, KDS,
+1. Open and sequence the P0 definer-RPC containment ticket. Do not run
+   unauthorized proof calls against staging or production.
+2. Open and sequence the separate P0 RLS/grant containment ticket for
+   `kiosk_pickup_sequences` and `luqra_sync_runs`.
+3. Run the companion read-only SQL pack in staging and production.
+4. Export results as JSON with environment and timestamp labels.
+5. Capture p50/p95/p99 action duration, PostgREST request count, response bytes, database CPU, and statement call/row statistics.
+6. Reproduce representative merchant and HQ report loads using the same date/location scope.
+7. Run the POS workload-delta collector around active-order, order-detail, KDS,
    floor-plan, and staff-login QA.
-6. Confirm which RPCs are shared before changing signatures or payloads.
-7. Declare one canonical migration root and export missing live function
+8. Confirm which RPCs are shared before changing signatures or payloads.
+9. Declare one canonical migration root and export missing live function
    definitions before any RPC rewrite.
 
 The migration-history work gates shared RPC replacement, but Phase 1
@@ -1229,9 +1667,14 @@ application-only bounding and projection changes may proceed in parallel.
 
 ### Phase 3 - Database Hardening
 
+The confirmed authless definer functions are not deferred to this phase; their
+P0 containment and compatible replacement begin before Phase 1. The remaining
+hardening work is:
+
 1. Use live statement/index statistics to approve only necessary indexes.
 2. Remove or consolidate duplicate/unused indexes only after write-cost and ownership review.
-3. Fix live `SECURITY DEFINER` functions missing pinned `search_path`, authorization, or grants.
+3. Finish lower-risk `SECURITY DEFINER` pinning, qualification, output
+   minimization, and grant cleanup after the P0 set is contained.
 4. Optimize RLS helper functions and membership indexes based on real tenant queries.
 5. Standardize business-day and timezone functions shared by website and POS.
 
@@ -1285,16 +1728,23 @@ repeatable fixture, concurrency level, cache state, and tenant/date scope.
 
 ## Required Senior Decisions
 
-1. Approve a shared RPC ownership model so POS and website do not independently redefine report contracts.
-2. Choose the authoritative business-day/timezone SQL contract.
-3. Decide summary freshness targets for merchant reports and HQ analytics.
-4. Decide whether Orders/Payments pagination can change existing UI/API response contracts.
-5. Assign an owner for service-role authorization inventory and reduction.
-6. Approve background-job batch size, retry, and queue-age SLOs.
-7. Approve retention and, if safe, a controlled reset window for the already-enabled `pg_stat_statements` extension so representative traffic can be measured.
-8. Defer Redis approval until post-remediation statistics show a remaining cross-instance cache use case.
-9. Declare the authoritative shared migration root and owner.
-10. Approve RPC version-retirement and offline-client compatibility windows.
+1. Assign an immediate owner for the five confirmed P0 definer-RPC repairs and
+   the 511-signature authorization/grant allowlist.
+2. Assign an owner for the station/PIN-login contract and plaintext PIN
+   removal, including legitimate anonymous pre-login and unattended-device
+   behavior.
+3. Choose one payment/preauthorization version policy for direct, service, and
+   offline replay paths.
+4. Approve a shared RPC ownership model so POS and website do not independently redefine report contracts.
+5. Choose the authoritative business-day/timezone SQL contract.
+6. Decide summary freshness targets for merchant reports and HQ analytics.
+7. Decide whether Orders/Payments pagination can change existing UI/API response contracts.
+8. Assign an owner for service-role authorization inventory and reduction.
+9. Approve background-job batch size, retry, and queue-age SLOs.
+10. Approve retention and, if safe, a controlled reset window for the already-enabled `pg_stat_statements` extension so representative traffic can be measured.
+11. Defer Redis approval until post-remediation statistics show a remaining cross-instance cache use case.
+12. Declare the authoritative shared migration root and owner.
+13. Approve RPC version-retirement and offline-client compatibility windows.
 
 ## Risks and Limitations
 
@@ -1331,3 +1781,6 @@ repeatable fixture, concurrency level, cache state, and tenant/date scope.
 - Website source audit: `docs/engineering/database-performance/AUDIT-2026-07-31-SHARED-DATABASE-PERFORMANCE-WEBSITE.md`
 - POS source audit: `Dexa-POS/tasks/database-performance-architecture-audit.md`
 - POS workload delta collector: `Dexa-POS/supabase/audits/20260731_database_workload_delta_readonly.sql`
+- POS current-staging detailed audit: `Dexa-POS/docs/engineering/database/POS-SUPABASE-PERFORMANCE-AUDIT-2026-08-03.md`
+- POS runtime runbook: `Dexa-POS/docs/engineering/database/POS-SUPABASE-PERFORMANCE-RUNTIME-RUNBOOK-2026-08-03.md`
+- POS partial cumulative evidence: `Dexa-POS/docs/engineering/database/POS-SUPABASE-PERFORMANCE-PARTIAL-RUNTIME-EVIDENCE-2026-08-03.md`

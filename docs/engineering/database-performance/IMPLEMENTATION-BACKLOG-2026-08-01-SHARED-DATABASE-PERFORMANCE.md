@@ -8,11 +8,14 @@
 
 ## Evidence Baseline
 
-- Dexa-POS evidence revision: `databse-audit` at `7a6ab3069840de5da926e71a3b05caca3f2700ff`.
-- DexaPOS-Website evidence revision: `dika-dev` at `1b53bc0846c149ce4d4b3008b23380a54d3a398b`.
+- Dexa-POS current-staging revision: `audit/pos-database-refresh` at `a1c7a032479bdfc533f28e29eb983824077742c1`.
+- Dexa-POS prior evidence revision: `databse-audit` at `7a6ab3069840de5da926e71a3b05caca3f2700ff`.
+- DexaPOS-Website evidence revision: `dika-dev` at `a2473d88933a90f8fcd46ddd8d4b11a1d1801e29`.
 - Database evidence: staging project `dfwqakoyittmrwbqvxgw`.
 - Follow-up database snapshot: `2026-07-31 10:22:56 UTC`.
-- POS `main` and `staging` changed during the July 31 SDK rollback. Source references must be revalidated against the implementation branch before code changes begin.
+- Current POS staging source has been revalidated. Controlled POS workflow
+  deltas remain pending because the received collector export has no matching
+  after-export.
 
 ## Guardrails
 
@@ -40,6 +43,11 @@
 | DB-P0-01 | P0 | POS + Website | Revalidate every cited source path against the post-rollback implementation branches and record new commit hashes | None | No |
 | DB-P0-02 | P0 | Database owner + senior | Declare one canonical migration root, export missing live definitions, and mark historical SQL roots reference-only | Senior ownership decision | Forward-only reconciliation likely |
 | DB-P0-03 | P0 | Database + QA | Capture controlled POS and website workload deltas plus production read-only statistics | Approved test fixtures and access | No |
+| DB-P0-04 | P0 | Security + Database + POS | Replace the authless PUBLIC/`anon` definer contracts for staff/PIN reads, check mutations, cash operations, and floor-plan deletion; preserve authenticated POS and offline replay | Immediate owner, station/user authorization contract, canonical migration root | Yes, focused forward-only migration |
+| DB-P0-05 | P0 | Security + Database + Kiosk/Website | Contain full anonymous access to `kiosk_pickup_sequences` and `luqra_sync_runs`; add appropriate RLS/grants and preserve authorized atomic kiosk allocation plus HQ/service-role Luqra jobs | Canonical migration root and decision to retain or retire the currently unreferenced kiosk counter | Yes, separate focused forward-only migration |
+| DB-P0-06 | P0 | Security + Database + POS + Website | Classify all 511 live `SECURITY DEFINER` signatures by caller, internal authorization, sensitivity, and intended role; replace broad PUBLIC/`anon` defaults with a reviewed allowlist, prioritizing payment, secret/device, NMI, billing, staff, order, and platform mutations | Query 13 inventory complete; canonical migration root; cross-repo/Edge Function/offline caller inventory | Classification first; multiple focused forward-only migrations likely |
+| DB-P0-07 | P0 | Security + Database + POS | Replace the conflicted station-status reference and version `pos_staff_login_v2` with atomic staff/location/merchant/station binding, rate limiting, and no plaintext PIN persistence | Live body/grant export; legitimate anonymous pre-login and unattended-device contract; canonical migration root | Yes, focused forward-only versions |
+| DB-P0-08 | P0 | POS + Payments + Database | Select one payment/preauthorization generation across direct, service, and offline replay, reproduce it in the canonical root, regenerate types, and retain compatible old versions through rollout | Live v16/v17 and preauth definitions; feature-flag state; offline compatibility window | Shared migration reconciliation plus POS caller change |
 | DB-P1-01 | P1 | Website | Paginate Merchant Orders, return list-only columns, and move payment/text filters into the database query | UI pagination contract | No initially; versioned list RPC optional |
 | DB-P1-02 | P1 | Website | Paginate Payments, separate summary from detail graphs, and move card/search filters into the database query | UI pagination/export contract | No initially; versioned list RPC optional |
 | DB-P1-03 | P1 | Website + Database | Resolve checkout prices and tax rules set-wise in one authoritative request/transaction | Price-cascade compatibility review | Yes |
@@ -48,6 +56,9 @@
 | DB-P1-06 | P1 | POS + Database | Add versioned active-order and order-detail RPCs using explicit fields and one-pass child aggregation | Canonical migration root and payload equivalence fixture | Yes |
 | DB-P1-07 | P1 | POS + Database | Split stable floor-plan geometry from volatile session/status state | Cache/version contract | Yes |
 | DB-P1-08 | P1 | POS + Database | Reshape KDS with early location/status bounds and one-pass item/modifier/acknowledgement aggregation | Preserve Done, rush, routing, retention, and server-name behavior | Yes |
+| DB-P1-09 | P1 | POS | Replace the active-order length/first-opened-at fingerprint with an authoritative snapshot revision or identity-preserving merge | Missed-broadcast/reconnect fixture | No unless a server revision is added |
+| DB-P1-10 | P1 | POS + Website + Database | Standardize location-timezone End-of-Day bounds and check-state vocabulary; route closure through authoritative mutations and replace raw/N+1 summaries with grouped SQL plus paged drill-down | Shared business-day contract and POS/website total-equivalence fixture | Yes |
+| DB-P1-11 | P1 | POS + Database | Consolidate Previous Orders page/count/summary work, raw analytics facts, and refund allocation reads into bounded list, aggregate, and batched/transactional contracts | Business-day/filter contract and payment-allocation correctness fixtures | Usually yes |
 | DB-P2-01 | P2 | Website + Database | Add bounded, idempotent claim batches to abandoned-cart and billing jobs | Batch size, retry, and queue-age SLO | Usually yes |
 | DB-P2-02 | P2 | Website | Remove confirmed Realtime/polling duplication and pause nonessential hidden-tab polling | Controlled request-count evidence | No |
 | DB-P2-03 | P2 | Website + Database | Consolidate overlapping merchant report requests and move hourly/sales grouping into SQL | Business-day/timezone contract | Yes where new RPCs are required |
@@ -60,7 +71,10 @@
 
 ### Wave 0 - Evidence And Contract Safety
 
-Complete `DB-P0-01`, `DB-P0-02`, and `DB-P0-03`.
+Complete `DB-P0-01`, `DB-P0-02`, `DB-P0-03`, and immediately sequence
+`DB-P0-04` through `DB-P0-08`. The security and payment-contract tickets may not wait for general
+performance implementation, but their rollout still requires the canonical
+migration owner and POS/kiosk compatibility plans.
 
 Output:
 
@@ -69,6 +83,19 @@ Output:
 - Exported live definitions for critical shared RPCs.
 - Repeatable staging fixtures and before/after workload snapshots.
 - Production read-only evidence where access is approved.
+- A forward-only authorization replacement for `get_unified_staff_view`,
+  `close_check`, `reopen_check`, `record_cash_operation`, and
+  `delete_floor_plan_cascade`, with no raw PIN material in staff-list output.
+- A separate forward-only RLS/grant containment migration for
+  `kiosk_pickup_sequences` and `luqra_sync_runs`, with service-role/HQ and
+  authorized kiosk behavior verified.
+- A signature-level authorization matrix for all 511 live definers, with the
+  465 anonymous-executable signatures classified as intentional public,
+  authenticated station/user, server-only, or obsolete before grants change.
+- A valid, canonical station-status function and versioned PIN-login contract
+  with no plaintext PIN persistence.
+- One documented payment/preauthorization router shared by direct, service,
+  and offline replay paths.
 
 Application-only work that does not change shared contracts may proceed in parallel after its individual ticket is approved.
 
@@ -85,7 +112,8 @@ Expected outcome:
 
 ### Wave 2 - Version Operational Contracts
 
-Implement `DB-P1-03`, `DB-P1-06`, `DB-P1-07`, and `DB-P1-08` as versioned contracts.
+Implement `DB-P1-03`, `DB-P1-06` through `DB-P1-11` as versioned or
+compatibility-preserving contracts.
 
 Required rollout:
 
@@ -180,4 +208,3 @@ A ticket is done when:
 5. Set the shared RPC backward-compatibility window for deployed and offline POS clients.
 6. Assign service-role authorization review ownership.
 7. Approve production read-only statistics collection and a controlled measurement window.
-
