@@ -1,6 +1,7 @@
 'use client'
 
 import { ChartCard } from './ChartCard'
+import { StatRow, StatTile } from './AnalyticsPrimitives'
 import { ChartContainer, ChartTooltip, type ChartConfig } from '@/components/ui/chart'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend } from 'recharts'
 import { CreditCard } from 'lucide-react'
@@ -60,60 +61,68 @@ export function DualPricingCard({ data, isLoading }: DualPricingCardProps) {
     >
       {data && (
         <>
-          <div className="grid grid-cols-1 gap-3 mb-4 sm:grid-cols-2">
-            <div className="space-y-1 bg-[#0A5C9E]/10 p-2 rounded">
-              <p className="text-xs text-muted-foreground">Card Revenue</p>
-              <p className="text-lg font-bold text-[#0A5C9E]">
-                {formatCurrency(data.cardRevenue)}
-              </p>
-              <p className="text-xs text-muted-foreground">{data.cardTransactions} transactions</p>
-            </div>
-            <div className="space-y-1 bg-emerald-50 dark:bg-emerald-950 p-2 rounded">
-              <p className="text-xs text-muted-foreground">Cash Revenue</p>
-              <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
-                {formatCurrency(data.cashRevenue)}
-              </p>
-              <p className="text-xs text-muted-foreground">{data.cashTransactions} transactions</p>
-            </div>
-          </div>
-
-          <div className="bg-amber-50 dark:bg-amber-950 p-2 rounded mb-4 border border-amber-200 dark:border-amber-800">
-            <p className="text-xs text-muted-foreground">Cash Discount Savings</p>
-            <p className="text-lg font-bold text-amber-600 dark:text-amber-400">
-              {formatCurrency(data.cashDiscountSavings)}
-            </p>
-          </div>
+          <StatRow columns={3} className="mb-8">
+            <StatTile
+              label="Card Revenue"
+              value={formatCurrency(data.cardRevenue)}
+              meta={`${data.cardTransactions} transactions`}
+              accent="brand"
+            />
+            <StatTile
+              label="Cash Revenue"
+              value={formatCurrency(data.cashRevenue)}
+              meta={`${data.cashTransactions} transactions`}
+              accent="positive"
+            />
+            <StatTile
+              label="Cash Discount Savings"
+              value={formatCurrency(data.cashDiscountSavings)}
+              accent="warning"
+            />
+          </StatRow>
 
           <div className="w-full h-[320px]">
             <ChartContainer config={chartConfig} className="aspect-auto w-full h-full">
                 <BarChart data={chartData} margin={{ left: 0, right: 10, top: 5, bottom: 20 }}>
-                  <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                  <CartesianGrid
+                    vertical={false}
+                    strokeDasharray="3 3"
+                    stroke="var(--border)"
+                  />
                   <XAxis
                     dataKey="date"
                     tickLine={false}
                     axisLine={false}
-                    tick={{ fontSize: 12 }}
+                    tick={{ fontSize: 12, fill: 'var(--muted-foreground)' }}
                   />
                   <YAxis
                     tickLine={false}
                     axisLine={false}
-                    tick={{ fontSize: 12 }}
+                    tick={{ fontSize: 12, fill: 'var(--muted-foreground)' }}
                     tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
                   />
                   <ChartTooltip
-                    cursor={{ fill: 'rgba(0, 0, 0, 0.1)' }}
+                    cursor={{ fill: 'color-mix(in srgb, var(--muted) 40%, transparent)' }}
                     content={({ active, payload, label }) => {
                       if (active && payload && payload.length) {
                         return (
-                          <div className="bg-white dark:bg-slate-950 p-3 rounded border border-slate-200 dark:border-slate-700 shadow-lg">
-                            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2">
+                          <div className="rounded-xl border bg-popover p-3 text-popover-foreground shadow-lg">
+                            <p className="mb-2 text-[0.8125rem] font-medium text-muted-foreground">
                               {label}
                             </p>
-                            <div className="space-y-1">
+                            <div className="space-y-1.5">
                               {payload.map((item, index) => (
-                                <div key={index} className="flex items-center justify-between gap-2">
-                                  <span className="text-xs text-slate-700 dark:text-slate-300">{item.name}:</span>
-                                  <span className="text-xs font-bold text-slate-900 dark:text-slate-100">
+                                <div key={index} className="flex items-center justify-between gap-6">
+                                  <div className="flex items-center gap-2">
+                                    <span
+                                      className="h-2.5 w-2.5 shrink-0 rounded-full"
+                                      style={{ backgroundColor: item.color }}
+                                    />
+                                    <span className="text-[0.8125rem] text-muted-foreground">
+                                      {item.name}
+                                    </span>
+                                  </div>
+                                  <span className="text-[0.8125rem] tabular-nums">
                                     {formatCurrency(Number(item.value))}
                                   </span>
                                 </div>
@@ -130,7 +139,9 @@ export function DualPricingCard({ data, isLoading }: DualPricingCardProps) {
                     verticalAlign="top"
                     height={36}
                     iconType="circle"
-                    formatter={(value) => <span className="text-xs text-gray-700">{value}</span>}
+                    formatter={(value) => (
+                      <span className="text-[0.8125rem] text-muted-foreground">{value}</span>
+                    )}
                   />
                   <Bar dataKey="cardRevenue" fill={COLORS.cardRevenue} name="Card Revenue" />
                   <Bar dataKey="cashRevenue" fill={COLORS.cashRevenue} name="Cash Revenue" />

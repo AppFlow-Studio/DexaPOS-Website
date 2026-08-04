@@ -110,7 +110,7 @@ export function RichTimeline({ events }: RichTimelineProps) {
 
               <div className="flex-1 min-w-0">
                 <div className="flex items-start justify-between gap-2">
-                  <div className="flex-1 space-y-1">
+                  <div className="min-w-0 flex-1 space-y-1">
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <span className="text-muted-foreground">
                         {categoryIcon[event.category]}
@@ -137,8 +137,11 @@ export function RichTimeline({ events }: RichTimelineProps) {
                       </button>
                     )}
 
+                    {/* Wrap rather than scroll sideways: long values would
+                        otherwise stretch this flex column and push the whole
+                        page wider on narrow screens. */}
                     {isOpen && hasDetails && (
-                      <pre className="mt-1 text-xs bg-muted p-2 rounded overflow-auto max-h-40">
+                      <pre className="mt-1 max-h-40 overflow-y-auto rounded bg-muted p-2 text-xs whitespace-pre-wrap break-words">
                         {JSON.stringify(event.details, null, 2)}
                       </pre>
                     )}

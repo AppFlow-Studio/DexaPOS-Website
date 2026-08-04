@@ -15,9 +15,9 @@ import {
   OrderItemModifier,
 } from "@/types/order-management";
 import { Location } from "@/types/merchant_locations";
-import { X, RotateCcw, Ban, Loader2 } from "lucide-react";
+import { X, RotateCcw, Ban, Printer } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { refundAdminOrder, voidAdminOrder } from "@/app/manage/actions/admin-merchant/transactions";
+import { RefundVoidDialog } from "./RefundVoidDialog";
 import { GetSessionTableLabel } from "@/app/dashboard/actions/order";
 import {
   getReceiptTemplate,
@@ -27,17 +27,6 @@ import { getOrderBreakdown } from "@/lib/orders/order-breakdown";
 import { resolveReceiptHeader } from "@/lib/receipts/header";
 import { formatReceiptDateTime } from "@/lib/receipts/format";
 import { useQuery } from "@tanstack/react-query";
-import { toast } from "sonner";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 
 interface ReceiptModalProps {
   order: OrderResponse;
@@ -246,48 +235,10 @@ export function ReceiptModal({
   showAdminActions = false,
   onOrderUpdate,
 }: ReceiptModalProps & { showAdminActions?: boolean; onOrderUpdate?: () => void }) {
-  const [isRefunding, setIsRefunding] = React.useState(false);
-  const [isVoiding, setIsVoiding] = React.useState(false);
+  // The refund/void requests themselves now live in RefundVoidDialog, which
+  // also owns its in-flight state.
   const [confirmRefundOpen, setConfirmRefundOpen] = React.useState(false);
   const [confirmVoidOpen, setConfirmVoidOpen] = React.useState(false);
-
-  const handleRefund = async () => {
-    setIsRefunding(true);
-    try {
-      const result = await refundAdminOrder(order.merchant_id, order.id);
-      if (result.success) {
-        toast.success("Order refunded successfully");
-        onOrderUpdate?.();
-        onOpenChange(false);
-      } else {
-        toast.error(result.error || "Failed to refund order");
-      }
-    } catch (error) {
-      toast.error("An unexpected error occurred");
-    } finally {
-      setIsRefunding(false);
-      setConfirmRefundOpen(false);
-    }
-  };
-
-  const handleVoid = async () => {
-    setIsVoiding(true);
-    try {
-      const result = await voidAdminOrder(order.merchant_id, order.id);
-      if (result.success) {
-        toast.success("Order voided successfully");
-        onOrderUpdate?.();
-        onOpenChange(false);
-      } else {
-        toast.error(result.error || "Failed to void order");
-      }
-    } catch (error) {
-      toast.error("An unexpected error occurred");
-    } finally {
-      setIsVoiding(false);
-      setConfirmVoidOpen(false);
-    }
-  };
 
   const items = (order.order_items || []) as ReceiptItem[];
   const payments = (order.order_payments || []) as OrderPayment[];
@@ -366,6 +317,33 @@ export function ReceiptModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
+      {/* Print isolation: the dialog renders in a portal on top of the page, so
+          printing would otherwise emit the dashboard behind it. Collapsing the
+          app root and un-clipping the dialog's scroll box leaves just the
+          receipt paper on the sheet, at its natural full height. */}
+      <style>{`
+        @media print {
+          body > *:not([data-slot="dialog-portal"]) { display: none !important; }
+          [data-slot="dialog-overlay"] { display: none !important; }
+          [data-slot="dialog-content"] {
+            position: static !important;
+            transform: none !important;
+            max-height: none !important;
+            width: auto !important;
+            max-width: none !important;
+          }
+          .no-print { display: none !important; }
+          .receipt-scroll {
+            overflow: visible !important;
+            max-height: none !important;
+            padding: 0 !important;
+          }
+          .receipt-paper {
+            box-shadow: none !important;
+            max-width: 100% !important;
+          }
+        }
+      `}</style>
       <DialogContent
         className="sm:max-w-md p-0 gap-0 bg-transparent border-none shadow-none flex flex-col max-h-[88vh]"
         showCloseButton={false}
@@ -378,13 +356,13 @@ export function ReceiptModal({
         {/* Receipt Container — scrolls vertically when taller than the viewport.
             overscroll-contain + thin scrollbar keep it tidy; no horizontal scroll. */}
         <div
-          className="relative min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain px-2 py-3 [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-black/20 dark:[&::-webkit-scrollbar-thumb]:bg-white/20 [&::-webkit-scrollbar-track]:bg-transparent"
+          className="receipt-scroll relative min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain px-2 py-3 [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-black/20 dark:[&::-webkit-scrollbar-thumb]:bg-white/20 [&::-webkit-scrollbar-track]:bg-transparent"
         >
 
           {/* Receipt Paper */}
           <div
             className={cn(
-              "relative mx-auto w-full max-w-[350px]",
+              "receipt-paper relative mx-auto w-full max-w-[350px]",
               "bg-[#faf9f6] dark:bg-zinc-900",
               "font-mono text-xs leading-relaxed",
               "text-zinc-800 dark:text-zinc-200",
@@ -678,8 +656,8 @@ export function ReceiptModal({
           </div>
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex gap-2 justify-center mt-4">
+        {/* Action Buttons — hidden while printing so only the paper prints. */}
+        <div className="no-print flex gap-2 justify-center mt-4">
           <Button
             variant="outline"
             size="sm"
@@ -689,67 +667,63 @@ export function ReceiptModal({
             <X className="h-4 w-4 mr-2" />
             Close
           </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => window.print()}
+            className="bg-white dark:bg-zinc-800"
+          >
+            <Printer className="h-4 w-4 mr-2" />
+            Print
+          </Button>
           {showAdminActions && order.status !== 'refunded' && order.status !== 'void' && (
             <>
-              <Button 
-                variant="outline" 
-                size="sm" 
+              <Button
+                variant="outline"
+                size="sm"
                 className="text-amber-600 border-amber-200 hover:bg-amber-50"
                 onClick={() => setConfirmRefundOpen(true)}
-                disabled={isRefunding || isVoiding}
               >
-                {isRefunding ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4 mr-2" />}
+                <RotateCcw className="h-4 w-4 mr-2" />
                 Refund
               </Button>
-              <Button 
-                variant="outline" 
-                size="sm" 
+              <Button
+                variant="outline"
+                size="sm"
                 className="text-red-600 border-red-200 hover:bg-red-50"
                 onClick={() => setConfirmVoidOpen(true)}
-                disabled={isRefunding || isVoiding}
               >
-                {isVoiding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ban className="h-4 w-4 mr-2" />}
+                <Ban className="h-4 w-4 mr-2" />
                 Void
               </Button>
             </>
           )}
         </div>
 
-        {/* Confirmation Dialogs */}
-        <AlertDialog open={confirmRefundOpen} onOpenChange={setConfirmRefundOpen}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Confirm Refund</AlertDialogTitle>
-              <AlertDialogDescription>
-                Are you sure you want to refund this order? This will mark the order and all payments as refunded.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={handleRefund} className="bg-amber-600 hover:bg-amber-700">
-                Refund Order
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-
-        <AlertDialog open={confirmVoidOpen} onOpenChange={setConfirmVoidOpen}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Confirm Void</AlertDialogTitle>
-              <AlertDialogDescription>
-                Are you sure you want to void this order? This will cancel any pending payments and invalidate the order.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={handleVoid} className="bg-red-600 hover:bg-red-700">
-                Void Order
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
       </DialogContent>
+
+      {/* Confirmations live OUTSIDE DialogContent. Nested inside, they portal
+          beneath this dialog's overlay and render greyed-out and unclickable. */}
+      <RefundVoidDialog
+        order={order}
+        action="refund"
+        open={confirmRefundOpen}
+        onOpenChange={setConfirmRefundOpen}
+        onCompleted={() => {
+          onOrderUpdate?.();
+          onOpenChange(false);
+        }}
+      />
+      <RefundVoidDialog
+        order={order}
+        action="void"
+        open={confirmVoidOpen}
+        onOpenChange={setConfirmVoidOpen}
+        onCompleted={() => {
+          onOrderUpdate?.();
+          onOpenChange(false);
+        }}
+      />
     </Dialog>
   );
 }

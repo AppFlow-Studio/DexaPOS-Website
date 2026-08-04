@@ -1,17 +1,14 @@
 "use client";
 
-import Link from "next/link";
 import {
   Card,
   CardContent,
   CardHeader,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import {
-  ArrowRight,
   Banknote,
   CreditCard,
   Gift,
@@ -24,6 +21,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { useState } from "react";
+import { OverviewLinkButton } from "./OverviewSection";
 import type {
   TransactionVolumeReport,
   TransactionVolumeRow,
@@ -163,7 +161,7 @@ export function TransactionVolumeCard({
       <CardHeader className="pb-4">
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
           <div className="space-y-1">
-            <h3 className="text-lg font-semibold tracking-tight">
+            <h3 className="text-[1.0625rem] font-semibold text-[#0C4FD1]! dark:text-[#6CA0FF]!">
               Transaction Volume Analysis
             </h3>
             <p className="text-sm text-muted-foreground">
@@ -192,11 +190,6 @@ export function TransactionVolumeCard({
                 />
               </button>
             </div>
-
-            {/* Date Range Badge */}
-            <Badge variant="outline" className="text-xs font-medium px-3 py-1">
-              Last 30 Days
-            </Badge>
           </div>
         </div>
       </CardHeader>
@@ -231,11 +224,14 @@ export function TransactionVolumeCard({
           </div>
         </div>
 
-        {/* Stacked Progress Bar */}
+        {/* Stacked Progress Bar. Each segment reserves at least enough room for
+            its own label (`min-w`) so a lopsided split — e.g. 96% in / 4% out —
+            still centres "8 OUT" inside the orange block instead of letting the
+            text overflow past its edge. */}
         <div className="flex h-8 rounded-lg overflow-hidden">
           {creditPercent > 0 && (
             <div
-              className="bg-primary flex items-center justify-center text-white text-xs font-semibold transition-all"
+              className="bg-primary flex min-w-fit items-center justify-center whitespace-nowrap px-2 text-white text-xs font-semibold transition-all"
               style={{ width: `${creditPercent}%` }}
             >
               {totals.credits.toLocaleString()} IN
@@ -243,8 +239,8 @@ export function TransactionVolumeCard({
           )}
           {debitPercent > 0 && (
             <div
-              className="bg-orange-500 flex items-center justify-center text-white text-xs font-semibold transition-all"
-              style={{ width: `${Math.max(debitPercent, 15)}%` }}
+              className="bg-orange-500 flex min-w-fit items-center justify-center whitespace-nowrap px-2 text-white text-xs font-semibold transition-all"
+              style={{ width: `${debitPercent}%` }}
             >
               {totals.debits.toLocaleString()} OUT
             </div>
@@ -395,12 +391,9 @@ export function TransactionVolumeCard({
             )}
           </div>
 
-          <Button variant="link" size="sm" className="h-auto p-0" asChild>
-            <Link href="/dashboard/transactions">
-              View full transaction details
-              <ArrowRight className="h-3.5 w-3.5 ml-1" />
-            </Link>
-          </Button>
+          <OverviewLinkButton href="/dashboard/transactions">
+            View full transaction details
+          </OverviewLinkButton>
         </div>
       </CardContent>
     </Card>

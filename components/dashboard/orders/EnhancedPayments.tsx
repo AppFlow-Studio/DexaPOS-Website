@@ -197,7 +197,7 @@ function PaymentFeeBreakdown({ payment }: { payment: RichPayment }) {
   const netTotal = netDualFee + netTipFee;
 
   return (
-    <div className="border-t px-4 py-3">
+    <div className="px-4 pb-3 pt-1">
       <div className="flex items-center justify-between mb-2">
         <p className="text-[11px] font-medium text-muted-foreground">
           Fees & Surcharges
@@ -384,10 +384,12 @@ export function EnhancedPaymentCard({
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
       <div
+        // Tint instead of an outline — the payment reads as one surface
+        // without drawing another box inside the section.
         className={cn(
-          "rounded-lg border bg-card overflow-hidden transition-colors",
-          showVoidInCard && "border-red-200 dark:border-red-800/50",
-          isFailed && "border-red-200 dark:border-red-800/50"
+          "rounded-2xl bg-muted/40 overflow-hidden transition-colors",
+          showVoidInCard && "bg-red-50/60 dark:bg-red-950/20",
+          isFailed && "bg-red-50/60 dark:bg-red-950/20"
         )}
       >
         {/* Collapsed: payment icon, method + amount + status */}
@@ -487,9 +489,11 @@ export function EnhancedPaymentCard({
                   )}
                 </>
               )}
-              <span className="text-muted-foreground font-medium pt-1.5 border-t col-span-2 mt-1" />
-              <span className="text-muted-foreground font-medium border-t pt-1.5">Total</span>
-              <span className="font-medium pt-1.5 border-t">
+              {/* Total is set apart by weight and a little space, not a rule.
+                  The old markup drew border-t on each cell plus an empty
+                  col-span-2 spacer, which rendered as a stray floating line. */}
+              <span className="mt-1.5 font-medium text-muted-foreground">Total</span>
+              <span className="mt-1.5 font-medium">
                 {formatCurrency(payment.total_amount)}
               </span>
             </div>
@@ -499,7 +503,7 @@ export function EnhancedPaymentCard({
 
             {/* Card info: card_type, card_last_four, auth_code, authorization_code */}
             {hasCardDetails && !isCash && (
-              <div className="border-t px-4 py-3">
+              <div className="px-4 pb-3 pt-1">
                 <p className="text-[11px] font-medium text-muted-foreground mb-2">Card</p>
                 <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-xs">
                   {cardInfo && (
@@ -526,7 +530,7 @@ export function EnhancedPaymentCard({
 
             {/* References: psp_reference, transaction_id */}
             {(payment.psp_reference || payment.transaction_id) && (
-              <div className="border-t px-4 py-3">
+              <div className="px-4 pb-3 pt-1">
                 <p className="text-[11px] font-medium text-muted-foreground mb-2">References</p>
                 <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-xs">
                   {payment.transaction_id && (
@@ -551,7 +555,7 @@ export function EnhancedPaymentCard({
 
             {/* Cash details: amount_tendered, change_given (cash only) */}
             {isCash && (
-              <div className="border-t px-4 py-3">
+              <div className="px-4 pb-3 pt-1">
                 <p className="text-[11px] font-medium text-muted-foreground mb-2">Cash</p>
                 <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-xs">
                   <span className="text-muted-foreground">Amount Tendered</span>
@@ -576,7 +580,7 @@ export function EnhancedPaymentCard({
 
             {/* Terminal: terminal_type, terminal_id, batch_number, dejavoo_* */}
             {hasTerminalInfo && (
-              <div className="border-t px-4 py-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-xs">
+              <div className="px-4 pb-3 pt-1 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-xs">
                 {payment.terminal_type && (
                   <>
                     <span className="text-muted-foreground">Terminal Type</span>
@@ -607,7 +611,7 @@ export function EnhancedPaymentCard({
             )}
 
             {/* Timestamps: authorized_at, captured_at, approved_at, created_at · Staff: processed_by_name */}
-            <div className="border-t px-4 py-3">
+            <div className="px-4 pb-3 pt-1">
               <p className="text-[11px] font-medium text-muted-foreground mb-2">Timestamps</p>
               <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-xs">
                 {payment.authorized_at && (
@@ -636,9 +640,8 @@ export function EnhancedPaymentCard({
                 )}
                 {payment.processed_by_name && (
                   <>
-                    <span className="text-muted-foreground pt-1.5 border-t col-span-2 mt-1" />
-                    <span className="text-muted-foreground pt-1.5 border-t">Processed by</span>
-                    <span className="pt-1.5 border-t">{payment.processed_by_name}</span>
+                    <span className="mt-1.5 text-muted-foreground">Processed by</span>
+                    <span className="mt-1.5">{payment.processed_by_name}</span>
                   </>
                 )}
               </div>
@@ -646,7 +649,7 @@ export function EnhancedPaymentCard({
 
             {/* Cash discount flag */}
             {cashDiscountApplied && isCash && (
-              <div className="border-t px-4 py-2.5">
+              <div className="px-4 pb-2.5 pt-1">
                 <div className="flex items-center gap-2 px-3 py-2 bg-green-50 dark:bg-green-950/30 rounded-lg border border-green-200 dark:border-green-800">
                   <DollarSign className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />
                   <span className="text-xs text-green-700 dark:text-green-400">
@@ -658,7 +661,7 @@ export function EnhancedPaymentCard({
 
             {/* Voided: payment-level or order-level voided_at, voided_by, void_reason */}
             {showVoidInCard && (
-              <div className="border-t px-4 py-3 bg-red-50/50 dark:bg-red-950/10 space-y-2">
+              <div className="mx-4 mb-3 rounded-xl px-3 py-3 bg-red-50/50 dark:bg-red-950/10 space-y-2">
                 <div className="flex items-center gap-1.5 text-xs text-red-600 dark:text-red-400">
                   <Ban className="h-3 w-3 shrink-0" />
                   <span className="font-medium">
@@ -688,7 +691,7 @@ export function EnhancedPaymentCard({
 
             {/* Failed: payment-level or event-level result_code, response_message */}
             {isFailed && (paymentResultCode || paymentResponseMessage || failedEvent?.reason) && (
-              <div className="border-t px-4 py-3 bg-red-50/50 dark:bg-red-950/10 space-y-1.5">
+              <div className="mx-4 mb-3 rounded-xl px-3 py-3 bg-red-50/50 dark:bg-red-950/10 space-y-1.5">
                 <div className="flex items-center gap-1.5 text-xs text-red-600 dark:text-red-400">
                   <XCircle className="h-3 w-3 shrink-0" />
                   <span className="font-medium">Payment {payment.status}</span>
@@ -713,7 +716,7 @@ export function EnhancedPaymentCard({
 
             {/* Split info: split_count, split_portion_index, covers_items, payment_items[] */}
             {isSplit && (
-              <div className="border-t px-4 py-3">
+              <div className="px-4 pb-3 pt-1">
                 <p className="text-[11px] font-medium text-muted-foreground mb-2">
                   Split
                 </p>
@@ -769,7 +772,7 @@ export function EnhancedPaymentCard({
 
             {/* Items covered (when not split) */}
             {paymentItems.length > 0 && !isSplit && (
-              <div className="border-t px-4 py-3">
+              <div className="px-4 pb-3 pt-1">
                 <p className="text-[11px] font-medium text-muted-foreground mb-2">
                   Items covered
                 </p>
@@ -805,7 +808,7 @@ export function EnhancedPaymentCard({
 
             {/* Payment Event Sub-Timeline (boxed, severity coloring) */}
             {hasEvents && (
-              <div className="border-t px-4 py-3">
+              <div className="px-4 pb-3 pt-1">
                 <div className="rounded-lg border bg-muted/30 overflow-hidden">
                   <div className="px-3 py-2 border-b bg-muted/50 text-[11px] font-medium text-muted-foreground flex items-center gap-1.5">
                     <Activity className="h-3 w-3" />

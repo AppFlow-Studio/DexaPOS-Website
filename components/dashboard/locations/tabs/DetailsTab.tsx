@@ -2,8 +2,15 @@
 
 import { useState } from 'react'
 import { Location, US_STATES, US_TIMEZONES, UpdateLocationInput } from '@/types/merchant_locations'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import {
+    LocationPanelSection,
+    roundedFields,
+    roundedSelectContent,
+    roundedPhoneInput,
+    phoneInputFilledVars,
+    pillButton,
+} from '../LocationPanelSection'
 import { Input } from '@/components/ui/input'
 import { PhoneInput } from '@/components/ui/phone-input'
 import { normalizePhone, formatPhoneForDisplay } from '@/lib/phone'
@@ -176,25 +183,26 @@ export function DetailsTab({ location, onUpdate, setHasUnsavedChanges }: Details
     return (
         <div className="space-y-4">
             {/* Basic Information */}
-            <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <div>
-                        <CardTitle className="text-base flex items-center gap-2">
-                            <Building2 className="h-4 w-4" />
-                            Basic Information
-                        </CardTitle>
-                        <CardDescription>Location name and identifier</CardDescription>
-                    </div>
-                    {editSection !== 'basic' && (
-                        <Button variant="ghost" size="sm" onClick={() => handleStartEdit('basic')}>
-                            <Edit className="h-4 w-4 mr-1" />
+            <LocationPanelSection
+                icon={Building2}
+                title="Basic Information"
+                description="Location name and identifier"
+                action={
+                    editSection !== 'basic' && (
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className={pillButton}
+                            onClick={() => handleStartEdit('basic')}
+                        >
+                            <Edit className="h-4 w-4" />
                             Edit
                         </Button>
-                    )}
-                </CardHeader>
-                <CardContent>
+                    )
+                }
+            >
                     {editSection === 'basic' ? (
-                        <div className="space-y-4 animate-in fade-in duration-200">
+                        <div className={cn('space-y-4 animate-in fade-in duration-200', roundedFields)}>
                             <div className="space-y-2">
                                 <Label htmlFor="name">Location Name *</Label>
                                 <Input
@@ -224,17 +232,17 @@ export function DetailsTab({ location, onUpdate, setHasUnsavedChanges }: Details
                                     rows={3}
                                 />
                             </div>
-                            <div className="flex items-center gap-2 pt-2">
-                                <Button onClick={() => handleSave('basic')} disabled={isSaving} size="sm">
+                            <div className="flex flex-wrap items-center gap-2 pt-2">
+                                <Button onClick={() => handleSave('basic')} disabled={isSaving} size="sm" className={pillButton}>
                                     {isSaving ? (
-                                        <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                                        <Loader2 className="h-4 w-4 animate-spin" />
                                     ) : (
-                                        <Save className="h-4 w-4 mr-1" />
+                                        <Save className="h-4 w-4" />
                                     )}
                                     Save
                                 </Button>
-                                <Button variant="ghost" size="sm" onClick={handleCancel} disabled={isSaving}>
-                                    <X className="h-4 w-4 mr-1" />
+                                <Button variant="ghost" size="sm" className={pillButton} onClick={handleCancel} disabled={isSaving}>
+                                    <X className="h-4 w-4" />
                                     Cancel
                                 </Button>
                             </div>
@@ -242,9 +250,11 @@ export function DetailsTab({ location, onUpdate, setHasUnsavedChanges }: Details
                     ) : (
                         <div className="space-y-2">
                             <div>
-                                <p className="font-medium">{location.name}</p>
+                                <p className="text-[1.0625rem] font-medium leading-tight tracking-[-0.01em]">
+                                    {location.name}
+                                </p>
                                 {location.code && (
-                                    <p className="text-sm text-muted-foreground font-mono">{location.code}</p>
+                                    <p className="mt-1 text-[0.8125rem] text-muted-foreground font-mono">{location.code}</p>
                                 )}
                             </div>
                             {location.description && (
@@ -252,35 +262,37 @@ export function DetailsTab({ location, onUpdate, setHasUnsavedChanges }: Details
                             )}
                         </div>
                     )}
-                </CardContent>
-            </Card>
+            </LocationPanelSection>
 
             {/* Contact Information */}
-            <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <div>
-                        <CardTitle className="text-base flex items-center gap-2">
-                            <Phone className="h-4 w-4" />
-                            Contact Information
-                        </CardTitle>
-                        <CardDescription>Phone and email for this location</CardDescription>
-                    </div>
-                    {editSection !== 'contact' && (
-                        <Button variant="ghost" size="sm" onClick={() => handleStartEdit('contact')}>
-                            <Edit className="h-4 w-4 mr-1" />
+            <LocationPanelSection
+                icon={Phone}
+                title="Contact Information"
+                description="Phone and email for this location"
+                action={
+                    editSection !== 'contact' && (
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className={pillButton}
+                            onClick={() => handleStartEdit('contact')}
+                        >
+                            <Edit className="h-4 w-4" />
                             Edit
                         </Button>
-                    )}
-                </CardHeader>
-                <CardContent>
+                    )
+                }
+            >
                     {editSection === 'contact' ? (
-                        <div className="space-y-4 animate-in fade-in duration-200">
+                        <div className={cn('space-y-4 animate-in fade-in duration-200', roundedFields)}>
                             <div className="space-y-2">
                                 <Label htmlFor="phone">Phone Number</Label>
                                 <PhoneInput
                                     id="phone"
                                     value={contactInfo.phone}
                                     onChange={(e164) => setContactInfo(prev => ({ ...prev, phone: e164 }))}
+                                    className={roundedPhoneInput}
+                                    style={phoneInputFilledVars}
                                 />
                             </div>
                             <div className="space-y-2">
@@ -293,64 +305,66 @@ export function DetailsTab({ location, onUpdate, setHasUnsavedChanges }: Details
                                     type="email"
                                 />
                             </div>
-                            <div className="flex items-center gap-2 pt-2">
-                                <Button onClick={() => handleSave('contact')} disabled={isSaving} size="sm">
+                            <div className="flex flex-wrap items-center gap-2 pt-2">
+                                <Button onClick={() => handleSave('contact')} disabled={isSaving} size="sm" className={pillButton}>
                                     {isSaving ? (
-                                        <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                                        <Loader2 className="h-4 w-4 animate-spin" />
                                     ) : (
-                                        <Save className="h-4 w-4 mr-1" />
+                                        <Save className="h-4 w-4" />
                                     )}
                                     Save
                                 </Button>
-                                <Button variant="ghost" size="sm" onClick={handleCancel} disabled={isSaving}>
-                                    <X className="h-4 w-4 mr-1" />
+                                <Button variant="ghost" size="sm" className={pillButton} onClick={handleCancel} disabled={isSaving}>
+                                    <X className="h-4 w-4" />
                                     Cancel
                                 </Button>
                             </div>
                         </div>
                     ) : (
-                        <div className="space-y-2">
-                            {location.phone ? (
-                                <div className="flex items-center gap-2 text-sm">
-                                    <Phone className="h-4 w-4 text-muted-foreground" />
-                                    <span>{formatPhoneForDisplay(location.phone)}</span>
-                                </div>
-                            ) : (
-                                <p className="text-sm text-muted-foreground">No phone number</p>
-                            )}
-                            {location.email ? (
-                                <div className="flex items-center gap-2 text-sm">
-                                    <Mail className="h-4 w-4 text-muted-foreground" />
-                                    <span>{location.email}</span>
-                                </div>
-                            ) : (
-                                <p className="text-sm text-muted-foreground">No email address</p>
-                            )}
+                        <div>
+                            <div className="flex items-center justify-between gap-4 py-2.5">
+                                <span className="flex items-center gap-2 text-[0.9375rem] text-muted-foreground">
+                                    <Phone className="h-4 w-4 shrink-0" />
+                                    Phone
+                                </span>
+                                <span className={cn('text-sm tabular-nums', !location.phone && 'text-muted-foreground')}>
+                                    {location.phone ? formatPhoneForDisplay(location.phone) : 'Not set'}
+                                </span>
+                            </div>
+                            <div className="flex items-center justify-between gap-4 py-2.5">
+                                <span className="flex items-center gap-2 text-[0.9375rem] text-muted-foreground">
+                                    <Mail className="h-4 w-4 shrink-0" />
+                                    Email
+                                </span>
+                                <span className={cn('text-sm truncate', !location.email && 'text-muted-foreground')}>
+                                    {location.email || 'Not set'}
+                                </span>
+                            </div>
                         </div>
                     )}
-                </CardContent>
-            </Card>
+            </LocationPanelSection>
 
             {/* Address */}
-            <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <div>
-                        <CardTitle className="text-base flex items-center gap-2">
-                            <MapPin className="h-4 w-4" />
-                            Address
-                        </CardTitle>
-                        <CardDescription>Physical location and timezone</CardDescription>
-                    </div>
-                    {editSection !== 'address' && (
-                        <Button variant="ghost" size="sm" onClick={() => handleStartEdit('address')}>
-                            <Edit className="h-4 w-4 mr-1" />
+            <LocationPanelSection
+                icon={MapPin}
+                title="Address"
+                description="Physical location and timezone"
+                action={
+                    editSection !== 'address' && (
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className={pillButton}
+                            onClick={() => handleStartEdit('address')}
+                        >
+                            <Edit className="h-4 w-4" />
                             Edit
                         </Button>
-                    )}
-                </CardHeader>
-                <CardContent>
+                    )
+                }
+            >
                     {editSection === 'address' ? (
-                        <div className="space-y-4 animate-in fade-in duration-200">
+                        <div className={cn('space-y-4 animate-in fade-in duration-200', roundedFields)}>
                             <div className="space-y-2">
                                 <Label htmlFor="address_line1">Address Line 1 *</Label>
                                 <AddressAutocomplete
@@ -398,7 +412,7 @@ export function DetailsTab({ location, onUpdate, setHasUnsavedChanges }: Details
                                         <SelectTrigger>
                                             <SelectValue placeholder="Select state" />
                                         </SelectTrigger>
-                                        <SelectContent>
+                                        <SelectContent className={roundedSelectContent}>
                                             {US_STATES.map((state) => (
                                                 <SelectItem key={state.code} value={state.code}>
                                                     {state.name}
@@ -437,7 +451,7 @@ export function DetailsTab({ location, onUpdate, setHasUnsavedChanges }: Details
                                     <SelectTrigger>
                                         <SelectValue placeholder="Select timezone" />
                                     </SelectTrigger>
-                                    <SelectContent>
+                                    <SelectContent className={roundedSelectContent}>
                                         {US_TIMEZONES.map((tz) => (
                                             <SelectItem key={tz.value} value={tz.value}>
                                                 {tz.label}
@@ -446,39 +460,47 @@ export function DetailsTab({ location, onUpdate, setHasUnsavedChanges }: Details
                                     </SelectContent>
                                 </Select>
                             </div>
-                            <div className="flex items-center gap-2 pt-2">
-                                <Button onClick={() => handleSave('address')} disabled={isSaving} size="sm">
+                            <div className="flex flex-wrap items-center gap-2 pt-2">
+                                <Button onClick={() => handleSave('address')} disabled={isSaving} size="sm" className={pillButton}>
                                     {isSaving ? (
-                                        <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                                        <Loader2 className="h-4 w-4 animate-spin" />
                                     ) : (
-                                        <Save className="h-4 w-4 mr-1" />
+                                        <Save className="h-4 w-4" />
                                     )}
                                     Save
                                 </Button>
-                                <Button variant="ghost" size="sm" onClick={handleCancel} disabled={isSaving}>
-                                    <X className="h-4 w-4 mr-1" />
+                                <Button variant="ghost" size="sm" className={pillButton} onClick={handleCancel} disabled={isSaving}>
+                                    <X className="h-4 w-4" />
                                     Cancel
                                 </Button>
                             </div>
                         </div>
                     ) : (
-                        <div className="space-y-2">
-                            <div className="text-sm">
-                                <p>{location.address_line1}</p>
-                                {location.address_line2 && <p>{location.address_line2}</p>}
-                                <p>{location.city}, {getStateName(location.state)} {location.postal_code}</p>
-                                {location.country && location.country !== 'US' && (
-                                    <p className="text-muted-foreground">{location.country}</p>
-                                )}
+                        <div>
+                            <div className="flex items-start justify-between gap-4 py-2.5">
+                                <span className="flex items-center gap-2 text-[0.9375rem] text-muted-foreground">
+                                    <Building2 className="h-4 w-4 shrink-0" />
+                                    Address
+                                </span>
+                                <div className="text-sm text-right leading-snug min-w-0">
+                                    <p>{location.address_line1}</p>
+                                    {location.address_line2 && <p>{location.address_line2}</p>}
+                                    <p>{location.city}, {getStateName(location.state)} {location.postal_code}</p>
+                                    {location.country && location.country !== 'US' && (
+                                        <p className="text-muted-foreground">{location.country}</p>
+                                    )}
+                                </div>
                             </div>
-                            <div className="flex items-center gap-2 text-sm text-muted-foreground pt-2">
-                                <Globe className="h-4 w-4" />
-                                <span>{getTimezoneLabel(location.timezone)}</span>
+                            <div className="flex items-center justify-between gap-4 py-2.5">
+                                <span className="flex items-center gap-2 text-[0.9375rem] text-muted-foreground">
+                                    <Globe className="h-4 w-4 shrink-0" />
+                                    Timezone
+                                </span>
+                                <span className="text-sm">{getTimezoneLabel(location.timezone)}</span>
                             </div>
                         </div>
                     )}
-                </CardContent>
-            </Card>
+            </LocationPanelSection>
         </div>
     )
 }

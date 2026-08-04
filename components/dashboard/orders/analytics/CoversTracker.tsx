@@ -1,6 +1,7 @@
 'use client'
 
 import { ChartCard } from './ChartCard'
+import { CHART_GRID, CHART_TICK, StatRow, StatTile } from './AnalyticsPrimitives'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip } from 'recharts'
 import { Users } from 'lucide-react'
 import type { TablePerformanceStats } from '@/types/analytics'
@@ -45,22 +46,22 @@ export function CoversTracker({ data, isLoading, numberOfDays = 1 }: CoversTrack
     if (active && payload && payload.length) {
       const data = payload[0].payload
       return (
-        <div className="bg-white dark:bg-slate-950 p-3 rounded border border-slate-200 dark:border-slate-700 shadow-lg">
-          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2">
+        <div className="rounded-xl border bg-popover p-3 text-popover-foreground shadow-lg">
+          <p className="mb-2 text-[0.8125rem] font-medium text-muted-foreground">
             {data.hourLabel}
           </p>
           <div className="flex items-center justify-between gap-2">
-            <span className="text-xs text-slate-700 dark:text-slate-300">
+            <span className="text-[0.8125rem] text-muted-foreground">
               {numberOfDays > 1 ? 'Avg covers:' : 'Total covers:'}
             </span>
-            <span className="text-xs font-bold text-slate-900 dark:text-slate-100">
+            <span className="text-[0.8125rem] tabular-nums">
               {data.avgCovers}
             </span>
           </div>
           {numberOfDays > 1 && (
-            <div className="flex items-center justify-between gap-2 mt-1 text-xs text-slate-500">
-              <span>Total:</span>
-              <span>{data.covers}</span>
+            <div className="mt-1 flex items-center justify-between gap-2 text-[0.8125rem] text-muted-foreground">
+              <span>Total</span>
+              <span className="tabular-nums">{data.covers}</span>
             </div>
           )}
         </div>
@@ -79,35 +80,36 @@ export function CoversTracker({ data, isLoading, numberOfDays = 1 }: CoversTrack
     >
       {data && !isEmpty && (
         <div className="space-y-4">
-          {/* Stat Cards */}
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div className="space-y-1 bg-pink-50 dark:bg-pink-950 p-2 rounded">
-              <p className="text-xs text-muted-foreground">Total Covers</p>
-              <p className="text-lg font-bold text-pink-600 dark:text-pink-400">
-                {data.total_covers}
-              </p>
-            </div>
-            <div className="space-y-1 bg-purple-50 dark:bg-purple-950 p-2 rounded">
-              <p className="text-xs text-muted-foreground">Peak Hour</p>
-              <p className="text-lg font-bold text-purple-600 dark:text-purple-400">
-                {peakHour.avgCovers > -Infinity
-                  ? `${peakHour.hourLabel} (${peakHour.avgCovers})`
-                  : '—'}
-              </p>
-            </div>
-          </div>
+          <StatRow columns={2}>
+            <StatTile
+              label="Total Covers"
+              value={data.total_covers}
+              accent="brand"
+            />
+            <StatTile
+              label="Peak Hour"
+              value={
+                peakHour.avgCovers > -Infinity ? peakHour.hourLabel : '—'
+              }
+              meta={
+                peakHour.avgCovers > -Infinity
+                  ? `${peakHour.avgCovers} avg covers`
+                  : undefined
+              }
+            />
+          </StatRow>
 
           {/* Line Chart */}
           {chartData.length > 0 && (
             <div className="w-full h-[240px]">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={chartData} margin={{ left: 0, right: 10, top: 5, bottom: 20 }}>
-                  <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                  <CartesianGrid vertical={false} {...CHART_GRID} />
                   <XAxis
                     dataKey="hourLabel"
                     tickLine={false}
                     axisLine={false}
-                    tick={{ fontSize: 11 }}
+                    tick={{ ...CHART_TICK, fontSize: 11 }}
                     angle={-45}
                     textAnchor="end"
                     height={60}
@@ -115,7 +117,7 @@ export function CoversTracker({ data, isLoading, numberOfDays = 1 }: CoversTrack
                   <YAxis
                     tickLine={false}
                     axisLine={false}
-                    tick={{ fontSize: 12 }}
+                    tick={CHART_TICK}
                     domain={[0, 'auto']}
                   />
                   <Tooltip content={<CustomTooltip />} />

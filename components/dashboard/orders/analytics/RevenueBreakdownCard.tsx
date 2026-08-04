@@ -1,6 +1,7 @@
 'use client'
 
 import { ChartCard } from './ChartCard'
+import { StatRow, StatTile } from './AnalyticsPrimitives'
 import { ChartContainer, type ChartConfig } from '@/components/ui/chart'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts'
 import { DollarSign } from 'lucide-react'
@@ -73,29 +74,20 @@ export function RevenueBreakdownCard({ data, isLoading }: RevenueBreakdownCardPr
     >
       {data && (
         <>
-          {/* Stat boxes – DexaPOS themed with dark mode support */}
-          <div className="grid grid-cols-1 gap-3 mb-4 sm:grid-cols-2">
-            <div className="bg-gray-50 dark:bg-slate-800/50 border border-gray-200 dark:border-gray-700 p-2 rounded space-y-1">
-              <p className="text-xs text-gray-500 dark:text-gray-400">Subtotal</p>
-              <p className="text-lg font-bold text-gray-900 dark:text-white">{formatCurrency(data.subtotal)}</p>
-            </div>
-            <div className="bg-gray-50 dark:bg-slate-800/50 border border-gray-200 dark:border-gray-700 p-2 rounded space-y-1">
-              <p className="text-xs text-gray-500 dark:text-gray-400">Net Revenue</p>
-              <p className="text-lg font-bold text-[#0A5C9E] dark:text-[#0A7AB8]">
-                {formatCurrency(data.netRevenue)}
-              </p>
-            </div>
-            <div className="bg-gray-50 dark:bg-slate-800/50 border border-gray-200 dark:border-gray-700 p-2 rounded space-y-1">
-              <p className="text-xs text-gray-500 dark:text-gray-400">Tax + Charges</p>
-              <p className="text-lg font-bold text-gray-900 dark:text-white">
-                {formatCurrency(data.tax + data.serviceCharges)}
-              </p>
-            </div>
-            <div className="bg-gray-50 dark:bg-slate-800/50 border border-gray-200 dark:border-gray-700 p-2 rounded space-y-1">
-              <p className="text-xs text-gray-500 dark:text-gray-400">Tips</p>
-              <p className="text-lg font-bold text-gray-900 dark:text-white">{formatCurrency(data.tips)}</p>
-            </div>
-          </div>
+          {/* Headline figures — hairline-separated, no tinted boxes. */}
+          <StatRow columns={4} className="mb-8">
+            <StatTile label="Subtotal" value={formatCurrency(data.subtotal)} />
+            <StatTile
+              label="Net Revenue"
+              value={formatCurrency(data.netRevenue)}
+              accent="brand"
+            />
+            <StatTile
+              label="Tax + Charges"
+              value={formatCurrency(data.tax + data.serviceCharges)}
+            />
+            <StatTile label="Tips" value={formatCurrency(data.tips)} />
+          </StatRow>
 
           {/* Stacked bar chart */}
           <div className="w-full h-[350px]">
@@ -104,42 +96,42 @@ export function RevenueBreakdownCard({ data, isLoading }: RevenueBreakdownCardPr
                   <CartesianGrid 
                     vertical={false} 
                     strokeDasharray="3 3" 
-                    stroke="hsl(var(--border))"
+                    stroke="var(--border)"
                   />
                   <XAxis
                     dataKey="date"
                     tickLine={false}
                     axisLine={false}
-                    tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }}
+                    tick={{ fontSize: 12, fill: 'var(--muted-foreground)' }}
                   />
                   <YAxis
                     tickLine={false}
                     axisLine={false}
-                    tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }}
+                    tick={{ fontSize: 12, fill: 'var(--muted-foreground)' }}
                     tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
                   />
                   <Tooltip
-                    cursor={{ fill: 'hsl(var(--muted)/0.3)' }}
+                    cursor={{ fill: 'color-mix(in srgb, var(--muted) 40%, transparent)' }}
                     content={({ active, payload, label }) => {
                       if (active && payload && payload.length) {
                         return (
-                          <div className="bg-white dark:bg-slate-900 p-3 rounded-lg border border-gray-200 dark:border-gray-700 shadow-lg">
-                            <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2">
+                          <div className="rounded-xl border bg-popover p-3 text-popover-foreground shadow-lg">
+                            <p className="mb-2 text-[0.8125rem] font-medium text-muted-foreground">
                               {label}
                             </p>
                             <div className="space-y-1.5">
                               {payload.map((item, index) => (
-                                <div key={index} className="flex items-center justify-between gap-4">
+                                <div key={index} className="flex items-center justify-between gap-6">
                                   <div className="flex items-center gap-2">
-                                    <div 
-                                      className="w-2 h-2 rounded-full" 
+                                    <span
+                                      className="h-2.5 w-2.5 shrink-0 rounded-full"
                                       style={{ backgroundColor: item.color }}
                                     />
-                                    <span className="text-xs text-gray-600 dark:text-gray-300">
-                                      {item.name}:
+                                    <span className="text-[0.8125rem] text-muted-foreground">
+                                      {item.name}
                                     </span>
                                   </div>
-                                  <span className="text-xs font-medium text-gray-900 dark:text-white">
+                                  <span className="text-[0.8125rem] tabular-nums">
                                     {formatCurrency(Number(item.value))}
                                   </span>
                                 </div>
@@ -161,14 +153,16 @@ export function RevenueBreakdownCard({ data, isLoading }: RevenueBreakdownCardPr
           </div>
 
           {/* Legend – matches chart colors */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mt-4 text-xs">
+          <div className="mt-5 flex flex-wrap gap-x-6 gap-y-2">
             {Object.entries(chartConfig).map(([key, config]) => (
-              <div key={key} className="flex items-center gap-2">
-                <div
-                  className="w-3 h-3 rounded-sm flex-shrink-0"
+              <div key={key} className="flex min-w-0 items-center gap-2">
+                <span
+                  className="h-2.5 w-2.5 shrink-0 rounded-full"
                   style={{ backgroundColor: config.color }}
                 />
-                <span className="text-gray-500 dark:text-gray-400 truncate">{config.label}</span>
+                <span className="truncate text-[0.8125rem] text-muted-foreground">
+                  {config.label}
+                </span>
               </div>
             ))}
           </div>

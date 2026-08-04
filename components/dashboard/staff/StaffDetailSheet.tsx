@@ -76,6 +76,11 @@ interface StaffDetailSheetProps {
   staff: UnifiedStaffMember | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /**
+   * Set when opened from inside a Sheet (e.g. the location detail sheet's Team
+   * tab) so it paints above it instead of behind the dimmed sheet.
+   */
+  elevated?: boolean;
 }
 
 type StaffDetailPanel =
@@ -90,6 +95,7 @@ export function StaffDetailSheet({
   staff,
   open,
   onOpenChange,
+  elevated,
 }: StaffDetailSheetProps) {
   // Ã¢â€â‚¬Ã¢â€â‚¬ All hooks MUST be called before any conditional return Ã¢â€â‚¬Ã¢â€â‚¬
   const deactivateStaff = useDeactivateStaff();
@@ -1356,7 +1362,7 @@ export function StaffDetailSheet({
 
 
   return (
-    <BottomSheet open={open} onOpenChange={onOpenChange}>
+    <BottomSheet open={open} onOpenChange={onOpenChange} elevated={elevated}>
       <BottomSheetContent
         className="mx-auto w-full max-w-6xl bottom-[2.5dvh] h-[95dvh] overflow-hidden rounded-b-[20px] border-b data-[state=closed]:duration-[400ms] data-[state=closed]:ease-[cubic-bezier(0.32,0.72,0,1)]"
         height="95"

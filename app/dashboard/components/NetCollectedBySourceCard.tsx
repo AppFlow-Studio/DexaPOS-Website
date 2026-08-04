@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import {
   Card,
   CardContent,
@@ -8,11 +7,9 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import {
-  ArrowRight,
   Monitor,
   TabletSmartphone,
   Globe,
@@ -20,6 +17,7 @@ import {
   UtensilsCrossed,
   LayoutGrid,
 } from "lucide-react";
+import { OverviewLinkButton } from "./OverviewSection";
 import type { NetCollectedBySourceReport } from "@/app/dashboard/actions/order-analytics";
 
 // ============================================================================
@@ -105,12 +103,12 @@ export function NetCollectedBySourceCard({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base flex items-center gap-2">
-          <LayoutGrid className="h-4 w-4" />
+        <CardTitle className="text-[1.0625rem] font-semibold text-[#0C4FD1]! dark:text-[#6CA0FF]! flex items-center gap-2">
+          <LayoutGrid className="h-[1.125rem] w-[1.125rem] shrink-0" />
           Net Collected by Channel
         </CardTitle>
         <CardDescription>
-          Revenue breakdown by order source — last 30 days
+          Revenue breakdown by order source
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -212,12 +210,9 @@ export function NetCollectedBySourceCard({
           <span className="text-xs text-muted-foreground">
             {rows.length} channel{rows.length !== 1 ? "s" : ""}
           </span>
-          <Button variant="link" size="sm" className="h-auto p-0" asChild>
-            <Link href="/dashboard/orders/analytics">
-              View order analytics
-              <ArrowRight className="h-3.5 w-3.5 ml-1" />
-            </Link>
-          </Button>
+          <OverviewLinkButton href="/dashboard/orders/analytics">
+            View order analytics
+          </OverviewLinkButton>
         </div>
       </CardContent>
     </Card>

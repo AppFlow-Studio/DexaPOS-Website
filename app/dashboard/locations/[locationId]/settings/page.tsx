@@ -80,19 +80,20 @@ export default async function LocationSettingsPage({ params }: LocationSettingsP
     : null
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Location Tax & Banking</h1>
-          <p className="text-muted-foreground">
-            {location.name} {location.city ? `- ${location.city}, ${location.state}` : ''}
+    <div className="mx-auto max-w-5xl space-y-6 animate-in fade-in duration-500 w-full min-w-0">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <h1 className="text-xl font-semibold tracking-tight">Location Tax &amp; Banking</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            {location.name}
+            {location.city ? ` · ${location.city}, ${location.state}` : ''}
           </p>
         </div>
         <Link
           href="/dashboard/locations"
-          className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-muted"
+          className="group shrink-0 self-start sm:self-auto inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-3.5 py-2 text-[0.8125rem] font-medium shadow-sm transition-colors hover:bg-muted/60"
         >
-          <ArrowLeft className="h-4 w-4" />
+          <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-0.5" />
           Back to Locations
         </Link>
       </div>

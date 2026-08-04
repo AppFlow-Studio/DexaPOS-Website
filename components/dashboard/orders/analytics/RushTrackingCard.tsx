@@ -1,6 +1,14 @@
 'use client'
 
 import { ChartCard } from './ChartCard'
+import {
+  CHART_CURSOR_FILL,
+  CHART_GRID,
+  CHART_TICK,
+  ChartTooltipPanel,
+  StatRow,
+  StatTile,
+} from './AnalyticsPrimitives'
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend, Tooltip } from 'recharts'
 import { Zap } from 'lucide-react'
@@ -65,71 +73,61 @@ export function RushTrackingCard({
     >
       {data && (
         <div className="space-y-4">
-          {/* Stats Cards */}
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <div className="space-y-1 bg-orange-50 dark:bg-orange-950 p-2 rounded">
-              <p className="text-xs text-muted-foreground">Rush Items</p>
-              <p className="text-lg font-bold text-orange-600 dark:text-orange-400">
-                {data.rush_items}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {(data.rush_percentage ?? 0).toFixed(1)}% of total
-              </p>
-            </div>
-            <div className="space-y-1 bg-blue-50 dark:bg-blue-950 p-2 rounded">
-              <p className="text-xs text-muted-foreground">Rush Avg Time</p>
-              <p className="text-lg font-bold text-blue-600 dark:text-blue-400">
-                {formatTime(data.avg_rush_time_minutes ?? 0)}
-              </p>
-            </div>
-            <div className="space-y-1 bg-emerald-50 dark:bg-emerald-950 p-2 rounded">
-              <p className="text-xs text-muted-foreground">Normal Avg Time</p>
-              <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
-                {formatTime(data.avg_normal_time_minutes ?? 0)}
-              </p>
-            </div>
-          </div>
-
-          {/* Impact Badge */}
-          <div className="bg-slate-50 dark:bg-slate-900 p-3 rounded border border-slate-200 dark:border-slate-800">
-            <p className="text-xs text-muted-foreground mb-1">Rush Impact</p>
-            <p className="text-sm font-semibold">
-              {difference > 0 ? '+' : ''}{formatTime(Math.abs(difference))} slower
-              ({differencePercent}%)
-            </p>
-          </div>
+          {/* Stats */}
+          <StatRow columns={4}>
+            <StatTile
+              label="Rush Items"
+              value={data.rush_items}
+              meta={`${(data.rush_percentage ?? 0).toFixed(1)}% of total`}
+              accent="warning"
+            />
+            <StatTile
+              label="Rush Avg Time"
+              value={formatTime(data.avg_rush_time_minutes ?? 0)}
+              accent="brand"
+            />
+            <StatTile
+              label="Normal Avg Time"
+              value={formatTime(data.avg_normal_time_minutes ?? 0)}
+              accent="positive"
+            />
+            <StatTile
+              label="Rush Impact"
+              value={`${difference > 0 ? '+' : ''}${formatTime(Math.abs(difference))}`}
+              meta={`${differencePercent}% slower`}
+            />
+          </StatRow>
 
           {/* Chart */}
           <div className="w-full h-[280px]">
             <ChartContainer config={chartConfig} className="aspect-auto w-full h-full">
                 <BarChart data={chartData} margin={{ left: 0, right: 10, top: 5, bottom: 20 }}>
-                  <CartesianGrid vertical={false} strokeDasharray="3 3" />
-                  <XAxis dataKey="name" tickLine={false} axisLine={false} />
+                  <CartesianGrid vertical={false} {...CHART_GRID} />
+                  <XAxis
+                    dataKey="name"
+                    tickLine={false}
+                    axisLine={false}
+                    tick={CHART_TICK}
+                  />
                   <YAxis
                     tickLine={false}
                     axisLine={false}
+                    tick={CHART_TICK}
                     tickFormatter={(value) => `${value.toFixed(0)}m`}
                   />
                   <ChartTooltip
-                    cursor={{ fill: 'rgba(0, 0, 0, 0.1)' }}
+                    cursor={{ fill: CHART_CURSOR_FILL }}
                     content={({ active, payload, label }) => {
                       if (active && payload && payload.length) {
                         return (
-                          <div className="bg-white dark:bg-slate-950 p-3 rounded border border-slate-200 dark:border-slate-700 shadow-lg">
-                            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2">
-                              {label}
-                            </p>
-                            <div className="space-y-1">
-                              {payload.map((item, index) => (
-                                <div key={index} className="flex items-center justify-between gap-2">
-                                  <span className="text-xs text-slate-700 dark:text-slate-300">{item.name}:</span>
-                                  <span className="text-xs font-bold text-slate-900 dark:text-slate-100">
-                                    {formatTime(Number(item.value))}
-                                  </span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
+                          <ChartTooltipPanel
+                            label={label}
+                            items={payload.map((item) => ({
+                              name: item.name,
+                              color: item.color,
+                              value: formatTime(Number(item.value)),
+                            }))}
+                          />
                         )
                       }
                       return null

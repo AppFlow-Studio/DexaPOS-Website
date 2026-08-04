@@ -62,7 +62,7 @@ export function LocationDetailSheet({
                 side="right"
                 className="w-full sm:max-w-3xl overflow-y-auto p-2"
             >
-                <SheetHeader className="pb-4 border-b">
+                <SheetHeader className="pb-4">
                     <div className="flex items-start gap-4">
                         <div className={cn(
                             "h-12 w-12 rounded-xl flex items-center justify-center shrink-0",
@@ -79,7 +79,7 @@ export function LocationDetailSheet({
                                     {location.name}
                                 </SheetTitle>
                                 {location.code && (
-                                    <Badge variant="outline" className="font-mono text-xs shrink-0">
+                                    <Badge variant="secondary" className="rounded-full border-transparent bg-muted text-muted-foreground font-mono text-xs px-2.5 py-0.5 shrink-0">
                                         {location.code}
                                     </Badge>
                                 )}
@@ -91,15 +91,15 @@ export function LocationDetailSheet({
                             <div className="flex items-center gap-2 mt-2">
                                 <Badge
                                     variant={location.is_active ? "default" : "secondary"}
-                                    className="text-xs"
+                                    className="rounded-full text-xs font-medium px-2.5 py-0.5"
                                 >
                                     {location.is_active ? 'Active' : 'Inactive'}
                                 </Badge>
                                 <Badge
                                     variant={location.is_accepting_orders ? "default" : "outline"}
                                     className={cn(
-                                        "text-xs",
-                                        location.is_accepting_orders && "bg-green-600"
+                                        "rounded-full text-xs font-medium px-2.5 py-0.5",
+                                        location.is_accepting_orders && "bg-emerald-600 hover:bg-emerald-600"
                                     )}
                                 >
                                     {location.is_accepting_orders ? 'Accepting Orders' : 'Not Accepting'}
@@ -110,23 +110,26 @@ export function LocationDetailSheet({
                 </SheetHeader>
 
                 <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-4">
-                    <TabsList className="grid w-full grid-cols-4">
-                        <TabsTrigger value="details" className="flex items-center gap-1.5">
-                            <FileText className="h-4 w-4" />
-                            <span className="hidden sm:inline">Details</span>
-                        </TabsTrigger>
-                        <TabsTrigger value="hours" className="flex items-center gap-1.5">
-                            <Clock className="h-4 w-4" />
-                            <span className="hidden sm:inline">Hours</span>
-                        </TabsTrigger>
-                        <TabsTrigger value="team" className="flex items-center gap-1.5">
-                            <Users className="h-4 w-4" />
-                            <span className="hidden sm:inline">Team</span>
-                        </TabsTrigger>
-                        <TabsTrigger value="settings" className="flex items-center gap-1.5">
-                            <Settings className="h-4 w-4" />
-                            <span className="hidden sm:inline">Settings</span>
-                        </TabsTrigger>
+                    {/* Pill tabs, matching the status filter on the locations page. */}
+                    <TabsList className="grid w-full grid-cols-4 rounded-full bg-muted/70 p-1 h-auto">
+                        {([
+                            { value: 'details', icon: FileText, label: 'Details' },
+                            { value: 'hours', icon: Clock, label: 'Hours' },
+                            { value: 'team', icon: Users, label: 'Team' },
+                            { value: 'settings', icon: Settings, label: 'Settings' },
+                        ] as const).map(tab => (
+                            <TabsTrigger
+                                key={tab.value}
+                                value={tab.value}
+                                className={cn(
+                                    "flex items-center gap-1.5 rounded-full px-4 py-2 text-[0.8125rem] font-medium",
+                                    "data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border"
+                                )}
+                            >
+                                <tab.icon className="h-4 w-4" />
+                                <span className="hidden sm:inline">{tab.label}</span>
+                            </TabsTrigger>
+                        ))}
                     </TabsList>
 
                     <div className="mt-4 pb-4">

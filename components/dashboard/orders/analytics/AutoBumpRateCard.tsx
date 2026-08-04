@@ -1,6 +1,13 @@
 'use client'
 
 import { ChartCard } from './ChartCard'
+import {
+  CHART_GRID,
+  CHART_TICK,
+  ChartTooltipPanel,
+  StatRow,
+  StatTile,
+} from './AnalyticsPrimitives'
 import { ChartContainer, ChartTooltip, type ChartConfig } from '@/components/ui/chart'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Legend, ReferenceLine } from 'recharts'
 import { AlertTriangle } from 'lucide-react'
@@ -55,89 +62,73 @@ export function AutoBumpRateCard({
     >
       {data && (
         <div className="space-y-4">
-          {/* Stats Cards - DexaPOS theme */}
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <div className="space-y-1 bg-[#0A5C9E]/10 p-2 rounded">
-              <p className="text-xs text-muted-foreground">Auto-Bumped</p>
-              <p className="text-lg font-bold text-[#0A5C9E]">
-                {data.auto_bumped}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {((data.auto_bumped / (data.total_items || 1)) * 100).toFixed(1)}%
-              </p>
-            </div>
-            <div className="space-y-1 bg-emerald-50 dark:bg-emerald-950 p-2 rounded">
-              <p className="text-xs text-muted-foreground">Manual Completed</p>
-              <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
-                {data.manual_completed}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {((data.manual_completed / (data.total_items || 1)) * 100).toFixed(1)}%
-              </p>
-            </div>
-            <div className="space-y-1 bg-gray-50 dark:bg-gray-900 p-2 rounded">
-              <p className="text-xs text-muted-foreground">Total Items</p>
-              <p className="text-lg font-bold">{data.total_items}</p>
-            </div>
-          </div>
+          <StatRow columns={4}>
+            <StatTile
+              label="Current Rate"
+              value={`${currentRate.toFixed(1)}%`}
+              accent={isHighAlert ? 'warning' : 'brand'}
+            />
+            <StatTile
+              label="Auto-Bumped"
+              value={data.auto_bumped}
+              meta={`${((data.auto_bumped / (data.total_items || 1)) * 100).toFixed(1)}% of items`}
+            />
+            <StatTile
+              label="Manual Completed"
+              value={data.manual_completed}
+              meta={`${((data.manual_completed / (data.total_items || 1)) * 100).toFixed(1)}% of items`}
+              accent="positive"
+            />
+            <StatTile label="Total Items" value={data.total_items} />
+          </StatRow>
 
-          {/* Alert if High */}
+          {/* Alert if High — kept as signal, but as an icon + text strip rather
+              than another tinted box inside the section. */}
           {isHighAlert && (
-            <div className="bg-red-50 dark:bg-red-950 p-3 rounded border border-red-200 dark:border-red-800">
-              <p className="text-xs font-semibold text-red-700 dark:text-red-300 mb-1">⚠️ High Auto-Bump Rate</p>
-              <p className="text-sm text-red-600 dark:text-red-400">
-                Kitchen is falling behind. {currentRate.toFixed(1)}% of items are auto-bumped.
+            <div className="flex items-start gap-2.5 text-amber-600 dark:text-amber-400">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <p className="text-sm">
+                <span className="font-medium">High auto-bump rate.</span>{' '}
+                <span className="text-muted-foreground">
+                  Kitchen is falling behind — {currentRate.toFixed(1)}% of items
+                  are auto-bumped.
+                </span>
               </p>
             </div>
           )}
-
-          {/* Rate Badge */}
-          <div className="bg-gray-50 dark:bg-gray-900 p-3 rounded border border-gray-200 dark:border-gray-800">
-            <p className="text-xs text-muted-foreground mb-1">Current Auto-Bump Rate</p>
-            <p className="text-lg font-bold">{currentRate.toFixed(1)}%</p>
-          </div>
 
           {/* Trend Line Chart */}
           {chartData.length > 0 && (
             <div className="w-full h-[280px]">
               <ChartContainer config={chartConfig} className="aspect-auto w-full h-full">
                   <LineChart data={chartData} margin={{ left: 0, right: 10, top: 5, bottom: 20 }}>
-                    <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                    <CartesianGrid vertical={false} {...CHART_GRID} />
                     <XAxis
                       dataKey="date"
                       tickLine={false}
                       axisLine={false}
-                      tick={{ fontSize: 12 }}
+                      tick={CHART_TICK}
                     />
                     <YAxis
                       tickLine={false}
                       axisLine={false}
-                      tick={{ fontSize: 12 }}
+                      tick={CHART_TICK}
                       tickFormatter={(value) => `${value.toFixed(0)}%`}
                       domain={[0, 100]}
                     />
                     <ChartTooltip
-                      cursor={{ stroke: 'rgba(0, 0, 0, 0.1)', strokeWidth: 2 }}
+                      cursor={{ stroke: 'var(--border)', strokeWidth: 2 }}
                       content={({ active, payload, label }) => {
                         if (active && payload && payload.length) {
                           return (
-                            <div className="bg-white dark:bg-slate-950 p-3 rounded border border-slate-200 dark:border-slate-700 shadow-lg">
-                              <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2">
-                                {label}
-                              </p>
-                              <div className="space-y-1">
-                                {payload.map((item, index) => (
-                                  <div key={index} className="flex items-center justify-between gap-2">
-                                    <span className="text-xs text-slate-700 dark:text-slate-300">
-                                      {item.name}:
-                                    </span>
-                                    <span className="text-xs font-bold text-slate-900 dark:text-slate-100">
-                                      {Number(item.value).toFixed(1)}%
-                                    </span>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
+                            <ChartTooltipPanel
+                              label={label}
+                              items={payload.map((item) => ({
+                                name: item.name,
+                                color: item.color,
+                                value: `${Number(item.value).toFixed(1)}%`,
+                              }))}
+                            />
                           )
                         }
                         return null
@@ -147,7 +138,7 @@ export function AutoBumpRateCard({
                       y={warningThreshold}
                       stroke={chartConfig.threshold.color}
                       strokeDasharray="5 5"
-                      label={{ value: 'High Alert', position: 'right', fontSize: 12, fill: '#9CA3AF' }}
+                      label={{ value: 'High Alert', position: 'right', fontSize: 12, fill: 'var(--muted-foreground)' }}
                     />
                     <Line
                       type="monotone"
@@ -158,7 +149,12 @@ export function AutoBumpRateCard({
                       activeDot={{ r: 6 }}
                       name="Auto-Bump Rate"
                     />
-                    <Legend />
+                    <Legend
+                      iconType="circle"
+                      formatter={(value) => (
+                        <span className="text-[0.8125rem] text-muted-foreground">{value}</span>
+                      )}
+                    />
                   </LineChart>
               </ChartContainer>
             </div>

@@ -49,7 +49,6 @@ import {
   orderTypeLabel,
 } from "@/lib/constants/order-type";
 import { useSelectedLocation } from "@/stores/location-store";
-import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import {
   ORDER_SOURCE_OPTIONS,
@@ -81,6 +80,15 @@ const PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
 const PAYMENT_METHOD_LABELS: Record<string, string> = Object.fromEntries(
   PAYMENT_METHODS.map((m) => [m.value, m.label])
 );
+
+/**
+ * Every filter trigger shares one look: a soft rounded pill with no outline.
+ * The row sits inside the All Orders container, which is the only frame on the
+ * page — outlined/dashed chips here added a second competing set of boxes.
+ * Tint (not a border) carries the affordance, and deepens on hover.
+ */
+const FILTER_TRIGGER =
+  "rounded-full border-0 bg-muted/60 text-muted-foreground shadow-none hover:bg-muted hover:text-foreground data-[state=open]:bg-muted data-[state=open]:text-foreground";
 
 export function OrderFilters({ className }: OrderFiltersProps) {
   const router = useRouter();
@@ -270,19 +278,18 @@ export function OrderFilters({ className }: OrderFiltersProps) {
             searchParams.get("to") ? new Date(searchParams.get("to")!) : null
           }
           onDateRangeChange={handleDateRangeChange}
+          triggerClassName={cn(FILTER_TRIGGER, "h-9 text-foreground")}
         />
-
-        <Separator orientation="vertical" className="h-8" />
 
         {/* Status Filter */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="border-dashed">
+            <Button variant="ghost" size="sm" className={FILTER_TRIGGER}>
               <Filter className="mr-2 h-4 w-4" />
               {statusTriggerLabel}
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-[200px]">
+          <DropdownMenuContent align="start" className="w-[200px] rounded-2xl">
             <DropdownMenuLabel>Filter by Status</DropdownMenuLabel>
             <DropdownMenuSeparator />
             {ORDER_STATUS_ORDER.map((status) => {
@@ -306,12 +313,12 @@ export function OrderFilters({ className }: OrderFiltersProps) {
         {/* Type Filter */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="border-dashed">
+            <Button variant="ghost" size="sm" className={FILTER_TRIGGER}>
               <Utensils className="mr-2 h-4 w-4" />
               {typeTriggerLabel}
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-[200px]">
+          <DropdownMenuContent align="start" className="w-[200px] rounded-2xl">
             <DropdownMenuLabel>Filter by Type</DropdownMenuLabel>
             <DropdownMenuSeparator />
             {ORDER_TYPE_ORDER.map((type) => {
@@ -332,12 +339,12 @@ export function OrderFilters({ className }: OrderFiltersProps) {
         {/* Channel (order_source) Filter */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="border-dashed">
+            <Button variant="ghost" size="sm" className={FILTER_TRIGGER}>
               <Radio className="mr-2 h-4 w-4" />
               {sourceTriggerLabel}
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-[200px]">
+          <DropdownMenuContent align="start" className="w-[200px] rounded-2xl">
             <DropdownMenuLabel>Filter by Channel</DropdownMenuLabel>
             <DropdownMenuSeparator />
             {ORDER_SOURCE_OPTIONS.map(({ value, label }) => {
@@ -364,7 +371,7 @@ export function OrderFilters({ className }: OrderFiltersProps) {
             <Button
               variant="outline"
               size="sm"
-              className="border-dashed disabled:opacity-50"
+              className={cn(FILTER_TRIGGER, "disabled:opacity-50")}
               disabled={!platformFilterEnabled}
               title={
                 platformFilterEnabled
@@ -376,7 +383,7 @@ export function OrderFilters({ className }: OrderFiltersProps) {
               {platformTriggerLabel}
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-[200px]">
+          <DropdownMenuContent align="start" className="w-[200px] rounded-2xl">
             <DropdownMenuLabel>Filter by Platform</DropdownMenuLabel>
             <DropdownMenuSeparator />
             {DELIVERY_PLATFORM_OPTIONS.map(({ value, label }) => {
@@ -400,12 +407,12 @@ export function OrderFilters({ className }: OrderFiltersProps) {
         {/* Payment Filter */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="border-dashed">
+            <Button variant="ghost" size="sm" className={FILTER_TRIGGER}>
               <CreditCard className="mr-2 h-4 w-4" />
               {paymentTriggerLabel}
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-[200px]">
+          <DropdownMenuContent align="start" className="w-[200px] rounded-2xl">
             <DropdownMenuLabel>Filter by Payment</DropdownMenuLabel>
             <DropdownMenuSeparator />
             {PAYMENT_METHODS.map(({ value, label }) => {
@@ -431,11 +438,11 @@ export function OrderFilters({ className }: OrderFiltersProps) {
           value={searchParams.get("staff") || "all"}
           onValueChange={handleStaffChange}
         >
-          <SelectTrigger className="w-[180px] h-9 border-dashed">
+          <SelectTrigger className={cn(FILTER_TRIGGER, "h-9 w-[180px]")}>
             <User className="mr-2 h-4 w-4 opacity-50" />
             <SelectValue placeholder="Staff Member" />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent className="rounded-2xl">
             <SelectItem value="all">All Staff</SelectItem>
             {staffMembers.filter((m) => m.member_id).map((member) => (
               <SelectItem key={member.member_id!} value={member.member_id!}>
@@ -448,12 +455,12 @@ export function OrderFilters({ className }: OrderFiltersProps) {
         {/* Amount Range */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="border-dashed">
+            <Button variant="ghost" size="sm" className={FILTER_TRIGGER}>
               <DollarSign className="mr-2 h-4 w-4" />
               {amountTriggerLabel}
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent className="w-80 p-4" align="start">
+          <DropdownMenuContent className="w-80 rounded-2xl p-4" align="start">
             <div className="grid gap-4">
               <div className="space-y-2">
                 <h4 className="font-medium leading-none">Amount Range</h4>
@@ -469,6 +476,7 @@ export function OrderFilters({ className }: OrderFiltersProps) {
                       id="minAmount"
                       placeholder="0.00"
                       type="number"
+                      className="h-10 rounded-full px-4"
                       value={searchParams.get("minAmount") || ""}
                       onChange={(e) =>
                         handleAmountChange(
@@ -484,6 +492,7 @@ export function OrderFilters({ className }: OrderFiltersProps) {
                       id="maxAmount"
                       placeholder="100.00"
                       type="number"
+                      className="h-10 rounded-full px-4"
                       value={searchParams.get("maxAmount") || ""}
                       onChange={(e) =>
                         handleAmountChange(
@@ -504,7 +513,7 @@ export function OrderFilters({ className }: OrderFiltersProps) {
             variant="ghost"
             size="sm"
             onClick={clearFilters}
-            className="h-8 px-2 lg:px-3"
+            className="h-8 rounded-full px-3 text-muted-foreground hover:text-foreground"
           >
             Reset
             <X className="ml-2 h-4 w-4" />

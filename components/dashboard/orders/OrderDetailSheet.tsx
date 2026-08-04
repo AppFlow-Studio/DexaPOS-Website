@@ -236,7 +236,7 @@ function EnhancedPaymentsSection({
           <Button
             variant="outline"
             size="sm"
-            className="rounded-xl border-border/60 bg-background/80 hover:bg-background"
+            className="rounded-full border-0 bg-muted/60 shadow-none hover:bg-muted"
             onClick={onAdjustTip}
           >
             <DollarSign className="h-3.5 w-3.5 mr-1.5" />
@@ -273,31 +273,26 @@ function SectionCard({
   className?: string;
   action?: React.ReactNode;
 }) {
+  // A section, not a card: no border, no shadow, no gradient, no boxed icon.
+  // The heading carries the brand blue exactly as on the dashboard Overview,
+  // and a hairline above each section does the separating. The old "SECTION"
+  // eyebrow was pure noise — the title already says what this is.
   return (
-    <div
+    <section
       className={cn(
-        "overflow-hidden rounded-2xl border border-border/60 bg-card/95 shadow-[0_16px_40px_-24px_rgba(15,23,42,0.35)] backdrop-blur-sm",
+        "border-t border-border/60 px-1 py-7 first:border-t-0 first:pt-1",
         className
       )}
     >
-      <div className="flex items-center justify-between gap-3 border-b border-border/60 bg-gradient-to-r from-muted/70 via-background to-background px-5 py-4">
-        <div className="flex min-w-0 items-center gap-3">
-          {icon && (
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border/60 bg-background/80 text-muted-foreground shadow-sm">
-              {icon}
-            </span>
-          )}
-          <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-              Section
-            </p>
-            <h3 className="truncate text-sm font-semibold text-foreground">{title}</h3>
-          </div>
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2 text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]">
+          {icon && <span className="shrink-0">{icon}</span>}
+          <h3 className="truncate">{title}</h3>
         </div>
         {action && <div className="shrink-0">{action}</div>}
       </div>
-      <div className="p-5">{children}</div>
-    </div>
+      <div className="mt-4">{children}</div>
+    </section>
   );
 }
 
@@ -310,16 +305,16 @@ function MetaChip({
   label: string;
   value: string | React.ReactNode;
 }) {
+  // Just a label over its value. No box, no tinted icon tile — the icon sits
+  // inline with the label at muted weight so the value is what reads.
   return (
-    <div className="flex items-center gap-3 rounded-2xl border border-border/60 bg-background/80 px-4 py-3 text-sm shadow-sm backdrop-blur-sm">
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-muted/70 text-muted-foreground">
-        {icon}
-      </span>
-      <div className="min-w-0">
-        <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground leading-none">
-          {label}
-        </p>
-        <div className="truncate font-medium leading-tight text-foreground">{value}</div>
+    <div className="min-w-0 text-sm">
+      <p className="flex items-center gap-1.5 text-xs font-normal text-muted-foreground">
+        <span className="shrink-0 [&_svg]:h-3.5 [&_svg]:w-3.5">{icon}</span>
+        {label}
+      </p>
+      <div className="mt-1 truncate font-medium leading-tight text-foreground">
+        {value}
       </div>
     </div>
   );
@@ -338,54 +333,35 @@ function HeroStatCard({
   icon: React.ReactNode;
   tone?: "neutral" | "primary" | "success" | "warning";
 }) {
-  const toneStyles = {
-    neutral:
-      "border-border/60 bg-background/85 text-foreground",
-    primary:
-      "border-primary/15 bg-primary/5 text-foreground",
-    success:
-      "border-emerald-200/70 bg-emerald-50/80 text-foreground dark:border-emerald-900/40 dark:bg-emerald-950/20",
-    warning:
-      "border-amber-200/70 bg-amber-50/80 text-foreground dark:border-amber-900/40 dark:bg-amber-950/20",
-  };
-
-  const iconStyles = {
-    neutral: "border-border/60 bg-muted/70 text-muted-foreground",
-    primary: "border-primary/15 bg-primary/10 text-primary",
-    success: "border-emerald-200/70 bg-emerald-100 text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-900/30 dark:text-emerald-400",
-    warning: "border-amber-200/70 bg-amber-100 text-amber-700 dark:border-amber-900/40 dark:bg-amber-900/30 dark:text-amber-400",
+  // Tone now colors the figure alone. Previously each stat was a tinted,
+  // bordered box with a bordered icon tile inside it — three nested boxes to
+  // show one number. The number itself is the thing worth looking at.
+  const valueStyles = {
+    neutral: "text-foreground",
+    primary: "text-foreground",
+    success: "text-emerald-600 dark:text-emerald-400",
+    warning: "text-amber-600 dark:text-amber-400",
   };
 
   return (
-    <div
-      className={cn(
-        "rounded-2xl border px-4 py-4 shadow-sm backdrop-blur-sm",
-        toneStyles[tone]
-      )}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-            {label}
-          </p>
-          <div className="mt-2 text-lg font-semibold tracking-tight text-foreground break-words">
-            {value}
-          </div>
-          {description && (
-            <div className="mt-1 text-xs text-muted-foreground break-words">
-              {description}
-            </div>
-          )}
-        </div>
-        <span
-          className={cn(
-            "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border",
-            iconStyles[tone]
-          )}
-        >
-          {icon}
-        </span>
+    <div className="min-w-0">
+      <p className="flex items-center gap-1.5 text-xs font-normal text-muted-foreground">
+        <span className="shrink-0 [&_svg]:h-3.5 [&_svg]:w-3.5">{icon}</span>
+        {label}
+      </p>
+      <div
+        className={cn(
+          "mt-1 text-[1.375rem] font-medium leading-tight tracking-[-0.02em] break-words",
+          valueStyles[tone]
+        )}
+      >
+        {value}
       </div>
+      {description && (
+        <div className="mt-1 text-xs text-muted-foreground break-words">
+          {description}
+        </div>
+      )}
     </div>
   );
 }
@@ -585,7 +561,7 @@ function EnhancedItemsSection({
               )}
 
               {/* Items in this group */}
-              <div className="space-y-0 divide-y">
+              <div className="space-y-0 divide-y divide-border/50">
                 {group.items.map((item) => (
                   <EnhancedItemRow
                     key={item.id}
@@ -1146,17 +1122,19 @@ export function OrderDetailSheet({
       <BottomSheet open={open} onOpenChange={onOpenChange} elevated={elevated}>
         <BottomSheetContent
           height="95"
-          className="border-x-0 border-t border-border/60 bg-gradient-to-b from-background via-background to-muted/20 sm:inset-x-4 sm:bottom-4 sm:mx-auto sm:h-[calc(100dvh-2rem)] sm:max-w-6xl sm:rounded-[28px] sm:border"
+          // overflow-hidden is what actually clips the footer to the rounded
+          // corners: the sheet only rounds its top by default, and the footer's
+          // opaque background filled the bottom corners square.
+          className="border-x-0 border-t border-border/60 bg-background sm:inset-x-4 sm:bottom-4 sm:mx-auto sm:h-[calc(100dvh-2rem)] sm:max-w-6xl sm:overflow-hidden sm:rounded-[32px] sm:border"
         >
           {/* ─── Header (non-scrollable part — capped at half the sheet, scrolls internally if it overflows) ─── */}
-          <BottomSheetHeader className="max-h-[50%] min-h-0 shrink-0 overflow-y-auto border-b border-border/60 bg-gradient-to-b from-muted/60 via-background to-background px-4 pb-6 pt-2 sm:px-8">
+          <BottomSheetHeader className="max-h-[50%] min-h-0 shrink-0 overflow-y-auto border-b border-border/60 bg-background px-4 pb-6 pt-2 sm:px-8">
             <div className="space-y-6">
               <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
                 <div className="min-w-0 space-y-4 pr-10 xl:pr-0">
+                  {/* The "Order Details" chip said nothing the title doesn't —
+                      dropped so the two status badges read immediately. */}
                   <div className="flex flex-wrap items-center gap-2">
-                    <Badge className="rounded-full border border-border/60 bg-background/90 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground shadow-sm hover:bg-background">
-                      Order Details
-                    </Badge>
                     <OrderStatusBadge status={displayOrder.status} prefix="Order" />
                     <PaymentStatusBadge status={displayOrder.payment_status} prefix="Payment" />
                   </div>
@@ -1174,7 +1152,7 @@ export function OrderDetailSheet({
                         <Clock className="h-3.5 w-3.5" />
                         {time}
                       </span>
-                      <span className="flex items-center gap-1.5 rounded-full border border-border/60 bg-background/80 px-3 py-1 text-xs font-medium text-foreground shadow-sm">
+                      <span className="flex items-center gap-1.5 text-foreground">
                         {getOrderTypeIcon(displayOrder.order_type)}
                         {formatOrderType(displayOrder.order_type)}
                       </span>
@@ -1197,26 +1175,19 @@ export function OrderDetailSheet({
                     <Button
                       variant="outline"
                       size="sm"
-                      className="flex-1 rounded-xl border-[#0C4FD1]/20 bg-[#0C4FD1]/5 text-[#0C4FD1] hover:bg-[#0C4FD1]/10 xl:flex-none"
+                      className="flex-1 rounded-full border-0 bg-[#0C4FD1]/10 text-[#0C4FD1] shadow-none hover:bg-[#0C4FD1]/15 xl:flex-none"
                       onClick={handleViewOnFloorPlan}
                     >
                       <MapPin className="mr-1.5 h-4 w-4" />
                       View on Floor Plan
                     </Button>
                   ) : null}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="flex-1 rounded-xl border-border/60 bg-background/80 hover:bg-background xl:flex-none"
-                    onClick={() => setIsSendReceiptOpen(true)}
-                  >
-                    <Mail className="mr-1.5 h-4 w-4" />
-                    Send Receipt
-                  </Button>
                 </div>
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {/* Hero stats. Boxes gone, so a hairline above the row and
+                  generous column gaps do the separating instead. */}
+              <div className="grid gap-x-10 gap-y-5 border-t border-border/60 pt-5 sm:grid-cols-2 lg:grid-cols-3">
                 <HeroStatCard
                   label="Order Total"
                   value={formatCurrency(totalAmount)}
@@ -1256,32 +1227,30 @@ export function OrderDetailSheet({
 
           {/* ─── Body ─── */}
           <BottomSheetBody className="bg-transparent px-4 py-6 sm:px-8">
-            <div className="space-y-6">
+            <div>
               {metaChips.length === 0 && isMetadataLoading ? (
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                  <Skeleton className="h-16 rounded-2xl" />
-                  <Skeleton className="h-16 rounded-2xl" />
-                  <Skeleton className="h-16 rounded-2xl" />
+                <div className="grid grid-cols-1 gap-x-10 gap-y-5 pb-2 sm:grid-cols-2 xl:grid-cols-3">
+                  <Skeleton className="h-10" />
+                  <Skeleton className="h-10" />
+                  <Skeleton className="h-10" />
                 </div>
               ) : metaChips.length > 0 ? (
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                <div className="grid grid-cols-1 gap-x-10 gap-y-5 pb-2 sm:grid-cols-2 xl:grid-cols-3">
                   {metaChips.map((chip, i) => (
                     <MetaChip key={i} {...chip} />
                   ))}
                 </div>
               ) : null}
 
+              {/* Internal note. Keeps its amber tint (it's a genuine callout)
+                  but loses the border, shadow and boxed icon. */}
               {notes && (
-                <div className="flex items-start gap-3 rounded-2xl border border-amber-200/80 bg-amber-50/80 px-4 py-4 shadow-sm dark:border-amber-800 dark:bg-amber-950/20">
-                  <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
-                    <MessageSquare className="h-4 w-4" />
-                  </span>
-                  <div>
-                    <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-700 dark:text-amber-400">
-                      Internal Note
-                    </p>
-                    <p className="text-sm text-foreground">&ldquo;{notes}&rdquo;</p>
-                  </div>
+                <div className="mt-6 rounded-2xl bg-amber-50 px-4 py-3.5 dark:bg-amber-950/20">
+                  <p className="flex items-center gap-1.5 text-xs font-medium text-amber-700 dark:text-amber-400">
+                    <MessageSquare className="h-3.5 w-3.5 shrink-0" />
+                    Internal note
+                  </p>
+                  <p className="mt-1 text-sm text-foreground">{notes}</p>
                 </div>
               )}
 
@@ -1657,10 +1626,12 @@ export function OrderDetailSheet({
           </BottomSheetBody>
 
           {/* ─── Footer ─── */}
-          <BottomSheetFooter className="border-t border-border/60 bg-background/90 px-6 py-5 backdrop-blur-sm sm:px-8">
+          {/* Send Receipt lives here rather than in the header, where it sat
+              under the close button and collided with it. */}
+          <BottomSheetFooter className="border-t border-border/60 bg-background px-6 py-5 sm:px-8">
             <div className="flex w-full flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <Button
-                className="w-full rounded-xl lg:w-auto"
+                className="w-full rounded-full lg:w-auto"
                 size="default"
                 onClick={handleViewMoreDetails}
               >
@@ -1670,7 +1641,7 @@ export function OrderDetailSheet({
               <div className="flex flex-wrap items-center gap-2 lg:justify-end">
                 <Button
                   variant="outline"
-                  className="rounded-xl border-border/60 bg-background/80 hover:bg-background"
+                  className="rounded-full border-0 bg-muted/60 shadow-none hover:bg-muted"
                   size="sm"
                   onClick={() => setIsSendReceiptOpen(true)}
                 >
@@ -1680,7 +1651,7 @@ export function OrderDetailSheet({
                 {!readOnly && canShowAdjustTip && (
                   <Button
                     variant="outline"
-                    className="rounded-xl border-border/60 bg-background/80 hover:bg-background"
+                    className="rounded-full border-0 bg-muted/60 shadow-none hover:bg-muted"
                     size="sm"
                     onClick={() => setIsAdjustTipOpen(true)}
                   >

@@ -20,6 +20,31 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
+
+/**
+ * Figures belong on the right so decimal points line up down a column, while
+ * labels stay left. Columns can state this explicitly via
+ * `meta: { numeric: true }`; absent that, the header text is matched against
+ * the money/count/duration wording the reports already use, so the eight
+ * existing report definitions get the right alignment without each being
+ * rewritten.
+ */
+const NUMERIC_HEADER =
+  /(sales|amount|total|orders|qty|quantity|count|tax|tips?|refunds?|discounts?|revenue|avg|average|price|minutes|min\)|threshold|turns|covers|rate|%|bumped)/i
+
+/** Timestamp columns read as text, so they must not be caught by "time". */
+const TEXT_HEADER = /(date|name|reason|item|station|server|staff|by$|method|type)/i
+
+function isNumericColumn(columnDef: ColumnDef<any, any>): boolean {
+  const meta = columnDef.meta as { numeric?: boolean } | undefined
+  if (typeof meta?.numeric === 'boolean') return meta.numeric
+
+  const header = columnDef.header
+  if (typeof header !== 'string') return false
+  if (TEXT_HEADER.test(header)) return false
+  return NUMERIC_HEADER.test(header)
+}
 
 interface ReportDataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[]
@@ -51,17 +76,29 @@ export function ReportDataTable<TData, TValue>({
     },
   })
 
+  const pageIndex = table.getState().pagination.pageIndex
+  const pageCount = table.getPageCount()
+
   return (
     <div>
-      <div className="rounded-md border border-gray-200 dark:border-gray-700 overflow-x-auto">
+      {/* No outer border: the table sits inside a report panel that already
+          provides the one visual boundary. Columns are separated by hairlines
+          under each row, the way the Overview lists read. */}
+      <div className="-mx-2 overflow-x-auto px-2">
         <Table className="min-w-max">
-          <TableHeader className="bg-[#0A5C9E] dark:bg-[#0A4A7E]">
+          <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
-              <TableRow key={headerGroup.id} className="hover:bg-transparent border-none">
+              <TableRow
+                key={headerGroup.id}
+                className="border-b border-border/60 hover:bg-transparent"
+              >
                 {headerGroup.headers.map((header) => (
                   <TableHead
                     key={header.id}
-                    className="text-white font-semibold py-3"
+                    className={cn(
+                      'h-auto py-2.5 text-[0.8125rem] font-normal text-muted-foreground',
+                      isNumericColumn(header.column.columnDef) && 'text-right'
+                    )}
                   >
                     {header.isPlaceholder
                       ? null
@@ -76,28 +113,30 @@ export function ReportDataTable<TData, TValue>({
           </TableHeader>
           <TableBody>
             {loading ? (
-              <TableRow>
+              <TableRow className="hover:bg-transparent">
                 <TableCell
                   colSpan={columns.length}
-                  className="h-24 text-center text-gray-500 dark:text-gray-400"
+                  className="h-24 text-center text-sm text-muted-foreground"
                 >
                   Loading...
                 </TableCell>
               </TableRow>
             ) : table.getRowModel().rows?.length ? (
-              table.getRowModel().rows.map((row, index) => (
+              table.getRowModel().rows.map((row) => (
                 <TableRow
                   key={row.id}
                   data-state={row.getIsSelected() && 'selected'}
-                  className={
-                    (index % 2 === 0 
-                      ? 'bg-white dark:bg-slate-900' 
-                      : 'bg-gray-50 dark:bg-slate-800/50'
-                    ) + ' hover:bg-gray-100 dark:hover:bg-slate-800'
-                  }
+                  className="border-b border-border/60 transition-colors last:border-0 hover:bg-muted/50"
                 >
                   {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id} className="py-3 text-gray-900 dark:text-gray-100">
+                    <TableCell
+                      key={cell.id}
+                      className={cn(
+                        'py-3 text-sm',
+                        isNumericColumn(cell.column.columnDef) &&
+                          'text-right tabular-nums'
+                      )}
+                    >
                       {flexRender(
                         cell.column.columnDef.cell,
                         cell.getContext()
@@ -107,10 +146,10 @@ export function ReportDataTable<TData, TValue>({
                 </TableRow>
               ))
             ) : (
-              <TableRow>
+              <TableRow className="hover:bg-transparent">
                 <TableCell
                   colSpan={columns.length}
-                  className="h-24 text-center text-gray-500 dark:text-gray-400"
+                  className="h-24 text-center text-sm text-muted-foreground"
                 >
                   No results.
                 </TableCell>
@@ -119,26 +158,36 @@ export function ReportDataTable<TData, TValue>({
           </TableBody>
         </Table>
       </div>
-      <div className="flex items-center justify-end space-x-2 py-4">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => table.previousPage()}
-          disabled={!table.getCanPreviousPage()}
-          className="border-[#0A5C9E] dark:border-[#0A7AB8] text-[#0A5C9E] dark:text-[#0A7AB8] hover:bg-[#0A5C9E]/10 dark:hover:bg-[#0A7AB8]/20 disabled:border-gray-300 dark:disabled:border-gray-600 disabled:text-gray-400 dark:disabled:text-gray-500 disabled:hover:bg-transparent dark:disabled:hover:bg-transparent"
-        >
-          Previous
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => table.nextPage()}
-          disabled={!table.getCanNextPage()}
-          className="border-[#0A5C9E] dark:border-[#0A7AB8] text-[#0A5C9E] dark:text-[#0A7AB8] hover:bg-[#0A5C9E]/10 dark:hover:bg-[#0A7AB8]/20 disabled:border-gray-300 dark:disabled:border-gray-600 disabled:text-gray-400 dark:disabled:text-gray-500 disabled:hover:bg-transparent dark:disabled:hover:bg-transparent"
-        >
-          Next
-        </Button>
-      </div>
+
+      {/* Pagination hides itself on a single page rather than showing two
+          permanently-disabled buttons. */}
+      {pageCount > 1 && (
+        <div className="flex items-center justify-between gap-3 pt-4">
+          <p className="text-[0.8125rem] text-muted-foreground tabular-nums">
+            Page {pageIndex + 1} of {pageCount}
+          </p>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => table.previousPage()}
+              disabled={!table.getCanPreviousPage()}
+              className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+            >
+              Previous
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => table.nextPage()}
+              disabled={!table.getCanNextPage()}
+              className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+            >
+              Next
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

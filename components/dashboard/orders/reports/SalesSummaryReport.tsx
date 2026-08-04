@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react'
 import { useSalesSummaryReport } from '@/app/dashboard/hooks/useOrderAnalytics'
 import { ReportDataTable } from './ReportDataTable'
 import { ReportToolbar } from './ReportToolbar'
-import { SummaryCard } from './SummaryCard'
+import { SummaryCard, SummaryCardRow } from './SummaryCard'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Empty } from '@/components/ui/empty'
 import { formatReportDateRange } from '@/utils/export'
@@ -149,25 +149,9 @@ export function SalesSummaryReport({ dateFrom, dateTo, merchantName, locationNam
   ]
 
   return (
-    <div className="space-y-4">
-      <ReportToolbar
-        searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
-        filteredCount={filteredData.length}
-        totalCount={data.length}
-        data={filteredData}
-        exportColumns={exportColumns}
-        filename={`Sales Summary - ${formatReportDateRange(dateFrom, dateTo)}`}
-        searchPlaceholder="Search by date (e.g., Mon, Jan 15)..."
-        merchantName={merchantName}
-        locationName={locationName}
-        dateFrom={dateFrom}
-        dateTo={dateTo}
-        summaryCards={summaryCardsData}
-      />
-
+    <div className="space-y-6">
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <SummaryCardRow>
         <SummaryCard
           label="Total Net Sales"
           value={formatCurrency(totalNetSales)}
@@ -183,7 +167,23 @@ export function SalesSummaryReport({ dateFrom, dateTo, merchantName, locationNam
           value={formatCurrency(avgOrderValue)}
           icon={<TrendingUp className="h-5 w-5" />}
         />
-      </div>
+      </SummaryCardRow>
+
+      <ReportToolbar
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        filteredCount={filteredData.length}
+        totalCount={data.length}
+        data={filteredData}
+        exportColumns={exportColumns}
+        filename={`Sales Summary - ${formatReportDateRange(dateFrom, dateTo)}`}
+        searchPlaceholder="Search by date (e.g., Mon, Jan 15)..."
+        merchantName={merchantName}
+        locationName={locationName}
+        dateFrom={dateFrom}
+        dateTo={dateTo}
+        summaryCards={summaryCardsData}
+      />
 
       <ReportDataTable columns={columns} data={filteredData} />
     </div>

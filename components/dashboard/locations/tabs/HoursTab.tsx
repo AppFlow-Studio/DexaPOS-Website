@@ -2,8 +2,12 @@
 
 import { useState } from 'react'
 import { Location, BusinessHours, DayHours, DEFAULT_BUSINESS_HOURS } from '@/types/merchant_locations'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import {
+    LocationPanelSection,
+    roundedSelectContent,
+    pillButton,
+} from '../LocationPanelSection'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -168,26 +172,24 @@ export function HoursTab({ location, onUpdate, setHasUnsavedChanges }: HoursTabP
 
     return (
         <div className="space-y-4">
-            <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-                    <div>
-                        <CardTitle className="text-base">Business Hours</CardTitle>
-                        <CardDescription>Set when this location is open for business</CardDescription>
-                    </div>
-                    {!isEditing && (
-                        <Button variant="ghost" size="sm" onClick={handleStartEdit}>
-                            <Edit className="h-4 w-4 mr-1.5" />
+            <LocationPanelSection
+                icon={Clock}
+                title="Business Hours"
+                description="Set when this location is open for business"
+                action={
+                    !isEditing && (
+                        <Button variant="ghost" size="sm" className={pillButton} onClick={handleStartEdit}>
+                            <Edit className="h-4 w-4" />
                             Edit
                         </Button>
-                    )}
-                </CardHeader>
-
-                <CardContent>
+                    )
+                }
+            >
                     {isEditing ? (
                         <div className="space-y-2 animate-in fade-in duration-200">
                             {/* Toolbar */}
                             <div className="flex justify-end mb-3">
-                                <Button variant="outline" size="sm" onClick={handleCopyToAll} className="gap-1.5">
+                                <Button variant="outline" size="sm" onClick={handleCopyToAll} className={pillButton}>
                                     <Copy className="h-3.5 w-3.5" />
                                     Copy Monday to all
                                 </Button>
@@ -212,8 +214,8 @@ export function HoursTab({ location, onUpdate, setHasUnsavedChanges }: HoursTabP
                                     <div
                                         key={key}
                                         className={cn(
-                                            'rounded-xl border px-4 py-3 transition-colors',
-                                            day.is_closed ? 'bg-muted/40' : 'bg-card'
+                                            'rounded-xl px-4 py-3 transition-colors',
+                                            day.is_closed ? 'bg-muted/60' : 'bg-muted/30'
                                         )}
                                     >
                                         {/* Row 1: day name + open/closed toggle */}
@@ -225,7 +227,7 @@ export function HoursTab({ location, onUpdate, setHasUnsavedChanges }: HoursTabP
                                                 {isOvernight && !day.is_closed && (
                                                     <Badge
                                                         variant="outline"
-                                                        className="text-[10px] text-orange-600 border-orange-300 bg-orange-50 gap-1 px-1.5 h-5"
+                                                        className="rounded-full text-[10px] text-orange-600 border-transparent bg-orange-50 dark:bg-orange-900/20 gap-1 px-2 h-5"
                                                     >
                                                         <Moon className="h-2.5 w-2.5" />
                                                         Overnight
@@ -254,10 +256,10 @@ export function HoursTab({ location, onUpdate, setHasUnsavedChanges }: HoursTabP
                                                         handleDayChange(key, { open: value })
                                                     }
                                                 >
-                                                    <SelectTrigger className="flex-1 min-w-27.5 h-8 text-sm">
+                                                    <SelectTrigger className="flex-1 min-w-27.5 h-9 rounded-xl border-transparent bg-background shadow-none text-sm">
                                                         <SelectValue />
                                                     </SelectTrigger>
-                                                    <SelectContent>
+                                                    <SelectContent className={roundedSelectContent}>
                                                         {TIME_OPTIONS.map((opt) => (
                                                             <SelectItem key={opt.value} value={opt.value}>
                                                                 {opt.label}
@@ -274,10 +276,10 @@ export function HoursTab({ location, onUpdate, setHasUnsavedChanges }: HoursTabP
                                                         handleDayChange(key, { close: value })
                                                     }
                                                 >
-                                                    <SelectTrigger className="flex-1 min-w-27.5 h-8 text-sm">
+                                                    <SelectTrigger className="flex-1 min-w-27.5 h-9 rounded-xl border-transparent bg-background shadow-none text-sm">
                                                         <SelectValue />
                                                     </SelectTrigger>
-                                                    <SelectContent>
+                                                    <SelectContent className={roundedSelectContent}>
                                                         {closeOptions.map((opt) => (
                                                             <SelectItem key={opt.value} value={opt.value}>
                                                                 {opt.label}
@@ -306,15 +308,15 @@ export function HoursTab({ location, onUpdate, setHasUnsavedChanges }: HoursTabP
                             })}
 
                             {/* Save / Cancel */}
-                            <div className="flex items-center gap-2 pt-2">
-                                <Button onClick={handleSave} disabled={isSaving} size="sm">
+                            <div className="flex flex-wrap items-center gap-2 pt-2">
+                                <Button onClick={handleSave} disabled={isSaving} size="sm" className={pillButton}>
                                     {isSaving
-                                        ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
-                                        : <Save className="h-4 w-4 mr-1.5" />}
+                                        ? <Loader2 className="h-4 w-4 animate-spin" />
+                                        : <Save className="h-4 w-4" />}
                                     Save Hours
                                 </Button>
-                                <Button variant="ghost" size="sm" onClick={handleCancel} disabled={isSaving}>
-                                    <X className="h-4 w-4 mr-1.5" />
+                                <Button variant="ghost" size="sm" className={pillButton} onClick={handleCancel} disabled={isSaving}>
+                                    <X className="h-4 w-4" />
                                     Cancel
                                 </Button>
                             </div>
@@ -327,23 +329,23 @@ export function HoursTab({ location, onUpdate, setHasUnsavedChanges }: HoursTabP
                                 return (
                                     <div
                                         key={key}
-                                        className="flex items-center justify-between py-2.5 border-b last:border-0"
+                                        className="flex items-center justify-between py-2.5"
                                     >
-                                        <span className="text-sm font-medium w-28 shrink-0">{label}</span>
+                                        <span className="text-[0.9375rem] text-muted-foreground w-28 shrink-0">{label}</span>
                                         {day.is_closed ? (
-                                            <Badge variant="secondary" className="text-xs">Closed</Badge>
+                                            <Badge variant="secondary" className="rounded-full text-xs font-medium px-2.5 py-0.5">Closed</Badge>
                                         ) : (
                                             <div className="flex items-center gap-2">
                                                 {day.is_overnight && (
                                                     <Badge
                                                         variant="outline"
-                                                        className="text-xs text-orange-600 border-orange-300 bg-orange-50 gap-1 px-1.5"
+                                                        className="rounded-full text-xs text-orange-600 border-transparent bg-orange-50 dark:bg-orange-900/20 gap-1 px-2.5 py-0.5"
                                                     >
                                                         <Moon className="h-2.5 w-2.5" />
                                                         Overnight
                                                     </Badge>
                                                 )}
-                                                <span className="text-sm text-muted-foreground">
+                                                <span className="text-sm tabular-nums">
                                                     {formatTime(day.open)} – {formatTime(day.close)}
                                                     {day.is_overnight ? ' (next day)' : ''}
                                                 </span>
@@ -354,17 +356,14 @@ export function HoursTab({ location, onUpdate, setHasUnsavedChanges }: HoursTabP
                             })}
                         </div>
                     )}
-                </CardContent>
-            </Card>
+            </LocationPanelSection>
 
             {/* Weekly visual overview */}
             {!isEditing && (
-                <Card>
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-base">Weekly Overview</CardTitle>
-                        <CardDescription>Visual representation of operating hours</CardDescription>
-                    </CardHeader>
-                    <CardContent>
+                <LocationPanelSection
+                    title="Weekly Overview"
+                    description="Visual representation of operating hours"
+                >
                         <div className="grid grid-cols-7 gap-1">
                             {DAYS_OF_WEEK.map(({ key, short }) => {
                                 const day = getDayHours(key)
@@ -380,8 +379,8 @@ export function HoursTab({ location, onUpdate, setHasUnsavedChanges }: HoursTabP
 
                                 return (
                                     <div key={key} className="text-center">
-                                        <p className="text-xs font-medium mb-1">{short}</p>
-                                        <div className="h-24 bg-muted rounded relative overflow-hidden">
+                                        <p className="text-xs text-muted-foreground mb-1.5">{short}</p>
+                                        <div className="h-24 bg-muted rounded-lg relative overflow-hidden">
                                             {!day.is_closed && (
                                                 <>
                                                     <div
@@ -409,8 +408,7 @@ export function HoursTab({ location, onUpdate, setHasUnsavedChanges }: HoursTabP
                             <span>12 PM</span>
                             <span>12 AM</span>
                         </div>
-                    </CardContent>
-                </Card>
+                </LocationPanelSection>
             )}
         </div>
     )

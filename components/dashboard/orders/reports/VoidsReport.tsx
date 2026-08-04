@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react'
 import { useVoidsReport } from '@/app/dashboard/hooks/useOrderAnalytics'
 import { ReportDataTable } from './ReportDataTable'
 import { ReportToolbar } from './ReportToolbar'
-import { SummaryCard } from './SummaryCard'
+import { SummaryCard, SummaryCardRow } from './SummaryCard'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Empty } from '@/components/ui/empty'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -201,17 +201,28 @@ export function VoidsReport({
   ]
 
   return (
-    <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-      <TabsList>
-        <TabsTrigger value="voids">Voids ({data.voids?.length || 0})</TabsTrigger>
-        <TabsTrigger value="refunds">Refunds ({data.refunds?.length || 0})</TabsTrigger>
+    <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+      {/* Sub-tabs use the same segmented pill as the page-level tabs. */}
+      <TabsList className="inline-flex h-auto w-max gap-0.5 rounded-full bg-muted/70 p-1">
+        <TabsTrigger
+          value="voids"
+          className="shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-[0.8125rem] font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border"
+        >
+          Voids ({data.voids?.length || 0})
+        </TabsTrigger>
+        <TabsTrigger
+          value="refunds"
+          className="shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-[0.8125rem] font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border"
+        >
+          Refunds ({data.refunds?.length || 0})
+        </TabsTrigger>
       </TabsList>
 
       <TabsContent value="voids">
         {data.voids && data.voids.length > 0 ? (
-          <div className="space-y-4">
+          <div className="space-y-6">
             {/* Summary Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <SummaryCardRow>
               <SummaryCard
                 label="Total Voids"
                 value={totalVoids.toLocaleString()}
@@ -227,7 +238,7 @@ export function VoidsReport({
                 value={formatCurrency(totalVoids > 0 ? totalVoidAmount / totalVoids : 0)}
                 icon={<TrendingDown className="h-5 w-5" />}
               />
-            </div>
+            </SummaryCardRow>
 
             <ReportToolbar
               searchQuery={voidsSearchQuery}
@@ -253,9 +264,9 @@ export function VoidsReport({
 
       <TabsContent value="refunds">
         {data.refunds && data.refunds.length > 0 ? (
-          <div className="space-y-4">
+          <div className="space-y-6">
             {/* Summary Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <SummaryCardRow>
               <SummaryCard
                 label="Total Refunds"
                 value={totalRefunds.toLocaleString()}
@@ -271,7 +282,7 @@ export function VoidsReport({
                 value={formatCurrency(totalRefunds > 0 ? totalRefundAmount / totalRefunds : 0)}
                 icon={<TrendingDown className="h-5 w-5" />}
               />
-            </div>
+            </SummaryCardRow>
 
             <ReportToolbar
               searchQuery={refundsSearchQuery}

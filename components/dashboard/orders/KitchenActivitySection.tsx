@@ -1,14 +1,12 @@
 "use client";
 
 import * as React from "react";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import {
+  DetailCard,
+  DetailHeader,
+  DetailBody,
+} from "@/components/dashboard/orders/OrderDetailPrimitives";
 import { cn } from "@/lib/utils";
 import {
   Send,
@@ -116,7 +114,7 @@ function ItemRow({ item }: { item: OrderFullHistoryItem }) {
 
   if (reached.length === 0 && bumps.length === 0) {
     return (
-      <div className="rounded-lg border p-3">
+      <div className="rounded-lg px-2 py-3 transition-colors hover:bg-muted/50">
         <div className="flex items-center justify-between">
           <span className="font-medium text-sm">
             {item.quantity}× {item.item_name}
@@ -132,7 +130,7 @@ function ItemRow({ item }: { item: OrderFullHistoryItem }) {
   return (
     <div
       className={cn(
-        "rounded-lg border p-3 space-y-3",
+        "rounded-lg px-2 py-3 space-y-3 transition-colors hover:bg-muted/50",
         item.is_voided && "opacity-60"
       )}
     >
@@ -251,18 +249,17 @@ export function KitchenActivitySection({ items }: KitchenActivitySectionProps) {
   });
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">Kitchen Activity</CardTitle>
-        <CardDescription>
-          Per-item KDS lifecycle — sent, acknowledged, preparing, ready
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-3">
+    <DetailCard>
+      <DetailHeader
+        icon={ChefHat}
+        label="Kitchen Activity"
+        caption="Per-item KDS lifecycle — sent, acknowledged, preparing, ready"
+      />
+      <DetailBody className="-mx-2">
         {sorted.map((item) => (
           <ItemRow key={item.id} item={item} />
         ))}
-      </CardContent>
-    </Card>
+      </DetailBody>
+    </DetailCard>
   );
 }

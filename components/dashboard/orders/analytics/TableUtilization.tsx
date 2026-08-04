@@ -2,7 +2,6 @@
 
 import { ChartCard } from './ChartCard'
 import { DataTable } from '@/components/ui/data-table'
-import { Badge } from '@/components/ui/badge'
 import { LayoutGrid } from 'lucide-react'
 import type { ColumnDef } from '@tanstack/react-table'
 import type { TableUtilizationRow } from '@/types/analytics'
@@ -21,13 +20,6 @@ export function TableUtilization({ tables, isLoading }: TableUtilizationProps) {
     return `${mins}:${secs.toString().padStart(2, '0')}`
   }
 
-  // Determine RevPASH badge color based on threshold
-  const getRevPASHColor = (revpash: number): 'default' | 'secondary' | 'destructive' | 'outline' => {
-    if (revpash >= 75) return 'default' // Green-ish
-    if (revpash >= 50) return 'secondary' // Yellow-ish
-    return 'destructive' // Red
-  }
-
   const columns: ColumnDef<TableUtilizationRow>[] = [
     {
       accessorKey: 'table_name',
@@ -40,7 +32,7 @@ export function TableUtilization({ tables, isLoading }: TableUtilizationProps) {
       accessorKey: 'section_name',
       header: 'Section',
       cell: ({ row }) => (
-        <span className="text-sm text-slate-600 dark:text-slate-400">
+        <span className="text-sm text-muted-foreground">
           {row.getValue('section_name') || 'Unassigned'}
         </span>
       ),
@@ -76,11 +68,7 @@ export function TableUtilization({ tables, isLoading }: TableUtilizationProps) {
       header: 'RevPASH',
       cell: ({ row }) => {
         const value = (row.getValue('revpash') as number) ?? 0
-        return (
-          <Badge variant={getRevPASHColor(value)}>
-            ${value.toFixed(2)}
-          </Badge>
-        )
+        return <span className="tabular-nums">${value.toFixed(2)}</span>
       },
     },
     {

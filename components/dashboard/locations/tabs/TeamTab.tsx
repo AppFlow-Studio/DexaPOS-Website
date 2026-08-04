@@ -2,8 +2,13 @@
 
 import { useState } from 'react'
 import { Location, LocationMemberWithDetails, LocationInviteWithDetails } from '@/types/merchant_locations'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import {
+    LocationPanelSection,
+    roundedFields,
+    roundedSelectContent,
+    pillButton,
+} from '../LocationPanelSection'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -31,17 +36,18 @@ interface TeamTabProps {
     location: Location
 }
 
+// Tint alone carries the role; no border, so the badges read as soft fills.
 const ROLE_COLORS: Record<string, string> = {
-    'merchant.owner': 'bg-amber-100 text-amber-800 border-amber-300',
-    'merchant.admin': 'bg-purple-100 text-purple-800 border-purple-300',
-    'merchant.manager': 'bg-blue-100 text-blue-800 border-blue-300',
-    'merchant.shift_manager': 'bg-cyan-100 text-cyan-800 border-cyan-300',
-    'merchant.cashier': 'bg-green-100 text-green-800 border-green-300',
-    'merchant.server': 'bg-emerald-100 text-emerald-800 border-emerald-300',
-    'merchant.busser': 'bg-orange-100 text-orange-800 border-orange-300',
-    'merchant.cook': 'bg-red-100 text-red-800 border-red-300',
-    'merchant.line_cook': 'bg-rose-100 text-rose-800 border-rose-300',
-    'merchant.staff': 'bg-gray-100 text-gray-800 border-gray-300',
+    'merchant.owner': 'bg-amber-100 text-amber-800 border-transparent',
+    'merchant.admin': 'bg-purple-100 text-purple-800 border-transparent',
+    'merchant.manager': 'bg-blue-100 text-blue-800 border-transparent',
+    'merchant.shift_manager': 'bg-cyan-100 text-cyan-800 border-transparent',
+    'merchant.cashier': 'bg-green-100 text-green-800 border-transparent',
+    'merchant.server': 'bg-emerald-100 text-emerald-800 border-transparent',
+    'merchant.busser': 'bg-orange-100 text-orange-800 border-transparent',
+    'merchant.cook': 'bg-red-100 text-red-800 border-transparent',
+    'merchant.line_cook': 'bg-rose-100 text-rose-800 border-transparent',
+    'merchant.staff': 'bg-gray-100 text-gray-800 border-transparent',
 }
 
 export function TeamTab({ location }: TeamTabProps) {
@@ -95,36 +101,35 @@ export function TeamTab({ location }: TeamTabProps) {
 
     return (
         <div className="space-y-4">
-            <Card>
-                <CardHeader className="pb-3">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <CardTitle className="text-base flex items-center gap-2">
-                                <Users className="h-4 w-4" />
-                                Team Members
-                                {membersList.length > 0 && (
-                                    <Badge variant="secondary" className="ml-2">
-                                        {membersList.length}
-                                    </Badge>
-                                )}
-                            </CardTitle>
-                            <CardDescription>Staff assigned to this location</CardDescription>
-                        </div>
-                        <Button size="sm" onClick={() => setInviteOpen(true)}>
-                            <UserPlus className="h-4 w-4 mr-1" />
-                            Invite
-                        </Button>
-                    </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                    <div className="flex flex-col sm:flex-row gap-2">
+            <LocationPanelSection
+                icon={Users}
+                title={
+                    <span className="inline-flex items-center gap-2">
+                        Team Members
+                        {membersList.length > 0 && (
+                            <Badge variant="secondary" className="rounded-full text-xs font-medium px-2.5 py-0.5">
+                                {membersList.length}
+                            </Badge>
+                        )}
+                    </span>
+                }
+                description="Staff assigned to this location"
+                action={
+                    <Button size="sm" className={pillButton} onClick={() => setInviteOpen(true)}>
+                        <UserPlus className="h-4 w-4" />
+                        Invite
+                    </Button>
+                }
+            >
+                <div className="space-y-4">
+                    <div className={cn('flex flex-col sm:flex-row gap-2', roundedFields)}>
                         <div className="relative flex-1">
-                            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
                             <Input
                                 placeholder="Search by name or email..."
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
-                                className="pl-8"
+                                className="pl-9"
                             />
                         </div>
                         <div className="flex gap-2">
@@ -133,7 +138,7 @@ export function TeamTab({ location }: TeamTabProps) {
                                     <Filter className="h-4 w-4 mr-1" />
                                     <SelectValue placeholder="Role" />
                                 </SelectTrigger>
-                                <SelectContent>
+                                <SelectContent className={roundedSelectContent}>
                                     <SelectItem value="all">All Roles</SelectItem>
                                     {uniqueRoles.map((role) => (
                                         <SelectItem key={role} value={role}>
@@ -146,7 +151,7 @@ export function TeamTab({ location }: TeamTabProps) {
                                 <SelectTrigger className="w-[120px]">
                                     <SelectValue placeholder="Status" />
                                 </SelectTrigger>
-                                <SelectContent>
+                                <SelectContent className={roundedSelectContent}>
                                     <SelectItem value="all">All</SelectItem>
                                     <SelectItem value="active">Active</SelectItem>
                                     <SelectItem value="inactive">Inactive</SelectItem>
@@ -158,7 +163,7 @@ export function TeamTab({ location }: TeamTabProps) {
                     {membersLoading ? (
                         <div className="space-y-2">
                             {[1, 2, 3].map((i) => (
-                                <div key={i} className="flex items-center gap-3 p-3 border rounded-lg">
+                                <div key={i} className="flex items-center gap-3 p-3 rounded-xl bg-muted/40">
                                     <Skeleton className="h-10 w-10 rounded-full" />
                                     <div className="flex-1 space-y-2">
                                         <Skeleton className="h-4 w-32" />
@@ -179,8 +184,8 @@ export function TeamTab({ location }: TeamTabProps) {
                             }
                             action={
                                 membersList.length === 0 ? (
-                                    <Button size="sm" onClick={() => setInviteOpen(true)}>
-                                        <UserPlus className="h-4 w-4 mr-2" />
+                                    <Button size="sm" className={pillButton} onClick={() => setInviteOpen(true)}>
+                                        <UserPlus className="h-4 w-4" />
                                         Invite Member
                                     </Button>
                                 ) : null
@@ -193,8 +198,8 @@ export function TeamTab({ location }: TeamTabProps) {
                                     key={member.id}
                                     onClick={() => handleMemberClick(member)}
                                     className={cn(
-                                        "w-full flex items-center gap-3 p-3 border rounded-lg text-left",
-                                        "hover:bg-muted/50 transition-colors",
+                                        "w-full flex items-center gap-3 p-3 rounded-xl bg-muted/40 text-left",
+                                        "hover:bg-muted transition-colors",
                                         "animate-in fade-in slide-in-from-left-2 duration-200",
                                         !member.is_active && "opacity-60"
                                     )}
@@ -221,7 +226,10 @@ export function TeamTab({ location }: TeamTabProps) {
                                     </div>
                                     <Badge
                                         variant="outline"
-                                        className={cn("text-xs capitalize shrink-0", getRoleBadgeClass(member.role_code))}
+                                        className={cn(
+                                            "rounded-full text-xs font-medium px-2.5 py-0.5 capitalize shrink-0",
+                                            getRoleBadgeClass(member.role_code)
+                                        )}
                                     >
                                         {member.role_code?.split('.').pop()?.replace('_', ' ') ?? 'Staff'}
                                     </Badge>
@@ -230,26 +238,28 @@ export function TeamTab({ location }: TeamTabProps) {
                             ))}
                         </div>
                     )}
-                </CardContent>
-            </Card>
+                </div>
+            </LocationPanelSection>
 
             {pendingInvites.length > 0 && (
-                <Card>
-                    <CardHeader className="pb-3">
-                        <CardTitle className="text-base flex items-center gap-2">
-                            <Mail className="h-4 w-4" />
+                <LocationPanelSection
+                    icon={Mail}
+                    title={
+                        <span className="inline-flex items-center gap-2">
                             Pending Invitations
-                            <Badge variant="secondary">{pendingInvites.length}</Badge>
-                        </CardTitle>
-                        <CardDescription>Invitations waiting for response</CardDescription>
-                    </CardHeader>
-                    <CardContent>
+                            <Badge variant="secondary" className="rounded-full text-xs font-medium px-2.5 py-0.5">
+                                {pendingInvites.length}
+                            </Badge>
+                        </span>
+                    }
+                    description="Invitations waiting for response"
+                >
                         <div className="space-y-2">
                             {pendingInvites.map((invite, index) => (
                                 <div
                                     key={invite.id}
                                     className={cn(
-                                        "flex items-center gap-3 p-3 border rounded-lg border-dashed",
+                                        "flex items-center gap-3 p-3 rounded-xl border border-dashed",
                                         "animate-in fade-in slide-in-from-left-2 duration-200"
                                     )}
                                     style={{ animationDelay: `${index * 30}ms` }}
@@ -266,15 +276,17 @@ export function TeamTab({ location }: TeamTabProps) {
                                     </div>
                                     <Badge
                                         variant="outline"
-                                        className={cn("text-xs capitalize", getRoleBadgeClass(invite.role_code))}
+                                        className={cn(
+                                            "rounded-full text-xs font-medium px-2.5 py-0.5 capitalize",
+                                            getRoleBadgeClass(invite.role_code)
+                                        )}
                                     >
                                         {invite.role_code.split('.').pop()?.replace('_', ' ')}
                                     </Badge>
                                 </div>
                             ))}
                         </div>
-                    </CardContent>
-                </Card>
+                </LocationPanelSection>
             )}
 
             <StaffDetailSheet
@@ -284,12 +296,16 @@ export function TeamTab({ location }: TeamTabProps) {
                     setDetailOpen(open)
                     if (!open) setSelectedMemberId(undefined)
                 }}
+                elevated
             />
 
+            {/* Opened from inside the location detail Sheet, so it has to clear
+                the sheet's z-index or it renders behind the dimmed backdrop. */}
             <InviteUserWizard
                 open={inviteOpen}
                 onOpenChange={setInviteOpen}
                 defaultLocationId={location.id}
+                elevated
             />
         </div>
     )

@@ -1,6 +1,13 @@
 'use client'
 
 import { ChartCard } from './ChartCard'
+import {
+  AnalyticsSubLabel,
+  CHART_CURSOR_FILL,
+  CHART_GRID,
+  CHART_TICK,
+  ChartTooltipPanel,
+} from './AnalyticsPrimitives'
 import { DataTable } from '@/components/ui/data-table'
 import { ChartContainer, ChartTooltip, type ChartConfig } from '@/components/ui/chart'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend } from 'recharts'
@@ -72,24 +79,24 @@ export function StationPerformanceCard({
       accessorKey: 'manual_completed',
       header: 'Completed',
       cell: ({ row }) => (
-        <div className="flex items-center gap-2">
-          <span>{row.getValue('manual_completed')}</span>
-          <Badge variant="outline" className="text-xs">
+        <span className="tabular-nums">
+          {row.getValue('manual_completed') as number}
+          <span className="ml-2 text-muted-foreground">
             {(
               ((row.getValue('manual_completed') as number) /
                 ((row.getValue('total_items') as number) || 1)) *
               100
             ).toFixed(0)}
             %
-          </Badge>
-        </div>
+          </span>
+        </span>
       ),
     },
     {
       accessorKey: 'auto_bumped',
       header: 'Auto-Bumped',
       cell: ({ row }) => (
-        <Badge variant="secondary">{row.getValue('auto_bumped')}</Badge>
+        <span className="tabular-nums">{row.getValue('auto_bumped') as number}</span>
       ),
     },
     {
@@ -115,40 +122,34 @@ export function StationPerformanceCard({
           <div className="w-full h-[300px]">
             <ChartContainer config={chartConfig} className="aspect-auto w-full h-full">
                 <BarChart data={chartData} margin={{ left: 0, right: 10, top: 5, bottom: 20 }}>
-                  <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                  <CartesianGrid vertical={false} {...CHART_GRID} />
                   <XAxis
                     dataKey="name"
                     tickLine={false}
                     axisLine={false}
-                    tick={{ fontSize: 12 }}
+                    tick={CHART_TICK}
                   />
                   <YAxis
                     tickLine={false}
                     axisLine={false}
-                    tick={{ fontSize: 12 }}
+                    tick={CHART_TICK}
                   />
                   <ChartTooltip
-                    cursor={{ fill: 'rgba(0, 0, 0, 0.1)' }}
+                    cursor={{ fill: CHART_CURSOR_FILL }}
                     content={({ active, payload, label }) => {
                       if (active && payload && payload.length) {
                         return (
-                          <div className="bg-white dark:bg-slate-950 p-3 rounded border border-slate-200 dark:border-slate-700 shadow-lg">
-                            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2">
-                              {label}
-                            </p>
-                            <div className="space-y-1">
-                              {payload.map((item, index) => (
-                                <div key={index} className="flex items-center justify-between gap-2">
-                                  <span className="text-xs text-slate-700 dark:text-slate-300">
-                                    {item.name}:
-                                  </span>
-                                  <span className="text-xs font-bold text-slate-900 dark:text-slate-100">
-                                    {item.name === 'Avg Prep Time (min)' ? `${Number(item.value).toFixed(1)}m` : Number(item.value).toFixed(1)}
-                                  </span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
+                          <ChartTooltipPanel
+                            label={label}
+                            items={payload.map((item) => ({
+                              name: item.name,
+                              color: item.color,
+                              value:
+                                item.name === 'Avg Prep Time (min)'
+                                  ? `${Number(item.value).toFixed(1)}m`
+                                  : Number(item.value).toFixed(1),
+                            }))}
+                          />
                         )
                       }
                       return null
@@ -157,14 +158,19 @@ export function StationPerformanceCard({
                   <Bar dataKey="avg_prep_minutes" fill={COLORS.prepTime} name="Avg Prep Time (min)" />
                   <Bar dataKey="items_per_hour" fill={COLORS.completionRate} name="Items/Hour" />
                   <Bar dataKey="total_items" fill={COLORS.itemsProcessed} name="Total Items" />
-                  <Legend />
+                  <Legend
+                    iconType="circle"
+                    formatter={(value) => (
+                      <span className="text-[0.8125rem] text-muted-foreground">{value}</span>
+                    )}
+                  />
                 </BarChart>
             </ChartContainer>
           </div>
 
           {/* Detail Table */}
           <div>
-            <p className="text-xs font-semibold mb-3 text-muted-foreground">Detailed Breakdown</p>
+            <AnalyticsSubLabel>Detailed breakdown</AnalyticsSubLabel>
             <DataTable columns={columns} data={stations} tableClassName="min-w-[560px]" />
           </div>
         </div>

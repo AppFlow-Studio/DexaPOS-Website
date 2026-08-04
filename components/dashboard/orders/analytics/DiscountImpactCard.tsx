@@ -1,6 +1,7 @@
 'use client'
 
 import { ChartCard } from './ChartCard'
+import { AnalyticsSubLabel, StatRow, StatTile } from './AnalyticsPrimitives'
 import { Badge } from '@/components/ui/badge'
 import { ChartContainer, ChartTooltip, type ChartConfig } from '@/components/ui/chart'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Cell } from 'recharts'
@@ -43,41 +44,26 @@ export function DiscountImpactCard({ data, isLoading }: DiscountImpactCardProps)
     >
       {data && (
         <>
-          {/* Stat boxes – DexaPOS themed with dark mode support */}
-          <div className="mt-4 space-y-3">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div className="bg-gray-50 dark:bg-slate-800/50 border border-gray-200 dark:border-gray-700 p-2 rounded space-y-1">
-                <p className="text-xs text-gray-500 dark:text-gray-400">Total Discounts</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">{formatCurrency(data.totalDiscounts)}</p>
-              </div>
-              <div className="bg-gray-50 dark:bg-slate-800/50 border border-gray-200 dark:border-gray-700 p-2 rounded space-y-1">
-                <p className="text-xs text-gray-500 dark:text-gray-400">Discounted Orders</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {data.discountedOrderCount} / {data.totalOrderCount}
-                </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  {data.discountedOrderPercent.toFixed(1)}%
-                </p>
-              </div>
-            </div>
-
-            {/* Highlight box – Dexa blue with dark mode variant */}
-            <div className="bg-[#0A5C9E]/10 dark:bg-[#0A7AB8]/20 border border-[#0A5C9E]/20 dark:border-[#0A7AB8]/30 p-2 rounded">
-              <p className="text-xs text-gray-500 dark:text-gray-400">Avg Discount per Order</p>
-              <p className="text-lg font-semibold text-[#0A5C9E] dark:text-[#0A7AB8]">
-                {formatCurrency(data.avgDiscountPerOrder)}
-              </p>
-            </div>
-          </div>
+          <StatRow columns={3}>
+            <StatTile
+              label="Total Discounts"
+              value={formatCurrency(data.totalDiscounts)}
+            />
+            <StatTile
+              label="Discounted Orders"
+              value={`${data.discountedOrderCount} / ${data.totalOrderCount}`}
+              meta={`${data.discountedOrderPercent.toFixed(1)}% of orders`}
+            />
+            <StatTile
+              label="Avg Discount per Order"
+              value={formatCurrency(data.avgDiscountPerOrder)}
+              accent="brand"
+            />
+          </StatRow>
 
           {data.bySource.length > 0 && (
-            <div className="mt-6">
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-xs font-semibold text-gray-900 dark:text-white">By Source</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  {data.bySource.reduce((sum, s) => sum + s.amount, 0) > 0 ? '' : 'No data'}
-                </p>
-              </div>
+            <div className="mt-8">
+              <AnalyticsSubLabel>By source</AnalyticsSubLabel>
 
               <div className="w-full h-[240px]">
                 <ChartContainer config={chartConfig} className="aspect-auto w-full h-full">
@@ -90,17 +76,17 @@ export function DiscountImpactCard({ data, isLoading }: DiscountImpactCardProps)
                         horizontal={false} 
                         strokeDasharray="3 3" 
                         vertical={false}
-                        stroke="hsl(var(--border))"
+                        stroke="var(--border)"
                       />
                       <XAxis
                         type="number"
-                        tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }}
+                        tick={{ fontSize: 12, fill: 'var(--muted-foreground)' }}
                         tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
                       />
                       <YAxis
                         type="category"
                         dataKey="source"
-                        tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+                        tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }}
                         width={105}
                         tickFormatter={(value) => {
                           const formatted = String(value)
@@ -112,25 +98,25 @@ export function DiscountImpactCard({ data, isLoading }: DiscountImpactCardProps)
                         }}
                       />
                       <ChartTooltip
-                        cursor={{ fill: 'hsl(var(--muted)/0.3)' }}
+                        cursor={{ fill: 'color-mix(in srgb, var(--muted) 40%, transparent)' }}
                         content={({ active, payload }) => {
                           if (active && payload && payload.length) {
                             const item = payload[0]
                             const total = data.bySource.reduce((sum, s) => sum + s.amount, 0)
                             const percent = ((Number(item.value) / total) * 100).toFixed(1)
                             return (
-                              <div className="bg-white dark:bg-slate-900 p-3 rounded-lg border border-gray-200 dark:border-gray-700 shadow-lg">
-                                <p className="text-xs font-semibold text-gray-900 dark:text-white mb-1">
+                              <div className="rounded-xl border bg-popover p-3 text-popover-foreground shadow-lg">
+                                <p className="mb-1 text-[0.8125rem] font-medium text-muted-foreground">
                                   {String(item.payload.source)
                                     .replace(/_/g, ' ')
                                     .split(' ')
                                     .map(w => w.charAt(0).toUpperCase() + w.slice(1))
                                     .join(' ')}
                                 </p>
-                                <p className="text-sm font-bold text-gray-700 dark:text-gray-300">
+                                <p className="text-base font-medium tabular-nums">
                                   {formatCurrency(Number(item.value))}
                                 </p>
-                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                <p className="mt-1 text-[0.8125rem] text-muted-foreground">
                                   {percent}% of total
                                 </p>
                               </div>
@@ -149,24 +135,29 @@ export function DiscountImpactCard({ data, isLoading }: DiscountImpactCardProps)
               </div>
 
               {/* Legend */}
-              <div className="mt-4 grid grid-cols-2 gap-2">
+              <div className="mt-4">
                 {data.bySource.map((source, idx) => {
                   const total = data.bySource.reduce((sum, s) => sum + s.amount, 0)
                   const percent = ((source.amount / total) * 100).toFixed(1)
                   return (
-                    <div key={idx} className="flex items-center gap-2 text-xs">
-                      <div
-                        className="w-3 h-3 rounded-sm flex-shrink-0"
-                        style={{ backgroundColor: COLORS[idx % COLORS.length] }}
-                      />
-                      <span className="text-gray-500 dark:text-gray-400 truncate">
-                        {String(source.source)
-                          .replace(/_/g, ' ')
-                          .split(' ')
-                          .map(w => w.charAt(0).toUpperCase() + w.slice(1))
-                          .join(' ')}
-                      </span>
-                      <span className="font-semibold text-gray-900 dark:text-white ml-auto flex-shrink-0">
+                    <div
+                      key={idx}
+                      className="flex items-center justify-between gap-3 border-b border-border/60 py-2.5 last:border-0"
+                    >
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span
+                          className="h-2.5 w-2.5 shrink-0 rounded-full"
+                          style={{ backgroundColor: COLORS[idx % COLORS.length] }}
+                        />
+                        <span className="truncate text-sm">
+                          {String(source.source)
+                            .replace(/_/g, ' ')
+                            .split(' ')
+                            .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+                            .join(' ')}
+                        </span>
+                      </div>
+                      <span className="shrink-0 text-sm tabular-nums text-muted-foreground">
                         {percent}%
                       </span>
                     </div>
@@ -177,20 +168,23 @@ export function DiscountImpactCard({ data, isLoading }: DiscountImpactCardProps)
           )}
 
           {data.topDiscounts.length > 0 && (
-            <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
-              <p className="text-xs font-semibold text-gray-900 dark:text-white mb-2">Top Discounts</p>
-              <div className="space-y-2">
+            <div className="mt-8">
+              <AnalyticsSubLabel>Top discounts</AnalyticsSubLabel>
+              <div>
                 {data.topDiscounts.slice(0, 5).map((discount, idx) => (
-                  <div key={idx} className="flex items-center justify-between text-xs">
-                    <span className="truncate text-gray-500 dark:text-gray-400">{discount.name}</span>
-                    <div className="flex items-center gap-2">
-                      <Badge 
-                        variant="outline" 
-                        className="text-xs border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 bg-transparent"
+                  <div
+                    key={idx}
+                    className="flex items-center justify-between gap-3 border-b border-border/60 py-2.5 last:border-0"
+                  >
+                    <span className="truncate text-sm">{discount.name}</span>
+                    <div className="flex shrink-0 items-center gap-3">
+                      <Badge
+                        variant="outline"
+                        className="rounded-full bg-transparent font-medium tabular-nums"
                       >
                         {discount.count}x
                       </Badge>
-                      <span className="font-semibold text-gray-900 dark:text-white w-16 text-right">
+                      <span className="w-16 text-right text-sm tabular-nums">
                         {formatCurrency(discount.amount)}
                       </span>
                     </div>

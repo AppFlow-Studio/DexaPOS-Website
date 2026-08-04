@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react'
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Legend } from 'recharts'
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart'
 import { ChartCard } from './ChartCard'
+import { CHART_GRID, CHART_TICK } from './AnalyticsPrimitives'
 import { SummaryCard } from '../reports/SummaryCard'
 import { DataTable } from '@/components/ui/data-table'
 import { Input } from '@/components/ui/input'
@@ -148,7 +149,7 @@ export function VoidRefundAnalysis({ data, isLoading }: VoidRefundAnalysisProps)
                   <Legend
                     verticalAlign="bottom"
                     height={36}
-                    wrapperStyle={{ fontSize: 12 }}
+                    wrapperStyle={{ fontSize: 13, color: "var(--muted-foreground)" }}
                     formatter={(value, entry) => {
                       const v = (entry?.payload as { value?: number } | undefined)?.value
                       return `${value}${v != null ? `: ${v}` : ''}`
@@ -166,9 +167,9 @@ export function VoidRefundAnalysis({ data, isLoading }: VoidRefundAnalysisProps)
                   layout="vertical"
                   margin={{ top: 5, right: 16, left: 0, bottom: 5 }}
                 >
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis type="number" />
-                  <YAxis dataKey="name" type="category" width={90} tick={{ fontSize: 12 }} />
+                  <CartesianGrid {...CHART_GRID} />
+                  <XAxis type="number" tick={CHART_TICK} />
+                  <YAxis dataKey="name" type="category" width={90} tick={CHART_TICK} />
                   <ChartTooltip content={<ChartTooltipContent />} />
                   <Bar dataKey="voids" fill="#ef4444" radius={[0, 8, 8, 0]} />
                 </BarChart>
@@ -180,22 +181,23 @@ export function VoidRefundAnalysis({ data, isLoading }: VoidRefundAnalysisProps)
         {data?.void_refund?.top_voided_items && data.void_refund.top_voided_items.length > 0 && (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-gray-900">Top Voided Items</h3>
+              <h3 className="text-sm font-medium">Top Voided Items</h3>
               {filteredVoidedItems.length < data.void_refund.top_voided_items.length && (
-                <p className="text-xs text-gray-500">
+                <p className="text-[0.8125rem] text-muted-foreground">
                   Showing {filteredVoidedItems.length} of {data.void_refund.top_voided_items.length}
                 </p>
               )}
             </div>
 
-            {/* Search Input */}
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            {/* Search Input — matches the Orders table search: a filled pill
+                with no border, going solid on focus. */}
+            <div className="relative max-w-sm">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
               <Input
                 placeholder="Search items..."
                 value={voidSearchQuery}
                 onChange={(e) => setVoidSearchQuery(e.target.value)}
-                className="pl-10 border-gray-200"
+                className="rounded-full border-0 bg-muted/60 pl-9 shadow-none focus-visible:bg-background"
               />
             </div>
 

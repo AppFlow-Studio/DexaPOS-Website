@@ -1,6 +1,15 @@
 'use client'
 
 import { ChartCard } from './ChartCard'
+import {
+  AnalyticsSubLabel,
+  CHART_CURSOR_FILL,
+  CHART_GRID,
+  CHART_TICK,
+  ChartTooltipPanel,
+  StatRow,
+  StatTile,
+} from './AnalyticsPrimitives'
 import { ChartContainer, ChartTooltip, type ChartConfig } from '@/components/ui/chart'
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend } from 'recharts'
 import { Timer } from 'lucide-react'
@@ -47,27 +56,15 @@ export function AvgTableTurnTime({ data, isLoading }: AvgTableTurnTimeProps) {
     >
       {data && !isEmpty && (
         <div className="space-y-6">
-          {/* Stat Cards */}
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <div className="space-y-1 bg-blue-50 dark:bg-blue-950 p-2 rounded">
-              <p className="text-xs text-muted-foreground">Avg Turn Time</p>
-              <p className="text-lg font-bold text-blue-600 dark:text-blue-400">
-                {formatTime(data.avg_turn_time_minutes)}
-              </p>
-            </div>
-            <div className="space-y-1 bg-emerald-50 dark:bg-emerald-950 p-2 rounded">
-              <p className="text-xs text-muted-foreground">Total Sessions</p>
-              <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
-                {data.total_sessions}
-              </p>
-            </div>
-            <div className="space-y-1 bg-amber-50 dark:bg-amber-950 p-2 rounded">
-              <p className="text-xs text-muted-foreground">Total Covers</p>
-              <p className="text-lg font-bold text-amber-600 dark:text-amber-400">
-                {data.total_covers}
-              </p>
-            </div>
-          </div>
+          <StatRow columns={3}>
+            <StatTile
+              label="Avg Turn Time"
+              value={formatTime(data.avg_turn_time_minutes)}
+              accent="brand"
+            />
+            <StatTile label="Total Sessions" value={data.total_sessions} />
+            <StatTile label="Total Covers" value={data.total_covers} />
+          </StatRow>
 
           {/* Charts side by side - fixed heights so they don't collapse on mobile */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -76,41 +73,32 @@ export function AvgTableTurnTime({ data, isLoading }: AvgTableTurnTimeProps) {
               <div className="w-full h-[250px]">
                 <ChartContainer config={chartConfig} className="aspect-auto w-full h-full">
                     <LineChart data={dailyChartData} margin={{ left: 0, right: 10, top: 5, bottom: 20 }}>
-                      <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                      <CartesianGrid vertical={false} {...CHART_GRID} />
                       <XAxis
                         dataKey="date"
                         tickLine={false}
                         axisLine={false}
-                        tick={{ fontSize: 12 }}
+                        tick={CHART_TICK}
                       />
                       <YAxis
                         tickLine={false}
                         axisLine={false}
-                        tick={{ fontSize: 12 }}
+                        tick={CHART_TICK}
                         tickFormatter={(value) => `${value.toFixed(0)}m`}
                       />
                       <ChartTooltip
-                        cursor={{ stroke: 'rgba(0, 0, 0, 0.1)', strokeWidth: 2 }}
+                        cursor={{ stroke: 'var(--border)', strokeWidth: 2 }}
                         content={({ active, payload, label }) => {
                           if (active && payload && payload.length) {
                             return (
-                              <div className="bg-white dark:bg-slate-950 p-3 rounded border border-slate-200 dark:border-slate-700 shadow-lg">
-                                <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2">
-                                  {label}
-                                </p>
-                                <div className="space-y-1">
-                                  {payload.map((item, index) => (
-                                    <div key={index} className="flex items-center justify-between gap-2">
-                                      <span className="text-xs text-slate-700 dark:text-slate-300">
-                                        {item.name}:
-                                      </span>
-                                      <span className="text-xs font-bold text-slate-900 dark:text-slate-100">
-                                        {formatTime(Number(item.value))}
-                                      </span>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
+                              <ChartTooltipPanel
+                                label={label}
+                                items={payload.map((item) => ({
+                                  name: item.name,
+                                  color: item.color,
+                                  value: formatTime(Number(item.value)),
+                                }))}
+                              />
                             )
                           }
                           return null
@@ -125,7 +113,7 @@ export function AvgTableTurnTime({ data, isLoading }: AvgTableTurnTimeProps) {
                         activeDot={{ r: 6 }}
                         name="Avg Turn Time"
                       />
-                      <Legend />
+                      <Legend iconType="circle" formatter={(value) => (<span className="text-[0.8125rem] text-muted-foreground">{value}</span>)} />
                     </LineChart>
                 </ChartContainer>
               </div>
@@ -134,42 +122,41 @@ export function AvgTableTurnTime({ data, isLoading }: AvgTableTurnTimeProps) {
             {/* Party Size Breakdown Bar Chart */}
             {partySizeChartData.length > 0 && (
               <div className="w-full h-[274px]">
-                <p className="text-xs font-semibold mb-2 text-muted-foreground">Turn Time by Party Size</p>
+                <AnalyticsSubLabel>Turn time by party size</AnalyticsSubLabel>
                 <div className="h-[250px]">
                   <ChartContainer config={chartConfig} className="aspect-auto w-full h-full">
                       <BarChart data={partySizeChartData} margin={{ left: 0, right: 10, top: 5, bottom: 20 }}>
-                        <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                        <CartesianGrid vertical={false} {...CHART_GRID} />
                         <XAxis
                           dataKey="bucket"
                           tickLine={false}
                           axisLine={false}
-                          tick={{ fontSize: 12 }}
+                          tick={CHART_TICK}
                         />
                         <YAxis
                           tickLine={false}
                           axisLine={false}
-                          tick={{ fontSize: 12 }}
+                          tick={CHART_TICK}
                           tickFormatter={(value) => `${value.toFixed(0)}m`}
                         />
                         <ChartTooltip
-                          cursor={{ fill: 'rgba(0,0,0,0.05)' }}
+                          cursor={{ fill: CHART_CURSOR_FILL }}
                           content={({ active, payload, label }) => {
                             if (!active || !payload?.length) return null
 
                             const item = payload[0]
 
                             return (
-                              <div className="bg-white dark:bg-slate-950 p-3 rounded-lg border shadow-lg">
-                                <p className="text-xs font-semibold mb-2 text-muted-foreground">
-                                  Party Size: {label}
-                                </p>
-                                <div className="flex justify-between text-xs">
-                                  <span>Avg Turn Time: </span>
-                                  <span className="font-bold">
-                                    {formatTime(Number(item.value))}
-                                  </span>
-                                </div>
-                              </div>
+                              <ChartTooltipPanel
+                                label={`Party size: ${label}`}
+                                items={[
+                                  {
+                                    name: 'Avg Turn Time',
+                                    color: item.color,
+                                    value: formatTime(Number(item.value)),
+                                  },
+                                ]}
+                              />
                             )
                           }}
                         />

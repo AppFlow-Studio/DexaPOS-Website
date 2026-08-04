@@ -81,7 +81,7 @@ export function KitchenPerformanceReport({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <ReportToolbar
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}

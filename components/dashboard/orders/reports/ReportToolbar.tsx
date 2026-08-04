@@ -49,46 +49,47 @@ export function ReportToolbar<T extends Record<string, any>>({
   }
 
   return (
-    <div className="space-y-3">
-      {/* Search Input */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      {/* Search sits on the same row as the exports rather than stacked above
+          them, so the controls read as one quiet bar over the table. */}
+      {/* Filled pill, matching the Orders table search: no border or shadow,
+          and the fill drops away on focus. */}
+      <div className="relative min-w-0 sm:max-w-sm sm:flex-1">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
         <Input
           placeholder={searchPlaceholder}
           value={searchQuery}
           onChange={(e) => onSearchChange(e.target.value)}
-          className="pl-10 border-gray-200 focus-visible:ring-[#0A5C9E]"
+          className="h-9 rounded-full border-0 bg-muted/60 pl-9 text-[0.8125rem] shadow-none focus-visible:bg-background"
         />
       </div>
 
-      {/* Record Count */}
-      {isFiltered && (
-        <p className="text-sm text-gray-500">
-          Showing {filteredCount.toLocaleString()} of {totalCount.toLocaleString()} records
-        </p>
-      )}
+      <div className="flex shrink-0 items-center gap-2">
+        {isFiltered && (
+          <p className="mr-1 hidden text-[0.8125rem] text-muted-foreground tabular-nums sm:block">
+            {filteredCount.toLocaleString()} of {totalCount.toLocaleString()}
+          </p>
+        )}
 
-      {/* Export Buttons */}
-      <div className="flex gap-2">
         <Button
           variant="outline"
           size="sm"
           onClick={handleExportCsv}
           disabled={isExportDisabled}
-          className="gap-2 border-[#0A5C9E] text-[#0A5C9E] hover:bg-[#0A5C9E]/10 disabled:border-gray-300 disabled:text-gray-400 disabled:hover:bg-transparent"
+          className="h-9 gap-1.5 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
         >
           <Download className="h-4 w-4" />
-          Export CSV
+          CSV
         </Button>
         <Button
           variant="outline"
           size="sm"
           onClick={handleExportPdf}
           disabled={isExportDisabled}
-          className="gap-2 border-[#0A5C9E] text-[#0A5C9E] hover:bg-[#0A5C9E]/10 disabled:border-gray-300 disabled:text-gray-400 disabled:hover:bg-transparent"
+          className="h-9 gap-1.5 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
         >
           <Download className="h-4 w-4" />
-          Export PDF
+          PDF
         </Button>
       </div>
     </div>

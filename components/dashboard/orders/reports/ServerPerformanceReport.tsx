@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react'
 import { useStaffPerformance } from '@/app/dashboard/hooks/useOrderAnalytics'
 import { ReportDataTable } from './ReportDataTable'
 import { ReportToolbar } from './ReportToolbar'
-import { SummaryCard } from './SummaryCard'
+import { SummaryCard, SummaryCardRow } from './SummaryCard'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Empty } from '@/components/ui/empty'
 import { formatReportDateRange } from '@/utils/export'
@@ -142,7 +142,21 @@ export function ServerPerformanceReport({
   ]
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
+      {/* Summary Cards */}
+      <SummaryCardRow columns={2}>
+        <SummaryCard
+          label="Top Server"
+          value={topServerName}
+          icon={<ShoppingBag className="h-5 w-5" />}
+        />
+        <SummaryCard
+          label="Total Tips"
+          value={formatCurrency(totalTips)}
+          icon={<DollarSign className="h-5 w-5" />}
+        />
+      </SummaryCardRow>
+
       <ReportToolbar
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
@@ -158,20 +172,6 @@ export function ServerPerformanceReport({
         dateTo={dateTo}
         summaryCards={summaryCardsData}
       />
-
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <SummaryCard
-          label="Top Server"
-          value={topServerName}
-          icon={<ShoppingBag className="h-5 w-5" />}
-        />
-        <SummaryCard
-          label="Total Tips"
-          value={formatCurrency(totalTips)}
-          icon={<DollarSign className="h-5 w-5" />}
-        />
-      </div>
 
       <ReportDataTable columns={columns} data={filteredData} />
     </div>

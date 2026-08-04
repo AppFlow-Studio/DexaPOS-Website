@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react'
 import { useTablePerformance } from '@/app/dashboard/hooks/useOrderAnalytics'
 import { ReportDataTable } from './ReportDataTable'
 import { ReportToolbar } from './ReportToolbar'
-import { SummaryCard } from './SummaryCard'
+import { SummaryCard, SummaryCardRow } from './SummaryCard'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Empty } from '@/components/ui/empty'
 import { formatReportDateRange } from '@/utils/export'
@@ -113,9 +113,9 @@ export function TableTurnsReport({
   ]
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <SummaryCardRow>
         <SummaryCard
           label="Avg Turn Time"
           value={`${formatMinutes(data.avg_turn_time_minutes)} min`}
@@ -131,7 +131,7 @@ export function TableTurnsReport({
           value={formatCurrency(avgRevPASH)}
           icon={<Table className="h-5 w-5" />}
         />
-      </div>
+      </SummaryCardRow>
 
       {/* Tables Table */}
       <ReportToolbar

@@ -68,6 +68,8 @@ import {
     isKnownPlatform,
 } from '@/lib/orderout/platform'
 import { PlatformBadge } from './PlatformBadge'
+import { ReceiptModal } from './ReceiptModal'
+import { RefundVoidDialog, type RefundVoidAction } from './RefundVoidDialog'
 import { useColumnPreferences } from '@/app/dashboard/hooks/useColumnPreferences'
 
 interface OrdersDataTableProps {
@@ -198,6 +200,24 @@ export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showL
     const isAllLocations = useIsAllLocations()
     const { locations, setSelectedLocation } = useLocationStore()
     const shouldShowLocation = showLocationColumn ?? isAllLocations
+
+    // Row actions. Print Receipt opens the receipt; Refund and Void open their
+    // confirmation directly rather than routing through it. Previously none of
+    // the three had a handler, so the click fell through to the row and opened
+    // the detail sheet instead.
+    const [receiptOrder, setReceiptOrder] = React.useState<OrderResponse | null>(null)
+    const [refundVoidOrder, setRefundVoidOrder] = React.useState<OrderResponse | null>(null)
+    const [refundVoidAction, setRefundVoidAction] = React.useState<RefundVoidAction>('refund')
+
+    const openRefundVoid = (order: OrderResponse, action: RefundVoidAction) => {
+        setRefundVoidAction(action)
+        setRefundVoidOrder(order)
+    }
+
+    const receiptLocation = React.useMemo(() => {
+        if (!receiptOrder?.location_id) return null
+        return locations.find((l) => l.id === receiptOrder.location_id) ?? null
+    }, [receiptOrder, locations])
 
     const handleRowClick = (order: OrderResponse) => {
         if (onOrderClick) {
@@ -493,12 +513,22 @@ export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showL
                 return (
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" className="h-8 w-8 p-0">
+                            {/* Opening the menu must not also trigger the row's
+                                own click handler (which opens the detail sheet). */}
+                            <Button
+                                variant="ghost"
+                                className="h-8 w-8 p-0"
+                                onClick={(e) => e.stopPropagation()}
+                            >
                                 <span className="sr-only">Open menu</span>
                                 <MoreHorizontal className="h-4 w-4" />
                             </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
+                        <DropdownMenuContent
+                            align="end"
+                            className="rounded-2xl"
+                            onClick={(e) => e.stopPropagation()}
+                        >
                             <DropdownMenuLabel>Actions</DropdownMenuLabel>
                             <DropdownMenuItem onClick={() => handleRowClick(order)}>
                                 <Eye className="mr-2 h-4 w-4" />
@@ -513,17 +543,23 @@ export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showL
                             {!readOnly && (
                                 <>
                                     <DropdownMenuSeparator />
-                                    <DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => setReceiptOrder(order)}>
                                         <Printer className="mr-2 h-4 w-4" />
                                         Print Receipt
                                     </DropdownMenuItem>
                                     {order.status !== 'void' && order.status !== 'cancelled' && (
                                         <>
-                                            <DropdownMenuItem className="text-orange-600">
+                                            <DropdownMenuItem
+                                                className="text-orange-600"
+                                                onClick={() => openRefundVoid(order, 'refund')}
+                                            >
                                                 <RotateCcw className="mr-2 h-4 w-4" />
                                                 Refund
                                             </DropdownMenuItem>
-                                            <DropdownMenuItem className="text-destructive">
+                                            <DropdownMenuItem
+                                                className="text-destructive"
+                                                onClick={() => openRefundVoid(order, 'void')}
+                                            >
                                                 <X className="mr-2 h-4 w-4" />
                                                 Void Order
                                             </DropdownMenuItem>
@@ -578,17 +614,21 @@ export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showL
                         placeholder="Search orders..."
                         value={globalFilter}
                         onChange={(e) => setGlobalFilter(e.target.value)}
-                        className="pl-9 border-border/60"
+                        className="rounded-full border-0 bg-muted/60 pl-9 shadow-none focus-visible:bg-background"
                     />
                 </div>
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                        <Button variant="outline" size="sm" className="ml-auto border-border/60">
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="ml-auto rounded-full border-0 bg-muted/60 text-muted-foreground shadow-none hover:bg-muted hover:text-foreground data-[state=open]:bg-muted data-[state=open]:text-foreground"
+                        >
                             <SlidersHorizontal className="mr-2 h-4 w-4" />
                             Columns
                         </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-[180px]">
+                    <DropdownMenuContent align="end" className="w-[180px] rounded-2xl">
                         <DropdownMenuLabel>Toggle columns</DropdownMenuLabel>
                         <DropdownMenuSeparator />
                         {table
@@ -610,9 +650,14 @@ export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showL
                 </DropdownMenu>
             </div>
 
-            {/* Table */}
-            <div className="rounded-lg border border-border/60">
-                <Table>
+            {/* Table. No box of its own — the page container is the only frame,
+                so rows are separated by hairlines alone.
+
+                The rounding goes on Table's own scroll container rather than an
+                extra wrapper: nesting overflow-hidden around its overflow-x-auto
+                created a second scroll context that reserved a scrollbar gutter
+                (dead space) below the rows. */}
+            <Table containerClassName="rounded-xl">
                     <TableHeader>
                         {table.getHeaderGroups().map((headerGroup) => (
                             <TableRow key={headerGroup.id} className="border-border/60 hover:bg-transparent">
@@ -645,7 +690,7 @@ export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showL
                                 <TableRow
                                     key={row.id}
                                     data-state={row.getIsSelected() && 'selected'}
-                                    className="cursor-pointer border-border/40 transition-colors hover:bg-muted/40"
+                                    className="cursor-pointer border-border/30 transition-colors hover:bg-muted/40"
                                     onClick={() => handleRowClick(row.original)}
                                 >
                                     {row.getVisibleCells().map((cell) => (
@@ -670,7 +715,6 @@ export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showL
                         )}
                     </TableBody>
                 </Table>
-            </div>
 
             {/* Results count & Pagination */}
             <div className="flex items-center justify-between pt-2">
@@ -721,6 +765,27 @@ export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showL
                     </Button>
                 </div>
             </div>
+
+            {/* Print Receipt. No admin actions here — Refund and Void are their
+                own menu items and open the dialog below directly. */}
+            {receiptOrder && (
+                <ReceiptModal
+                    order={receiptOrder}
+                    location={receiptLocation}
+                    open={!!receiptOrder}
+                    onOpenChange={(open) => !open && setReceiptOrder(null)}
+                />
+            )}
+
+            {/* Sibling of the receipt, never nested inside it — see the note in
+                RefundVoidDialog on why nesting makes it unclickable. */}
+            <RefundVoidDialog
+                order={refundVoidOrder}
+                action={refundVoidAction}
+                open={!!refundVoidOrder}
+                onOpenChange={(open) => !open && setRefundVoidOrder(null)}
+                onCompleted={() => router.refresh()}
+            />
         </div>
     )
 }

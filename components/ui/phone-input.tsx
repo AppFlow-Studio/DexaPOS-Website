@@ -16,6 +16,12 @@ interface PhoneInputProps {
   className?: string
   id?: string
   'aria-invalid'?: boolean
+  /**
+   * Overrides for the library's CSS variables (border color, height, …), merged
+   * over the defaults below. Utility classes can't reach those variables, so
+   * restyling the control has to go through here.
+   */
+  style?: React.CSSProperties
 }
 
 function PhoneInput({
@@ -28,6 +34,7 @@ function PhoneInput({
   className,
   id,
   'aria-invalid': ariaInvalid,
+  style,
 }: PhoneInputProps) {
   const handleChange = (phone: string) => {
     onChange(phone)
@@ -60,6 +67,7 @@ function PhoneInput({
           '--react-international-phone-dropdown-item-background-color': 'var(--popover)',
           '--react-international-phone-height': '36px',
           '--react-international-phone-font-size': '0.875rem',
+          ...style,
         } as React.CSSProperties
       }
       className={cn(
