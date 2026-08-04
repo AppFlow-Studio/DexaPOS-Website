@@ -7,7 +7,7 @@
  * MDM API), we can only link to the device list and let the admin search the
  * serial by hand. This is the interim "Option B".
  *
- * See tasks/admin-web-landi-connect-quick-links.md for the full URL contract.
+ * See docs/features/device-management/admin-web-landi-connect-quick-links.md for the full URL contract.
  */
 
 const DEFAULT_LANDI_CONNECT_BASE_URL = 'https://apac-mdm.connect.landiglobal.com'
