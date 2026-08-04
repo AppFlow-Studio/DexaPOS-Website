@@ -720,23 +720,33 @@ export async function getActiveSnoozes(
 }
 
 /**
- * Current snooze state for a single item at a location. Mirrors the
+ * Current per-location override state for a single item. Mirrors the
  * GetItemIsPopular/GetItemIsNew per-location read pattern used by the item
- * editor, so the snooze control can self-fetch without threading snoozed_until
- * through every page's item mapping.
+ * editor, so the snooze + availability controls can self-fetch without threading
+ * this through every page's item mapping.
+ *
+ * `is_available` is the L2 override's raw value: `null` means "no override row"
+ * (inherit the global `menu_items.availability`), so the availability toggle can
+ * seed `override.is_available ?? global`. This is what lets a single-location
+ * account SEE and CLEAR an item that was turned off at its one store — the case
+ * that previously showed "Available" on web while the POS had it off.
  */
 export async function getItemSnooze(
   menuItemId: string,
   locationId: string,
-): Promise<{ snoozed_until: string | null; snooze_reason: string | null }> {
+): Promise<{
+  snoozed_until: string | null;
+  snooze_reason: string | null;
+  is_available: boolean | null;
+}> {
   if (!menuItemId || !locationId || locationId === "all") {
-    return { snoozed_until: null, snooze_reason: null };
+    return { snoozed_until: null, snooze_reason: null, is_available: null };
   }
 
   const supabase = createServerSupabaseClient();
   const { data } = await supabase
     .from("location_item_overrides")
-    .select("snoozed_until, snooze_reason")
+    .select("snoozed_until, snooze_reason, is_available")
     .eq("location_id", locationId)
     .eq("menu_item_id", menuItemId)
     .maybeSingle();
@@ -744,5 +754,56 @@ export async function getItemSnooze(
   return {
     snoozed_until: data?.snoozed_until ?? null,
     snooze_reason: data?.snooze_reason ?? null,
+    is_available: data?.is_available ?? null,
   };
+}
+
+// ----------------------------------------------------------------------------
+// Read: items TURNED OFF at a location (deliberate hide, not a timed 86).
+//
+// A row with is_available=false AND snoozed_until IS NULL is a manager/POS
+// "turn off", not an out-of-stock snooze — so the auto-restore cron never touches
+// it and, before this, a single-location account had no web surface that even
+// showed it (the item card reads the global availability flag). The Out-of-stock
+// page renders these in a distinct "Turned off" section so they're always
+// visible and one-click restorable.
+// ----------------------------------------------------------------------------
+
+export interface TurnedOffItem {
+  menu_item_id: string;
+  name: string;
+  image: string | null;
+  updated_at: string;
+}
+
+export async function getTurnedOffItems(
+  locationId: string,
+): Promise<{ success: boolean; data?: TurnedOffItem[]; error?: string }> {
+  if (!locationId || locationId === "all") {
+    return { success: false, error: "A specific location is required." };
+  }
+
+  const supabase = createServerSupabaseClient();
+  const { data, error } = await supabase
+    .from("location_item_overrides")
+    .select("menu_item_id, updated_at, menu_items!inner(name, image)")
+    .eq("location_id", locationId)
+    .eq("is_available", false)
+    .is("snoozed_until", null);
+
+  if (error) {
+    return { success: false, error: error.message };
+  }
+
+  const rows: TurnedOffItem[] = (data ?? []).map((r) => {
+    const item = r.menu_items as unknown as { name: string; image: string | null } | null;
+    return {
+      menu_item_id: r.menu_item_id,
+      name: item?.name ?? "",
+      image: item?.image ?? null,
+      updated_at: r.updated_at,
+    };
+  });
+
+  return { success: true, data: rows };
 }

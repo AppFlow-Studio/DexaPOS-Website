@@ -1359,6 +1359,103 @@ export async function setItemAvailability(
   });
 }
 
+/**
+ * Availability-only write, resolved to the correct scope. Availability is a
+ * per-location concept (like 86 and prep-station), so this is the single writer
+ * the "Available for sale" toggle uses across every account shape:
+ *   - locationId null (multi-location viewing "All") -> global menu_items.availability (L1)
+ *   - locationId set (specific loc, or a single-location account's one store)
+ *       -> a SURGICAL L2 override write of is_available only
+ *
+ * Why a direct upsert instead of upsert_category_item_override: that RPC treats
+ * "is_available=true with no price override" as an empty override and DELETES the
+ * whole location_item_overrides row — which would silently drop prep_station_id,
+ * snoozed_until, and the popular/new flags that also live on it. Here we touch
+ * only is_available (and updated_at), so re-enabling an item never loses its
+ * per-location config.
+ *
+ * normalizeGlobal (single-location accounts): the item is gated to its one store's
+ * override, but effective_availability = global AND override, so a stale global
+ * availability=false would keep masking it. When ENABLING, lift the global flag so
+ * the override alone governs. Never touched for multi-location (global false there
+ * is a deliberate merchant-wide off).
+ */
+export async function setItemAvailabilityScoped(
+  menuItemId: string,
+  isAvailable: boolean,
+  locationId: string | null,
+  opts?: { normalizeGlobal?: boolean },
+): Promise<{ success: boolean; error?: string }> {
+  if (!menuItemId) return { success: false, error: "menuItemId is required" };
+
+  const supabase = createServerSupabaseClient();
+  const now = new Date().toISOString();
+
+  const { data: item } = await supabase
+    .from("menu_items")
+    .select("merchant_id, name, availability")
+    .eq("id", menuItemId)
+    .maybeSingle();
+
+  let beforeAvailable: boolean | null;
+
+  if (!locationId) {
+    // Multi-location on "All" (or no concrete location) — global core (L1).
+    beforeAvailable = item?.availability ?? null;
+    const { error } = await supabase
+      .from("menu_items")
+      .update({ availability: isAvailable, updated_at: now })
+      .eq("id", menuItemId);
+    if (error) return { success: false, error: error.message };
+  } else {
+    // Concrete location — surgical L2 override write (preserves every other field).
+    const { data: prev } = await supabase
+      .from("location_item_overrides")
+      .select("is_available")
+      .eq("location_id", locationId)
+      .eq("menu_item_id", menuItemId)
+      .maybeSingle();
+    beforeAvailable = prev?.is_available ?? item?.availability ?? null;
+
+    const { error } = await supabase.from("location_item_overrides").upsert(
+      {
+        location_id: locationId,
+        menu_item_id: menuItemId,
+        is_available: isAvailable,
+        updated_at: now,
+      },
+      { onConflict: "location_id,menu_item_id" },
+    );
+    if (error) return { success: false, error: error.message };
+
+    // Single-location: lift a stale global mask so the override alone governs.
+    if (opts?.normalizeGlobal && isAvailable && item?.availability === false) {
+      await supabase
+        .from("menu_items")
+        .update({ availability: true, updated_at: now })
+        .eq("id", menuItemId);
+    }
+  }
+
+  await LogAuditEvent({
+    merchantId: item?.merchant_id,
+    action: `${isAvailable ? "Enabled" : "Disabled"} Item: ${item?.name ?? menuItemId}`,
+    actionCategory: "menu",
+    severity: "info",
+    resourceType: "menu_item",
+    resourceId: menuItemId,
+    resourceName: item?.name ?? undefined,
+    locationId: locationId ?? undefined,
+    changes: {
+      before: { is_available: beforeAvailable },
+      after: { is_available: isAvailable },
+    },
+    metadata: { scope: locationId ? "location" : "global", source: "dashboard" },
+  });
+
+  return { success: true };
+}
+
 // ============================================================================
 // CREATE ITEM (Always global - Level 1)
 // ============================================================================
