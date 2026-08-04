@@ -1,9 +1,12 @@
 'use server'
 
-import { assertHQPermission } from '@/lib/admin/auth'
+import { assertHQPermission, assertSuperAdmin } from '@/lib/admin/auth'
+import { auth, reverificationError } from '@clerk/nextjs/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { refundAdminOrder } from '@/app/manage/actions/admin-merchant/transactions'
 import { headers } from 'next/headers'
+import { LogAuditEvent } from '@/app/dashboard/actions/audit-logs'
 import {
   aggregateAdminTransactionSummary,
   type AdminTransactionSummaryV2Row,
@@ -2018,6 +2021,136 @@ export async function getPlatformSettlementBatchPayments(
   return {
     data: rows.map(mapRpcRowToSettlementBatchPayment),
   }
+}
+
+export interface ManualBatchoutResult {
+  success: boolean
+  payments_settled?: number
+  error?: string
+}
+
+// Step-up config for the manual batchout. We deliberately use an explicit
+// `first_factor` level (not the `strict`/`moderate`/`lax` presets, which are all
+// `second_factor`/`multi_factor`): HQ super-admins sign in with Google SSO and have
+// no password or 2FA, so only a first-factor challenge — satisfied by an email code —
+// is reachable for them. Requires "Email verification code" enabled in Clerk.
+const MANUAL_BATCHOUT_REVERIFICATION = { level: 'first_factor', afterMinutes: 10 } as const
+
+/**
+ * Manually reconcile a stuck settlement batch: mark it `settled` so its linked
+ * `order_payments` cascade to settled (via the `trg_cascade_is_settled_on_batch_close`
+ * trigger). This mirrors the hand-run "batch 009" reconciliation — a direct UPDATE,
+ * not the `manual_mark_batch_settled` RPC, because that RPC requires a uuid `p_staff_id`
+ * and HQ super-admins have none (they're Clerk SSO users with a text `members.id` and a
+ * NULL `staff_profile_id`). Actor attribution is recorded in the audit log instead.
+ *
+ * RECONCILIATION ONLY — this records that a batch the terminal already closed
+ * processor-side is settled in Dexa. It does NOT command the pinpad/TSYS to batch out.
+ *
+ * Gated to HQ super-admins and protected by Clerk step-up reverification. When the
+ * caller's identity is stale, this returns a `reverificationError` hint; the client
+ * `useReverification` wrapper shows the verification modal and retries automatically.
+ */
+export async function manualBatchout(
+  batchId: string,
+  merchantId: string,
+  reason: string
+): Promise<ManualBatchoutResult | ReturnType<typeof reverificationError>> {
+  // 1. Super-admin only (throws otherwise).
+  const { userId } = await assertSuperAdmin()
+
+  // 2. Require a fresh step-up reverification (works for password AND SSO users).
+  const { has } = await auth()
+  if (!has({ reverification: MANUAL_BATCHOUT_REVERIFICATION })) {
+    return reverificationError(MANUAL_BATCHOUT_REVERIFICATION)
+  }
+
+  // 3. Validate inputs.
+  const cleanReason = reason.trim()
+  if (cleanReason.length < 10) {
+    return { success: false, error: 'A reason of at least 10 characters is required.' }
+  }
+  if (!batchId?.trim() || !merchantId?.trim()) {
+    return { success: false, error: 'Missing batch or merchant reference.' }
+  }
+
+  // 4. Elevated client — the reconciliation UPDATE bypasses RLS (server-only, and
+  //    already gated by super-admin + reverification above).
+  const admin = createServiceRoleClient()
+
+  // 4a. Load the batch; verify ownership and that it isn't already settled.
+  const { data: batch, error: fetchError } = await admin
+    .from('settlement_batches')
+    .select('id, merchant_id, status, closed_at, settlement_date')
+    .eq('id', batchId)
+    .maybeSingle()
+
+  if (fetchError) {
+    console.error('[manualBatchout] fetch error:', fetchError)
+    return { success: false, error: fetchError.message }
+  }
+  if (!batch) return { success: false, error: 'Settlement batch not found.' }
+  if (batch.merchant_id !== merchantId) {
+    return { success: false, error: 'Batch does not belong to this merchant.' }
+  }
+  if (batch.status === 'settled') {
+    return { success: false, error: 'Batch is already settled.' }
+  }
+
+  // 4b. Count the payments that will cascade to settled (for the confirmation toast).
+  const { count: pendingCount } = await admin
+    .from('order_payments')
+    .select('id', { count: 'exact', head: true })
+    .eq('settlement_batch_id', batchId)
+    .eq('is_settled', false)
+
+  // 4c. Mark the batch settled. The AFTER-UPDATE cascade trigger flips the linked
+  //     order_payments to is_settled=true in the same statement.
+  const nowIso = new Date().toISOString()
+  const { data: updatedRows, error: updateError } = await admin
+    .from('settlement_batches')
+    .update({
+      status: 'settled',
+      closed_at: batch.closed_at ?? nowIso,
+      settlement_date: batch.settlement_date ?? nowIso.slice(0, 10),
+      last_attempt_at: nowIso,
+      failure_reason: cleanReason,
+    })
+    .eq('id', batchId)
+    .eq('merchant_id', merchantId)
+    .neq('status', 'settled')
+    .select('id')
+
+  if (updateError) {
+    console.error('[manualBatchout] update error:', updateError)
+    return { success: false, error: updateError.message }
+  }
+  if (!updatedRows || updatedRows.length === 0) {
+    return { success: false, error: 'Batch could not be settled (already settled or not found).' }
+  }
+
+  const paymentsSettled = pendingCount ?? 0
+
+  // 5. Audit (best-effort). Attributed to the merchant whose batch this is, so it
+  //    surfaces under that store (and is merchant-filterable) in the HQ audit log.
+  //    Attribution of the *actor* (the HQ super-admin) is resolved from Clerk inside
+  //    LogAuditEvent; the reason/count live in metadata since the direct-UPDATE path
+  //    writes no per-payment payment_events rows.
+  void LogAuditEvent({
+    merchantId,
+    action: 'manual_mark_batch_settled',
+    actionCategory: 'settlement',
+    severity: 'warning',
+    resourceType: 'settlement_batch',
+    resourceId: batchId,
+    metadata: {
+      clerk_user_id: userId,
+      reason: cleanReason,
+      payments_settled: paymentsSettled,
+    },
+  })
+
+  return { success: true, payments_settled: paymentsSettled }
 }
 
 export async function getPlatformMerchantBreakdown(
