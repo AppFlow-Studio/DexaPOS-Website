@@ -95,7 +95,10 @@ import {
   useLocationStore,
   useIsAllLocations,
   useGatedLocationId,
+  useIsSingleLocation,
 } from "@/stores/location-store";
+import { useItemSnooze } from "@/lib/queries/use-snoozes";
+import { setItemAvailabilityScoped } from "@/app/dashboard/actions/menu-items-rpc";
 import {
   DndContext,
   closestCenter,
@@ -834,6 +837,12 @@ export function NewEditItemFormSheet({
   // physical location, so resolve a concrete id via the gated resolver for
   // those pieces ONLY. Null for multi-location on 'all'.
   const gatedLocationId = useGatedLocationId();
+  const isSingleLocation = useIsSingleLocation();
+  // Plain item scope = editing the item itself (Items Library / single-loc menu),
+  // NOT within a category/menu cascade. Availability at this scope is a per-location
+  // L2 concept (like 86), so it is written/seeded via the gated location instead of
+  // the global core. In category/menu scope, availability stays on the cascade RPC.
+  const isPlainItemScope = !categoryId && !menuId;
   const { pricingStrategy: effectivePricingStrategy, dualPricingPercentage: effectiveDualPercentage } = useEffectivePricing();
 
   // Tax rates for current location
@@ -1186,6 +1195,24 @@ export function NewEditItemFormSheet({
     return () => { cancelled = true; };
   }, [editItem, form, getPriceForContext, imageUpload.reset]);
 
+  // Availability seed (plain item scope only): the item list is fetched in core
+  // ('all') scope, so editItem.availability is the GLOBAL flag. Overlay the gated
+  // location's L2 override (is_available) when one exists, so a single-location
+  // account SEES an item that was turned off at its one store — the case that
+  // previously showed "Available" here while the POS had it off. Runs after the
+  // reset above so it wins for the availability field; no-op when no override.
+  const { data: availabilityOverride } = useItemSnooze(
+    isPlainItemScope ? editItem?.id : undefined,
+    gatedLocationId,
+  );
+  React.useEffect(() => {
+    if (!isPlainItemScope || !editItem?.id) return;
+    if (availabilityOverride?.is_available == null) return;
+    form.setValue("availability", availabilityOverride.is_available, {
+      shouldDirty: false,
+    });
+  }, [isPlainItemScope, editItem?.id, gatedLocationId, availabilityOverride?.is_available, form]);
+
   const watchedValues = form.watch();
 
   React.useEffect(() => {
@@ -1414,7 +1441,10 @@ export function NewEditItemFormSheet({
           price: values.price,
           cashPrice: values.cash_price ?? null,
           deliveryPrice: values.delivery_price ?? null,
-          availability: values.availability,
+          // Plain item scope routes availability through the scoped writer below
+          // (per-location override for single/specific loc). In category/menu
+          // scope it stays on the cascade RPC (L3/L4/L5 is_available).
+          ...(isPlainItemScope ? {} : { availability: values.availability }),
         };
 
         // Only include base fields if we can edit them (Level 1)
@@ -1476,6 +1506,23 @@ export function NewEditItemFormSheet({
         }
         toast.error("Operation Failed", { description: result.error });
         return;
+      }
+
+      // Availability (plain item scope): write through the scope-resolved writer so
+      // a single-location account persists to its ONE store's L2 override — the fix
+      // that makes a turned-off item both visible and clearable from the web. Multi
+      // -loc "All" -> null -> global; specific location -> that location's override.
+      // Surgical (is_available only) so it never drops prep-station / snooze data.
+      if (editItem && isPlainItemScope) {
+        const availRes = await setItemAvailabilityScoped(
+          editItem.id,
+          values.availability,
+          gatedLocationId,
+          { normalizeGlobal: isSingleLocation },
+        );
+        if (!availRes.success) {
+          toast.warning("Availability not saved", { description: availRes.error });
+        }
       }
 
       // For edits, sync category assignment changes (additions + removals)
@@ -1560,6 +1607,10 @@ export function NewEditItemFormSheet({
       queryClient.invalidateQueries({ queryKey: ["menu-item", editItem?.id] });
       queryClient.invalidateQueries({ queryKey: ["menus"] });
       queryClient.invalidateQueries({ queryKey: ["categories-with-items"] });
+      // Availability writes to the per-location override — refresh its seed + the
+      // Out-of-stock "Turned off" list so the toggle and that page stay in sync.
+      queryClient.invalidateQueries({ queryKey: ["item-snooze"] });
+      queryClient.invalidateQueries({ queryKey: ["turned-off-items"] });
       invalidateOrderOutSync(queryClient);
 
       form.reset();
