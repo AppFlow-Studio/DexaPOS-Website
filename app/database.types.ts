@@ -9054,6 +9054,7 @@ export type Database = {
           merchant_id: string
           payment_device_id: string | null
           platform_billing_config_id: string | null
+          processor: string
           routing_number_last_four: string | null
           updated_at: string
           vault_initial_transaction_id: string | null
@@ -9081,6 +9082,7 @@ export type Database = {
           merchant_id: string
           payment_device_id?: string | null
           platform_billing_config_id?: string | null
+          processor?: string
           routing_number_last_four?: string | null
           updated_at?: string
           vault_initial_transaction_id?: string | null
@@ -9108,6 +9110,7 @@ export type Database = {
           merchant_id?: string
           payment_device_id?: string | null
           platform_billing_config_id?: string | null
+          processor?: string
           routing_number_last_four?: string | null
           updated_at?: string
           vault_initial_transaction_id?: string | null
@@ -9165,6 +9168,103 @@ export type Database = {
           },
         ]
       }
+      merchant_processor_accounts: {
+        Row: {
+          created_at: string
+          disc_rate_percent: number | null
+          fee_schedule_id: string | null
+          id: string
+          is_active: boolean
+          is_primary: boolean
+          location_id: string | null
+          merchant_id: string
+          nmi_customer_vault_id: string | null
+          nmi_merchant_id: string | null
+          pricing_owner: string
+          processor: string
+          purpose: string
+          residual_bps: number | null
+          surcharge_percent: number | null
+          updated_at: string
+          valor_appid: string | null
+          valor_appkey_encrypted: string | null
+          valor_customer_profile_id: string | null
+          valor_epi: string | null
+          valor_merchant_id: string | null
+          valor_payment_profile_id: string | null
+          valor_store_id: string | null
+          webhook_secret_encrypted: string | null
+        }
+        Insert: {
+          created_at?: string
+          disc_rate_percent?: number | null
+          fee_schedule_id?: string | null
+          id?: string
+          is_active?: boolean
+          is_primary?: boolean
+          location_id?: string | null
+          merchant_id: string
+          nmi_customer_vault_id?: string | null
+          nmi_merchant_id?: string | null
+          pricing_owner?: string
+          processor: string
+          purpose: string
+          residual_bps?: number | null
+          surcharge_percent?: number | null
+          updated_at?: string
+          valor_appid?: string | null
+          valor_appkey_encrypted?: string | null
+          valor_customer_profile_id?: string | null
+          valor_epi?: string | null
+          valor_merchant_id?: string | null
+          valor_payment_profile_id?: string | null
+          valor_store_id?: string | null
+          webhook_secret_encrypted?: string | null
+        }
+        Update: {
+          created_at?: string
+          disc_rate_percent?: number | null
+          fee_schedule_id?: string | null
+          id?: string
+          is_active?: boolean
+          is_primary?: boolean
+          location_id?: string | null
+          merchant_id?: string
+          nmi_customer_vault_id?: string | null
+          nmi_merchant_id?: string | null
+          pricing_owner?: string
+          processor?: string
+          purpose?: string
+          residual_bps?: number | null
+          surcharge_percent?: number | null
+          updated_at?: string
+          valor_appid?: string | null
+          valor_appkey_encrypted?: string | null
+          valor_customer_profile_id?: string | null
+          valor_epi?: string | null
+          valor_merchant_id?: string | null
+          valor_payment_profile_id?: string | null
+          valor_store_id?: string | null
+          webhook_secret_encrypted?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "merchant_processor_accounts_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "merchant_processor_accounts_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: false
+            referencedRelation: "merchants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+
       merchant_notes: {
         Row: {
           author_name: string
@@ -10022,6 +10122,7 @@ export type Database = {
           ipospays_tpn: string
           location_id: string
           merchant_id: string
+          merchant_processor_account_id: string | null
           order_data: Json
           order_id: string | null
           payment_method: string | null
@@ -10052,6 +10153,7 @@ export type Database = {
           ipospays_tpn: string
           location_id: string
           merchant_id: string
+          merchant_processor_account_id?: string | null
           order_data: Json
           order_id?: string | null
           payment_method?: string | null
@@ -10082,6 +10184,7 @@ export type Database = {
           ipospays_tpn?: string
           location_id?: string
           merchant_id?: string
+          merchant_processor_account_id?: string | null
           order_data?: Json
           order_id?: string | null
           payment_method?: string | null
@@ -10161,6 +10264,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "qr_online_order_sessions_safe_v1"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "online_order_payment_intents_processor_account_fkey"
+            columns: ["merchant_processor_account_id", "merchant_id"]
+            isOneToOne: false
+            referencedRelation: "merchant_processor_accounts"
+            referencedColumns: ["id", "merchant_id"]
           },
           {
             foreignKeyName: "online_order_payment_intents_store_config_id_fkey"
@@ -10479,6 +10589,7 @@ export type Database = {
           max_future_order_days: number | null
           menu_layout: string
           merchant_id: string
+          merchant_processor_account_id: string | null
           meta_description: string | null
           meta_title: string | null
           min_order: number | null
@@ -10551,6 +10662,7 @@ export type Database = {
           max_future_order_days?: number | null
           menu_layout?: string
           merchant_id: string
+          merchant_processor_account_id?: string | null
           meta_description?: string | null
           meta_title?: string | null
           min_order?: number | null
@@ -10623,6 +10735,7 @@ export type Database = {
           max_future_order_days?: number | null
           menu_layout?: string
           merchant_id?: string
+          merchant_processor_account_id?: string | null
           meta_description?: string | null
           meta_title?: string | null
           min_order?: number | null
@@ -10676,6 +10789,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_location_menu_items"
             referencedColumns: ["location_id"]
+          },
+          {
+            foreignKeyName: "online_store_config_processor_account_fkey"
+            columns: ["merchant_processor_account_id", "merchant_id"]
+            isOneToOne: false
+            referencedRelation: "merchant_processor_accounts"
+            referencedColumns: ["id", "merchant_id"]
           },
           {
             foreignKeyName: "online_store_config_merchant_id_fkey"

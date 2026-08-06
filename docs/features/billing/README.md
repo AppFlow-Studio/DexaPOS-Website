@@ -4,6 +4,7 @@ Merchant billing, invoices, NMI billing, pricing, add-ons, devices, and access g
 
 ## Documents
 
+- [C1-MERCHANT-PROCESSOR-ACCOUNTS-SCHEMA.md](C1-MERCHANT-PROCESSOR-ACCOUNTS-SCHEMA.md) - [C1] NMI/Valor Processor Account Schema and RLS
 - [HANDOFF-2026-06-16-INVOICE-NMI-WEBHOOK.md](HANDOFF-2026-06-16-INVOICE-NMI-WEBHOOK.md) - Invoice NMI + Webhook Handoff
 - [HANDOFF-2026-07-13-BILLING-CONTROL-REMAINING-POS-ITEMS.md](HANDOFF-2026-07-13-BILLING-CONTROL-REMAINING-POS-ITEMS.md) - Billing Control - POS Completion Handoff
 - [HANDOFF-2026-07-13-HQ-BILLING-CONTROL-FINAL.md](HANDOFF-2026-07-13-HQ-BILLING-CONTROL-FINAL.md) - HQ Self-Service Billing Control - Final Handoff

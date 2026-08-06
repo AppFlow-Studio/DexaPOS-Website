@@ -467,6 +467,25 @@ Single index for active ticket streams and their source trackers.
 - The engineering group message and POS repository restructure remain manual,
   separately verified follow-ups.
 
+## Stream W: [C1] NMI to Valor Processor Account Schema
+
+1. Canonical implementation and QA document:
+- `docs/features/billing/C1-MERCHANT-PROCESSOR-ACCOUNTS-SCHEMA.md`
+
+2. Notion sources:
+- C1 ticket: `3b18280c-1b1d-8133-a0c3-d073287e36e5`
+- Parent architecture: `3b18280c-1b1d-81fe-8923-ec09e70e6de0`
+
+3. Scope notes:
+- Adds the processor-agnostic account table, NMI/Valor discriminator columns,
+  active/primary indexes, and Clerk-aware RLS.
+- Existing NMI runtime behavior remains unchanged; no data is backfilled and
+  no merchant is cut over in C1.
+- Code is complete locally. Staging migration apply, schema/constraint/RLS QA,
+  generated-type refresh, Notion evidence attachment, and reviewer sign-off
+  remain manual.
+- C1 sign-off blocks C2 service-module merge.
+
 ## Notes
 
 1. Keep this file updated whenever a new ticket stream starts.
