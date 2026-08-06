@@ -28,10 +28,13 @@ import {
   unsnoozeItem,
   unsnoozeModifier,
   unsnoozeModifierGroup,
+  getTurnedOffItems,
   type ActiveSnoozes,
   type ActiveSnoozeItem,
   type ActiveSnoozeModifier,
+  type TurnedOffItem,
 } from '@/app/dashboard/actions/item-snooze'
+import { setItemAvailabilityScoped } from '@/app/dashboard/actions/menu-items-rpc'
 import {
   getCategorySnooze,
   snoozeCategory,
@@ -41,18 +44,24 @@ import {
   unsnoozeCategory,
 } from '@/app/dashboard/actions/category-snooze'
 
-export type { ActiveSnoozes }
+export type { ActiveSnoozes, TurnedOffItem }
 
-// Per-item snooze state at a location (drives the item editor's 86 control).
+// Per-item override state at a location: snooze (86) + raw is_available.
+// `is_available` is null when there's no override row (inherit global) — the
+// availability toggle seeds `is_available ?? global` from this.
 export function useItemSnooze(
   menuItemId: string | undefined,
   locationId: string | null,
 ) {
-  return useQuery<{ snoozed_until: string | null; snooze_reason: string | null }>({
+  return useQuery<{
+    snoozed_until: string | null
+    snooze_reason: string | null
+    is_available: boolean | null
+  }>({
     queryKey: ['item-snooze', menuItemId ?? null, locationId ?? null],
     queryFn: async () => {
       if (!menuItemId || !locationId) {
-        return { snoozed_until: null, snooze_reason: null }
+        return { snoozed_until: null, snooze_reason: null, is_available: null }
       }
       return getItemSnooze(menuItemId, locationId)
     },
@@ -81,11 +90,67 @@ export function useActiveSnoozes(
   })
 }
 
+// Items TURNED OFF at a location (is_available=false, no timed snooze) — a
+// deliberate hide the auto-restore cron never clears. Surfaced on the
+// Out-of-stock page so a single-location account can see + restore them.
+export function useTurnedOffItems(
+  clerkOrgId: string | null | undefined,
+  locationId: string | 'all',
+) {
+  return useQuery<TurnedOffItem[]>({
+    queryKey: ['turned-off-items', clerkOrgId ?? null, locationId, 'scoped'],
+    queryFn: async () => {
+      const result = await getTurnedOffItems(locationId)
+      if (!result.success) throw new Error(result.error)
+      return result.data ?? []
+    },
+    enabled: !!clerkOrgId && !!locationId && locationId !== 'all',
+    staleTime: 30 * 1000,
+  })
+}
+
+// ----------------------------------------------------------------------------
+// Availability toggle ("Available for sale") — per-location, scope-resolved.
+// Distinct from 86: this is the deliberate on/off, writing is_available on the
+// L2 override (single/specific location) or the global flag (multi-loc "All").
+// Single-location callers pass normalizeGlobal so re-enabling also lifts any
+// stale global mask.
+// ----------------------------------------------------------------------------
+
+export interface SetItemAvailabilityVars {
+  clerkOrgId: string
+  menuItemId: string
+  isAvailable: boolean
+  /** Gated location: concrete uuid, or null for multi-location on "All". */
+  locationId: string | null
+  /** True for single-location accounts (lift global mask when enabling). */
+  normalizeGlobal?: boolean
+}
+
+export function useSetItemAvailability() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ menuItemId, isAvailable, locationId, normalizeGlobal }: SetItemAvailabilityVars) =>
+      setItemAvailabilityScoped(menuItemId, isAvailable, locationId, { normalizeGlobal }),
+    onSuccess: (result, vars) => {
+      if (result.success) {
+        invalidate(queryClient, vars.clerkOrgId)
+        toast.success(vars.isAvailable ? 'Item enabled' : 'Item turned off')
+      } else {
+        toast.error(result.error || 'Failed to update availability')
+      }
+    },
+    onError: (e: Error) => toast.error(e.message || 'Failed to update availability'),
+  })
+}
+
 function invalidate(
   queryClient: QueryClient,
   clerkOrgId: string,
 ) {
   queryClient.invalidateQueries({ queryKey: ['snoozed-items', clerkOrgId] })
+  // "Turned off" (is_available=false, no snooze) list on the Out-of-stock page.
+  queryClient.invalidateQueries({ queryKey: ['turned-off-items'] })
   // Per-item / per-category control state + every menu view that surfaces
   // effective_availability or category snooze.
   queryClient.invalidateQueries({ queryKey: ['item-snooze'] })

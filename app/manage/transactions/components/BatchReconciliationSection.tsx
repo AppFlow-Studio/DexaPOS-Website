@@ -1,8 +1,8 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { format, parse, parseISO } from 'date-fns'
-import { AlertTriangle, CalendarIcon, Download, RefreshCcwDot } from 'lucide-react'
+import { format, parse, parseISO, subDays } from 'date-fns'
+import { AlertTriangle, CalendarIcon, Download, RefreshCcwDot, ShieldCheck } from 'lucide-react'
 import { InfoIcon } from '@/components/ui/info-icon'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -31,6 +31,11 @@ import {
   usePlatformSettlementBatches,
 } from '@/lib/queries/use-platform-analytics'
 import { toast } from 'sonner'
+import { PermissionGate } from '@/components/admin/PermissionGate'
+import { ManualBatchoutDialog } from './ManualBatchoutDialog'
+
+// Batch statuses for which a manual batchout is a no-op (already closed out).
+const SETTLED_BATCH_STATUSES = new Set(['settled', 'funded', 'closed'])
 
 const BATCH_STATUS_OPTIONS = ['open', 'closed', 'submitted', 'settled', 'funded'] as const
 
@@ -185,6 +190,10 @@ function DateField({
   )
 }
 
+// Bounded default window for the batch list so the reconciliation RPC never
+// runs unfiltered (all-time), which times out at scale (Postgres 57014).
+const defaultDateFrom = () => format(subDays(new Date(), 7), 'yyyy-MM-dd')
+
 export function BatchReconciliationSection({
   scopedMerchantId,
   renderBatchPayments,
@@ -194,11 +203,15 @@ export function BatchReconciliationSection({
 } = {}) {
   const [merchantId, setMerchantId] = useState(scopedMerchantId ?? 'all')
   const [status, setStatus] = useState('all')
-  const [dateFrom, setDateFrom] = useState('')
+  // Default to the last week so the initial load is bounded. An unfiltered
+  // (all-time) query fans the reconciliation RPC across every settlement batch
+  // and times out (57014) once payment volume is large.
+  const [dateFrom, setDateFrom] = useState(defaultDateFrom)
   const [dateTo, setDateTo] = useState('')
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null)
   const [merchants, setMerchants] = useState<PlatformMerchant[]>([])
   const [loadingMerchants, setLoadingMerchants] = useState(true)
+  const [manualBatchoutOpen, setManualBatchoutOpen] = useState(false)
 
   const filters = useMemo<PlatformSettlementBatchFilters>(() => ({
     merchantIds: merchantId !== 'all' ? [merchantId] : undefined,
@@ -272,7 +285,8 @@ export function BatchReconciliationSection({
   const clearFilters = () => {
     if (!scopedMerchantId) setMerchantId('all')
     setStatus('all')
-    setDateFrom('')
+    // Reset to the bounded default window, not all-time, to avoid the timeout.
+    setDateFrom(defaultDateFrom())
     setDateTo('')
     setSelectedBatchId(null)
   }
@@ -383,8 +397,12 @@ export function BatchReconciliationSection({
 
         {batchErrorCode && (
           <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
-            Batch reconciliation data unavailable (apply migration `027_adm_016_batch_reconciliation_rpc.sql`).
-            {` Error: ${batchErrorCode}`}
+            {batchErrorCode === '57014'
+              ? 'Batch reconciliation timed out. Narrow the date range or filter to a single merchant and try again.'
+              : batchErrorCode === 'PGRST202' || batchErrorCode === '42883'
+                ? 'Batch reconciliation RPC is not installed on this database. Apply the settlement batch migrations.'
+                : 'Batch reconciliation data is unavailable.'}
+            {` (Error: ${batchErrorCode})`}
           </div>
         )}
 
@@ -492,6 +510,23 @@ export function BatchReconciliationSection({
               <span className="font-medium">{formatCurrency(selectedBatch.gross_amount)}</span>
             </div>
 
+            <PermissionGate minLevel={10}>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setManualBatchoutOpen(true)}
+                  disabled={SETTLED_BATCH_STATUSES.has(selectedBatch.status.toLowerCase())}
+                >
+                  <ShieldCheck className="mr-2 h-4 w-4" />
+                  Manual Batchout
+                </Button>
+                <span className="text-xs text-muted-foreground">
+                  Super-admin only · marks this batch settled (reconciliation, not a terminal batchout).
+                </span>
+              </div>
+            </PermissionGate>
+
             {batchPaymentsErrorCode && (
               <div className="rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-800">
                 Batch payment details unavailable. Error: {batchPaymentsErrorCode}
@@ -564,6 +599,13 @@ export function BatchReconciliationSection({
             )}
           </div>
         )}
+
+        <ManualBatchoutDialog
+          batch={selectedBatch}
+          open={manualBatchoutOpen}
+          onOpenChange={setManualBatchoutOpen}
+          onSuccess={handleRefresh}
+        />
       </CardContent>
     </Card>
   )
