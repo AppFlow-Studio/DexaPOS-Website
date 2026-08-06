@@ -416,7 +416,9 @@ export function InteractiveCanvas({
     return (
         <div
             ref={containerRef}
-            className="relative w-full h-full bg-gray-50 overflow-hidden"
+            // `bg-muted/40`, not a hardcoded grey: the canvas backdrop has to
+            // follow the theme or the floor plan stays a light slab in dark mode.
+            className="relative h-full w-full overflow-hidden bg-muted/40"
             onWheel={handleWheel}
             onWheelCapture={(e) => {
                 // Always prevent browser zoom on canvas

@@ -58,7 +58,16 @@ export function DatePopover({
           </span>
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-auto p-0" align="start">
+      {/* `w-auto` overrides the primitive's fixed `w-72`, which is narrower
+          than the calendar grid and clipped the trailing columns.
+          `collisionPadding` keeps it off the viewport edge when the trigger
+          sits low or far right (e.g. inside a scrolled dialog). */}
+      <PopoverContent
+        className="w-auto max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl p-0"
+        align="start"
+        collisionPadding={16}
+        avoidCollisions
+      >
         <Calendar
           mode="single"
           selected={selected}

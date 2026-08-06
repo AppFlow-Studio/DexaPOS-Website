@@ -230,8 +230,8 @@ export default function LocationsPage() {
         return (
             <div className="space-y-6 animate-in fade-in duration-500 w-full min-w-0">
                 <div>
-                    <h1 className="text-xl font-semibold tracking-tight">Location</h1>
-                    <p className="text-sm text-muted-foreground mt-0.5">
+                    <h1 className="text-[1.75rem] font-semibold tracking-[-0.02em]">Location</h1>
+                    <p className="mt-1 text-sm text-muted-foreground">
                         Manage your store&apos;s details and settings
                     </p>
                 </div>
@@ -350,8 +350,8 @@ export default function LocationsPage() {
             {/* ── Header ─────────────────────────────────────────────────────── */}
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                    <h1 className="text-xl font-semibold tracking-tight">Locations</h1>
-                    <p className="text-sm text-muted-foreground mt-0.5">
+                    <h1 className="text-[1.75rem] font-semibold tracking-[-0.02em]">Locations</h1>
+                    <p className="mt-1 text-sm text-muted-foreground">
                         Manage your business locations and storefronts
                     </p>
                 </div>
@@ -434,12 +434,12 @@ export default function LocationsPage() {
                 </div>
 
                 <div className="relative flex-1 w-full sm:w-auto">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
                     <Input
                         placeholder="Search locations..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="pl-9 w-full"
+                        className="h-9 w-full rounded-full border-0 bg-muted/60 pl-9 text-[0.8125rem] shadow-none focus-visible:bg-background"
                     />
                 </div>
 

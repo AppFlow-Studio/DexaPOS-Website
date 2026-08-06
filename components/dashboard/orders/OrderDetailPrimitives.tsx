@@ -2,11 +2,18 @@
 
 import * as React from "react";
 import { cn } from "@/lib/utils";
+import {
+  PANEL_NESTED,
+} from "@/components/dashboard/shell/tokens";
 
 /**
  * Shared shell for the order-detail page, matching the dashboard Overview
  * language: a single `rounded-2xl` boundary per group, a brand-blue section
  * title, and hairline rules between rows instead of a card per row.
+ *
+ * These cards are `rounded-2xl` by design — they are tier 2 of the radius
+ * scale, nested inside the detail page's column grid rather than being
+ * top-level page panels (D-02).
  */
 export function DetailCard({
   className,
@@ -16,7 +23,7 @@ export function DetailCard({
   children: React.ReactNode;
 }) {
   return (
-    <div className={cn("rounded-2xl border bg-card", className)}>{children}</div>
+    <div className={cn(PANEL_NESTED, className)}>{children}</div>
   );
 }
 

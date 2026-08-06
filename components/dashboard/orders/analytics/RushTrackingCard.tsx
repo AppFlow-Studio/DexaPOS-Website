@@ -79,17 +79,14 @@ export function RushTrackingCard({
               label="Rush Items"
               value={data.rush_items}
               meta={`${(data.rush_percentage ?? 0).toFixed(1)}% of total`}
-              accent="warning"
             />
             <StatTile
               label="Rush Avg Time"
               value={formatTime(data.avg_rush_time_minutes ?? 0)}
-              accent="brand"
             />
             <StatTile
               label="Normal Avg Time"
               value={formatTime(data.avg_normal_time_minutes ?? 0)}
-              accent="positive"
             />
             <StatTile
               label="Rush Impact"

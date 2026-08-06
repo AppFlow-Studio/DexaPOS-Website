@@ -147,11 +147,15 @@ export function NetSalesSummaryCard({
         {/* Instant Deposit Banner */}
         {instantDepositAvailable > 0 && (
           <div className="mt-4 p-3 rounded-lg bg-gradient-to-r from-primary/10 to-primary/5 border border-primary/20 relative group">
+            {/* Close: filled, borderless, circular — the search-field
+                material. Visible at rest rather than fading in on hover, so
+                the dismiss affordance is discoverable without hunting. */}
             <button
               onClick={onDismissDeposit}
-              className="absolute top-2 right-2 p-1 rounded-full hover:bg-primary/10 transition-colors opacity-0 group-hover:opacity-100"
+              className="absolute top-2 right-2 inline-flex size-8 shrink-0 items-center justify-center rounded-full border-0 bg-muted/60 text-muted-foreground shadow-none transition-colors hover:bg-muted hover:text-foreground"
             >
-              <X className="h-3.5 w-3.5 text-muted-foreground" />
+              <X className="h-3.5 w-3.5" />
+              <span className="sr-only">Dismiss</span>
             </button>
             <div className="flex items-start gap-3">
               <div className="p-1.5 rounded-full bg-primary/20">

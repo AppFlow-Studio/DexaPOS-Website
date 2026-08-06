@@ -3,169 +3,6 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* :root {
-  --background: rgb(255, 255, 255);
-  --foreground: rgb(51, 51, 51);
-  --card: rgb(255, 255, 255);
-  --card-foreground: rgb(51, 51, 51);
-  --popover: rgb(255, 255, 255);
-  --popover-foreground: rgb(51, 51, 51);
-  --primary: rgb(59, 130, 246);
-  --primary-foreground: rgb(255, 255, 255);
-  --secondary: rgb(243, 244, 246);
-  --secondary-foreground: rgb(75, 85, 99);
-  --muted: rgb(249, 250, 251);
-  --muted-foreground: rgb(107, 114, 128);
-  --accent: rgb(224, 242, 254);
-  --accent-foreground: rgb(30, 58, 138);
-  --destructive: rgb(239, 68, 68);
-  --destructive-foreground: rgb(255, 255, 255);
-  --border: rgb(229, 231, 235);
-  --input: rgb(229, 231, 235);
-  --ring: rgb(59, 130, 246);
-  --chart-1: rgb(59, 130, 246);
-  --chart-2: rgb(37, 99, 235);
-  --chart-3: rgb(29, 78, 216);
-  --chart-4: rgb(30, 64, 175);
-  --chart-5: rgb(30, 58, 138);
-  --sidebar: rgb(249, 250, 251);
-  --sidebar-foreground: rgb(51, 51, 51);
-  --sidebar-primary: rgb(59, 130, 246);
-  --sidebar-primary-foreground: rgb(255, 255, 255);
-  --sidebar-accent: rgb(224, 242, 254);
-  --sidebar-accent-foreground: rgb(30, 58, 138);
-  --sidebar-border: rgb(229, 231, 235);
-  --sidebar-ring: rgb(59, 130, 246);
-  --font-sans: var(--font-geist-sans), Inter, ui-sans-serif, system-ui, sans-serif;
-  --font-serif: Source Serif 4, serif;
-  --font-mono: JetBrains Mono, monospace;
-  --radius: 0.375rem;
-  --shadow-x: 0;
-  --shadow-y: 1px;
-  --shadow-blur: 3px;
-  --shadow-spread: 0px;
-  --shadow-opacity: 0.1;
-  --shadow-color: oklch(0 0 0);
-  --shadow-2xs: 0 1px 3px 0px hsl(0 0% 0% / 0.05);
-  --shadow-xs: 0 1px 3px 0px hsl(0 0% 0% / 0.05);
-  --shadow-sm: 0 1px 3px 0px hsl(0 0% 0% / 0.10), 0 1px 2px -1px hsl(0 0% 0% / 0.10);
-  --shadow: 0 1px 3px 0px hsl(0 0% 0% / 0.10), 0 1px 2px -1px hsl(0 0% 0% / 0.10);
-  --shadow-md: 0 1px 3px 0px hsl(0 0% 0% / 0.10), 0 2px 4px -1px hsl(0 0% 0% / 0.10);
-  --shadow-lg: 0 1px 3px 0px hsl(0 0% 0% / 0.10), 0 4px 6px -1px hsl(0 0% 0% / 0.10);
-  --shadow-xl: 0 1px 3px 0px hsl(0 0% 0% / 0.10), 0 8px 10px -1px hsl(0 0% 0% / 0.10);
-  --shadow-2xl: 0 1px 3px 0px hsl(0 0% 0% / 0.25);
-  --tracking-normal: 0em;
-  --spacing: 0.25rem;
-}
-
-.dark {
-  --background: rgb(23, 23, 23);
-  --foreground: rgb(229, 229, 229);
-  --card: rgb(38, 38, 38);
-  --card-foreground: rgb(229, 229, 229);
-  --popover: rgb(38, 38, 38);
-  --popover-foreground: rgb(229, 229, 229);
-  --primary: rgb(59, 130, 246);
-  --primary-foreground: rgb(255, 255, 255);
-  --secondary: rgb(38, 38, 38);
-  --secondary-foreground: rgb(229, 229, 229);
-  --muted: rgb(31, 31, 31);
-  --muted-foreground: rgb(163, 163, 163);
-  --accent: rgb(30, 58, 138);
-  --accent-foreground: rgb(191, 219, 254);
-  --destructive: rgb(239, 68, 68);
-  --destructive-foreground: rgb(255, 255, 255);
-  --border: rgb(64, 64, 64);
-  --input: rgb(64, 64, 64);
-  --ring: rgb(59, 130, 246);
-  --chart-1: rgb(96, 165, 250);
-  --chart-2: rgb(59, 130, 246);
-  --chart-3: rgb(37, 99, 235);
-  --chart-4: rgb(29, 78, 216);
-  --chart-5: rgb(30, 64, 175);
-  --sidebar: rgb(23, 23, 23);
-  --sidebar-foreground: rgb(229, 229, 229);
-  --sidebar-primary: rgb(59, 130, 246);
-  --sidebar-primary-foreground: rgb(255, 255, 255);
-  --sidebar-accent: rgb(30, 58, 138);
-  --sidebar-accent-foreground: rgb(191, 219, 254);
-  --sidebar-border: rgb(64, 64, 64);
-  --sidebar-ring: rgb(59, 130, 246);
-  --font-sans: var(--font-geist-sans), Inter, ui-sans-serif, system-ui, sans-serif;
-  --font-serif: Source Serif 4, serif;
-  --font-mono: JetBrains Mono, monospace;
-  --radius: 0.375rem;
-  --shadow-x: 0;
-  --shadow-y: 1px;
-  --shadow-blur: 3px;
-  --shadow-spread: 0px;
-  --shadow-opacity: 0.1;
-  --shadow-color: oklch(0 0 0);
-  --shadow-2xs: 0 1px 3px 0px hsl(0 0% 0% / 0.05);
-  --shadow-xs: 0 1px 3px 0px hsl(0 0% 0% / 0.05);
-  --shadow-sm: 0 1px 3px 0px hsl(0 0% 0% / 0.10), 0 1px 2px -1px hsl(0 0% 0% / 0.10);
-  --shadow: 0 1px 3px 0px hsl(0 0% 0% / 0.10), 0 1px 2px -1px hsl(0 0% 0% / 0.10);
-  --shadow-md: 0 1px 3px 0px hsl(0 0% 0% / 0.10), 0 2px 4px -1px hsl(0 0% 0% / 0.10);
-  --shadow-lg: 0 1px 3px 0px hsl(0 0% 0% / 0.10), 0 4px 6px -1px hsl(0 0% 0% / 0.10);
-  --shadow-xl: 0 1px 3px 0px hsl(0 0% 0% / 0.10), 0 8px 10px -1px hsl(0 0% 0% / 0.10);
-  --shadow-2xl: 0 1px 3px 0px hsl(0 0% 0% / 0.25);
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-card: var(--card);
-  --color-card-foreground: var(--card-foreground);
-  --color-popover: var(--popover);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-secondary: var(--secondary);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-muted: var(--muted);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-destructive: var(--destructive);
-  --color-destructive-foreground: var(--destructive-foreground);
-  --color-border: var(--border);
-  --color-input: var(--input);
-  --color-ring: var(--ring);
-  --color-chart-1: var(--chart-1);
-  --color-chart-2: var(--chart-2);
-  --color-chart-3: var(--chart-3);
-  --color-chart-4: var(--chart-4);
-  --color-chart-5: var(--chart-5);
-  --color-sidebar: var(--sidebar);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-ring: var(--sidebar-ring);
-
-  --breakpoint-xs: 25rem;
-
-  --font-sans: var(--font-sans);
-  --font-mono: var(--font-mono);
-  --font-serif: var(--font-serif);
-
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
-
-  --shadow-2xs: var(--shadow-2xs);
-  --shadow-xs: var(--shadow-xs);
-  --shadow-sm: var(--shadow-sm);
-  --shadow: var(--shadow);
-  --shadow-md: var(--shadow-md);
-  --shadow-lg: var(--shadow-lg);
-  --shadow-xl: var(--shadow-xl);
-  --shadow-2xl: var(--shadow-2xl);
-} */
-
 :root {
   --background: oklch(0.9842 0.0034 247.8575);
   --foreground: oklch(0.2795 0.0368 260.0310);
@@ -175,6 +12,11 @@
   --popover-foreground: oklch(0.2795 0.0368 260.0310);
   --primary: oklch(0.5854 0.2041 277.1173);
   --primary-foreground: oklch(1.0000 0 0);
+  /* Dashboard brand blue. Distinct from --primary (violet): this is the accent
+     that marks section headings in the merchant dashboard. Section headings
+     only — never stat-tile labels, or the accent stops signalling anything. */
+  --brand: #0C4FD1;
+  --brand-foreground: #FFFFFF;
   --secondary: oklch(0.9276 0.0058 264.5313);
   --secondary-foreground: oklch(0.3729 0.0306 259.7328);
   --muted: oklch(0.9670 0.0029 264.5419);
@@ -285,6 +127,11 @@
   --popover-foreground: oklch(0.9288 0.0126 255.5078);
   --primary: oklch(0.6801 0.1583 276.9349);
   --primary-foreground: oklch(0.2077 0.0398 265.7549);
+  /* Lightened brand blue. #0C4FD1 fails contrast on the dark card surface
+     (#1c1f26 inside .dashboard-sidebar-theme), so dark mode steps up rather
+     than reusing the light value. */
+  --brand: #6CA0FF;
+  --brand-foreground: #0B1220;
   --secondary: oklch(0.3351 0.0331 260.9120);
   --secondary-foreground: oklch(0.8717 0.0093 258.3382);
   --muted: oklch(0.2427 0.0381 259.9437);
@@ -338,6 +185,8 @@
   --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
@@ -401,6 +250,29 @@
 html:has([data-template]) body {
   background-color: var(--bg);
   color: var(--text);
+}
+
+/* ---------------------------------------------------------------------------
+   Dashboard / HQ shells: exactly one scrollbar.
+
+   The shell caps itself at the viewport, but `<html>` and `<body>` have no
+   height constraint of their own — so anything that overflows the shell grows
+   the document and the WINDOW scrolls as well. That produces a second, useless
+   scrollbar beside the real one, with dead space beneath the content.
+
+   Capping the document closes that off at the root. Keyed on
+   `.dashboard-sidebar-theme`, which only the dashboard and manage shells
+   carry, so storefront, marketing, receipt and print pages scroll normally.
+
+   `#main-content` inside the shell stays the single intended scroll container:
+   this removes the *extra* scrollbar, not the working one.
+   --------------------------------------------------------------------------- */
+html:has(.dashboard-sidebar-theme),
+html:has(.dashboard-sidebar-theme) body {
+  height: 100%;
+  max-height: 100svh;
+  overflow: hidden;
+  overscroll-behavior: none;
 }
 
 
@@ -592,4 +464,145 @@ html:has([data-template]) body[data-scroll-locked] {
   background-color: var(--input);
   color: var(--foreground);
   border-color: var(--border);
+}
+
+/* ---------------------------------------------------------------------------
+   Soft form fields: borderless, filled, generously rounded.
+
+   Same rationale as `.tables-pill-controls` below — a form with a dozen
+   shadcn Inputs/Textareas would otherwise need the same class string repeated
+   at every call site. Scoped to the class so it cannot leak.
+
+   The material is the search-field material from the design system (§4.2):
+   no border, `bg-muted/60`, no shadow, and the fill brightening to the card
+   colour on focus so the active field reads without a ring of chrome.
+   --------------------------------------------------------------------------- */
+/* Target the ELEMENTS, not `[data-slot="input"]`. `FormControl` renders a Radix
+   `Slot` that passes `data-slot="form-control"` down onto its child, which
+   overwrites the Input's own `data-slot="input"` — so a slot selector matches
+   nothing for any field inside a `FormField`. Tag selectors are immune. */
+.soft-form-fields input:not([type="checkbox"]):not([type="radio"]),
+.soft-form-fields textarea,
+.soft-form-fields [data-slot="select-trigger"],
+.soft-form-fields [data-slot="popover-trigger"],
+.soft-form-fields button[role="combobox"] {
+  border-color: transparent;
+  background-color: color-mix(in oklab, var(--muted) 60%, transparent);
+  box-shadow: none;
+  border-radius: 1.25rem;
+}
+
+.soft-form-fields input:not([type="checkbox"]):not([type="radio"]):focus-visible,
+.soft-form-fields textarea:focus-visible,
+.soft-form-fields [data-slot="select-trigger"]:focus-visible {
+  background-color: var(--background);
+}
+
+/* Multi-line fields get a slightly softer rectangle than the single-line ones. */
+.soft-form-fields textarea {
+  border-radius: 1.5rem;
+}
+
+/* Native date/time inputs: the FIELD takes our radius and fill like any other.
+   Their dropdown panel is browser-rendered UI that no stylesheet can reach —
+   that is a platform limit, not an oversight. The picker glyph is nudged to the
+   muted foreground so it does not sit brighter than the field's own text. */
+.soft-form-fields input[type="time"],
+.soft-form-fields input[type="date"] {
+  border-radius: 1.25rem;
+}
+
+.soft-form-fields input[type="time"]::-webkit-calendar-picker-indicator,
+.soft-form-fields input[type="date"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.55;
+}
+
+.soft-form-fields input[type="time"]::-webkit-calendar-picker-indicator:hover,
+.soft-form-fields input[type="date"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+}
+
+.dark .soft-form-fields input[type="time"]::-webkit-calendar-picker-indicator,
+.dark .soft-form-fields input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+}
+
+/* The DatePopover trigger is a Button that plays the role of a field. It is
+   identifiable by its outline variant + full width; the footer's action
+   buttons are neither, so they keep their pill shape. */
+.soft-form-fields button[data-slot="form-control"] {
+  border-color: transparent;
+  background-color: color-mix(in oklab, var(--muted) 60%, transparent);
+  box-shadow: none;
+  border-radius: 1.25rem;
+}
+
+/* react-international-phone styles itself from its own custom properties
+   rather than a class, so the selectors above cannot reach it. */
+.soft-form-fields .react-international-phone-input-container {
+  --react-international-phone-border-radius: 1.25rem;
+  --react-international-phone-border-color: transparent;
+}
+
+.soft-form-fields .react-international-phone-input-container .react-international-phone-input,
+.soft-form-fields .react-international-phone-input-container .react-international-phone-country-selector-button {
+  background-color: color-mix(in oklab, var(--muted) 60%, transparent);
+  border-color: transparent;
+  box-shadow: none;
+}
+
+/* ---------------------------------------------------------------------------
+   Tables → floor-plan editor: pill controls.
+
+   The editor is a dense toolbar app built from many small shadcn Buttons,
+   Inputs and Selects, all of which ship `rounded-md`. Rather than append
+   `rounded-full` to several dozen call sites (and miss some), the shape is
+   applied once here.
+
+   Scoped to `.tables-pill-controls` so it can never leak into the rest of the
+   app. Square-cornered children opt out with `rounded-none`; containers keep
+   their tier radius via the `rounded-2xl` / `rounded-3xl` guards.
+   --------------------------------------------------------------------------- */
+.tables-pill-controls button:not([class*="rounded-none"]):not([class*="rounded-2xl"]):not([class*="rounded-3xl"]),
+.tables-pill-controls input:not([type="checkbox"]):not([type="radio"]):not([class*="rounded-none"]),
+.tables-pill-controls [data-slot="input"],
+.tables-pill-controls [data-slot="select-trigger"] {
+  border-radius: 9999px;
+}
+
+/* Icon-only buttons stay circular rather than becoming stadium-shaped. */
+.tables-pill-controls button[data-slot="button"][class*="size-8"],
+.tables-pill-controls button[data-slot="button"][class*="size-9"] {
+  border-radius: 9999px;
+}
+
+/* Multi-line fields keep a soft rectangle — a stadium shape crops the text. */
+.tables-pill-controls textarea:not([class*="rounded-none"]) {
+  border-radius: 1rem;
+}
+
+/* react-international-phone styles itself from its own custom property rather
+   than a class, so the Tailwind selectors above cannot reach it. */
+.tables-pill-controls .react-international-phone-input-container {
+  --react-international-phone-border-radius: 9999px;
+}
+
+/* ---------------------------------------------------------------------------
+   Radix portals its overlays to the <body>, outside any scoped ancestor, so
+   `.tables-pill-controls` cannot reach them. These target the slots directly:
+   the panel takes the tier-2 overlay radius and its rows become pills.
+
+   Global on purpose — every dropdown/select panel in the product uses the same
+   overlay radius (§3.1), so this also retires the per-call-site
+   `className="rounded-2xl"` overrides the primitives otherwise need.
+   --------------------------------------------------------------------------- */
+[data-slot="select-content"],
+[data-slot="dropdown-menu-content"] {
+  border-radius: 1rem;
+}
+
+[data-slot="select-content"] [data-slot="select-item"],
+[data-slot="dropdown-menu-content"] [data-slot="dropdown-menu-item"] {
+  border-radius: 9999px;
 }

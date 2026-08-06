@@ -60,7 +60,6 @@ export function AvgTableTurnTime({ data, isLoading }: AvgTableTurnTimeProps) {
             <StatTile
               label="Avg Turn Time"
               value={formatTime(data.avg_turn_time_minutes)}
-              accent="brand"
             />
             <StatTile label="Total Sessions" value={data.total_sessions} />
             <StatTile label="Total Covers" value={data.total_covers} />

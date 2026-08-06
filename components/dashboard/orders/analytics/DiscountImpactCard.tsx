@@ -57,7 +57,6 @@ export function DiscountImpactCard({ data, isLoading }: DiscountImpactCardProps)
             <StatTile
               label="Avg Discount per Order"
               value={formatCurrency(data.avgDiscountPerOrder)}
-              accent="brand"
             />
           </StatRow>
 

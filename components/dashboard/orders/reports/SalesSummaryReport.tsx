@@ -206,7 +206,7 @@ export function SalesSummaryReport({
                   key={channel.channel}
                   label={channel.label}
                   value={formatCurrency(channel.net)}
-                  description={`${channel.orders.toLocaleString()} orders · ${formatCurrency(channel.avgTicket)} avg`}
+                  meta={`${channel.orders.toLocaleString()} orders · ${formatCurrency(channel.avgTicket)} avg`}
                   icon={<Icon className="h-5 w-5" />}
                   dimmed={orderSource !== null && orderSource !== channel.channel}
                 />

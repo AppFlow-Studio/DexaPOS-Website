@@ -5,9 +5,12 @@ import { useAuth } from '@clerk/nextjs'
 import { useIsAllLocations, useSelectedLocation } from '@/stores/location-store'
 
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
-import { MapPin, Globe, ArrowLeft } from 'lucide-react'
-import Link from 'next/link'
-import { Button } from '@/components/ui/button'
+import {
+  LocationIndicator,
+  PageHeader,
+  PageShell,
+  Panel,
+} from '@/components/dashboard/shell'
 import { DateRangePicker, DatePreset } from '@/components/dashboard/orders/DateRangePicker'
 import { SalesSummaryReport } from '@/components/dashboard/orders/reports/SalesSummaryReport'
 import { HourlySalesReport } from '@/components/dashboard/orders/reports/HourlySalesReport'
@@ -65,7 +68,7 @@ export default function ReportsPage() {
     activeTab === 'sales-summary' || activeTab === 'item-sales'
 
   return (
-    <main className="space-y-6">
+    <PageShell>
       {/*
         Reports used to stack a bordered, shadowed, blue-tinted Card per tab on
         top of a solid-blue table header. It now reads as one rounded container
@@ -81,7 +84,11 @@ export default function ReportsPage() {
              scrolls on its inner columns, so nothing is cut off here. */
           overflow: hidden;
         }
-        .reports-date-popover button,
+        /* Month/year selects and the Cancel/Apply footer. The preset buttons
+           are excluded: they own their own radius, which differs by breakpoint
+           (pill-shaped chips when stacked on a phone, a square-cornered list on
+           a wide screen). */
+        .reports-date-popover button:not(.rounded-full):not([class*="rounded-none"]),
         .reports-date-popover select {
           border-radius: 0.625rem;
         }
@@ -91,45 +98,18 @@ export default function ReportsPage() {
         }
       `}</style>
 
-      {/* Back to Orders */}
-      <Button
-        variant="ghost"
-        size="sm"
-        className="-ml-2 h-8 gap-1.5 rounded-full text-muted-foreground"
-        asChild
-      >
-        <Link href="/dashboard/orders">
-          <ArrowLeft className="h-4 w-4" />
-          Back to Orders
-        </Link>
-      </Button>
-
-      {/* Header */}
-      <div className="animate-in fade-in duration-500">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h1 className="text-[1.75rem] font-semibold tracking-[-0.02em]">
-            Reports
-          </h1>
-
-          <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
-            {isAllLocations ? (
-              <>
-                <Globe className="h-4 w-4" />
-                All Locations
-              </>
-            ) : (
-              <>
-                <MapPin className="h-4 w-4" />
-                {selectedLocation?.name}
-              </>
-            )}
-          </p>
-        </div>
-
-        <p className="mt-1 text-sm text-muted-foreground">
-          Download and analyze detailed reports for your business
-        </p>
-      </div>
+      <PageHeader
+        title="Reports"
+        subtitle="Download and analyze detailed reports for your business"
+        backHref="/dashboard/orders"
+        backLabel="Back to Orders"
+        indicator={
+          <LocationIndicator
+            isAllLocations={isAllLocations}
+            locationName={selectedLocation?.name}
+          />
+        }
+      />
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         {/* Segmented pill tab bar — same affordance as the Analytics tabs and
@@ -216,15 +196,17 @@ export default function ReportsPage() {
           </ReportPanel>
         </TabsContent>
       </Tabs>
-    </main>
+    </PageShell>
   )
 }
 
-/** The rounded container one report's content lives inside. */
+/**
+ * The rounded container one report's content lives inside.
+ *
+ * A tier-1 `Panel` with slightly taller padding than the default `padded`
+ * (`py-7` vs `py-6`) — reports open on a row of headline figures, which needs
+ * a little more air above it than a toolbar does.
+ */
 function ReportPanel({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="min-w-0 rounded-3xl border bg-card px-6 py-7">
-      {children}
-    </div>
-  )
+  return <Panel className="px-6 py-7">{children}</Panel>
 }

@@ -505,8 +505,13 @@ export default function ManageLayout({
         { title: 'Device Catalog', url: '/manage/device-catalog', icon: Monitor },
     ]
 
+    // Capped at the viewport so #main-content below is the only scroll
+    // container. `min-h-0` is required: the provider ships `min-h-svh`, and a
+    // min-height beats a smaller height whatever the source order, so without
+    // it the wrapper grows and the window scrolls too — two scrollbars.
+    // Mirrors app/dashboard/layout.tsx.
     return (
-        <SidebarProvider className="dashboard-sidebar-theme">
+        <SidebarProvider className="dashboard-sidebar-theme h-svh max-h-svh min-h-0 overflow-hidden">
             <DeviceRegistryCommandPaletteProvider>
                 <Suspense>
                     <DeniedParamHandler />
@@ -519,7 +524,7 @@ export default function ManageLayout({
                     (and its Exit button) are reachable from the admin console. */}
                 <ImpersonationHydrator />
                 <AppSidebar />
-                <main aria-label="Admin content" className="flex-1 flex flex-col min-w-0 bg-background">
+                <main aria-label="Admin content" className="h-svh max-h-svh min-h-0 flex-1 flex flex-col min-w-0 overflow-hidden bg-background">
                     <ImpersonationBanner />
                     <header className="flex h-16 shrink-0 items-center gap-2 border-b px-3 sm:px-4">
                         <SidebarTrigger className="-ml-1 hidden sm:flex" />
@@ -538,7 +543,7 @@ export default function ManageLayout({
                             />
                         </div>
                     </header>
-                    <div id="main-content" className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6 pb-20 sm:pb-6 min-w-0">
+                    <div id="main-content" className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-4 sm:p-6 pb-20 sm:pb-6 min-w-0">
                     {children}
                     </div>
                 </main>

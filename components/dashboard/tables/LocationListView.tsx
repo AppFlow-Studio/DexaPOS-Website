@@ -5,7 +5,7 @@ import { useMemo } from 'react'
 import { useUserInfo } from '@/app/manage/hooks/useUserInfo.'
 import { GetLocationsWithFloorPlanStats } from '@/app/dashboard/actions/floor-plan-server'
 import { LocationCard } from './LocationCard'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Panel } from '@/components/dashboard/shell'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Empty } from '@/components/ui/empty'
 import { MapPin } from 'lucide-react'
@@ -44,24 +44,18 @@ export function LocationListView({ onLocationSelect }: LocationListViewProps) {
 
     if (isLoading) {
         return (
-            <div className="space-y-4">
-                <Card>
-                    <CardHeader>
-                        <Skeleton className="h-6 w-48" />
-                        <Skeleton className="h-4 w-96 mt-2" />
-                    </CardHeader>
-                </Card>
+            <div className="space-y-6">
+                <div>
+                    <Skeleton className="h-6 w-48" />
+                    <Skeleton className="mt-2 h-4 w-96" />
+                </div>
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                     {[1, 2, 3].map((i) => (
-                        <Card key={i}>
-                            <CardHeader>
-                                <Skeleton className="h-5 w-32" />
-                                <Skeleton className="h-4 w-24 mt-2" />
-                            </CardHeader>
-                            <CardContent>
-                                <Skeleton className="h-20 w-full" />
-                            </CardContent>
-                        </Card>
+                        <Panel key={i} nested padded>
+                            <Skeleton className="h-5 w-32" />
+                            <Skeleton className="mt-2 h-4 w-24" />
+                            <Skeleton className="mt-4 h-20 w-full" />
+                        </Panel>
                     ))}
                 </div>
             </div>
@@ -70,42 +64,41 @@ export function LocationListView({ onLocationSelect }: LocationListViewProps) {
 
     if (error) {
         return (
-            <Card>
-                <CardContent className="py-12">
-                    <Empty
-                        icon={MapPin}
-                        title="Error loading locations"
-                        description={error instanceof Error ? error.message : 'Failed to load locations'}
-                    />
-                </CardContent>
-            </Card>
+            <Panel className="py-12">
+                <Empty
+                    icon={MapPin}
+                    title="Error loading locations"
+                    description={error instanceof Error ? error.message : 'Failed to load locations'}
+                />
+            </Panel>
         )
     }
 
     if (!locationsWithStats || locationsWithStats.length === 0) {
         return (
-            <Card>
-                <CardContent className="py-12">
-                    <Empty
-                        icon={MapPin}
-                        title="No locations found"
-                        description="Create a location to start managing floor plans and tables"
-                    />
-                </CardContent>
-            </Card>
+            <Panel className="py-12">
+                <Empty
+                    icon={MapPin}
+                    title="No locations found"
+                    description="Create a location to start managing floor plans and tables"
+                />
+            </Panel>
         )
     }
 
     return (
         <div className="space-y-6">
-            <Card>
-                <CardHeader>
-                    <CardTitle>Select a Location</CardTitle>
-                    <CardDescription>
-                        Choose a location to view and manage its floor plans and tables
-                    </CardDescription>
-                </CardHeader>
-            </Card>
+            {/* The picker heading is page furniture, not a card: a bordered box
+                whose only content is a title competed with the location cards
+                beneath it. */}
+            <div>
+                <h2 className="text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]">
+                    Select a Location
+                </h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                    Choose a location to view and manage its floor plans and tables
+                </p>
+            </div>
 
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {locationsWithStats.map((stat) => {

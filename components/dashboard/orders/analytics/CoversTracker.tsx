@@ -84,7 +84,6 @@ export function CoversTracker({ data, isLoading, numberOfDays = 1 }: CoversTrack
             <StatTile
               label="Total Covers"
               value={data.total_covers}
-              accent="brand"
             />
             <StatTile
               label="Peak Hour"

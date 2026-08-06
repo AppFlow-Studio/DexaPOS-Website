@@ -422,7 +422,7 @@ export default function OrderDetailPage() {
           </Button>
           <div className="min-w-0">
             <div className="flex items-center gap-2.5 flex-wrap">
-              <h1 className="text-[1.75rem] font-medium leading-tight tracking-[-0.02em] tabular-nums md:text-[2rem]">
+              <h1 className="text-[1.75rem] font-semibold tracking-[-0.02em] tabular-nums">
                 Order #{order.display_number || order.order_number}
               </h1>
               <OrderStatusBadge status={order.status} />

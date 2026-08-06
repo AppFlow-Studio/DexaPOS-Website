@@ -27,8 +27,8 @@ import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Badge } from '@/components/ui/badge'
 import { AlertTriangle, CalendarDays, Clock3, Crown, Loader2, Users } from 'lucide-react'
+import { DatePopover } from '@/app/dashboard/settings/tips/components/DatePopover'
 import { useUpdateReservation } from '@/app/dashboard/hooks/useReservations'
 import { toast } from 'sonner'
 import type { Reservation } from '@/types/floor-plan'
@@ -172,38 +172,44 @@ export default function EditReservationDialog ({
       <DialogContent
         elevation='high'
         overlayClassName='z-[260]'
-        className='!h-[96vh] !w-[98vw] !max-w-[98vw] z-[261] border-border/70 p-0 shadow-2xl sm:!max-w-[98vw] sm:overflow-hidden'
+        // Mobile: full-width bottom sheet. `dialog.tsx` pins mobile to `h-dvh`
+        // with its own `overflow-y-auto`, which forced full viewport height
+        // regardless of content (dead space below the form) and nested a second
+        // scroller inside the form's own. `h-auto` sizes to content instead.
+        className='soft-form-fields flex max-h-[92vh] flex-col gap-0 overflow-hidden rounded-[32px] border-0 p-0 shadow-none z-[261] sm:!max-w-3xl max-sm:inset-x-0 max-sm:bottom-0 max-sm:top-auto max-sm:h-auto max-sm:max-h-[92dvh] max-sm:w-full max-sm:max-w-none max-sm:translate-x-0 max-sm:translate-y-0 max-sm:overflow-hidden max-sm:rounded-b-none max-sm:rounded-t-[28px]'
       >
-        <DialogHeader className='border-b border-border/70 bg-gradient-to-r from-muted/40 via-background to-muted/20 px-6 py-4'>
-          <div className='flex flex-col gap-3 text-left lg:flex-row lg:items-center lg:justify-between'>
+        <DialogHeader className='shrink-0 px-6 pt-6 pb-2'>
+          {/* `pr-12` keeps the date chip clear of the absolutely-positioned
+              close button, which sits at `top-4 right-4` in `dialog.tsx`. */}
+          <div className='flex flex-col gap-3 pr-12 text-left lg:flex-row lg:items-center lg:justify-between'>
             <div className='space-y-2 text-left'>
-              <DialogTitle className='text-[1.65rem] font-semibold tracking-tight'>Edit Reservation</DialogTitle>
+              <DialogTitle className='text-[1.0625rem] font-semibold tracking-[-0.01em]'>Edit Reservation</DialogTitle>
               <DialogDescription className='max-w-2xl text-sm leading-relaxed'>
                 Update the guest, schedule, and seating details without leaving the reservation flow.
               </DialogDescription>
             </div>
-            <Badge variant='secondary' className='mt-0.5 inline-flex gap-1.5 self-start rounded-full px-3 py-1.5 text-xs font-medium'>
+            <span className='inline-flex shrink-0 items-center gap-1.5 self-start rounded-full bg-muted/60 px-2.5 py-0.5 text-xs font-medium text-muted-foreground tabular-nums'>
               <CalendarDays className='h-3.5 w-3.5' />
               {reservation.reservation_date ?? date}
-            </Badge>
+            </span>
           </div>
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit, onInvalidSubmit)} className='flex h-[calc(96vh-88px)] flex-col px-6 py-4 pb-6'>
-            <div className='min-h-0 flex-1 overflow-y-auto pr-1'>
-              <div className='space-y-4 pb-4'>
+          <form onSubmit={form.handleSubmit(onSubmit, onInvalidSubmit)} className='flex min-h-0 flex-1 flex-col'>
+            <div className='min-h-0 flex-1 overflow-y-auto'>
+              <div>
                 {submitError && (
-                  <Alert variant='destructive'>
+                  <Alert variant='destructive' className='mx-6 mt-5 w-auto rounded-2xl'>
                     <AlertTriangle className='h-4 w-4' />
                     <AlertDescription>{submitError}</AlertDescription>
                   </Alert>
                 )}
 
-                <div className='grid gap-5 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.95fr)_minmax(0,0.9fr)]'>
-                  <section className='min-w-0 rounded-2xl border border-border/70 bg-background p-4'>
-                    <div className='mb-4 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground'>
-                      <Users className='h-4 w-4' />
+                <div>
+                  <section className='min-w-0 px-6 py-6'>
+                    <div className='mb-4 flex items-center gap-2 text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]'>
+                      <Users className='h-[1.125rem] w-[1.125rem] shrink-0' />
                       Guest Details
                     </div>
                     <div className='grid gap-4'>
@@ -221,7 +227,7 @@ export default function EditReservationDialog ({
                         )}
                       />
 
-                      <div className='grid gap-4 xl:grid-cols-[140px_minmax(0,1fr)]'>
+                      <div className='grid gap-4 sm:grid-cols-[140px_minmax(0,1fr)]'>
                         <FormField
                           control={form.control}
                           name='partySize'
@@ -283,9 +289,9 @@ export default function EditReservationDialog ({
                     </div>
                   </section>
 
-                  <section className='min-w-0 rounded-2xl border border-border/70 bg-background p-4'>
-                    <div className='mb-4 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground'>
-                      <Clock3 className='h-4 w-4' />
+                  <section className='min-w-0 px-6 py-6'>
+                    <div className='mb-4 flex items-center gap-2 text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]'>
+                      <Clock3 className='h-[1.125rem] w-[1.125rem] shrink-0' />
                       Schedule
                     </div>
                     <div className='grid gap-4'>
@@ -293,17 +299,20 @@ export default function EditReservationDialog ({
                         control={form.control}
                         name='reservationDate'
                         render={({ field }) => (
-                          <FormItem>
+                          <FormItem className='sm:max-w-[calc(50%-0.5rem)]'>
                             <FormLabel>Date</FormLabel>
                             <FormControl>
-                              <Input type='date' {...field} />
+                              <DatePopover
+                                value={field.value}
+                                onChange={value => field.onChange(value ?? '')}
+                              />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
                         )}
                       />
 
-                      <div className='grid gap-4 xl:grid-cols-2'>
+                      <div className='grid gap-4 sm:grid-cols-2'>
                         <FormField
                           control={form.control}
                           name='reservationTime'
@@ -311,6 +320,7 @@ export default function EditReservationDialog ({
                             <FormItem>
                               <FormLabel>Time</FormLabel>
                               <FormControl>
+                                {/* Native — see the note in CreateReservationDialog. */}
                                 <Input type='time' {...field} />
                               </FormControl>
                               <FormMessage />
@@ -343,9 +353,9 @@ export default function EditReservationDialog ({
                     </div>
                   </section>
 
-                  <section className='min-w-0 rounded-2xl border border-border/70 bg-muted/20 p-4'>
-                    <div className='mb-4 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground'>
-                      <Crown className='h-4 w-4' />
+                  <section className='min-w-0 px-6 py-6'>
+                    <div className='mb-4 flex items-center gap-2 text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]'>
+                      <Crown className='h-[1.125rem] w-[1.125rem] shrink-0' />
                       Preferences
                     </div>
                     <div className='grid gap-4'>
@@ -377,7 +387,7 @@ export default function EditReservationDialog ({
                         )}
                       />
 
-                      <div className='grid gap-4 xl:grid-cols-2'>
+                      <div className='grid gap-4 sm:grid-cols-2'>
                         <FormField
                           control={form.control}
                           name='notes'
@@ -410,7 +420,7 @@ export default function EditReservationDialog ({
                           control={form.control}
                           name='isVip'
                           render={({ field }) => (
-                            <FormItem className='flex items-center justify-between gap-4 rounded-xl border border-border/70 bg-background px-4 py-3 xl:col-span-2'>
+                            <FormItem className='flex items-center justify-between gap-4 rounded-[24px] border-0 bg-muted/40 px-4 py-3 shadow-none sm:col-span-2'>
                               <div className='space-y-1'>
                                 <FormLabel className='mt-0 text-sm'>VIP Guest</FormLabel>
                                 <p className='text-xs text-muted-foreground'>
@@ -418,9 +428,12 @@ export default function EditReservationDialog ({
                                 </p>
                               </div>
                               <FormControl>
+                                {/* Larger with a visible off-state — the default
+                                    switch all but disappears on a tinted well. */}
                                 <Switch
                                   checked={field.value}
                                   onCheckedChange={field.onChange}
+                                  className='h-6 w-11 shrink-0 ring-1 ring-border data-[state=checked]:bg-[#0C4FD1] dark:data-[state=checked]:bg-[#6CA0FF] data-[state=unchecked]:bg-muted-foreground/35 dark:data-[state=unchecked]:bg-muted-foreground/40 [&>[data-slot=switch-thumb]]:size-5 [&>[data-slot=switch-thumb]]:bg-background [&>[data-slot=switch-thumb]]:shadow-sm'
                                 />
                               </FormControl>
                             </FormItem>
@@ -433,14 +446,13 @@ export default function EditReservationDialog ({
               </div>
             </div>
 
-            <div className='mt-2 flex shrink-0 items-center justify-between gap-4 rounded-2xl border border-border/70 bg-muted/20 px-5 py-3'>
-              <div className='text-xs text-muted-foreground'>
+            <div className='flex shrink-0 flex-col gap-3 px-6 pb-6 pt-2 sm:flex-row sm:items-center sm:justify-between'>
+              <p className='text-[0.8125rem] text-muted-foreground'>
                 Update the reservation details and save the changes when you are done.
-              </div>
+              </p>
               <DialogFooter className='border-0 pt-0'>
                 <Button
-                  size='lg'
-                  className='min-w-48'
+                  className='h-9 w-full rounded-full px-5 text-[0.8125rem] font-medium shadow-sm sm:w-auto'
                   type='submit'
                   disabled={mutation.isPending}
                 >

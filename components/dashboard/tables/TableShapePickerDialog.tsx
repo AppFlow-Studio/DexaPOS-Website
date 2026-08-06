@@ -87,8 +87,11 @@ export function TableShapePickerDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="w-[96vw] sm:w-[96vw] sm:max-w-[1120px] max-w-[1120px] gap-0 overflow-hidden border border-border bg-background p-0 text-foreground flex flex-col max-h-[90vh]">
-                <DialogHeader className="border-b border-border px-5 py-4 shrink-0">
+            {/* Mobile: a bottom sheet — anchored to bottom-0 with a rounded top,
+                capped at 92dvh so the surface behind stays visible. Matches
+                CreateReservationDialog. `sm:` restores the centred card. */}
+            <DialogContent className="tables-pill-controls max-sm:inset-x-0 max-sm:bottom-0 max-sm:top-auto max-sm:h-auto max-sm:max-h-[92dvh] max-sm:w-full max-sm:max-w-none max-sm:translate-x-0 max-sm:translate-y-0 max-sm:overflow-hidden max-sm:rounded-b-none max-sm:rounded-t-[28px] sm:rounded-3xl sm:w-[96vw] sm:max-w-[1120px] gap-0 overflow-hidden border border-border bg-background p-0 text-foreground flex flex-col sm:max-h-[90vh]">
+                <DialogHeader className="px-5 pt-5 pb-2 shrink-0">
                     <DialogTitle className="text-lg font-semibold text-foreground">Add New Object</DialogTitle>
                     <DialogDescription className="text-sm text-muted-foreground">
                         Pick a shape from the shared SVG library and drop a named object into the floor plan.
@@ -106,7 +109,7 @@ export function TableShapePickerDialog({
                                 value={name}
                                 onChange={(event) => setName(event.target.value)}
                                 placeholder="e.g. Table 12 or Main Bar"
-                                className="h-10 border-border bg-background text-sm text-foreground placeholder:text-muted-foreground"
+                                className="h-10 rounded-xl border-transparent bg-muted/50 text-sm text-foreground shadow-none placeholder:text-muted-foreground focus-visible:bg-background"
                                 onKeyDown={(event) => {
                                     if (event.key === 'Enter') {
                                         event.preventDefault()
@@ -116,17 +119,19 @@ export function TableShapePickerDialog({
                             />
                         </div>
 
-                        <div className="rounded-md border border-border bg-muted/20 p-3">
+                        <div className="rounded-2xl bg-muted/50 p-3">
                             <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
                                 Selected shape
                             </p>
-                                <div className="mt-2 rounded-md border border-border bg-background p-3 shadow-sm">
+                                <div className="mt-2">
                                 {(() => {
                                     const selectedShape = TABLE_SHAPES[selectedShapeId]
                                     const SelectedShapeIcon = selectedShape.component
                                     return (
                                         <div className="space-y-2.5">
-                                            <div className="flex h-20 items-center justify-center rounded-md border border-border bg-muted/30">
+                                            {/* One surface, not three: the panel already draws a
+                                                boundary, so the preview well is borderless. */}
+                                            <div className="flex h-20 items-center justify-center rounded-2xl bg-background">
                                                 <SelectedShapeIcon width={76} height={76} color={SHAPE_ACTIVE_COLOR} />
                                             </div>
                                             <div>
@@ -149,12 +154,12 @@ export function TableShapePickerDialog({
 
                     <div className="min-w-0">
                         <Tabs value={activeCategory} onValueChange={(value) => setActiveCategory(value as ShapeCategory)}>
-                            <TabsList className="grid w-full grid-cols-3 bg-muted/40 lg:grid-cols-6">
+                            <TabsList className="grid w-full grid-cols-3 gap-0.5 rounded-full bg-muted/70 p-1 lg:grid-cols-6">
                                 {CATEGORY_ORDER.map((category) => (
                                     <TabsTrigger
                                         key={category}
                                         value={category}
-                                        className="px-2 text-xs text-muted-foreground data-[state=active]:bg-background data-[state=active]:text-foreground"
+                                        className="rounded-full px-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border"
                                     >
                                         {CATEGORY_LABELS[category]}
                                     </TabsTrigger>
@@ -163,7 +168,7 @@ export function TableShapePickerDialog({
 
                             {CATEGORY_ORDER.map((category) => (
                                 <TabsContent key={category} value={category} className="mt-3">
-                                    <ScrollArea className="h-[45vh] lg:h-[420px] rounded-md border border-border bg-muted/10 p-2">
+                                    <ScrollArea className="h-[45vh] lg:h-[420px] rounded-2xl p-2">
                                         <div className="grid gap-3 p-2 md:grid-cols-2 xl:grid-cols-3">
                                             {shapesByCategory[category].map((shape) => {
                                                 const ShapeIcon = shape.component
@@ -173,13 +178,16 @@ export function TableShapePickerDialog({
                                                         key={shape.id}
                                                         type="button"
                                                         onClick={() => setSelectedShapeId(shape.id as keyof typeof TABLE_SHAPES)}
-                                                        className={`rounded-md border p-3 text-left transition-all ${
+                                                        className={`rounded-2xl border-0 p-3 text-left shadow-none transition-colors ${
                                                             isSelected
-                                                                ? 'border-primary/60 bg-primary/10 shadow-sm'
-                                                                : 'border-border bg-background hover:border-primary/40'
+                                                                ? 'bg-primary/10'
+                                                                : 'bg-muted/50 hover:bg-muted'
                                                         }`}
                                                     >
-                                                        <div className="flex h-20 items-center justify-center rounded-md border border-border bg-muted/30">
+                                                        {/* Borderless: the tile itself carries the
+                                                            boundary, so a second ring inside it
+                                                            just doubles the outline. */}
+                                                        <div className="flex h-20 items-center justify-center rounded-2xl bg-muted/40">
                                                             <ShapeIcon
                                                                 width={74}
                                                                 height={74}
@@ -214,7 +222,7 @@ export function TableShapePickerDialog({
                     </div>
                 </div>
 
-                <DialogFooter className="border-t border-border bg-muted/20 px-4 sm:px-5 py-3 flex-col sm:flex-row gap-2">
+                <DialogFooter className="px-4 sm:px-5 pt-2 pb-5 flex-col sm:flex-row gap-2">
                     <div className="flex gap-2 w-full sm:w-auto sm:ml-auto">
                         <Button
                             variant="outline"

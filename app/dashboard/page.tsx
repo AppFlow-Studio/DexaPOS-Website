@@ -402,13 +402,17 @@ export default function MerchantDashboardPage() {
             <Button variant="outline" size="sm" asChild>
               <Link href="/dashboard/staff">Set PIN</Link>
             </Button>
+            {/* Close: same filled, borderless material as the search fields,
+                circled rather than pilled. Tinted amber to sit inside the
+                banner rather than reading as a foreign control. */}
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8 text-amber-600 hover:text-amber-800 dark:text-amber-400"
+              className="inline-flex size-8 shrink-0 items-center justify-center rounded-full border-0 bg-amber-500/15 text-amber-700 shadow-none transition-colors hover:bg-amber-500/25 hover:text-amber-900 dark:text-amber-400 dark:hover:text-amber-200"
               onClick={() => setPinBannerDismissed(true)}
             >
               <X className="h-4 w-4" />
+              <span className="sr-only">Dismiss</span>
             </Button>
           </div>
         )}

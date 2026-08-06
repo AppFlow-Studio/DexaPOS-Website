@@ -1349,20 +1349,28 @@ export default function MerchantDashboardLayout({
     { title: "Get Help", url: "/dashboard/support", icon: MessageCircle },
   ];
 
-  // h-svh + overflow-hidden caps the shell at the viewport. The provider's own
-  // `min-h-svh` is only a floor, so the wrapper could grow past the viewport
-  // (the impersonation banner sits inside <main> alongside its h-svh column)
-  // and the window scrolled as well — two scrollbars, with dead space under
+  // h-svh + max-h-svh + min-h-0 + overflow-hidden caps the shell at the
+  // viewport. All four are load-bearing:
+  //
+  //   • The provider ships `min-h-svh` (sidebar.tsx). `min-height` beats a
+  //     smaller `height` regardless of source order, so `h-svh` alone does NOT
+  //     cap it — `min-h-0` is what actually removes the floor.
+  //   • `max-h-svh` then makes the cap explicit rather than relying on `h-svh`
+  //     surviving future edits to the primitive.
+  //
+  // Without this the wrapper grows past the viewport (the impersonation banner
+  // sits inside <main> alongside the header and the scroll container), the
+  // window scrolls as well, and you get two scrollbars with dead space under
   // the content. #main-content below is the single intended scroll container.
   return (
-    <SidebarProvider className="dashboard-sidebar-theme h-svh overflow-hidden">
+    <SidebarProvider className="dashboard-sidebar-theme h-svh max-h-svh min-h-0 overflow-hidden">
       <ImpersonationHydrator />
       <MerchantSidebar />
       {/* h-svh + min-h-0 constrain this column to the viewport so #main-content
           below can actually scroll. Without the floor, `flex-1` lets the scroll
           container grow to fit its content — it never scrolls, the window
           scrolls instead, and any `position: sticky` inside it never triggers. */}
-      <main aria-label="Dashboard content" className="h-svh min-h-0 flex-1 flex flex-col min-w-0 bg-background">
+      <main aria-label="Dashboard content" className="h-svh max-h-svh min-h-0 flex-1 flex flex-col min-w-0 overflow-hidden bg-background">
         <ImpersonationBanner />
         <header className="flex h-16 shrink-0 items-center gap-2 border-b px-3 sm:px-4">
           <SidebarTrigger className="-ml-1 hidden sm:flex" />

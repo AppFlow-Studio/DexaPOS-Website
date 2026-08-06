@@ -67,7 +67,6 @@ export function AvgTicketTimeCard({
             <StatTile
               label="Current Avg"
               value={formatTime(currentTime)}
-              accent="brand"
             />
             <StatTile label="Target Alert" value={formatTime(benchmark)} />
             <StatTile label="Total Items" value={data.total_items_processed} />

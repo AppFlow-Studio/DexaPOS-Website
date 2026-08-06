@@ -370,7 +370,7 @@ export default function OrdersPage() {
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <h1 className="text-[1.75rem] font-medium leading-tight tracking-[-0.02em] md:text-[2rem]">
+          <h1 className="text-[1.75rem] font-semibold tracking-[-0.02em]">
             Orders
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">

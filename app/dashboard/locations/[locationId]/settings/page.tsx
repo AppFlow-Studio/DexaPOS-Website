@@ -1,7 +1,6 @@
-import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { ArrowLeft } from 'lucide-react'
 import { auth } from '@clerk/nextjs/server'
+import { PageHeader, PageShell } from '@/components/dashboard/shell'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { LocationTaxComplianceCard } from '@/components/dashboard/locations/LocationTaxComplianceCard'
 import { LocationBankingProfileCard } from '@/components/dashboard/locations/LocationBankingProfileCard'
@@ -80,23 +79,13 @@ export default async function LocationSettingsPage({ params }: LocationSettingsP
     : null
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6 animate-in fade-in duration-500 w-full min-w-0">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <h1 className="text-xl font-semibold tracking-tight">Location Tax &amp; Banking</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {location.name}
-            {location.city ? ` · ${location.city}, ${location.state}` : ''}
-          </p>
-        </div>
-        <Link
-          href="/dashboard/locations"
-          className="group shrink-0 self-start sm:self-auto inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-3.5 py-2 text-[0.8125rem] font-medium shadow-sm transition-colors hover:bg-muted/60"
-        >
-          <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-0.5" />
-          Back to Locations
-        </Link>
-      </div>
+    <PageShell width="narrow">
+      <PageHeader
+        title="Location Tax & Banking"
+        subtitle={`${location.name}${location.city ? ` · ${location.city}, ${location.state}` : ''}`}
+        backHref="/dashboard/locations"
+        backLabel="Back to Locations"
+      />
 
       <LocationTaxComplianceCard location={location as Location} />
 
@@ -119,7 +108,7 @@ export default async function LocationSettingsPage({ params }: LocationSettingsP
         }
         locationEmail={(location as { email?: string | null }).email ?? null}
       />
-    </div>
+    </PageShell>
   )
 }
 

@@ -66,18 +66,15 @@ export function DualPricingCard({ data, isLoading }: DualPricingCardProps) {
               label="Card Revenue"
               value={formatCurrency(data.cardRevenue)}
               meta={`${data.cardTransactions} transactions`}
-              accent="brand"
             />
             <StatTile
               label="Cash Revenue"
               value={formatCurrency(data.cashRevenue)}
               meta={`${data.cashTransactions} transactions`}
-              accent="positive"
             />
             <StatTile
               label="Cash Discount Savings"
               value={formatCurrency(data.cashDiscountSavings)}
-              accent="warning"
             />
           </StatRow>
 

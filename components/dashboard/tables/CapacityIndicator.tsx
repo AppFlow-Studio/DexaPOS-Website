@@ -44,7 +44,7 @@ export function CapacityIndicator ({ tables }: CapacityIndicatorProps) {
   }, [tables])
 
   return (
-    <div className='space-y-1.5 px-2 py-2 border-b'>
+    <div className='space-y-1.5 px-2 py-2'>
       <div className='flex items-center justify-between text-[11px]'>
         <span className='text-muted-foreground'>
           {capacity.occupied}/{capacity.total} tables

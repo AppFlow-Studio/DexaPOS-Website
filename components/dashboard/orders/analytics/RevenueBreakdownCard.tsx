@@ -80,7 +80,6 @@ export function RevenueBreakdownCard({ data, isLoading }: RevenueBreakdownCardPr
             <StatTile
               label="Net Revenue"
               value={formatCurrency(data.netRevenue)}
-              accent="brand"
             />
             <StatTile
               label="Tax + Charges"

@@ -20,8 +20,19 @@ import {
   CardHeader,
   CardTitle
 } from '@/components/ui/card'
-import { Separator } from '@/components/ui/separator'
 import { X, RotateCcw } from 'lucide-react'
+
+/**
+ * Borderless field material — the same tinted fill the dashboard search input
+ * and dialog fields use, so a stack of them reads as one surface instead of a
+ * ladder of outlined boxes.
+ *
+ * Written as a literal in this `.tsx` on purpose: Tailwind does not scan `.ts`
+ * files, so a class sourced only from a constants module gets no CSS rule and
+ * the element silently renders unstyled.
+ */
+const PANEL_FIELD =
+  'h-10 rounded-xl border-transparent bg-muted/50 shadow-none focus-visible:bg-background'
 
 interface FloorPlanPropertiesPanelProps {
   selectedTableId: string | null
@@ -93,7 +104,7 @@ export function FloorPlanPropertiesPanel ({
 
   return (
     <div className='w-full lg:w-80 bg-background border-l border-border flex flex-col h-full overflow-hidden'>
-      <Card className='rounded-none border-0 border-b flex-1 overflow-y-auto'>
+      <Card className='rounded-none border-0 shadow-none flex-1 overflow-y-auto'>
         <CardHeader className='pb-3'>
           <div className='flex items-center justify-between'>
             <div>
@@ -119,6 +130,7 @@ export function FloorPlanPropertiesPanel ({
                 value={selectedTable.name || ''}
                 onChange={e => updateProperty('name', e.target.value)}
                 placeholder='Table 1'
+                className={PANEL_FIELD}
               />
             </div>
 
@@ -131,6 +143,7 @@ export function FloorPlanPropertiesPanel ({
                 }
                 placeholder='Max 20 chars'
                 maxLength={20}
+                className={PANEL_FIELD}
               />
               <p className='text-xs text-muted-foreground'>
                 Short label shown on table
@@ -145,11 +158,10 @@ export function FloorPlanPropertiesPanel ({
                   updateProperty('zone_name', e.target.value || null)
                 }
                 placeholder='e.g., Patio, Bar, Main'
+                className={PANEL_FIELD}
               />
             </div>
           </div>
-
-          <Separator />
 
           {/* Seating Properties */}
           {isTable && (
@@ -170,6 +182,7 @@ export function FloorPlanPropertiesPanel ({
                     }
                     placeholder='4'
                     min={1}
+                    className={PANEL_FIELD}
                   />
                 </div>
 
@@ -186,11 +199,10 @@ export function FloorPlanPropertiesPanel ({
                     }
                     placeholder='1'
                     min={0}
+                    className={PANEL_FIELD}
                   />
                 </div>
               </div>
-
-              <Separator />
 
               {/* Business Rules */}
               <div className='space-y-3'>
@@ -235,6 +247,7 @@ export function FloorPlanPropertiesPanel ({
                     }
                     placeholder='90'
                     min={1}
+                    className={PANEL_FIELD}
                   />
                   <p className='text-xs text-muted-foreground'>
                     Expected dining duration
@@ -242,7 +255,6 @@ export function FloorPlanPropertiesPanel ({
                 </div>
               </div>
 
-              <Separator />
             </>
           )}
 
@@ -280,7 +292,7 @@ export function FloorPlanPropertiesPanel ({
                     onChange={e =>
                       updateProperty('color_override', e.target.value)
                     }
-                    className='w-10 h-10 rounded border border-border cursor-pointer p-0.5'
+                    className='w-10 h-10 rounded-xl border-0 cursor-pointer p-0.5'
                   />
                   <Input
                     value={selectedTable.color_override || ''}
@@ -293,7 +305,7 @@ export function FloorPlanPropertiesPanel ({
                       }
                     }}
                     placeholder='#3b82f6'
-                    className='font-mono text-sm flex-1'
+                    className='font-mono text-sm flex-1 h-10 rounded-xl border-transparent bg-muted/50 shadow-none focus-visible:bg-background'
                   />
                   {selectedTable.color_override && (
                     <Button
@@ -317,7 +329,7 @@ export function FloorPlanPropertiesPanel ({
       </Card>
 
       {/* Info Footer */}
-      <div className='border-t bg-muted/50 px-4 py-2 text-xs text-muted-foreground'>
+      <div className='bg-muted/50 px-4 py-2 text-xs text-muted-foreground'>
         <div className='space-y-1'>
           <div>
             ID:{' '}

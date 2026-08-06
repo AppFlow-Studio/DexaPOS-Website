@@ -25,14 +25,13 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 
+import { DollarSign, Settings } from 'lucide-react'
+
 import {
-  DollarSign,
-  MapPin,
-  Globe,
-  Settings,
-  ArrowLeft,
-} from 'lucide-react'
-import Link from 'next/link'
+  LocationIndicator,
+  PageHeader,
+  PageShell,
+} from '@/components/dashboard/shell'
 
 import {
   DateRangePicker,
@@ -79,7 +78,10 @@ import { fillDailySalesSeries } from '@/lib/reporting/date-range'
 const chartConfig = {
   sales: { label: 'Sales', color: 'var(--chart-1)' },
   orders: { label: 'Orders', color: 'var(--chart-2)' },
-  previous: { label: 'Previous Period', color: 'hsl(var(--muted-foreground))' },
+  // Not `hsl(var(--muted-foreground))`: the tokens are raw oklch values, so
+  // wrapping them yields invalid CSS and Recharts silently falls back to its
+  // own defaults. See docs/UI-DESIGN-SYSTEM.md C2.
+  previous: { label: 'Previous Period', color: 'var(--muted-foreground)' },
   aov: { label: 'Average Order Value', color: 'var(--chart-1)' },
 } satisfies ChartConfig
 
@@ -206,7 +208,7 @@ export default function AnalyticsPage() {
   /* ---------------- Render ---------------- */
 
   return (
-    <main className="space-y-6">
+    <PageShell>
       {/*
         The analytics tabs used to stack standalone bordered+shadowed Cards.
         They now read as hairline-separated sections inside one rounded
@@ -332,45 +334,18 @@ export default function AnalyticsPage() {
         }
       `}</style>
 
-      {/* Back to Orders */}
-      <Button
-        variant="ghost"
-        size="sm"
-        className="-ml-2 h-8 gap-1.5 rounded-full text-muted-foreground"
-        asChild
-      >
-        <Link href="/dashboard/orders">
-          <ArrowLeft className="h-4 w-4" />
-          Back to Orders
-        </Link>
-      </Button>
-
-      {/* Header */}
-      <div className="animate-in fade-in duration-500">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h1 className="text-[1.75rem] font-semibold tracking-[-0.02em]">
-            Analytics
-          </h1>
-
-          <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
-            {isAllLocations ? (
-              <>
-                <Globe className="h-4 w-4" />
-                All Locations
-              </>
-            ) : (
-              <>
-                <MapPin className="h-4 w-4" />
-                {selectedLocation?.name}
-              </>
-            )}
-          </p>
-        </div>
-
-        <p className="mt-1 text-sm text-muted-foreground">
-          View detailed analytics and insights for your orders
-        </p>
-      </div>
+      <PageHeader
+        title="Analytics"
+        subtitle="View detailed analytics and insights for your orders"
+        backHref="/dashboard/orders"
+        backLabel="Back to Orders"
+        indicator={
+          <LocationIndicator
+            isAllLocations={isAllLocations}
+            locationName={selectedLocation?.name}
+          />
+        }
+      />
 
       {/* Settings Dialog */}
       <Dialog open={showSettings} onOpenChange={setShowSettings}>
@@ -497,7 +472,6 @@ export default function AnalyticsPage() {
                   label="Total Sales"
                   value={formatCurrency(totalSales)}
                   isLoading={isLoading}
-                  accent="brand"
                 />
                 <StatTile
                   label="Total Orders"
@@ -607,6 +581,6 @@ export default function AnalyticsPage() {
           </AnalyticsPanel>
         </TabsContent>
       </Tabs>
-    </main>
+    </PageShell>
   )
 }

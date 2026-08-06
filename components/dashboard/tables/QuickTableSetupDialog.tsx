@@ -67,8 +67,10 @@ export function QuickTableSetupDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-3xl gap-0 overflow-hidden border border-border bg-background p-0 text-foreground flex flex-col max-h-[90vh]">
-                <DialogHeader className="border-b border-border px-5 py-4 shrink-0">
+            {/* Mobile: a bottom sheet with a rounded top, capped at 92dvh.
+                Matches the shape picker and CreateReservationDialog. */}
+            <DialogContent className="tables-pill-controls max-sm:inset-x-0 max-sm:bottom-0 max-sm:top-auto max-sm:h-auto max-sm:max-h-[92dvh] max-sm:w-full max-sm:max-w-none max-sm:translate-x-0 max-sm:translate-y-0 max-sm:overflow-hidden max-sm:rounded-b-none max-sm:rounded-t-[28px] sm:rounded-3xl sm:max-w-3xl gap-0 overflow-hidden border border-border bg-background p-0 text-foreground flex flex-col sm:max-h-[90vh]">
+                <DialogHeader className="px-5 pt-5 pb-2 shrink-0">
                     <DialogTitle className="text-lg font-semibold text-foreground">Quick Floor Setup</DialogTitle>
                     <DialogDescription className="text-sm text-muted-foreground">
                         Add multiple tables and booths in one pass using the shared SVG shape registry.
@@ -82,9 +84,9 @@ export function QuickTableSetupDialog({
                             return (
                                 <div
                                     key={shape.id}
-                                    className="grid items-center gap-3 rounded-md border border-border bg-muted/30 p-3 md:grid-cols-[64px_minmax(0,1fr)_96px]"
+                                    className="grid items-center gap-3 rounded-2xl border-0 bg-muted/50 p-3 shadow-none md:grid-cols-[64px_minmax(0,1fr)_96px]"
                                 >
-                                    <div className="flex h-14 w-14 items-center justify-center rounded-md">
+                                    <div className="flex h-14 w-14 items-center justify-center rounded-2xl">
                                         <ShapeIcon width={52} height={52} color={QUICK_SETUP_SHAPE_COLOR} />
                                     </div>
 
@@ -115,7 +117,7 @@ export function QuickTableSetupDialog({
                                             value={quantities[shape.id] || ''}
                                             onChange={(event) => handleQuantityChange(shape.id, event.target.value)}
                                             placeholder="0"
-                                            className="h-9 border-border bg-background text-center text-sm font-semibold text-foreground placeholder:text-muted-foreground"
+                                            className="h-9 rounded-xl border-transparent bg-background text-center text-sm font-semibold text-foreground shadow-none placeholder:text-muted-foreground"
                                         />
                                     </div>
                                 </div>
@@ -124,7 +126,7 @@ export function QuickTableSetupDialog({
                     </div>
                 </div>
 
-                <DialogFooter className="border-t border-border bg-muted/20 px-4 py-3 flex-col sm:flex-row gap-2 shrink-0">
+                <DialogFooter className="px-4 pt-2 pb-5 flex-col sm:flex-row gap-2 shrink-0">
                     <div className="text-sm text-muted-foreground sm:mr-auto">
                         {selectedCount > 0 ? `${selectedCount} objects will be added` : 'No objects selected'}
                     </div>

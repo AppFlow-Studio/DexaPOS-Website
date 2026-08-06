@@ -66,7 +66,6 @@ export function AutoBumpRateCard({
             <StatTile
               label="Current Rate"
               value={`${currentRate.toFixed(1)}%`}
-              accent={isHighAlert ? 'warning' : 'brand'}
             />
             <StatTile
               label="Auto-Bumped"
@@ -77,7 +76,6 @@ export function AutoBumpRateCard({
               label="Manual Completed"
               value={data.manual_completed}
               meta={`${((data.manual_completed / (data.total_items || 1)) * 100).toFixed(1)}% of items`}
-              accent="positive"
             />
             <StatTile label="Total Items" value={data.total_items} />
           </StatRow>

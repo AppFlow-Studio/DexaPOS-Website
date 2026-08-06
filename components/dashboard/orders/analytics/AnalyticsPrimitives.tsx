@@ -2,6 +2,15 @@
 
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+// Imported from the leaf modules, not the `shell` barrel: the barrel
+// re-exports this file's chart constants, so going through it would cycle.
+import {
+  BRAND_ACCENT,
+} from "@/components/dashboard/shell/tokens";
+import {
+  StatTile as ShellStatTile,
+  StatRow as ShellStatRow,
+} from "@/components/dashboard/shell/StatTile";
 
 /**
  * Shared building blocks for the Orders → Analytics page.
@@ -13,8 +22,14 @@ import { cn } from "@/lib/utils";
  * figures carrying the emphasis.
  */
 
-/** Brand blue used for section titles, matched to the Overview headings. */
-export const ANALYTICS_ACCENT = "text-[#0C4FD1] dark:text-[#6CA0FF]";
+/**
+ * Brand blue used for section titles.
+ *
+ * @deprecated Import `BRAND_ACCENT` from `@/components/dashboard/shell`. Kept
+ * as an alias so existing call sites keep working; both now resolve to the
+ * `--brand` token rather than a hardcoded hex.
+ */
+export const ANALYTICS_ACCENT = BRAND_ACCENT;
 
 /**
  * The rounded container a whole tab's sections live inside. Deliberately has no
@@ -69,12 +84,7 @@ export function AnalyticsSection({
     <section className={cn("px-6 py-8", className)}>
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <div
-            className={cn(
-              "flex items-center gap-2 text-[1.0625rem] font-semibold",
-              ANALYTICS_ACCENT
-            )}
-          >
+          <div className="flex items-center gap-2 text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]">
             {Icon && <Icon className="h-[1.125rem] w-[1.125rem] shrink-0" />}
             <span>{label}</span>
           </div>
@@ -103,87 +113,15 @@ export function AnalyticsSection({
 }
 
 /**
- * A figure inside a section — replaces the old tinted `bg-gray-50 … rounded`
- * boxes. No fill, no border: a quiet caption above a large tabular figure. See
- * [[StatRow]] for how a row of them is separated.
+ * @deprecated Import `StatTile` / `StatRow` from `@/components/dashboard/shell`.
+ *
+ * Re-exported here so the analytics page keeps working unchanged. The shell
+ * versions are identical apart from dropping the no-op `accent` prop, which
+ * never applied a colour: tinted figures competed with the brand-blue section
+ * headings, so figures always read in the default foreground.
  */
-export function StatTile({
-  label,
-  value,
-  meta,
-  isLoading,
-  accent = "default",
-  className,
-}: {
-  label: React.ReactNode;
-  value: React.ReactNode;
-  meta?: React.ReactNode;
-  isLoading?: boolean;
-  accent?: "default" | "brand" | "positive" | "warning";
-  className?: string;
-}) {
-  // Figures always read in the default foreground. The `accent` prop is kept
-  // so call sites stay expressive (and a variant can be reintroduced), but
-  // colour is deliberately not applied: tinted numbers competed with the
-  // brand-blue section headings and made the page read as noise.
-  void accent;
-  const accentClass = "";
-
-  return (
-    <div className={cn("min-w-0", className)}>
-      <p className="text-sm text-muted-foreground">{label}</p>
-      {isLoading ? (
-        <Skeleton className="mt-2 h-8 w-28" />
-      ) : (
-        <p
-          className={cn(
-            "mt-1 text-[1.75rem] font-medium leading-tight tracking-[-0.02em] tabular-nums",
-            accentClass
-          )}
-        >
-          {value}
-        </p>
-      )}
-      {meta && (
-        <p className="mt-0.5 text-[0.8125rem] text-muted-foreground">{meta}</p>
-      )}
-    </div>
-  );
-}
-
-/**
- * Row of StatTiles, separated by vertical rules between columns. When the grid
- * stacks on narrow screens the rules drop away entirely rather than turning
- * horizontal — the page body carries no horizontal lines.
- */
-export function StatRow({
-  children,
-  columns = 3,
-  className,
-}: {
-  children: React.ReactNode;
-  columns?: 2 | 3 | 4;
-  className?: string;
-}) {
-  const cols = {
-    2: "sm:grid-cols-2",
-    3: "sm:grid-cols-2 lg:grid-cols-3",
-    4: "sm:grid-cols-2 lg:grid-cols-4",
-  }[columns];
-
-  return (
-    <div
-      className={cn(
-        "grid grid-cols-1 gap-y-6 sm:gap-x-10 sm:divide-x sm:divide-border/60",
-        "[&>*]:sm:pl-10 [&>*:first-child]:sm:pl-0",
-        cols,
-        className
-      )}
-    >
-      {children}
-    </div>
-  );
-}
+export const StatTile = ShellStatTile;
+export const StatRow = ShellStatRow;
 
 /**
  * Wraps an existing analytics Card so it reads as a section of the panel.

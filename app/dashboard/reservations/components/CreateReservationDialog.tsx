@@ -27,10 +27,15 @@ import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Badge } from '@/components/ui/badge'
+import { DatePopover } from '@/app/dashboard/settings/tips/components/DatePopover'
 import { AlertTriangle, CalendarDays, Clock3, Crown, Loader2, Users } from 'lucide-react'
 import { useCreateReservation } from '@/app/dashboard/hooks/useReservations'
 import { detectReservationConflict } from '@/lib/reservations/conflict-detection'
+import {
+  DEFAULT_RESERVATION_TIMEZONE,
+  isPastAtLocation,
+  zonedToday
+} from '@/lib/reservations/local-time'
 import { toast } from 'sonner'
 import type { ConflictResult } from '@/lib/reservations/conflict-detection'
 import type { Reservation } from '@/types/floor-plan'
@@ -55,6 +60,27 @@ const schema = z.object({
   specialRequests: z.string().optional()
 })
 
+/**
+ * The `create_reservation` RPC rejects a past booking with a bare `P0001`,
+ * which reaches the user as an unreadable
+ * `{code: "P0001", details: Null, hint: ...}` toast. Validating the same rule
+ * here turns it into an inline message on the field that is actually wrong,
+ * and the request is never sent.
+ *
+ * Bound to the LOCATION's timezone, not the browser's — see `local-time.ts`.
+ */
+const makeSchema = (timeZone: string) =>
+  schema.superRefine((values, ctx) => {
+    if (!values.reservationDate || !values.reservationTime) return
+    if (isPastAtLocation(values.reservationDate, values.reservationTime, timeZone)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['reservationTime'],
+        message: 'Reservation must be in the future'
+      })
+    }
+  })
+
 type FormValues = z.infer<typeof schema>
 
 interface CreateReservationDialogProps {
@@ -62,13 +88,16 @@ interface CreateReservationDialogProps {
   onOpenChange: (open: boolean) => void
   defaultDate: string
   existingReservations: Reservation[]
+  /** IANA zone of the location the booking belongs to. */
+  timeZone?: string
 }
 
 export default function CreateReservationDialog ({
   open,
   onOpenChange,
   defaultDate,
-  existingReservations
+  existingReservations,
+  timeZone = DEFAULT_RESERVATION_TIMEZONE
 }: CreateReservationDialogProps) {
   const [conflictWarning, setConflictWarning] = useState<ConflictResult | null>(
     null
@@ -78,45 +107,45 @@ export default function CreateReservationDialog ({
 
   const mutation = useCreateReservation(defaultDate)
 
+  // The page's date selector browses history too, so `defaultDate` can be a
+  // past day. Pre-filling it there would seed the form with a value that can
+  // never submit, so a past day falls forward to today.
+  const localToday = zonedToday(timeZone)
+  const initialDate = defaultDate < localToday ? localToday : defaultDate
+
+  const blankValues = {
+    partyName: '',
+    partySize: 2,
+    phone: '',
+    email: '',
+    reservationDate: initialDate,
+    reservationTime: '19:00',
+    durationMinutes: 90,
+    isVip: false,
+    preferredSection: '',
+    seatingPreference: '',
+    notes: '',
+    specialRequests: ''
+  }
+
   const form = useForm<FormValues>({
-    resolver: zodResolver(schema),
-    defaultValues: {
-      partyName: '',
-      partySize: 2,
-      phone: '',
-      email: '',
-      reservationDate: defaultDate,
-      reservationTime: '19:00',
-      durationMinutes: 90,
-      isVip: false,
-      preferredSection: '',
-      seatingPreference: '',
-      notes: '',
-      specialRequests: ''
-    }
+    resolver: zodResolver(makeSchema(timeZone)),
+    defaultValues: blankValues
   })
 
+  // `blankValues` is rebuilt every render, so it is deliberately NOT a
+  // dependency — including it would reset the form on each keystroke. The
+  // effect only needs to re-run when the dialog opens or the day changes, and
+  // it reads the current values through the closure at that point.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!open) return
 
-    form.reset({
-      partyName: '',
-      partySize: 2,
-      phone: '',
-      email: '',
-      reservationDate: defaultDate,
-      reservationTime: '19:00',
-      durationMinutes: 90,
-      isVip: false,
-      preferredSection: '',
-      seatingPreference: '',
-      notes: '',
-      specialRequests: ''
-    })
+    form.reset(blankValues)
     setConflictWarning(null)
     setSubmitError(null)
     setForceCreate(false)
-  }, [defaultDate, form, open])
+  }, [defaultDate, form, open, initialDate])
 
   const onSubmit = async (values: FormValues) => {
     setSubmitError(null)
@@ -195,39 +224,51 @@ export default function CreateReservationDialog ({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className='max-h-[92vh] overflow-y-auto !w-[98vw] !max-w-[98vw] border-border/70 p-0 shadow-2xl sm:!max-w-[98vw]'>
-        <DialogHeader className='sticky top-0 z-20 border-b border-border/70 bg-background px-4 sm:px-6 py-4'>
-          <div className='flex items-center justify-between gap-3'>
-            <div className='space-y-0.5 min-w-0'>
-              <DialogTitle className='text-xl font-semibold tracking-tight'>Create Reservation</DialogTitle>
-              <DialogDescription className='text-sm text-muted-foreground hidden sm:block'>
+      {/* Mobile: keep the primitive's full-bleed sheet (full width, flush to
+          the edges) but drop its `h-dvh` + own `overflow-y-auto`. Height then
+          follows content up to the viewport, so a short form has no dead space
+          below it and the form's scroller is the only one. */}
+      <DialogContent className='soft-form-fields flex max-h-[92vh] flex-col gap-0 overflow-hidden rounded-[32px] border-0 p-0 shadow-none sm:!max-w-3xl max-sm:inset-x-0 max-sm:bottom-0 max-sm:top-auto max-sm:h-auto max-sm:max-h-[92dvh] max-sm:w-full max-sm:max-w-none max-sm:translate-x-0 max-sm:translate-y-0 max-sm:overflow-hidden max-sm:rounded-b-none max-sm:rounded-t-[28px]'>
+        <DialogHeader className='shrink-0 px-6 pt-6 pb-2'>
+          {/* Stacks on mobile: side by side, the narrow screen squeezed the
+              title column until "Create Reservation" broke over three lines.
+              `pr-12` clears the close button at `top-4 right-4` (size-8). */}
+          <div className='flex flex-col gap-2 pr-12 text-left sm:flex-row sm:items-center sm:justify-between sm:gap-3'>
+            <div className='min-w-0'>
+              <DialogTitle className='text-[1.0625rem] font-semibold tracking-[-0.01em]'>
+                Create Reservation
+              </DialogTitle>
+              <DialogDescription className='mt-1 text-sm text-muted-foreground'>
                 Fill in guest, schedule and seating details.
               </DialogDescription>
             </div>
-            <Badge variant='secondary' className='shrink-0 inline-flex gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium'>
+            <span className='inline-flex shrink-0 items-center gap-1.5 self-start rounded-full bg-muted/60 px-2.5 py-0.5 text-xs font-medium text-muted-foreground tabular-nums'>
               <CalendarDays className='h-3.5 w-3.5' />
               {defaultDate}
-            </Badge>
+            </span>
           </div>
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit, onInvalidSubmit)}>
-            <div className='px-4 sm:px-6 py-4'>
-            <div className='space-y-4 pb-4'>
+          <form
+            onSubmit={form.handleSubmit(onSubmit, onInvalidSubmit)}
+            className='flex min-h-0 flex-1 flex-col'
+          >
+            <div className='min-h-0 flex-1 overflow-y-auto'>
                 {(conflictWarning || submitError) && (
-                  <Alert variant='destructive'>
-                    <AlertTriangle className='h-4 w-4' />
-                    <AlertDescription>
-                      {submitError ?? `Table conflict: ${conflictWarning?.reason}. You can go back and adjust the time, or create it anyway.`}
-                    </AlertDescription>
-                  </Alert>
+                  <div className='px-6 pt-5'>
+                    <Alert variant='destructive' className='rounded-2xl'>
+                      <AlertTriangle className='h-4 w-4' />
+                      <AlertDescription>
+                        {submitError ?? `Table conflict: ${conflictWarning?.reason}. You can go back and adjust the time, or create it anyway.`}
+                      </AlertDescription>
+                    </Alert>
+                  </div>
                 )}
 
-                <div className='grid gap-5 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.95fr)_minmax(0,0.9fr)]'>
-              <section className='min-w-0 rounded-2xl border border-border/70 bg-background p-4'>
-                <div className='mb-4 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground'>
-                  <Users className='h-4 w-4' />
+              <section className='min-w-0 px-6 py-6'>
+                <div className='mb-4 flex items-center gap-2 text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]'>
+                  <Users className='h-[1.125rem] w-[1.125rem] shrink-0' />
                   Guest Details
                 </div>
                 <div className='grid gap-4'>
@@ -245,7 +286,7 @@ export default function CreateReservationDialog ({
                     )}
                   />
 
-                  <div className='grid gap-4 xl:grid-cols-[140px_minmax(0,1fr)]'>
+                  <div className='grid gap-4 sm:grid-cols-[140px_minmax(0,1fr)]'>
                     <FormField
                       control={form.control}
                       name='partySize'
@@ -307,9 +348,9 @@ export default function CreateReservationDialog ({
                 </div>
               </section>
 
-              <section className='min-w-0 rounded-2xl border border-border/70 bg-background p-4'>
-                <div className='mb-4 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground'>
-                  <Clock3 className='h-4 w-4' />
+              <section className='min-w-0 px-6 py-6'>
+                <div className='mb-4 flex items-center gap-2 text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]'>
+                  <Clock3 className='h-[1.125rem] w-[1.125rem] shrink-0' />
                   Schedule
                 </div>
                 <div className='grid gap-4'>
@@ -317,17 +358,24 @@ export default function CreateReservationDialog ({
                     control={form.control}
                     name='reservationDate'
                     render={({ field }) => (
-                      <FormItem>
+                      // Half width but still alone on its row: the row stays a
+                      // full-width grid and the field caps at half, so the
+                      // Time/Duration pair below keeps its own alignment.
+                      <FormItem className='sm:max-w-[calc(50%-0.5rem)]'>
                         <FormLabel>Date</FormLabel>
                         <FormControl>
-                          <Input type='date' {...field} />
+                          <DatePopover
+                            value={field.value}
+                            onChange={value => field.onChange(value ?? '')}
+                            min={localToday}
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
 
-                  <div className='grid gap-4 xl:grid-cols-2'>
+                  <div className='grid gap-4 sm:grid-cols-2'>
                     <FormField
                       control={form.control}
                       name='reservationTime'
@@ -335,6 +383,11 @@ export default function CreateReservationDialog ({
                         <FormItem>
                           <FormLabel>Time</FormLabel>
                           <FormControl>
+                            {/* Native time input on purpose. Its dropdown is
+                                browser UI that CSS cannot reach, but the field
+                                box itself takes our radius via
+                                `.soft-form-fields` — a custom panel here read
+                                as a full-width sheet rather than a field. */}
                             <Input type='time' {...field} />
                           </FormControl>
                           <FormMessage />
@@ -367,12 +420,13 @@ export default function CreateReservationDialog ({
                 </div>
               </section>
 
-              <section className='min-w-0 rounded-2xl border border-border/70 bg-muted/20 p-4'>
-                <div className='mb-4 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground'>
-                    <Crown className='h-4 w-4' />
+              <section className='min-w-0 px-6 py-6'>
+                <div className='mb-4 flex items-center gap-2 text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]'>
+                    <Crown className='h-[1.125rem] w-[1.125rem] shrink-0' />
                     Preferences
                 </div>
                 <div className='grid gap-4'>
+                  <div className='grid gap-4 sm:grid-cols-2'>
                   <FormField
                     control={form.control}
                     name='preferredSection'
@@ -400,8 +454,9 @@ export default function CreateReservationDialog ({
                       </FormItem>
                     )}
                   />
+                  </div>
 
-                  <div className='grid gap-4 xl:grid-cols-2'>
+                  <div className='grid gap-4 sm:grid-cols-2'>
                     <FormField
                       control={form.control}
                       name='notes'
@@ -434,17 +489,23 @@ export default function CreateReservationDialog ({
                       control={form.control}
                       name='isVip'
                       render={({ field }) => (
-                        <FormItem className='flex items-center justify-between gap-4 rounded-xl border border-border/70 bg-background px-4 py-3 xl:col-span-2'>
-                          <div className='space-y-1'>
+                        <FormItem className='flex items-center justify-between gap-4 rounded-[24px] border-0 bg-muted/40 px-4 py-3 shadow-none sm:col-span-2'>
+                          <div className='min-w-0 space-y-1'>
                             <FormLabel className='mt-0 text-sm'>VIP Guest</FormLabel>
-                            <p className='text-xs text-muted-foreground'>
+                            <p className='text-[0.8125rem] text-muted-foreground'>
                               Highlight this guest in the reservation list.
                             </p>
                           </div>
                           <FormControl>
+                            {/* The default switch is h-[1.15rem] with a
+                                `bg-input` off-track, which all but vanishes
+                                against the tinted well behind it. Bigger, with
+                                a ring and a darker off-state, so "off" reads as
+                                a control rather than as background. */}
                             <Switch
                               checked={field.value}
                               onCheckedChange={field.onChange}
+                              className='h-6 w-11 shrink-0 ring-1 ring-border data-[state=checked]:bg-[#0C4FD1] dark:data-[state=checked]:bg-[#6CA0FF] data-[state=unchecked]:bg-muted-foreground/35 dark:data-[state=unchecked]:bg-muted-foreground/40 [&>[data-slot=switch-thumb]]:size-5 [&>[data-slot=switch-thumb]]:bg-background [&>[data-slot=switch-thumb]]:shadow-sm'
                             />
                           </FormControl>
                         </FormItem>
@@ -453,25 +514,25 @@ export default function CreateReservationDialog ({
                   </div>
                 </div>
               </section>
-                </div>
-            </div>
             </div>
 
-            <div className='sticky bottom-0 z-20 border-t border-border/70 bg-background px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3'>
-              <div className='text-xs text-muted-foreground'>
+            <div className='flex shrink-0 flex-col gap-3 px-6 pt-2 pb-6 sm:flex-row sm:items-center sm:justify-between'>
+              <p className='text-[0.8125rem] text-muted-foreground'>
                 Required: party name, party size, phone, date, time, and duration.
-              </div>
+              </p>
               {conflictWarning ? (
-                <DialogFooter className='gap-2 border-0 pt-0 flex-row'>
+                <DialogFooter className='flex-row gap-2 border-0 pt-0'>
                   <Button
                     type='button'
                     variant='outline'
+                    className='h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm'
                     onClick={() => setConflictWarning(null)}
                   >
                     Go Back
                   </Button>
                   <Button
                     type='button'
+                    className='h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm'
                     onClick={handleCreateAnyway}
                     disabled={mutation.isPending}
                   >
@@ -483,7 +544,11 @@ export default function CreateReservationDialog ({
                 </DialogFooter>
               ) : (
                 <DialogFooter className='border-0 pt-0'>
-                  <Button size='lg' className='w-full sm:min-w-48 sm:w-auto' type='submit' disabled={mutation.isPending}>
+                  <Button
+                    type='submit'
+                    className='h-9 w-full rounded-full px-5 text-[0.8125rem] font-medium shadow-sm sm:w-auto'
+                    disabled={mutation.isPending}
+                  >
                     {mutation.isPending && (
                       <Loader2 className='mr-2 h-4 w-4 animate-spin' />
                     )}
