@@ -16,7 +16,7 @@
 //      at all, so this correctly returns null and callers fall back to the HQ
 //      literal instead of branding /manage as the impersonated merchant.
 //
-// See tasks/BUG-hq-portal-shows-merchant-dba.md.
+// See docs/features/admin-platform/BUG-hq-portal-shows-merchant-dba.md.
 // =============================================================================
 
 /** The subset of an `organizations` row the HQ header actually renders. */

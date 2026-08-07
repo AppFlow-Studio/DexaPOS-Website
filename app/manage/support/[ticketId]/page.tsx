@@ -369,7 +369,7 @@ export default function AdminTicketDetailPage() {
                   {TICKET_PRIORITY_LABELS[ticket.priority]}
                 </Badge>
                 <span className="text-xs text-muted-foreground">
-                  {isHQInternal ? "DEXA HQ Internal" : merchantInfo?.name}
+                  {isHQInternal ? "DEXA HQ" : merchantInfo?.name}
                   {" / "}
                   {format(new Date(ticket.created_at), "MMM d, yyyy")}
                 </span>
@@ -684,7 +684,7 @@ export default function AdminTicketDetailPage() {
           </SidebarSection>
         )}
         {isHQInternal && (
-          <SidebarSection title="Internal Ticket">
+          <SidebarSection title="Reporter">
             <div className="space-y-2 text-sm">
               <div className="flex items-start gap-1.5">
                 <Building2 className="h-3.5 w-3.5 text-muted-foreground mt-0.5 shrink-0" />

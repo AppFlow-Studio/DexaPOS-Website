@@ -7,11 +7,17 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Empty } from '@/components/ui/empty'
-import { CircleSlash, MapPin, AlertTriangle, RotateCcw, Loader2, Layers } from 'lucide-react'
-import { useGatedLocationId, useGatedLocation } from '@/stores/location-store'
+import { CircleSlash, MapPin, AlertTriangle, RotateCcw, Loader2, Layers, PowerOff } from 'lucide-react'
+import {
+  useGatedLocationId,
+  useGatedLocation,
+  useIsSingleLocation,
+} from '@/stores/location-store'
 import { useUserInfo } from '@/app/manage/hooks/useUserInfo.'
 import {
   useActiveSnoozes,
+  useTurnedOffItems,
+  useSetItemAvailability,
   useRestoreItem,
   useRestoreModifier,
   useRestoreModifierGroup,
@@ -29,6 +35,7 @@ export default function OutOfStockPage() {
   const gatedLocationId = useGatedLocationId()
   const selectedLocationId = gatedLocationId ?? 'all'
   const isAllLocations = !gatedLocationId
+  const isSingleLocation = useIsSingleLocation()
   const selectedLocation = useGatedLocation()
   const { data: userInfo } = useUserInfo()
   const clerkOrgId: string | undefined = userInfo?.members?.[0]?.organizations?.id
@@ -37,11 +44,16 @@ export default function OutOfStockPage() {
     clerkOrgId,
     selectedLocationId,
   )
+  // Items deliberately turned off (is_available=false, no timed snooze). Distinct
+  // from 86: the auto-restore cron never clears these, so they must be visible
+  // and restorable here — the gap that stranded item 311 at a single-loc store.
+  const { data: turnedOffData } = useTurnedOffItems(clerkOrgId, selectedLocationId)
 
   const restoreItem = useRestoreItem()
   const restoreModifier = useRestoreModifier()
   const restoreModifierGroup = useRestoreModifierGroup()
   const restoreCategory = useRestoreCategory()
+  const setAvailability = useSetItemAvailability()
 
   const [mounted, setMounted] = useState(false)
   useEffect(() => setMounted(true), [])
@@ -49,7 +61,8 @@ export default function OutOfStockPage() {
   const items = data?.items ?? []
   const modifiers = data?.modifiers ?? []
   const categories = data?.categories ?? []
-  const total = items.length + modifiers.length + categories.length
+  const turnedOff = turnedOffData ?? []
+  const total = items.length + modifiers.length + categories.length + turnedOff.length
 
   // Collapse snoozed options under their parent modifier group so a whole-group
   // 86 reads as one block (with a "Restore group" action), not N loose rows.
@@ -72,7 +85,19 @@ export default function OutOfStockPage() {
     restoreItem.isPending ||
     restoreModifier.isPending ||
     restoreModifierGroup.isPending ||
-    restoreCategory.isPending
+    restoreCategory.isPending ||
+    setAvailability.isPending
+
+  const handleEnableItem = (menuItemId: string) => {
+    if (!clerkOrgId || isAllLocations) return
+    setAvailability.mutate({
+      clerkOrgId,
+      menuItemId,
+      isAvailable: true,
+      locationId: selectedLocationId,
+      normalizeGlobal: isSingleLocation,
+    })
+  }
 
   const handleRestoreItem = (menuItemId: string) => {
     if (!clerkOrgId || isAllLocations) return
@@ -105,6 +130,7 @@ export default function OutOfStockPage() {
     categories.forEach((c) =>
       restoreCategory.mutate({ clerkOrgId, categoryId: c.category_id, locationId: selectedLocationId }),
     )
+    turnedOff.forEach((t) => handleEnableItem(t.menu_item_id))
   }
 
   if (!mounted) return <PageSkeleton />
@@ -217,6 +243,46 @@ export default function OutOfStockPage() {
                   disabled={isRestoring}
                   onRestore={() => handleRestoreItem(i.menu_item_id)}
                 />
+              ))}
+            </section>
+          )}
+
+          {turnedOff.length > 0 && (
+            <section className="space-y-3">
+              <h3 className="text-sm font-semibold text-muted-foreground">
+                Turned off ({turnedOff.length})
+              </h3>
+              <p className="text-xs text-muted-foreground">
+                Manually turned off at this location (not a timed 86). These stay
+                off until switched back on.
+              </p>
+              {turnedOff.map((t) => (
+                <Card key={t.menu_item_id}>
+                  <CardContent className="flex items-center justify-between gap-4 py-4">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="truncate font-medium">{t.name}</p>
+                        <Badge variant="secondary" className="shrink-0">
+                          <PowerOff className="mr-1 h-3 w-3" />
+                          Turned off
+                        </Badge>
+                      </div>
+                      <p className="truncate text-sm text-muted-foreground">
+                        Off since {formatDistanceToNow(new Date(t.updated_at), { addSuffix: true })}
+                      </p>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleEnableItem(t.menu_item_id)}
+                      disabled={isRestoring}
+                      className="shrink-0"
+                    >
+                      <RotateCcw className="mr-2 h-4 w-4" />
+                      Turn on
+                    </Button>
+                  </CardContent>
+                </Card>
               ))}
             </section>
           )}

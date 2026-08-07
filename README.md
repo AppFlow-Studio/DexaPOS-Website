@@ -170,6 +170,23 @@ The POS tablet app (separate repo) is offline-first. The web dashboard assumes c
 
 ---
 
+## Documentation
+
+Use [`docs/README.md`](docs/README.md) as the documentation entry point. Product
+documentation is organized by feature under `docs/features/<feature-name>/`,
+with cross-cutting engineering and QA material under `docs/engineering/` and
+`docs/quality/`.
+
+Every new feature must ship with a new or updated document in its feature
+folder. The document must cover relevant contracts, dependencies, verification,
+manual QA, and remaining work. Do not create disconnected status files at the
+repository root.
+
+For concise AI-assisted updates, follow
+[`docs/engineering/developer-experience/AI-DOCUMENTATION-GUIDE.md`](docs/engineering/developer-experience/AI-DOCUMENTATION-GUIDE.md).
+
+---
+
 ## Deployment
 
 The web dashboard deploys to [Vercel](https://vercel.com). Connect your GitHub repository to Vercel and configure the environment variables above.
