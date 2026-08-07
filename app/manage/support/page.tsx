@@ -81,8 +81,16 @@ function StatCard({
 
 function TicketRow({ ticket, onOpen }: { ticket: any; onOpen: () => void }) {
   const isUrgent = ticket.priority === "urgent" || ticket.priority === "high";
-  const isUnassigned = !ticket.assigned_to;
   const isHQInternal = ticket.ticket_scope === "hq_internal";
+  const emailAssignees = Array.isArray(ticket.assigned_to_emails)
+    ? ticket.assigned_to_emails
+    : [];
+  const isUnassigned = !ticket.assigned_to && emailAssignees.length === 0;
+  const assignmentLabel = isHQInternal
+    ? emailAssignees.length > 1
+      ? `${emailAssignees[0]} +${emailAssignees.length - 1}`
+      : emailAssignees[0]
+    : ticket.assigned_to_name;
 
   return (
     <div
@@ -115,14 +123,14 @@ function TicketRow({ ticket, onOpen }: { ticket: any; onOpen: () => void }) {
           </Badge>
           {isHQInternal && (
             <Badge variant="outline" className="rounded-full text-xs">
-              HQ Internal
+              Developer
             </Badge>
           )}
         </div>
         <p className="font-medium text-sm truncate">{ticket.subject}</p>
         <p className="text-xs text-muted-foreground mt-0.5">
           {isHQInternal
-            ? "DEXA HQ Internal"
+            ? "DEXA HQ"
             : ticket.merchant?.name || "Unknown Merchant"}
           {!isHQInternal && ticket.location?.name && ` / ${ticket.location.name}`}
           {" / "}
@@ -140,7 +148,7 @@ function TicketRow({ ticket, onOpen }: { ticket: any; onOpen: () => void }) {
             isUnassigned ? "text-amber-600 font-semibold" : "text-muted-foreground"
           )}
         >
-          {isUnassigned ? "Unassigned" : ticket.assigned_to_name}
+          {isUnassigned ? "Unassigned" : assignmentLabel || "Assigned"}
         </p>
       </div>
 
@@ -290,7 +298,7 @@ export default function AdminSupportPage() {
           <SelectContent>
             <SelectItem value="all">All Sources</SelectItem>
             <SelectItem value="merchant">Merchant</SelectItem>
-            <SelectItem value="hq_internal">HQ Internal</SelectItem>
+            <SelectItem value="hq_internal">Developer Tickets</SelectItem>
           </SelectContent>
         </Select>
 

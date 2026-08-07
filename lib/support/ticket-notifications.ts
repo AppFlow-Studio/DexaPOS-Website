@@ -106,7 +106,7 @@ function buildNotificationHtml(
           <tr><td style="padding:7px 0;color:#64748b">Category</td><td style="padding:7px 0">${escapeHtml(category)}</td></tr>
           ${
             isHQInternal
-              ? '<tr><td style="padding:7px 0;color:#64748b">Scope</td><td style="padding:7px 0">DEXA HQ Internal</td></tr>'
+              ? '<tr><td style="padding:7px 0;color:#64748b">Scope</td><td style="padding:7px 0">DEXA HQ Developer Ticket</td></tr>'
               : `<tr><td style="padding:7px 0;color:#64748b">Merchant</td><td style="padding:7px 0">${escapeHtml(merchantName)}</td></tr>
           <tr><td style="padding:7px 0;color:#64748b">Location</td><td style="padding:7px 0">${escapeHtml(locationName)}</td></tr>`
           }
@@ -151,7 +151,7 @@ function buildMessageNotificationHtml(
           <tr><td style="padding:7px 0;color:#64748b">Sender role</td><td style="padding:7px 0">${escapeHtml(message.sender_role)}</td></tr>
           ${
             isHQInternal
-              ? '<tr><td style="padding:7px 0;color:#64748b">Scope</td><td style="padding:7px 0">DEXA HQ Internal</td></tr>'
+              ? '<tr><td style="padding:7px 0;color:#64748b">Scope</td><td style="padding:7px 0">DEXA HQ Developer Ticket</td></tr>'
               : `<tr><td style="padding:7px 0;color:#64748b">Merchant</td><td style="padding:7px 0">${escapeHtml(merchantName)}</td></tr>
           <tr><td style="padding:7px 0;color:#64748b">Location</td><td style="padding:7px 0">${escapeHtml(locationName)}</td></tr>`
           }

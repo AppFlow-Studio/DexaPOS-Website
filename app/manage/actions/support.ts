@@ -10,6 +10,7 @@ import {
   parseSupportAssigneeEmails,
   validateSupportAssigneeSelection,
 } from "@/lib/support/assignees";
+import { requestSupportTicketCreatedNotification } from "@/lib/support/ticket-notification-request";
 import {
   SupportTicket,
   SupportTicketWithMessages,
@@ -114,7 +115,9 @@ export async function GetAllTickets(
 
   if (filters?.assigned_to) {
     if (filters.assigned_to === "unassigned") {
-      query = query.is("assigned_to", null);
+      query = query
+        .is("assigned_to", null)
+        .eq("assigned_to_emails", []);
     } else if (filters.assigned_to !== "all") {
       query = query.eq("assigned_to", filters.assigned_to);
     }
@@ -193,6 +196,7 @@ export async function CreateHQSupportTicket(
     location_id: null;
   };
   error?: string;
+  notificationWarning?: string;
 }> {
   try {
     const { userId, orgId } = await assertHQPermission("hq.support.manage");
@@ -296,7 +300,20 @@ export async function CreateHQSupportTicket(
       console.error("[CreateHQSupportTicket] Audit logging failed", auditError);
     }
 
-    return { data: result };
+    const notificationResult =
+      await requestSupportTicketCreatedNotification(result.ticket_id);
+    const notificationWarning = notificationResult.ok
+      ? undefined
+      : "Ticket created, but email notification delivery could not be confirmed.";
+
+    if (!notificationResult.ok) {
+      console.error("[CreateHQSupportTicket] Notification request failed", {
+        ticketId: result.ticket_id,
+        error: notificationResult.error,
+      });
+    }
+
+    return { data: result, notificationWarning };
   } catch (error) {
     return {
       error:

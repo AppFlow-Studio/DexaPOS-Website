@@ -114,6 +114,9 @@ export default function NewHQSupportTicketPage() {
       }
 
       toast.success(`${result.data.ticket_number} created`);
+      if (result.notificationWarning) {
+        toast.warning(result.notificationWarning);
+      }
       router.push(`/manage/support/${result.data.ticket_id}`);
     } catch {
       toast.error("Failed to create ticket");
@@ -136,7 +139,7 @@ export default function NewHQSupportTicketPage() {
             New Developer Ticket
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Create an internal engineering ticket from DEXA HQ.
+            Create an engineering ticket for the DEXA development team.
           </p>
         </div>
       </div>
@@ -147,7 +150,7 @@ export default function NewHQSupportTicketPage() {
             <LockKeyhole className="h-4 w-4 text-blue-700" />
           </div>
           <div>
-            <p className="text-sm font-semibold">DEXA HQ internal ticket</p>
+            <p className="text-sm font-semibold">DEXA HQ developer ticket</p>
             <p className="mt-1 text-xs leading-relaxed text-blue-800">
               Website-created developer tickets are platform-scoped. They are
               not assigned to a merchant, location, or carrier.
