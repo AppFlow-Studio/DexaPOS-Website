@@ -76,6 +76,9 @@ export function useCreateTicket() {
       toast.success("Ticket submitted!", {
         description: `Your ticket ${result.data?.ticket_number} has been created.`,
       });
+      if (result.notificationWarning) {
+        toast.warning(result.notificationWarning);
+      }
     },
     onError: () => {
       toast.error("Failed to submit ticket");

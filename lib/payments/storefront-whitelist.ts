@@ -5,7 +5,7 @@
 // merchant storefront can be reached from, and syncing them into
 // `location_payment_devices.whitelist_origins`. This is the *local mirror* of
 // the allow-list ops registers in the NMI / Dejavoo merchant portal — it does
-// NOT call NMI's API. See docs/RUNBOOK-PAYMENT-WHITELIST-SYNC.md.
+// NOT call NMI's API. See docs/features/online-ordering/RUNBOOK-PAYMENT-WHITELIST-SYNC.md.
 //
 // Both the HQ admin server action and the standalone backfill/audit scripts
 // import from this module so they share one source of truth.
