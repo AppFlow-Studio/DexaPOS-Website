@@ -12,6 +12,7 @@ import {
   TicketCategory,
 } from "@/types/support-ticket";
 import { LogAuditEvent } from "./audit-logs";
+import { requestSupportTicketCreatedNotification } from "@/lib/support/ticket-notification-request";
 
 // ============================================================================
 // GET TICKETS (Merchant)
@@ -195,7 +196,11 @@ interface CreateTicketInput {
 export async function CreateTicket(
   clerkOrgId: string,
   input: CreateTicketInput
-): Promise<{ data?: { ticket_id: string; ticket_number: string }; error?: string }> {
+): Promise<{
+  data?: { ticket_id: string; ticket_number: string };
+  error?: string;
+  notificationWarning?: string;
+}> {
   if (!clerkOrgId) return { error: "Organization ID is required" };
 
   const supabase = createServiceRoleClient();
@@ -228,7 +233,9 @@ export async function CreateTicket(
     p_attachments: input.attachments || [],
   });
 
-  if (error) return { error: error.message };
+  if (error || !data) {
+    return { error: error?.message || "Failed to create support ticket" };
+  }
 
   await LogAuditEvent({
     clerkOrgId,
@@ -241,7 +248,20 @@ export async function CreateTicket(
     resourceName: input.subject,
   });
 
-  return { data };
+  const notificationResult =
+    await requestSupportTicketCreatedNotification(data.ticket_id);
+  const notificationWarning = notificationResult.ok
+    ? undefined
+    : "Ticket created, but email notification delivery could not be confirmed.";
+
+  if (!notificationResult.ok) {
+    console.error("[CreateTicket] Notification request failed", {
+      ticketId: data.ticket_id,
+      error: notificationResult.error,
+    });
+  }
+
+  return { data, notificationWarning };
 }
 
 // ============================================================================

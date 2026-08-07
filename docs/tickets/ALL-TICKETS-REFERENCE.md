@@ -307,6 +307,11 @@ Single index for active ticket streams and their source trackers.
   the initial description message is suppressed to prevent duplicate creation
   emails.
 - Resend recipients are configured through `SUPPORT_TICKET_NOTIFICATION_EMAILS`.
+- Website-created support tickets immediately request the same idempotent
+  notification endpoint used by the Supabase trigger; POS and direct inserts
+  remain covered by `pg_net`.
+- `20260806160000_support_ticket_email_assignment_consistency.sql` aligns the
+  dashboard unassigned metric with HQ email assignees.
 - New-ticket attempts are recorded in
   `support_ticket_notification_deliveries`; reply/note attempts are recorded in
   `support_ticket_message_notification_deliveries`. Email failure never rolls

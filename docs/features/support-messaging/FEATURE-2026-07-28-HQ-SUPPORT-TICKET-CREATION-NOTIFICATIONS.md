@@ -1,4 +1,4 @@
-# HQ Internal Developer Tickets + Ticket/Thread Email Notifications
+# DEXA HQ Developer Tickets + Ticket/Thread Email Notifications
 
 ## Purpose
 
@@ -17,6 +17,10 @@ merchant dashboard, or DEXA HQ.
 - `merchant`: requires `merchant_id`; `location_id` remains optional.
 - `hq_internal`: requires `merchant_id`, `location_id`, and `carrier_id` to be
   null.
+
+`hq_internal` remains the stable database value. The HQ interface presents it
+as **Developer** or **DEXA HQ** because these tickets are already visible only
+inside the HQ support workspace.
 
 The append-only migration
 `supabase/migrations/20260729120000_hq_internal_support_ticket_scope.sql`:
@@ -74,8 +78,10 @@ single-owner filters or foreign keys.
 
 ### Inbox and detail behavior
 
-- The support inbox can filter by **Merchant** or **HQ Internal**.
-- HQ rows display **DEXA HQ Internal**, never **Unknown Merchant**.
+- The support inbox can filter by **Merchant** or **Developer Tickets**.
+- HQ rows display **DEXA HQ**, never **Unknown Merchant**.
+- Inbox assignment state checks both legacy `assigned_to` and developer
+  `assigned_to_emails`, so an email-assigned ticket is not shown as unassigned.
 - Internal detail pages use developer/reporting wording instead of merchant
   reply wording.
 - Merchant links and location fields only render for merchant tickets.
@@ -91,7 +97,7 @@ single-owner filters or foreign keys.
   message trigger, so creating a ticket sends one email rather than two.
 - Resend emails the configured recipients in one delivery.
 - Merchant ticket emails contain merchant and location context.
-- HQ internal ticket emails contain `Scope: DEXA HQ Internal` and do not show
+- HQ developer-ticket emails contain `Scope: DEXA HQ Developer Ticket` and do not show
   fake merchant or location values.
 - New-ticket delivery state is stored in
   `public.support_ticket_notification_deliveries`; reply/note delivery state is
@@ -121,6 +127,7 @@ single-owner filters or foreign keys.
 - `supabase/migrations/20260729120000_hq_internal_support_ticket_scope.sql`
 - `supabase/migrations/20260729130000_support_ticket_thread_notifications.sql`
 - `supabase/migrations/20260729140000_hq_support_ticket_email_assignees.sql`
+- `supabase/migrations/20260806160000_support_ticket_email_assignment_consistency.sql`
 
 ## Required Website Environment
 
@@ -233,12 +240,12 @@ production. Do not run raw Markdown in the SQL editor.
 3. Open the assignee dropdown and select two configured developer emails.
 4. Reopen the dropdown between selections and confirm earlier selections stay
    checked; remove and re-add one selected badge.
-5. Confirm the detail page opens, shows **DEXA HQ Internal**, and lists both
+5. Confirm the detail page opens, shows **DEXA HQ**, and lists both
    selected developer assignees.
 6. Confirm there is no merchant/location link or `Unknown Merchant` label.
 7. Add a developer update and a private HQ note.
 8. Change priority, change category, and resolve the ticket.
-9. Filter the inbox to **HQ Internal** and confirm the ticket appears.
+9. Filter the inbox to **Developer Tickets** and confirm the ticket appears.
 10. Verify the database record:
 
 ```sql
@@ -272,7 +279,7 @@ selected addresses.
 For one HQ internal ticket and one merchant ticket:
 
 1. Confirm one email reaches each configured test recipient.
-2. Confirm the HQ email says **DEXA HQ Internal** and has no fake tenant.
+2. Confirm the HQ email says **DEXA HQ Developer Ticket** and has no fake tenant.
 3. Confirm the merchant email includes the real merchant/location.
 4. Confirm both links open the correct HQ detail route.
 5. Add a public reply to each ticket and confirm one new-reply email per
@@ -299,6 +306,12 @@ limit 20;
 ```
 
 Expected: `status = 'sent'` and both recipients are present.
+
+Website-created HQ and merchant tickets also request the same idempotent
+endpoint directly after creation. This provides an immediate fallback for a
+missing or delayed `pg_net` request. The database trigger remains in place for
+POS and direct-database ticket creation. If the website cannot confirm the
+request, it preserves the ticket and shows a notification warning.
 
 9. Verify reply/private-note delivery state:
 
