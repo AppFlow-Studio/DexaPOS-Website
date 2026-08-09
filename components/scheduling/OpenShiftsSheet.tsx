@@ -2,12 +2,12 @@
 
 import { useState, useMemo } from "react";
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -40,6 +40,17 @@ interface OpenShiftsSheetProps {
   scheduleType: "period" | "weekly";
   onAddOpenShift?: () => void;
   onEditShift?: (shift: Shift) => void;
+}
+
+function TabBadge({ count }: { count: number }) {
+  return count > 0 ? (
+    <Badge
+      variant="destructive"
+      className="ml-1 h-5 w-5 justify-center p-0 text-[10px]"
+    >
+      {count}
+    </Badge>
+  ) : null;
 }
 
 export function OpenShiftsSheet({
@@ -99,6 +110,7 @@ export function OpenShiftsSheet({
   );
 
   const openShifts = useMemo(() => {
+    if (!currentSchedule) return [];
     return getOpenShifts(scheduleId);
   }, [scheduleId, getOpenShifts, currentSchedule]);
 
@@ -179,65 +191,56 @@ export function OpenShiftsSheet({
     });
   };
 
-  const TabBadge = ({ count }: { count: number }) =>
-    count > 0 ? (
-      <Badge
-        variant="destructive"
-        className="ml-1 h-5 w-5 p-0 justify-center text-[10px]"
-      >
-        {count}
-      </Badge>
-    ) : null;
-
   return (
     <>
-      <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent side="right" className="w-full sm:max-w-xl p-0">
-          <SheetHeader className="px-6 py-4 border-b">
-            <SheetTitle className="flex items-center gap-2">
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="flex h-[min(760px,calc(100dvh-2rem))] flex-col gap-0 overflow-hidden p-0 sm:max-w-4xl max-sm:top-1/2 max-sm:right-auto max-sm:bottom-auto max-sm:left-1/2 max-sm:h-[calc(100dvh-2rem)] max-sm:max-w-[calc(100%-2rem)] max-sm:-translate-x-1/2 max-sm:-translate-y-1/2 max-sm:rounded-3xl max-sm:overflow-hidden">
+          <DialogHeader className="border-b border-border/60 px-5 py-5 pr-14 text-left sm:px-6 sm:pr-16">
+            <DialogTitle className="flex items-center gap-2">
               <Calendar className="h-5 w-5 text-primary" />
-              Open Shifts & Requests
-            </SheetTitle>
-            <SheetDescription>
+              Open shifts &amp; requests
+            </DialogTitle>
+            <DialogDescription>
               Manage open shifts, drop requests, swaps, and PTO.
-            </SheetDescription>
-          </SheetHeader>
+            </DialogDescription>
+          </DialogHeader>
 
           <Tabs
             value={activeTab}
             onValueChange={setActiveTab}
-            className="flex-1"
+            className="flex min-h-0 flex-1 flex-col"
           >
-            <TabsList className="w-full justify-start rounded-none border-b bg-transparent px-6 h-12">
+            <TabsList className="grid h-auto w-full shrink-0 grid-cols-4 rounded-none border-b border-border/60 bg-transparent p-0">
               <TabsTrigger
                 value="open-shifts"
-                className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none"
+                className="min-w-0 rounded-none border-b-2 border-transparent px-2 py-3 text-xs data-[state=active]:border-primary data-[state=active]:bg-transparent sm:text-sm"
               >
-                Open Shifts <TabBadge count={openShiftsCount} />
+                <span className="truncate">Open shifts</span>
+                <TabBadge count={openShiftsCount} />
               </TabsTrigger>
               <TabsTrigger
                 value="drops"
-                className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none"
+                className="min-w-0 rounded-none border-b-2 border-transparent px-2 py-3 text-xs data-[state=active]:border-primary data-[state=active]:bg-transparent sm:text-sm"
               >
                 Drops <TabBadge count={dropCount} />
               </TabsTrigger>
               <TabsTrigger
                 value="swaps"
-                className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none"
+                className="min-w-0 rounded-none border-b-2 border-transparent px-2 py-3 text-xs data-[state=active]:border-primary data-[state=active]:bg-transparent sm:text-sm"
               >
                 Swaps <TabBadge count={swapCount} />
               </TabsTrigger>
               <TabsTrigger
                 value="pto"
-                className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none"
+                className="min-w-0 rounded-none border-b-2 border-transparent px-2 py-3 text-xs data-[state=active]:border-primary data-[state=active]:bg-transparent sm:text-sm"
               >
                 PTO <TabBadge count={ptoCount} />
               </TabsTrigger>
             </TabsList>
 
-            <ScrollArea className="h-[calc(100vh-180px)]">
+            <ScrollArea className="min-h-0 flex-1">
               {/* Open Shifts Tab */}
-              <TabsContent value="open-shifts" className="p-6 space-y-4 m-0">
+              <TabsContent value="open-shifts" className="m-0 space-y-4 p-4 sm:p-6">
                 <Button onClick={onAddOpenShift} className="w-full gap-2">
                   <Plus className="h-4 w-4" />
                   Add Open Shift
@@ -306,7 +309,7 @@ export function OpenShiftsSheet({
               </TabsContent>
 
               {/* Drop Requests Tab */}
-              <TabsContent value="drops" className="p-6 space-y-4 m-0">
+              <TabsContent value="drops" className="m-0 space-y-4 p-4 sm:p-6">
                 {pendingDrops.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
                     <ArrowDownCircle className="h-12 w-12 mb-3 opacity-30" />
@@ -328,7 +331,7 @@ export function OpenShiftsSheet({
               </TabsContent>
 
               {/* Swaps Tab */}
-              <TabsContent value="swaps" className="p-6 space-y-4 m-0">
+              <TabsContent value="swaps" className="m-0 space-y-4 p-4 sm:p-6">
                 {pendingSwaps.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
                     <ArrowRightLeft className="h-12 w-12 mb-3 opacity-30" />
@@ -373,7 +376,7 @@ export function OpenShiftsSheet({
               </TabsContent>
 
               {/* PTO Tab */}
-              <TabsContent value="pto" className="p-6 space-y-4 m-0">
+              <TabsContent value="pto" className="m-0 space-y-4 p-4 sm:p-6">
                 {pendingPTO.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
                     <Calendar className="h-12 w-12 mb-3 opacity-30" />
@@ -395,8 +398,8 @@ export function OpenShiftsSheet({
               </TabsContent>
             </ScrollArea>
           </Tabs>
-        </SheetContent>
-      </Sheet>
+        </DialogContent>
+      </Dialog>
 
       <DenyRequestModal
         open={isDenyModalOpen}

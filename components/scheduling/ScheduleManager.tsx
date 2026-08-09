@@ -279,29 +279,30 @@ export function ScheduleManager({ scheduleId }: { scheduleId: string }) {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-6rem)] gap-4">
-      {/* Header / Toolbar */}
-      <div className="flex items-center justify-between p-4 bg-background border rounded-lg shadow-sm">
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-1 bg-muted p-1 rounded-md">
+    <div className="flex min-h-[calc(100vh-12rem)] min-w-0 flex-col gap-4">
+      <div className="flex flex-col gap-4 rounded-3xl border bg-card px-4 py-4 sm:px-6 xl:flex-row xl:items-center xl:justify-between">
+        <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="flex w-full items-center gap-1 rounded-full bg-muted/60 p-1 sm:w-auto">
             <Button
               variant="ghost"
-              size="sm"
+              size="icon-sm"
               onClick={handlePrevWeek}
               disabled={!canGoPrev}
-              className="h-7 w-7 p-0"
+              className="shrink-0"
+              aria-label="Previous week"
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <span className="text-sm font-medium px-2 min-w-[200px] text-center">
+            <span className="min-w-0 flex-1 px-1 text-center text-sm font-medium tabular-nums sm:min-w-[200px]">
               {format(weekStart, "MMM d")} - {format(weekEnd, "MMM d, yyyy")}
             </span>
             <Button
               variant="ghost"
-              size="sm"
+              size="icon-sm"
               onClick={handleNextWeek}
               disabled={!canGoNext}
-              className="h-7 w-7 p-0"
+              className="shrink-0"
+              aria-label="Next week"
             >
               <ChevronRight className="h-4 w-4" />
             </Button>
@@ -309,7 +310,7 @@ export function ScheduleManager({ scheduleId }: { scheduleId: string }) {
 
           {/* Compact Labor Cost Badge */}
           {schedule && schedule.shifts && schedule.shifts.length > 0 && (
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-muted/50 rounded-md border">
+            <div className="flex items-center gap-2 rounded-full bg-muted/45 px-3 py-2">
               <DollarSign className="h-4 w-4 text-primary" />
               <div className="text-sm">
                 <span className="text-muted-foreground">Labor:</span>{" "}
@@ -334,7 +335,7 @@ export function ScheduleManager({ scheduleId }: { scheduleId: string }) {
           )}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {/* Filters */}
           <FiltersPanel
             employees={staffMembers.map((s) => ({
@@ -349,19 +350,19 @@ export function ScheduleManager({ scheduleId }: { scheduleId: string }) {
             hasChanges ? (
               <Badge
                 variant="outline"
-                className="h-8 gap-1 border-yellow-500 text-yellow-600 bg-yellow-500/10"
+                className="h-8 gap-1 border-0 bg-yellow-500/10 text-yellow-700"
               >
                 <CalendarIcon className="h-3 w-3" />
                 Unsaved Changes
               </Badge>
             ) : (
-              <Badge variant="outline" className="h-8 gap-1">
+              <Badge variant="secondary" className="h-8 gap-1">
                 <CalendarIcon className="h-3 w-3" />
                 Viewing Published
               </Badge>
             )
           ) : (
-            <Badge variant="outline" className="h-8 gap-1">
+            <Badge variant="secondary" className="h-8 gap-1">
               <CalendarIcon className="h-3 w-3" />
               {schedule?.status === "published" ? "Published" : "Draft Mode"}
             </Badge>
@@ -373,7 +374,7 @@ export function ScheduleManager({ scheduleId }: { scheduleId: string }) {
             hasChanges && (
               <Button
                 size="sm"
-                variant="outline"
+                variant="ghost"
                 className="gap-2 text-destructive hover:text-destructive"
                 onClick={() => setIsDiscardDialogOpen(true)}
               >
@@ -382,7 +383,7 @@ export function ScheduleManager({ scheduleId }: { scheduleId: string }) {
             )}
           <Button
             size="sm"
-            variant="outline"
+            variant="secondary"
             className="gap-2"
             onClick={() => setIsOpenShiftsSheetOpen(true)}
           >
@@ -391,7 +392,7 @@ export function ScheduleManager({ scheduleId }: { scheduleId: string }) {
           </Button>
           <Button
             size="sm"
-            variant="outline"
+            variant="secondary"
             className="gap-2"
             onClick={() => router.push("/dashboard/schedules/templates")}
           >
@@ -431,9 +432,8 @@ export function ScheduleManager({ scheduleId }: { scheduleId: string }) {
         onOverride={() => handleResolveConflict("override")}
       />
 
-      {/* Main Content Area with Drawer */}
-      <div className="flex-1 flex overflow-hidden border rounded-lg bg-background">
-        <div className="flex-1 overflow-auto">
+      <div className="flex min-h-[620px] flex-1 overflow-hidden rounded-3xl border bg-card">
+        <div className="min-w-0 flex-1 overflow-auto">
           <WeeklyCalendar
             currentDate={currentDate}
             scheduleId={scheduleId}
@@ -487,7 +487,7 @@ export function ScheduleManager({ scheduleId }: { scheduleId: string }) {
         open={isDiscardDialogOpen}
         onOpenChange={setIsDiscardDialogOpen}
       >
-        <AlertDialogContent>
+        <AlertDialogContent className="rounded-3xl">
           <AlertDialogHeader>
             <div className="flex items-center gap-3 mb-2">
               <div className="w-12 h-12 rounded-full bg-destructive/10 flex items-center justify-center">
@@ -501,14 +501,14 @@ export function ScheduleManager({ scheduleId }: { scheduleId: string }) {
               </div>
             </div>
           </AlertDialogHeader>
-          <div className="p-4 bg-muted/50 rounded-lg border my-2">
+          <div className="my-2 rounded-2xl bg-muted/50 p-4">
             <p className="text-sm text-muted-foreground">
               Your edits to this schedule will be lost and you will be reverted
               to the last published version. This action cannot be undone.
             </p>
           </div>
           <AlertDialogFooter>
-            <AlertDialogCancel>Keep Editing</AlertDialogCancel>
+            <AlertDialogCancel className="rounded-full">Keep Editing</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
               onClick={() => {

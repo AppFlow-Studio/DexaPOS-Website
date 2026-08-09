@@ -30,8 +30,8 @@ import { useUnifiedStaff } from "@/app/dashboard/hooks/useStaff";
 import { useScheduleStore } from "@/stores/useScheduleStore";
 import { ShiftModal } from "./ShiftModal";
 import { Shift } from "@/types/schedule";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Plus, AlertTriangle, Users } from "lucide-react";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Plus, AlertTriangle, UserRound, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ShiftCard } from "./ShiftCard";
 import { toast } from "sonner";
@@ -58,7 +58,7 @@ export function WeeklyCalendar({
       state.weeklySchedules.find((s) => s.id === scheduleId) ||
       state.schedulePeriods.find((s) => s.id === scheduleId)
   );
-  const shifts = schedule?.shifts || [];
+  const shifts = useMemo(() => schedule?.shifts ?? [], [schedule?.shifts]);
   const { data: staffMembers = [] } = useUnifiedStaff();
 
   const weekStart = startOfDay(currentDate);
@@ -281,13 +281,23 @@ export function WeeklyCalendar({
   // -------------------------------------------------------------------------
   // Prepare Open Shifts Row Data
   // -------------------------------------------------------------------------
-  const staffIds = new Set(staffMembers.map((s) => s.member_id));
+  const staffIds = new Set(
+    staffMembers
+      .map((staff) => staff.member_id)
+      .filter((memberId): memberId is string => Boolean(memberId))
+  );
 
   const openShifts = weeklyShifts.filter(
-    (s) => s.employee_id === "unassigned" || !staffIds.has(s.employee_id)
+    (s) =>
+      !s.employee_id ||
+      s.employee_id === "unassigned" ||
+      !staffIds.has(s.employee_id)
   );
   const openPreviewShifts = (previewShifts || []).filter(
-    (s) => s.employee_id === "unassigned" || !staffIds.has(s.employee_id)
+    (s) =>
+      !s.employee_id ||
+      s.employee_id === "unassigned" ||
+      !staffIds.has(s.employee_id)
   );
 
   // -------------------------------------------------------------------------
@@ -299,10 +309,10 @@ export function WeeklyCalendar({
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      <div className="flex flex-col h-full bg-background rounded-lg border shadow-sm overflow-hidden">
+      <div className="flex h-full min-w-[960px] flex-col overflow-hidden bg-card">
         {/* Calendar Header */}
-        <div className="flex border-b border-border min-h-[60px] bg-muted/50 sticky top-0 z-20">
-          <div className="w-[200px] flex-shrink-0 border-r border-border p-4 flex items-center bg-muted/20">
+        <div className="sticky top-0 z-20 flex min-h-[60px] border-b border-border/60 bg-muted/45">
+          <div className="flex w-[200px] flex-shrink-0 items-center border-r border-border/60 bg-muted/20 p-4">
             <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Employee
             </span>
@@ -310,7 +320,7 @@ export function WeeklyCalendar({
           {days.map((day) => (
             <div
               key={day.toISOString()}
-              className="flex-1 border-r border-border last:border-r-0 p-2 text-center flex flex-col justify-center items-center bg-muted/20"
+              className="flex flex-1 flex-col items-center justify-center border-r border-border/60 bg-muted/20 p-2 text-center last:border-r-0"
             >
               <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                 {format(day, "EEE")}
@@ -365,11 +375,16 @@ export function WeeklyCalendar({
               return renderRow(
                 staff.member_id,
                 <div className="flex items-center gap-3">
-                  <Avatar className="h-9 w-9 ring-2 ring-background border border-border shadow-sm">
-                    <AvatarImage src={staff.avatar_url || ""} />
-                    <AvatarFallback className="bg-gradient-to-br from-primary/10 to-primary/5 text-primary text-xs font-bold">
-                      {staff.first_name[0]}
-                      {staff.last_name[0]}
+                  <Avatar className="h-9 w-9 shrink-0 bg-muted">
+                    <AvatarFallback className="bg-muted text-xs font-medium text-muted-foreground">
+                      {staff.avatar_url ? (
+                        <UserRound className="h-4 w-4" />
+                      ) : (
+                        <>
+                          {staff.first_name?.[0]}
+                          {staff.last_name?.[0]}
+                        </>
+                      )}
                     </AvatarFallback>
                   </Avatar>
                   <div className="overflow-hidden">
@@ -444,7 +459,7 @@ function DayCell({
     <div
       ref={setNodeRef}
       className={cn(
-        "flex-1 border-r border-border last:border-r-0 p-2 relative group transition-colors min-h-[100px] flex flex-col gap-2",
+        "group relative flex min-h-[100px] flex-1 flex-col gap-2 border-r border-border/60 p-2 transition-colors last:border-r-0",
         isOver
           ? "bg-primary/5 ring-inset ring-2 ring-primary/20"
           : "hover:bg-muted/10"

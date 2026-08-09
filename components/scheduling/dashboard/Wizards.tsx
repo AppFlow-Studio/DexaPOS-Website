@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Calendar } from "@/components/ui/calendar";
 import { SchedulePeriod } from "@/types/schedule";
-import { addDays, format, startOfWeek } from "date-fns";
+import { addDays, format, parseISO, startOfWeek } from "date-fns";
 import {
   CalendarDays,
   Check,
@@ -23,6 +23,10 @@ import {
   FileText,
   Calendar as CalendarIcon,
 } from "lucide-react";
+
+const CALENDAR_FRAME_CLASS =
+  "rounded-2xl bg-muted/30 p-3 sm:p-4";
+const CALENDAR_CLASS = "mx-auto w-full max-w-[360px] p-0";
 
 // ============================================
 // Quick Schedule Modal (New Weekly Schedule)
@@ -69,32 +73,37 @@ export function QuickScheduleModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[400px]">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <CalendarDays className="h-5 w-5 text-primary" />
-            New Schedule
-          </DialogTitle>
-          <DialogDescription>
-            Select a start date and duration for your schedule.
-          </DialogDescription>
+      <DialogContent className="gap-0 overflow-y-auto sm:max-h-[calc(100vh-2rem)] sm:max-w-[470px]">
+        <DialogHeader className="pr-10">
+          <div className="flex items-start gap-3 text-left">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+              <CalendarDays className="h-5 w-5" />
+            </span>
+            <div>
+              <DialogTitle>New Schedule</DialogTitle>
+              <DialogDescription className="mt-1.5">
+                Select a start date and duration for your schedule.
+              </DialogDescription>
+            </div>
+          </div>
         </DialogHeader>
 
-        <div className="space-y-4 py-4">
-          <div className="space-y-2">
-            <Label>Select Start Date</Label>
-            <div className="flex justify-center border rounded-lg p-2 overflow-x-auto">
+        <div className="space-y-5 py-6">
+          <div className="space-y-2.5">
+            <Label className="text-sm font-semibold">Select start date</Label>
+            <div className={CALENDAR_FRAME_CLASS}>
               <Calendar
                 mode="single"
                 selected={selectedDate}
                 onSelect={setSelectedDate}
-                className="rounded-md w-full max-w-[320px] [&_table]:w-full"
+                defaultMonth={selectedDate}
+                className={CALENDAR_CLASS}
               />
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label>Schedule Duration</Label>
+          <div className="space-y-2.5">
+            <Label className="text-sm font-semibold">Schedule duration</Label>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               {WEEK_OPTIONS.map((opt) => (
                 <Button
@@ -102,7 +111,7 @@ export function QuickScheduleModal({
                   type="button"
                   variant={numberOfWeeks === opt.value ? "default" : "outline"}
                   size="sm"
-                  className="w-full"
+                  className="w-full shadow-none"
                   onClick={() => setNumberOfWeeks(opt.value)}
                 >
                   {opt.label}
@@ -112,11 +121,11 @@ export function QuickScheduleModal({
           </div>
 
           {scheduleRange && (
-            <div className="p-3 bg-muted/50 rounded-lg border">
-              <div className="text-sm text-muted-foreground">
-                Schedule Period:
+            <div className="rounded-2xl bg-primary/[0.07] p-4">
+              <div className="text-xs font-semibold uppercase tracking-wide text-primary">
+                Schedule period
               </div>
-              <div className="font-medium">
+              <div className="mt-1 font-semibold tabular-nums">
                 {format(scheduleRange.start, "MMM d")} -{" "}
                 {format(scheduleRange.end, "MMM d, yyyy")}
               </div>
@@ -127,8 +136,8 @@ export function QuickScheduleModal({
           )}
         </div>
 
-        <DialogFooter className="gap-2">
-          <Button variant="outline" onClick={onClose}>
+        <DialogFooter className="border-t border-border/60 pt-4">
+          <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>
           <Button onClick={handleCreate} disabled={!selectedDate}>
@@ -153,39 +162,41 @@ interface PeriodWizardProps {
 
 type Step = 1 | 2 | 3;
 
-export function PeriodWizard({
+export function PeriodWizard(props: PeriodWizardProps) {
+  if (!props.isOpen) return null;
+
+  return (
+    <PeriodWizardContent
+      key={props.periodToEdit?.id ?? "new-period"}
+      {...props}
+    />
+  );
+}
+
+function PeriodWizardContent({
   isOpen,
   onClose,
   onComplete,
   periodToEdit,
 }: PeriodWizardProps) {
   const [step, setStep] = useState<Step>(1);
-  const [formData, setFormData] = useState({
-    name: "",
-    startDate: undefined as Date | undefined,
-    endDate: undefined as Date | undefined,
-  });
-
-  // Reset on open/edit
-  useEffect(() => {
-    if (isOpen) {
-      if (periodToEdit) {
-        setFormData({
+  const [formData, setFormData] = useState<{
+    name: string;
+    startDate: Date | undefined;
+    endDate: Date | undefined;
+  }>(() =>
+    periodToEdit
+      ? {
           name: periodToEdit.name,
-          startDate: new Date(periodToEdit.startDate),
-          endDate: new Date(periodToEdit.endDate),
-        });
-        setStep(1);
-      } else {
-        setFormData({
+          startDate: parseISO(periodToEdit.startDate),
+          endDate: parseISO(periodToEdit.endDate),
+        }
+      : {
           name: "",
           startDate: new Date(),
           endDate: addDays(new Date(), 30),
-        });
-        setStep(1);
-      }
-    }
-  }, [periodToEdit, isOpen]);
+        }
+  );
 
   const handleNext = () => {
     if (step === 1 && formData.name.trim()) {
@@ -229,29 +240,34 @@ export function PeriodWizard({
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-[450px]">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <CalendarIcon className="h-5 w-5 text-primary" />
-            {periodToEdit ? "Edit Period" : "New Schedule Period"}
-          </DialogTitle>
-          <DialogDescription>
-            {step === 1 && "Step 1: Give your period a name."}
-            {step === 2 && "Step 2: Select the start date."}
-            {step === 3 && "Step 3: Select the end date."}
-          </DialogDescription>
+      <DialogContent className="gap-0 overflow-y-auto sm:max-h-[calc(100vh-2rem)] sm:max-w-[480px]">
+        <DialogHeader className="pr-10">
+          <div className="flex items-start gap-3 text-left">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+              <CalendarIcon className="h-5 w-5" />
+            </span>
+            <div>
+              <DialogTitle>
+                {periodToEdit ? "Edit Period" : "New Schedule Period"}
+              </DialogTitle>
+              <DialogDescription className="mt-1.5">
+                {step === 1 && "Give this scheduling period a clear name."}
+                {step === 2 && "Choose when this scheduling period begins."}
+                {step === 3 && "Choose when this scheduling period ends."}
+              </DialogDescription>
+            </div>
+          </div>
         </DialogHeader>
 
-        {/* Progress Indicator */}
-        <div className="flex items-center justify-center gap-2 py-3">
+        <div className="flex items-center justify-center gap-1 py-6">
           {[1, 2, 3].map((s) => (
             <div key={s} className="flex items-center">
               <div
-                className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium transition-all duration-300 ${
+                className={`flex size-8 items-center justify-center rounded-full text-xs font-semibold transition-colors duration-300 ${
                   step === s
-                    ? "bg-primary text-primary-foreground scale-110 shadow-lg"
+                    ? "bg-primary text-primary-foreground"
                     : step > s
-                    ? "bg-green-500 text-white"
+                    ? "bg-emerald-500 text-white"
                     : "bg-muted text-muted-foreground"
                 }`}
               >
@@ -259,8 +275,8 @@ export function PeriodWizard({
               </div>
               {s < 3 && (
                 <div
-                  className={`w-12 h-1 mx-1 rounded transition-colors duration-300 ${
-                    step > s ? "bg-green-500" : "bg-muted"
+                  className={`mx-1 h-px w-12 transition-colors duration-300 ${
+                    step > s ? "bg-emerald-500" : "bg-border"
                   }`}
                 />
               )}
@@ -268,8 +284,7 @@ export function PeriodWizard({
           ))}
         </div>
 
-        {/* Step Labels */}
-        <div className="flex justify-between text-xs text-muted-foreground px-4 -mt-1 mb-2">
+        <div className="-mt-4 mb-4 flex justify-between px-7 text-[0.7rem] text-muted-foreground">
           {stepLabels.map((label, i) => (
             <span
               key={i}
@@ -285,10 +300,10 @@ export function PeriodWizard({
         <div className="min-h-[300px]">
           {/* Step 1: Name */}
           {step === 1 && (
-            <div className="space-y-4 p-2 animate-in fade-in slide-in-from-right-4 duration-300">
+            <div className="animate-in space-y-5 fade-in slide-in-from-right-4 duration-300">
               <div className="flex items-center justify-center mb-4">
-                <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
-                  <FileText className="h-8 w-8 text-primary" />
+                <div className="flex size-14 items-center justify-center rounded-full bg-muted/50">
+                  <FileText className="h-6 w-6 text-primary" />
                 </div>
               </div>
               <div className="space-y-2">
@@ -300,7 +315,7 @@ export function PeriodWizard({
                     setFormData({ ...formData, name: e.target.value })
                   }
                   placeholder="e.g., Summer Season 2026"
-                  className="text-center text-lg h-12"
+                  className="h-11 rounded-xl bg-muted/30 text-base shadow-none"
                   autoFocus
                 />
                 <p className="text-xs text-muted-foreground text-center">
@@ -312,19 +327,20 @@ export function PeriodWizard({
 
           {/* Step 2: Start Date */}
           {step === 2 && (
-            <div className="space-y-4 p-2 animate-in fade-in slide-in-from-right-4 duration-300">
-              <div className="flex justify-center border rounded-lg p-2 overflow-x-auto">
+            <div className="animate-in space-y-4 fade-in slide-in-from-right-4 duration-300">
+              <div className={CALENDAR_FRAME_CLASS}>
                 <Calendar
                   mode="single"
                   selected={formData.startDate}
                   onSelect={(date) =>
                     setFormData({ ...formData, startDate: date })
                   }
-                  className="rounded-md w-full max-w-[320px] [&_table]:w-full"
+                  defaultMonth={formData.startDate}
+                  className={CALENDAR_CLASS}
                 />
               </div>
               {formData.startDate && (
-                <div className="p-3 bg-muted/50 rounded-lg border text-center">
+                <div className="rounded-2xl bg-primary/[0.07] p-3 text-center">
                   <div className="text-sm text-muted-foreground">
                     Start Date:
                   </div>
@@ -338,8 +354,8 @@ export function PeriodWizard({
 
           {/* Step 3: End Date */}
           {step === 3 && (
-            <div className="space-y-4 p-2 animate-in fade-in slide-in-from-right-4 duration-300">
-              <div className="flex justify-center border rounded-lg p-2 overflow-x-auto">
+            <div className="animate-in space-y-4 fade-in slide-in-from-right-4 duration-300">
+              <div className={CALENDAR_FRAME_CLASS}>
                 <Calendar
                   mode="single"
                   selected={formData.endDate}
@@ -349,11 +365,12 @@ export function PeriodWizard({
                   disabled={(date) =>
                     formData.startDate ? date < formData.startDate : false
                   }
-                  className="rounded-md w-full max-w-[320px] [&_table]:w-full"
+                  defaultMonth={formData.endDate}
+                  className={CALENDAR_CLASS}
                 />
               </div>
               {formData.startDate && formData.endDate && (
-                <div className="p-3 bg-primary/5 rounded-lg border border-primary/20 text-center">
+                <div className="rounded-2xl bg-primary/[0.07] p-3 text-center">
                   <div className="text-sm text-muted-foreground">
                     Period Range:
                   </div>
@@ -371,9 +388,9 @@ export function PeriodWizard({
         </div>
 
         {/* Footer Navigation */}
-        <DialogFooter className="flex-row items-center justify-between gap-2 pt-4 border-t sm:justify-between">
+        <DialogFooter className="flex-row items-center justify-between gap-2 border-t border-border/60 pt-4 sm:justify-between">
           <Button
-            variant="outline"
+            variant="ghost"
             onClick={step === 1 ? handleClose : handleBack}
             className="gap-1"
           >
