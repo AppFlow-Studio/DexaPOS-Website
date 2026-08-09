@@ -38,7 +38,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -69,6 +69,7 @@ import {
   Copy,
   X,
   Filter,
+  UserRound,
 } from "lucide-react";
 import { UnifiedStaffMember, BulkPinResetResult } from "@/types/staff";
 import { BulkPasswordResetResult } from "@/app/dashboard/actions/unified-staff";
@@ -411,12 +412,14 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
             className="flex cursor-pointer items-center gap-3"
             onClick={() => handleRowClick(staff)}
           >
-            <Avatar className="h-9 w-9">
-              <AvatarImage
-                src={staff.avatar_url || undefined}
-                alt={staff.display_name}
-              />
-              <AvatarFallback className="text-xs">{initials}</AvatarFallback>
+            <Avatar className="h-9 w-9 bg-muted">
+              <AvatarFallback className="bg-muted text-xs text-muted-foreground">
+                {staff.avatar_url ? (
+                  <UserRound className="h-4 w-4" />
+                ) : (
+                  initials
+                )}
+              </AvatarFallback>
             </Avatar>
             <div className="flex flex-col">
               <span className="font-medium text-sm">
@@ -878,7 +881,7 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
               </TableRow>
             ))}
           </TableHeader>
-          <TableBody>
+          <TableBody className="[&_tr]:border-0">
             {isLoading ? (
               <TableRow>
                 <TableCell
@@ -895,7 +898,7 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
                 <TableRow
                   key={row.id}
                   data-state={row.getIsSelected() && "selected"}
-                  className="bg-card/70 hover:bg-muted/40"
+                  className="border-0 bg-card/70 hover:bg-muted/40"
                 >
                   {row.getVisibleCells().map((cell) => (
                     <TableCell key={cell.id}>
@@ -986,13 +989,13 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
                     onClick={() => handleRowClick(staff)}
                     className="flex min-w-0 flex-1 items-center gap-3 text-left"
                   >
-                    <Avatar className="h-10 w-10 shrink-0">
-                      <AvatarImage
-                        src={staff.avatar_url || undefined}
-                        alt={staff.display_name}
-                      />
-                      <AvatarFallback className="text-xs">
-                        {initials}
+                    <Avatar className="h-10 w-10 shrink-0 bg-muted">
+                      <AvatarFallback className="bg-muted text-xs text-muted-foreground">
+                        {staff.avatar_url ? (
+                          <UserRound className="h-[1.125rem] w-[1.125rem]" />
+                        ) : (
+                          initials
+                        )}
                       </AvatarFallback>
                     </Avatar>
                     <span className="min-w-0 flex-1">

@@ -127,7 +127,7 @@ export function PendingInvitesTable() {
               <TableHead className="w-10" />
             </TableRow>
           </TableHeader>
-          <TableBody>
+          <TableBody className="[&_tr]:border-0">
             {invites.map((invite) => {
               const expired = isPast(new Date(invite.expires_at));
               const displayName =
@@ -138,7 +138,7 @@ export function PendingInvitesTable() {
               return (
                 <TableRow
                   key={invite.id}
-                  className="bg-card/70 hover:bg-muted/40"
+                  className="border-0 bg-card/70 hover:bg-muted/40"
                 >
                   <TableCell>
                     <div className="text-sm font-medium">{displayName}</div>
