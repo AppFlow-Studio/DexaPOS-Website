@@ -39,6 +39,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -62,7 +63,6 @@ import {
   UserCheck,
   ArrowUpDown,
   CheckCircle2,
-  User,
   ShieldCheck,
   Shield,
   Download,
@@ -100,13 +100,15 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
   const { data: userInfo } = useUserInfo();
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
-    []
+    [],
   );
   const [columnVisibility, setColumnVisibility] =
     React.useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = React.useState({});
   const [globalFilter, setGlobalFilter] = React.useState("");
-  const [statusFilter, setStatusFilter] = React.useState<"all" | "active" | "inactive">("active");
+  const [statusFilter, setStatusFilter] = React.useState<
+    "all" | "active" | "inactive"
+  >("active");
   const [roleFilter, setRoleFilter] = React.useState<string>("all");
 
   const [selectedStaff, setSelectedStaff] =
@@ -123,13 +125,20 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
   const [bulkRoleDialogOpen, setBulkRoleDialogOpen] = React.useState(false);
   const [bulkRoleCode, setBulkRoleCode] = React.useState("");
   const [bulkPinResultsOpen, setBulkPinResultsOpen] = React.useState(false);
-  const [bulkPinResults, setBulkPinResults] = React.useState<BulkPinResetResult[]>([]);
+  const [bulkPinResults, setBulkPinResults] = React.useState<
+    BulkPinResetResult[]
+  >([]);
   const [bulkPinCustomPin, setBulkPinCustomPin] = React.useState("");
   const [bulkPinConfirmOpen, setBulkPinConfirmOpen] = React.useState(false);
-  const [bulkConfirmDeactivateOpen, setBulkConfirmDeactivateOpen] = React.useState(false);
-  const [bulkPasswordResultsOpen, setBulkPasswordResultsOpen] = React.useState(false);
-  const [bulkPasswordResults, setBulkPasswordResults] = React.useState<BulkPasswordResetResult[]>([]);
-  const [bulkPasswordConfirmOpen, setBulkPasswordConfirmOpen] = React.useState(false);
+  const [bulkConfirmDeactivateOpen, setBulkConfirmDeactivateOpen] =
+    React.useState(false);
+  const [bulkPasswordResultsOpen, setBulkPasswordResultsOpen] =
+    React.useState(false);
+  const [bulkPasswordResults, setBulkPasswordResults] = React.useState<
+    BulkPasswordResetResult[]
+  >([]);
+  const [bulkPasswordConfirmOpen, setBulkPasswordConfirmOpen] =
+    React.useState(false);
   const [availableRoles, setAvailableRoles] = React.useState<RolesModel[]>([]);
 
   const updateAssignment = useUpdateStaffAssignment();
@@ -145,7 +154,9 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
 
   // Selected member IDs derived from rowSelection
   const selectedMemberIds = React.useMemo(() => {
-    return Object.keys(rowSelection).filter((key) => rowSelection[key as keyof typeof rowSelection]);
+    return Object.keys(rowSelection).filter(
+      (key) => rowSelection[key as keyof typeof rowSelection],
+    );
   }, [rowSelection]);
 
   const selectedCount = selectedMemberIds.length;
@@ -159,7 +170,9 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
         roleMap.set(primary.role_code, primary.role_name);
       }
     });
-    return Array.from(roleMap.entries()).sort((a, b) => a[1].localeCompare(b[1]));
+    return Array.from(roleMap.entries()).sort((a, b) =>
+      a[1].localeCompare(b[1]),
+    );
   }, [data]);
 
   // Pre-filter data by status and role before passing to table
@@ -167,7 +180,9 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
     let result = data;
     if (statusFilter !== "all") {
       result = result.filter((staff) =>
-        statusFilter === "active" ? staff.overall_is_active : !staff.overall_is_active
+        statusFilter === "active"
+          ? staff.overall_is_active
+          : !staff.overall_is_active,
       );
     }
     if (roleFilter !== "all") {
@@ -210,7 +225,10 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
       return;
     }
     bulkResetPINs.mutate(
-      { memberIds: selectedMemberIds, customPin: bulkPinCustomPin || undefined },
+      {
+        memberIds: selectedMemberIds,
+        customPin: bulkPinCustomPin || undefined,
+      },
       {
         onSuccess: (result) => {
           if (result.data?.results) {
@@ -221,7 +239,7 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
           setBulkPinCustomPin("");
           setRowSelection({});
         },
-      }
+      },
     );
   };
 
@@ -252,7 +270,7 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
           setBulkRoleDialogOpen(false);
           setBulkRoleCode("");
         },
-      }
+      },
     );
   };
 
@@ -265,7 +283,10 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
   };
 
   const handleDownloadPinResults = () => {
-    const csv = ["Name,PIN", ...bulkPinResults.map((r) => `${r.staff_name},${r.new_pin}`)].join("\n");
+    const csv = [
+      "Name,PIN",
+      ...bulkPinResults.map((r) => `${r.staff_name},${r.new_pin}`),
+    ].join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -290,7 +311,7 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
     if (!upgradeTarget) return;
 
     const primaryAssignment = upgradeTarget.location_assignments.find(
-      (a) => a.is_primary
+      (a) => a.is_primary,
     );
     if (!primaryAssignment) {
       toast.error("No primary location found for this staff member");
@@ -314,8 +335,29 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
           setUpgradeTarget(null);
           setUpgradeEmail("");
         },
-      }
+      },
     );
+  };
+
+  const handleStaffStatusToggle = (staff: UnifiedStaffMember) => {
+    const primaryLocation =
+      staff.location_assignments.find((assignment) => assignment.is_primary) ||
+      staff.location_assignments[0];
+
+    if (!primaryLocation || !staff.staff_profile_id) return;
+
+    if (staff.overall_is_active) {
+      deactivateStaff.mutate({
+        staffProfileId: staff.staff_profile_id,
+        locationId: primaryLocation.location_id,
+      });
+      return;
+    }
+
+    reactivateStaff.mutate({
+      staffProfileId: staff.staff_profile_id,
+      locationId: primaryLocation.location_id,
+    });
   };
 
   const columns: ColumnDef<UnifiedStaffMember>[] = [
@@ -351,7 +393,7 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
           <Button
             variant="ghost"
             onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-            className="h-8 px-2"
+            className="h-8 rounded-full px-2"
           >
             Employee
             <ArrowUpDown className="ml-2 h-3 w-3" />
@@ -366,7 +408,7 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
 
         return (
           <div
-            className="flex items-center gap-3 cursor-pointer hover:bg-muted/60 rounded-md px-2 py-1 -mx-2"
+            className="flex cursor-pointer items-center gap-3"
             onClick={() => handleRowClick(staff)}
           >
             <Avatar className="h-9 w-9">
@@ -415,7 +457,10 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
         }
 
         return (
-          <Badge variant="outline" className="text-xs font-mono w-fit">
+          <Badge
+            variant="secondary"
+            className="w-fit rounded-full border-0 px-2.5 text-xs font-medium"
+          >
             {primaryAssignment.role_name || primaryAssignment.role_code || "-"}
           </Badge>
         );
@@ -427,7 +472,7 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
       cell: ({ row }) => {
         const staff = row.original;
         const activeLocations = staff.location_assignments.filter(
-          (a) => a.is_active
+          (a) => a.is_active,
         );
         const visibleLocations =
           activeLocations.length > 0
@@ -441,15 +486,19 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
         const primaryLocation =
           visibleLocations.find((a) => a.is_primary) || visibleLocations[0];
         const otherLocations = visibleLocations.filter(
-          (loc) => loc !== primaryLocation
+          (loc) => loc !== primaryLocation,
         );
 
         return (
           <div className="flex flex-wrap gap-1">
             {primaryLocation && (
               <Badge
-                variant={primaryLocation.is_active ? "default" : "outline"}
-                className="text-xs gap-1"
+                variant="secondary"
+                className={cn(
+                  "gap-1 rounded-full border-0 px-2.5 text-xs",
+                  primaryLocation.is_active &&
+                    "bg-[#0C4FD1]/10 text-[#0C4FD1] dark:text-[#6CA0FF]",
+                )}
               >
                 <MapPin className="h-2.5 w-2.5" />
                 {primaryLocation.location_name}
@@ -459,15 +508,18 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
             {otherLocations.slice(0, 2).map((loc) => (
               <Badge
                 key={loc.location_id}
-                variant={loc.is_active ? "secondary" : "outline"}
-                className="text-xs"
+                variant="secondary"
+                className="rounded-full border-0 px-2.5 text-xs"
               >
                 {loc.location_name}
                 {!loc.is_active ? " (inactive)" : ""}
               </Badge>
             ))}
             {otherLocations.length > 2 && (
-              <Badge variant="outline" className="text-xs">
+              <Badge
+                variant="secondary"
+                className="rounded-full border-0 px-2.5 text-xs"
+              >
                 +{otherLocations.length - 2} more
               </Badge>
             )}
@@ -484,28 +536,11 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
           staff.location_assignments.find((a) => a.is_primary) ||
           staff.location_assignments[0];
 
-        const handleToggle = async () => {
-          if (!primaryLocation || !staff.staff_profile_id) return;
-          const staffProfileId = staff.staff_profile_id;
-
-          if (staff.overall_is_active) {
-            deactivateStaff.mutate({
-              staffProfileId,
-              locationId: primaryLocation.location_id,
-            });
-          } else {
-            reactivateStaff.mutate({
-              staffProfileId,
-              locationId: primaryLocation.location_id,
-            });
-          }
-        };
-
         return (
           <div className="flex items-center gap-2">
             <Switch
               checked={staff.overall_is_active}
-              onCheckedChange={handleToggle}
+              onCheckedChange={() => handleStaffStatusToggle(staff)}
               disabled={
                 !primaryLocation ||
                 deactivateStaff.isPending ||
@@ -517,7 +552,7 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
                 "text-sm font-medium",
                 staff.overall_is_active
                   ? "text-green-600"
-                  : "text-muted-foreground"
+                  : "text-muted-foreground",
               )}
             >
               {staff.overall_is_active ? "Active" : "Inactive"}
@@ -594,7 +629,7 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
         return (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="h-8 w-8 p-0">
+              <Button variant="ghost" className="h-8 w-8 rounded-full p-0">
                 <span className="sr-only">Open menu</span>
                 <MoreHorizontal className="h-4 w-4" />
               </Button>
@@ -621,9 +656,7 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
               {!staff.is_clerk_user && !staff.user_id && (
                 <>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onClick={() => handleUpgradeClick(staff)}
-                  >
+                  <DropdownMenuItem onClick={() => handleUpgradeClick(staff)}>
                     <ShieldCheck className="mr-2 h-4 w-4" />
                     Upgrade to Dashboard User
                   </DropdownMenuItem>
@@ -635,7 +668,11 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
                     onClick={() => {
-                      if (confirm(`Demote ${staff.display_name} to POS-only? This will revoke their dashboard access.`)) {
+                      if (
+                        confirm(
+                          `Demote ${staff.display_name} to POS-only? This will revoke their dashboard access.`,
+                        )
+                      ) {
                         demoteClerk.mutate(staff.member_id);
                       }
                     }}
@@ -698,22 +735,29 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
     },
   });
 
+  const visibleRows = table.getRowModel().rows;
+
   return (
-    <div className="space-y-4">
+    <div className="min-w-0 space-y-5">
       {/* Search & Filters */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <div className="relative flex-1 min-w-[160px]">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+      <div className="flex min-w-0 flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div className="relative min-w-0 flex-1 md:max-w-xl">
+          <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
           <Input
             placeholder="Search staff..."
             value={globalFilter}
             onChange={(e) => setGlobalFilter(e.target.value)}
-            className="pl-9 w-full"
+            className="h-10 w-full rounded-full pl-10"
           />
         </div>
-        <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full sm:w-auto sm:shrink-0">
-          <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as "all" | "active" | "inactive")}>
-            <SelectTrigger className="w-full sm:w-[130px]">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <Select
+            value={statusFilter}
+            onValueChange={(v) =>
+              setStatusFilter(v as "all" | "active" | "inactive")
+            }
+          >
+            <SelectTrigger className="h-9 min-w-0 flex-1 rounded-full border-0 bg-muted/60 px-3 shadow-none sm:w-[140px] sm:flex-none">
               <Filter className="mr-2 h-4 w-4" />
               <SelectValue placeholder="Status" />
             </SelectTrigger>
@@ -724,7 +768,7 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
             </SelectContent>
           </Select>
           <Select value={roleFilter} onValueChange={setRoleFilter}>
-            <SelectTrigger className="w-full sm:w-[150px]">
+            <SelectTrigger className="h-9 min-w-0 flex-1 rounded-full border-0 bg-muted/60 px-3 shadow-none sm:w-[170px] sm:flex-none">
               <Shield className="mr-2 h-4 w-4" />
               <SelectValue placeholder="Role" />
             </SelectTrigger>
@@ -741,6 +785,7 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
             <Button
               variant="ghost"
               size="sm"
+              className="h-9 rounded-full px-3 text-muted-foreground"
               onClick={() => {
                 setStatusFilter("active");
                 setRoleFilter("all");
@@ -755,13 +800,14 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
 
       {/* Bulk Action Bar */}
       {selectedCount > 0 && (
-        <div className="flex items-center gap-2 rounded-lg border bg-muted/50 px-4 py-3">
-          <span className="text-sm font-medium mr-2">
+        <div className="flex flex-wrap items-center gap-2 rounded-2xl border-0 bg-muted/60 px-3 py-3 sm:px-4">
+          <span className="mr-2 text-sm font-medium tabular-nums">
             {selectedCount} selected
           </span>
           <Button
-            variant="outline"
+            variant="ghost"
             size="sm"
+            className="h-8 rounded-full px-3"
             onClick={() => setBulkConfirmDeactivateOpen(true)}
             disabled={bulkDeactivate.isPending}
           >
@@ -769,8 +815,9 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
             Bulk Deactivate
           </Button>
           <Button
-            variant="outline"
+            variant="ghost"
             size="sm"
+            className="h-8 rounded-full px-3"
             onClick={handleBulkResetPINs}
             disabled={bulkResetPINs.isPending}
           >
@@ -778,8 +825,9 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
             {bulkResetPINs.isPending ? "Resetting…" : "Bulk PIN Reset"}
           </Button>
           <Button
-            variant="outline"
+            variant="ghost"
             size="sm"
+            className="h-8 rounded-full px-3"
             onClick={handleBulkResetPasswords}
             disabled={bulkResetPasswords.isPending}
           >
@@ -787,8 +835,9 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
             {bulkResetPasswords.isPending ? "Resetting…" : "Reset Passwords"}
           </Button>
           <Button
-            variant="outline"
+            variant="ghost"
             size="sm"
+            className="h-8 rounded-full px-3"
             onClick={() => setBulkRoleDialogOpen(true)}
             disabled={bulkAssignRole.isPending}
           >
@@ -799,6 +848,7 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
           <Button
             variant="ghost"
             size="sm"
+            className="h-8 rounded-full px-3"
             onClick={() => setRowSelection({})}
           >
             <X className="mr-2 h-4 w-4" />
@@ -807,10 +857,10 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
         </div>
       )}
 
-      {/* Table */}
-      <div className="rounded-md border">
-        <Table className="min-w-[800px]">
-          <TableHeader>
+      {/* Wide-screen table */}
+      <div className="hidden overflow-hidden rounded-2xl bg-muted/20 xl:block">
+        <Table className="min-w-[900px] [&_td]:px-3 [&_td]:py-3 [&_th]:px-3">
+          <TableHeader className="bg-muted/50">
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => {
@@ -820,7 +870,7 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
                         ? null
                         : flexRender(
                             header.column.columnDef.header,
-                            header.getContext()
+                            header.getContext(),
                           )}
                     </TableHead>
                   );
@@ -845,12 +895,13 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
                 <TableRow
                   key={row.id}
                   data-state={row.getIsSelected() && "selected"}
+                  className="bg-card/70 hover:bg-muted/40"
                 >
                   {row.getVisibleCells().map((cell) => (
                     <TableCell key={cell.id}>
                       {flexRender(
                         cell.column.columnDef.cell,
-                        cell.getContext()
+                        cell.getContext(),
                       )}
                     </TableCell>
                   ))}
@@ -873,8 +924,182 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
         </Table>
       </div>
 
+      {/* Phones and tablets use cards instead of a horizontally scrolling table. */}
+      <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:hidden">
+        {isLoading ? (
+          Array.from({ length: 4 }).map((_, index) => (
+            <div key={index} className="rounded-2xl border-0 bg-muted/45 p-4">
+              <div className="flex items-center gap-3">
+                <Skeleton className="h-10 w-10 rounded-full" />
+                <div className="min-w-0 flex-1 space-y-2">
+                  <Skeleton className="h-4 w-32 max-w-full" />
+                  <Skeleton className="h-3 w-44 max-w-full" />
+                </div>
+              </div>
+              <div className="mt-5 grid grid-cols-2 gap-4">
+                <Skeleton className="h-9 w-full" />
+                <Skeleton className="h-9 w-full" />
+              </div>
+            </div>
+          ))
+        ) : visibleRows.length > 0 ? (
+          visibleRows.map((row) => {
+            const staff = row.original;
+            const initials = `${staff.first_name?.[0] || ""}${
+              staff.last_name?.[0] || ""
+            }`.toUpperCase();
+            const activeLocations = staff.location_assignments.filter(
+              (assignment) => assignment.is_active,
+            );
+            const locations =
+              activeLocations.length > 0
+                ? activeLocations
+                : staff.location_assignments;
+            const primaryLocation =
+              locations.find((assignment) => assignment.is_primary) ||
+              locations[0];
+            const primaryRole =
+              primaryLocation?.role_name ||
+              primaryLocation?.role_code ||
+              "Unassigned";
+            const hasPin = staff.location_assignments.some(
+              (assignment) => assignment.has_pin,
+            );
+
+            return (
+              <article
+                key={row.id}
+                className={cn(
+                  "min-w-0 rounded-2xl border-0 bg-muted/45 p-4 transition-colors",
+                  row.getIsSelected() && "bg-muted ring-1 ring-border",
+                )}
+              >
+                <div className="flex min-w-0 items-start gap-3">
+                  <Checkbox
+                    checked={row.getIsSelected()}
+                    onCheckedChange={(value) => row.toggleSelected(!!value)}
+                    aria-label={`Select ${staff.display_name}`}
+                    className="mt-3 shrink-0"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleRowClick(staff)}
+                    className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                  >
+                    <Avatar className="h-10 w-10 shrink-0">
+                      <AvatarImage
+                        src={staff.avatar_url || undefined}
+                        alt={staff.display_name}
+                      />
+                      <AvatarFallback className="text-xs">
+                        {initials}
+                      </AvatarFallback>
+                    </Avatar>
+                    <span className="min-w-0 flex-1">
+                      <span className="flex min-w-0 items-center gap-2">
+                        <span className="truncate text-sm font-semibold">
+                          {staff.display_name}
+                        </span>
+                        {userInfo?.id === staff.user_id && (
+                          <span className="shrink-0 text-xs text-muted-foreground">
+                            You
+                          </span>
+                        )}
+                      </span>
+                      <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                        {staff.email || "POS-only account"}
+                      </span>
+                    </span>
+                  </button>
+                </div>
+
+                <dl className="mt-5 grid min-w-0 grid-cols-2 gap-x-4 gap-y-4">
+                  <div className="min-w-0">
+                    <dt className="text-[0.6875rem] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                      Role
+                    </dt>
+                    <dd className="mt-1 truncate text-sm font-medium">
+                      {primaryRole}
+                    </dd>
+                  </div>
+                  <div className="min-w-0">
+                    <dt className="text-[0.6875rem] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                      Location
+                    </dt>
+                    <dd className="mt-1 truncate text-sm font-medium">
+                      {primaryLocation?.location_name || "None"}
+                      {locations.length > 1 && (
+                        <span className="ml-1 text-muted-foreground">
+                          +{locations.length - 1}
+                        </span>
+                      )}
+                    </dd>
+                  </div>
+                  <div className="min-w-0">
+                    <dt className="text-[0.6875rem] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                      POS access
+                    </dt>
+                    <dd
+                      className={cn(
+                        "mt-1 flex items-center gap-1.5 text-sm font-medium",
+                        hasPin
+                          ? "text-emerald-700 dark:text-emerald-300"
+                          : "text-muted-foreground",
+                      )}
+                    >
+                      {hasPin && <CheckCircle2 className="h-3.5 w-3.5" />}
+                      {hasPin ? "PIN set" : "No PIN"}
+                    </dd>
+                  </div>
+                  <div className="min-w-0">
+                    <dt className="text-[0.6875rem] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                      Account
+                    </dt>
+                    <dd className="mt-1 text-sm font-medium">
+                      {staff.is_clerk_user ? "Dashboard user" : "POS only"}
+                    </dd>
+                  </div>
+                </dl>
+
+                <div className="mt-5 flex items-center justify-between gap-3 border-t border-border/60 pt-4">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <Switch
+                      checked={staff.overall_is_active}
+                      onCheckedChange={() => handleStaffStatusToggle(staff)}
+                      disabled={
+                        !primaryLocation ||
+                        deactivateStaff.isPending ||
+                        reactivateStaff.isPending
+                      }
+                      aria-label={`Toggle ${staff.display_name} status`}
+                    />
+                    <span className="truncate text-sm text-muted-foreground">
+                      {staff.overall_is_active ? "Active" : "Inactive"}
+                    </span>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 shrink-0 rounded-full px-3"
+                    onClick={() => handleRowClick(staff)}
+                  >
+                    <Edit className="mr-1.5 h-3.5 w-3.5" />
+                    Manage
+                  </Button>
+                </div>
+              </article>
+            );
+          })
+        ) : (
+          <div className="col-span-full flex min-h-40 flex-col items-center justify-center gap-2 rounded-2xl bg-muted/30 px-4 text-center text-muted-foreground">
+            <UserX className="h-8 w-8" />
+            <p className="text-sm">No staff members found</p>
+          </div>
+        )}
+      </div>
+
       {/* Results count */}
-      <div className="flex items-center justify-between text-sm text-muted-foreground">
+      <div className="flex items-center justify-between text-xs text-muted-foreground sm:text-sm">
         <div>
           {selectedCount > 0
             ? `${selectedCount} of ${table.getFilteredRowModel().rows.length} row(s) selected`
@@ -948,7 +1173,10 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
       </Dialog>
 
       {/* Bulk Confirm Deactivation Dialog */}
-      <Dialog open={bulkConfirmDeactivateOpen} onOpenChange={setBulkConfirmDeactivateOpen}>
+      <Dialog
+        open={bulkConfirmDeactivateOpen}
+        onOpenChange={setBulkConfirmDeactivateOpen}
+      >
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
             <DialogTitle>Bulk Deactivate Staff</DialogTitle>
@@ -1038,7 +1266,13 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
       </Dialog>
 
       {/* Bulk PIN Reset — Confirm + Custom PIN Dialog */}
-      <Dialog open={bulkPinConfirmOpen} onOpenChange={(open) => { setBulkPinConfirmOpen(open); if (!open) setBulkPinCustomPin(""); }}>
+      <Dialog
+        open={bulkPinConfirmOpen}
+        onOpenChange={(open) => {
+          setBulkPinConfirmOpen(open);
+          if (!open) setBulkPinCustomPin("");
+        }}
+      >
         <DialogContent className="sm:max-w-105">
           <DialogHeader>
             <DialogTitle>Bulk PIN Reset</DialogTitle>
@@ -1049,7 +1283,10 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
           <div className="space-y-4 py-2">
             <div className="space-y-2">
               <Label className="text-sm font-medium">
-                Custom PIN <span className="font-normal text-muted-foreground">(optional)</span>
+                Custom PIN{" "}
+                <span className="font-normal text-muted-foreground">
+                  (optional)
+                </span>
               </Label>
               <Input
                 type="text"
@@ -1058,7 +1295,9 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
                 maxLength={6}
                 placeholder="Leave blank to auto-generate"
                 value={bulkPinCustomPin}
-                onChange={(e) => setBulkPinCustomPin(e.target.value.replace(/\D/g, ""))}
+                onChange={(e) =>
+                  setBulkPinCustomPin(e.target.value.replace(/\D/g, ""))
+                }
                 className="font-mono"
               />
               <p className="text-xs text-muted-foreground">
@@ -1067,10 +1306,17 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setBulkPinConfirmOpen(false)} disabled={bulkResetPINs.isPending}>
+            <Button
+              variant="outline"
+              onClick={() => setBulkPinConfirmOpen(false)}
+              disabled={bulkResetPINs.isPending}
+            >
               Cancel
             </Button>
-            <Button onClick={handleConfirmBulkResetPINs} disabled={bulkResetPINs.isPending}>
+            <Button
+              onClick={handleConfirmBulkResetPINs}
+              disabled={bulkResetPINs.isPending}
+            >
               {bulkResetPINs.isPending ? "Resetting…" : "Reset PINs"}
             </Button>
           </DialogFooter>
@@ -1078,20 +1324,32 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
       </Dialog>
 
       {/* Bulk Password Reset — Confirm Dialog */}
-      <Dialog open={bulkPasswordConfirmOpen} onOpenChange={setBulkPasswordConfirmOpen}>
+      <Dialog
+        open={bulkPasswordConfirmOpen}
+        onOpenChange={setBulkPasswordConfirmOpen}
+      >
         <DialogContent className="sm:max-w-105">
           <DialogHeader>
             <DialogTitle>Bulk Reset Passwords</DialogTitle>
             <DialogDescription>
-              Reset dashboard passwords for {selectedCount} selected staff member(s).
-              POS-only staff without dashboard accounts will be skipped.
+              Reset dashboard passwords for {selectedCount} selected staff
+              member(s). POS-only staff without dashboard accounts will be
+              skipped.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setBulkPasswordConfirmOpen(false)} disabled={bulkResetPasswords.isPending}>
+            <Button
+              variant="outline"
+              onClick={() => setBulkPasswordConfirmOpen(false)}
+              disabled={bulkResetPasswords.isPending}
+            >
               Cancel
             </Button>
-            <Button variant="destructive" onClick={handleConfirmBulkResetPasswords} disabled={bulkResetPasswords.isPending}>
+            <Button
+              variant="destructive"
+              onClick={handleConfirmBulkResetPasswords}
+              disabled={bulkResetPasswords.isPending}
+            >
               {bulkResetPasswords.isPending ? "Resetting…" : "Reset Passwords"}
             </Button>
           </DialogFooter>
@@ -1110,7 +1368,8 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
           <DialogHeader>
             <DialogTitle>Password Reset Results</DialogTitle>
             <DialogDescription>
-              New passwords for {bulkPasswordResults.length} dashboard user(s). Share them securely — these are shown only once.
+              New passwords for {bulkPasswordResults.length} dashboard user(s).
+              Share them securely — these are shown only once.
             </DialogDescription>
           </DialogHeader>
           <div className="max-h-[300px] overflow-y-auto">
@@ -1125,9 +1384,15 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
               <TableBody>
                 {bulkPasswordResults.map((result) => (
                   <TableRow key={result.member_id}>
-                    <TableCell className="font-medium">{result.staff_name}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{result.email || "—"}</TableCell>
-                    <TableCell className="text-right font-mono">{result.new_password}</TableCell>
+                    <TableCell className="font-medium">
+                      {result.staff_name}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {result.email || "—"}
+                    </TableCell>
+                    <TableCell className="text-right font-mono">
+                      {result.new_password}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -1137,8 +1402,15 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
             <Button
               variant="outline"
               onClick={() => {
-                const csv = ["Name,Email,Password", ...bulkPasswordResults.map((r) => `"${r.staff_name}","${r.email}","${r.new_password}"`)].join("\n");
-                const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+                const csv = [
+                  "Name,Email,Password",
+                  ...bulkPasswordResults.map(
+                    (r) => `"${r.staff_name}","${r.email}","${r.new_password}"`,
+                  ),
+                ].join("\n");
+                const blob = new Blob([csv], {
+                  type: "text/csv;charset=utf-8;",
+                });
                 const url = URL.createObjectURL(blob);
                 const link = document.createElement("a");
                 link.href = url;
@@ -1152,7 +1424,9 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
               <Download className="mr-2 h-4 w-4" />
               Download CSV
             </Button>
-            <Button onClick={() => setBulkPasswordResultsOpen(false)}>Done</Button>
+            <Button onClick={() => setBulkPasswordResultsOpen(false)}>
+              Done
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
