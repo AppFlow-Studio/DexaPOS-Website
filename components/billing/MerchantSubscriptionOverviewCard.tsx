@@ -4,8 +4,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import {
   AlertTriangle,
+  Building2,
   ChevronDown,
-  ChevronRight,
   CreditCard,
   Download,
   Eye,
@@ -42,6 +42,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { PageHeader, PageShell, Panel } from '@/components/dashboard/shell'
 import {
   getMerchantSubscriptionInvoiceDocument,
   type MerchantBillingLocationViewRecord,
@@ -60,12 +61,49 @@ import {
   type SubscriptionInvoiceDocumentData,
 } from '@/lib/subscription-billing/invoice-template'
 import { downloadSubscriptionInvoicePdf } from '@/lib/subscription-billing/invoice-pdf'
+import { cn } from '@/lib/utils'
 
 interface MerchantSubscriptionOverviewCardProps {
   merchantName: string
 }
 
 const LOCATION_PAGE_SIZE = 10
+type SubscriptionSection = 'plan' | 'hardware' | 'billing'
+
+const EMPTY_PLAN_STATUS: MerchantPlanStatusView = {
+  plan: null,
+  active_location_count: 0,
+  is_over_limit: false,
+  required_plan_code: null,
+  subscription_status: null,
+  current_period_end: null,
+}
+const EMPTY_LOCATIONS: MerchantBillingLocationViewRecord[] = []
+const EMPTY_DEVICES_BY_LOCATION: Record<string, MerchantProvisionedDeviceViewRecord[]> = {}
+const EMPTY_INVOICES: MerchantSubscriptionInvoiceViewRecord[] = []
+const EMPTY_BILLING_PROFILES: Record<string, MerchantSubscriptionBillingProfileViewRecord> = {}
+
+const SUBSCRIPTION_SECTIONS: Array<{
+  id: SubscriptionSection
+  label: string
+  icon: React.ComponentType<{ className?: string }>
+}> = [
+  {
+    id: 'plan',
+    label: 'Plan & locations',
+    icon: Building2,
+  },
+  {
+    id: 'hardware',
+    label: 'Hardware',
+    icon: Monitor,
+  },
+  {
+    id: 'billing',
+    label: 'Billing',
+    icon: CreditCard,
+  },
+]
 const PLAN_NAME_BY_CODE: Record<string, string> = {
   basic: 'Basic',
   multi_location: 'Multi-Location',
@@ -207,6 +245,36 @@ function usageTone(planStatus: MerchantPlanStatusView): {
   }
 }
 
+function SubscriptionSectionButton({
+  section,
+  active,
+  onClick,
+}: {
+  section: (typeof SUBSCRIPTION_SECTIONS)[number]
+  active: boolean
+  onClick: () => void
+}) {
+  const Icon = section.icon
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-current={active ? 'page' : undefined}
+      className={cn(
+        'flex min-w-max flex-1 items-center justify-center gap-2 rounded-full px-4 py-2.5 text-center transition-colors',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0C4FD1] focus-visible:ring-offset-2',
+        active
+          ? 'text-[#0C4FD1] dark:text-[#9DBDF5]'
+          : 'text-muted-foreground hover:text-foreground',
+      )}
+    >
+      <Icon className="h-4 w-4 shrink-0" />
+      <span className="truncate text-sm font-medium">{section.label}</span>
+    </button>
+  )
+}
+
 export function MerchantSubscriptionOverviewCard({
   merchantName,
 }: MerchantSubscriptionOverviewCardProps) {
@@ -218,27 +286,20 @@ export function MerchantSubscriptionOverviewCard({
   const [isInvoicePreviewLoading, setIsInvoicePreviewLoading] = useState(false)
   const [invoiceActionId, setInvoiceActionId] = useState<string | null>(null)
   const [contactModalMode, setContactModalMode] = useState<'plan' | 'hardware' | null>(null)
+  const [activeSection, setActiveSection] = useState<SubscriptionSection>('plan')
   const [locationPage, setLocationPage] = useState(1)
   const [openLocationIds, setOpenLocationIds] = useState<string[]>([])
 
   const devicesRef = useRef<HTMLDivElement | null>(null)
   const isLoading = overviewQuery.isLoading
-  const merchantPlanStatus: MerchantPlanStatusView = overviewQuery.data?.merchantPlanStatus ?? {
-    plan: null,
-    active_location_count: 0,
-    is_over_limit: false,
-    required_plan_code: null,
-    subscription_status: null,
-    current_period_end: null,
-  }
-  const locations: MerchantBillingLocationViewRecord[] = overviewQuery.data?.locations ?? []
+  const merchantPlanStatus = overviewQuery.data?.merchantPlanStatus ?? EMPTY_PLAN_STATUS
+  const locations = overviewQuery.data?.locations ?? EMPTY_LOCATIONS
   const merchantTierPlans: MerchantTierPlanViewRecord[] =
     merchantTierPlansQuery.data ?? overviewQuery.data?.merchantTierPlans ?? []
-  const devicesByLocationId: Record<string, MerchantProvisionedDeviceViewRecord[]> =
-    overviewQuery.data?.devicesByLocationId ?? {}
-  const invoices: MerchantSubscriptionInvoiceViewRecord[] = overviewQuery.data?.invoices ?? []
-  const billingProfilesByLocationId: Record<string, MerchantSubscriptionBillingProfileViewRecord> =
-    overviewQuery.data?.billingProfilesByLocationId ?? {}
+  const devicesByLocationId = overviewQuery.data?.devicesByLocationId ?? EMPTY_DEVICES_BY_LOCATION
+  const invoices = overviewQuery.data?.invoices ?? EMPTY_INVOICES
+  const billingProfilesByLocationId =
+    overviewQuery.data?.billingProfilesByLocationId ?? EMPTY_BILLING_PROFILES
 
   const invoicePreviewHtml = useMemo(
     () => (invoicePreviewDocument ? renderSubscriptionInvoiceHtml(invoicePreviewDocument) : ''),
@@ -279,10 +340,11 @@ export function MerchantSubscriptionOverviewCard({
   }, [selectedInvoices])
 
   const totalLocationPages = Math.max(1, Math.ceil(locations.length / LOCATION_PAGE_SIZE))
+  const effectiveLocationPage = Math.min(locationPage, totalLocationPages)
   const paginatedLocations = useMemo(() => {
-    const start = (locationPage - 1) * LOCATION_PAGE_SIZE
+    const start = (effectiveLocationPage - 1) * LOCATION_PAGE_SIZE
     return locations.slice(start, start + LOCATION_PAGE_SIZE)
-  }, [locationPage, locations])
+  }, [effectiveLocationPage, locations])
 
   const refresh = async () => {
     const [overviewResult, tierPlansResult] = await Promise.all([
@@ -303,12 +365,6 @@ export function MerchantSubscriptionOverviewCard({
   }
 
   useEffect(() => {
-    if (!selectedLocationId && locations[0]?.id) {
-      setSelectedLocationId(locations[0].id)
-    }
-  }, [locations, selectedLocationId])
-
-  useEffect(() => {
     const errorMessage =
       overviewQuery.error instanceof Error
         ? overviewQuery.error.message
@@ -321,17 +377,6 @@ export function MerchantSubscriptionOverviewCard({
     }
   }, [merchantTierPlansQuery.error, overviewQuery.error])
 
-  useEffect(() => {
-    if (!selectedLocation?.id) return
-    setOpenLocationIds((current) => (current.includes(selectedLocation.id) ? current : [...current, selectedLocation.id]))
-  }, [selectedLocation])
-
-  useEffect(() => {
-    if (locationPage > totalLocationPages) {
-      setLocationPage(totalLocationPages)
-    }
-  }, [locationPage, totalLocationPages])
-
   const toggleLocationOpen = (locationId: string) => {
     setOpenLocationIds((current) =>
       current.includes(locationId) ? current.filter((value) => value !== locationId) : [...current, locationId],
@@ -340,10 +385,18 @@ export function MerchantSubscriptionOverviewCard({
 
   const focusLocation = (locationId: string) => {
     setSelectedLocationId(locationId)
+    setActiveSection('hardware')
     setOpenLocationIds((current) => (current.includes(locationId) ? current : [...current, locationId]))
     setTimeout(() => {
       devicesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     }, 100)
+  }
+
+  const selectLocation = (locationId: string) => {
+    setSelectedLocationId(locationId)
+    setOpenLocationIds((current) =>
+      current.includes(locationId) ? current : [...current, locationId],
+    )
   }
 
   const loadInvoiceDocument = async (invoiceId: string): Promise<SubscriptionInvoiceDocumentData | null> => {
@@ -409,28 +462,24 @@ export function MerchantSubscriptionOverviewCard({
     : null
 
   return (
-    <div className="space-y-6">
-      <div className="space-y-2">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <span>Billing</span>
-          <ChevronRight className="h-4 w-4" />
-          <span className="text-foreground">Subscriptions</span>
-        </div>
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <h1 className="text-3xl font-semibold tracking-tight">Subscription & Billing</h1>
-            <p className="text-sm text-muted-foreground">
-              Review your current plan, covered locations, provisioned hardware, and billing history.
-            </p>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="merchant-subscriptions-location">Selected Location</Label>
+    <PageShell>
+      <PageHeader
+        title="Subscription & Billing"
+        subtitle="Review plan coverage, provisioned hardware, payments, and invoices."
+        actions={
+          <div className="w-full min-w-0 sm:w-auto">
+            <Label htmlFor="merchant-subscriptions-location" className="sr-only">
+              Selected location
+            </Label>
             <Select
               value={selectedLocation?.id || ''}
-              onValueChange={setSelectedLocationId}
+              onValueChange={selectLocation}
               disabled={isLoading || locations.length === 0}
             >
-              <SelectTrigger id="merchant-subscriptions-location" className="min-w-[280px]">
+              <SelectTrigger
+                id="merchant-subscriptions-location"
+                className="h-9 w-full min-w-0 rounded-full bg-card px-4 shadow-sm sm:w-[280px]"
+              >
                 <SelectValue placeholder="Select location" />
               </SelectTrigger>
               <SelectContent>
@@ -442,8 +491,8 @@ export function MerchantSubscriptionOverviewCard({
               </SelectContent>
             </Select>
           </div>
-        </div>
-      </div>
+        }
+      />
 
       {merchantPlanStatus.subscription_status === 'suspended' ? (
         <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
@@ -452,7 +501,45 @@ export function MerchantSubscriptionOverviewCard({
         </div>
       ) : null}
 
-      <Card className="border-slate-200 shadow-none">
+      <Panel className="min-w-0 overflow-hidden">
+        <div className="border-b border-border/60 px-4 py-5 sm:px-6">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
+                <p className="truncate text-lg font-semibold">
+                  {merchantPlanStatus.plan?.name || 'Plan not activated'}
+                </p>
+                {merchantPlanStatus.plan ? (
+                  <Badge className={planBadgeClass(merchantPlanStatus.subscription_status)}>
+                    {(merchantPlanStatus.subscription_status || 'inactive').replace('_', ' ')}
+                  </Badge>
+                ) : null}
+              </div>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {planAmountLabel} · {merchantPlanStatus.active_location_count} locations ·{' '}
+                {locations.reduce((sum, location) => sum + location.device_count, 0)} devices
+              </p>
+            </div>
+          </div>
+
+          <nav
+            aria-label="Subscription sections"
+            className="mt-4 flex min-w-0 gap-1 overflow-x-auto rounded-full bg-muted/60 p-1"
+          >
+            {SUBSCRIPTION_SECTIONS.map((section) => (
+              <SubscriptionSectionButton
+                key={section.id}
+                section={section}
+                active={activeSection === section.id}
+                onClick={() => setActiveSection(section.id)}
+              />
+            ))}
+          </nav>
+        </div>
+
+          {activeSection === 'plan' ? (
+            <div className="min-w-0">
+      <Card className="rounded-none border-0 shadow-none">
         <CardHeader className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <CardTitle className="text-xl">Current Plan</CardTitle>
@@ -460,7 +547,7 @@ export function MerchantSubscriptionOverviewCard({
               Read-only visibility into your merchant-wide subscription tier and plan capacity.
             </CardDescription>
           </div>
-          <Button type="button" onClick={() => setContactModalMode('plan')}>
+          <Button type="button" className="rounded-full" onClick={() => setContactModalMode('plan')}>
             Manage plan
           </Button>
         </CardHeader>
@@ -475,14 +562,14 @@ export function MerchantSubscriptionOverviewCard({
                 {merchantTierPlans.map((plan) => (
                   <div
                     key={plan.id}
-                    className="flex min-h-[360px] flex-col rounded-2xl border border-slate-200 bg-white p-6 shadow-none"
+                    className="flex min-h-[340px] flex-col rounded-2xl bg-muted/45 p-6"
                   >
                     <div className="text-xl font-semibold">{plan.display_name}</div>
                     <div className="mt-2 text-3xl font-semibold tracking-tight">{formatTierPrice(plan.monthly_price_cents)}</div>
                     <div className="mt-3 text-sm text-muted-foreground">
                       {plan.description || formatTierCapacity(plan)}
                     </div>
-                    <div className="mt-6 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700">
+                    <div className="mt-6 rounded-xl bg-background/80 px-3 py-2 text-sm font-medium text-foreground">
                       {formatTierCapacity(plan)}
                     </div>
                     <div className="mt-6 space-y-3 text-sm text-muted-foreground">
@@ -505,7 +592,7 @@ export function MerchantSubscriptionOverviewCard({
           ) : (
             <>
               <div className="grid gap-4 lg:grid-cols-3">
-                <div className="rounded-xl border border-slate-200 bg-white p-4">
+                <div className="rounded-2xl bg-muted/45 p-4">
                   <div className="text-sm text-muted-foreground">Current Tier</div>
                   <div className="mt-3 flex flex-wrap items-center gap-2">
                     <div className="text-2xl font-semibold">{merchantPlanStatus.plan.name}</div>
@@ -518,7 +605,7 @@ export function MerchantSubscriptionOverviewCard({
                   </div>
                 </div>
 
-                <div className="rounded-xl border border-slate-200 bg-white p-4">
+                <div className="rounded-2xl bg-muted/45 p-4">
                   <div className="text-sm text-muted-foreground">Location Coverage</div>
                   <div className="mt-3">
                     <Badge variant="outline" className={usage.className}>
@@ -533,7 +620,7 @@ export function MerchantSubscriptionOverviewCard({
                   </div>
                 </div>
 
-                <div className="rounded-xl border border-slate-200 bg-white p-4">
+                <div className="rounded-2xl bg-muted/45 p-4">
                   <div className="text-sm text-muted-foreground">Next Charge</div>
                   <div className="mt-3 text-2xl font-semibold">{planAmountLabel}</div>
                   <div className="mt-2 text-sm text-muted-foreground">
@@ -580,7 +667,7 @@ export function MerchantSubscriptionOverviewCard({
         </CardContent>
       </Card>
 
-      <Card className="border-slate-200 shadow-none">
+      <Card className="rounded-none border-0 border-t border-border/60 shadow-none">
         <CardHeader>
           <CardTitle>Locations</CardTitle>
           <CardDescription>
@@ -596,9 +683,9 @@ export function MerchantSubscriptionOverviewCard({
             </div>
           ) : (
             <>
-              <div className="overflow-x-auto rounded-lg border">
-                <Table>
-                  <TableHeader>
+              <div className="hidden overflow-hidden rounded-2xl bg-muted/20 xl:block">
+                <Table className="min-w-[760px] [&_td]:px-4 [&_td]:py-3.5 [&_th]:px-4">
+                  <TableHeader className="bg-muted/50">
                     <TableRow>
                       <TableHead>Name</TableHead>
                       <TableHead>Address</TableHead>
@@ -606,11 +693,11 @@ export function MerchantSubscriptionOverviewCard({
                       <TableHead className="text-right">Device Count</TableHead>
                     </TableRow>
                   </TableHeader>
-                  <TableBody>
+                  <TableBody className="[&_tr]:border-0">
                     {paginatedLocations.map((location) => (
                       <TableRow
                         key={location.id}
-                        className="cursor-pointer"
+                        className="cursor-pointer transition-colors hover:bg-muted/55"
                         data-state={selectedLocation?.id === location.id ? 'selected' : undefined}
                         onClick={() => focusLocation(location.id)}
                       >
@@ -630,19 +717,55 @@ export function MerchantSubscriptionOverviewCard({
                 </Table>
               </div>
 
+              <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:hidden">
+                {paginatedLocations.map((location) => (
+                  <button
+                    key={`location-card-${location.id}`}
+                    type="button"
+                    onClick={() => focusLocation(location.id)}
+                    className={cn(
+                      'min-w-0 rounded-2xl bg-muted/45 p-4 text-left transition-colors hover:bg-muted/65',
+                      selectedLocation?.id === location.id && 'ring-1 ring-border',
+                    )}
+                  >
+                    <div className="flex min-w-0 items-start gap-3">
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                        <Building2 className="h-4 w-4" />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-medium">{location.name}</span>
+                        <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                          {formatLocationAddress(location)}
+                        </span>
+                      </span>
+                      <Badge variant={location.is_active ? 'outline' : 'secondary'}>
+                        {location.is_active ? 'Active' : 'Inactive'}
+                      </Badge>
+                    </div>
+                    <span className="mt-4 block text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                      Devices
+                    </span>
+                    <span className="mt-1 block text-sm font-medium tabular-nums">
+                      {location.device_count}
+                    </span>
+                  </button>
+                ))}
+              </div>
+
               {locations.length > LOCATION_PAGE_SIZE ? (
-                <div className="flex items-center justify-between text-sm text-muted-foreground">
+                <div className="flex flex-col gap-3 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
                   <span>
-                    Showing {(locationPage - 1) * LOCATION_PAGE_SIZE + 1}-
-                    {Math.min(locationPage * LOCATION_PAGE_SIZE, locations.length)} of {locations.length} locations
+                    Showing {(effectiveLocationPage - 1) * LOCATION_PAGE_SIZE + 1}-
+                    {Math.min(effectiveLocationPage * LOCATION_PAGE_SIZE, locations.length)} of {locations.length} locations
                   </span>
                   <div className="flex gap-2">
                     <Button
                       type="button"
                       variant="outline"
                       size="sm"
-                      disabled={locationPage === 1}
-                      onClick={() => setLocationPage((current) => Math.max(1, current - 1))}
+                      className="rounded-full"
+                      disabled={effectiveLocationPage === 1}
+                      onClick={() => setLocationPage(Math.max(1, effectiveLocationPage - 1))}
                     >
                       Previous
                     </Button>
@@ -650,8 +773,9 @@ export function MerchantSubscriptionOverviewCard({
                       type="button"
                       variant="outline"
                       size="sm"
-                      disabled={locationPage >= totalLocationPages}
-                      onClick={() => setLocationPage((current) => Math.min(totalLocationPages, current + 1))}
+                      className="rounded-full"
+                      disabled={effectiveLocationPage >= totalLocationPages}
+                      onClick={() => setLocationPage(Math.min(totalLocationPages, effectiveLocationPage + 1))}
                     >
                       Next
                     </Button>
@@ -662,8 +786,12 @@ export function MerchantSubscriptionOverviewCard({
           )}
         </CardContent>
       </Card>
+            </div>
+          ) : null}
 
-      <Card ref={devicesRef} className="border-slate-200 shadow-none">
+          {activeSection === 'hardware' ? (
+            <div ref={devicesRef} className="min-w-0">
+      <Card className="rounded-none border-0 shadow-none">
         <CardHeader className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <CardTitle>Devices</CardTitle>
@@ -671,7 +799,12 @@ export function MerchantSubscriptionOverviewCard({
               Provisioned Dexa hardware grouped by location. This section is read-only in V1.
             </CardDescription>
           </div>
-          <Button type="button" variant="outline" onClick={() => setContactModalMode('hardware')}>
+          <Button
+            type="button"
+            variant="outline"
+            className="rounded-full"
+            onClick={() => setContactModalMode('hardware')}
+          >
             Request hardware
           </Button>
         </CardHeader>
@@ -685,10 +818,12 @@ export function MerchantSubscriptionOverviewCard({
           ) : (
             locations.map((location) => {
               const locationDevices = devicesByLocationId[location.id] ?? []
-              const isOpen = openLocationIds.includes(location.id)
+              const isOpen =
+                openLocationIds.includes(location.id) ||
+                (openLocationIds.length === 0 && selectedLocation?.id === location.id)
               return (
                 <Collapsible key={location.id} open={isOpen} onOpenChange={() => toggleLocationOpen(location.id)}>
-                  <div className="rounded-lg border">
+                  <div className="border-b border-border/60 last:border-b-0">
                     <CollapsibleTrigger asChild>
                       <button
                         type="button"
@@ -752,8 +887,12 @@ export function MerchantSubscriptionOverviewCard({
           )}
         </CardContent>
       </Card>
+            </div>
+          ) : null}
 
-      <Card className="border-slate-200 shadow-none">
+          {activeSection === 'billing' ? (
+            <div className="min-w-0">
+      <Card className="rounded-none border-0 shadow-none">
         <CardHeader>
           <CardTitle>Payment Method</CardTitle>
           <CardDescription>
@@ -766,7 +905,7 @@ export function MerchantSubscriptionOverviewCard({
           ) : (
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               <div className="flex items-start gap-3">
-                <div className="rounded-lg border p-2">
+                <div className="rounded-full bg-muted p-2.5">
                   <CreditCard className="h-5 w-5 text-muted-foreground" />
                 </div>
                 <div>
@@ -786,7 +925,7 @@ export function MerchantSubscriptionOverviewCard({
         </CardContent>
       </Card>
 
-      <Card className="border-slate-200 shadow-none">
+      <Card className="rounded-none border-0 border-t border-border/60 shadow-none">
         <CardHeader>
           <CardTitle>Transactions</CardTitle>
           <CardDescription>
@@ -795,15 +934,15 @@ export function MerchantSubscriptionOverviewCard({
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-4 md:grid-cols-3">
-            <div className="rounded-lg border p-4">
+            <div className="rounded-2xl bg-muted/45 p-4">
               <div className="text-sm text-muted-foreground">Collected</div>
               <div className="mt-1 text-2xl font-semibold">{formatMoney(transactionSummary.collected)}</div>
             </div>
-            <div className="rounded-lg border p-4">
+            <div className="rounded-2xl bg-muted/45 p-4">
               <div className="text-sm text-muted-foreground">Pending</div>
               <div className="mt-1 text-2xl font-semibold">{formatMoney(transactionSummary.pending)}</div>
             </div>
-            <div className="rounded-lg border p-4">
+            <div className="rounded-2xl bg-muted/45 p-4">
               <div className="text-sm text-muted-foreground">Transactions</div>
               <div className="mt-1 text-2xl font-semibold">{transactionSummary.count}</div>
             </div>
@@ -816,7 +955,7 @@ export function MerchantSubscriptionOverviewCard({
               No subscription transactions for this location yet.
             </div>
           ) : (
-            <div className="overflow-x-auto rounded-lg border">
+            <div className="overflow-x-auto rounded-2xl bg-muted/20">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -853,7 +992,7 @@ export function MerchantSubscriptionOverviewCard({
         </CardContent>
       </Card>
 
-      <Card className="border-slate-200 shadow-none">
+      <Card className="rounded-none border-0 border-t border-border/60 shadow-none">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <FileText className="h-5 w-5" />
@@ -871,7 +1010,7 @@ export function MerchantSubscriptionOverviewCard({
               No invoices have been generated for this location yet.
             </div>
           ) : (
-            <div className="overflow-x-auto rounded-lg border">
+            <div className="overflow-x-auto rounded-2xl bg-muted/20">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -928,6 +1067,9 @@ export function MerchantSubscriptionOverviewCard({
           )}
         </CardContent>
       </Card>
+            </div>
+          ) : null}
+      </Panel>
 
       <Dialog open={Boolean(contactModalMode)} onOpenChange={(open) => !open && setContactModalMode(null)}>
         <DialogContent className="max-w-lg">
@@ -1003,6 +1145,6 @@ export function MerchantSubscriptionOverviewCard({
           )}
         </DialogContent>
       </Dialog>
-    </div>
+    </PageShell>
   )
 }

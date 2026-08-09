@@ -1,10 +1,17 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Card, CardContent } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Skeleton } from '@/components/ui/skeleton'
-import { Empty } from '@/components/ui/empty'
+import {
+  AlertTriangle,
+  Banknote,
+  DoorClosed,
+  DoorOpen,
+  Info,
+  Loader2,
+  MapPin,
+  Plus,
+} from 'lucide-react'
+
 import {
   AlertDialog,
   AlertDialogAction,
@@ -15,25 +22,32 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { Plus, AlertTriangle, MapPin, Banknote, Loader2 } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Empty } from '@/components/ui/empty'
+import { Skeleton } from '@/components/ui/skeleton'
 import {
-  useGatedLocationId,
-  useGatedLocation,
-} from '@/stores/location-store'
+  LocationIndicator,
+  PageHeader,
+  PageShell,
+  Panel,
+  StatRow,
+  StatTile,
+} from '@/components/dashboard/shell'
 import { useUserInfo } from '@/app/manage/hooks/useUserInfo.'
 import {
   useCashDrawers,
   useUpdateCashDrawer,
   type CashDrawerListItem,
 } from '@/lib/queries/use-cash-drawers'
+import { useGatedLocation, useGatedLocationId } from '@/stores/location-store'
+
 import { CashDrawerCard } from './components/CashDrawerCard'
 import { CashDrawerFormDialog } from './components/CashDrawerFormDialog'
-import { OpenSessionDialog } from './components/OpenSessionDialog'
 import { CloseSessionDialog } from './components/CloseSessionDialog'
+import { OpenSessionDialog } from './components/OpenSessionDialog'
 
 export default function CashDrawersPage() {
-  // Resolve to the gated location so single-location accounts (locked to 'all')
-  // skip the "Select a Location" prompt. Multi-location on 'all' -> null.
+  // Single-location accounts resolve their hidden "all" state to the only store.
   const gatedLocationId = useGatedLocationId()
   const selectedLocationId = gatedLocationId ?? 'all'
   const isAllLocations = !gatedLocationId
@@ -47,7 +61,6 @@ export default function CashDrawersPage() {
     isError,
     error,
   } = useCashDrawers(clerkOrgId, selectedLocationId)
-
   const updateMutation = useUpdateCashDrawer()
 
   const [formOpen, setFormOpen] = useState(false)
@@ -57,43 +70,54 @@ export default function CashDrawersPage() {
   const [closeSessionTarget, setCloseSessionTarget] = useState<CashDrawerListItem | null>(null)
   const [mounted, setMounted] = useState(false)
 
-  useEffect(() => setMounted(true), [])
+  useEffect(() => {
+    const frameId = window.requestAnimationFrame(() => setMounted(true))
+    return () => window.cancelAnimationFrame(frameId)
+  }, [])
 
-  const handleEdit = (d: CashDrawerListItem) => {
-    setEditingDrawer(d)
+  const handleEdit = (drawer: CashDrawerListItem) => {
+    setEditingDrawer(drawer)
     setFormOpen(true)
   }
+
   const handleAdd = () => {
     setEditingDrawer(null)
     setFormOpen(true)
   }
+
   const handleDeactivateConfirm = async () => {
     if (!deactivateTarget || !clerkOrgId) return
+
     const result = await updateMutation.mutateAsync({
       clerkOrgId,
       drawerId: deactivateTarget.id,
       input: { is_active: false },
     })
+
     if (result.success) setDeactivateTarget(null)
   }
 
-  if (!mounted) {
-    return <PageSkeleton />
-  }
+  if (!mounted) return <PageSkeleton />
 
   if (isAllLocations) {
     return (
-      <PageShell title="Cash Drawers" subtitle="Define and run cash drawer sessions per location.">
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-            <MapPin className="mb-4 h-12 w-12 text-muted-foreground" />
-            <h3 className="mb-2 text-lg font-semibold">Select a Location</h3>
-            <p className="max-w-md text-muted-foreground">
-              Cash drawers are location-specific. Pick a location from the top bar to manage
-              its drawers.
+      <PageShell>
+        <PageHeader
+          title="Cash Drawers"
+          subtitle="Define and run drawer sessions for each location."
+          indicator={<LocationIndicator isAllLocations />}
+        />
+        <Panel padded>
+          <div className="flex min-h-52 flex-col items-center justify-center text-center">
+            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
+              <MapPin className="h-5 w-5" />
+            </span>
+            <h2 className="mt-4 text-base font-semibold">Select a location</h2>
+            <p className="mt-1 max-w-md text-sm text-muted-foreground">
+              Cash drawers are location-specific. Choose a location from the top bar to manage its drawers.
             </p>
-          </CardContent>
-        </Card>
+          </div>
+        </Panel>
       </PageShell>
     )
   }
@@ -102,113 +126,193 @@ export default function CashDrawersPage() {
 
   if (isError) {
     return (
-      <PageShell title="Cash Drawers" subtitle={`for ${selectedLocation?.name ?? ''}`}>
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-            <AlertTriangle className="mb-4 h-12 w-12 text-destructive" />
-            <h3 className="mb-2 text-lg font-semibold">Failed to load cash drawers</h3>
-            <p className="max-w-md text-muted-foreground">
+      <PageShell>
+        <PageHeader
+          title="Cash Drawers"
+          subtitle="Drawer sessions could not be loaded."
+          indicator={
+            <LocationIndicator
+              isAllLocations={false}
+              locationName={selectedLocation?.name}
+            />
+          }
+        />
+        <Panel padded>
+          <div className="flex min-h-52 flex-col items-center justify-center text-center">
+            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+              <AlertTriangle className="h-5 w-5" />
+            </span>
+            <h2 className="mt-4 text-base font-semibold">Failed to load cash drawers</h2>
+            <p className="mt-1 max-w-md text-sm text-muted-foreground">
               {error instanceof Error ? error.message : 'Unknown error'}
             </p>
-          </CardContent>
-        </Card>
+          </div>
+        </Panel>
       </PageShell>
     )
   }
 
+  const activeDrawers = drawers.filter((drawer) => drawer.is_active).length
+  const openDrawers = drawers.filter((drawer) => drawer.is_active && drawer.is_open).length
+  const availableDrawers = activeDrawers - openDrawers
+
+  const drawerActions = {
+    onEdit: handleEdit,
+    onDeactivate: setDeactivateTarget,
+    onOpenSession: setOpenSessionTarget,
+    onCloseSession: setCloseSessionTarget,
+  }
+
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Cash Drawers</h2>
-          <p className="text-muted-foreground">
-            Manage drawers for{' '}
-            <span className="font-medium">{selectedLocation?.name}</span> — open and close
-            sessions from the web while operations stay on the POS tablet.
-          </p>
-        </div>
-        <Button onClick={handleAdd} disabled={!clerkOrgId}>
-          <Plus className="mr-2 h-4 w-4" />
-          Add Cash Drawer
-        </Button>
-      </div>
+    <PageShell>
+      <PageHeader
+        title="Cash Drawers"
+        subtitle="Monitor drawer assignments and open sessions from one workspace."
+        indicator={
+          <LocationIndicator
+            isAllLocations={false}
+            locationName={selectedLocation?.name}
+          />
+        }
+        actions={
+          <Button className="h-9 rounded-full px-4" onClick={handleAdd} disabled={!clerkOrgId}>
+            <Plus className="mr-1.5 h-4 w-4" />
+            Add Cash Drawer
+          </Button>
+        }
+      />
 
-      <div className="rounded-lg border bg-muted/50 p-3 text-sm text-muted-foreground">
-        Cash drawers are paired to a location and (optionally) a prep station. Sessions
-        opened here are visible to the POS tablet, which records sales and cash events
-        against the open session. Close from either side at end of day.
-      </div>
-
-      {drawers.length === 0 ? (
-        <Empty
-          icon={Banknote}
-          title="No cash drawers yet"
-          description="Add your first cash drawer to start tracking cash sessions."
-          action={
-            <Button onClick={handleAdd} disabled={!clerkOrgId}>
-              <Plus className="mr-2 h-4 w-4" />
-              Add Cash Drawer
-            </Button>
-          }
-        />
-      ) : (
-        <div className="space-y-3">
-          {drawers.map((d) => (
-            <CashDrawerCard
-              key={d.id}
-              drawer={d}
-              onEdit={handleEdit}
-              onDeactivate={setDeactivateTarget}
-              onOpenSession={setOpenSessionTarget}
-              onCloseSession={setCloseSessionTarget}
+      <Panel className="overflow-hidden">
+        <div className="px-4 py-6 sm:px-6">
+          <StatRow columns={3}>
+            <StatTile
+              label="Configured drawers"
+              value={drawers.length}
+              meta={`${activeDrawers} active`}
+              icon={<Banknote />}
             />
-          ))}
+            <StatTile
+              label="Open sessions"
+              value={openDrawers}
+              meta="Currently accepting cash"
+              icon={<DoorOpen />}
+            />
+            <StatTile
+              label="Ready to open"
+              value={availableDrawers}
+              meta="Active without a session"
+              icon={<DoorClosed />}
+            />
+          </StatRow>
         </div>
-      )}
 
-      {clerkOrgId && (
+        <div className="border-t border-border/60 px-4 pb-6 pt-5 sm:px-6">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h2 className="text-sm font-semibold text-[#0C4FD1] dark:text-[#9DBDF5]">
+                Drawer registry
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Drawer sessions opened here stay synchronized with the POS tablet.
+              </p>
+            </div>
+            <p className="flex max-w-xl items-start gap-2 text-xs text-muted-foreground sm:text-right">
+              <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              Close sessions from either surface at the end of the business day.
+            </p>
+          </div>
+
+          {drawers.length === 0 ? (
+            <div className="mt-5">
+              <Empty
+                icon={Banknote}
+                title="No cash drawers yet"
+                description="Add your first cash drawer to start tracking cash sessions."
+                action={
+                  <Button className="rounded-full" onClick={handleAdd} disabled={!clerkOrgId}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add Cash Drawer
+                  </Button>
+                }
+              />
+            </div>
+          ) : (
+            <div className="mt-5 min-w-0">
+              <div className="hidden overflow-x-auto rounded-2xl bg-muted/20 xl:block">
+                <div className="grid min-w-[900px] grid-cols-[minmax(170px,1.2fr)_minmax(130px,1fr)_minmax(170px,1.2fr)_105px_180px] gap-4 bg-muted/50 px-5 py-3 text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                  <div>Drawer</div>
+                  <div>Assignment</div>
+                  <div>Current session</div>
+                  <div>Status</div>
+                  <div className="text-right">Actions</div>
+                </div>
+                {drawers.map((drawer) => (
+                  <CashDrawerCard
+                    key={`drawer-row-${drawer.id}`}
+                    drawer={drawer}
+                    layout="row"
+                    {...drawerActions}
+                  />
+                ))}
+              </div>
+
+              <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:hidden">
+                {drawers.map((drawer) => (
+                  <CashDrawerCard
+                    key={`drawer-card-${drawer.id}`}
+                    drawer={drawer}
+                    layout="card"
+                    {...drawerActions}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </Panel>
+
+      {clerkOrgId ? (
         <>
           <CashDrawerFormDialog
             open={formOpen}
-            onOpenChange={(o) => {
-              setFormOpen(o)
-              if (!o) setEditingDrawer(null)
+            onOpenChange={(open) => {
+              setFormOpen(open)
+              if (!open) setEditingDrawer(null)
             }}
             clerkOrgId={clerkOrgId}
             locationId={selectedLocationId}
             drawerToEdit={editingDrawer}
           />
           <OpenSessionDialog
-            open={!!openSessionTarget}
-            onOpenChange={(o) => {
-              if (!o) setOpenSessionTarget(null)
+            open={Boolean(openSessionTarget)}
+            onOpenChange={(open) => {
+              if (!open) setOpenSessionTarget(null)
             }}
             clerkOrgId={clerkOrgId}
             drawer={openSessionTarget}
           />
           <CloseSessionDialog
-            open={!!closeSessionTarget}
-            onOpenChange={(o) => {
-              if (!o) setCloseSessionTarget(null)
+            open={Boolean(closeSessionTarget)}
+            onOpenChange={(open) => {
+              if (!open) setCloseSessionTarget(null)
             }}
             clerkOrgId={clerkOrgId}
             drawer={closeSessionTarget}
           />
         </>
-      )}
+      ) : null}
 
       <AlertDialog
-        open={!!deactivateTarget}
-        onOpenChange={(o) => {
-          if (!updateMutation.isPending && !o) setDeactivateTarget(null)
+        open={Boolean(deactivateTarget)}
+        onOpenChange={(open) => {
+          if (!updateMutation.isPending && !open) setDeactivateTarget(null)
         }}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Deactivate &quot;{deactivateTarget?.name}&quot;?</AlertDialogTitle>
             <AlertDialogDescription>
-              Inactive drawers can&apos;t be opened from the POS or web. You can reactivate
-              later by editing.
+              Inactive drawers cannot be opened from the POS or web. You can reactivate one later by editing it.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -217,53 +321,40 @@ export default function CashDrawersPage() {
               onClick={handleDeactivateConfirm}
               disabled={updateMutation.isPending}
             >
-              {updateMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {updateMutation.isPending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : null}
               Deactivate
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
-  )
-}
-
-function PageShell({
-  title,
-  subtitle,
-  children,
-}: {
-  title: string
-  subtitle: string
-  children: React.ReactNode
-}) {
-  return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold tracking-tight">{title}</h2>
-        <p className="text-muted-foreground">{subtitle}</p>
-      </div>
-      {children}
-    </div>
+    </PageShell>
   )
 }
 
 function PageSkeleton({ title }: { title?: string } = {}) {
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Cash Drawers</h2>
-          <p className="text-muted-foreground">
-            {title ? `Manage drawers for ${title}` : 'Manage cash drawers per location.'}
-          </p>
+    <PageShell>
+      <PageHeader
+        title="Cash Drawers"
+        subtitle={title ? `Loading drawers for ${title}.` : 'Loading cash drawer sessions.'}
+        actions={<Skeleton className="h-9 w-40 rounded-full" />}
+      />
+      <Panel className="overflow-hidden">
+        <div className="px-4 py-6 sm:px-6">
+          <StatRow columns={3}>
+            {[0, 1, 2].map((index) => (
+              <StatTile key={index} label="Loading" value="" isLoading />
+            ))}
+          </StatRow>
         </div>
-        <Skeleton className="h-10 w-40" />
-      </div>
-      <div className="space-y-3">
-        {[0, 1, 2].map((i) => (
-          <Skeleton key={i} className="h-20 w-full" />
-        ))}
-      </div>
-    </div>
+        <div className="grid gap-3 border-t border-border/60 px-4 py-6 sm:grid-cols-2 sm:px-6">
+          {[0, 1].map((index) => (
+            <Skeleton key={index} className="h-56 rounded-2xl" />
+          ))}
+        </div>
+      </Panel>
+    </PageShell>
   )
 }

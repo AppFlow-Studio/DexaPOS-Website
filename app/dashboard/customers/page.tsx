@@ -6,12 +6,18 @@ import { useState, useMemo, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, Plus, Megaphone } from "lucide-react";
+import { Search, Plus, Megaphone, Users } from "lucide-react";
 import { CustomerProfileSheet } from "./components/CustomerProfileSheet";
 import { CreateCustomerDialog } from "./components/CreateCustomerDialog";
 import { CreateCampaignDialog } from "./components/campaigns/CreateCampaignDialog";
 import type { CustomerListItem } from "@/types/customer";
 import { getCustomerDisplayName } from "@/types/customer";
+import {
+  PageHeader,
+  PageShell,
+  Panel,
+  PanelSection,
+} from "@/components/dashboard/shell";
 
 export default function CustomersPage() {
   const { data: customers = [], isLoading } = useCustomers();
@@ -32,9 +38,13 @@ export default function CustomersPage() {
     if (!deepLinkCustomerId || customers.length === 0) return;
     const match = customers.find((c) => c.id === deepLinkCustomerId);
     if (match) {
-      setSelectedCustomer(match);
-      setIsProfileOpen(true);
-      router.replace("/dashboard/customers");
+      const frameId = window.requestAnimationFrame(() => {
+        setSelectedCustomer(match);
+        setIsProfileOpen(true);
+        router.replace("/dashboard/customers");
+      });
+
+      return () => window.cancelAnimationFrame(frameId);
     }
   }, [deepLinkCustomerId, customers, router]);
 
@@ -60,40 +70,61 @@ export default function CustomersPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Customers</h2>
-          <p className="text-muted-foreground">
-            Manage your customer database and view order history
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="relative w-full sm:w-[300px]">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+    <PageShell>
+      <PageHeader
+        title="Customers"
+        subtitle="Manage customer profiles, activity, and order history."
+        actions={
+          <>
+            <Button
+              variant="outline"
+              className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+              onClick={() => setIsCampaignOpen(true)}
+            >
+              <Megaphone className="mr-1.5 h-4 w-4" />
+              Create Campaign
+            </Button>
+            <Button
+              className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+              onClick={() => setIsCreateOpen(true)}
+            >
+              <Plus className="mr-1.5 h-4 w-4" />
+              New Customer
+            </Button>
+          </>
+        }
+      />
+
+      <Panel>
+        <PanelSection
+          icon={Users}
+          label="Customer directory"
+          caption="Search customer records and open a profile to review activity."
+          action={
+            <span className="inline-flex h-8 items-center rounded-full bg-muted px-3 text-xs font-medium text-muted-foreground tabular-nums">
+              {isLoading
+                ? "Loading customers"
+                : `${filteredData.length} customer${filteredData.length === 1 ? "" : "s"}`}
+            </span>
+          }
+        >
+          <div className="relative mb-5 w-full sm:max-w-md">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
-              placeholder="Search customers..."
-              className="pl-9"
+              placeholder="Search by name, phone, or email..."
+              className="h-10 rounded-full border-0 bg-muted/60 pl-9 shadow-none focus-visible:ring-1"
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(event) => setSearchTerm(event.target.value)}
             />
           </div>
-          <Button variant="outline" onClick={() => setIsCampaignOpen(true)}>
-            <Megaphone className="h-4 w-4 mr-2" />
-            Create Campaign
-          </Button>
-          <Button onClick={() => setIsCreateOpen(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            New Customer
-          </Button>
-        </div>
-      </div>
 
-      <CustomerList
-        customers={filteredData}
-        isLoading={isLoading}
-        onViewProfile={handleViewProfile}
-      />
+          <CustomerList
+            customers={filteredData}
+            isLoading={isLoading}
+            onViewProfile={handleViewProfile}
+          />
+        </PanelSection>
+      </Panel>
 
       <CustomerProfileSheet
         customer={selectedCustomer}
@@ -110,6 +141,6 @@ export default function CustomersPage() {
         open={isCampaignOpen}
         onOpenChange={setIsCampaignOpen}
       />
-    </div>
+    </PageShell>
   );
 }

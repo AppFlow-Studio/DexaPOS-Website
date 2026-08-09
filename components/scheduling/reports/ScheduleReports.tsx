@@ -3,13 +3,6 @@
 import { useScheduleStore } from "@/stores/useScheduleStore";
 import { useState, useMemo } from "react";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
   Select,
   SelectContent,
   SelectItem,
@@ -17,14 +10,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import {
   format,
   parseISO,
@@ -35,15 +20,15 @@ import {
 import {
   Download,
   FileText,
-  TrendingDown,
-  TrendingUp,
   DollarSign,
   Clock,
   Briefcase,
   AlertCircle,
+  type LucideIcon,
 } from "lucide-react";
 import { VarianceChart } from "./VarianceChart";
 import { BreakComplianceTable, ComplianceRecord } from "./BreakComplianceTable";
+import { Panel, StatRow, StatTile } from "@/components/dashboard/shell";
 
 // --- Helpers ---
 
@@ -60,29 +45,14 @@ const StatCard = ({
   value: string;
   trend?: string;
   trendColor?: string;
-  icon?: any;
+  icon?: LucideIcon;
 }) => (
-  <Card>
-    <CardContent className="p-6">
-      <div className="flex items-center justify-between space-y-0 pb-2">
-        <p className="text-sm font-medium text-muted-foreground">{title}</p>
-        {Icon && <Icon className="h-4 w-4 text-muted-foreground" />}
-      </div>
-      <div className="flex items-baseline justify-between pt-2">
-        <div className="text-2xl font-bold">{value}</div>
-        {trend && (
-          <p className={`text-xs ${trendColor} flex items-center gap-1`}>
-            {trend.includes("-") ? (
-              <TrendingDown className="h-3 w-3" />
-            ) : (
-              <TrendingUp className="h-3 w-3" />
-            )}
-            {trend}
-          </p>
-        )}
-      </div>
-    </CardContent>
-  </Card>
+  <StatTile
+    label={title}
+    value={value}
+    icon={Icon ? <Icon /> : undefined}
+    meta={trend ? <span className={trendColor}>{trend}</span> : undefined}
+  />
 );
 
 export function ScheduleReports() {
@@ -94,7 +64,9 @@ export function ScheduleReports() {
   );
 
   const selectedSchedule = useMemo(
-    () => weeklySchedules.find((s) => s.id === selectedScheduleId),
+    () =>
+      weeklySchedules.find((s) => s.id === selectedScheduleId) ??
+      weeklySchedules[0],
     [weeklySchedules, selectedScheduleId]
   );
 
@@ -169,95 +141,94 @@ export function ScheduleReports() {
 
   if (weeklySchedules.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center p-12 text-muted-foreground border border-dashed rounded-lg bg-muted/10 h-[400px]">
+      <Panel className="flex min-h-[360px] flex-col items-center justify-center bg-muted/15 p-12 text-center text-muted-foreground">
         <FileText className="w-12 h-12 mb-4 opacity-20" />
         <p>No schedules available to report on.</p>
-      </div>
+        <p className="mt-1 text-sm">Publish or save a weekly schedule to unlock labor reporting.</p>
+      </Panel>
     );
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header Controls */}
-      <Card className="bg-muted/40 border-muted">
-        <CardContent className="p-4">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div>
-              <h2 className="text-lg font-semibold tracking-tight">
-                Weekly Performance
-              </h2>
-              <p className="text-sm text-muted-foreground">
-                Showing data for{" "}
-                {selectedSchedule
-                  ? `${format(
-                      parseISO(selectedSchedule.startDate),
-                      "MMM d"
-                    )} - ${format(
-                      parseISO(selectedSchedule.endDate),
-                      "MMM d, yyyy"
-                    )}`
-                  : "Selected Range"}
-              </p>
-            </div>
+    <Panel className="overflow-hidden">
+      <section className="flex flex-col gap-4 px-4 py-5 sm:px-6 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h2 className="text-lg font-semibold tracking-tight text-primary">
+            Weekly performance
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {selectedSchedule
+              ? `${format(parseISO(selectedSchedule.startDate), "MMM d")} - ${format(
+                  parseISO(selectedSchedule.endDate),
+                  "MMM d, yyyy"
+                )}`
+              : "Selected range"}
+          </p>
+        </div>
 
-            <div className="flex items-center gap-2">
-              <Select
-                value={selectedScheduleId}
-                onValueChange={setSelectedScheduleId}
-              >
-                <SelectTrigger className="w-[200px] h-9">
-                  <SelectValue placeholder="Select Week" />
-                </SelectTrigger>
-                <SelectContent>
-                  {weeklySchedules.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>
-                      {format(parseISO(s.startDate), "MMM d")} -{" "}
-                      {format(parseISO(s.endDate), "MMM d")}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+        <div className="flex w-full flex-col gap-2 sm:flex-row md:w-auto">
+          <Select
+            value={selectedSchedule?.id ?? ""}
+            onValueChange={setSelectedScheduleId}
+          >
+            <SelectTrigger className="h-9 w-full rounded-full bg-muted/40 shadow-none sm:w-[220px]">
+              <SelectValue placeholder="Select week" />
+            </SelectTrigger>
+            <SelectContent>
+              {weeklySchedules.map((schedule) => (
+                <SelectItem key={schedule.id} value={schedule.id}>
+                  {format(parseISO(schedule.startDate), "MMM d")} -{" "}
+                  {format(parseISO(schedule.endDate), "MMM d")}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-9 gap-2 hidden md:flex"
-                disabled={!selectedSchedule || !stats}
-                onClick={() => {
-                  if (!selectedSchedule || !stats) return;
-                  const rows = [
-                    ["Employee", "Role", "Date", "Start", "End", "Hours"],
-                    ...selectedSchedule.shifts.map((s) => [
-                      s.employee_name || "Unassigned",
-                      s.role,
-                      format(parseISO(s.start_time), "yyyy-MM-dd"),
-                      format(parseISO(s.start_time), "HH:mm"),
-                      format(parseISO(s.end_time), "HH:mm"),
-                      (differenceInMinutes(parseISO(s.end_time), parseISO(s.start_time)) / 60).toFixed(2),
-                    ]),
-                  ];
-                  const csv = rows.map((r) => r.map((c) => `"${c}"`).join(",")).join("\n");
-                  const blob = new Blob([csv], { type: "text/csv" });
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement("a");
-                  a.href = url;
-                  a.download = `schedule-${selectedSchedule.name.replace(/\s+/g, "-")}.csv`;
-                  a.click();
-                  URL.revokeObjectURL(url);
-                }}
-              >
-                <Download className="h-4 w-4" />
-                Export CSV
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-9 w-full gap-2 sm:w-auto"
+            disabled={!selectedSchedule || !stats}
+            onClick={() => {
+              if (!selectedSchedule || !stats) return;
+              const rows = [
+                ["Employee", "Role", "Date", "Start", "End", "Hours"],
+                ...selectedSchedule.shifts.map((shift) => [
+                  shift.employee_name || "Unassigned",
+                  shift.role,
+                  format(parseISO(shift.start_time), "yyyy-MM-dd"),
+                  format(parseISO(shift.start_time), "HH:mm"),
+                  format(parseISO(shift.end_time), "HH:mm"),
+                  (
+                    differenceInMinutes(
+                      parseISO(shift.end_time),
+                      parseISO(shift.start_time)
+                    ) / 60
+                  ).toFixed(2),
+                ]),
+              ];
+              const csv = rows
+                .map((row) => row.map((cell) => `"${cell}"`).join(","))
+                .join("\n");
+              const blob = new Blob([csv], { type: "text/csv" });
+              const url = URL.createObjectURL(blob);
+              const anchor = document.createElement("a");
+              anchor.href = url;
+              anchor.download = `schedule-${selectedSchedule.name.replace(/\s+/g, "-")}.csv`;
+              anchor.click();
+              URL.revokeObjectURL(url);
+            }}
+          >
+            <Download className="h-4 w-4" />
+            Export CSV
+          </Button>
+        </div>
+      </section>
 
       {selectedSchedule && stats ? (
-        <div className="space-y-6">
-          {/* Top Row Stats */}
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <>
+          <section className="border-t border-border/60 px-4 py-6 sm:px-6">
+            <StatRow columns={4}>
             <StatCard
               title="Est. Labor Cost"
               value={`$${stats.estLaborCost.toLocaleString(undefined, {
@@ -282,43 +253,36 @@ export function ScheduleReports() {
               trend={stats.overtimeHours > 0 ? "Over 40h threshold" : "No overtime"}
               icon={AlertCircle}
             />
-          </div>
+            </StatRow>
+          </section>
 
-          <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-7">
-            {/* Variance Chart - Using Recharts */}
-            <Card className="md:col-span-2 lg:col-span-4">
-              <CardHeader>
-                <CardTitle className="text-base">
-                  Daily Labor Cost
-                </CardTitle>
-                <CardDescription>
+          <section className="grid border-t border-border/60 lg:grid-cols-[minmax(0,1.35fr)_minmax(280px,0.65fr)]">
+            <div className="min-w-0 px-4 py-6 sm:px-6">
+              <h3 className="font-semibold">Daily labor cost</h3>
+              <p className="mt-1 text-sm text-muted-foreground">
                   Estimated labor cost per day based on scheduled hours.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
+              </p>
+              <div className="mt-5 min-w-0">
                 <VarianceChart data={stats.chartData} />
-              </CardContent>
-            </Card>
+              </div>
+            </div>
 
-            {/* Summary List */}
-            <Card className="md:col-span-1 lg:col-span-3">
-              <CardHeader>
-                <CardTitle className="text-base">Week Summary</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center justify-between py-2 border-b">
+            <div className="border-t border-border/60 px-4 py-6 sm:px-6 lg:border-l lg:border-t-0">
+              <h3 className="font-semibold">Week summary</h3>
+              <div className="mt-4 space-y-1">
+                <div className="flex items-center justify-between py-2.5">
                   <span className="text-sm text-muted-foreground">
                     Total Employees
                   </span>
                   <span className="font-medium">{stats.employeeCount}</span>
                 </div>
-                <div className="flex items-center justify-between py-2 border-b">
+                <div className="flex items-center justify-between py-2.5">
                   <span className="text-sm text-muted-foreground">
                     Total Shifts
                   </span>
                   <span className="font-medium">{stats.totalShifts}</span>
                 </div>
-                <div className="flex items-center justify-between py-2 border-b">
+                <div className="flex items-center justify-between py-2.5">
                   <span className="text-sm text-muted-foreground">
                     Avg Shift Length
                   </span>
@@ -328,7 +292,7 @@ export function ScheduleReports() {
                       : "—"}
                   </span>
                 </div>
-                <div className="flex items-center justify-between py-2 border-b">
+                <div className="flex items-center justify-between py-2.5">
                   <span className="text-sm text-muted-foreground">
                     Overtime Hours
                   </span>
@@ -336,7 +300,7 @@ export function ScheduleReports() {
                     {stats.overtimeHours > 0 ? `${stats.overtimeHours.toFixed(1)}h` : "—"}
                   </span>
                 </div>
-                <div className="flex items-center justify-between py-2">
+                <div className="flex items-center justify-between py-2.5">
                   <span className="text-sm text-muted-foreground">
                     Open Shifts
                   </span>
@@ -344,19 +308,20 @@ export function ScheduleReports() {
                     {selectedSchedule.shifts.filter((s) => !s.employee_id || s.employee_id === "unassigned").length}
                   </span>
                 </div>
-              </CardContent>
-            </Card>
-          </div>
+              </div>
+            </div>
+          </section>
 
-          {/* Compliance Table - built from scheduled employees (violations require actual timesheet data) */}
-          <BreakComplianceTable data={stats.complianceData} />
-        </div>
+          <section className="border-t border-border/60 px-4 py-6 sm:px-6">
+            <BreakComplianceTable data={stats.complianceData} />
+          </section>
+        </>
       ) : (
-        <div className="flex flex-col items-center justify-center p-12 text-muted-foreground border border-dashed rounded-lg bg-muted/10 h-[400px]">
+        <div className="flex min-h-[360px] flex-col items-center justify-center border-t border-border/60 p-12 text-center text-muted-foreground">
           <FileText className="w-12 h-12 mb-4 opacity-20" />
           <p>Select a schedule to view detailed reports.</p>
         </div>
       )}
-    </div>
+    </Panel>
   );
 }
