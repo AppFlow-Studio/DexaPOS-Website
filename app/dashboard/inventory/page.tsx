@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -17,7 +17,6 @@ import {
   TrendingDown,
   TrendingUp,
   LayoutDashboard,
-  ArrowUpRight,
   MoreHorizontal,
   Filter,
   Download,
@@ -82,88 +81,18 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { InventoryItemWithVendor } from "@/types/inventory";
-import { VendorWithStats } from "./hooks/useInventoryManagement";
-
-// ============================================================================
-// COMPONENTS
-// ============================================================================
-
-function StatCard({
-  title,
-  value,
-  subtitle,
-  icon: Icon,
-  trend,
-  trendUp,
-  className,
-  iconClassName,
-  isLoading,
-}: {
-  title: string;
-  value: string | number;
-  subtitle?: string;
-  icon: React.ElementType;
-  trend?: string;
-  trendUp?: boolean;
-  className?: string;
-  iconClassName?: string;
-  isLoading?: boolean;
-}) {
-  return (
-    <Card
-      className={cn(
-        "relative overflow-hidden transition-all hover:shadow-lg hover:-translate-y-0.5",
-        className
-      )}
-    >
-      <CardContent className="p-4 sm:p-6">
-        <div className="flex items-start justify-between gap-2 sm:gap-3">
-          <div className="space-y-2 min-w-0 flex-1">
-            <p className="text-sm font-medium text-muted-foreground">{title}</p>
-            {isLoading ? (
-              <Skeleton className="h-8 w-16" />
-            ) : (
-              <p className="text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight tabular-nums break-words">
-                {value}
-              </p>
-            )}
-            {subtitle && (
-              <p className="text-xs text-muted-foreground">{subtitle}</p>
-            )}
-            {trend && (
-              <div
-                className={cn(
-                  "flex items-center gap-1 text-xs font-medium",
-                  trendUp ? "text-emerald-500" : "text-rose-500"
-                )}
-              >
-                {trendUp ? (
-                  <ArrowUpRight className="h-3 w-3" />
-                ) : (
-                  <TrendingDown className="h-3 w-3" />
-                )}
-                {trend}
-              </div>
-            )}
-          </div>
-          <div
-            className={cn(
-              "shrink-0 p-3 rounded-xl",
-              iconClassName || "bg-primary/10"
-            )}
-          >
-            <Icon
-              className={cn(
-                "h-6 w-6",
-                iconClassName ? "text-white" : "text-primary"
-              )}
-            />
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
+import {
+  PurchaseOrderWithDetails,
+  VendorWithStats,
+} from "./hooks/useInventoryManagement";
+import {
+  LocationIndicator,
+  PageHeader,
+  PageShell,
+  Panel,
+  StatRow,
+  StatTile,
+} from "@/components/dashboard/shell";
 
 function StockStatusBadge({
   stockMode,
@@ -371,6 +300,122 @@ function StockEditCell({
   );
 }
 
+function InventoryItemActions({
+  item,
+  isAllLocations,
+  onEdit,
+  onDelete,
+  alwaysVisible = false,
+}: {
+  item: InventoryItemWithVendor;
+  isAllLocations: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
+  alwaysVisible?: boolean;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          className={cn(
+            "h-8 w-8 rounded-full transition-opacity",
+            !alwaysVisible &&
+              "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100",
+          )}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <span className="sr-only">Open inventory item actions</span>
+          <MoreHorizontal className="h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onClick={onEdit}>Edit Item</DropdownMenuItem>
+        <DropdownMenuSeparator />
+        {isAllLocations || item.location_id !== null ? (
+          <DropdownMenuItem className="text-destructive" onClick={onDelete}>
+            Delete Item
+          </DropdownMenuItem>
+        ) : (
+          <DropdownMenuItem disabled className="text-muted-foreground">
+            Cannot delete global item
+          </DropdownMenuItem>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function PurchaseOrderActions({
+  purchaseOrder,
+  onStatusChange,
+  alwaysVisible = false,
+}: {
+  purchaseOrder: PurchaseOrderWithDetails;
+  onStatusChange: (
+    status: "pending" | "received" | "paid" | "cancelled",
+    receivedQuantities?: Record<string, number>,
+  ) => void;
+  alwaysVisible?: boolean;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          className={cn(
+            "h-8 w-8 rounded-full transition-opacity",
+            !alwaysVisible &&
+              "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100",
+          )}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <span className="sr-only">Open purchase order actions</span>
+          <MoreHorizontal className="h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        {purchaseOrder.status === "draft" && (
+          <DropdownMenuItem onClick={() => onStatusChange("pending")}>
+            Submit Order
+          </DropdownMenuItem>
+        )}
+        {purchaseOrder.status === "pending" && (
+          <DropdownMenuItem
+            onClick={() => {
+              const quantities: Record<string, number> = {};
+              purchaseOrder.items?.forEach((item) => {
+                quantities[item.id] = item.quantity_ordered;
+              });
+              onStatusChange("received", quantities);
+            }}
+          >
+            Mark as Received
+          </DropdownMenuItem>
+        )}
+        {purchaseOrder.status === "received" && (
+          <DropdownMenuItem onClick={() => onStatusChange("paid")}>
+            Mark as Paid
+          </DropdownMenuItem>
+        )}
+        {purchaseOrder.status === "draft" && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              className="text-destructive"
+              onClick={() => onStatusChange("cancelled")}
+            >
+              Cancel Order
+            </DropdownMenuItem>
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 // ============================================================================
 // MAIN PAGE
 // ============================================================================
@@ -446,6 +491,7 @@ export default function InventoryPage() {
   // Single-location accounts have exactly one active store, so the global-vs-
   // location framing (badges, scope filter, "all locations" copy) is noise.
   const isSingleLocation = useIsSingleLocation();
+  const showMultiLocationContext = isAllLocations && !isSingleLocation;
 
   // Data hooks
   const { data: items = [], isLoading: isLoadingItems } = useInventoryItems();
@@ -597,15 +643,28 @@ export default function InventoryPage() {
 
   // Fetch usage when delete target changes
   useEffect(() => {
-    if (deleteItemTarget) {
+    let cancelled = false;
+    const frameId = window.requestAnimationFrame(() => {
+      if (!deleteItemTarget) {
+        setUsageData(null);
+        return;
+      }
+
       setIsLoadingUsage(true);
       GetInventoryItemUsage(deleteItemTarget.id)
-        .then((data) => setUsageData(data))
-        .catch((err) => console.error(err))
-        .finally(() => setIsLoadingUsage(false));
-    } else {
-      setUsageData(null);
-    }
+        .then((data) => {
+          if (!cancelled) setUsageData(data);
+        })
+        .catch((error) => console.error(error))
+        .finally(() => {
+          if (!cancelled) setIsLoadingUsage(false);
+        });
+    });
+
+    return () => {
+      cancelled = true;
+      window.cancelAnimationFrame(frameId);
+    };
   }, [deleteItemTarget]);
 
   const deleteDescription = useMemo(() => {
@@ -657,140 +716,137 @@ export default function InventoryPage() {
   }, [isLoadingUsage, usageData]);
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
-      {/* Page Header */}
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text">
-            Inventory Management
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            {isSingleLocation
-              ? "Managing your inventory catalog and vendors"
-              : isAllLocations
-              ? "Managing global inventory catalog and vendors"
-              : `Managing inventory for ${
-                  selectedLocation?.name || "selected location"
-                }`}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-2"
-            onClick={() => setIsActivityLogOpen(true)}
-          >
-            <Clock className="h-4 w-4" />
-            Activity Log
-          </Button>
-          {!isAllLocations && (
+    <PageShell>
+      <PageHeader
+        title="Inventory Management"
+        subtitle={
+          isSingleLocation
+            ? "Manage your inventory catalog, vendors, and stock activity."
+            : isAllLocations
+              ? "Manage the shared inventory catalog and vendor network."
+              : `Manage inventory for ${selectedLocation?.name || "the selected location"}.`
+        }
+        indicator={
+          !isSingleLocation ? (
+            <LocationIndicator
+              isAllLocations={isAllLocations}
+              locationName={selectedLocation?.name}
+            />
+          ) : undefined
+        }
+        actions={
+          <>
             <Button
               variant="outline"
-              size="sm"
-              className="gap-2"
-              onClick={() => setIsExpenseDialogOpen(true)}
+              className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+              onClick={() => setIsActivityLogOpen(true)}
             >
-              <Receipt className="h-4 w-4" />
-              Log Expense
+              <Clock className="mr-1.5 h-4 w-4" />
+              Activity Log
             </Button>
-          )}
-          <Button variant="outline" size="sm" className="gap-2">
-            <Download className="h-4 w-4" />
-            Export
-          </Button>
-          {activeTab !== "waste" &&
-            activeTab !== "counts" &&
-            activeTab !== "transfers" &&
-            activeTab !== "dashboard" &&
-            activeTab !== "reports" && (
+            {!isAllLocations && (
+              <Button
+                variant="outline"
+                className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+                onClick={() => setIsExpenseDialogOpen(true)}
+              >
+                <Receipt className="mr-1.5 h-4 w-4" />
+                Log Expense
+              </Button>
+            )}
             <Button
-              className="gap-2 shadow-lg shadow-primary/25"
-              onClick={getAddButtonAction()}
+              variant="outline"
+              className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
             >
-              <Plus className="h-4 w-4" />
-              {getAddButtonLabel()}
+              <Download className="mr-1.5 h-4 w-4" />
+              Export
             </Button>
-          )}
-        </div>
-      </div>
+            {activeTab !== "waste" &&
+              activeTab !== "counts" &&
+              activeTab !== "transfers" &&
+              activeTab !== "dashboard" &&
+              activeTab !== "reports" && (
+                <Button
+                  className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+                  onClick={getAddButtonAction()}
+                >
+                  <Plus className="mr-1.5 h-4 w-4" />
+                  {getAddButtonLabel()}
+                </Button>
+              )}
+          </>
+        }
+      />
 
-      {/* Stats Overview */}
-      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          title="Total Items"
+      <Panel padded>
+        <StatRow columns={4}>
+          <StatTile
+            label="Total items"
           value={stats?.totalItems || 0}
-          subtitle={
+            meta={
             isSingleLocation
               ? "Catalog items"
               : isAllLocations
-              ? "Global catalog items"
-              : "Available at this location"
+                ? "Shared catalog items"
+                : "Available at this location"
           }
-          icon={Package}
+            icon={<Package />}
           isLoading={isLoadingStats}
-        />
-        <StatCard
-          title="Low Stock"
+          />
+          <StatTile
+            label="Low stock"
           value={stats?.lowStock || 0}
-          subtitle={
+            meta={
             isSingleLocation
               ? "Low stock alerts"
               : isAllLocations
-              ? `Location${
-                  (stats?.lowStock || 0) !== 1 ? "s" : ""
-                } with low stock`
-              : "Need reordering"
+                ? `Location${(stats?.lowStock || 0) !== 1 ? "s" : ""} with low stock`
+                : "Needs reordering"
           }
-          icon={AlertTriangle}
-          iconClassName="bg-amber-500"
+            icon={<AlertTriangle />}
           isLoading={isLoadingStats}
-        />
-        <StatCard
-          title="Out of Stock"
+          />
+          <StatTile
+            label="Out of stock"
           value={stats?.outOfStock || 0}
-          subtitle={
+            meta={
             isSingleLocation
               ? "Out of stock alerts"
               : isAllLocations
-              ? `Location${
-                  (stats?.outOfStock || 0) !== 1 ? "s" : ""
-                } with out of stock`
-              : "Immediate action needed"
+                ? `Location${(stats?.outOfStock || 0) !== 1 ? "s" : ""} with no stock`
+                : "Immediate action needed"
           }
-          icon={TrendingDown}
-          iconClassName="bg-rose-500"
+            icon={<TrendingDown />}
           isLoading={isLoadingStats}
-        />
-        <StatCard
-          title="Inventory Value"
+          />
+          <StatTile
+            label="Inventory value"
           value={`$${(stats?.totalValue || 0).toLocaleString("en-US", {
             minimumFractionDigits: 2,
             maximumFractionDigits: 2,
           })}`}
-          subtitle={
+            meta={
             isSingleLocation
               ? "Total inventory value"
               : isAllLocations
-              ? "Total across all locations"
-              : "Current location value"
+                ? "Total across all locations"
+                : "Current location value"
           }
-          icon={DollarSign}
-          iconClassName="bg-emerald-500"
+            icon={<DollarSign />}
           isLoading={isLoadingStats}
-        />
-      </div>
+          />
+        </StatRow>
+      </Panel>
 
-      {/* Main Content with Tabs */}
-      <Card className="border-0 shadow-xl">
+      <Panel className="overflow-hidden">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <CardHeader className="pb-0 border-b">
+          <div className="px-4 pt-5 sm:px-6">
             <div className="flex flex-col gap-4 md:flex-row md:flex-wrap md:items-center md:justify-between min-w-0">
               <div className="overflow-x-auto w-full min-w-0">
-              <TabsList className="bg-muted/50 p-1 h-auto w-max flex-nowrap justify-start">
+              <TabsList className="h-auto w-max flex-nowrap justify-start rounded-full border-0 bg-muted/60 p-1">
                 <TabsTrigger
                   value="catalog"
-                  className="gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm px-4 py-2"
+                  className="gap-2 rounded-full px-4 py-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
                 >
                   <Boxes className="h-4 w-4" />
                   Catalog
@@ -803,7 +859,7 @@ export default function InventoryPage() {
                 </TabsTrigger>
                 <TabsTrigger
                   value="vendors"
-                  className="gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm px-4 py-2"
+                  className="gap-2 rounded-full px-4 py-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
                 >
                   <Truck className="h-4 w-4" />
                   Vendors
@@ -816,7 +872,7 @@ export default function InventoryPage() {
                 </TabsTrigger>
                 <TabsTrigger
                   value="purchase-orders"
-                  className="gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm px-4 py-2"
+                  className="gap-2 rounded-full px-4 py-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
                 >
                   <ShoppingCart className="h-4 w-4" />
                   Purchase Orders
@@ -829,35 +885,35 @@ export default function InventoryPage() {
                 </TabsTrigger>
                 <TabsTrigger
                   value="waste"
-                  className="gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm px-4 py-2"
+                  className="gap-2 rounded-full px-4 py-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
                 >
                   <Trash2 className="h-4 w-4" />
                   Waste
                 </TabsTrigger>
                 <TabsTrigger
                   value="counts"
-                  className="gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm px-4 py-2"
+                  className="gap-2 rounded-full px-4 py-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
                 >
                   <ClipboardList className="h-4 w-4" />
                   Counts
                 </TabsTrigger>
                 <TabsTrigger
                   value="transfers"
-                  className="gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm px-4 py-2"
+                  className="gap-2 rounded-full px-4 py-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
                 >
                   <ArrowRightLeft className="h-4 w-4" />
                   Transfers
                 </TabsTrigger>
                 <TabsTrigger
                   value="dashboard"
-                  className="gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm px-4 py-2"
+                  className="gap-2 rounded-full px-4 py-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
                 >
                   <LayoutDashboard className="h-4 w-4" />
                   Dashboard
                 </TabsTrigger>
                 <TabsTrigger
                   value="reports"
-                  className="gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm px-4 py-2"
+                  className="gap-2 rounded-full px-4 py-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
                 >
                   <TrendingUp className="h-4 w-4" />
                   Reports
@@ -875,12 +931,16 @@ export default function InventoryPage() {
                     placeholder="Search..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-9 w-full md:w-64 bg-background"
+                    className="h-10 w-full rounded-full border-0 bg-muted/60 pl-9 shadow-none focus-visible:ring-1 md:w-64"
                   />
                 </div>
                 <Popover open={filterOpen} onOpenChange={handleFilterOpenChange}>
                   <PopoverTrigger asChild>
-                    <Button variant="outline" size="sm" className="gap-2 relative">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="relative h-10 gap-2 rounded-full px-4"
+                    >
                       <Filter className="h-4 w-4" />
                       Filters
                       {activeFilterCount > 0 && (
@@ -1000,9 +1060,9 @@ export default function InventoryPage() {
               </div>
               )}
             </div>
-          </CardHeader>
+          </div>
 
-          <CardContent className="p-0">
+          <div className="min-w-0">
             {/* Catalog Tab */}
             <TabsContent value="catalog" className="m-0">
               {isLoadingItems ? (
@@ -1049,8 +1109,9 @@ export default function InventoryPage() {
                   )}
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                <div className="divide-y min-w-[700px]">
+                <>
+                <div className="hidden px-4 pb-6 sm:px-6 xl:block">
+                <div className="min-w-[760px] overflow-hidden rounded-2xl bg-muted/20">
                   {/* Table Header */}
                   <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-muted/30 text-sm font-medium text-muted-foreground">
                     {(
@@ -1094,7 +1155,7 @@ export default function InventoryPage() {
                   {filteredItems.map((item) => (
                     <div
                       key={item.id}
-                      className="grid grid-cols-12 gap-4 px-6 py-4 items-center hover:bg-muted/30 transition-colors group"
+                      className="group grid grid-cols-12 items-center gap-4 px-6 py-4 transition-colors hover:bg-muted/40"
                     >
                       <div className="col-span-4">
                         <div className="flex items-center gap-4">
@@ -1117,7 +1178,11 @@ export default function InventoryPage() {
                             currentStock={item.current_stock}
                             unitType={item.unit_type}
                             isGlobalView={isAllLocations}
-                            locationCount={(item as any).location_count}
+                            locationCount={
+                              showMultiLocationContext
+                                ? (item as any).location_count
+                                : undefined
+                            }
                             onEdit={() => setStockUpdateItem(item)}
                           />
                         ) : (
@@ -1130,7 +1195,7 @@ export default function InventoryPage() {
                       </div>
 
                       <div className="col-span-2">
-                        {isAllLocations ? (
+                        {showMultiLocationContext ? (
                           <span className="text-muted-foreground text-sm">
                             —
                           </span>
@@ -1156,46 +1221,118 @@ export default function InventoryPage() {
 
                       <div className="col-span-2 flex items-center justify-between">
                         {isSingleLocation ? <span /> : <ScopeBadge locationId={item.location_id} />}
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="opacity-0 group-hover:opacity-100 transition-opacity"
-                            >
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem
-                              onClick={() => setEditingItem(item)}
-                            >
-                              Edit Item
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            {/* Only allow delete if not a global item when in location view */}
-                            {isAllLocations || item.location_id !== null ? (
-                              <DropdownMenuItem
-                                className="text-destructive"
-                                onClick={() => setDeleteItemTarget(item)}
-                              >
-                                Delete Item
-                              </DropdownMenuItem>
-                            ) : (
-                              <DropdownMenuItem
-                                disabled
-                                className="text-muted-foreground"
-                              >
-                                Cannot delete global item
-                              </DropdownMenuItem>
-                            )}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                        <InventoryItemActions
+                          item={item}
+                          isAllLocations={isAllLocations}
+                          onEdit={() => setEditingItem(item)}
+                          onDelete={() => setDeleteItemTarget(item)}
+                        />
                       </div>
                     </div>
                   ))}
                 </div>
                 </div>
+                <div className="grid min-w-0 grid-cols-1 gap-3 px-4 pb-6 sm:grid-cols-2 sm:px-6 xl:hidden">
+                  {filteredItems.map((item) => (
+                    <article
+                      key={item.id}
+                      className="group min-w-0 rounded-2xl border-0 bg-muted/45 p-4 transition-colors hover:bg-muted/65"
+                    >
+                      <div className="flex min-w-0 items-start gap-3">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                          <Package className="h-4 w-4" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium">
+                            {item.name}
+                          </p>
+                          <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                            {item.sku || "No SKU"}
+                            {item.category ? ` / ${item.category}` : ""}
+                          </p>
+                        </div>
+                        <InventoryItemActions
+                          item={item}
+                          isAllLocations={isAllLocations}
+                          onEdit={() => setEditingItem(item)}
+                          onDelete={() => setDeleteItemTarget(item)}
+                          alwaysVisible
+                        />
+                      </div>
+
+                      <dl className="mt-5 grid min-w-0 grid-cols-2 gap-x-4 gap-y-4">
+                        <div className="min-w-0">
+                          <dt className="text-[0.6875rem] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                            Stock
+                          </dt>
+                          <dd className="mt-1 text-sm">
+                            {item.stock_mode === "stock_tracking" ? (
+                              <StockEditCell
+                                currentStock={item.current_stock}
+                                unitType={item.unit_type}
+                                isGlobalView={isAllLocations}
+                                locationCount={
+                                  showMultiLocationContext
+                                    ? (item as any).location_count
+                                    : undefined
+                                }
+                                onEdit={() => setStockUpdateItem(item)}
+                              />
+                            ) : (
+                              <span className="text-muted-foreground">
+                                {item.stock_mode === "in_stock"
+                                  ? "Not tracked"
+                                  : "N/A"}
+                              </span>
+                            )}
+                          </dd>
+                        </div>
+                        <div className="min-w-0">
+                          <dt className="text-[0.6875rem] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                            Status
+                          </dt>
+                          <dd className="mt-1">
+                            {showMultiLocationContext ? (
+                              <span className="text-sm text-muted-foreground">
+                                Aggregate view
+                              </span>
+                            ) : (
+                              <StockStatusBadge
+                                stockMode={item.stock_mode}
+                                currentStock={item.current_stock}
+                                reorderPoint={
+                                  item.reorder_threshold ?? item.reorder_point
+                                }
+                              />
+                            )}
+                          </dd>
+                        </div>
+                        <div className="min-w-0">
+                          <dt className="text-[0.6875rem] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                            Cost
+                          </dt>
+                          <dd className="mt-1 truncate text-sm font-medium tabular-nums">
+                            ${item.cost_per_unit.toFixed(2)}
+                            <span className="font-normal text-muted-foreground">
+                              /{item.unit_type}
+                            </span>
+                          </dd>
+                        </div>
+                        {!isSingleLocation && (
+                          <div className="min-w-0">
+                            <dt className="text-[0.6875rem] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                              Scope
+                            </dt>
+                            <dd className="mt-1">
+                              <ScopeBadge locationId={item.location_id} />
+                            </dd>
+                          </div>
+                        )}
+                      </dl>
+                    </article>
+                  ))}
+                </div>
+                </>
               )}
             </TabsContent>
 
@@ -1204,7 +1341,7 @@ export default function InventoryPage() {
               {isLoadingVendors ? (
                 <div className="grid gap-4 p-6 md:grid-cols-2 lg:grid-cols-3">
                   {[1, 2, 3].map((i) => (
-                    <Card key={i}>
+                    <Card key={i} className="border-0 bg-muted/40 shadow-none">
                       <CardContent className="p-5">
                         <Skeleton className="h-10 w-10 rounded-xl mb-4" />
                         <Skeleton className="h-5 w-32 mb-2" />
@@ -1237,7 +1374,7 @@ export default function InventoryPage() {
                   {filteredVendors.map((vendor) => (
                     <Card
                       key={vendor.id}
-                      className="group hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-pointer border-muted"
+                      className="group cursor-pointer rounded-2xl border-0 bg-muted/45 shadow-none transition-colors hover:bg-muted/65"
                       onClick={() => {
                         setSelectedDetailVendor(vendor);
                         setIsDetailSheetOpen(true);
@@ -1245,8 +1382,8 @@ export default function InventoryPage() {
                     >
                       <CardContent className="p-5">
                         <div className="flex items-start justify-between mb-4">
-                          <div className="p-3 rounded-xl bg-gradient-to-br from-blue-500/20 to-blue-500/5 border border-blue-500/10">
-                            <Truck className="h-5 w-5 text-blue-500" />
+                          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                            <Truck className="h-4 w-4" />
                           </div>
                           <div className="flex items-center gap-2">
                             {!isSingleLocation && <ScopeBadge locationId={vendor.location_id} />}
@@ -1255,7 +1392,8 @@ export default function InventoryPage() {
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  className="h-8 w-8"
+                                  className="h-8 w-8 rounded-full"
+                                  onClick={(event) => event.stopPropagation()}
                                 >
                                   <MoreHorizontal className="h-4 w-4" />
                                 </Button>
@@ -1301,7 +1439,7 @@ export default function InventoryPage() {
                           {vendor.contact_name || "No contact"}
                         </p>
 
-                        <div className="flex items-center justify-between pt-4 border-t">
+                        <div className="flex items-center justify-between pt-4">
                           <div>
                             <p className="text-2xl font-bold">
                               {vendor.total_orders}
@@ -1325,7 +1463,7 @@ export default function InventoryPage() {
 
                   {/* Add Vendor Card */}
                   <Card
-                    className="border-dashed border-2 hover:border-primary/50 hover:bg-muted/30 transition-colors cursor-pointer"
+                    className="cursor-pointer rounded-2xl border border-dashed bg-transparent shadow-none transition-colors hover:border-primary/40 hover:bg-muted/30"
                     onClick={() => setIsAddVendorOpen(true)}
                   >
                     <CardContent className="p-5 flex flex-col items-center justify-center h-full min-h-[200px] text-center">
@@ -1363,27 +1501,33 @@ export default function InventoryPage() {
                     No purchase orders
                   </h3>
                   <p className="text-muted-foreground text-sm max-w-sm">
-                    {isAllLocations
+                    {isAllLocations && !isSingleLocation
                       ? "Select a specific location to create purchase orders"
                       : "Create your first purchase order to restock inventory"}
                   </p>
                 </div>
               ) : (
-                <div className="divide-y">
+                <>
+                <div className="hidden px-4 pb-6 sm:px-6 xl:block">
+                <div className="min-w-[760px] overflow-hidden rounded-2xl bg-muted/20">
                   {/* Table Header */}
                   <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-muted/30 text-sm font-medium text-muted-foreground">
                     <div
-                      className={isAllLocations ? "col-span-2" : "col-span-3"}
+                      className={
+                        showMultiLocationContext ? "col-span-2" : "col-span-3"
+                      }
                     >
                       PO Number
                     </div>
-                    {isAllLocations && (
+                    {showMultiLocationContext && (
                       <div className="col-span-2">Location</div>
                     )}
                     <div className="col-span-3">Vendor</div>
                     <div className="col-span-2">Status</div>
                     <div
-                      className={isAllLocations ? "col-span-1" : "col-span-2"}
+                      className={
+                        showMultiLocationContext ? "col-span-1" : "col-span-2"
+                      }
                     >
                       Items
                     </div>
@@ -1394,14 +1538,18 @@ export default function InventoryPage() {
                   {filteredPOs.map((po) => (
                     <div
                       key={po.id}
-                      className="grid grid-cols-12 gap-4 px-6 py-4 items-center hover:bg-muted/30 transition-colors group cursor-pointer"
+                      className="group grid cursor-pointer grid-cols-12 items-center gap-4 px-6 py-4 transition-colors hover:bg-muted/40"
                       onClick={() => {
                         setSelectedPOId(po.id);
                         setIsPODetailOpen(true);
                       }}
                     >
                       <div
-                        className={isAllLocations ? "col-span-2" : "col-span-3"}
+                        className={
+                          showMultiLocationContext
+                            ? "col-span-2"
+                            : "col-span-3"
+                        }
                       >
                         <p className="font-medium font-mono">{po.po_number}</p>
                         <p className="text-sm text-muted-foreground">
@@ -1409,7 +1557,7 @@ export default function InventoryPage() {
                         </p>
                       </div>
 
-                      {isAllLocations && (
+                      {showMultiLocationContext && (
                         <div className="col-span-2">
                           <p className="text-sm font-medium">
                             {po.location?.name || "Unknown"}
@@ -1441,86 +1589,111 @@ export default function InventoryPage() {
                         <span className="font-semibold">
                           ${po.total_amount.toFixed(2)}
                         </span>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="opacity-0 group-hover:opacity-100 transition-opacity"
-                            >
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            {po.status === "draft" && (
-                              <DropdownMenuItem
-                                onClick={() =>
-                                  updatePOStatus.mutate({
-                                    poId: po.id,
-                                    status: "pending",
-                                  })
-                                }
-                              >
-                                Submit Order
-                              </DropdownMenuItem>
-                            )}
-                            {po.status === "pending" && (
-                              <DropdownMenuItem
-                                onClick={() => {
-                                  // Set all quantities received to ordered
-                                  const quantities: Record<string, number> = {};
-                                  po.items?.forEach((item) => {
-                                    quantities[item.id] = item.quantity_ordered;
-                                  });
-                                  updatePOStatus.mutate({
-                                    poId: po.id,
-                                    status: "received",
-                                    receivedQuantities: quantities,
-                                  });
-                                }}
-                              >
-                                Mark as Received
-                              </DropdownMenuItem>
-                            )}
-                            {po.status === "received" && (
-                              <DropdownMenuItem
-                                onClick={() =>
-                                  updatePOStatus.mutate({
-                                    poId: po.id,
-                                    status: "paid",
-                                  })
-                                }
-                              >
-                                Mark as Paid
-                              </DropdownMenuItem>
-                            )}
-                            {po.status === "draft" && (
-                              <>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem
-                                  className="text-destructive"
-                                  onClick={() =>
-                                    updatePOStatus.mutate({
-                                      poId: po.id,
-                                      status: "cancelled",
-                                    })
-                                  }
-                                >
-                                  Cancel Order
-                                </DropdownMenuItem>
-                              </>
-                            )}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                        <PurchaseOrderActions
+                          purchaseOrder={po}
+                          onStatusChange={(status, receivedQuantities) =>
+                            updatePOStatus.mutate({
+                              poId: po.id,
+                              status,
+                              receivedQuantities,
+                            })
+                          }
+                        />
                       </div>
                     </div>
                   ))}
                 </div>
+                </div>
+                <div className="grid min-w-0 grid-cols-1 gap-3 px-4 pb-6 sm:grid-cols-2 sm:px-6 xl:hidden">
+                  {filteredPOs.map((po) => (
+                    <article
+                      key={po.id}
+                      className="group min-w-0 rounded-2xl border-0 bg-muted/45 p-4 transition-colors hover:bg-muted/65"
+                    >
+                      <div className="flex min-w-0 items-start gap-3">
+                        <button
+                          type="button"
+                          className="min-w-0 flex-1 text-left"
+                          onClick={() => {
+                            setSelectedPOId(po.id);
+                            setIsPODetailOpen(true);
+                          }}
+                        >
+                          <span className="block truncate font-mono text-sm font-medium">
+                            {po.po_number}
+                          </span>
+                          <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                            {new Date(po.created_at).toLocaleDateString()}
+                          </span>
+                        </button>
+                        <POStatusBadge status={po.status} />
+                        <PurchaseOrderActions
+                          purchaseOrder={po}
+                          alwaysVisible
+                          onStatusChange={(status, receivedQuantities) =>
+                            updatePOStatus.mutate({
+                              poId: po.id,
+                              status,
+                              receivedQuantities,
+                            })
+                          }
+                        />
+                      </div>
+
+                      <button
+                        type="button"
+                        className="mt-5 block w-full text-left"
+                        onClick={() => {
+                          setSelectedPOId(po.id);
+                          setIsPODetailOpen(true);
+                        }}
+                      >
+                        <dl className="grid min-w-0 grid-cols-2 gap-x-4 gap-y-4">
+                          <div className="min-w-0">
+                            <dt className="text-[0.6875rem] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                              Vendor
+                            </dt>
+                            <dd className="mt-1 truncate text-sm font-medium">
+                              {po.vendor?.name || "Unknown Vendor"}
+                            </dd>
+                          </div>
+                          <div className="min-w-0">
+                            <dt className="text-[0.6875rem] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                              Total
+                            </dt>
+                            <dd className="mt-1 truncate text-sm font-medium tabular-nums">
+                              ${po.total_amount.toFixed(2)}
+                            </dd>
+                          </div>
+                          <div className="min-w-0">
+                            <dt className="text-[0.6875rem] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                              Items
+                            </dt>
+                            <dd className="mt-1 truncate text-sm text-muted-foreground tabular-nums">
+                              {po.items?.length || 0}
+                            </dd>
+                          </div>
+                          {isAllLocations && !isSingleLocation && (
+                            <div className="min-w-0">
+                              <dt className="text-[0.6875rem] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                                Location
+                              </dt>
+                              <dd className="mt-1 truncate text-sm text-muted-foreground">
+                                {po.location?.name || "Unknown"}
+                              </dd>
+                            </div>
+                          )}
+                        </dl>
+                      </button>
+                    </article>
+                  ))}
+                </div>
+                </>
               )}
 
               {/* Quick Actions for PO */}
               {(filteredPOs.length > 0 || !isAllLocations) && (
-                <div className="p-6 border-t bg-muted/20">
+                <div className="px-4 pb-6 sm:px-6">
                   <div className="flex items-center justify-between">
                     <p className="text-sm text-muted-foreground">
                       {filteredPOs.length > 0
@@ -1567,9 +1740,9 @@ export default function InventoryPage() {
             <TabsContent value="reports" className="m-0">
               <InventoryReportsTab isAllLocations={isAllLocations} />
             </TabsContent>
-          </CardContent>
+          </div>
         </Tabs>
-      </Card>
+      </Panel>
 
       {/* Dialogs */}
       <AddItemDialog open={isAddItemOpen} onOpenChange={setIsAddItemOpen} />
@@ -1677,6 +1850,6 @@ export default function InventoryPage() {
         }}
         isPending={createAdhocExpense.isPending}
       />
-    </div>
+    </PageShell>
   );
 }
