@@ -1,13 +1,7 @@
 "use client";
 
 import { Fragment, useState } from "react";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Panel, PanelSection } from "@/components/dashboard/shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -94,17 +88,12 @@ export function PushChannelsHistoryCard({
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base flex items-center gap-2">
-          <History className="h-4 w-4" />
-          Channel Push History
-        </CardTitle>
-        <CardDescription>
-          Recent pushes from DexaPOS to delivery platforms via OrderOut.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
+    <Panel>
+      <PanelSection
+        icon={History}
+        label="Channel push history"
+        caption="Recent menu pushes from DexaPOS to delivery platforms through OrderOut."
+      >
         {isLoading ? (
           <div className="space-y-2">
             <Skeleton className="h-10 w-full" />
@@ -118,7 +107,8 @@ export function PushChannelsHistoryCard({
             description="Use “Push to Channels” above to fan a menu out to delivery platforms."
           />
         ) : (
-          <Table>
+          <div className="overflow-x-auto">
+          <Table className="min-w-[760px]">
             <TableHeader>
               <TableRow>
                 <TableHead>Menu</TableHead>
@@ -211,8 +201,9 @@ export function PushChannelsHistoryCard({
               })}
             </TableBody>
           </Table>
+          </div>
         )}
-      </CardContent>
-    </Card>
+      </PanelSection>
+    </Panel>
   );
 }

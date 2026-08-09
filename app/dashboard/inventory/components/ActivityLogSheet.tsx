@@ -2,12 +2,12 @@
 
 import { useState } from "react";
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -30,7 +30,6 @@ import {
   DollarSign,
   TrendingUp,
   TrendingDown,
-  AlertTriangle,
   Info,
   ChevronRight,
   MapPin,
@@ -53,7 +52,6 @@ import {
   AuditCategory,
   CATEGORY_LABELS,
   CATEGORY_COLORS,
-  SEVERITY_COLORS,
   AUDIT_CATEGORIES,
 } from "@/types/audit-log";
 import { cn } from "@/lib/utils";
@@ -158,67 +156,62 @@ export function ActivityLogSheet({
   const logs = logsResponse?.data || [];
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-xl px-4">
-        <SheetHeader className="pb-4 border-b">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-gradient-to-br from-violet-500/20 to-violet-500/5 border border-violet-500/10">
-              <Clock className="h-5 w-5 text-violet-500" />
-            </div>
-            <div>
-              <SheetTitle>Activity Log</SheetTitle>
-              <SheetDescription>
-                Recent actions and changes at your location
-              </SheetDescription>
-            </div>
-          </div>
-        </SheetHeader>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="flex h-[min(800px,calc(100dvh-2rem))] flex-col gap-0 overflow-hidden p-0 sm:max-w-4xl max-sm:top-1/2 max-sm:right-auto max-sm:bottom-auto max-sm:left-1/2 max-sm:h-[calc(100dvh-2rem)] max-sm:max-w-[calc(100%-2rem)] max-sm:-translate-x-1/2 max-sm:-translate-y-1/2 max-sm:rounded-3xl max-sm:overflow-hidden">
+        <DialogHeader className="border-b border-border/60 px-5 py-5 pr-14 text-left sm:px-6 sm:pr-16">
+          <DialogTitle className="flex items-center gap-2">
+            <Clock className="h-5 w-5 text-primary" />
+            Activity log
+          </DialogTitle>
+          <DialogDescription>
+            Recent inventory and purchasing activity for the selected location.
+          </DialogDescription>
+        </DialogHeader>
 
-        {/* Filters */}
-        <div className="py-4 space-y-3 border-b">
-          <div className="flex items-center gap-2">
-            <div className="relative flex-1">
+        <section className="shrink-0 border-b border-border/60 px-4 py-4 sm:px-6">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="relative min-w-0 flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Search activity..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-9"
+                className="h-10 rounded-full border-0 bg-muted/45 pl-10 shadow-none focus-visible:ring-1"
               />
             </div>
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => refetch()}
-              disabled={isFetching}
-            >
-              <RefreshCw
-                className={cn("h-4 w-4", isFetching && "animate-spin")}
-              />
-            </Button>
+            <div className="flex items-center gap-2">
+              <Filter className="hidden h-4 w-4 text-muted-foreground sm:block" />
+              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                <SelectTrigger className="h-10 min-w-0 flex-1 rounded-full bg-muted/45 shadow-none sm:w-[200px] sm:flex-none">
+                  <SelectValue placeholder="All categories" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All categories</SelectItem>
+                  {AUDIT_CATEGORIES.map((cat) => (
+                    <SelectItem key={cat} value={cat}>
+                      {CATEGORY_LABELS[cat]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-10 w-10 shrink-0 rounded-full"
+                onClick={() => refetch()}
+                disabled={isFetching}
+              >
+                <RefreshCw
+                  className={cn("h-4 w-4", isFetching && "animate-spin")}
+                />
+                <span className="sr-only">Refresh activity</span>
+              </Button>
+            </div>
           </div>
+        </section>
 
-          <div className="flex items-center gap-2">
-            <Filter className="h-4 w-4 text-muted-foreground" />
-            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="All Categories" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Categories</SelectItem>
-                {AUDIT_CATEGORIES.map((cat) => (
-                  <SelectItem key={cat} value={cat}>
-                    {CATEGORY_LABELS[cat]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-
-        {/* Activity List */}
-        <ScrollArea className="h-[calc(100vh-220px)] w-full min-w-0 [&_[data-slot=scroll-area-viewport]>div]:!block [&_[data-slot=scroll-area-viewport]>div]:!w-full">
-          <div className="py-4 space-y-3 px-1 w-full min-w-0">
+        <ScrollArea className="min-h-0 w-full min-w-0 flex-1 [&_[data-slot=scroll-area-viewport]>div]:!block [&_[data-slot=scroll-area-viewport]>div]:!w-full">
+          <div className="w-full min-w-0 space-y-3 p-4 sm:p-6">
             {isLoading ? (
               // Loading skeletons
               Array.from({ length: 5 }).map((_, i) => (
@@ -246,8 +239,8 @@ export function ActivityLogSheet({
             )}
           </div>
         </ScrollArea>
-      </SheetContent>
-    </Sheet>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -270,10 +263,12 @@ function ActivityLogItem({ log }: { log: AuditLogWithLocation }) {
   const isIncrease = changeAmount && changeAmount > 0;
 
   return (
-    <div
+    <button
+      type="button"
+      aria-expanded={expanded}
       className={cn(
-        "w-full min-w-0 rounded-lg border p-3 transition-all hover:shadow-sm cursor-pointer",
-        expanded ? "bg-muted/30" : "hover:bg-muted/20"
+        "w-full min-w-0 cursor-pointer rounded-2xl border-0 p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        expanded ? "bg-muted/50" : "bg-muted/25 hover:bg-muted/40"
       )}
       onClick={() => setExpanded(!expanded)}
     >
@@ -281,7 +276,7 @@ function ActivityLogItem({ log }: { log: AuditLogWithLocation }) {
         {/* Icon */}
         <div
           className={cn(
-            "p-2 rounded-lg shrink-0",
+            "shrink-0 rounded-full p-2",
             log.severity === "warning"
               ? "bg-amber-500/10"
               : log.severity === "critical"
@@ -374,7 +369,7 @@ function ActivityLogItem({ log }: { log: AuditLogWithLocation }) {
 
       {/* Expanded details */}
       {expanded && (
-        <div className="mt-3 pt-3 border-t space-y-3">
+        <div className="mt-3 space-y-3 border-t border-border/60 pt-3">
           {/* Reason - for all logs that have it */}
           {log.changes?.reason && (
             <div className="flex items-start gap-2 p-2.5 rounded-lg bg-muted/50">
@@ -527,6 +522,6 @@ function ActivityLogItem({ log }: { log: AuditLogWithLocation }) {
           )}
         </div>
       )}
-    </div>
+    </button>
   );
 }

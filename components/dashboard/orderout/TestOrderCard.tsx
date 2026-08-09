@@ -2,13 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Panel, PanelSection } from "@/components/dashboard/shell";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
@@ -102,25 +96,18 @@ export function TestOrderCard({ locationId, hasRestaurant }: TestOrderCardProps)
 
   if (!hasRestaurant) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Beaker className="h-5 w-5" />
-            Send Test Order
-          </CardTitle>
-          <CardDescription>
-            Connect this location to OrderOut first. Once the restaurant is
-            provisioned, you&apos;ll be able to fire synthetic webhooks from here
-            to verify orders flow into your POS.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+      <Panel>
+        <PanelSection
+          icon={Beaker}
+          label="Send test order"
+          caption="Connect this location to OrderOut before sending synthetic webhooks to verify the POS order flow."
+        >
           <div className="flex items-center gap-2 rounded-md border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
             <Plug className="h-4 w-4" />
             OrderOut restaurant not yet connected for this location
           </div>
-        </CardContent>
-      </Card>
+        </PanelSection>
+      </Panel>
     );
   }
 
@@ -156,19 +143,13 @@ export function TestOrderCard({ locationId, hasRestaurant }: TestOrderCardProps)
   const isPending = sendMutation.isPending;
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base">
-          <Beaker className="h-5 w-5" />
-          Send Test Order
-        </CardTitle>
-        <CardDescription>
-          Fire a synthetic OrderOut webhook against this location to verify
-          orders flow into your POS. Uses real menu items so line items resolve
-          exactly like a live order.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-6">
+    <Panel>
+      <PanelSection
+        icon={Beaker}
+        label="Send test order"
+        caption="Fire a synthetic OrderOut webhook with real menu items to verify orders flow into the POS."
+      >
+        <div className="space-y-6">
         {/* Controls */}
         <div className="grid gap-4 sm:grid-cols-3">
           <div className="space-y-2">
@@ -334,7 +315,8 @@ export function TestOrderCard({ locationId, hasRestaurant }: TestOrderCardProps)
               No test orders sent yet.
             </div>
           ) : (
-            <Table>
+            <div className="overflow-x-auto">
+            <Table className="min-w-[720px]">
               <TableHeader>
                 <TableRow>
                   <TableHead>Sent at</TableHead>
@@ -374,9 +356,11 @@ export function TestOrderCard({ locationId, hasRestaurant }: TestOrderCardProps)
                 ))}
               </TableBody>
             </Table>
+            </div>
           )}
         </div>
-      </CardContent>
-    </Card>
+        </div>
+      </PanelSection>
+    </Panel>
   );
 }

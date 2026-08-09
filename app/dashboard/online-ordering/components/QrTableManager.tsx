@@ -13,7 +13,7 @@ import {
 } from "../actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Panel, PanelSection } from "@/components/dashboard/shell";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -118,7 +118,11 @@ export function QrTableManager({
   }, [locationId]);
 
   useEffect(() => {
-    void loadSnapshot();
+    const timer = window.setTimeout(() => {
+      void loadSnapshot();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, [loadSnapshot]);
 
   const groupedRows = useMemo(() => {
@@ -423,19 +427,13 @@ export function QrTableManager({
   }
 
   return (
-    <Card className="border-[#0C4FD1]/15">
-      <CardHeader className="space-y-4">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <CardTitle className="flex items-center gap-2">
-              <QrCode className="h-5 w-5 text-[#0C4FD1]" />
-              QR Code Manager
-            </CardTitle>
-            <CardDescription>
-              Manage table QR generation state for {locationName}. This dashboard slice handles generation, regeneration, revoke, preview, and scan visibility.
-            </CardDescription>
-          </div>
-          <div className="flex flex-wrap gap-2">
+    <Panel>
+      <PanelSection
+        icon={QrCode}
+        label="QR code manager"
+        caption={`Generate, preview, export, regenerate, and revoke table QR codes for ${locationName}.`}
+        action={
+          <div className="flex min-w-0 flex-wrap gap-2">
             <div className="inline-flex items-center rounded-md border border-border bg-background p-1 text-xs">
               <button
                 type="button"
@@ -490,10 +488,12 @@ export function QrTableManager({
               Generate Missing
             </Button>
           </div>
-        </div>
+        }
+      >
+        <div className="space-y-4">
 
         <div className="grid gap-3 md:grid-cols-3">
-          <div className="rounded-lg border bg-background p-4">
+          <div className="rounded-2xl bg-muted/45 p-4">
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
               Tables
             </p>
@@ -501,7 +501,7 @@ export function QrTableManager({
               {snapshot?.tables.length ?? 0}
             </p>
           </div>
-          <div className="rounded-lg border bg-background p-4">
+          <div className="rounded-2xl bg-muted/45 p-4">
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
               Generated
             </p>
@@ -509,7 +509,7 @@ export function QrTableManager({
               {snapshot?.generatedCount ?? 0}
             </p>
           </div>
-          <div className="rounded-lg border bg-background p-4">
+          <div className="rounded-2xl bg-muted/45 p-4">
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
               Active
             </p>
@@ -549,9 +549,6 @@ export function QrTableManager({
             {snapshot.error}
           </div>
         ) : null}
-      </CardHeader>
-
-      <CardContent className="space-y-4">
         {isLoading ? (
           <div
             className="flex items-center gap-2 rounded-lg border bg-background px-4 py-8 text-sm text-muted-foreground"
@@ -747,7 +744,8 @@ export function QrTableManager({
             </p>
           </div>
         </div>
-      </CardContent>
-    </Card>
+        </div>
+      </PanelSection>
+    </Panel>
   );
 }
