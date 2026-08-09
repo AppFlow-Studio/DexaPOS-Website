@@ -65,7 +65,7 @@ export function OverviewSection({ itemId, item, globalScope }: SectionRenderCtx)
   return (
     <div className="space-y-4">
       <SectionHeader title="Overview" scope={globalScope} />
-      <div className="space-y-4 rounded-lg border bg-card p-4">
+      <div className="space-y-4 rounded-2xl border bg-card p-6">
         <div className="space-y-1.5">
           <Label htmlFor="overview-name">Name</Label>
           <Input

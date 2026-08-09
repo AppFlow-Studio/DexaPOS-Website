@@ -143,7 +143,7 @@ export function PriceSourcePopover({
         <button
           type="button"
           className={cn(
-            "inline-flex items-center gap-1 rounded hover:bg-muted/50 px-1 -mx-1 transition-colors text-left",
+            "-mx-1 inline-flex items-center gap-1 rounded-full px-1 text-left transition-colors hover:bg-muted/50",
             className,
           )}
           aria-label={`Price source: ${sourceLabel}`}
@@ -151,16 +151,20 @@ export function PriceSourcePopover({
           {children}
         </button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-[320px] p-0">
-        <div className="border-b px-4 py-3">
+      <PopoverContent
+        align="start"
+        className="w-[320px] overflow-hidden rounded-2xl p-0"
+      >
+        <div className="border-b border-border/60 px-4 py-3">
           <div className="flex items-center justify-between gap-2">
             <div>
-              <p className="text-sm font-semibold">{formatPrice(currentPrice)}</p>
+              <p className="text-sm font-semibold tabular-nums">
+                {formatPrice(currentPrice)}
+              </p>
               <p
                 className={cn(
-                  "mt-0.5 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium",
+                  "mt-0.5 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium",
                   sourceColors.bg,
-                  sourceColors.border,
                   sourceColors.text,
                 )}
               >
@@ -210,11 +214,11 @@ export function PriceSourcePopover({
                 </div>
               )}
             </div>
-            <div className="flex flex-col gap-1 border-t bg-muted/20 p-2">
+            <div className="flex flex-col gap-1 border-t border-border/60 bg-muted/60 p-2">
               <Button
                 size="sm"
                 variant="ghost"
-                className="h-7 justify-start gap-2 text-xs"
+                className="h-7 justify-start gap-2 rounded-full text-xs"
                 onClick={() => setMode("edit")}
               >
                 <Pencil className="h-3.5 w-3.5" /> Edit this override
@@ -223,7 +227,7 @@ export function PriceSourcePopover({
                 <Button
                   size="sm"
                   variant="ghost"
-                  className="h-7 justify-start gap-2 text-xs text-rose-700 hover:bg-rose-50 hover:text-rose-800"
+                  className="h-7 justify-start gap-2 rounded-full text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
                   onClick={() => removeMutation.mutate()}
                   disabled={removeMutation.isPending}
                 >
@@ -239,7 +243,7 @@ export function PriceSourcePopover({
                 asChild
                 size="sm"
                 variant="ghost"
-                className="h-7 justify-start gap-2 text-xs"
+                className="h-7 justify-start gap-2 rounded-full text-xs"
               >
                 <Link
                   href={`/dashboard/menu/items/${itemId}/pricing`}
@@ -284,7 +288,7 @@ function CascadeRow({
   return (
     <div
       className={cn(
-        "flex items-center justify-between rounded px-2 py-1 text-xs",
+        "flex items-center justify-between rounded-full px-2.5 py-1 text-xs",
         isWinner
           ? cn(colors.bg, "font-semibold", colors.text)
           : "text-muted-foreground",

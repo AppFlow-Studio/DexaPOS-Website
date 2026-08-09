@@ -253,10 +253,18 @@ The tier-1/tier-2 difference is the nesting cue. A card inside a panel must be s
 **Never:** a squared `rounded-md` button in a converted page.
 
 ### 4.2 Search input — `DS-CTL-02`
-**Canonical:** `h-9 rounded-full border-0 bg-muted/60 pl-9 text-[0.8125rem] shadow-none focus-visible:bg-background`
+**Now in the base component.** `border-0 bg-muted/60 shadow-none focus-visible:bg-background`
+plus `rounded-full` are the **defaults** in `components/ui/input.tsx`. A plain `<Input />`
+is already correct — do **not** re-declare them at the call site.
+
+**Canonical (search only):** `pl-9` for the icon, plus `h-9 text-[0.8125rem]` if the
+field sits in a toolbar. Everything else comes from the base.
 **Icon:** `pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50` — note `text-muted-foreground/50`, not `/100`.
-**Never:** a bordered shadcn `<Input>`.
-**Grep:** `grep -rn 'Input' <file> | grep -v 'border-0'`
+**Never:** re-adding `border-0 bg-muted/60 shadow-none` to an `<Input>`; a raw `<input>`
+for a text/number/date field (see §11.1).
+**Error state:** an invalid field re-gains a destructive border via
+`aria-invalid:border aria-invalid:border-destructive` — the fill alone cannot carry it.
+**Grep (redundant classes):** `grep -rn '<Input' <file> | grep -E 'border-0|bg-muted/60|shadow-none'`
 
 ### 4.3 Filter chip — `DS-CTL-03`
 **Canonical:** `rounded-full border-0 bg-muted/60 text-muted-foreground shadow-none hover:bg-muted hover:text-foreground data-[state=open]:bg-muted data-[state=open]:text-foreground` — tinted, borderless, quieter than a pill control.
@@ -497,14 +505,168 @@ Fix-once items. **Do not** re-solve these per page.
 | `FILTER_TRIGGER` inlined instead of imported | `OrdersDataTable.tsx:625` | Open |
 | Three currency formatters | `lib/utils.ts` (canonical), `tips/lib/constants.ts`, `device-registry/presentation.ts` | Open |
 | `STATUS_CONFIG` has no dark variants | `tips/lib/constants.ts` | Open |
+| Raw `<input>` elements bypass `ui/input` — see §11.1 | 12 text/number/date fields | Open |
 | `--brand` token + accent dedupe | `globals.css` + 10 files | ✅ Done |
 | Delete dead 160-line token block | `globals.css` | ✅ Done |
+| `DS-CTL-02` fill moved into base `input.tsx`; 41 redundant call-site classNames stripped | `input.tsx` + 25 files | ✅ Done |
+
+### §11.1 Raw `<input>` elements that bypass the primitive
+
+`DS-CTL-02` now lives in the base `components/ui/input.tsx` (muted fill, borderless,
+`rounded-full`), so anything rendering a bare `<input>` **no longer matches the rest of
+the dashboard** — it falls back to browser-default chrome.
+
+34 raw `<input>` elements remain under `app/dashboard` + `components/dashboard`. Most are
+**legitimate and must stay** — the primitive cannot style them:
+
+- `type="color"` (7), `type="checkbox"` (5), `type="file"` (4), `type="radio"` (1)
+- `type="datetime-local"` (2) in the snooze controls
+
+These are the **real gaps** — plain fields that should be `<Input>`:
+
+| File | Field |
+|------|-------|
+| `app/dashboard/payments/page.tsx:228,238` | `date` ×2 |
+| `app/dashboard/payments/disputes/page.tsx:469,479` | `date` ×2 |
+| `app/dashboard/invoices/components/InvoiceForm.tsx:588` | `number` |
+| `app/dashboard/orders/analytics/page.tsx:371` | text/date |
+| `app/dashboard/customers/components/tabs/DetailsTab.tsx:455` | text |
+| `app/dashboard/customers/components/tabs/MarketingTab.tsx:161,188,208,218` | text ×4 |
+| `app/dashboard/online-ordering/page.tsx:743,758,776,792,807` | mixed |
+| `app/dashboard/kiosk/[locationId]/KioskEditor.tsx:211,219,323,417,519` | mixed |
+
+**Why this was not swept with the className cleanup:** converting a raw `<input>` to
+`<Input>` is a behaviour change, not a styling one. Several are `type="date"`, and the
+primitive applies `isNativeDateLike` → `[color-scheme:light]`/`dark:[color-scheme:dark]`,
+which changes how the native picker renders. Each needs an eyeball, so treat this as a
+per-file pass rather than a codemod.
+
+**Grep:** `grep -rn '<input' --include=*.tsx app/dashboard components/dashboard | grep -v 'type="\(checkbox\|color\|file\|radio\)"'`
 
 ---
 
 ## Out of scope
 
-- **`app/dashboard/menu/**`** — separate epic (11.6k LOC). Do not touch.
+- ~~**`app/dashboard/menu/**`** — separate epic.~~ **No longer out of scope.** This
+  document is the standard for *every* merchant-dashboard page, menu included. The
+  menu tree is being converted like any other; see the slice table below.
 - **`app/manage/*`** — shares `.dashboard-sidebar-theme`; the shell will apply later.
 - **The 277-file `<Card>` migration** — see C6.
+
+### Base control radius is now set globally
+
+`components/ui/button.tsx` and `components/ui/input.tsx` were `rounded-md`, which is
+why call sites all over the app hand-wrote `rounded-full` to get the pill shape this
+document asks for. The radius now lives in the base components:
+
+- **Button** — `rounded-full` in the base `cva` string. The `sm` and `lg` size variants
+  previously re-declared `rounded-md`; a size-level radius **wins over the base string**,
+  so those declarations were removed. Don't reintroduce a `rounded-*` in a size variant.
+- **Input** — `rounded-full`, horizontal padding bumped `px-3` → `px-4` so text isn't
+  crowded by the round ends. Grouped/affixed fields still override locally (see the
+  store-slug field in `OnlineStoreTab.tsx`, which pairs `rounded-l-full` on the affix
+  with `rounded-l-none` on the input).
+- **Select** — trigger matches Input (`rounded-full`, `px-4`); the dropdown panel is
+  `rounded-2xl` and its items `rounded-full`.
+- **Badge** — `rounded-full` **and `border-0`**. The `outline` variant lost its border,
+  so it now carries `bg-muted/60` instead — without that it would have become invisible
+  text. Call sites that pass their own `bg-*` (there are ~400) override the tint and are
+  unaffected; any `border-*` they also pass is now inert but harmless.
+
+- **Textarea** — `rounded-2xl` (not `full`; a pill reads wrong on a multi-line box).
+- **Alert** — `rounded-2xl`.
+- **Dialog** — `rounded-3xl`, matching the large overlay panels.
+
+> Only **Badge** dropped its border. `variant="outline"` on **Button** still has one —
+> that's the intended outline-button look.
+
+### Overlay scroll structure
+
+A `DialogContent` that owns the rounded corner **must not be the scroll container**.
+A scrollbar renders inside the element's padding box, so on a rounded element it
+appears to sit outside the corner — the bug visible on the New Menu Item sheet.
+
+The correct structure, used by `CreateItemWizard` and `NewEditItemFormSheet`:
+
+```
+DialogContent   flex flex-col overflow-hidden rounded-3xl   ← clips, never scrolls
+├─ DialogHeader shrink-0                                     ← no `sticky` needed
+├─ body         thin-scrollbar flex-1 min-h-0 overflow-y-auto ← the only scroller
+└─ DialogFooter shrink-0
+```
+
+Because header and footer are flex-fixed siblings of the scroll area, they no longer
+need `sticky` + `border-b`/`border-t` to separate themselves from scrolling content —
+which is how those hairlines got there in the first place. Don't reintroduce them.
+
+This means **new code does not need `rounded-full` on buttons or inputs** — it is the
+default. Existing per-call-site overrides are redundant but harmless.
+
+### Converted: the Item Library slice
+
+These files are done and conform to this document. Treat them as reference examples
+rather than pending work — and keep them conforming if you edit them:
+
+| File | Notes |
+|---|---|
+| `app/dashboard/menu/items/page.tsx` | `PageShell`/`PageHeader`/`Panel`/`StatRow`; 4 stat cards → one panel |
+| `components/dashboard/menu/NewEditItemFormSheet.tsx` | Retired underline tabs → pill rail |
+| `components/dashboard/menu/items/CreateItemWizard.tsx` | Retired underline tabs → pill rail |
+| `components/dashboard/menu/items/BulkPriceAdjustDialog.tsx` | Segmented controls → pill rails |
+| `components/dashboard/menu/items/BulkDeliveryPriceAdjustDialog.tsx` | Same |
+| `components/dashboard/menu/PriceSourcePopover.tsx` | Popover `rounded-2xl` per §4.6 |
+| `components/dashboard/menu/ScopeContextStrip.tsx` | Tier-3 inset treatment |
+| `app/dashboard/menu/items/[itemId]/page.tsx` | Item detail — 11 `<Card>` → `Panel`; `border-b`/`border-t` dividers removed |
+| `app/dashboard/menu/items/[itemId]/edit/**` | Edit panel shell + section nav |
+| `components/dashboard/menu/item-edit/**` (11 files) | All 8 section panels → `rounded-2xl … p-6` |
+
+### Converted: `ReceiptModal`
+
+`components/dashboard/orders/ReceiptModal.tsx` — shared by 5 call sites (order detail,
+transactions, financials report, HQ merchant transactions, orders table), so all five
+inherit the fix. Three deviations closed; no call-site changes were needed.
+
+- **Hand-rolled scrollbar → `.thin-scrollbar`.** It carried eight chained
+  `[&::-webkit-scrollbar-*]` arbitrary variants — one of the three drifted copies the
+  utility in `globals.css` was written to replace. It is now the last of those three.
+- **Scroll container split from padding.** The scroller previously owned the horizontal
+  padding around floating paper, so the bar ran the full modal width with dead space
+  either side of the receipt. Padding moved to an inner wrapper; the scroller is now a
+  bare `flex-1 min-h-0 overflow-y-auto` and the bar tracks the panel edge.
+- **`bg-transparent border-none shadow-none` → a real panel.** The paper floated on the
+  overlay and the action row floated below it as bare white pills. The dialog now owns
+  the surface per §"Overlay scroll structure": visible header (title + mono order
+  number), one scroller, `shrink-0` footer. The footer buttons dropped their
+  `bg-white dark:bg-zinc-800` — that override only existed to fake a surface under a
+  floating button.
+
+> **This panel is deliberately not `bg-background`.** It carries the paper's own
+> `bg-[#faf9f6] dark:bg-zinc-900`, so panel and receipt are one continuous surface and
+> the modal reads as a single sheet rather than a card containing a card. Two
+> consequences: the footer takes **no `border-t` and no `bg-muted/30`** — on one surface a
+> divider or tinted band reads as a seam — and the paper's `shadow-lg` plus its torn
+> edges become the only things separating receipt from panel, so don't remove them. The
+> receipt is the one place in the dashboard where a modal opts out of the neutral panel
+> colour; it is not a precedent for other dialogs.
+
+> **The print stylesheet is coupled to this DOM.** `@media print` in that file collapses
+> everything outside the dialog portal and un-clips `.receipt-scroll` so the paper prints
+> at natural height. Because the panel is now opaque, the `dialog-content` print rule also
+> has to strip `background`/`border`/`box-shadow`/`border-radius` and restore
+> `display: block`, or the card chrome prints as a grey box around the receipt. Anything
+> added to the panel that is not the paper needs `no-print`.
+
+Two shared modules came out of this slice — prefer them over new inline colour triples:
+
+- **`lib/constants/menu-item-badges.ts`** — badge styles (price source, category scope,
+  availability, tax) in the `BadgeStyle` `{dot,text,bg}` shape used by `table-status.ts`.
+- **`lib/menu/cascade-labels.ts` → `scopeColor()`** — now carries `dark:` variants for all
+  5 cascade levels. It previously returned light-only tints, so every consumer
+  (`CascadeLadder`, `AffectsTag`, `PriceMatrixGrid`, …) rendered near-white blocks on dark
+  cards. Fixing it at the source fixed all of them.
+
+> ⚠️ **Both files are `.ts`, which Tailwind does not scan (C7).** Their classes generate CSS
+> only because each one is *also* written literally in some `.tsx`. Before adding a new class
+> to either, grep the `.tsx` files for it — an unmatched class reaches the DOM with no rule
+> behind it and the element silently falls back to inherited styling.
 - **`lib/messaging/notification-shared.ts` `COLORS`** — email-template palette, deliberately different from the UI accent. Do not unify.

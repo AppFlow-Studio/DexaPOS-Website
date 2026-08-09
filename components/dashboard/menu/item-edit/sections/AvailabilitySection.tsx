@@ -54,8 +54,8 @@ export function AvailabilitySection({ itemId, item, scope }: SectionRenderCtx) {
   return (
     <div className="space-y-4">
       <SectionHeader title="Availability" scope={scope} />
-      <div className="space-y-4 rounded-lg border bg-card p-4">
-        <div className="flex items-center justify-between rounded-md border px-3 py-2">
+      <div className="space-y-4 rounded-2xl border bg-card p-6">
+        <div className="flex items-center justify-between rounded-2xl border-0 bg-muted/60 px-3 py-2 shadow-none">
           <Label htmlFor="avail-toggle" className="text-sm font-medium">
             Available for sale
           </Label>

@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Command,
@@ -22,7 +21,8 @@ import {
 } from "@/components/ui/bottom-sheet";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { Check, X } from "lucide-react";
+import { Check, ChevronDown, X } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export interface MenuItemOption {
   id: string;
@@ -38,6 +38,10 @@ interface MenuItemPickerProps {
   placeholder?: string;
   emptyLabel?: string;
 }
+
+/** A removable selection chip — soft tint, no border, matching the search field. */
+const SELECTION_CHIP =
+  "inline-flex max-w-full items-center gap-1 rounded-full bg-muted/60 py-0.5 pl-2.5 pr-1 text-xs font-medium text-muted-foreground";
 
 export function MenuItemPicker({
   label = "Menu items",
@@ -63,36 +67,40 @@ export function MenuItemPicker({
   };
 
   return (
-    <div className="space-y-2">
-      <Label>{label}</Label>
+    <div className="min-w-0 space-y-2">
+      <Label className="text-sm text-muted-foreground">{label}</Label>
       <BottomSheet open={open} onOpenChange={setOpen}>
         <BottomSheetTrigger asChild>
-          <Button variant="outline" className="w-full justify-between">
-            <span>
-              {selected.length > 0
-                ? `${selected.length} selected`
-                : placeholder}
+          <Button
+            variant="outline"
+            className="h-9 w-full justify-between gap-2 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+          >
+            <span className="min-w-0 truncate">
+              {selected.length > 0 ? `${selected.length} selected` : placeholder}
             </span>
-            {selected.length > 0 && (
-              <span className="ml-2 text-xs text-muted-foreground">
-                ({selected.length})
-              </span>
-            )}
+            <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
           </Button>
         </BottomSheetTrigger>
 
         {/* Fixed-height sheet so the flex layout + footer are always visible */}
-        <BottomSheetContent height="95" className="sm:max-w-md mx-auto">
+        <BottomSheetContent height="95" className="mx-auto sm:max-w-md">
           <BottomSheetHeader>
-            <BottomSheetTitle>{label}</BottomSheetTitle>
+            <BottomSheetTitle className="text-[1.75rem] font-semibold tracking-[-0.02em]">
+              {label}
+            </BottomSheetTitle>
           </BottomSheetHeader>
 
           {/* Scrollable body — CommandList has no inner scroll; the body handles it */}
           <BottomSheetBody className="flex-1 overflow-y-auto">
-            <Command>
-              <CommandInput placeholder="Search menu items" />
+            <Command className="bg-transparent">
+              <CommandInput
+                placeholder="Search menu items"
+                className="text-[0.8125rem]"
+              />
               <CommandList className="max-h-none overflow-visible">
-                <CommandEmpty>{emptyLabel}</CommandEmpty>
+                <CommandEmpty className="py-8 text-center text-sm text-muted-foreground">
+                  {emptyLabel}
+                </CommandEmpty>
                 <CommandGroup>
                   {options.map((opt) => {
                     const isSelected = value.includes(opt.id);
@@ -101,12 +109,12 @@ export function MenuItemPicker({
                         key={opt.id}
                         value={opt.id}
                         onSelect={() => toggleValue(opt.id)}
-                        className="flex items-center gap-3 cursor-pointer"
+                        className="flex cursor-pointer items-center gap-3 rounded-full px-3 py-2 text-sm"
                       >
                         <Checkbox checked={isSelected} />
-                        <span className="flex-1">{opt.name}</span>
+                        <span className="min-w-0 flex-1 truncate">{opt.name}</span>
                         {isSelected && (
-                          <Check className="h-4 w-4 text-primary" />
+                          <Check className="h-4 w-4 shrink-0 text-[#0C4FD1] dark:text-[#6CA0FF]" />
                         )}
                       </CommandItem>
                     );
@@ -116,31 +124,28 @@ export function MenuItemPicker({
             </Command>
 
             {selected.length > 0 && (
-              <div className="mt-4 pt-4 border-t">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-medium">
+              <div className="mt-6">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <span className="text-sm text-muted-foreground tabular-nums">
                     Selected ({selected.length})
                   </span>
                   <Button
                     variant="ghost"
-                    size="sm"
                     onClick={() => onChange([])}
-                    className="h-7 text-xs"
+                    className="h-8 gap-1.5 rounded-full px-3 text-[0.8125rem] font-medium text-muted-foreground hover:text-foreground"
                   >
+                    <X className="h-3.5 w-3.5" />
                     Clear all
                   </Button>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {selected.map((opt) => (
-                    <Badge
-                      key={opt.id}
-                      variant="secondary"
-                      className="gap-1 pr-1"
-                    >
-                      {opt.name}
+                    <span key={opt.id} className={SELECTION_CHIP}>
+                      <span className="min-w-0 truncate">{opt.name}</span>
                       <button
                         type="button"
-                        className="ml-1 rounded-full hover:bg-muted p-0.5"
+                        className="shrink-0 rounded-full p-0.5 transition-colors hover:bg-muted hover:text-foreground"
+                        aria-label={`Remove ${opt.name}`}
                         onClick={(e) => {
                           e.stopPropagation();
                           toggleValue(opt.id);
@@ -148,7 +153,7 @@ export function MenuItemPicker({
                       >
                         <X className="h-3 w-3" />
                       </button>
-                    </Badge>
+                    </span>
                   ))}
                 </div>
               </div>
@@ -157,7 +162,10 @@ export function MenuItemPicker({
 
           {/* Always-visible footer with Done button */}
           <BottomSheetFooter>
-            <Button className="w-full" onClick={() => setOpen(false)}>
+            <Button
+              className="h-9 w-full rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+              onClick={() => setOpen(false)}
+            >
               Done
             </Button>
           </BottomSheetFooter>
@@ -168,16 +176,17 @@ export function MenuItemPicker({
       {selected.length > 0 && (
         <div className="flex flex-wrap gap-2">
           {selected.map((opt) => (
-            <Badge key={opt.id} variant="secondary" className="gap-1">
-              {opt.name}
+            <span key={opt.id} className={cn(SELECTION_CHIP)}>
+              <span className="min-w-0 truncate">{opt.name}</span>
               <button
                 type="button"
-                className="text-xs hover:text-destructive"
+                className="shrink-0 rounded-full p-0.5 transition-colors hover:bg-muted hover:text-foreground"
+                aria-label={`Remove ${opt.name}`}
                 onClick={() => toggleValue(opt.id)}
               >
-                ×
+                <X className="h-3 w-3" />
               </button>
-            </Badge>
+            </span>
           ))}
         </div>
       )}

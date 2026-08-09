@@ -331,6 +331,14 @@ export function ReceiptModal({
             max-height: none !important;
             width: auto !important;
             max-width: none !important;
+            /* The panel chrome is screen-only: on paper the receipt must sit
+               alone, with no card background, border or rounded corner. */
+            display: block !important;
+            background: transparent !important;
+            border: none !important;
+            box-shadow: none !important;
+            border-radius: 0 !important;
+            overflow: visible !important;
           }
           .no-print { display: none !important; }
           .receipt-scroll {
@@ -344,20 +352,27 @@ export function ReceiptModal({
           }
         }
       `}</style>
+      {/* One connected panel: the DialogContent owns the surface and the rounded
+          corner, clips, and never scrolls. Header and footer are flex-fixed
+          siblings of the single scroll area (see §"Overlay scroll structure" in
+          docs/UI-DESIGN-SYSTEM.md). */}
       <DialogContent
-        className="sm:max-w-md p-0 gap-0 bg-transparent border-none shadow-none flex flex-col max-h-[88vh]"
+        className="sm:max-w-md p-0 gap-0 flex flex-col overflow-hidden max-h-[88vh] bg-[#faf9f6] dark:bg-zinc-900"
         showCloseButton={false}
         elevation="above-sheet"
       >
-        <DialogHeader className="sr-only">
-          <DialogTitle>Receipt Preview</DialogTitle>
+        <DialogHeader className="no-print shrink-0 flex-row items-baseline gap-2 px-5 py-4">
+          <DialogTitle className="text-base">Receipt</DialogTitle>
+          <span className="min-w-0 truncate font-mono text-xs text-muted-foreground">
+            {order.display_number || order.order_number}
+          </span>
         </DialogHeader>
 
-        {/* Receipt Container — scrolls vertically when taller than the viewport.
-            overscroll-contain + thin scrollbar keep it tidy; no horizontal scroll. */}
-        <div
-          className="receipt-scroll relative min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain px-2 py-3 [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-black/20 dark:[&::-webkit-scrollbar-thumb]:bg-white/20 [&::-webkit-scrollbar-track]:bg-transparent"
-        >
+        {/* The only scroller. Padding lives on the inner wrapper so the
+            scrollbar tracks the panel edge instead of floating in dead space
+            beside the paper. */}
+        <div className="receipt-scroll thin-scrollbar relative flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain">
+          <div className="px-5 pb-5">
 
           {/* Receipt Paper */}
           <div
@@ -654,34 +669,19 @@ export function ReceiptModal({
               </p>
             </div>
           </div>
+          </div>
         </div>
 
-        {/* Action Buttons — hidden while printing so only the paper prints. */}
-        <div className="no-print flex gap-2 justify-center mt-4">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onOpenChange(false)}
-            className="bg-white dark:bg-zinc-800"
-          >
-            <X className="h-4 w-4 mr-2" />
-            Close
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => window.print()}
-            className="bg-white dark:bg-zinc-800"
-          >
-            <Printer className="h-4 w-4 mr-2" />
-            Print
-          </Button>
+        {/* Action Buttons — part of the panel, hidden while printing. No
+            border-t or tint: the footer shares the panel's paper colour, so a
+            divider or a grey band would read as a seam across one surface. */}
+        <div className="no-print shrink-0 flex flex-wrap gap-2 justify-end px-5 py-3">
           {showAdminActions && order.status !== 'refunded' && order.status !== 'void' && (
             <>
               <Button
                 variant="outline"
                 size="sm"
-                className="text-amber-600 border-amber-200 hover:bg-amber-50"
+                className="mr-auto text-amber-600 border-amber-200 hover:bg-amber-50 dark:border-amber-900/50 dark:hover:bg-amber-950/40"
                 onClick={() => setConfirmRefundOpen(true)}
               >
                 <RotateCcw className="h-4 w-4 mr-2" />
@@ -690,7 +690,7 @@ export function ReceiptModal({
               <Button
                 variant="outline"
                 size="sm"
-                className="text-red-600 border-red-200 hover:bg-red-50"
+                className="text-red-600 border-red-200 hover:bg-red-50 dark:border-red-900/50 dark:hover:bg-red-950/40"
                 onClick={() => setConfirmVoidOpen(true)}
               >
                 <Ban className="h-4 w-4 mr-2" />
@@ -698,6 +698,14 @@ export function ReceiptModal({
               </Button>
             </>
           )}
+          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
+            <X className="h-4 w-4 mr-2" />
+            Close
+          </Button>
+          <Button size="sm" onClick={() => window.print()}>
+            <Printer className="h-4 w-4 mr-2" />
+            Print
+          </Button>
         </div>
 
       </DialogContent>

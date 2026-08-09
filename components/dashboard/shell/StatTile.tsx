@@ -75,13 +75,17 @@ export function StatRow({
   return (
     <div
       className={cn(
-        'grid min-w-0 grid-cols-1 gap-y-6 sm:gap-x-10 sm:divide-x sm:divide-border/60',
-        '[&>*]:sm:pl-10 [&>*:first-child]:sm:pl-0',
-        // 3-up goes 2-wide at `sm` before 3-wide at `lg`: three tiles in a
-        // 640px row leaves each figure too narrow to stay on one line.
-        columns === 2 && 'sm:grid-cols-2',
-        columns === 3 && 'sm:grid-cols-2 lg:grid-cols-3',
-        columns === 4 && 'sm:grid-cols-2 lg:grid-cols-4',
+        'grid min-w-0 grid-cols-1 gap-y-6 sm:gap-x-10',
+        // Rules and indents are applied per *column position*, not per child.
+        // `divide-x` + `:first-child` only clears the very first tile, so the
+        // tile that starts each wrapped row kept a stray rule and a 40px
+        // indent — which is what left a 3-up row's last tile hanging.
+        columns === 2 &&
+          'sm:grid-cols-2 [&>*:nth-child(2n+1)]:sm:pl-0 [&>*:nth-child(2n+1)]:sm:border-l-0 [&>*]:sm:border-l [&>*]:sm:border-border/60 [&>*]:sm:pl-10',
+        columns === 3 &&
+          'sm:grid-cols-2 lg:grid-cols-3 [&>*]:sm:border-l [&>*]:sm:border-border/60 [&>*]:sm:pl-10 [&>*:nth-child(2n+1)]:sm:pl-0 [&>*:nth-child(2n+1)]:sm:border-l-0 [&>*:nth-child(3n+1)]:lg:pl-0 [&>*:nth-child(3n+1)]:lg:border-l-0 [&>*:nth-child(3n+2)]:lg:pl-10 [&>*:nth-child(3n+2)]:lg:border-l',
+        columns === 4 &&
+          'sm:grid-cols-2 lg:grid-cols-4 [&>*]:sm:border-l [&>*]:sm:border-border/60 [&>*]:sm:pl-10 [&>*:nth-child(2n+1)]:sm:pl-0 [&>*:nth-child(2n+1)]:sm:border-l-0 [&>*:nth-child(4n+1)]:lg:pl-0 [&>*:nth-child(4n+1)]:lg:border-l-0 [&>*:nth-child(4n+2)]:lg:pl-10 [&>*:nth-child(4n+2)]:lg:border-l [&>*:nth-child(4n+3)]:lg:pl-10 [&>*:nth-child(4n+3)]:lg:border-l',
         className
       )}
     >

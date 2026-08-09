@@ -107,7 +107,7 @@ export function WeeklyScheduleView({ schedules, className }: WeeklyScheduleViewP
     }
 
     return (
-        <Card className={cn("overflow-hidden", className)}>
+        <Card className={cn("overflow-hidden rounded-3xl", className)}>
             <CardHeader className="pb-2">
                 <CardTitle className="text-base flex items-center gap-2">
                     <Calendar className="h-4 w-4" />
@@ -137,8 +137,10 @@ export function WeeklyScheduleView({ schedules, className }: WeeklyScheduleViewP
                     </div>
                 )}
 
-                {/* Calendar Grid */}
-                <div className="overflow-x-auto">
+                {/* Calendar Grid. The scroll container cannot be clipped by the
+                    Card's radius (a scroll box paints its own square corners), so
+                    it carries the matching bottom rounding itself. */}
+                <div className="overflow-x-auto rounded-b-3xl">
                     <div className="min-w-[600px]">
                         {/* Hour Labels */}
                         <div className="flex border-b bg-muted/30">

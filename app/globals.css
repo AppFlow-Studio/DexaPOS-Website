@@ -310,6 +310,44 @@ html:has(.dashboard-sidebar-theme) body {
   display: none; /* Chrome, Safari, Opera */
 }
 
+/* The dashboard's scrollbar: a thin, rounded, low-contrast thumb on a
+   transparent track, replacing the chunky OS default inside dialogs, sheets
+   and scrolling panes.
+
+   Lives here rather than as a Tailwind class string because the three
+   hand-rolled variants that predate it (ReceiptModal, TablesSidebar,
+   sidebar.tsx) had drifted to three different widths and thumb colours. A
+   plain CSS class is also immune to C7 — no `.ts` scanning problem. */
+.thin-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklch, var(--foreground) 20%, transparent)
+    transparent;
+}
+
+.thin-scrollbar::-webkit-scrollbar {
+  width: 0.375rem;
+  height: 0.375rem;
+}
+
+.thin-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.thin-scrollbar::-webkit-scrollbar-thumb {
+  border-radius: 9999px;
+  background: color-mix(in oklch, var(--foreground) 20%, transparent);
+  transition: background 150ms;
+}
+
+.thin-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in oklch, var(--foreground) 35%, transparent);
+}
+
+/* Corner where the two bars meet — otherwise renders as an OS-grey square. */
+.thin-scrollbar::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
 /* Storefront: keep page scrollable even when a Radix dialog is open.
    Radix sets data-scroll-locked on <body> to block scroll — we undo it
    only when a storefront template is mounted (data-template attribute). */

@@ -1,13 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Panel } from "@/components/dashboard/shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -206,13 +200,15 @@ export function CategorySection({
 
   return (
     <Collapsible open={isExpanded} onOpenChange={onToggle}>
-      <Card
+      {/* A repeating list row, not a page section — tier 2 (`nested`). */}
+      <Panel
+        nested
         className={cn(
-          "overflow-hidden transition-all",
+          "overflow-hidden rounded-3xl transition-all",
           !category.is_active && "opacity-60",
         )}
       >
-        <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors py-3 px-3 sm:px-6">
+        <div className="cursor-pointer hover:bg-muted/50 transition-colors py-3 px-3 sm:px-6">
           <div className="flex items-center justify-between gap-2">
             {/* Category-level selection checkbox */}
             {isSelectionMode && categoryItemIds.length > 0 && (
@@ -232,9 +228,9 @@ export function CategorySection({
                 )}
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <CardTitle className="truncate text-base sm:text-lg">
+                    <h3 className="truncate text-base font-semibold sm:text-lg">
                       {category.category?.name || "Unnamed Category"}
-                    </CardTitle>
+                    </h3>
                     {/* Location-scoped category badge */}
                     {category.category?.location_id &&
                       category.category?.location_name && (
@@ -299,11 +295,14 @@ export function CategorySection({
                       </TooltipProvider>
                     )}
                   </div>
-                  {category.category?.description && (
-                    <CardDescription className="mt-1">
-                      {category.category.description}
-                    </CardDescription>
-                  )}
+                  {/* Reserved slot: categories without a description hold the
+                      line so every card in the list is the same height. */}
+                  <p
+                    className="mt-1 line-clamp-1 min-h-[1.25rem] text-sm text-muted-foreground"
+                    title={category.category?.description || undefined}
+                  >
+                    {category.category?.description || ""}
+                  </p>
                 </div>
               </div>
             </CollapsibleTrigger>
@@ -371,9 +370,9 @@ export function CategorySection({
               </Badge>
             </div>
           </div>
-        </CardHeader>
+        </div>
         <CollapsibleContent>
-          <CardContent className="pt-0 px-2 sm:px-6">
+          <div className="pb-6 pt-0 px-2 sm:px-6">
             {itemCount === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 No items in this category
@@ -422,9 +421,9 @@ export function CategorySection({
                 </Button>
               </div>
             )}
-          </CardContent>
+          </div>
         </CollapsibleContent>
-      </Card>
+      </Panel>
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>

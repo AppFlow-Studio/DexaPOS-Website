@@ -326,10 +326,12 @@ export function AddCategoryToMenuWizard({
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent
                 overlayClassName="bg-slate-950/40 backdrop-blur-md"
-                className="w-full max-w-[calc(100vw-1rem)] gap-0 overflow-hidden rounded-[28px] border border-slate-200/80 bg-background/95 p-0 shadow-[0_30px_100px_rgba(15,23,42,0.26)] max-sm:max-w-none sm:max-w-4xl"
+                className="w-full max-w-[calc(100vw-1rem)] gap-0 overflow-hidden rounded-[28px] border-0 bg-background p-0 shadow-[0_30px_100px_rgba(15,23,42,0.26)] max-sm:max-w-none sm:max-w-4xl"
             >
-                <div className="flex max-h-[min(92vh,920px)] flex-col">
-                <DialogHeader className="border-b border-border/70 bg-background/95 px-4 py-5 pr-14 text-left sm:px-6 sm:text-left">
+                {/* `min-w-0` keeps this from sizing to its widest descendant
+                    and overflowing the dialog on a phone. */}
+                <div className="flex min-w-0 max-h-[min(92vh,920px)] flex-col">
+                <DialogHeader className="bg-background px-4 py-5 pr-14 text-left sm:px-6 sm:text-left">
                     <DialogTitle className="flex items-center gap-2 text-xl font-semibold tracking-tight sm:text-[1.625rem]">
                         <Tag className="h-5 w-5 shrink-0 text-primary" />
                         Add Categories to Menu
@@ -341,7 +343,7 @@ export function AddCategoryToMenuWizard({
 
                     <div className="min-h-0 flex flex-1 flex-col overflow-hidden">
                         {/* Search */}
-                        <div className="border-b border-border/70 px-4 pb-4 pt-4 sm:px-6">
+                        <div className="bg-background px-4 pb-4 pt-4 sm:px-6">
                             <div className="relative">
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                                 <Input
@@ -376,7 +378,7 @@ export function AddCategoryToMenuWizard({
                         </div>
 
                         {/* Categories List */}
-                        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 space-y-6 sm:px-6">
+                        <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto bg-background px-4 py-5 space-y-6 sm:px-6">
                             {/* Global Categories */}
                             {globalCategories.length > 0 && (
                                 <div className="space-y-3">
@@ -420,11 +422,11 @@ export function AddCategoryToMenuWizard({
                                                 <div
                                                     key={category.id}
                                                     className={cn(
-                                                        "border rounded-lg p-4 transition-all",
+                                                        "rounded-2xl border bg-background p-4 transition-all",
                                                         canAddRemoveCategories ? "cursor-pointer" : "cursor-not-allowed opacity-60",
                                                         isSelected
                                                             ? "border-primary bg-primary/5 shadow-sm"
-                                                            : "border-muted hover:border-primary/50"
+                                                            : "border-border/60 hover:border-primary/50"
                                                     )}
                                                     onClick={() => canAddRemoveCategories && handleToggleCategory(category.id)}
                                                 >
@@ -566,11 +568,11 @@ export function AddCategoryToMenuWizard({
                                                 <div
                                                     key={category.id}
                                                     className={cn(
-                                                        "border rounded-lg p-4 transition-all",
+                                                        "rounded-2xl border bg-background p-4 transition-all",
                                                         canAddRemoveCategories ? "cursor-pointer" : "cursor-not-allowed opacity-60",
                                                         isSelected
                                                             ? "border-primary bg-primary/5 shadow-sm"
-                                                            : "border-muted hover:border-primary/50"
+                                                            : "border-border/60 hover:border-primary/50"
                                                     )}
                                                     onClick={() => canAddRemoveCategories && handleToggleCategory(category.id)}
                                                 >
@@ -684,7 +686,7 @@ export function AddCategoryToMenuWizard({
                         </div>
                     </div>
 
-                <DialogFooter className="border-t border-border/70 bg-background/95 px-4 py-4 sm:px-6">
+                <DialogFooter className="bg-background px-4 py-4 sm:px-6">
                     <div className="flex w-full flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <Button
                             type="button"

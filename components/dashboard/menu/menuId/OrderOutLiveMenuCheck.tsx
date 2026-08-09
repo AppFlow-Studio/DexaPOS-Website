@@ -44,9 +44,11 @@ export function OrderOutLiveMenuCheck({
   const menu = result?.success ? result.data : null;
 
   return (
-    <div className={cn("rounded-lg border p-4", className)}>
-      <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0">
+    <div className={cn("rounded-2xl border-0 bg-muted/50 p-4", className)}>
+      {/* Wraps: a `shrink-0` button on a non-wrapping row crushes this text
+          column to one word per line on a phone. */}
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-3">
+        <div className="min-w-0 flex-1 basis-56">
           <p className="text-sm font-medium">Verify delivery-app sync</p>
           <p className="text-xs text-muted-foreground">
             Fetch the menu OrderOut is actually serving and confirm 86’d items show

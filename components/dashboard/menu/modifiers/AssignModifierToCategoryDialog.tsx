@@ -204,9 +204,9 @@ export function AssignModifierToCategoryDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[calc(100vw-1rem)] sm:max-w-xl max-h-[90vh] flex flex-col overflow-hidden">
-        <DialogHeader>
-          <DialogTitle>
+      <DialogContent className="flex max-h-[90vh] w-full max-w-none flex-col overflow-hidden sm:max-w-xl">
+        <DialogHeader className="pr-10 text-left">
+          <DialogTitle className="text-left">
             Add &quot;{modifierGroup.name}&quot; to Categories
           </DialogTitle>
           <DialogDescription>
@@ -217,7 +217,7 @@ export function AssignModifierToCategoryDialog({
 
         {/* Scope context banner */}
         {!isAllLocations ? (
-          <div className="flex items-start gap-2 p-2.5 bg-blue-50 text-blue-800 rounded-lg text-xs border border-blue-100">
+          <div className="flex items-start gap-2 rounded-2xl border-0 bg-blue-50 p-3 text-xs text-blue-800 dark:bg-blue-950/40 dark:text-blue-200">
             <MapPin className="h-3.5 w-3.5 mt-0.5 shrink-0" />
             <span>
               Assigning from this location view will apply modifiers{" "}
@@ -226,7 +226,7 @@ export function AssignModifierToCategoryDialog({
             </span>
           </div>
         ) : (
-          <div className="flex items-start gap-2 p-2.5 bg-emerald-50 text-emerald-800 rounded-lg text-xs border border-emerald-100">
+          <div className="flex items-start gap-2 rounded-2xl border-0 bg-emerald-50 p-3 text-xs text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200">
             <Globe className="h-3.5 w-3.5 mt-0.5 shrink-0" />
             <span>
               Assigning to a category applies this modifier to all current and
@@ -237,16 +237,16 @@ export function AssignModifierToCategoryDialog({
         )}
 
         <div className="relative">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
           <Input
             placeholder="Search categories..."
-            className="pl-9"
+            className="h-9 pl-9 text-[0.8125rem]"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
 
-        <div className="flex-1 overflow-y-auto min-h-0 max-h-[400px] space-y-1 pr-1">
+        <div className="flex-1 overflow-y-auto min-h-0 max-h-[400px] space-y-2 pr-2">
           {isLoading ? (
             <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin mr-2" />
@@ -273,14 +273,12 @@ export function AssignModifierToCategoryDialog({
                 <div
                   key={category.id}
                   className={cn(
-                    "flex items-center gap-3 p-2.5 rounded-lg border cursor-pointer transition-colors",
+                    "flex cursor-pointer items-center gap-3 rounded-2xl border-0 p-3 shadow-none transition-colors",
                     isMarkedForRemoval
-                      ? "border-destructive/30 bg-destructive/5"
+                      ? "bg-destructive/10"
                       : isNewSelection
-                        ? "border-primary bg-primary/5"
-                        : isAssigned
-                          ? "bg-muted/30"
-                          : "hover:bg-muted/30",
+                        ? "bg-primary/10"
+                        : "bg-muted/60 hover:bg-muted",
                   )}
                   onClick={() => toggleCategory(category.id)}
                 >
@@ -342,8 +340,8 @@ export function AssignModifierToCategoryDialog({
           )}
         </div>
 
-        <DialogFooter className="gap-2 sm:gap-0">
-          <div className="flex-1 text-sm text-muted-foreground">
+        <DialogFooter className="flex-col gap-2 sm:flex-row sm:items-center sm:gap-0">
+          <div className="min-w-0 flex-1 text-sm text-muted-foreground">
             {selectedIds.size > 0 && (
               <span className="text-primary">
                 +{selectedIds.size} to assign
@@ -365,13 +363,14 @@ export function AssignModifierToCategoryDialog({
             variant="outline"
             onClick={() => onOpenChange(false)}
             disabled={isSaving}
+            className="rounded-full"
           >
             Cancel
           </Button>
           <Button
             onClick={handleSave}
             disabled={isSaving || !hasChanges}
-            className="gap-2"
+            className="gap-2 rounded-full"
           >
             {isSaving ? (
               <>

@@ -2,7 +2,6 @@
 
 import { useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
 import { DiscountForm } from "@/components/discounts/discount-form";
 import {
     useDiscount,
@@ -10,9 +9,8 @@ import {
     useDiscountMenuItems,
     useUpdateDiscount,
 } from "@/hooks/use-discounts";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Button } from "@/components/ui/button";
+import { PageShell, PageHeader, Panel } from "@/components/dashboard/shell";
 import { DiscountFormInput } from "@/types/discount";
 import { useLocations } from "@/app/dashboard/hooks/useLocations";
 import { useClerkOrgId } from "@/app/dashboard/hooks/useLocationScoped";
@@ -62,50 +60,56 @@ export default function EditDiscountPage() {
     };
 
     const loading = isLoading || categoriesLoading || menuItemsLoading;
+    const backHref = discountId ? `/dashboard/discounts/${discountId}` : "/dashboard/discounts";
 
     return (
-        <div className="space-y-6 w-full min-w-0">
-            <div className="flex items-center gap-2">
-                <Button variant="ghost" size="sm" onClick={() => router.back()}>
-                    <ArrowLeft className="mr-2 h-4 w-4" />
-                    Back
-                </Button>
-                <div>
-                    <h1 className="text-2xl font-semibold">Edit discount</h1>
-                    <p className="text-sm text-muted-foreground">Update discount details.</p>
-                </div>
-            </div>
+        <PageShell>
+            <PageHeader
+                title="Edit discount"
+                subtitle={defaultValues?.name ?? "Update discount details."}
+                backHref={backHref}
+                backLabel="Back to Discount"
+            />
 
-            <Card>
-                <CardHeader>
-                    <CardTitle>Discount configuration</CardTitle>
-                    <CardDescription>Adjust settings and save changes.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    {loading ? (
-                        <div className="space-y-3">
-                            {Array.from({ length: 4 }).map((_, idx) => (
+            {loading ? (
+                <div className="grid min-w-0 gap-6 lg:grid-cols-3">
+                    <div className="space-y-6 lg:col-span-2">
+                        <div className="space-y-4 rounded-3xl border bg-card px-6 py-6">
+                            {Array.from({ length: 5 }).map((_, idx) => (
                                 <Skeleton key={idx} className="h-10 w-full" />
                             ))}
                         </div>
-                    ) : defaultValues ? (
-                        <DiscountForm
-                            defaultValues={defaultValues}
-                            onSubmit={handleSubmit}
-                            submitting={updateDiscount.isPending}
-                            categories={categories}
-                            menuItems={menuItems}
-                            locations={locations}
-                            isSingleLocation={isSingleLocation}
-                            onCancel={() => router.push(`/dashboard/discounts/${discountId}`)}
-                            submitLabel="Save changes"
-                        />
-                    ) : (
-                        <p className="text-sm text-muted-foreground">Discount not found.</p>
-                    )}
-                </CardContent>
-            </Card>
-        </div>
+                        <div className="space-y-4 rounded-3xl border bg-card px-6 py-6">
+                            {Array.from({ length: 3 }).map((_, idx) => (
+                                <Skeleton key={idx} className="h-10 w-full" />
+                            ))}
+                        </div>
+                    </div>
+                    <div className="space-y-6">
+                        <div className="space-y-4 rounded-3xl border bg-card px-6 py-6">
+                            {Array.from({ length: 3 }).map((_, idx) => (
+                                <Skeleton key={idx} className="h-10 w-full" />
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            ) : defaultValues ? (
+                <DiscountForm
+                    defaultValues={defaultValues}
+                    onSubmit={handleSubmit}
+                    submitting={updateDiscount.isPending}
+                    categories={categories}
+                    menuItems={menuItems}
+                    locations={locations}
+                    isSingleLocation={isSingleLocation}
+                    onCancel={() => router.push(backHref)}
+                    submitLabel="Save changes"
+                />
+            ) : (
+                <Panel padded>
+                    <p className="text-sm text-muted-foreground">Discount not found.</p>
+                </Panel>
+            )}
+        </PageShell>
     );
 }
-

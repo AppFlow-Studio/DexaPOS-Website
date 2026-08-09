@@ -485,14 +485,16 @@ export function AddItemToCategoryWizard({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         overlayClassName="bg-slate-950/40 backdrop-blur-md"
-        className="w-full max-w-[calc(100vw-1rem)] gap-0 overflow-hidden rounded-[28px] border border-slate-200/80 bg-background/95 p-0 shadow-[0_30px_100px_rgba(15,23,42,0.26)] sm:max-w-5xl xl:max-w-6xl"
+        className="w-full gap-0 overflow-hidden border bg-card p-0 sm:max-w-5xl sm:rounded-3xl xl:max-w-6xl"
       >
-        <div className="flex max-h-[min(92vh,960px)] flex-col">
-          <DialogHeader className="border-b border-border/70 bg-background/95 px-6 py-5 pr-14 text-left sm:text-left">
-            <div className="space-y-2">
-              <DialogTitle className="flex items-center gap-2 text-[1.625rem] font-semibold tracking-tight">
-                <Utensils className="h-5 w-5 text-primary" />
-                Add Items to {categoryName}
+        <div className="flex h-full max-h-[100dvh] min-h-0 w-full min-w-0 flex-col sm:max-h-[min(92vh,960px)]">
+          <DialogHeader className="shrink-0 min-w-0 bg-card px-6 py-5 pr-14 text-left sm:text-left">
+            <div className="min-w-0 space-y-2">
+              <DialogTitle className="flex min-w-0 items-center gap-2 text-xl font-semibold tracking-tight sm:text-[1.625rem]">
+                <Utensils className="h-5 w-5 shrink-0 text-primary" />
+                <span className="min-w-0 break-words">
+                  Add Items to {categoryName}
+                </span>
               </DialogTitle>
               <DialogDescription className="max-w-[60ch] text-sm leading-6">
                 Add existing items from your library or create new ones
@@ -501,13 +503,13 @@ export function AddItemToCategoryWizard({
           </DialogHeader>
 
           {/* Top Level Tabs */}
-          <div className="border-b border-border/70 px-6 pt-4">
+          <div className="w-full min-w-0 shrink-0 overflow-x-auto px-6 pt-4">
             <Tabs
               value={activeTab}
               onValueChange={(v) => setActiveTab(v as "existing" | "create")}
             >
-              <TabsList className="grid w-full max-w-sm grid-cols-2">
-                <TabsTrigger value="existing" className="gap-2">
+              <TabsList className="inline-flex h-auto w-max flex-nowrap gap-0.5 rounded-full bg-muted/70 p-1">
+                <TabsTrigger value="existing" className="shrink-0 gap-2 whitespace-nowrap rounded-full px-4 py-2 text-[0.8125rem] font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border">
                   <CheckCircle2 className="h-4 w-4" />
                   Add Existing
                   {selectedItems.size > 0 && (
@@ -516,7 +518,7 @@ export function AddItemToCategoryWizard({
                     </Badge>
                   )}
                 </TabsTrigger>
-                <TabsTrigger value="create" className="gap-2">
+                <TabsTrigger value="create" className="shrink-0 gap-2 whitespace-nowrap rounded-full px-4 py-2 text-[0.8125rem] font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border">
                   <Plus className="h-4 w-4" />
                   Create New
                 </TabsTrigger>
@@ -529,9 +531,9 @@ export function AddItemToCategoryWizard({
           {/* ============================================================ */}
           {activeTab === "existing" && (
             <>
-              <div className="min-h-0 flex flex-1 flex-col overflow-hidden px-6 py-5">
+              <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-6 py-5">
                 {/* Context Banner */}
-                <div className="mb-4 rounded-lg border border-primary/20 bg-primary/5 p-3">
+                <div className="mb-4 rounded-2xl border-0 bg-muted/40 p-3">
                   <div className="flex items-center gap-2 text-sm">
                     <Tag className="h-4 w-4 text-primary" />
                     <span className="font-medium">Adding to:</span>
@@ -593,15 +595,15 @@ export function AddItemToCategoryWizard({
                         <div
                           key={item.id}
                           className={cn(
-                            "flex cursor-pointer items-center gap-3 rounded-lg border p-3 transition-all",
+                            "flex cursor-pointer items-center gap-3 rounded-2xl border-0 p-3 transition-all",
                             isSelected
-                              ? "border-primary bg-primary/5 ring-1 ring-primary"
-                              : "border-border hover:border-primary/30 hover:bg-muted/30",
+                              ? "bg-primary/10"
+                              : "bg-muted/40 hover:bg-muted/60",
                           )}
                           onClick={() => handleToggleItem(item.id)}
                         >
                           <Checkbox checked={isSelected} onCheckedChange={() => handleToggleItem(item.id)} className="shrink-0" />
-                          <div className="h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-muted/30">
+                          <div className="h-12 w-12 shrink-0 overflow-hidden rounded-2xl bg-muted/30">
                             {item.image ? (
                               <img src={item.image} alt={item.name} className="h-full w-full object-cover" />
                             ) : (
@@ -630,7 +632,7 @@ export function AddItemToCategoryWizard({
                 </div>
               </div>
 
-              <DialogFooter className="shrink-0 border-t border-border/70 bg-background/95 px-6 py-4">
+              <DialogFooter className="shrink-0 min-w-0 bg-card px-6 py-4">
                 <div className="flex w-full flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSaving} className="sm:min-w-[140px]">
                     Cancel
@@ -652,12 +654,12 @@ export function AddItemToCategoryWizard({
           {/* ============================================================ */}
           {activeTab === "create" && (
             <Form {...form}>
-              <form onSubmit={form.handleSubmit(handleCreateItem)} className="flex min-h-0 flex-1 flex-col overflow-hidden">
-                <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
+              <form onSubmit={form.handleSubmit(handleCreateItem)} className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+                <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden lg:flex-row">
                   {/* LEFT COLUMN — FORM */}
-                  <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+                  <div className="min-h-0 min-w-0 flex-1 overflow-y-auto px-6 py-5">
                     {/* Context Banner */}
-                    <div className="mb-6 rounded-lg border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-900 dark:bg-emerald-950/50">
+                    <div className="mb-6 rounded-2xl border-0 bg-emerald-500/10 p-4 dark:bg-emerald-400/10">
                       <div className="flex items-start gap-3">
                         <Plus className="mt-0.5 h-5 w-5 text-emerald-600" />
                         <div>
@@ -669,21 +671,21 @@ export function AddItemToCategoryWizard({
                       </div>
                     </div>
 
-                    <Tabs defaultValue="general" className="w-full">
-                      <TabsList className="mb-6 h-auto w-full justify-start gap-6 overflow-x-auto rounded-none border-b bg-transparent p-0">
-                        <TabsTrigger value="general" className="flex-shrink-0 rounded-none px-0 py-2 data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none">
+                    <Tabs defaultValue="general" className="w-full min-w-0">
+                      <TabsList className="mb-6 flex h-auto w-full min-w-0 justify-start flex-nowrap gap-0.5 overflow-x-auto rounded-full bg-muted/70 p-1">
+                        <TabsTrigger value="general" className="shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-[0.8125rem] font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border">
                           General
                         </TabsTrigger>
-                        <TabsTrigger value="pricing" className="flex-shrink-0 rounded-none px-0 py-2 data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none">
+                        <TabsTrigger value="pricing" className="shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-[0.8125rem] font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border">
                           Pricing
                         </TabsTrigger>
-                        <TabsTrigger value="modifiers" className="flex-shrink-0 rounded-none px-0 py-2 data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none">
+                        <TabsTrigger value="modifiers" className="shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-[0.8125rem] font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border">
                           Modifiers
                         </TabsTrigger>
-                        <TabsTrigger value="tax" className="flex-shrink-0 rounded-none px-0 py-2 data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none">
+                        <TabsTrigger value="tax" className="shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-[0.8125rem] font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border">
                           Tax &amp; Fees
                         </TabsTrigger>
-                        <TabsTrigger value="availability" className="flex-shrink-0 rounded-none px-0 py-2 data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none">
+                        <TabsTrigger value="availability" className="shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-[0.8125rem] font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border">
                           Availability
                         </TabsTrigger>
                       </TabsList>
@@ -881,9 +883,9 @@ export function AddItemToCategoryWizard({
                             ) : (
                               <div className="space-y-2">
                                 {assignedGroups.map((group: any) => (
-                                  <div key={group.id} className="group flex items-center justify-between rounded-lg border bg-background p-3 transition-colors hover:border-primary/50">
+                                  <div key={group.id} className="group flex items-center justify-between rounded-2xl border-0 bg-muted/40 p-3 transition-colors hover:bg-muted/60">
                                     <div className="flex items-center gap-3">
-                                      <div className="flex h-8 w-8 items-center justify-center rounded bg-muted">
+                                      <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-muted">
                                         <Layers className="h-4 w-4 text-muted-foreground" />
                                       </div>
                                       <div>
@@ -919,9 +921,9 @@ export function AddItemToCategoryWizard({
                             </div>
                             <div className="grid max-h-[300px] gap-2 overflow-y-auto">
                               {availableGroups.filter((g: any) => g.name.toLowerCase().includes(modifierSearchQuery.toLowerCase())).map((group: any) => (
-                                <div key={group.id} className="flex items-center justify-between rounded-lg border border-dashed p-2 transition-colors hover:bg-muted/50">
+                                <div key={group.id} className="flex items-center justify-between rounded-2xl border-0 bg-muted/30 p-2 transition-colors hover:bg-muted/50">
                                   <div className="flex items-center gap-3">
-                                    <div className="flex h-8 w-8 items-center justify-center rounded bg-muted/50">
+                                    <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-muted/50">
                                       <Sliders className="h-4 w-4 text-muted-foreground opacity-50" />
                                     </div>
                                     <div>
@@ -954,7 +956,7 @@ export function AddItemToCategoryWizard({
                           control={form.control}
                           name="is_tax_exempt"
                           render={({ field }) => (
-                            <FormItem className="flex items-center justify-between rounded-lg border p-4">
+                            <FormItem className="flex items-center justify-between rounded-2xl border-0 bg-muted/40 p-4">
                               <div className="space-y-0.5">
                                 <FormLabel className="text-base">Tax Exempt</FormLabel>
                                 <FormDescription>No tax will be applied to this item</FormDescription>
@@ -989,7 +991,7 @@ export function AddItemToCategoryWizard({
                           control={form.control}
                           name="availability"
                           render={({ field }) => (
-                            <FormItem className="flex items-center justify-between rounded-lg border p-4">
+                            <FormItem className="flex items-center justify-between rounded-2xl border-0 bg-muted/40 p-4">
                               <div className="space-y-0.5">
                                 <FormLabel className="text-base">Available</FormLabel>
                                 <FormDescription>Item is available for purchase</FormDescription>
@@ -1010,7 +1012,7 @@ export function AddItemToCategoryWizard({
                                   const Icon = channel.icon;
                                   const isChecked = field.value?.includes(channel.id);
                                   return (
-                                    <label key={channel.id} className={cn("flex cursor-pointer flex-col items-center gap-2 rounded-lg border p-3 transition-all hover:bg-muted/50", isChecked ? "border-primary bg-primary/5 ring-1 ring-primary" : "text-muted-foreground")}>
+                                    <label key={channel.id} className={cn("flex cursor-pointer flex-col items-center gap-2 rounded-2xl border-0 p-3 transition-all", isChecked ? "bg-primary/10" : "bg-muted/40 text-muted-foreground hover:bg-muted/60")}>
                                       <Checkbox
                                         checked={isChecked}
                                         onCheckedChange={checked => {
@@ -1052,7 +1054,7 @@ export function AddItemToCategoryWizard({
                   </div>
 
                   {/* RIGHT COLUMN — PREVIEW */}
-                  <div className="hidden min-h-0 w-[360px] shrink-0 overflow-y-auto border-l border-border/70 bg-muted/10 px-6 py-5 lg:block">
+                  <div className="hidden min-h-0 w-[360px] shrink-0 overflow-y-auto border-l border-border/60 bg-card px-6 py-5 lg:block">
                     <div className="space-y-8 pb-4">
                       <div className="mb-4 flex items-center gap-2 text-sm font-medium text-muted-foreground">
                         <Monitor className="h-4 w-4" /> POS Preview
@@ -1098,7 +1100,7 @@ export function AddItemToCategoryWizard({
                   </div>
                 </div>
 
-                <DialogFooter className="shrink-0 border-t border-border/70 bg-background/95 px-6 py-4 sm:justify-end">
+                <DialogFooter className="shrink-0 min-w-0 bg-card px-6 py-4 sm:justify-end">
                   <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                     Cancel
                   </Button>

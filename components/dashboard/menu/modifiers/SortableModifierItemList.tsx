@@ -4,7 +4,8 @@ import React, { useState } from "react";
 import {
   DndContext,
   closestCenter,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   useSensor,
   useSensors,
   DragEndEvent,
@@ -18,7 +19,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, Save, RotateCcw } from "lucide-react";
+import { GripVertical, Save, RotateCcw, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { ModifierGroupItemsModel } from "@/types/db-modles";
@@ -54,21 +55,23 @@ function SortableOptionRow({ item, index, children }: SortableOptionRowProps) {
     <div
       ref={setNodeRef}
       style={style}
-      className={cn(isDragging && "opacity-50 z-50")}
+      className={cn("min-w-0", isDragging && "opacity-50 z-50")}
     >
-      <div className="flex items-start gap-2">
+      <div className="flex min-w-0 items-start gap-2">
+        {/* Grip: the drag affordance at every width. */}
         <button
           {...attributes}
           {...listeners}
-          className="mt-3 flex items-center justify-center w-6 h-6 rounded hover:bg-muted cursor-grab active:cursor-grabbing touch-none shrink-0"
-          aria-label="Drag to reorder"
+          className="mt-3 flex h-7 w-7 shrink-0 cursor-grab items-center justify-center rounded-full touch-none hover:bg-muted active:cursor-grabbing sm:h-6 sm:w-6"
+          aria-label={`Drag ${item.name} to reorder`}
         >
-          <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
+          <GripVertical className="h-4 w-4 text-muted-foreground sm:h-3.5 sm:w-3.5" />
         </button>
-        <span className="mt-3.5 flex items-center justify-center w-4 h-4 rounded-full bg-muted text-muted-foreground text-[10px] font-medium shrink-0">
+        {/* Position number: desktop only — the grip takes its place on mobile. */}
+        <span className="mt-3.5 hidden h-4 w-4 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-medium tabular-nums text-muted-foreground sm:flex">
           {index + 1}
         </span>
-        <div className="flex-1 min-w-0">{children}</div>
+        <div className="min-w-0 flex-1">{children}</div>
       </div>
     </div>
   );
@@ -97,9 +100,12 @@ export function SortableModifierItemList({
 }: SortableModifierItemListProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
 
-  // Pointer-only — no KeyboardSensor to avoid event capture conflicts with nested DndContext
+  // Pointer-only — no KeyboardSensor to avoid event capture conflicts with nested DndContext.
+  // Both drags start from the grip (which is `touch-none`), so touch needs no long-press delay;
+  // a short distance threshold keeps an imprecise tap on the grip from jittering into a drag.
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
+    useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { distance: 8 } })
   );
 
   const handleDragStart = (event: DragStartEvent) => {
@@ -127,25 +133,25 @@ export function SortableModifierItemList({
   const isLocationScoped = locationId && locationId !== "all";
 
   return (
-    <div className="space-y-2">
+    <div className="min-w-0 space-y-2">
       {hasChanges && (
-        <div className="flex items-center justify-between p-2 rounded-lg bg-muted/50 border border-dashed">
-          <p className="text-xs text-muted-foreground">
+        <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-2xl border-0 bg-muted/60 p-3 shadow-none">
+          <p className="min-w-0 flex-1 basis-32 text-xs text-muted-foreground">
             Option order changed
             {isLocationScoped && (
               <span className="ml-1 text-primary">(Location-specific)</span>
             )}
           </p>
-          <div className="flex items-center gap-1.5">
+          <div className="flex shrink-0 items-center gap-1.5">
             <Button
               variant="ghost"
               size="sm"
               onPointerDown={(e) => { e.stopPropagation(); }}
               onClick={(e) => { e.stopPropagation(); onReset(); }}
               disabled={isSaving}
-              className="h-7 text-xs"
+              className="h-7 shrink-0 rounded-full px-3 text-xs"
             >
-              <RotateCcw className="h-3 w-3 mr-1" />
+              <RotateCcw className="size-3 shrink-0" />
               Reset
             </Button>
             <Button
@@ -153,23 +159,27 @@ export function SortableModifierItemList({
               onPointerDown={(e) => { e.stopPropagation(); }}
               onClick={(e) => { e.stopPropagation(); onSave(); }}
               disabled={isSaving}
-              className="h-7 text-xs"
+              className="h-7 shrink-0 rounded-full px-3 text-xs"
             >
               {isSaving ? (
-                <span className="flex items-center gap-1">
-                  <span className="animate-spin">⏳</span> Saving...
-                </span>
+                <>
+                  <Loader2 className="size-3 shrink-0 animate-spin" />
+                  Saving...
+                </>
               ) : (
-                <span className="flex items-center gap-1">
-                  <Save className="h-3 w-3" /> Save Order
-                </span>
+                <>
+                  <Save className="size-3 shrink-0" />
+                  <span>
+                    Save<span className="hidden xs:inline">&nbsp;Order</span>
+                  </span>
+                </>
               )}
             </Button>
           </div>
         </div>
       )}
 
-      <div onPointerDown={(e) => e.stopPropagation()}>
+      <div className="min-w-0" onPointerDown={(e) => e.stopPropagation()}>
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
@@ -180,7 +190,7 @@ export function SortableModifierItemList({
           items={items.map((i) => i.id)}
           strategy={verticalListSortingStrategy}
         >
-          <div className="space-y-2">
+          <div className="min-w-0 space-y-2">
             {items.map((item, index) => (
               <SortableOptionRow key={item.id} item={item} index={index}>
                 {renderItem(item)}
@@ -190,7 +200,7 @@ export function SortableModifierItemList({
         </SortableContext>
         <DragOverlay>
           {activeItem && (
-            <div className="flex items-center gap-2 px-3 py-2 rounded-lg border bg-card shadow-xl opacity-90">
+            <div className="flex items-center gap-2 rounded-2xl border bg-card px-3 py-2 shadow-xl opacity-90">
               <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
               <span className="text-sm font-medium">{activeItem.name}</span>
             </div>

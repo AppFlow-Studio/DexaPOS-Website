@@ -476,7 +476,7 @@ export function OrderFilters({ className }: OrderFiltersProps) {
                       id="minAmount"
                       placeholder="0.00"
                       type="number"
-                      className="h-10 rounded-full px-4"
+                      className="h-10 px-4"
                       value={searchParams.get("minAmount") || ""}
                       onChange={(e) =>
                         handleAmountChange(
@@ -492,7 +492,7 @@ export function OrderFilters({ className }: OrderFiltersProps) {
                       id="maxAmount"
                       placeholder="100.00"
                       type="number"
-                      className="h-10 rounded-full px-4"
+                      className="h-10 px-4"
                       value={searchParams.get("maxAmount") || ""}
                       onChange={(e) =>
                         handleAmountChange(

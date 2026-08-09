@@ -101,6 +101,16 @@ import {
   useRestoreItemsBatch,
   type SnoozeDuration,
 } from "@/lib/queries/use-snoozes";
+import { PageShell } from "@/components/dashboard/shell";
+import { cn } from "@/lib/utils";
+
+/**
+ * Pill-rail tab trigger. Written out literally here rather than imported from
+ * `tokens.ts` — Tailwind does not scan `.ts` files, so a class sourced only
+ * from there would reach the DOM with no rule behind it (C7).
+ */
+const TAB_PILL =
+  "shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-[0.8125rem] font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border";
 
 export default function MenuDetailPage() {
   const params = useParams();
@@ -1177,16 +1187,18 @@ export default function MenuDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="space-y-6 animate-in fade-in duration-500">
-        <Skeleton className="h-10 w-64" />
-        <Skeleton className="h-96 w-full" />
-      </div>
+      <PageShell>
+        <div className="animate-in fade-in duration-500">
+          <Skeleton className="h-10 w-64" />
+        </div>
+        <Skeleton className="h-96 w-full rounded-3xl" />
+      </PageShell>
     );
   }
 
   if (!menu) {
     return (
-      <div className="space-y-6">
+      <PageShell>
         <Empty
           icon={Utensils}
           title="Menu not found"
@@ -1198,7 +1210,7 @@ export default function MenuDetailPage() {
             </Button>
           }
         />
-      </div>
+      </PageShell>
     );
   }
 
@@ -1207,7 +1219,7 @@ export default function MenuDetailPage() {
   //TODO: Handle switching between location to location should send you back to menu
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
+    <PageShell>
       <ScopeContextStrip menuName={menu?.name ?? null} />
       <MenuHeader
         menu={menu}
@@ -1218,18 +1230,19 @@ export default function MenuDetailPage() {
       />
 
       <Tabs defaultValue="overview" className="space-y-4">
-        <div className="overflow-x-auto">
-        <TabsList className="w-max">
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="categories" className="flex items-center gap-1.5">
-            Categories & Items
+        {/* Pill rail, not underline tabs. Classes are literal, not {TOKEN} — see C7. */}
+        <div className="w-full min-w-0 overflow-x-auto pb-1">
+        <TabsList className="inline-flex h-auto w-max flex-nowrap gap-0.5 rounded-full bg-muted/70 p-1">
+          <TabsTrigger value="overview" className={TAB_PILL}>Overview</TabsTrigger>
+          <TabsTrigger value="categories" className={cn(TAB_PILL, "gap-1.5")}>
+            Categories &amp; Items
             {enrichedCategories.length > 0 && (
               <Badge variant="secondary" className="h-5 px-1.5 text-xs">
                 {enrichedCategories.length}
               </Badge>
             )}
           </TabsTrigger>
-          <TabsTrigger value="schedules" className="flex items-center gap-1.5">
+          <TabsTrigger value="schedules" className={cn(TAB_PILL, "gap-1.5")}>
             Schedules
             {menuSchedules.length > 0 && (
               <Badge
@@ -1240,9 +1253,9 @@ export default function MenuDetailPage() {
               </Badge>
             )}
           </TabsTrigger>
-          <TabsTrigger value="settings">Settings</TabsTrigger>
+          <TabsTrigger value="settings" className={TAB_PILL}>Settings</TabsTrigger>
           {showOrderOutTab && (
-            <TabsTrigger value="orderout" className="flex items-center gap-1.5">
+            <TabsTrigger value="orderout" className={cn(TAB_PILL, "gap-1.5")}>
               OrderOut
               {orderOutTabDot && (
                 <span
@@ -1271,11 +1284,11 @@ export default function MenuDetailPage() {
         <TabsContent value="categories" className="space-y-4">
           {/* Sticky selection bar — matches items-page pattern */}
           {isSelectionMode && (
-            <div className="sticky top-0 z-20 flex items-center gap-3 rounded-xl border border-primary/20 bg-primary/5 px-4 py-2.5 backdrop-blur mb-4">
-              <Badge variant="secondary" className="text-xs">
+            <div className="sticky top-0 z-20 mb-4 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl border-0 bg-primary/5 px-4 py-2.5 backdrop-blur">
+              <Badge variant="secondary" className="shrink-0 text-xs">
                 {selectedItemIds.size} of {totalSelectableItems} selected
               </Badge>
-              <div className="w-px h-4 bg-border" />
+              <div className="hidden h-4 w-px bg-border sm:block" />
               <Button
                 size="sm"
                 variant="ghost"
@@ -1298,12 +1311,12 @@ export default function MenuDetailPage() {
               >
                 Clear
               </Button>
-              <div className="ml-auto flex items-center gap-2">
+              <div className="flex shrink-0 items-center gap-2 sm:ml-auto">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button
                       size="sm"
-                      className="h-8 gap-1"
+                      className="h-8 gap-1 rounded-full"
                       disabled={selectedItemIds.size === 0}
                     >
                       Bulk edit
@@ -1734,6 +1747,6 @@ export default function MenuDetailPage() {
         }}
       />
 
-    </div>
+    </PageShell>
   );
 }

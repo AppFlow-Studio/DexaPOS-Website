@@ -439,7 +439,7 @@ export default function LocationsPage() {
                         placeholder="Search locations..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="h-9 w-full rounded-full border-0 bg-muted/60 pl-9 text-[0.8125rem] shadow-none focus-visible:bg-background"
+                        className="h-9 w-full pl-9 text-[0.8125rem]"
                     />
                 </div>
 

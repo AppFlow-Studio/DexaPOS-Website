@@ -104,18 +104,23 @@ function SortableCategoryWrapper({
       ref={setNodeRef}
       style={style}
       className={cn(
-        "relative flex items-stretch gap-0",
+        "group relative flex items-stretch gap-0",
         isDragging && "opacity-50 z-50"
       )}
     >
-      {/* Drag Handle - Always visible for easy dragging */}
+      {/* Drag handle — hidden until the row is hovered, matching the hint text
+          below the list. Kept mounted (not conditionally rendered) so the row
+          never reflows, and revealed on keyboard focus for a11y. */}
       <div
         {...attributes}
         {...listeners}
         className={cn(
           "flex-shrink-0 w-10 flex items-center justify-center cursor-grab active:cursor-grabbing",
-          "bg-muted/50 hover:bg-muted border-r border-border rounded-l-lg",
-          "touch-none transition-colors"
+          // Borderless: the handle reads as part of the card, not a separate
+          // gutter. Hover alone carries the affordance.
+          "rounded-l-2xl bg-transparent text-muted-foreground/40 hover:bg-muted/60 hover:text-muted-foreground",
+          "touch-none opacity-0 transition-[opacity,background-color,color] focus-visible:opacity-100 group-hover:opacity-100",
+          isDragging && "opacity-100"
         )}
       >
         <GripVertical className="h-5 w-5 text-muted-foreground" />

@@ -14,7 +14,7 @@ export function CategoriesSection({ item, globalScope }: SectionRenderCtx) {
   return (
     <div className="space-y-4">
       <SectionHeader title="Categories" scope={globalScope} />
-      <div className="space-y-3 rounded-lg border bg-card p-4">
+      <div className="space-y-3 rounded-2xl border bg-card p-6">
         {categoryItems.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             This item isn't attached to any category yet. Attach from the

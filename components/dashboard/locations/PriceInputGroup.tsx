@@ -120,12 +120,12 @@ export function PriceInputGroup({
   };
 
   return (
-    <div className="space-y-4 p-4 rounded-lg bg-muted/20 border border-border/50">
+    <div className="space-y-4 rounded-2xl border-0 bg-muted/60 p-4 shadow-none">
       <div className="flex items-center justify-between mb-2">
         <h4 className="text-sm font-medium flex items-center gap-2">
           {label} Configuration
           {isDual && (
-            <Badge variant="outline" className="text-[10px] h-5 bg-blue-50 text-blue-700 border-blue-200">
+            <Badge variant="outline" className="h-5 bg-blue-50 text-[10px] text-blue-700 dark:bg-blue-900/20 dark:text-blue-400">
               Dual Pricing Active ({percentage}%)
             </Badge>
           )}
@@ -161,7 +161,10 @@ export function PriceInputGroup({
               onChange={handleCardInput}
               disabled={disabled}
               placeholder="0.00"
-              className={cn("pl-7", isDual && "border-blue-200 focus-visible:ring-blue-500")}
+              className={cn(
+                "border-0 bg-background pl-7 shadow-none tabular-nums",
+                isDual && "focus-visible:ring-blue-500/40",
+              )}
             />
           </div>
         </div>
@@ -181,7 +184,10 @@ export function PriceInputGroup({
               onChange={handleCashInput}
               disabled={disabled}
               placeholder="0.00"
-              className={cn("pl-7", isDual && "border-blue-200 focus-visible:ring-blue-500")}
+              className={cn(
+                "border-0 bg-background pl-7 shadow-none tabular-nums",
+                isDual && "focus-visible:ring-blue-500/40",
+              )}
             />
           </div>
         </div>

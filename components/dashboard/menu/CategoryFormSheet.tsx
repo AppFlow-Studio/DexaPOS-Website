@@ -363,7 +363,7 @@ export function CategoryFormSheet({
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && handleClose()}>
       <DialogContent
         overlayClassName="bg-slate-950/40 backdrop-blur-md"
-        className="w-full max-w-[calc(100vw-1rem)] gap-0 overflow-hidden rounded-[28px] border border-slate-200/80 bg-background/95 p-0 shadow-[0_30px_100px_rgba(15,23,42,0.26)] sm:max-w-5xl xl:max-w-6xl"
+        className="w-full max-w-[calc(100vw-1rem)] gap-0 overflow-hidden rounded-3xl border bg-card p-0 sm:max-w-5xl xl:max-w-6xl"
       >
         <Form {...form}>
           <form
@@ -371,7 +371,7 @@ export function CategoryFormSheet({
             onSubmit={form.handleSubmit(onSubmit)}
             className="flex max-h-[min(92vh,960px)] flex-col"
           >
-        <DialogHeader className="border-b border-border/70 bg-background/95 px-6 py-5 pr-14 text-left sm:text-left">
+        <DialogHeader className="bg-card px-6 py-5 pr-14 text-left sm:text-left">
           <DialogTitle className="flex items-center gap-2 text-[1.625rem] font-semibold tracking-tight">
             <Tag className="h-5 w-5 text-primary" />
             {editCategory ? "Edit Category" : "Create New Category"}
@@ -401,7 +401,7 @@ export function CategoryFormSheet({
                           <FormControl>
                             <Input
                               placeholder="e.g., Appetizers, Main Course, Desserts"
-                              className="h-12 text-lg"
+                              className="h-12 rounded-2xl bg-muted/50 text-lg focus-visible:bg-muted"
                               {...field}
                             />
                           </FormControl>
@@ -418,7 +418,7 @@ export function CategoryFormSheet({
                           <FormLabel>Description</FormLabel>
                           <FormControl>
                             <textarea
-                              className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-none"
+                              className="flex min-h-[80px] w-full rounded-2xl border-0 bg-muted/50 px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:bg-muted disabled:cursor-not-allowed disabled:opacity-50 resize-none"
                               placeholder="Optional description for this category..."
                               {...field}
                             />
@@ -442,7 +442,7 @@ export function CategoryFormSheet({
                                                 type="button"
                                                 onClick={() => setSelectedMenu(null)}
                                                 className={cn(
-                                                    "px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200",
+                                                    "px-4 py-2 rounded-full text-sm font-medium transition-all duration-200",
                                                     "border hover:scale-105 active:scale-95",
                                                     selectedMenu === null
                                                         ? "bg-primary text-primary-foreground border-primary shadow-md"
@@ -458,7 +458,7 @@ export function CategoryFormSheet({
                                                     type="button"
                                                     onClick={() => setSelectedMenu(menu.id)}
                                                     className={cn(
-                                                        "px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200",
+                                                        "px-4 py-2 rounded-full text-sm font-medium transition-all duration-200",
                                                         "border hover:scale-105 active:scale-95",
                                                         selectedMenu === menu.id
                                                             ? "bg-primary text-primary-foreground border-primary shadow-md"
@@ -479,7 +479,7 @@ export function CategoryFormSheet({
                     <CollapsibleTrigger asChild>
                       <button
                         type="button"
-                        className="flex items-center justify-between w-full p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
+                        className="flex items-center justify-between w-full p-3 rounded-2xl bg-muted/50 hover:bg-muted transition-colors"
                       >
                         <span className="text-sm font-semibold flex items-center gap-2">
                           <Palette className="h-4 w-4 text-pink-500" />
@@ -529,7 +529,7 @@ export function CategoryFormSheet({
                     <CollapsibleTrigger asChild>
                       <button
                         type="button"
-                        className="flex items-center justify-between w-full p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
+                        className="flex items-center justify-between w-full p-3 rounded-2xl bg-muted/50 hover:bg-muted transition-colors"
                       >
                         <span className="text-sm font-semibold flex items-center gap-2">
                           <Calendar className="h-4 w-4 text-blue-500" />
@@ -566,11 +566,10 @@ export function CategoryFormSheet({
                                   handleToggleSchedule(schedule.id)
                                 }
                                 className={cn(
-                                  "flex-1 p-3 rounded-lg border text-left transition-all duration-200",
-                                  "hover:shadow-md",
+                                  "flex-1 p-3 rounded-2xl border-0 text-left transition-colors duration-200",
                                   selectedSchedules.includes(schedule.id)
-                                    ? "border-primary bg-primary/5 shadow-sm"
-                                    : "border-border hover:border-primary/50",
+                                    ? "bg-primary/10"
+                                    : "bg-muted/50 hover:bg-muted",
                                 )}
                               >
                                 <div className="flex items-center justify-between">
@@ -665,7 +664,7 @@ export function CategoryFormSheet({
                       </p>
                       {prepStations.filter((ps) => ps.is_active).length ===
                       0 ? (
-                        <div className="flex items-start gap-2 p-3 bg-muted/50 border rounded-lg text-sm">
+                        <div className="flex items-start gap-2 p-3 bg-muted/50 border rounded-2xl text-sm">
                           <Info className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
                           <p className="text-muted-foreground">
                             No prep stations configured for this location. Create
@@ -726,7 +725,7 @@ export function CategoryFormSheet({
                     </div>
                   )}
                   {editCategory && !gatedLocationId && (
-                    <div className="flex items-start gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm dark:bg-blue-950/30 dark:border-blue-900">
+                    <div className="flex items-start gap-2 p-3 bg-muted/50 border-0 rounded-2xl text-sm">
                       <Info className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0 dark:text-blue-400" />
                       <p className="text-blue-800 dark:text-blue-300">
                         Prep station routing is location-specific. Select a
@@ -743,7 +742,7 @@ export function CategoryFormSheet({
                     <CollapsibleTrigger asChild>
                       <button
                         type="button"
-                        className="flex items-center justify-between w-full p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
+                        className="flex items-center justify-between w-full p-3 rounded-2xl bg-muted/50 hover:bg-muted transition-colors"
                       >
                         <span className="text-sm font-semibold flex items-center gap-2">
                           <Settings2 className="h-4 w-4 text-gray-500" />
@@ -768,6 +767,7 @@ export function CategoryFormSheet({
                                 type="number"
                                 min="0"
                                 placeholder="Auto"
+                                className="rounded-2xl bg-muted/50 focus-visible:bg-muted"
                                 {...field}
                                 value={field.value ?? ""}
                                 onChange={(e) =>
@@ -792,7 +792,7 @@ export function CategoryFormSheet({
                         control={form.control}
                         name="is_active"
                         render={({ field }) => (
-                          <FormItem className="flex items-center justify-between rounded-lg border p-4">
+                          <FormItem className="flex items-center justify-between rounded-2xl border-0 bg-muted/50 p-4">
                             <div className="space-y-0.5">
                               <FormLabel className="text-base">
                                 Active
@@ -841,7 +841,7 @@ export function CategoryFormSheet({
             </div>
 
             {/* Preview Section */}
-            <div className="hidden min-h-0 w-[360px] shrink-0 overflow-y-auto border-l border-border/70 bg-muted/10 px-6 py-5 lg:block">
+            <div className="hidden min-h-0 w-[360px] shrink-0 overflow-y-auto border-l border-border/60 bg-card px-6 py-5 lg:block">
               <div className="space-y-6 pb-4">
               <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
                 <Sparkles className="h-4 w-4" />
@@ -849,9 +849,9 @@ export function CategoryFormSheet({
               </h3>
 
               {/* Category Preview Card */}
-              <div className="bg-card rounded-xl border-2 border-border/50 p-4 shadow-lg transition-all duration-300 hover:shadow-xl">
+              <div className="bg-card rounded-3xl border border-border/60 p-4 transition-all duration-300">
                 {imageUpload.previewUrl ? (
-                  <div className="aspect-video rounded-lg bg-muted mb-3 overflow-hidden">
+                  <div className="aspect-video rounded-2xl bg-muted mb-3 overflow-hidden">
                     <img
                       src={imageUpload.previewUrl}
                       alt="Category preview"
@@ -862,7 +862,7 @@ export function CategoryFormSheet({
                     />
                   </div>
                 ) : (
-                  <div className="aspect-video rounded-lg bg-muted/50 mb-3 flex items-center justify-center">
+                  <div className="aspect-video rounded-2xl bg-muted/50 mb-3 flex items-center justify-center">
                     <Tag className="h-12 w-12 text-muted-foreground/30" />
                   </div>
                 )}
@@ -906,7 +906,7 @@ export function CategoryFormSheet({
               </div>
             </div>
           </div>
-        <DialogFooter className="shrink-0 border-t border-border/70 bg-background/95 px-6 py-4 sm:justify-end">
+        <DialogFooter className="shrink-0 bg-card px-6 py-4 sm:justify-end">
           <Button
             type="button"
             variant="outline"

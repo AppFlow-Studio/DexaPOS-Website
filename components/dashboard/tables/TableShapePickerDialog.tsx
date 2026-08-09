@@ -109,7 +109,7 @@ export function TableShapePickerDialog({
                                 value={name}
                                 onChange={(event) => setName(event.target.value)}
                                 placeholder="e.g. Table 12 or Main Bar"
-                                className="h-10 rounded-xl border-transparent bg-muted/50 text-sm text-foreground shadow-none placeholder:text-muted-foreground focus-visible:bg-background"
+                                className="h-10 rounded-xl border-transparent bg-muted/50 text-sm text-foreground placeholder:text-muted-foreground"
                                 onKeyDown={(event) => {
                                     if (event.key === 'Enter') {
                                         event.preventDefault()

@@ -614,7 +614,7 @@ export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showL
                         placeholder="Search orders..."
                         value={globalFilter}
                         onChange={(e) => setGlobalFilter(e.target.value)}
-                        className="rounded-full border-0 bg-muted/60 pl-9 shadow-none focus-visible:bg-background"
+                        className="pl-9"
                     />
                 </div>
                 <DropdownMenu>

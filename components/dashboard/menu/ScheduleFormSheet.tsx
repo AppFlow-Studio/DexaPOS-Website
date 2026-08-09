@@ -446,7 +446,7 @@ export function ScheduleFormSheet({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         overlayClassName="bg-slate-950/40 backdrop-blur-md"
-        className="w-full max-w-[calc(100vw-1rem)] gap-0 overflow-hidden rounded-[28px] border border-slate-200/80 bg-background/95 p-0 shadow-[0_30px_100px_rgba(15,23,42,0.26)] sm:max-w-3xl"
+        className="w-full max-w-[calc(100vw-1rem)] gap-0 overflow-hidden rounded-[28px] border-0 bg-background p-0 shadow-[0_30px_100px_rgba(15,23,42,0.26)] sm:max-w-3xl"
       >
         {showSuccess ? (
           // Success animation
@@ -465,7 +465,7 @@ export function ScheduleFormSheet({
           </div>
         ) : (
           <div className="flex max-h-[min(92vh,920px)] flex-col">
-            <DialogHeader className="border-b border-border/70 bg-background/95 px-6 py-5 pr-14 text-left sm:text-left">
+            <DialogHeader className="bg-background px-6 py-5 pr-14 text-left sm:text-left">
               <DialogTitle className="flex items-center gap-2 text-[1.625rem] font-semibold tracking-tight">
                 <Calendar className="h-5 w-5" />
                 {mode === "edit" ? "Edit Schedule" : "Create Schedule"}
@@ -514,7 +514,7 @@ export function ScheduleFormSheet({
               )}
             </DialogHeader>
 
-            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6">
+            <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto bg-background px-4 py-5 sm:px-6">
               <div className="space-y-6">
                 {/* Schedule Details */}
                 <BottomSheetSection title="Schedule Details">
@@ -725,7 +725,7 @@ export function ScheduleFormSheet({
               </div>
             </div>
 
-            <DialogFooter className="border-t border-border/70 bg-background/95 px-6 py-4">
+            <DialogFooter className="bg-background px-6 py-4">
               <div className="flex w-full flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <Button
                   type="button"

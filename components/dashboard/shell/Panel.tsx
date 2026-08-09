@@ -33,7 +33,8 @@ export function Panel({
       className={cn(
         'min-w-0 border bg-card',
         nested ? 'rounded-2xl' : 'rounded-3xl',
-        padded && 'px-6 py-6',
+        // Matches PanelSection: 48px of padding is most of a 320px viewport.
+        padded && 'px-4 py-6 sm:px-6',
         className
       )}
     >

@@ -197,7 +197,7 @@ export function VoidRefundAnalysis({ data, isLoading }: VoidRefundAnalysisProps)
                 placeholder="Search items..."
                 value={voidSearchQuery}
                 onChange={(e) => setVoidSearchQuery(e.target.value)}
-                className="rounded-full border-0 bg-muted/60 pl-9 shadow-none focus-visible:bg-background"
+                className="pl-9"
               />
             </div>
 

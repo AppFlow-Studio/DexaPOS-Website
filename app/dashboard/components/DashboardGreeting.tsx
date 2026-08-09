@@ -29,7 +29,7 @@ export function DashboardGreeting({
   }).format(weekRevenue);
 
   return (
-    <div className="rounded-2xl border bg-card px-6 py-6 md:px-8 md:py-7">
+    <div className="rounded-3xl border bg-card px-6 py-6 md:px-8 md:py-7">
       <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
         <div className="min-w-0">
           <p className="text-2xl font-normal text-muted-foreground md:text-[1.75rem]">

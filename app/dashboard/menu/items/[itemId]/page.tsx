@@ -6,15 +6,14 @@ import { useMenuItem } from "../../../hooks/useMenuItem";
 import { useCategories } from "../../../hooks/useCategories";
 import { useModifierGroups } from "../../../hooks/useModifierGroups";
 import { useUserInfo } from "../../../../manage/hooks/useUserInfo.";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
+import { scopeColor, type CascadeLevel } from "@/lib/menu/cascade-labels";
+import {
+  PageShell,
+  PageHeader,
+  Panel,
+} from "@/components/dashboard/shell";
 import {
   ArrowLeft,
   Utensils,
@@ -94,22 +93,37 @@ type EditingContext = {
   resetLabel: string | null;
 };
 
+/**
+ * Adapts `scopeColor()`'s `{text,bg,border}` to the `{color,bgColor,borderColor}`
+ * names this page's call sites already use, so the shared palette can be dropped
+ * in without touching every `levelInfo.*` reference.
+ */
+function levelPalette(level: CascadeLevel) {
+  const c = scopeColor(level);
+  return { color: c.text, bgColor: c.bg, borderColor: c.border };
+}
+
+/**
+ * Cascade-level presentation for this page.
+ *
+ * Colours come from `scopeColor()` rather than being written out again: this file
+ * used to carry its own light-only `bg-*-50` / `border-*-200` triples — a third
+ * copy of the same five colours, which rendered as near-white blocks on the dark
+ * dashboard (C4). Names, icons and copy stay local because they are worded for
+ * this page.
+ */
 const LEVEL_INFO = {
   1: {
     name: "Global Base",
     icon: Globe,
-    color: "text-emerald-600",
-    bgColor: "bg-emerald-50",
-    borderColor: "border-emerald-200",
+    ...levelPalette(1),
     description: "Base item price that applies everywhere by default.",
     affects: "All locations and all menus",
   },
   2: {
     name: "Location Override",
     icon: Building2,
-    color: "text-blue-600",
-    bgColor: "bg-blue-50",
-    borderColor: "border-blue-200",
+    ...levelPalette(2),
     description:
       "Location-specific base price that overrides the global price.",
     affects: "All menus at this location",
@@ -117,27 +131,21 @@ const LEVEL_INFO = {
   3: {
     name: "Menu Override",
     icon: MenuIcon,
-    color: "text-purple-600",
-    bgColor: "bg-purple-50",
-    borderColor: "border-purple-200",
+    ...levelPalette(3),
     description: "Menu-specific price that applies when this menu is used.",
     affects: "This menu at all locations",
   },
   4: {
     name: "Location + Menu",
     icon: MapPin,
-    color: "text-orange-600",
-    bgColor: "bg-orange-50",
-    borderColor: "border-orange-200",
+    ...levelPalette(4),
     description: "Price specific to this menu at this location only.",
     affects: "This menu at this location only",
   },
   5: {
     name: "Location Menu Owner",
     icon: Sparkles,
-    color: "text-pink-600",
-    bgColor: "bg-pink-50",
-    borderColor: "border-pink-200",
+    ...levelPalette(5),
     description: "This is your location's own menu - you have full control.",
     affects: "Your menu at your location",
   },
@@ -191,9 +199,8 @@ function EditingContextIndicator({
         <TooltipTrigger asChild>
           <div
             className={cn(
-              "flex min-w-0 max-w-full items-center gap-2 px-3 py-2 rounded-lg border transition-all cursor-help hover:shadow-sm",
+              "flex min-w-0 max-w-full cursor-help items-center gap-2 rounded-full border-0 px-3 py-2 shadow-none transition-colors",
               levelInfo.bgColor,
-              levelInfo.borderColor,
               levelInfo.color
             )}
           >
@@ -207,7 +214,7 @@ function EditingContextIndicator({
         <TooltipContent
           side="bottom"
           align="start"
-          className="w-80 p-4 bg-background border rounded-lg shadow-xl"
+          className="w-80 rounded-2xl border bg-card p-4 shadow-lg"
           sideOffset={8}
         >
           <div className="space-y-3">
@@ -215,7 +222,7 @@ function EditingContextIndicator({
             <div className="flex items-center gap-3">
               <div
                 className={cn(
-                  "h-9 w-9 rounded-lg flex items-center justify-center shrink-0",
+                  "flex h-9 w-9 shrink-0 items-center justify-center rounded-full",
                   levelInfo.bgColor
                 )}
               >
@@ -237,8 +244,8 @@ function EditingContextIndicator({
             </p>
 
             {/* Affects */}
-            <div className="rounded-lg bg-muted/50 p-2.5">
-              <p className="text-[11px] font-medium text-muted-foreground mb-0.5">
+            <div className="rounded-2xl border-0 bg-muted/60 p-2.5 shadow-none">
+              <p className="mb-0.5 text-[11px] font-medium text-muted-foreground">
                 Currently viewing:
               </p>
               <p className="text-xs font-medium text-foreground">
@@ -261,16 +268,10 @@ function EditingContextIndicator({
                     <div
                       key={level}
                       className={cn(
-                        "flex items-center gap-1 px-2 py-1 rounded text-[10px]",
+                        "flex items-center gap-1 rounded-full px-2 py-1 text-[10px]",
                         isCurrentLevel
-                          ? cn(
-                              info.bgColor,
-                              info.borderColor,
-                              "border",
-                              info.color,
-                              "font-medium"
-                            )
-                          : "bg-muted/30 text-muted-foreground"
+                          ? cn(info.bgColor, info.color, "font-medium")
+                          : "bg-muted/60 text-muted-foreground"
                       )}
                     >
                       <LevelIcon className="h-3 w-3" />
@@ -315,49 +316,51 @@ function PriceBreakdown({
     locationOverride?.custom_cash_price ?? baseCashPrice;
 
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-sm font-medium flex items-center gap-2">
-          <DollarSign className="h-4 w-4 text-green-500" />
-          Price Hierarchy
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3">
+    <Panel padded>
+      <h2 className="flex items-center gap-2 text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]">
+        <DollarSign className="h-4 w-4 shrink-0" />
+        Price Hierarchy
+      </h2>
+      <div className="mt-4 space-y-3">
         {/* Level 1 - Global Base */}
         <div
           className={cn(
-            "flex flex-wrap items-center justify-between gap-x-2 gap-y-1 p-3 rounded-lg border",
-            isAllLocations ? "bg-emerald-50 border-emerald-200" : "bg-muted/30"
+            "flex flex-wrap items-center justify-between gap-x-2 gap-y-1 rounded-2xl border-0 p-3 shadow-none",
+            isAllLocations
+              ? "bg-emerald-50 dark:bg-emerald-900/20"
+              : "bg-muted/60"
           )}
         >
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 min-w-0 flex-1 basis-40">
+          <div className="flex min-w-0 flex-1 basis-40 flex-wrap items-center gap-x-2 gap-y-1">
             <div
               className={cn(
-                "w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium shrink-0",
-                isAllLocations ? "bg-emerald-500 text-white" : "bg-muted"
+                "flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-medium tabular-nums",
+                isAllLocations
+                  ? "bg-emerald-500 text-white"
+                  : "bg-background text-muted-foreground"
               )}
             >
               1
             </div>
-            <Globe className="h-4 w-4 text-emerald-600 shrink-0" />
+            <Globe className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
             <span className="text-sm font-medium">Global Base</span>
             {isAllLocations && (
-              <Badge variant="secondary" className="text-xs">
+              <span className="inline-flex shrink-0 items-center rounded-full bg-background/70 px-2 py-0.5 text-xs font-medium text-muted-foreground">
                 Active
-              </Badge>
+              </span>
             )}
           </div>
-          <div className="text-right shrink-0 ml-auto">
+          <div className="ml-auto shrink-0 text-right">
             <div
               className={cn(
-                "font-semibold",
-                isAllLocations && "text-emerald-600"
+                "font-medium tabular-nums",
+                isAllLocations && "text-emerald-700 dark:text-emerald-400"
               )}
             >
               ${basePrice?.toFixed(2)}
             </div>
             {baseCashPrice && (
-              <div className="text-xs text-muted-foreground">
+              <div className="text-xs text-muted-foreground tabular-nums">
                 Cash: ${baseCashPrice.toFixed(2)}
               </div>
             )}
@@ -368,32 +371,31 @@ function PriceBreakdown({
         {!isAllLocations && (
           <div
             className={cn(
-              "flex flex-wrap items-center justify-between gap-x-2 gap-y-1 p-3 rounded-lg border",
+              "flex flex-wrap items-center justify-between gap-x-2 gap-y-1 rounded-2xl border-0 p-3 shadow-none",
               hasLocationOverride
-                ? "bg-blue-50 border-blue-200"
-                : "bg-muted/30 border-dashed"
+                ? "bg-blue-50 dark:bg-blue-900/20"
+                : "bg-muted/60"
             )}
           >
-            <div className="flex items-center gap-2 min-w-0 flex-1 basis-40">
+            <div className="flex min-w-0 flex-1 basis-40 items-center gap-2">
               <div
                 className={cn(
-                  "w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium shrink-0",
-                  hasLocationOverride ? "bg-blue-500 text-white" : "bg-muted"
+                  "flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-medium tabular-nums",
+                  hasLocationOverride
+                    ? "bg-blue-500 text-white"
+                    : "bg-background text-muted-foreground"
                 )}
               >
                 2
               </div>
-              <Building2 className="h-4 w-4 text-blue-600 shrink-0" />
+              <Building2 className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                   <span className="text-sm font-medium">Location Override</span>
                   {hasLocationOverride && (
-                    <Badge
-                      variant="outline"
-                      className="text-xs bg-blue-50 text-blue-600 border-blue-200"
-                    >
+                    <span className="inline-flex shrink-0 items-center rounded-full bg-background/70 px-2 py-0.5 text-xs font-medium text-blue-700 dark:text-blue-400">
                       Override Active
-                    </Badge>
+                    </span>
                   )}
                 </div>
                 <p className="text-xs text-muted-foreground truncate">
@@ -401,14 +403,14 @@ function PriceBreakdown({
                 </p>
               </div>
             </div>
-            <div className="text-right shrink-0 ml-auto">
+            <div className="ml-auto shrink-0 text-right">
               {hasLocationOverride ? (
                 <>
-                  <div className="font-semibold text-blue-600">
+                  <div className="font-medium tabular-nums text-blue-700 dark:text-blue-400">
                     ${locationOverride?.custom_price?.toFixed(2)}
                   </div>
                   {locationOverride?.custom_cash_price && (
-                    <div className="text-xs text-muted-foreground">
+                    <div className="text-xs text-muted-foreground tabular-nums">
                       Cash: ${locationOverride?.custom_cash_price.toFixed(2)}
                     </div>
                   )}
@@ -423,15 +425,15 @@ function PriceBreakdown({
         )}
 
         {/* Effective Price */}
-        <div className="pt-3 border-t">
-          <div className="flex items-center justify-between">
+        <div className="rounded-2xl border-0 bg-muted/60 p-3 shadow-none">
+          <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
             <span className="text-sm font-medium">Effective Price</span>
-            <div className="text-right">
-              <span className="text-xl font-bold text-green-600">
+            <div className="ml-auto text-right">
+              <span className="text-xl font-semibold tracking-[-0.02em] tabular-nums">
                 ${effectivePrice?.toFixed(2)}
               </span>
               {effectiveCashPrice && (
-                <div className="text-xs text-muted-foreground">
+                <div className="text-xs text-muted-foreground tabular-nums">
                   Cash: ${effectiveCashPrice.toFixed(2)}
                 </div>
               )}
@@ -440,9 +442,9 @@ function PriceBreakdown({
           {!isAllLocations &&
             hasLocationOverride &&
             basePrice !== effectivePrice && (
-              <div className="mt-2 flex items-center gap-1 text-xs text-blue-600">
-                <Info className="h-3 w-3" />
-                <span>
+              <div className="mt-2 flex items-center gap-1 text-xs text-blue-700 dark:text-blue-400">
+                <Info className="h-3 w-3 shrink-0" />
+                <span className="tabular-nums">
                   {effectivePrice < basePrice ? "Discounted" : "Increased"} by $
                   {Math.abs(effectivePrice - basePrice).toFixed(2)} at this
                   location
@@ -450,8 +452,8 @@ function PriceBreakdown({
               </div>
             )}
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </Panel>
   );
 }
 
@@ -562,34 +564,39 @@ export default function MenuItemDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="space-y-6 animate-in fade-in duration-500">
-        <Skeleton className="h-10 w-64" />
+      <PageShell>
+        <Skeleton className="h-10 w-64 rounded-2xl" />
         <div className="grid gap-6 lg:grid-cols-3">
-          <div className="lg:col-span-2 space-y-6">
-            <Skeleton className="h-96 w-full" />
-            <Skeleton className="h-48 w-full" />
+          <div className="space-y-6 lg:col-span-2">
+            <Skeleton className="h-96 w-full rounded-2xl" />
+            <Skeleton className="h-48 w-full rounded-2xl" />
           </div>
-          <Skeleton className="h-[500px]" />
+          <Skeleton className="h-[500px] rounded-2xl" />
         </div>
-      </div>
+      </PageShell>
     );
   }
 
   if (!item) {
     return (
-      <div className="space-y-6">
-        <Empty
-          icon={Utensils}
-          title="Item not found"
-          description="The item you're looking for doesn't exist or has been deleted."
-          action={
-            <Button onClick={() => router.push("/dashboard/menu/items")}>
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Items
-            </Button>
-          }
-        />
-      </div>
+      <PageShell>
+        <Panel padded>
+          <Empty
+            icon={Utensils}
+            title="Item not found"
+            description="The item you're looking for doesn't exist or has been deleted."
+            action={
+              <Button
+                onClick={() => router.push("/dashboard/menu/items")}
+                className="h-9 rounded-full px-4 text-[0.8125rem] font-medium"
+              >
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Back to Items
+              </Button>
+            }
+          />
+        </Panel>
+      </PageShell>
     );
   }
 
@@ -641,29 +648,34 @@ export default function MenuItemDetailPage() {
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500 w-full min-w-0">
+    <PageShell>
       {/* Header */}
       <div className="w-full min-w-0 space-y-2">
         {/* Breadcrumb + actions row */}
-        <div className="flex items-center justify-between gap-2 min-w-0">
+        <div className="flex min-w-0 items-center justify-between gap-2">
           <button
             type="button"
-            className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground shrink-0"
+            className="flex shrink-0 items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
             onClick={() => router.push("/dashboard/menu/items")}
           >
             <ArrowLeft className="h-4 w-4" />
             Items
           </button>
-          <div className="flex items-center gap-2 shrink-0">
-            <Button size="sm" onClick={() => setIsEditSheetOpen(true)}>
-              <Edit3 className="h-4 w-4 mr-1.5" />
+          <div className="flex shrink-0 items-center gap-2">
+            <Button
+              size="sm"
+              onClick={() => setIsEditSheetOpen(true)}
+              className="h-9 gap-1.5 rounded-full px-4 text-[0.8125rem] font-medium"
+            >
+              <Edit3 className="h-4 w-4" />
               Edit Item
             </Button>
             {isAllLocations && (
               <Button
-                variant="destructive"
+                variant="ghost"
                 size="icon"
-                className="h-8 w-8"
+                aria-label="Delete item"
+                className="size-9 shrink-0 rounded-full text-destructive transition-colors hover:bg-destructive/10 hover:text-destructive"
                 onClick={() => setIsDeleteDialogOpen(true)}
               >
                 <Trash2 className="h-4 w-4" />
@@ -673,18 +685,24 @@ export default function MenuItemDetailPage() {
         </div>
         {/* Title + badges */}
         <div className="min-w-0">
-          <h1 className="text-2xl font-bold truncate">{menuItem.name}</h1>
-          <div className="mt-1 flex w-full min-w-0 flex-col items-start gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-            <Badge
-              variant={menuItem.effective_availability ? "default" : "secondary"}
-              className="h-6 text-xs shrink-0"
+          <h1 className="truncate text-[1.75rem] font-semibold tracking-[-0.02em]">
+            {menuItem.name}
+          </h1>
+          <div className="mt-2 flex w-full min-w-0 flex-col items-start gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+            <span
+              className={cn(
+                "inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium",
+                menuItem.effective_availability
+                  ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400"
+                  : "bg-muted/60 text-muted-foreground"
+              )}
             >
               {menuItem.effective_availability ? (
-                <><CheckCircle2 className="h-3 w-3 mr-1" />Available</>
+                <><CheckCircle2 className="h-3 w-3 shrink-0" />Available</>
               ) : (
-                <><XCircle className="h-3 w-3 mr-1" />Unavailable</>
+                <><XCircle className="h-3 w-3 shrink-0" />Unavailable</>
               )}
-            </Badge>
+            </span>
             <EditingContextIndicator
               context={editingContext}
               locationName={currentLocationName}
@@ -698,17 +716,15 @@ export default function MenuItemDetailPage() {
         {/* Left Column - Details */}
         <div className="lg:col-span-2 space-y-6 min-w-0">
           {/* Basic Info Card */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Sparkles className="h-5 w-5 text-primary" />
-                Item Details
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="flex gap-4 sm:grid sm:gap-6 sm:grid-cols-2">
+          <Panel padded>
+            <h2 className="flex items-center gap-2 text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]">
+              <Sparkles className="h-4 w-4 shrink-0" />
+              Item Details
+            </h2>
+            <div className="mt-4 space-y-6">
+              <div className="flex gap-4 sm:grid sm:grid-cols-2 sm:gap-6">
                 {/* Image */}
-                <div className="w-24 h-24 sm:w-auto sm:aspect-square rounded-lg bg-muted/30 overflow-hidden border shrink-0 sm:max-h-none">
+                <div className="h-24 w-24 shrink-0 overflow-hidden rounded-2xl border-0 bg-muted/60 shadow-none sm:aspect-square sm:max-h-none sm:w-auto">
                   {isValidImageUrl(menuItem.image) ? (
                     <img
                       src={menuItem.image}
@@ -750,10 +766,13 @@ export default function MenuItemDetailPage() {
                       </div>
                       <div className="flex flex-wrap gap-1">
                         {menuItem.meal_types.map((type: string) => (
-                          <Badge key={type} variant="outline">
-                            <Clock className="h-3 w-3 mr-1" />
+                          <span
+                            key={type}
+                            className="inline-flex shrink-0 items-center gap-1 rounded-full bg-muted/60 px-2.5 py-1 text-xs font-medium text-muted-foreground"
+                          >
+                            <Clock className="h-3 w-3 shrink-0" />
                             {type}
-                          </Badge>
+                          </span>
                         ))}
                       </div>
                     </div>
@@ -763,29 +782,28 @@ export default function MenuItemDetailPage() {
 
               {/* Allergens */}
               {menuItem.allergens && menuItem.allergens.length > 0 && (
-                <div className="pt-4 border-t">
-                  <div className="text-sm font-medium text-muted-foreground mb-2 flex items-center gap-2">
-                    <AlertTriangle className="h-4 w-4 text-orange-500" />
+                <div>
+                  <div className="mb-2 flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                    <AlertTriangle className="h-4 w-4 shrink-0 text-orange-500" />
                     Allergens
                   </div>
                   <div className="flex flex-wrap gap-1">
                     {menuItem.allergens.map((allergen: string) => (
-                      <Badge
+                      <span
                         key={allergen}
-                        variant="secondary"
-                        className="bg-orange-500/10 text-orange-600 border-orange-200"
+                        className="inline-flex shrink-0 items-center rounded-full bg-orange-50 px-2.5 py-1 text-xs font-medium text-orange-700 dark:bg-orange-900/20 dark:text-orange-400"
                       >
                         {allergen}
-                      </Badge>
+                      </span>
                     ))}
                   </div>
                 </div>
               )}
 
               {/* Categories */}
-              <div className="pt-4 border-t">
-                <div className="text-sm font-medium text-muted-foreground mb-2 flex items-center gap-2">
-                  <Tag className="h-4 w-4" />
+              <div>
+                <div className="mb-2 flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                  <Tag className="h-4 w-4 shrink-0" />
                   Categories
                 </div>
                 {categories.length === 0 ? (
@@ -795,13 +813,12 @@ export default function MenuItemDetailPage() {
                 ) : (
                   <div className="flex flex-wrap gap-2">
                     {categories.map((cat) => (
-                      <Badge
+                      <span
                         key={cat.id}
-                        variant="outline"
-                        className="px-3 py-1"
+                        className="inline-flex shrink-0 items-center rounded-full bg-muted/60 px-3 py-1 text-xs font-medium text-muted-foreground"
                       >
                         {cat?.name}
-                      </Badge>
+                      </span>
                     ))}
                   </div>
                 )}
@@ -809,39 +826,42 @@ export default function MenuItemDetailPage() {
 
               {/* Menus this item is in */}
               {menus.length > 0 && (
-                <div className="pt-4 border-t">
-                  <div className="text-sm font-medium text-muted-foreground mb-2 flex items-center gap-2">
-                    <Utensils className="h-4 w-4" />
-                    Appears in {menus.length} Menu(s)
+                <div>
+                  <div className="mb-2 flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                    <Utensils className="h-4 w-4 shrink-0" />
+                    Appears in <span className="tabular-nums">{menus.length}</span> Menu(s)
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {menus.map((m) => (
-                      <Badge key={m.id} variant="secondary">
+                      <span
+                        key={m.id}
+                        className="inline-flex shrink-0 items-center rounded-full bg-muted/60 px-3 py-1 text-xs font-medium text-muted-foreground"
+                      >
                         {m?.name}
-                      </Badge>
+                      </span>
                     ))}
                   </div>
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </Panel>
 
           {/* Modifier Groups Section - Read Only */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Layers className="h-5 w-5 text-purple-500" />
+          <Panel padded>
+            <div>
+              <h2 className="flex items-center gap-2 text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]">
+                <Layers className="h-4 w-4 shrink-0" />
                 Modifier Groups
-                <Badge variant="secondary" className="ml-auto text-xs">
+                <span className="ml-auto inline-flex shrink-0 items-center rounded-full bg-muted/60 px-2.5 py-0.5 text-xs font-medium text-muted-foreground tabular-nums">
                   {modifierGroups.length}
-                </Badge>
-              </CardTitle>
-              <CardDescription>
+                </span>
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">
                 Customization options available for this item.
                 {!isAllLocations && " Showing both global and location-specific modifiers."}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
+              </p>
+            </div>
+            <div className="mt-4">
               {modifierGroups.length === 0 ? (
                 <Empty
                   icon={Layers}
@@ -860,20 +880,20 @@ export default function MenuItemDetailPage() {
                         open={expandedModifiers[mg.id]}
                         onOpenChange={() => toggleModifierExpand(mg.id)}
                       >
-                        <Card
+                        <div
                           className={cn(
-                            "transition-all hover:shadow-md animate-in fade-in slide-in-from-left-4",
+                            "overflow-hidden rounded-2xl border-0 bg-muted/60 shadow-none transition-colors animate-in fade-in slide-in-from-left-4",
                             expandedModifiers[mg.id] &&
-                              "ring-2 ring-purple-500/20"
+                              "ring-2 ring-violet-500/20"
                           )}
                           style={{ animationDelay: `${index * 50}ms` }}
                         >
                           <CollapsibleTrigger asChild>
-                            <CardContent className="p-4 cursor-pointer">
-                              <div className="flex items-center justify-between gap-3 min-w-0">
-                                <div className="flex items-center gap-4 flex-1 min-w-0">
-                                  <div className="h-10 w-10 rounded-lg bg-purple-500/10 flex items-center justify-center shrink-0">
-                                    <Layers className="h-5 w-5 text-purple-500" />
+                            <div className="cursor-pointer p-4">
+                              <div className="flex min-w-0 items-center justify-between gap-3">
+                                <div className="flex min-w-0 flex-1 items-center gap-4">
+                                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-violet-500/10">
+                                    <Layers className="h-5 w-5 text-violet-500" />
                                   </div>
                                   <div className="flex-1 min-w-0">
                                     <div className="font-semibold break-words">
@@ -881,29 +901,20 @@ export default function MenuItemDetailPage() {
                                     </div>
                                     <div className="flex flex-wrap items-center gap-1.5 mt-1">
                                       {group.is_required && (
-                                        <Badge
-                                          variant="destructive"
-                                          className="text-xs max-w-full"
-                                        >
+                                        <span className="inline-flex max-w-full shrink-0 items-center rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-medium text-red-700 dark:bg-red-900/20 dark:text-red-400">
                                           Required
-                                        </Badge>
+                                        </span>
                                       )}
                                       {(group as any).source === "location" ? (
-                                        <Badge
-                                          variant="outline"
-                                          className="text-[10px] gap-1 bg-blue-50 text-blue-700 border-blue-200 max-w-full"
-                                        >
+                                        <span className="inline-flex max-w-full shrink-0 items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-900/20 dark:text-blue-400">
                                           <MapPin className="h-2.5 w-2.5 shrink-0" />
                                           This Location
-                                        </Badge>
+                                        </span>
                                       ) : (
-                                        <Badge
-                                          variant="outline"
-                                          className="text-[10px] gap-1 bg-emerald-50 text-emerald-700 border-emerald-200 max-w-full"
-                                        >
+                                        <span className="inline-flex max-w-full shrink-0 items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400">
                                           <Globe className="h-2.5 w-2.5 shrink-0" />
                                           All Locations
-                                        </Badge>
+                                        </span>
                                       )}
                                     </div>
                                     {group.description && (
@@ -913,26 +924,22 @@ export default function MenuItemDetailPage() {
                                     )}
                                     <div className="flex flex-wrap gap-1 mt-2">
                                       {group.items?.slice(0, 4).map((opt) => (
-                                        <Badge
+                                        <span
                                           key={opt.id}
-                                          variant="outline"
-                                          className="text-xs max-w-full"
+                                          className="inline-flex max-w-full shrink-0 items-center rounded-full bg-background px-2.5 py-0.5 text-xs font-medium text-muted-foreground"
                                         >
                                           <span className="truncate">{opt.name}</span>
                                           {opt.price_modifier > 0 && (
-                                            <span className="text-green-600 ml-1 shrink-0">
+                                            <span className="ml-1 shrink-0 text-emerald-700 tabular-nums dark:text-emerald-400">
                                               +${opt.price_modifier}
                                             </span>
                                           )}
-                                        </Badge>
+                                        </span>
                                       ))}
                                       {(group.items?.length || 0) > 4 && (
-                                        <Badge
-                                          variant="outline"
-                                          className="text-xs"
-                                        >
+                                        <span className="inline-flex shrink-0 items-center rounded-full bg-background px-2.5 py-0.5 text-xs font-medium text-muted-foreground tabular-nums">
                                           +{group.items.length - 4} more
-                                        </Badge>
+                                        </span>
                                       )}
                                     </div>
                                   </div>
@@ -949,14 +956,18 @@ export default function MenuItemDetailPage() {
                                   />
                                 </div>
                               </div>
-                            </CardContent>
+                            </div>
                           </CollapsibleTrigger>
 
                           <CollapsibleContent>
-                            <div className="px-4 pb-4 pt-0 border-t">
+                            <div className="px-4 pb-4 pt-0">
                               <div className="mt-4 space-y-2">
                                 <h4 className="text-sm font-medium text-muted-foreground">
-                                  Options ({group.items?.length || 0})
+                                  Options (
+                                  <span className="tabular-nums">
+                                    {group.items?.length || 0}
+                                  </span>
+                                  )
                                 </h4>
                                 {group.items && group.items.length > 0 ? (
                                   <div className="grid gap-2 md:grid-cols-2">
@@ -964,20 +975,17 @@ export default function MenuItemDetailPage() {
                                       <div
                                         key={opt.id}
                                         className={cn(
-                                          "flex items-center justify-between p-3 rounded-lg bg-muted/50 transition-colors",
+                                          "flex items-center justify-between gap-3 rounded-2xl border-0 bg-background p-3 shadow-none transition-colors",
                                           !opt.is_active && "opacity-50"
                                         )}
                                       >
-                                        <div>
-                                          <div className="font-medium flex items-center gap-2">
+                                        <div className="min-w-0">
+                                          <div className="flex flex-wrap items-center gap-2 font-medium">
                                             {opt.name}
                                             {!opt.is_active && (
-                                              <Badge
-                                                variant="secondary"
-                                                className="text-xs"
-                                              >
+                                              <span className="inline-flex shrink-0 items-center rounded-full bg-muted/60 px-2 py-0.5 text-xs font-medium text-muted-foreground">
                                                 Inactive
-                                              </Badge>
+                                              </span>
                                             )}
                                           </div>
                                           {opt.description && (
@@ -988,11 +996,11 @@ export default function MenuItemDetailPage() {
                                         </div>
                                         <div
                                           className={cn(
-                                            "font-semibold shrink-0",
+                                            "shrink-0 font-medium tabular-nums",
                                             opt.price_modifier > 0
-                                              ? "text-green-600"
+                                              ? "text-emerald-700 dark:text-emerald-400"
                                               : opt.price_modifier < 0
-                                              ? "text-red-500"
+                                              ? "text-destructive"
                                               : "text-muted-foreground"
                                           )}
                                         >
@@ -1017,24 +1025,27 @@ export default function MenuItemDetailPage() {
                                 )}
                               </div>
 
-                              <div className="mt-4 p-3 rounded-lg bg-muted/30">
-                                <h4 className="text-sm font-medium mb-2">
+                              <div className="mt-4 rounded-2xl border-0 bg-background p-3 shadow-none">
+                                <h4 className="mb-2 text-sm font-medium">
                                   Selection Rules
                                 </h4>
-                                <div className="grid grid-cols-2 gap-4 text-sm">
-                                  <div>
+                                {/* One column until `sm`: at mobile width a rigid
+                                    2-col grid gave "Maximum: Unlimited" half a
+                                    narrow row and clipped the word. */}
+                                <div className="grid grid-cols-1 gap-x-4 gap-y-1 text-sm sm:grid-cols-2">
+                                  <div className="flex min-w-0 flex-wrap items-baseline gap-x-2">
                                     <span className="text-muted-foreground">
                                       Minimum:
                                     </span>
-                                    <span className="ml-2 font-medium">
+                                    <span className="font-medium tabular-nums">
                                       {group.min_selections || 0}
                                     </span>
                                   </div>
-                                  <div>
+                                  <div className="flex min-w-0 flex-wrap items-baseline gap-x-2">
                                     <span className="text-muted-foreground">
                                       Maximum:
                                     </span>
-                                    <span className="ml-2 font-medium">
+                                    <span className="font-medium tabular-nums">
                                       {group.max_selections || "Unlimited"}
                                     </span>
                                   </div>
@@ -1042,27 +1053,27 @@ export default function MenuItemDetailPage() {
                               </div>
                             </div>
                           </CollapsibleContent>
-                        </Card>
+                        </div>
                       </Collapsible>
                     );
                   })}
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </Panel>
 
           {/* Recipes Section */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <ChefHat className="h-5 w-5 text-orange-500" />
+          <Panel padded>
+            <div>
+              <h2 className="flex items-center gap-2 text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]">
+                <ChefHat className="h-4 w-4 shrink-0" />
                 Recipes
-              </CardTitle>
-              <CardDescription>
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">
                 Recipes and ingredients for this item
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
+              </p>
+            </div>
+            <div className="mt-4">
               {recipes.length === 0 ? (
                 <Empty
                   icon={ChefHat}
@@ -1079,9 +1090,9 @@ export default function MenuItemDetailPage() {
                     }) => (
                       <div
                         key={recipe.id}
-                        className="p-3 rounded-lg border bg-card"
+                        className="rounded-2xl border-0 bg-muted/60 p-3 shadow-none"
                       >
-                        <div className="font-semibold">
+                        <div className="font-medium">
                           {recipe.recipe?.name}
                         </div>
                         {recipe.recipe?.description && (
@@ -1090,17 +1101,17 @@ export default function MenuItemDetailPage() {
                           </div>
                         )}
                         {recipe.quantity_multiplier !== 1 && (
-                          <Badge variant="outline" className="mt-2">
+                          <span className="mt-2 inline-flex shrink-0 items-center rounded-full bg-background px-2.5 py-0.5 text-xs font-medium text-muted-foreground tabular-nums">
                             ×{recipe.quantity_multiplier}
-                          </Badge>
+                          </span>
                         )}
                       </div>
                     )
                   )}
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </Panel>
         </div>
 
         {/* Right Column - Preview & Quick Info */}
@@ -1113,18 +1124,18 @@ export default function MenuItemDetailPage() {
           />
 
           {/* Location Badges */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <Flame className="h-4 w-4 text-orange-500" />
+          <Panel padded>
+            <div>
+              <h2 className="flex items-center gap-2 text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]">
+                <Flame className="h-4 w-4 shrink-0" />
                 Location Badges
-              </CardTitle>
-              <CardDescription className="text-xs">
+              </h2>
+              <p className="mt-1 text-xs text-muted-foreground">
                 Badges shown on the storefront for{" "}
                 {gatedLocation?.name ?? currentLocationName}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
+              </p>
+            </div>
+            <div className="mt-4 space-y-4">
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -1182,17 +1193,19 @@ export default function MenuItemDetailPage() {
                   )}
                 </Tooltip>
               </TooltipProvider>
-            </CardContent>
-          </Card>
+            </div>
+          </Panel>
 
-          {/* POS Preview */}
-          <Card className="sticky top-6">
-            <CardHeader>
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                POS Preview
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="flex justify-center">
+          {/* POS Preview
+              Deliberately NOT `sticky`: it sits mid-column, so pinning it left the
+              cards below (Quick Stats, Metadata) scrolling underneath and visually
+              swallowed by this panel. A sticky card only works as the last child of
+              the column. */}
+          <Panel padded>
+            <h2 className="text-sm font-medium text-muted-foreground">
+              POS Preview
+            </h2>
+            <div className="mt-4 flex justify-center">
               <ItemPreviewCard
                 name={menuItem.name}
                 description={menuItem.description || undefined}
@@ -1207,75 +1220,79 @@ export default function MenuItemDetailPage() {
                   true
                 }
               />
-            </CardContent>
-          </Card>
+            </div>
+          </Panel>
 
           {/* Quick Stats */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Quick Stats
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex items-center justify-between py-2 border-b">
+          <Panel padded>
+            <h2 className="text-sm font-medium text-muted-foreground">
+              Quick Stats
+            </h2>
+            <div className="mt-4 space-y-1">
+              <div className="flex items-center justify-between py-2">
                 <span className="text-sm text-muted-foreground">
                   Categories
                 </span>
-                <Badge variant="secondary">{categories.length}</Badge>
+                <span className="inline-flex shrink-0 items-center rounded-full bg-muted/60 px-2.5 py-0.5 text-xs font-medium text-muted-foreground tabular-nums">
+                  {categories.length}
+                </span>
               </div>
-              <div className="flex items-center justify-between py-2 border-b">
+              <div className="flex items-center justify-between py-2">
                 <span className="text-sm text-muted-foreground">
                   Modifier Groups
                 </span>
-                <Badge variant="secondary">{modifierGroups.length}</Badge>
+                <span className="inline-flex shrink-0 items-center rounded-full bg-muted/60 px-2.5 py-0.5 text-xs font-medium text-muted-foreground tabular-nums">
+                  {modifierGroups.length}
+                </span>
               </div>
-              <div className="flex items-center justify-between py-2 border-b">
+              <div className="flex items-center justify-between py-2">
                 <span className="text-sm text-muted-foreground">Menus</span>
-                <Badge variant="secondary">{menus.length}</Badge>
+                <span className="inline-flex shrink-0 items-center rounded-full bg-muted/60 px-2.5 py-0.5 text-xs font-medium text-muted-foreground tabular-nums">
+                  {menus.length}
+                </span>
               </div>
-              <div className="flex items-center justify-between py-2 border-b">
+              <div className="flex items-center justify-between py-2">
                 <span className="text-sm text-muted-foreground">Recipes</span>
-                <Badge variant="secondary">{recipes.length}</Badge>
+                <span className="inline-flex shrink-0 items-center rounded-full bg-muted/60 px-2.5 py-0.5 text-xs font-medium text-muted-foreground tabular-nums">
+                  {recipes.length}
+                </span>
               </div>
               <div className="flex items-center justify-between py-2">
                 <span className="text-sm text-muted-foreground">
                   Stock Mode
                 </span>
-                <Badge variant="outline">
+                <span className="inline-flex shrink-0 items-center rounded-full bg-muted/60 px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
                   {menuItem.stock_tracking_mode || "in_stock"}
-                </Badge>
+                </span>
               </div>
               {menuItem.stock_tracking_mode === "quantity" && !isAllLocations && (
-                <div className="flex items-center justify-between py-2 border-t">
-                  <span className="text-sm text-muted-foreground flex items-center gap-1">
-                    <Package className="h-3.5 w-3.5" />
+                <div className="flex items-center justify-between py-2">
+                  <span className="flex items-center gap-1 text-sm text-muted-foreground">
+                    <Package className="h-3.5 w-3.5 shrink-0" />
                     Stock Count
                   </span>
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium">
+                    <span className="text-sm font-medium tabular-nums">
                       {stockRecord != null ? stockRecord.quantity : "—"}
                     </span>
                     {stockRecord != null &&
                       stockRecord.quantity <= (stockRecord.reorder_threshold ?? 5) && (
-                        <Badge variant="destructive" className="text-xs">
+                        <span className="inline-flex shrink-0 items-center rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900/20 dark:text-red-400">
                           Stock low
-                        </Badge>
+                        </span>
                       )}
                   </div>
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </Panel>
 
           {/* Metadata */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Metadata
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2 text-sm">
+          <Panel padded>
+            <h2 className="text-sm font-medium text-muted-foreground">
+              Metadata
+            </h2>
+            <div className="mt-4 space-y-2 text-sm">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Created</span>
                 <span>
@@ -1294,12 +1311,12 @@ export default function MenuItemDetailPage() {
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">ID</span>
-                <span className="font-mono text-xs truncate max-w-32">
+                <span className="max-w-32 truncate font-mono text-xs">
                   {menuItem.id}
                 </span>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </Panel>
         </div>
       </div>
 
@@ -1356,6 +1373,7 @@ export default function MenuItemDetailPage() {
               variant="outline"
               onClick={() => setIsDeleteDialogOpen(false)}
               disabled={isDeleting}
+              className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
             >
               Cancel
             </Button>
@@ -1363,6 +1381,7 @@ export default function MenuItemDetailPage() {
               variant="destructive"
               onClick={handleDeleteItem}
               disabled={isDeleting}
+              className="h-9 rounded-full px-4 text-[0.8125rem] font-medium"
             >
               {isDeleting ? (
                 <>
@@ -1397,6 +1416,6 @@ export default function MenuItemDetailPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </PageShell>
   );
 }

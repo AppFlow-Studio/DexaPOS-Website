@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Banknote, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { DiscountFilters } from "@/components/discounts/discount-filters";
 import { DiscountTable } from "@/components/discounts/discount-table";
 import {
@@ -14,7 +14,15 @@ import {
 } from "@/hooks/use-discounts";
 import { DiscountListFilters } from "@/types/discount";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+    PageShell,
+    PageHeader,
+    LocationIndicator,
+    Panel,
+    StatRow,
+    StatTile,
+} from "@/components/dashboard/shell";
+import { discountStatus } from "@/lib/constants/discount-status";
 import { useLocations } from "@/app/dashboard/hooks/useLocations";
 import { useClerkOrgId } from "@/app/dashboard/hooks/useLocationScoped";
 import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
@@ -56,66 +64,101 @@ export default function DiscountsPage() {
         [data?.data, data?.success]
     );
 
+    const stats = useMemo(() => {
+        let active = 0;
+        let scheduled = 0;
+        let expired = 0;
+        discounts.forEach((discount) => {
+            const status = discountStatus(discount);
+            if (status === "active") active += 1;
+            else if (status === "scheduled") scheduled += 1;
+            else if (status === "expired") expired += 1;
+        });
+        return { total: discounts.length, active, scheduled, expired };
+    }, [discounts]);
+
     const handleCreate = () => router.push("/dashboard/discounts/new");
     const handleView = (id: string) => router.push(`/dashboard/discounts/${id}`);
     const handleEdit = (id: string) => router.push(`/dashboard/discounts/${id}/edit`);
 
-    const emptyState =
-        !isLoading && discounts.length === 0 ? (
-            <Card>
-                <CardHeader>
-                    <CardTitle>No discounts yet</CardTitle>
-                    <CardDescription>Create your first discount to get started.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <Button onClick={handleCreate}>Create discount</Button>
-                </CardContent>
-            </Card>
-        ) : null;
-
     return (
-        <div className="space-y-6">
-            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                <div className="flex items-center gap-2">
-                    <Banknote className="h-6 w-6" />
-                    <div>
-                        <h1 className="text-2xl font-semibold">Discounts</h1>
-                        <p className="text-sm text-muted-foreground">
-                            Manage POS discounts, activation, and targeting.
-                        </p>
-                    </div>
+        <PageShell>
+            <PageHeader
+                title="Discounts"
+                subtitle="Manage POS discounts, activation, and targeting."
+                indicator={
+                    !isSingleLocation ? (
+                        <LocationIndicator
+                            isAllLocations={isAllLocations}
+                            locationName={selectedLocation?.name}
+                        />
+                    ) : undefined
+                }
+                actions={
+                    <Button
+                        onClick={handleCreate}
+                        className="h-9 gap-1.5 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+                    >
+                        <Plus className="h-4 w-4" />
+                        New discount
+                    </Button>
+                }
+            />
+
+            <Panel>
+                <div className="px-6 py-6">
+                    <StatRow columns={4}>
+                        <StatTile
+                            label="Total discounts"
+                            value={stats.total}
+                            meta={
+                                !isSingleLocation && !isAllLocations && selectedLocation
+                                    ? `${selectedLocation.name} + global`
+                                    : "All discounts"
+                            }
+                            isLoading={isLoading}
+                        />
+                        <StatTile
+                            label="Active"
+                            value={stats.active}
+                            meta="Available on POS now"
+                            isLoading={isLoading}
+                        />
+                        <StatTile
+                            label="Scheduled"
+                            value={stats.scheduled}
+                            meta="Starts on a future date"
+                            isLoading={isLoading}
+                        />
+                        <StatTile
+                            label="Expired"
+                            value={stats.expired}
+                            meta="Past their end date"
+                            isLoading={isLoading}
+                        />
+                    </StatRow>
                 </div>
-                <Button onClick={handleCreate}>
-                    <Plus className="mr-2 h-4 w-4" />
-                    New discount
-                </Button>
-            </div>
+            </Panel>
 
-            {!isSingleLocation && !isAllLocations && selectedLocation && (
-                <p className="text-sm text-muted-foreground">
-                    Showing discounts for <span className="font-medium">{selectedLocation.name}</span> plus all global discounts.
-                </p>
-            )}
+            <Panel padded>
+                <DiscountFilters value={filters} onChange={setFilters} onCreate={handleCreate} />
 
-            <DiscountFilters value={filters} onChange={setFilters} onCreate={handleCreate} />
-
-            {emptyState ? (
-                emptyState
-            ) : (
-                <DiscountTable
-                    discounts={discounts}
-                    isLoading={isLoading}
-                    locationNameById={locationNameById}
-                    isSingleLocation={isSingleLocation}
-                    onToggleStatus={(id, isActive) => toggleStatus.mutate({ id, isActive })}
-                    onBulkStatus={(ids, isActive) => bulkStatus.mutate({ ids, isActive })}
-                    onBulkDelete={(ids) => bulkDelete.mutate({ ids })}
-                    onDelete={(id) => deleteOne.mutate({ id })}
-                    onView={handleView}
-                    onEdit={handleEdit}
-                />
-            )}
-        </div>
+                <div className="mt-6">
+                    <DiscountTable
+                        discounts={discounts}
+                        isLoading={isLoading}
+                        locationNameById={locationNameById}
+                        isSingleLocation={isSingleLocation}
+                        onCreate={handleCreate}
+                        onToggleStatus={(id, isActive) => toggleStatus.mutate({ id, isActive })}
+                        onBulkStatus={(ids, isActive) => bulkStatus.mutate({ ids, isActive })}
+                        onBulkDelete={(ids, mode) => bulkDelete.mutate({ ids, mode })}
+                        onDelete={(id, mode) => deleteOne.mutate({ id, mode })}
+                        onView={handleView}
+                        onEdit={handleEdit}
+                    />
+                </div>
+            </Panel>
+        </PageShell>
     );
 }
-

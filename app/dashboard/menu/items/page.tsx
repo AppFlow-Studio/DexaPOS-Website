@@ -1,12 +1,5 @@
 "use client";
 //TODO: Setup or remove the items detailed page
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -40,6 +33,7 @@ import {
   Check,
   CheckCircle2,
   Truck,
+  Loader2,
 } from "lucide-react";
 import { useState, useMemo, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
@@ -107,6 +101,22 @@ import { AVAILABLE_CHANNELS } from "@/types/inventory";
 import { DeleteMenuItem } from "../../actions/menu-items";
 import { CreateItemWizard } from "@/components/dashboard/menu/items/CreateItemWizard";
 import { useManagerPermissions } from "../../hooks/useManagerPermissions";
+import {
+  PageShell,
+  PageHeader,
+  Panel,
+  StatRow,
+  StatTile,
+  LocationIndicator,
+} from "@/components/dashboard/shell";
+import {
+  priceSourceStyle,
+  priceSourceLabel,
+  categoryScopeStyle,
+  ITEM_AVAILABILITY_STYLES,
+  TAX_BADGE_STYLES,
+  OVERRIDE_BADGE_STYLE,
+} from "@/lib/constants/menu-item-badges";
 import { BulkPriceAdjustDialog } from "@/components/dashboard/menu/items/BulkPriceAdjustDialog";
 import { BulkDeliveryPriceAdjustDialog } from "@/components/dashboard/menu/items/BulkDeliveryPriceAdjustDialog";
 
@@ -167,37 +177,13 @@ function mapFlatItemToEditItem(
   };
 }
 
-// Price source badge colors
-const PRICE_SOURCE_COLORS: Record<
-  string,
-  { bg: string; text: string; border: string }
-> = {
-  base: {
-    bg: "bg-slate-50",
-    text: "text-slate-600",
-    border: "border-slate-200",
-  },
-  location_item: {
-    bg: "bg-blue-50",
-    text: "text-blue-600",
-    border: "border-blue-200",
-  },
-  category: {
-    bg: "bg-emerald-50",
-    text: "text-emerald-600",
-    border: "border-emerald-200",
-  },
-  location_category: {
-    bg: "bg-purple-50",
-    text: "text-purple-600",
-    border: "border-purple-200",
-  },
-  location_menu: {
-    bg: "bg-orange-50",
-    text: "text-orange-600",
-    border: "border-orange-200",
-  },
-};
+/**
+ * The badge shell shared by every tag on this page (DS-CTL-09): soft tint, no
+ * border, 6px dot for the colour coding. Written literally here because
+ * Tailwind only scans `.tsx` (C7).
+ */
+const BADGE_SHELL =
+  "inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium";
 
 // ============================================================================
 // ITEM CARD COMPONENT
@@ -227,8 +213,7 @@ function ItemCard({
   onToggleSelect?: (id: string) => void;
 }) {
   const hasOverride = item.has_location_override;
-  const priceColors =
-    PRICE_SOURCE_COLORS[item.price_source] || PRICE_SOURCE_COLORS.base;
+  const priceStyle = priceSourceStyle(item.price_source);
 
   const isAllLocations = useIsAllLocations();
   const isSingleLocation = useIsSingleLocation();
@@ -251,14 +236,15 @@ function ItemCard({
       className="group animate-in fade-in slide-in-from-bottom-4"
       style={{ animationDelay: `${Math.min(index * 30, 300)}ms` }}
     >
-      <Card
+      <div
         className={cn(
-          "overflow-hidden transition-all duration-300 h-full py-0.5 cursor-pointer relative",
-          "hover:shadow-lg hover:scale-[1.02] hover:border-primary/50",
-          hasOverride && "ring-1 ring-amber-200",
+          // Borderless tinted surface: these cards sit inside a Panel (tier-2), so a
+          // border here would stack outlines two deep. Tint carries the separation.
+          "relative h-full cursor-pointer overflow-hidden rounded-2xl border-0 bg-muted/50 shadow-none transition-colors",
+          "hover:bg-muted",
+          hasOverride && "ring-1 ring-amber-500/30",
           !item.effective_availability && "opacity-70",
-          isSelectionMode && isSelected &&
-            "ring-2 ring-primary border-primary/60 shadow-md scale-[1.01]",
+          isSelectionMode && isSelected && "ring-2 ring-primary border-primary/60",
           isSelectionMode && !isSelected && "hover:ring-2 hover:ring-primary/40",
         )}
         onClick={
@@ -281,7 +267,7 @@ function ItemCard({
           </div>
         )}
         {/* Image Section */}
-        <div className="relative aspect-[4/3] bg-gradient-to-br from-muted/50 to-muted overflow-hidden">
+        <div className="relative aspect-[4/3] overflow-hidden bg-background/60">
           {isValidImageUrl(item.image) ? (
             <img
               src={item.image}
@@ -298,68 +284,75 @@ function ItemCard({
           <div className="absolute top-2 left-2 right-2 flex items-start justify-between">
             {/* Price source indicator */}
             {item.price_source !== "base" && (
-              <Badge
-                variant="secondary"
+              <span
                 className={cn(
-                  "text-[10px] px-1.5 py-0.5 gap-1",
-                  priceColors.bg,
-                  priceColors.text,
-                  priceColors.border,
+                  BADGE_SHELL,
+                  "backdrop-blur-sm",
+                  priceStyle.bg,
+                  priceStyle.text,
                 )}
               >
-                {item.price_source === "location_item" && (
-                  <MapPin className="h-2.5 w-2.5" />
-                )}
-                {item.price_source === "category" && (
-                  <Tag className="h-2.5 w-2.5" />
-                )}
-                {item.price_source === "location_category" && (
-                  <Layers className="h-2.5 w-2.5" />
-                )}
-                {item.price_source.replace("_", " ")}
-              </Badge>
+                <span
+                  className={cn("h-1.5 w-1.5 shrink-0 rounded-full", priceStyle.dot)}
+                />
+                {priceSourceLabel(item.price_source)}
+              </span>
             )}
 
             {/* Availability */}
             {!item.effective_availability && (
-              <Badge
-                variant="secondary"
-                className="text-[10px] px-1.5 py-0.5 bg-red-100 text-red-700"
+              <span
+                className={cn(
+                  BADGE_SHELL,
+                  "ml-auto backdrop-blur-sm",
+                  ITEM_AVAILABILITY_STYLES.unavailable.bg,
+                  ITEM_AVAILABILITY_STYLES.unavailable.text,
+                )}
               >
+                <span
+                  className={cn(
+                    "h-1.5 w-1.5 shrink-0 rounded-full",
+                    ITEM_AVAILABILITY_STYLES.unavailable.dot,
+                  )}
+                />
                 Unavailable
-              </Badge>
+              </span>
             )}
           </div>
 
           {/* Category badges at bottom */}
           {item.categories.length > 0 && (
             <div className="absolute bottom-2 left-2 right-2 flex flex-wrap gap-1">
-              {item.categories.slice(0, 2).map((cat) => (
-                <Badge
-                  key={cat.id}
-                  variant="secondary"
-                  className={cn(
-                    "text-[10px] px-1.5 py-0 bg-background/90 backdrop-blur-sm",
-                    cat.is_global
-                      ? "border-emerald-200 text-emerald-700"
-                      : "border-purple-200 text-purple-700",
-                  )}
-                >
-                  {cat.is_global ? (
-                    <Globe className="h-2.5 w-2.5 mr-0.5" />
-                  ) : (
-                    <MapPin className="h-2.5 w-2.5 mr-0.5" />
-                  )}
-                  {cat.name}
-                </Badge>
-              ))}
+              {item.categories.slice(0, 2).map((cat) => {
+                const scope = categoryScopeStyle(cat.is_global);
+                return (
+                  <span
+                    key={cat.id}
+                    className={cn(
+                      BADGE_SHELL,
+                      "max-w-full backdrop-blur-sm",
+                      scope.bg,
+                      scope.text,
+                    )}
+                  >
+                    {cat.is_global ? (
+                      <Globe className="h-2.5 w-2.5 shrink-0" />
+                    ) : (
+                      <MapPin className="h-2.5 w-2.5 shrink-0" />
+                    )}
+                    <span className="truncate">{cat.name}</span>
+                  </span>
+                );
+              })}
               {item.categories.length > 2 && (
-                <Badge
-                  variant="secondary"
-                  className="text-[10px] px-1.5 py-0 bg-background/90 backdrop-blur-sm"
+                <span
+                  className={cn(
+                    BADGE_SHELL,
+                    "bg-background/90 text-muted-foreground backdrop-blur-sm tabular-nums",
+                  )}
                 >
                   +{item.categories.length - 2}
-                </Badge>
+                </span>
               )}
             </div>
           )}
@@ -371,7 +364,7 @@ function ItemCard({
                 <Button
                   size="sm"
                   variant="secondary"
-                  className="h-8 bg-white/95 hover:bg-white shadow-lg"
+                  className="h-8 rounded-full bg-background/95 px-4 text-[0.8125rem] font-medium hover:bg-background"
                   onClick={(e) => {
                     e.stopPropagation();
                     onEdit();
@@ -386,9 +379,9 @@ function ItemCard({
         </div>
 
         {/* Content Section */}
-        <CardContent className="p-4">
+        <div className="p-4">
           <div className="space-y-2">
-            <h3 className="font-semibold text-base line-clamp-1">
+            <h3 className="line-clamp-1 text-base font-semibold">
               {item.name}
             </h3>
             {item.description && (
@@ -405,11 +398,11 @@ function ItemCard({
             >
               {isSelectionMode ? (
                 <div className="flex items-baseline gap-2">
-                  <span className="text-lg font-bold text-primary">
+                  <span className="text-lg font-medium tracking-[-0.02em] tabular-nums">
                     ${item.effective_price.toFixed(2)}
                   </span>
                   {hasOverride && item.base_price !== item.effective_price && (
-                    <span className="text-sm text-muted-foreground line-through">
+                    <span className="text-sm text-muted-foreground line-through tabular-nums">
                       ${item.base_price.toFixed(2)}
                     </span>
                   )}
@@ -429,66 +422,74 @@ function ItemCard({
                   })}
                 >
                   <div className="flex items-baseline gap-2">
-                    <span className="text-lg font-bold text-primary">
+                    <span className="text-lg font-medium tracking-[-0.02em] tabular-nums">
                       ${item.effective_price.toFixed(2)}
                     </span>
                     {hasOverride && item.base_price !== item.effective_price && (
-                      <span className="text-sm text-muted-foreground line-through">
+                      <span className="text-sm text-muted-foreground line-through tabular-nums">
                         ${item.base_price.toFixed(2)}
                       </span>
                     )}
-                    <Info className="h-3 w-3 text-muted-foreground opacity-60 self-center" />
+                    <Info className="h-3 w-3 self-center text-muted-foreground/60" />
                   </div>
                 </PriceSourcePopover>
               )}
               {item.effective_cash_price && (
-                <Badge variant="outline" className="text-xs">
+                <span
+                  className={cn(
+                    BADGE_SHELL,
+                    "bg-muted/60 text-muted-foreground tabular-nums",
+                  )}
+                >
                   Cash: ${item.effective_cash_price.toFixed(2)}
-                </Badge>
+                </span>
               )}
             </div>
 
             {/* Tax & Channel Badges */}
-            <div className="flex flex-wrap gap-1.5 pt-3 border-t mt-3">
+            <div className="mt-3 flex flex-wrap gap-1.5 pt-3">
               {modifierGroupCount > 0 && (
-                <Badge
-                  variant="secondary"
-                  className="text-[10px] px-1.5 py-0.5"
+                <span
+                  className={cn(BADGE_SHELL, "bg-muted/60 text-muted-foreground")}
                 >
-                  <Layers className="h-2.5 w-2.5 mr-0.5" />
-                  {modifierGroupCount} modifier
-                  {modifierGroupCount === 1 ? " group" : " groups"}
-                </Badge>
+                  <Layers className="h-2.5 w-2.5 shrink-0" />
+                  <span className="tabular-nums">{modifierGroupCount}</span>
+                  {modifierGroupCount === 1 ? "modifier group" : "modifier groups"}
+                </span>
               )}
 
               {/* Tax Badge */}
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Badge
-                      variant="outline"
+                    <span
                       className={cn(
-                        "text-[10px] px-1.5 py-0.5 cursor-help",
+                        BADGE_SHELL,
+                        "cursor-help",
                         item.effective_is_tax_exempt
-                          ? "bg-amber-50 text-amber-700 border-amber-200"
-                          : "bg-blue-50 text-blue-700 border-blue-200",
+                          ? cn(TAX_BADGE_STYLES.exempt.bg, TAX_BADGE_STYLES.exempt.text)
+                          : cn(TAX_BADGE_STYLES.taxed.bg, TAX_BADGE_STYLES.taxed.text),
                       )}
                     >
                       {item.effective_is_tax_exempt ? (
                         <>
-                          <ShieldX className="h-2.5 w-2.5 mr-0.5" />
+                          <ShieldX className="h-2.5 w-2.5 shrink-0" />
                           Tax Exempt
                         </>
                       ) : (
                         <>
-                          <ShieldCheck className="h-2.5 w-2.5 mr-0.5" />
+                          <ShieldCheck className="h-2.5 w-2.5 shrink-0" />
                           {TAX_CATEGORY_LABELS[
                             item.effective_tax_category as keyof typeof TAX_CATEGORY_LABELS
                           ] || item.effective_tax_category}
-                          {taxRate && `: ${taxRate.percentage}%`}
+                          {taxRate && (
+                            <span className="tabular-nums">
+                              : {taxRate.percentage}%
+                            </span>
+                          )}
                         </>
                       )}
-                    </Badge>
+                    </span>
                   </TooltipTrigger>
                   <TooltipContent className="max-w-xs">
                     {item.effective_is_tax_exempt ? (
@@ -496,10 +497,10 @@ function ItemCard({
                     ) : taxRate ? (
                       <div className="space-y-1">
                         <p className="font-medium">{taxRate.name}</p>
-                        <p className="text-xs">
+                        <p className="text-xs tabular-nums">
                           Rate: {taxRate.percentage}% • Tax: ${taxAmount}
                         </p>
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-xs text-muted-foreground tabular-nums">
                           Total with tax: $
                           {(
                             parseFloat(item.effective_price.toString()) +
@@ -508,7 +509,7 @@ function ItemCard({
                         </p>
                       </div>
                     ) : (
-                      <p className="text-xs text-amber-600">
+                      <p className="text-xs text-amber-600 dark:text-amber-400">
                         No tax rate set for this category
                       </p>
                     )}
@@ -518,41 +519,40 @@ function ItemCard({
 
               {/* Channel Badges */}
               {item.effective_available_channels?.map((channel) => (
-                <Badge
+                <span
                   key={channel}
-                  variant="secondary"
-                  className="text-[10px] px-1.5 py-0.5"
+                  className={cn(BADGE_SHELL, "bg-muted/60 text-muted-foreground")}
                 >
                   {channel === "pos" && (
-                    <CreditCard className="h-2.5 w-2.5 mr-0.5" />
-                  )}/
+                    <CreditCard className="h-2.5 w-2.5 shrink-0" />
+                  )}
                   {channel === "online" && (
-                    <Globe className="h-2.5 w-2.5 mr-0.5" />
+                    <Globe className="h-2.5 w-2.5 shrink-0" />
                   )}
                   {channel === "kiosk" && (
-                    <Monitor className="h-2.5 w-2.5 mr-0.5" />
+                    <Monitor className="h-2.5 w-2.5 shrink-0" />
                   )}
                   {channel.toUpperCase()}
-                </Badge>
+                </span>
               ))}
             </div>
           </div>
           {canDelete && !isSelectionMode && (
             <Button
               size="sm"
-              variant="destructive"
-              className="h-8 bg-red-500/95 hover:bg-red-600 shadow-lg mt-5"
+              variant="ghost"
+              className="mt-4 h-8 rounded-full px-3 text-[0.8125rem] font-medium text-destructive hover:bg-destructive/10 hover:text-destructive"
               onClick={(e) => {
                 e.stopPropagation();
                 onDelete();
               }}
             >
-              <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+              <Trash2 className="mr-1.5 h-3.5 w-3.5" />
               Delete
             </Button>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }
@@ -585,8 +585,7 @@ function ItemRow({
   onToggleSelect?: (id: string) => void;
 }) {
   const hasOverride = item.has_location_override;
-  const priceColors =
-    PRICE_SOURCE_COLORS[item.price_source] || PRICE_SOURCE_COLORS.base;
+  const priceStyle = priceSourceStyle(item.price_source);
 
   // Tax info
   const taxRate = taxRates.find(
@@ -605,9 +604,9 @@ function ItemRow({
     >
       <div
         className={cn(
-          "flex items-center gap-4 p-4 rounded-xl border bg-card transition-all duration-200 cursor-pointer",
-          "hover:shadow-md hover:border-primary/30",
-          hasOverride && "ring-1 ring-amber-200",
+          "flex cursor-pointer items-center gap-4 rounded-2xl border-0 bg-muted/50 p-4 shadow-none transition-colors",
+          "hover:bg-muted",
+          hasOverride && "ring-1 ring-amber-500/30",
           isSelectionMode && isSelected &&
             "ring-2 ring-primary border-primary/50 bg-primary/5",
           isSelectionMode && !isSelected && "hover:ring-1 hover:ring-primary/30",
@@ -630,7 +629,7 @@ function ItemRow({
           </div>
         )}
         {/* Image */}
-        <div className="relative w-16 h-16 rounded-lg overflow-hidden bg-muted/30 shrink-0">
+        <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-2xl bg-muted/60">
           {isValidImageUrl(item.image) ? (
             <img
               src={item.image}
@@ -655,84 +654,95 @@ function ItemRow({
                 </p>
               )}
               {/* Category, Tax & Channel tags */}
-              <div className="flex flex-wrap gap-1 mt-2">
+              <div className="mt-2 flex flex-wrap gap-1">
                 {modifierGroupCount > 0 && (
-                  <Badge
-                    variant="secondary"
-                    className="text-[10px] px-1.5 py-0"
+                  <span
+                    className={cn(BADGE_SHELL, "bg-muted/60 text-muted-foreground")}
                   >
-                    <Layers className="h-2.5 w-2.5 mr-0.5" />
-                    {modifierGroupCount} modifier
-                    {modifierGroupCount === 1 ? " group" : " groups"}
-                  </Badge>
+                    <Layers className="h-2.5 w-2.5 shrink-0" />
+                    <span className="tabular-nums">{modifierGroupCount}</span>
+                    {modifierGroupCount === 1
+                      ? "modifier group"
+                      : "modifier groups"}
+                  </span>
                 )}
 
                 {/* Category tags */}
-                {item.categories.slice(0, 3).map((cat) => (
-                  <Badge
-                    key={cat.id}
-                    variant="outline"
+                {item.categories.slice(0, 3).map((cat) => {
+                  const scope = categoryScopeStyle(cat.is_global);
+                  return (
+                    <span
+                      key={cat.id}
+                      className={cn(BADGE_SHELL, scope.bg, scope.text)}
+                    >
+                      {cat.is_global ? (
+                        <Globe className="h-2.5 w-2.5 shrink-0" />
+                      ) : (
+                        <MapPin className="h-2.5 w-2.5 shrink-0" />
+                      )}
+                      {cat.name}
+                    </span>
+                  );
+                })}
+                {item.categories.length > 3 && (
+                  <span
                     className={cn(
-                      "text-[10px] px-1.5 py-0",
-                      cat.is_global
-                        ? "border-emerald-200 text-emerald-700"
-                        : "border-purple-200 text-purple-700",
+                      BADGE_SHELL,
+                      "bg-muted/60 text-muted-foreground tabular-nums",
                     )}
                   >
-                    {cat.is_global ? (
-                      <Globe className="h-2.5 w-2.5 mr-0.5" />
-                    ) : (
-                      <MapPin className="h-2.5 w-2.5 mr-0.5" />
-                    )}
-                    {cat.name}
-                  </Badge>
-                ))}
-                {item.categories.length > 3 && (
-                  <Badge variant="outline" className="text-[10px] px-1.5 py-0">
                     +{item.categories.length - 3}
-                  </Badge>
+                  </span>
                 )}
 
                 {/* Tax Badge */}
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <Badge
-                        variant="outline"
+                      <span
                         className={cn(
-                          "text-[10px] px-1.5 py-0 cursor-help",
+                          BADGE_SHELL,
+                          "cursor-help",
                           item.effective_is_tax_exempt
-                            ? "bg-amber-50 text-amber-700 border-amber-200"
-                            : "bg-blue-50 text-blue-700 border-blue-200",
+                            ? cn(
+                                TAX_BADGE_STYLES.exempt.bg,
+                                TAX_BADGE_STYLES.exempt.text,
+                              )
+                            : cn(
+                                TAX_BADGE_STYLES.taxed.bg,
+                                TAX_BADGE_STYLES.taxed.text,
+                              ),
                         )}
                       >
                         {item.effective_is_tax_exempt ? (
                           <>
-                            <ShieldX className="h-2.5 w-2.5 mr-0.5" />
+                            <ShieldX className="h-2.5 w-2.5 shrink-0" />
                             Exempt
                           </>
                         ) : (
                           <>
-                            <ShieldCheck className="h-2.5 w-2.5 mr-0.5" />
+                            <ShieldCheck className="h-2.5 w-2.5 shrink-0" />
                             {TAX_CATEGORY_LABELS[
                               item.effective_tax_category as keyof typeof TAX_CATEGORY_LABELS
                             ] || item.effective_tax_category}
                           </>
                         )}
-                      </Badge>
+                      </span>
                     </TooltipTrigger>
                     <TooltipContent className="max-w-xs">
                       {item.effective_is_tax_exempt ? (
                         <p>Tax exempt</p>
                       ) : taxRate ? (
                         <div className="space-y-1">
-                          <p className="font-medium text-xs">{taxRate.name}</p>
-                          <p className="text-xs">
+                          <p className="text-xs font-medium">{taxRate.name}</p>
+                          <p className="text-xs tabular-nums">
                             Rate: {taxRate.percentage}% • Tax: ${taxAmount}
                           </p>
                         </div>
                       ) : (
-                        <p className="text-xs text-amber-600">No rate set</p>
+                        <p className="text-xs text-amber-600 dark:text-amber-400">
+                          No rate set
+                        </p>
                       )}
                     </TooltipContent>
                   </Tooltip>
@@ -740,63 +750,66 @@ function ItemRow({
 
                 {/* Channel Badges */}
                 {item.effective_available_channels?.map((channel) => (
-                  <Badge
+                  <span
                     key={channel}
-                    variant="secondary"
-                    className="text-[10px] px-1.5 py-0"
+                    className={cn(BADGE_SHELL, "bg-muted/60 text-muted-foreground")}
                   >
                     {channel === "pos" && (
-                      <CreditCard className="h-2.5 w-2.5 mr-0.5" />
+                      <CreditCard className="h-2.5 w-2.5 shrink-0" />
                     )}
                     {channel === "online" && (
-                      <Globe className="h-2.5 w-2.5 mr-0.5" />
+                      <Globe className="h-2.5 w-2.5 shrink-0" />
                     )}
                     {channel === "kiosk" && (
-                      <Monitor className="h-2.5 w-2.5 mr-0.5" />
+                      <Monitor className="h-2.5 w-2.5 shrink-0" />
                     )}
                     {channel.toUpperCase()}
-                  </Badge>
+                  </span>
                 ))}
               </div>
             </div>
 
             {/* Price and indicators */}
-            <div className="shrink-0 flex flex-col items-end gap-1 w-24">
-              <span className="font-bold text-primary tabular-nums leading-none">
+            <div className="flex w-24 shrink-0 flex-col items-end gap-1">
+              <span className="font-medium leading-none tracking-[-0.02em] tabular-nums">
                 ${item.effective_price.toFixed(2)}
               </span>
               {hasOverride && item.base_price !== item.effective_price && (
-                <span className="text-xs text-muted-foreground line-through tabular-nums leading-none">
+                <span className="text-xs leading-none text-muted-foreground line-through tabular-nums">
                   ${item.base_price.toFixed(2)}
                 </span>
               )}
               {(item.price_source !== "base" || !item.effective_availability) && (
                 <div className="flex items-center gap-1">
                   {item.price_source !== "base" && (
-                    <Badge
-                      variant="outline"
+                    <span
                       className={cn(
-                        "text-[10px] px-1.5 py-0",
-                        priceColors.bg,
-                        priceColors.text,
-                        priceColors.border,
+                        BADGE_SHELL,
+                        "px-1.5",
+                        priceStyle.bg,
+                        priceStyle.text,
                       )}
+                      title={priceSourceLabel(item.price_source)}
                     >
-                      {item.price_source === "location_item" && (
+                      {item.price_source === "location_item" ? (
                         <MapPin className="h-2.5 w-2.5" />
-                      )}
-                      {item.price_source === "category" && (
+                      ) : item.price_source === "category" ? (
                         <Tag className="h-2.5 w-2.5" />
+                      ) : (
+                        <Layers className="h-2.5 w-2.5" />
                       )}
-                    </Badge>
+                    </span>
                   )}
                   {!item.effective_availability && (
-                    <Badge
-                      variant="secondary"
-                      className="text-[10px] px-1.5 py-0 bg-red-100 text-red-700"
+                    <span
+                      className={cn(
+                        BADGE_SHELL,
+                        ITEM_AVAILABILITY_STYLES.unavailable.bg,
+                        ITEM_AVAILABILITY_STYLES.unavailable.text,
+                      )}
                     >
                       Off
-                    </Badge>
+                    </span>
                   )}
                 </div>
               )}
@@ -806,24 +819,24 @@ function ItemRow({
 
         {/* Actions */}
         {!isSelectionMode && (
-          <div className="hidden md:flex flex-col gap-1 w-20 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="hidden w-20 shrink-0 flex-col gap-1 opacity-0 transition-opacity group-hover:opacity-100 md:flex">
             <Button
               size="sm"
               variant="ghost"
-              className="h-7 w-full justify-start px-2"
+              className="h-7 w-full justify-start rounded-full px-2 text-[0.8125rem]"
               onClick={(e) => {
                 e.stopPropagation();
                 onEdit();
               }}
             >
-              <Edit3 className="h-3.5 w-3.5 mr-1.5" />
+              <Edit3 className="mr-1.5 h-3.5 w-3.5" />
               Edit
             </Button>
             {canDelete && (
               <Button
                 size="sm"
                 variant="ghost"
-                className="h-7 w-full justify-start px-2 text-destructive hover:text-destructive hover:bg-destructive/10"
+                className="h-7 w-full justify-start rounded-full px-2 text-[0.8125rem] text-destructive hover:bg-destructive/10 hover:text-destructive"
                 onClick={(e) => {
                   e.stopPropagation();
                   onDelete();
@@ -920,59 +933,61 @@ function CategoryGroup({
 
   return (
     <Collapsible open={isExpanded} onOpenChange={onToggle}>
-      <Card
+      <div
         className={cn(
-          "overflow-hidden transition-all",
+          "min-w-0 overflow-hidden rounded-2xl border bg-card transition-colors",
           isSelectionMode && selectedCount > 0 && "ring-1 ring-primary/30",
         )}
       >
         <CollapsibleTrigger asChild>
-          <CardHeader
+          <div
             className={cn(
-              "cursor-pointer hover:bg-muted/50 transition-colors py-3",
+              "cursor-pointer px-6 py-4 transition-colors hover:bg-muted/50",
               isSelectionMode && selectedCount > 0 && "bg-primary/5",
             )}
           >
-            <div className="flex items-center justify-between gap-2 min-w-0">
-              <div className="flex items-center gap-3 min-w-0 overflow-hidden">
+            <div className="flex min-w-0 items-center justify-between gap-2">
+              <div className="flex min-w-0 items-center gap-3 overflow-hidden">
                 {isExpanded ? (
-                  <ChevronDown className="h-5 w-5 text-muted-foreground shrink-0" />
+                  <ChevronDown className="h-5 w-5 shrink-0 text-muted-foreground" />
                 ) : (
-                  <ChevronRight className="h-5 w-5 text-muted-foreground shrink-0" />
+                  <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
                 )}
-                <div className="flex items-center gap-2 min-w-0 flex-wrap">
-                  <Tag className="h-5 w-5 text-primary shrink-0" />
-                  <CardTitle className="text-lg truncate">{category.name}</CardTitle>
-                  {category.is_global ? (
-                    <Badge
-                      variant="outline"
-                      className="text-xs bg-emerald-50 text-emerald-600 border-emerald-200 shrink-0"
-                    >
-                      <Globe className="h-3 w-3 mr-1" />
-                      Global
-                    </Badge>
-                  ) : (
-                    <Badge
-                      variant="outline"
-                      className="text-xs bg-purple-50 text-purple-600 border-purple-200 shrink-0"
-                    >
-                      <MapPin className="h-3 w-3 mr-1" />
-                      {category.location_name || "Location"}
-                    </Badge>
-                  )}
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                  <h3 className="truncate text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]">
+                    {category.name}
+                  </h3>
+                  {(() => {
+                    const scope = categoryScopeStyle(category.is_global);
+                    return (
+                      <span className={cn(BADGE_SHELL, scope.bg, scope.text)}>
+                        {category.is_global ? (
+                          <>
+                            <Globe className="h-3 w-3 shrink-0" />
+                            Global
+                          </>
+                        ) : (
+                          <>
+                            <MapPin className="h-3 w-3 shrink-0" />
+                            {category.location_name || "Location"}
+                          </>
+                        )}
+                      </span>
+                    );
+                  })()}
                 </div>
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 {isSelectionMode && (
                   <>
                     {selectedCount > 0 && (
-                      <Badge
-                        variant="default"
-                        className="gap-1 bg-primary/15 text-primary border border-primary/30 hover:bg-primary/20"
+                      <span
+                        className={cn(BADGE_SHELL, "bg-primary/15 text-primary")}
                       >
-                        <CheckCircle2 className="h-3 w-3" />
-                        {selectedCount} selected
-                      </Badge>
+                        <CheckCircle2 className="h-3 w-3 shrink-0" />
+                        <span className="tabular-nums">{selectedCount}</span>
+                        selected
+                      </span>
                     )}
                     <button
                       type="button"
@@ -1013,18 +1028,21 @@ function CategoryGroup({
                     </button>
                   </>
                 )}
-                <Badge variant="secondary">
-                  {items.length} item{items.length !== 1 ? "s" : ""}
-                </Badge>
+                <span
+                  className={cn(BADGE_SHELL, "bg-muted/60 text-muted-foreground")}
+                >
+                  <span className="tabular-nums">{items.length}</span>
+                  item{items.length !== 1 ? "s" : ""}
+                </span>
               </div>
             </div>
-          </CardHeader>
+          </div>
         </CollapsibleTrigger>
         <CollapsibleContent>
-          <CardContent className="pt-0">
+          <div className="px-6 pb-6 pt-0">
             {items.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <Utensils className="h-8 w-8 mx-auto mb-2 opacity-50" />
+              <div className="py-8 text-center text-muted-foreground">
+                <Utensils className="mx-auto mb-2 h-8 w-8 opacity-50" />
                 <p className="text-sm">No items in this category</p>
               </div>
             ) : (
@@ -1053,9 +1071,9 @@ function CategoryGroup({
                 })}
               </div>
             )}
-          </CardContent>
+          </div>
         </CollapsibleContent>
-      </Card>
+      </div>
     </Collapsible>
   );
 }
@@ -1443,24 +1461,28 @@ export default function MenuItemsPage() {
 
   if (hasError && !isLoading) {
     return (
-      <div className="space-y-6 animate-in fade-in duration-500">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-2xl font-bold tracking-tight">Menu Items</h2>
-            <p className="text-muted-foreground">Manage your menu items</p>
-          </div>
-        </div>
-        <Empty
-          icon={Utensils}
-          title="Error loading items"
-          description={errorMessage}
-          action={
-            <Button onClick={() => refetch()} variant="outline">
-              Try Again
-            </Button>
-          }
+      <PageShell>
+        <PageHeader
+          title="Item Library"
+          subtitle="Manage your menu items"
         />
-      </div>
+        <Panel padded>
+          <Empty
+            icon={Utensils}
+            title="Error loading items"
+            description={errorMessage}
+            action={
+              <Button
+                onClick={() => refetch()}
+                variant="outline"
+                className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+              >
+                Try Again
+              </Button>
+            }
+          />
+        </Panel>
+      </PageShell>
     );
   }
 
@@ -1469,212 +1491,193 @@ export default function MenuItemsPage() {
   );
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
+    <PageShell>
       <ScopeContextStrip />
-      {/* Header */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between w-full min-w-0">
-        <div>
-          <div className="flex items-center gap-3 flex-wrap">
-            <h2 className="text-2xl font-bold tracking-tight">Item Library</h2>
-            {!isSingleLocation && (
-              <Badge
-                variant={isAllLocations ? "secondary" : "default"}
-                className={cn(
-                  "gap-1.5 animate-in fade-in slide-in-from-left-2 duration-300",
-                  !isAllLocations &&
-                    "bg-blue-500/10 text-blue-600 border-blue-200",
-                )}
+
+      <PageHeader
+        title="Item Library"
+        subtitle={
+          isSingleLocation
+            ? "All items on your menu. Items live within categories."
+            : isAllLocations
+              ? "All items across your organization. Items live within categories."
+              : `Viewing items for ${locationName} with location-specific pricing.`
+        }
+        indicator={
+          !isSingleLocation ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <LocationIndicator
+                isAllLocations={isAllLocations}
+                locationName={locationName}
+              />
+              {!isAllLocations && stats.withOverrides > 0 && (
+                <span
+                  className={cn(
+                    BADGE_SHELL,
+                    OVERRIDE_BADGE_STYLE.bg,
+                    OVERRIDE_BADGE_STYLE.text,
+                  )}
+                >
+                  <Sparkles className="h-3 w-3 shrink-0" />
+                  <span className="tabular-nums">{stats.withOverrides}</span>
+                  with local pricing
+                </span>
+              )}
+            </div>
+          ) : undefined
+        }
+        actions={
+          <>
+            {canCreateItem ? (
+              <Button
+                onClick={() => setIsCreateWizardOpen(true)}
+                className="h-9 gap-1.5 rounded-full px-4 text-[0.8125rem] font-medium"
               >
-                {isAllLocations ? (
-                  <Globe className="h-3 w-3" />
-                ) : (
-                  <MapPin className="h-3 w-3" />
-                )}
-                {locationName}
-              </Badge>
-            )}
-            {!isSingleLocation && !isAllLocations && stats.withOverrides > 0 && (
-              <Badge
-                variant="outline"
-                className="gap-1 bg-amber-500/10 text-amber-600 border-amber-200"
-              >
-                <Sparkles className="h-3 w-3" />
-                {stats.withOverrides} with local pricing
-              </Badge>
-            )}
-          </div>
-          <p className="text-muted-foreground mt-1">
-            {isSingleLocation
-              ? "All items on your menu. Items live within categories."
-              : isAllLocations
-                ? "All items across your organization. Items live within categories."
-                : `Viewing items for ${locationName} with location-specific pricing.`}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2 shrink-0">
-          {canCreateItem ? (
+                <Plus className="h-4 w-4" />
+                Create Item
+              </Button>
+            ) : !isMember ? (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span>
+                      <Button
+                        disabled
+                        className="h-9 gap-1.5 rounded-full px-4 text-[0.8125rem] font-medium"
+                        aria-label={createDisabledReason}
+                      >
+                        <Plus className="h-4 w-4" />
+                        Create Item
+                      </Button>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>{createDisabledReason}</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            ) : null}
+            {/* `min-w-0` + a truncating label: Button sets `whitespace-nowrap`, so
+                this long label would otherwise push past the viewport edge on a
+                narrow screen even once the action row wraps. */}
             <Button
-              onClick={() => setIsCreateWizardOpen(true)}
-              className="gap-2"
+              onClick={() => router.push("/dashboard/menu/categories")}
+              variant="outline"
+              className="h-9 min-w-0 gap-1.5 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
             >
-              <Plus className="h-4 w-4" />
-              Create Item
+              <Plus className="h-4 w-4 shrink-0" />
+              <span className="truncate">Add Items to Categories</span>
             </Button>
-          ) : !isMember ? (
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span>
-                    <Button
-                      disabled
-                      className="gap-2"
-                      aria-label={createDisabledReason}
-                    >
-                      <Plus className="h-4 w-4" />
-                      Create Item
-                    </Button>
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent>{createDisabledReason}</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          ) : null}
-          <Button
-            onClick={() => router.push("/dashboard/menu/categories")}
-            variant="outline"
-            className="gap-2"
-          >
-            <Plus className="h-4 w-4" />
-            Add Items to Categories
-          </Button>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       {/* Stats */}
-      <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4">
-        <Card className="transition-all hover:shadow-md">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Items</CardTitle>
-            <Utensils className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.total}</div>
-            <p className="text-xs text-muted-foreground">
-              In {categoriesList.length} categories
-            </p>
-          </CardContent>
-        </Card>
-        <Card className="transition-all hover:shadow-md">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Available</CardTitle>
-            <Package className="h-4 w-4 text-green-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">
-              {stats.available}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              {stats.unavailable > 0
-                ? `${stats.unavailable} unavailable`
-                : "All items available"}
-            </p>
-          </CardContent>
-        </Card>
-        <Card className="transition-all hover:shadow-md">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Avg Price</CardTitle>
-            <DollarSign className="h-4 w-4 text-primary" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-primary">
-              ${stats.avgPrice.toFixed(2)}
-            </div>
-            <p className="text-xs text-muted-foreground">Across all items</p>
-          </CardContent>
-        </Card>
-        <Card className="transition-all hover:shadow-md">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Uncategorized</CardTitle>
-            <Tag className="h-4 w-4 text-amber-500" />
-          </CardHeader>
-          <CardContent>
-            <div
-              className={cn(
-                "text-2xl font-bold",
+      <Panel>
+        <div className="px-6 py-6">
+          <StatRow columns={4}>
+            <StatTile
+              label="Total Items"
+              icon={<Utensils />}
+              value={stats.total}
+              meta={`In ${categoriesList.length} categories`}
+              isLoading={isLoading}
+            />
+            <StatTile
+              label="Available"
+              icon={<Package />}
+              value={stats.available}
+              meta={
+                stats.unavailable > 0
+                  ? `${stats.unavailable} unavailable`
+                  : "All items available"
+              }
+              isLoading={isLoading}
+            />
+            <StatTile
+              label="Avg Price"
+              icon={<DollarSign />}
+              value={`$${stats.avgPrice.toFixed(2)}`}
+              meta="Across all items"
+              isLoading={isLoading}
+            />
+            <StatTile
+              label="Uncategorized"
+              icon={<Tag />}
+              value={stats.uncategorized}
+              meta={
                 stats.uncategorized > 0
-                  ? "text-amber-600"
-                  : "text-muted-foreground",
-              )}
-            >
-              {stats.uncategorized}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              {stats.uncategorized > 0
-                ? "Need categorization"
-                : "All items categorized"}
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+                  ? "Need categorization"
+                  : "All items categorized"
+              }
+              isLoading={isLoading}
+            />
+          </StatRow>
+        </div>
+      </Panel>
 
       {/* Items List */}
-      <Card>
-        <CardHeader className="space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <CardTitle>All Items</CardTitle>
-              <CardDescription>
-                {selectedCategoryId
-                  ? `${filteredItems.length} items in ${
-                      selectedCategoryId === "uncategorized"
-                        ? "uncategorized"
-                        : selectedCategory?.name || "selected category"
-                    }`
-                  : `${filteredItems.length} items found`}
-              </CardDescription>
+      <Panel padded>
+        <div className="space-y-4">
+          <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+            <div className="min-w-0">
+              <h2 className="flex items-center gap-2 text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]">
+                All Items
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {selectedCategoryId ? (
+                  <>
+                    <span className="tabular-nums">{filteredItems.length}</span>
+                    {" items in "}
+                    {selectedCategoryId === "uncategorized"
+                      ? "uncategorized"
+                      : selectedCategory?.name || "selected category"}
+                  </>
+                ) : (
+                  <>
+                    <span className="tabular-nums">{filteredItems.length}</span>
+                    {" items found"}
+                  </>
+                )}
+              </p>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
               {/* Search */}
               <div className="relative">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
                 <Input
                   placeholder="Search items..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-9 w-48 sm:w-64"
+                  className="h-9 w-48 pl-9 text-[0.8125rem] sm:w-64"
                 />
               </div>
 
               {/* Category Filter Toggle */}
               {categoriesList.length > 0 && (
                 <Button
-                  variant={showCategoryFilter ? "default" : "outline"}
+                  variant="ghost"
                   size="sm"
                   onClick={() => setShowCategoryFilter(!showCategoryFilter)}
                   className={cn(
-                    "gap-1.5",
-                    selectedCategoryId &&
-                      !showCategoryFilter &&
-                      "border-primary text-primary",
+                    "h-9 gap-1.5 rounded-full border-0 px-4 text-[0.8125rem] font-medium shadow-none",
+                    showCategoryFilter || selectedCategoryId
+                      ? "bg-muted text-foreground"
+                      : "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground",
                   )}
                 >
                   <Filter className="h-4 w-4" />
                   Filter
                   {selectedCategoryId && (
-                    <Badge
-                      variant="secondary"
-                      className="ml-1 h-5 px-1.5 text-[10px]"
-                    >
+                    <span className="ml-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-medium text-primary-foreground tabular-nums">
                       1
-                    </Badge>
+                    </span>
                   )}
                 </Button>
               )}
 
               {/* Selection Mode Toggle — works across all views */}
               <Button
-                variant={isSelectionMode ? "default" : "outline"}
+                variant="ghost"
                 size="sm"
                 onClick={() => {
                   setIsSelectionMode((prev) => {
@@ -1683,122 +1686,115 @@ export default function MenuItemsPage() {
                   });
                 }}
                 className={cn(
-                  "gap-1.5",
-                  isSelectionMode &&
-                    "bg-primary text-primary-foreground hover:bg-primary/90",
+                  "h-9 gap-1.5 rounded-full border-0 px-4 text-[0.8125rem] font-medium shadow-none",
+                  isSelectionMode
+                    ? "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground"
+                    : "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground",
                 )}
               >
                 <CheckSquare className="h-4 w-4" />
                 {isSelectionMode ? "Selecting" : "Select"}
                 {isSelectionMode && selectedItemIds.size > 0 && (
-                  <Badge
-                    variant="secondary"
-                    className="ml-1 h-5 px-1.5 text-[10px] bg-primary-foreground/20 text-primary-foreground border-0"
-                  >
+                  <span className="ml-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-primary-foreground/20 px-1 text-[10px] font-medium tabular-nums">
                     {selectedItemIds.size}
-                  </Badge>
+                  </span>
                 )}
               </Button>
 
               {/* View Mode Toggle */}
-              <div className="flex items-center border rounded-lg overflow-hidden">
-                <Button
-                  variant={viewMode === "grid" ? "default" : "ghost"}
-                  size="sm"
-                  className="rounded-none"
-                  onClick={() => setViewMode("grid")}
-                >
-                  <Grid3x3 className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant={viewMode === "list" ? "default" : "ghost"}
-                  size="sm"
-                  className="rounded-none border-x"
-                  onClick={() => setViewMode("list")}
-                >
-                  <List className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant={viewMode === "categories" ? "default" : "ghost"}
-                  size="sm"
-                  className="rounded-none"
-                  onClick={() => setViewMode("categories")}
-                >
-                  <Layers className="h-4 w-4" />
-                </Button>
+              <div className="inline-flex items-center gap-0.5 rounded-full bg-muted/70 p-1">
+                {(
+                  [
+                    { mode: "grid" as const, Icon: Grid3x3, label: "Grid view" },
+                    { mode: "list" as const, Icon: List, label: "List view" },
+                    {
+                      mode: "categories" as const,
+                      Icon: Layers,
+                      label: "Category view",
+                    },
+                  ]
+                ).map(({ mode, Icon, label }) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => setViewMode(mode)}
+                    aria-label={label}
+                    aria-pressed={viewMode === mode}
+                    className={cn(
+                      "inline-flex size-7 shrink-0 items-center justify-center rounded-full transition-colors",
+                      viewMode === mode
+                        ? "bg-background text-foreground shadow-sm ring-1 ring-border"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    <Icon className="h-4 w-4" />
+                  </button>
+                ))}
               </div>
             </div>
           </div>
 
           {/* Category Filter Pills */}
           {showCategoryFilter && categoriesList.length > 0 && (
-            <div className="space-y-3 pt-2 border-t animate-in fade-in slide-in-from-top-2 duration-200">
+            <div className="space-y-3 pt-4 animate-in fade-in slide-in-from-top-2 duration-200">
               <div className="flex flex-wrap gap-2">
-                <Button
-                  variant={selectedCategoryId === null ? "default" : "outline"}
-                  size="sm"
+                <button
+                  type="button"
                   onClick={() => setSelectedCategoryId(null)}
-                  className="h-7 text-xs"
+                  className={cn(
+                    "inline-flex h-7 shrink-0 items-center gap-1 rounded-full px-3 text-xs font-medium transition-colors",
+                    selectedCategoryId === null
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground",
+                  )}
                 >
                   All
-                  <Badge
-                    variant="secondary"
-                    className="ml-1.5 h-4 px-1 text-[10px]"
-                  >
+                  <span className="tabular-nums opacity-70">
                     {itemsList.length}
-                  </Badge>
-                </Button>
+                  </span>
+                </button>
                 {categoriesList.map((category) => {
                   const count = categoryItemCounts[category.id] || 0;
+                  const isActive = selectedCategoryId === category.id;
                   return (
-                    <Button
+                    <button
                       key={category.id}
-                      variant={
-                        selectedCategoryId === category.id
-                          ? "default"
-                          : "outline"
-                      }
-                      size="sm"
+                      type="button"
                       onClick={() => setSelectedCategoryId(category.id)}
                       className={cn(
-                        "h-7 text-xs gap-1",
-                        count === 0 && "opacity-50",
+                        "inline-flex h-7 shrink-0 items-center gap-1 rounded-full px-3 text-xs font-medium transition-colors",
+                        isActive
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground",
+                        count === 0 && !isActive && "opacity-50",
                       )}
                     >
                       {category.is_global ? (
-                        <Globe className="h-3 w-3" />
+                        <Globe className="h-3 w-3 shrink-0" />
                       ) : (
-                        <MapPin className="h-3 w-3" />
+                        <MapPin className="h-3 w-3 shrink-0" />
                       )}
                       {category.name}
-                      <Badge
-                        variant="secondary"
-                        className="ml-1 h-4 px-1 text-[10px]"
-                      >
-                        {count}
-                      </Badge>
-                    </Button>
+                      <span className="tabular-nums opacity-70">{count}</span>
+                    </button>
                   );
                 })}
                 {stats.uncategorized > 0 && (
-                  <Button
-                    variant={
-                      selectedCategoryId === "uncategorized"
-                        ? "default"
-                        : "outline"
-                    }
-                    size="sm"
+                  <button
+                    type="button"
                     onClick={() => setSelectedCategoryId("uncategorized")}
-                    className="h-7 text-xs border-dashed"
+                    className={cn(
+                      "inline-flex h-7 shrink-0 items-center gap-1 rounded-full px-3 text-xs font-medium transition-colors",
+                      selectedCategoryId === "uncategorized"
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground",
+                    )}
                   >
                     Uncategorized
-                    <Badge
-                      variant="secondary"
-                      className="ml-1.5 h-4 px-1 text-[10px]"
-                    >
+                    <span className="tabular-nums opacity-70">
                       {stats.uncategorized}
-                    </Badge>
-                  </Button>
+                    </span>
+                  </button>
                 )}
               </div>
 
@@ -1807,17 +1803,24 @@ export default function MenuItemsPage() {
                   <span className="text-xs text-muted-foreground">
                     Filtered by:
                   </span>
-                  <Badge variant="secondary" className="gap-1 pr-1">
+                  <span
+                    className={cn(
+                      BADGE_SHELL,
+                      "gap-1 bg-muted/60 py-1 pr-1 text-muted-foreground",
+                    )}
+                  >
                     {selectedCategoryId === "uncategorized"
                       ? "Uncategorized"
                       : selectedCategory?.name || "Unknown"}
                     <button
+                      type="button"
                       onClick={() => setSelectedCategoryId(null)}
-                      className="ml-1 hover:bg-muted rounded-full p-0.5 transition-colors"
+                      aria-label="Clear category filter"
+                      className="inline-flex size-4 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-muted hover:text-foreground"
                     >
                       <X className="h-3 w-3" />
                     </button>
-                  </Badge>
+                  </span>
                 </div>
               )}
             </div>
@@ -1825,35 +1828,43 @@ export default function MenuItemsPage() {
 
           {/* Category view controls */}
           {viewMode === "categories" && (
-            <div className="flex items-center gap-2 pt-2 border-t">
-              <Button variant="outline" size="sm" onClick={expandAllCategories}>
+            <div className="flex items-center gap-2 pt-4">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={expandAllCategories}
+                className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+              >
                 Expand All
               </Button>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={collapseAllCategories}
+                className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
               >
                 Collapse All
               </Button>
             </div>
           )}
-        </CardHeader>
+        </div>
 
-        <CardContent>
+        <div className="mt-6">
           {isSelectionMode && (
-            <div className="sticky top-0 z-20 -mx-1 px-3 py-2 mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-primary/30 bg-primary/5 backdrop-blur-md shadow-sm animate-in fade-in slide-in-from-top-2 duration-200">
+            <div className="sticky top-0 z-20 mb-4 flex flex-wrap items-center gap-2 rounded-2xl border-0 bg-muted/60 px-4 py-2.5 shadow-none backdrop-blur-md animate-in fade-in slide-in-from-top-2 duration-200">
               <div className="flex items-center gap-2 text-sm font-medium">
                 <CheckCircle2 className="h-4 w-4 text-primary" />
                 <span>
-                  {selectedItemIds.size} of {filteredItems.length} selected
+                  <span className="tabular-nums">{selectedItemIds.size}</span> of{" "}
+                  <span className="tabular-nums">{filteredItems.length}</span>{" "}
+                  selected
                 </span>
               </div>
-              <div className="h-5 w-px bg-border mx-1" />
+              <div className="mx-1 h-5 w-px bg-border/60" />
               <Button
                 size="sm"
                 variant="ghost"
-                className="h-7 px-2 text-xs gap-1"
+                className="h-7 gap-1 rounded-full px-3 text-xs"
                 onClick={() => {
                   const allSelected =
                     filteredItems.length > 0 &&
@@ -1877,7 +1888,7 @@ export default function MenuItemsPage() {
               <Button
                 size="sm"
                 variant="ghost"
-                className="h-7 px-2 text-xs"
+                className="h-7 rounded-full px-3 text-xs"
                 onClick={clearSelection}
                 disabled={selectedItemIds.size === 0}
               >
@@ -1889,7 +1900,7 @@ export default function MenuItemsPage() {
                     <Button
                       size="sm"
                       variant="default"
-                      className="h-8 gap-1"
+                      className="h-8 gap-1 rounded-full px-4 text-[0.8125rem] font-medium"
                       disabled={selectedItemIds.size === 0}
                     >
                       Bulk edit
@@ -1916,7 +1927,7 @@ export default function MenuItemsPage() {
                 <Button
                   size="sm"
                   variant="ghost"
-                  className="h-8 px-2 gap-1"
+                  className="h-8 gap-1 rounded-full px-3 text-[0.8125rem]"
                   onClick={() => {
                     setIsSelectionMode(false);
                     clearSelection();
@@ -1939,7 +1950,10 @@ export default function MenuItemsPage() {
               {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
                 <Skeleton
                   key={i}
-                  className={viewMode === "list" ? "h-20" : "h-64"}
+                  className={cn(
+                    "rounded-2xl",
+                    viewMode === "list" ? "h-20" : "h-64",
+                  )}
                 />
               ))}
             </div>
@@ -1964,16 +1978,18 @@ export default function MenuItemsPage() {
                 itemsList.length === 0 ? (
                   <Button
                     onClick={() => router.push("/dashboard/menu/categories")}
+                    className="h-9 rounded-full px-4 text-[0.8125rem] font-medium"
                   >
-                    <Plus className="h-4 w-4 mr-2" />
+                    <Plus className="mr-2 h-4 w-4" />
                     Go to Categories
                   </Button>
                 ) : selectedCategoryId ? (
                   <Button
                     variant="outline"
                     onClick={() => setSelectedCategoryId(null)}
+                    className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
                   >
-                    <X className="h-4 w-4 mr-2" />
+                    <X className="mr-2 h-4 w-4" />
                     Clear Filter
                   </Button>
                 ) : null
@@ -2067,8 +2083,8 @@ export default function MenuItemsPage() {
               })}
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </Panel>
 
       {/* Edit Item Sheet */}
       <NewEditItemFormSheet
@@ -2146,6 +2162,7 @@ export default function MenuItemsPage() {
               variant="outline"
               onClick={() => setDeletingItem(null)}
               disabled={isDeleting}
+              className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
             >
               Cancel
             </Button>
@@ -2153,15 +2170,16 @@ export default function MenuItemsPage() {
               variant="destructive"
               onClick={handleDeleteItem}
               disabled={isDeleting}
+              className="h-9 rounded-full px-4 text-[0.8125rem] font-medium"
             >
               {isDeleting ? (
                 <>
-                  <span className="animate-spin mr-2">⏳</span>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Deleting...
                 </>
               ) : (
                 <>
-                  <Trash2 className="h-4 w-4 mr-2" />
+                  <Trash2 className="mr-2 h-4 w-4" />
                   Delete Item
                 </>
               )}
@@ -2244,6 +2262,6 @@ export default function MenuItemsPage() {
           refetch();
         }}
       />
-    </div>
+    </PageShell>
   );
 }

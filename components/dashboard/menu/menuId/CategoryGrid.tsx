@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
+import { Panel } from "@/components/dashboard/shell";
 import {
   ChevronUp,
   ChevronDown,
@@ -73,11 +73,13 @@ export function CategoryGrid({
           !!onResetOverride;
 
         return (
-          <Card
+          /* A repeating grid tile, not a page section — tier 2 (`nested`). */
+          <Panel
+            nested
             key={category.id}
             className={cn(
               "group flex flex-col overflow-hidden transition-all duration-200",
-              "hover:shadow-md hover:border-primary/40",
+              "border-0 bg-card shadow-sm hover:shadow-md",
               !isActive && "opacity-70 bg-muted/30",
             )}
           >
@@ -96,10 +98,12 @@ export function CategoryGrid({
                   )}
                 </div>
                 <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
+                  {/* Borderless soft tints (D-11), with the dark variants the
+                      originals omitted (C4). */}
                   {isGlobal ? (
                     <Badge
                       variant="outline"
-                      className="gap-1 text-[10px] px-1.5 py-0 bg-emerald-50 text-emerald-700 border-emerald-200"
+                      className="gap-1 rounded-full border-0 px-2 py-0 text-[10px] bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400"
                     >
                       <Globe className="h-2.5 w-2.5" />
                       Global
@@ -107,7 +111,7 @@ export function CategoryGrid({
                   ) : (
                     <Badge
                       variant="outline"
-                      className="gap-1 text-[10px] px-1.5 py-0 bg-blue-50 text-blue-700 border-blue-200"
+                      className="gap-1 rounded-full border-0 px-2 py-0 text-[10px] bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400"
                     >
                       <MapPin className="h-2.5 w-2.5" />
                       {category.category?.location_name || "Location"}
@@ -116,10 +120,10 @@ export function CategoryGrid({
                   <Badge
                     variant="outline"
                     className={cn(
-                      "gap-1 text-[10px] px-1.5 py-0",
+                      "gap-1 rounded-full border-0 px-2 py-0 text-[10px]",
                       isActive
-                        ? "bg-green-50 text-green-700 border-green-200"
-                        : "bg-amber-50 text-amber-700 border-amber-200",
+                        ? "bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400"
+                        : "bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400",
                     )}
                   >
                     {isActive ? (
@@ -163,7 +167,7 @@ export function CategoryGrid({
               </div>
             </div>
 
-            <CardContent className="flex-1 px-4 pt-3 pb-4 flex flex-col gap-3">
+            <div className="flex-1 px-4 pt-3 pb-4 flex flex-col gap-3">
               {/* Description */}
               {category.category?.description ? (
                 <p className="text-sm text-muted-foreground line-clamp-2">
@@ -188,7 +192,7 @@ export function CategoryGrid({
               </div>
 
               {/* Item preview */}
-              <div className="rounded-md border bg-muted/20 p-2">
+              <div className="rounded-2xl bg-muted/40 p-2">
                 {previewItems.length === 0 ? (
                   <div className="flex items-center gap-2 text-xs text-muted-foreground py-1.5 px-1">
                     <Utensils className="h-3.5 w-3.5 opacity-60" />
@@ -215,7 +219,7 @@ export function CategoryGrid({
                             e.stopPropagation();
                             if (itemId) onItemClick?.(itemId);
                           }}
-                          className="inline-flex items-center gap-1.5 rounded-md border bg-background px-2 py-1 text-xs transition-colors hover:border-primary/40 hover:bg-primary/5 max-w-40"
+                          className="inline-flex items-center gap-1.5 rounded-full bg-background px-2.5 py-1 text-xs shadow-sm transition-colors hover:bg-muted max-w-40"
                           title={itemName}
                         >
                           {isValidImageUrl(img) ? (
@@ -232,7 +236,7 @@ export function CategoryGrid({
                       );
                     })}
                     {overflow > 0 && (
-                      <span className="inline-flex items-center rounded-md border border-dashed bg-background px-2 py-1 text-xs text-muted-foreground">
+                      <span className="inline-flex items-center rounded-full bg-background/60 px-2.5 py-1 text-xs text-muted-foreground">
                         +{overflow} more
                       </span>
                     )}
@@ -241,7 +245,7 @@ export function CategoryGrid({
               </div>
 
               {/* Footer actions */}
-              <div className="mt-auto flex items-center gap-1 flex-wrap pt-1 border-t">
+              <div className="mt-auto flex items-center gap-1 flex-wrap pt-2">
                 <Button
                   variant="ghost"
                   size="sm"
@@ -284,8 +288,8 @@ export function CategoryGrid({
                   </Button>
                 )}
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </Panel>
         );
       })}
     </div>

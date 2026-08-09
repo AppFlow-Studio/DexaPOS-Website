@@ -305,7 +305,7 @@ export function FloorPlanPropertiesPanel ({
                       }
                     }}
                     placeholder='#3b82f6'
-                    className='font-mono text-sm flex-1 h-10 rounded-xl border-transparent bg-muted/50 shadow-none focus-visible:bg-background'
+                    className='font-mono text-sm flex-1 h-10 rounded-xl border-transparent bg-muted/50'
                   />
                   {selectedTable.color_override && (
                     <Button

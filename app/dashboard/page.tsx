@@ -437,14 +437,15 @@ export default function MerchantDashboardPage() {
           </p>
         </div>
 
-        {/* No `overflow-hidden` — it would clip the sticky range bar. */}
-        <div className="rounded-2xl border bg-card">
+        {/* `overflow-clip` preserves sticky positioning while keeping the
+            range bar's background inside the shell's rounded border. */}
+        <div className="overflow-clip rounded-3xl border bg-card">
           {/* Sticky within this container only: the bar rides down as the
               Overview scrolls, then releases once the section ends. */}
           {/* Translucent + blurred so content dissolves as it scrolls under,
               rather than cutting off at a hard edge. The `after` strip hangs a
               short fade below the bar to soften the transition further. */}
-          <div className="sticky -top-4 sm:-top-6 z-20 rounded-t-2xl bg-card/80 backdrop-blur-md after:pointer-events-none after:absolute after:inset-x-0 after:top-full after:h-6 after:bg-gradient-to-b after:from-card/80 after:to-transparent">
+          <div className="sticky -top-4 sm:-top-6 z-20 rounded-t-3xl bg-card/80 backdrop-blur-md after:pointer-events-none after:absolute after:inset-x-0 after:top-full after:h-6 after:bg-gradient-to-b after:from-card/80 after:to-transparent">
             <OverviewRangeTabs value={range} onChange={setRange} />
           </div>
 
@@ -701,15 +702,15 @@ export default function MerchantDashboardPage() {
         {/* One container, sections divided by hairlines — same treatment as
             Overview. Each child card is de-chromed by the .overview-shell
             rules so its own border/shadow doesn't nest inside this one.
-            Note: no `overflow-hidden` here — it would clip the sticky range
-            bar below. The rounded corners are clipped by the inner wrapper. */}
-        <div className="overview-shell rounded-2xl border bg-card">
+            `overflow-clip` keeps the sticky range bar working while clipping
+            its background to the shell's rounded corners. */}
+        <div className="overview-shell overflow-clip rounded-3xl border bg-card">
           {/* Sticks to the top of the viewport while the section scrolls past,
               so the active range stays visible and changeable throughout. */}
           {/* Translucent + blurred so content dissolves as it scrolls under,
               rather than cutting off at a hard edge. The `after` strip hangs a
               short fade below the bar to soften the transition further. */}
-          <div className="sticky -top-4 sm:-top-6 z-20 rounded-t-2xl bg-card/80 backdrop-blur-md after:pointer-events-none after:absolute after:inset-x-0 after:top-full after:h-6 after:bg-gradient-to-b after:from-card/80 after:to-transparent">
+          <div className="sticky -top-4 sm:-top-6 z-20 rounded-t-3xl bg-card/80 backdrop-blur-md after:pointer-events-none after:absolute after:inset-x-0 after:top-full after:h-6 after:bg-gradient-to-b after:from-card/80 after:to-transparent">
             <OverviewRangeTabs
               value={financialRange}
               onChange={setFinancialRange}

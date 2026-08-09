@@ -870,7 +870,7 @@ export function FloorPlanCanvasView({ locationId, initialFloorPlanId, onBack, re
                                             onChange={(e) => setEditingPlanName(e.target.value)}
                                             onKeyDown={(e) => e.key === 'Enter' && handleRenamePlan()}
                                             autoFocus
-                                            className="h-7 text-sm flex-1 rounded-xl border-transparent bg-background shadow-none"
+                                            className="h-7 text-sm flex-1 rounded-xl border-transparent bg-background"
                                         />
                                         <Button size="sm" onClick={handleRenamePlan} disabled={isManaging}>Save</Button>
                                         <Button size="sm" variant="ghost" onClick={() => setEditingPlanId(null)}>Cancel</Button>

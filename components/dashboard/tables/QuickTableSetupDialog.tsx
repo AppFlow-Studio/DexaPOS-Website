@@ -117,7 +117,7 @@ export function QuickTableSetupDialog({
                                             value={quantities[shape.id] || ''}
                                             onChange={(event) => handleQuantityChange(shape.id, event.target.value)}
                                             placeholder="0"
-                                            className="h-9 rounded-xl border-transparent bg-background text-center text-sm font-semibold text-foreground shadow-none placeholder:text-muted-foreground"
+                                            className="h-9 rounded-xl border-transparent bg-background text-center text-sm font-semibold text-foreground placeholder:text-muted-foreground"
                                         />
                                     </div>
                                 </div>

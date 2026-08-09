@@ -127,10 +127,10 @@ export function MenuCategoriesTab({
             <Button
               variant={isSelectionMode ? "secondary" : "outline"}
               size="sm"
-              className="gap-1"
+              className="h-8 gap-1 px-3 text-xs"
               onClick={onToggleSelectionMode}
             >
-              <CheckSquare className="h-4 w-4" />
+              <CheckSquare className="h-3.5 w-3.5" />
               {isSelectionMode ? "Selecting" : "Select"}
               {isSelectionMode && selectedCount > 0 && (
                 <Badge variant="secondary" className="ml-0.5 h-5 px-1.5 text-xs">
@@ -141,53 +141,77 @@ export function MenuCategoriesTab({
           )}
           {categoryViewMode === "list" && (
             <>
-              <Button variant="outline" size="sm" onClick={onExpandAll}>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 px-3 text-xs"
+                onClick={onExpandAll}
+              >
                 Expand All
               </Button>
-              <Button variant="outline" size="sm" onClick={onCollapseAll}>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 px-3 text-xs"
+                onClick={onCollapseAll}
+              >
                 Collapse All
               </Button>
             </>
           )}
           {onViewModeChange && (
-            <div className="hidden sm:flex items-center border rounded-md overflow-hidden">
+            // One pill rail, matching the tab rail — no bordered segments.
+            <div className="hidden sm:flex items-center gap-0.5 rounded-full bg-muted/70 p-1 h-8">
               <Button
-                variant={categoryViewMode === "list" ? "default" : "ghost"}
+                variant="ghost"
                 size="sm"
-                className="rounded-none"
+                className={cn(
+                  "h-6 rounded-full px-2.5 text-muted-foreground shadow-none hover:text-foreground",
+                  categoryViewMode === "list" &&
+                    "bg-background text-foreground shadow-sm ring-1 ring-border",
+                )}
                 onClick={() => onViewModeChange("list")}
                 title="List view (drag to reorder)"
               >
-                <List className="h-4 w-4" />
+                <List className="h-3.5 w-3.5" />
               </Button>
               <Button
-                variant={categoryViewMode === "grid" ? "default" : "ghost"}
+                variant="ghost"
                 size="sm"
                 className={cn(
-                  "rounded-none border-x",
-                  categoryViewMode !== "grid" && "border-x-transparent",
+                  "h-6 rounded-full px-2.5 text-muted-foreground shadow-none hover:text-foreground",
+                  categoryViewMode === "grid" &&
+                    "bg-background text-foreground shadow-sm ring-1 ring-border",
                 )}
                 onClick={() => onViewModeChange("grid")}
                 title="Grid view"
               >
-                <LayoutGrid className="h-4 w-4" />
+                <LayoutGrid className="h-3.5 w-3.5" />
               </Button>
               <Button
-                variant={categoryViewMode === "table" ? "default" : "ghost"}
+                variant="ghost"
                 size="sm"
-                className="rounded-none"
+                className={cn(
+                  "h-6 rounded-full px-2.5 text-muted-foreground shadow-none hover:text-foreground",
+                  categoryViewMode === "table" &&
+                    "bg-background text-foreground shadow-sm ring-1 ring-border",
+                )}
                 onClick={() => onViewModeChange("table")}
                 title="Table view"
               >
-                <TableIcon className="h-4 w-4" />
+                <TableIcon className="h-3.5 w-3.5" />
               </Button>
             </div>
           )}
         </div>
         <div className="flex items-center gap-2">
           {canModifyCategories ? (
-            <Button onClick={onAddCategory} className="gap-1">
-              <Wand2 className="h-4 w-4" />
+            <Button
+              onClick={onAddCategory}
+              size="sm"
+              className="h-8 gap-1 px-3 text-xs"
+            >
+              <Wand2 className="h-3.5 w-3.5" />
               Add Category
             </Button>
           ) : (
@@ -197,10 +221,11 @@ export function MenuCategoriesTab({
                   <div>
                     <Button
                       onClick={onAddCategory}
-                      className="gap-1"
+                      size="sm"
+                      className="h-8 gap-1 px-3 text-xs"
                       disabled={true}
                     >
-                      <Wand2 className="h-4 w-4" />
+                      <Wand2 className="h-3.5 w-3.5" />
                       Add Category
                     </Button>
                   </div>

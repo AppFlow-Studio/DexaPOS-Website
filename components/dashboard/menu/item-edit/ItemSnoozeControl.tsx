@@ -69,7 +69,7 @@ export function ItemSnoozeControl({
     return (
       <div
         className={cn(
-          "rounded-lg border border-dashed p-3 text-xs text-muted-foreground",
+          "rounded-2xl border-0 bg-muted/60 p-3 text-xs text-muted-foreground shadow-none",
           className,
         )}
       >
@@ -113,18 +113,18 @@ export function ItemSnoozeControl({
     return (
       <div
         className={cn(
-          "flex items-center justify-between gap-3 rounded-lg border border-amber-300 bg-amber-50 p-3",
+          "flex items-center justify-between gap-3 rounded-2xl border-0 bg-amber-50 p-3 shadow-none dark:bg-amber-900/20",
           className,
         )}
       >
         <div className="flex min-w-0 items-center gap-2">
-          <CircleSlash className="h-4 w-4 shrink-0 text-amber-600" />
+          <CircleSlash className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
           <div className="min-w-0">
-            <p className="truncate text-sm font-medium text-amber-800">
+            <p className="truncate text-sm font-medium text-amber-800 dark:text-amber-200">
               {snoozeLabel(snoozedUntil)}
             </p>
             {snooze?.snooze_reason ? (
-              <p className="truncate text-xs text-amber-700">
+              <p className="truncate text-xs text-amber-700 dark:text-amber-300">
                 {snooze.snooze_reason}
               </p>
             ) : null}
@@ -152,7 +152,12 @@ export function ItemSnoozeControl({
   }
 
   return (
-    <div className={cn("space-y-3 rounded-lg border p-3", className)}>
+    <div
+      className={cn(
+        "space-y-3 rounded-2xl border-0 bg-muted/60 p-3 shadow-none",
+        className,
+      )}
+    >
       <div className="flex items-center justify-between gap-3">
         <div className="space-y-0.5">
           <p className="text-sm font-medium">Out of stock (86)</p>

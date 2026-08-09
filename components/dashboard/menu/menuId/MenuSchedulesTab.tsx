@@ -1,10 +1,9 @@
 'use client'
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Panel, PanelSection } from '@/components/dashboard/shell'
 import { Button } from '@/components/ui/button'
 import { Empty } from '@/components/ui/empty'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Badge } from '@/components/ui/badge'
 import { Calendar, Plus } from 'lucide-react'
 import { WeeklyScheduleView } from '../WeeklyScheduleView'
 import { ScheduleCard } from '../ScheduleCard'
@@ -45,32 +44,21 @@ export function MenuSchedulesTab({
             )}
 
             {/* Schedule Cards */}
-            <Card>
-                <CardHeader>
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <CardTitle>Assigned Schedule</CardTitle>
-                            <CardDescription>
-                                {menuSchedules.length === 0
-                                    ? "No schedules assigned yet"
-                                    : `${menuSchedules.length} schedule${menuSchedules.length !== 1 ? 's' : ''} controlling menu availability`
-                                }
-                            </CardDescription>
-                            {scopeLabel && (
-                                <p className="text-xs text-muted-foreground mt-1">
-                                    {scopeLabel}
-                                </p>
-                            )}
-                        </div>
-                        {/* <div className='items-end justify-end flex flex-col gap-2'>
-                            <Button onClick={onAddSchedule}>
-                                <Plus className="h-4 w-4 mr-2" />
-                                Add Schedule
-                            </Button>
-                        </div> */}
-                    </div>
-                </CardHeader>
-                <CardContent>
+            <Panel>
+                <PanelSection
+                    icon={Calendar}
+                    label="Assigned Schedule"
+                    caption={
+                        menuSchedules.length === 0
+                            ? "No schedules assigned yet"
+                            : `${menuSchedules.length} schedule${menuSchedules.length !== 1 ? 's' : ''} controlling menu availability`
+                    }
+                >
+                    {scopeLabel && (
+                        <p className="-mt-1 mb-4 text-xs text-muted-foreground">
+                            {scopeLabel}
+                        </p>
+                    )}
                     {isLoading ? (
                         <div className="space-y-3">
                             {[1].map((i) => (
@@ -83,7 +71,7 @@ export function MenuSchedulesTab({
                             title="No schedules assigned"
                             description="Add schedules to control when this menu is available to customers"
                             action={
-                                <Button onClick={onOpenScheduleSheet}>
+                                <Button onClick={onOpenScheduleSheet} className="rounded-full">
                                     <Plus className="h-4 w-4 mr-2" />
                                     Add Schedule
                                 </Button>
@@ -98,9 +86,9 @@ export function MenuSchedulesTab({
                                 return (
                                     <div key={`${schedule.id}:${schedule.assignment_location_id ?? 'global'}`} className="space-y-2">
                                         <div className="flex items-center gap-2">
-                                            <Badge variant={schedule.assignment_location_id ? 'outline' : 'secondary'}>
+                                            <span className="inline-flex items-center rounded-full bg-muted/60 px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
                                                 {scopeName}
-                                            </Badge>
+                                            </span>
                                         </div>
                                         <ScheduleCard
                                             schedule={schedule}
@@ -113,8 +101,8 @@ export function MenuSchedulesTab({
                             })}
                         </div>
                     )}
-                </CardContent>
-            </Card>
+                </PanelSection>
+            </Panel>
         </div>
     )
 }

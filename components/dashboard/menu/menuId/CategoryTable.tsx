@@ -44,7 +44,7 @@ export function CategoryTable({
 
     return (
         <div className="space-y-4">
-            <div className="rounded-md border overflow-x-auto">
+            <div className="rounded-2xl overflow-x-auto">
                 <Table className="min-w-[750px]">
                     <TableHeader>
                         <TableRow className="bg-muted/50">

@@ -66,8 +66,12 @@ export function PageHeader({
       >
         <h1 className="min-w-0 text-[1.75rem] font-semibold tracking-[-0.02em]">{title}</h1>
 
+        {/* `flex-wrap` + `min-w-0`, NOT `shrink-0`: a non-shrinking, non-wrapping
+            action row overflows the viewport on narrow screens (two buttons here
+            pushed "Add Items to Categories" off the right edge at ~360px). Wrapping
+            onto a second line is the correct narrow-screen behaviour. */}
         {(indicator || actions) && (
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
             {indicator}
             {actions}
           </div>

@@ -22,13 +22,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card";
+import { CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,7 +33,6 @@ import {
   Layers,
   Info,
   ChevronDown,
-  Sparkles,
   Loader2,
   Trash2,
   Edit3,
@@ -52,6 +45,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { Panel } from "@/components/dashboard/shell";
 import { useModifierGroups } from "@/app/dashboard/hooks/useModifierGroups";
 import { invalidateOrderOutSync } from "@/app/dashboard/hooks/useOrderOutMenuSync";
 import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
@@ -155,7 +149,7 @@ function SortableGroupWrapper({
     </button>
   ) : null;
   return (
-    <div ref={setNodeRef} style={style} className={cn(isDragging && "opacity-50 z-50")}>
+    <div ref={setNodeRef} style={style} className={cn("min-w-0", isDragging && "opacity-50 z-50")}>
       {children(handle, isDragging)}
     </div>
   );
@@ -668,30 +662,30 @@ const sensors = useSensors(
     return (
       <div
         key={item.id}
-        className="p-3 rounded-lg border bg-muted/40 space-y-2 animate-in fade-in"
+        className="min-w-0 overflow-hidden rounded-2xl border-0 bg-muted/60 p-3 shadow-none space-y-2 animate-in fade-in"
       >
-        <div className="flex items-center justify-between gap-2">
-          <div>
-            <div className="flex items-center gap-2 font-medium">
-              {item.name}
+        <div className="flex min-w-0 items-start justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 font-medium">
+              <span className="min-w-0 break-words">{item.name}</span>
               {item.is_default && (
-                <Badge variant="outline" className="text-[10px]">
+                <Badge variant="outline" className="shrink-0 text-[10px]">
                   Default
                 </Badge>
               )}
               {override && isOverrideScope && (
-                <Badge variant="outline" className="text-[10px]">
+                <Badge variant="outline" className="shrink-0 text-[10px]">
                   Overridden
                 </Badge>
               )}
             </div>
             {item.description && (
-              <div className="text-xs text-muted-foreground">
+              <div className="text-xs text-muted-foreground break-words">
                 {item.description}
               </div>
             )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-1">
             {override && isOverrideScope && (
               <Button
                 variant="ghost"
@@ -714,17 +708,17 @@ const sensors = useSensors(
           </div>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-4 items-center">
-          <div>
+        <div className="grid min-w-0 items-center gap-3 [grid-template-columns:repeat(auto-fit,minmax(7rem,1fr))]">
+          <div className="min-w-0">
             <div className="text-xs text-muted-foreground mb-1">
               Price Modifier
             </div>
             <div className="relative">
-              <span className="absolute left-2 top-2 text-muted-foreground text-sm">
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
                 $
               </span>
               <Input
-                className="pl-6 h-9"
+                className="h-9 bg-background pl-7 pr-3 text-sm tabular-nums"
                 type="number"
                 step="0.01"
                 disabled={isSaving || (isOverrideScope && !selectedLocationId)}
@@ -739,7 +733,7 @@ const sensors = useSensors(
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex min-w-0 items-center gap-2">
             <div className="text-xs text-muted-foreground">Active</div>
             <Switch
               checked={!!effectiveActive}
@@ -747,11 +741,12 @@ const sensors = useSensors(
                 setItemDraft(item.id, { isActive: checked })
               }
               disabled={isSaving}
+              className="shrink-0"
             />
           </div>
 
           {!isOverrideScope && (
-            <div className="flex items-center gap-2">
+            <div className="flex min-w-0 items-center gap-2">
               <div className="text-xs text-muted-foreground">Default</div>
               <Switch
                 checked={draft.isDefault ?? item.is_default ?? false}
@@ -759,27 +754,25 @@ const sensors = useSensors(
                   setItemDraft(item.id, { isDefault: checked })
                 }
                 disabled={isSaving}
+                className="shrink-0"
               />
             </div>
           )}
 
-          <div className="flex justify-end">
+          <div className="flex min-w-0 justify-center [grid-column:1/-1] sm:justify-end sm:[grid-column:auto]">
             <Button
               size="sm"
               onClick={() => handleSaveItem(group, item)}
               disabled={isSaving}
-              className="gap-2"
+              className="h-8 min-w-0 gap-1.5 rounded-full px-4 text-xs"
             >
               {isSaving ? (
                 <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <Loader2 className="size-3.5 shrink-0 animate-spin" />
                   Saving...
                 </>
               ) : (
-                <>
-                  <Sparkles className="h-4 w-4" />
-                  Save
-                </>
+                "Save"
               )}
             </Button>
           </div>
@@ -797,7 +790,7 @@ const sensors = useSensors(
       description: "",
     };
     return (
-      <div className="rounded-lg border bg-white p-3 space-y-2">
+      <div className="rounded-2xl border bg-card p-3 space-y-3">
         <div className="font-semibold text-sm">Add Option</div>
         <div className="grid md:grid-cols-4 gap-3">
           <Input
@@ -882,7 +875,7 @@ const sensors = useSensors(
           </Button>
         </div>
         {!isAllLocations && (
-          <div className="flex items-start gap-2 p-2 bg-blue-50 text-blue-800 rounded-lg text-sm border border-blue-100">
+          <div className="flex items-start gap-2 rounded-2xl border-0 bg-blue-50 p-3 text-sm text-blue-800 dark:bg-blue-950/40 dark:text-blue-200">
             <Info className="h-4 w-4 mt-0.5 flex-shrink-0" />
             <span>Viewing <strong>{selectedLocation?.name}</strong>. Global groups are
             structural read-only; you can override price/availability.</span>
@@ -890,14 +883,14 @@ const sensors = useSensors(
         )}
       </div>
 
-      <Card className="border shadow-sm">
-        <CardHeader className="space-y-4">
+      <Panel>
+        <div className="min-w-0 space-y-4 px-6 pt-6">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div className="relative w-full md:max-w-sm">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
               <Input
                 placeholder="Search modifier groups..."
-                className="pl-9"
+                className="h-9 pl-9 text-[0.8125rem]"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
@@ -918,16 +911,20 @@ const sensors = useSensors(
           )}
 
           {/* Filter Buttons */}
-          <div className="flex flex-wrap gap-2 border-t pt-4">
+          <div className="flex flex-wrap items-center gap-2 border-t border-border/60 pt-5">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Filter className="h-4 w-4" />
               <span>Filter by:</span>
             </div>
             <Button
-              variant={scopeFilter === "all" ? "default" : "outline"}
+              variant={scopeFilter === "all" ? "default" : "ghost"}
               size="sm"
               onClick={() => setScopeFilter("all")}
-              className="h-7 text-xs"
+              className={cn(
+                "h-7 rounded-full border-0 text-xs shadow-none",
+                scopeFilter !== "all" &&
+                  "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground",
+              )}
             >
               All
               <Badge
@@ -938,40 +935,42 @@ const sensors = useSensors(
               </Badge>
             </Button>
             <Button
-              variant={scopeFilter === "global" ? "default" : "outline"}
+              variant={scopeFilter === "global" ? "default" : "ghost"}
               size="sm"
               onClick={() => setScopeFilter("global")}
               className={cn(
-                "h-7 text-xs gap-1",
-                scopeFilter === "global" &&
-                  "bg-emerald-500 hover:bg-emerald-600",
+                "h-7 gap-1 rounded-full border-0 text-xs shadow-none",
+                scopeFilter === "global"
+                  ? "bg-emerald-500 hover:bg-emerald-600"
+                  : "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground",
               )}
             >
-              <Globe className="h-3 w-3" />
+              <Globe className="size-3" />
               Global
               <Badge variant="secondary" className="ml-1 h-4 px-1 text-[10px]">
                 {counts.global}
               </Badge>
             </Button>
             <Button
-              variant={scopeFilter === "location" ? "default" : "outline"}
+              variant={scopeFilter === "location" ? "default" : "ghost"}
               size="sm"
               onClick={() => setScopeFilter("location")}
               className={cn(
-                "h-7 text-xs gap-1",
-                scopeFilter === "location" &&
-                  "bg-purple-500 hover:bg-purple-600",
+                "h-7 gap-1 rounded-full border-0 text-xs shadow-none",
+                scopeFilter === "location"
+                  ? "bg-purple-500 hover:bg-purple-600"
+                  : "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground",
               )}
             >
-              <MapPin className="h-3 w-3" />
+              <MapPin className="size-3" />
               Location
               <Badge variant="secondary" className="ml-1 h-4 px-1 text-[10px]">
                 {counts.location}
               </Badge>
             </Button>
           </div>
-        </CardHeader>
-        <CardContent className="space-y-3">
+        </div>
+        <div className="min-w-0 space-y-3 px-6 pt-6 pb-6">
           {isLoading ? (
             <div className="text-sm text-muted-foreground">Loading...</div>
           ) : filteredGroups.length === 0 ? (
@@ -1016,14 +1015,12 @@ const sensors = useSensors(
                   canReorder={canReorderLibraryGroups}
                 >
                   {(dragHandle) => (
-                  <div
-                    className="border rounded-lg bg-white shadow-sm"
-                  >
-                  <div className="flex flex-col gap-3 p-4">
-                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="min-w-0 overflow-hidden rounded-2xl border bg-card">
+                  <div className="flex min-w-0 flex-col gap-3 p-4">
+                    <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                       <div className="flex items-center gap-3 min-w-0">
                         {dragHandle}
-                        <div className="h-10 w-10 rounded-lg bg-purple-50 flex items-center justify-center">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-purple-50 dark:bg-purple-950/40">
                           <Layers className="h-5 w-5 text-purple-600" />
                         </div>
                         <div className="min-w-0">
@@ -1170,7 +1167,7 @@ const sensors = useSensors(
                     </div>
 
                     {expandedGroups[group.id] && (
-                      <div className="space-y-3 border-t pt-3">
+                      <div className="min-w-0 space-y-3 border-t border-border/60 pt-3">
                         <div className="flex items-center gap-2 text-sm font-semibold text-muted-foreground">
                           Options ({itemCount})
                         </div>
@@ -1188,7 +1185,7 @@ const sensors = useSensors(
 
                         {/* Linked Items Breakdown */}
                         {(globalLinkedCount > 0 || locationLinkedCount > 0) && (
-                          <div className="space-y-2 border-t pt-3">
+                          <div className="space-y-2 pt-4">
                             <div className="text-sm font-semibold text-muted-foreground">
                               Linked Items ({globalLinkedCount + locationLinkedCount})
                             </div>
@@ -1262,7 +1259,7 @@ const sensors = useSensors(
                 {isDraggingGroupId && (() => {
                   const g = filteredGroups.find((x) => x.id === isDraggingGroupId);
                   return g ? (
-                    <div className="flex items-center gap-3 px-4 py-3 rounded-lg border bg-card shadow-xl opacity-90">
+                    <div className="flex items-center gap-3 rounded-2xl border bg-card px-4 py-3 shadow-xl opacity-90">
                       <GripVertical className="h-4 w-4 text-muted-foreground" />
                       <Layers className="h-5 w-5 text-purple-600" />
                       <span className="font-semibold">{g.name}</span>
@@ -1272,8 +1269,8 @@ const sensors = useSensors(
               </DragOverlay>
             </DndContext>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </Panel>
 
       <ModifierGroupFormSheet
         open={isSheetOpen}

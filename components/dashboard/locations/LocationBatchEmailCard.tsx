@@ -105,7 +105,7 @@ export function LocationBatchEmailCard({
             }
             autoComplete="off"
             maxLength={254}
-            className="h-10 rounded-xl border-transparent bg-muted/50 shadow-none"
+            className="h-10 rounded-xl border-transparent bg-muted/50"
           />
           <p className="text-sm text-muted-foreground">
             Leave blank to send to the location email

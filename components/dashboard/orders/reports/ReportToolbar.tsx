@@ -60,7 +60,7 @@ export function ReportToolbar<T extends Record<string, any>>({
           placeholder={searchPlaceholder}
           value={searchQuery}
           onChange={(e) => onSearchChange(e.target.value)}
-          className="h-9 rounded-full border-0 bg-muted/60 pl-9 text-[0.8125rem] shadow-none focus-visible:bg-background"
+          className="h-9 pl-9 text-[0.8125rem]"
         />
       </div>
 

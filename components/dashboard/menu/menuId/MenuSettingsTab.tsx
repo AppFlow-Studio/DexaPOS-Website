@@ -1,11 +1,10 @@
 'use client'
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Panel, PanelSection } from '@/components/dashboard/shell'
 import { Button } from '@/components/ui/button'
 import { CdnImageUploadField } from '@/components/ui/cdn-image-upload-field'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
 import { Power, Settings, Info, AlertTriangle, Save, Trash2, Globe, MapPin } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { MenuWithCategories } from '@/types/menu'
@@ -76,101 +75,72 @@ export function MenuSettingsTab({
     const isGlobal = editedLocationId === null
 
     return (
-        <div className="space-y-4">
-            {/* Status Card */}
-            <Card className={cn(
-                "transition-all",
-                menu.is_active
-                    ? "border-green-200 bg-green-50/50 dark:border-green-900 dark:bg-green-950/20"
-                    : "border-amber-200 bg-amber-50/50 dark:border-amber-900 dark:bg-amber-950/20"
-            )}>
-                <CardHeader>
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                            <div className={cn(
-                                "h-10 w-10 rounded-lg flex items-center justify-center",
-                                menu.is_active
-                                    ? "bg-green-500/20 text-green-600"
-                                    : "bg-amber-500/20 text-amber-600"
-                            )}>
-                                <Power className="h-5 w-5" />
-                            </div>
-                            <div>
-                                <CardTitle className="text-base">Menu Status</CardTitle>
-                                <CardDescription>
-                                    {menu.is_active
-                                        ? 'This menu is currently active and visible to customers'
-                                        : 'This menu is currently inactive and hidden from customers'
-                                    }
-                                </CardDescription>
-                            </div>
-                        </div>
-                        <Badge
-                            variant={menu.is_active ? "default" : "secondary"}
-                            className={cn(
-                                "text-sm px-3 py-1",
-                                menu.is_active
-                                    ? "bg-green-500 hover:bg-green-600"
-                                    : "bg-amber-500 hover:bg-amber-600 text-white"
-                            )}
-                        >
-                            {menu.is_active ? 'Active' : 'Inactive'}
-                        </Badge>
-                    </div>
-                </CardHeader>
-                <CardContent>
-                    <Button
-                        onClick={onToggleActive}
-                        disabled={isTogglingActive}
-                        variant={menu.is_active ? "outline" : "default"}
-                        className={cn(
-                            menu.is_active
-                                ? "border-amber-300 text-amber-700 hover:bg-amber-100 dark:border-amber-700 dark:text-amber-400"
-                                : "bg-green-600 hover:bg-green-700"
-                        )}
-                    >
-                        {isTogglingActive ? (
-                            <>
-                                <svg className="animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24">
-                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                                </svg>
-                                Updating...
-                            </>
-                        ) : (
-                            <>
-                                <Power className="h-4 w-4 mr-2" />
-                                {menu.is_active ? 'Deactivate Menu' : 'Activate Menu'}
-                            </>
-                        )}
-                    </Button>
-                </CardContent>
-            </Card>
+        <Panel>
+            {/* Status */}
+            <PanelSection
+                icon={Power}
+                label="Menu Status"
+                caption={
+                    menu.is_active
+                        ? 'This menu is currently active and visible to customers'
+                        : 'This menu is currently inactive and hidden from customers'
+                }
+                action={
+                    /* Soft tint + dot, not a solid saturated fill (D-11). */
+                    <span className={cn(
+                        "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium",
+                        menu.is_active
+                            ? "bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400"
+                            : "bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400"
+                    )}>
+                        <span className={cn(
+                            "h-1.5 w-1.5 rounded-full",
+                            menu.is_active ? "bg-green-500" : "bg-amber-500"
+                        )} />
+                        {menu.is_active ? 'Active' : 'Inactive'}
+                    </span>
+                }
+            >
+                <Button
+                    onClick={onToggleActive}
+                    disabled={isTogglingActive}
+                    variant="outline"
+                    className="rounded-full"
+                >
+                    {isTogglingActive ? (
+                        <>
+                            <svg className="animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                            </svg>
+                            Updating...
+                        </>
+                    ) : (
+                        <>
+                            <Power className="h-4 w-4 mr-2" />
+                            {menu.is_active ? 'Deactivate Menu' : 'Activate Menu'}
+                        </>
+                    )}
+                </Button>
+            </PanelSection>
 
             {/* Menu Scope */}
-            <Card>
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                        {isGlobal ? <Globe className="h-5 w-5 text-blue-500" /> : <MapPin className="h-5 w-5 text-orange-500" />}
-                        Menu Scope
-                    </CardTitle>
-                    <CardDescription>
-                        Control which location this menu belongs to. Global menus are available across all locations.
-                    </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                    {/* Current scope indicator */}
-                    <div className={cn(
-                        "flex items-center gap-3 rounded-lg border p-4",
-                        isGlobal
-                            ? "border-blue-200 bg-blue-50/50 dark:border-blue-900 dark:bg-blue-950/20"
-                            : "border-orange-200 bg-orange-50/50 dark:border-orange-900 dark:bg-orange-950/20"
-                    )}>
+            <PanelSection
+                icon={isGlobal ? Globe : MapPin}
+                label="Menu Scope"
+                caption="Control which location this menu belongs to. Global menus are available across all locations."
+            >
+                {/* Rhythm lives on this wrapper, not on the section: PanelSection's
+                    own `space-y` would only separate its heading from its body,
+                    leaving the fields inside to collide with their labels. */}
+                <div className="space-y-6">
+                    {/* Current scope indicator — tier-3 inset, borderless tinted fill */}
+                    <div className="flex items-center gap-3 rounded-2xl border-0 bg-muted/60 p-4 shadow-none">
                         <div className={cn(
-                            "h-9 w-9 rounded-lg flex items-center justify-center shrink-0",
+                            "h-9 w-9 rounded-full flex items-center justify-center shrink-0",
                             isGlobal
-                                ? "bg-blue-500/15 text-blue-600"
-                                : "bg-orange-500/15 text-orange-600"
+                                ? "bg-blue-500/15 text-blue-600 dark:text-blue-400"
+                                : "bg-orange-500/15 text-orange-600 dark:text-orange-400"
                         )}>
                             {isGlobal ? <Globe className="h-4 w-4" /> : <MapPin className="h-4 w-4" />}
                         </div>
@@ -187,17 +157,14 @@ export function MenuSettingsTab({
                                 }
                             </p>
                         </div>
-                        <Badge
-                            variant="outline"
-                            className={cn(
-                                "ml-auto shrink-0",
-                                isGlobal
-                                    ? "border-blue-300 text-blue-700 dark:border-blue-700 dark:text-blue-400"
-                                    : "border-orange-300 text-orange-700 dark:border-orange-700 dark:text-orange-400"
-                            )}
-                        >
+                        <span className={cn(
+                            "ml-auto shrink-0 inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium",
+                            isGlobal
+                                ? "bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400"
+                                : "bg-orange-50 text-orange-700 dark:bg-orange-900/20 dark:text-orange-400"
+                        )}>
                             {isGlobal ? 'Global' : 'Location-specific'}
-                        </Badge>
+                        </span>
                     </div>
 
                     {/* Location selector */}
@@ -208,7 +175,7 @@ export function MenuSettingsTab({
                             onValueChange={(val) => onLocationChange(val === 'global' ? null : val)}
                             disabled={isSavingSettings}
                         >
-                            <SelectTrigger className="max-w-sm">
+                            <SelectTrigger className="h-9 max-w-sm rounded-full border-0 bg-muted/60 px-4 text-[0.8125rem] shadow-none">
                                 <SelectValue placeholder="Select location..." />
                             </SelectTrigger>
                             <SelectContent>
@@ -238,19 +205,16 @@ export function MenuSettingsTab({
                             </p>
                         )}
                     </div>
-                </CardContent>
-            </Card>
+                </div>
+            </PanelSection>
 
             {/* General Settings */}
-            <Card>
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                        <Settings className="h-5 w-5" />
-                        General Settings
-                    </CardTitle>
-                    <CardDescription>Update menu name and description</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
+            <PanelSection
+                icon={Settings}
+                label="General Settings"
+                caption="Update menu name and description"
+            >
+                <div className="space-y-6">
                     <div className="space-y-2">
                         <Label htmlFor="menu-name">Menu Name</Label>
                         <Input
@@ -315,18 +279,11 @@ export function MenuSettingsTab({
                             </Button>
                         </div>
                     )}
-                </CardContent>
-            </Card>
+                </div>
+            </PanelSection>
 
-            {/* Info Card */}
-            <Card>
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-base">
-                        <Info className="h-4 w-4" />
-                        Menu Information
-                    </CardTitle>
-                </CardHeader>
-                <CardContent>
+            {/* Menu Information */}
+            <PanelSection icon={Info} label="Menu Information">
                     <div className="grid gap-4 md:grid-cols-2 text-sm">
                         <div className="space-y-1">
                             <span className="text-muted-foreground">Created</span>
@@ -357,23 +314,24 @@ export function MenuSettingsTab({
                             <p className="font-medium">{totalItems} items</p>
                         </div>
                     </div>
-                </CardContent>
-            </Card>
+            </PanelSection>
 
             {/* Danger Zone */}
-            <Card className="border-destructive/50">
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-destructive">
-                        <AlertTriangle className="h-5 w-5" />
+            {/* Destructive section: icon lives in `label` rather than the `icon`
+                prop so both it and the text override PanelSection's brand blue
+                without a selector that depends on its internal DOM shape.
+                Classes literal, not from tokens.ts — see C7. */}
+            <PanelSection
+                label={
+                    <span className="flex items-center gap-2 text-destructive">
+                        <AlertTriangle className="h-[1.125rem] w-[1.125rem] shrink-0" />
                         Danger Zone
-                    </CardTitle>
-                    <CardDescription>
-                        Irreversible actions for this menu
-                    </CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <div className="flex items-center justify-between p-4 rounded-lg bg-destructive/5 border border-destructive/20">
-                        <div>
+                    </span>
+                }
+                caption="Irreversible actions for this menu"
+            >
+                    <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border-0 bg-destructive/5 p-4 shadow-none">
+                        <div className="min-w-0">
                             <h4 className="font-medium text-destructive">Delete Menu</h4>
                             <p className="text-sm text-muted-foreground">
                                 Permanently delete this menu and all its associations
@@ -383,6 +341,7 @@ export function MenuSettingsTab({
                             variant="destructive"
                             disabled={selectedLocationId !== 'all'}
                             onClick={onDeleteMenu}
+                            className="shrink-0 rounded-full"
                         >
                             <Trash2 className="h-4 w-4 mr-2" />
                             Delete Menu
@@ -391,9 +350,8 @@ export function MenuSettingsTab({
                     <p className="text-xs text-muted-foreground mt-3">
                         * Deletion is only available when viewing all locations.
                     </p>
-                </CardContent>
-            </Card>
-        </div>
+            </PanelSection>
+        </Panel>
     )
 }
 

@@ -195,42 +195,52 @@ export interface ScopeColor {
  *   blue    = branch-scoped (L3, branch category)
  *   amber   = menu-global (L4, global menu)
  *   rose    = branch menu (L5, most specific)
+ *
+ * Every entry carries a `dark:` variant. Without one, a `bg-*-50` tint renders
+ * as a near-white block on the dark dashboard card, which is a class of bug an
+ * engineer testing in light mode never reproduces (C4 in the design system).
+ *
+ * ⚠️ These strings live in a `.ts` file, which Tailwind does not scan (C7).
+ * They generate CSS only because each class is also written literally in some
+ * `.tsx`. Before introducing a *new* class here, grep the `.tsx` files for it —
+ * an unmatched class lands in the DOM with no rule behind it and the element
+ * silently inherits.
  */
 export function scopeColor(level: CascadeLevel): ScopeColor {
   switch (level) {
     case 1:
       return {
-        text: "text-emerald-700",
-        bg: "bg-emerald-50",
-        border: "border-emerald-200",
+        text: "text-emerald-700 dark:text-emerald-400",
+        bg: "bg-emerald-50 dark:bg-emerald-900/20",
+        border: "border-emerald-200 dark:border-emerald-900",
         dot: "bg-emerald-500",
       };
     case 2:
       return {
-        text: "text-violet-700",
-        bg: "bg-violet-50",
-        border: "border-violet-200",
+        text: "text-violet-700 dark:text-violet-400",
+        bg: "bg-violet-50 dark:bg-violet-900/20",
+        border: "border-violet-200 dark:border-violet-900",
         dot: "bg-violet-500",
       };
     case 3:
       return {
-        text: "text-blue-700",
-        bg: "bg-blue-50",
-        border: "border-blue-200",
+        text: "text-blue-700 dark:text-blue-400",
+        bg: "bg-blue-50 dark:bg-blue-900/20",
+        border: "border-blue-200 dark:border-blue-900",
         dot: "bg-blue-500",
       };
     case 4:
       return {
-        text: "text-amber-700",
-        bg: "bg-amber-50",
-        border: "border-amber-200",
+        text: "text-amber-700 dark:text-amber-400",
+        bg: "bg-amber-50 dark:bg-amber-900/20",
+        border: "border-amber-200 dark:border-amber-900",
         dot: "bg-amber-500",
       };
     case 5:
       return {
-        text: "text-rose-700",
-        bg: "bg-rose-50",
-        border: "border-rose-200",
+        text: "text-rose-700 dark:text-rose-400",
+        bg: "bg-rose-50 dark:bg-rose-900/20",
+        border: "border-rose-200 dark:border-rose-900",
         dot: "bg-rose-500",
       };
   }

@@ -740,7 +740,7 @@ export default function CategoriesPage() {
 
       {/* Stats Overview */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card className="transition-all hover:shadow-md">
+        <Card className="rounded-3xl transition-all hover:shadow-md">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
               Total Categories
@@ -752,7 +752,7 @@ export default function CategoriesPage() {
             <p className="text-xs text-muted-foreground">All categories</p>
           </CardContent>
         </Card>
-        <Card className="transition-all hover:shadow-md">
+        <Card className="rounded-3xl transition-all hover:shadow-md">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Items</CardTitle>
             <Utensils className="h-4 w-4 text-blue-500" />
@@ -764,7 +764,7 @@ export default function CategoriesPage() {
             </p>
           </CardContent>
         </Card>
-        <Card className="transition-all hover:shadow-md">
+        <Card className="rounded-3xl transition-all hover:shadow-md">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Active</CardTitle>
             <Eye className="h-4 w-4 text-green-500" />
@@ -778,7 +778,7 @@ export default function CategoriesPage() {
             </p>
           </CardContent>
         </Card>
-        <Card className="transition-all hover:shadow-md">
+        <Card className="rounded-3xl transition-all hover:shadow-md">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
               {isAllLocations ? "In Menus" : "With Overrides"}
@@ -811,7 +811,7 @@ export default function CategoriesPage() {
       </div>
 
       {/* Categories List */}
-      <Card>
+      <Card className="rounded-3xl">
         <CardHeader>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -864,11 +864,13 @@ export default function CategoriesPage() {
         <CardContent>
           {/* Sticky selection bar */}
           {isSelectionMode && (
-            <div className="sticky top-0 z-20 flex items-center gap-3 rounded-xl border border-primary/20 bg-primary/5 px-4 py-2.5 backdrop-blur mb-4">
-              <Badge variant="secondary" className="text-xs">
-                {selectedItemIds.size} of {totalSelectableItems} selected
+            <div className="sticky top-0 z-20 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl border-0 bg-muted/60 px-4 py-2.5 backdrop-blur mb-4">
+              <Badge variant="secondary" className="min-w-0 shrink text-xs">
+                <span className="truncate tabular-nums">
+                  {selectedItemIds.size} of {totalSelectableItems} selected
+                </span>
               </Badge>
-              <div className="w-px h-4 bg-border" />
+              <div className="hidden w-px h-4 bg-border sm:block" />
               <Button
                 size="sm"
                 variant="ghost"
@@ -891,7 +893,7 @@ export default function CategoriesPage() {
               >
                 Clear
               </Button>
-              <div className="ml-auto flex items-center gap-2">
+              <div className="ml-auto flex shrink-0 items-center gap-2">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button
@@ -962,7 +964,7 @@ export default function CategoriesPage() {
                   <Card
                     key={category.id}
                     className={cn(
-                      "transition-all animate-in fade-in slide-in-from-bottom-4 overflow-hidden",
+                      "rounded-3xl transition-all animate-in fade-in slide-in-from-bottom-4 overflow-hidden",
                       isExpanded
                         ? "ring-2 ring-primary shadow-lg"
                         : "hover:shadow-md hover:border-primary/30 cursor-pointer",
@@ -973,7 +975,6 @@ export default function CategoriesPage() {
                     <div
                       className={cn(
                         "p-4 cursor-pointer transition-colors",
-                        isExpanded && "bg-muted/30",
                       )}
                       onClick={() => handleCategoryClick(category)}
                     >
@@ -1397,7 +1398,7 @@ export default function CategoriesPage() {
 
                     {/* Expanded Items Section */}
                     {isExpanded && (
-                      <div className="border-t bg-muted/10 animate-in slide-in-from-top-2 overflow-hidden">
+                      <div className="animate-in slide-in-from-top-2 overflow-hidden">
                         <div className="p-3 sm:p-4">
                           <div className="flex flex-wrap items-center justify-between gap-2 mb-3 min-w-0">
                             <h4 className="text-sm font-medium flex flex-wrap items-center gap-1.5 min-w-0">
@@ -1950,7 +1951,7 @@ function SortableCategoryItemRow({
       ref={setNodeRef}
       style={style}
       className={cn(
-        "flex items-center gap-1.5 sm:gap-3 p-2 sm:p-3 my-1 rounded-lg bg-background border transition-all overflow-hidden",
+        "flex items-center gap-1.5 sm:gap-3 p-2 sm:p-3 my-1 rounded-2xl bg-muted/40 border transition-all overflow-hidden",
         isDragging
           ? "opacity-30 shadow-lg z-50 ring-2 ring-primary"
           : "hover:shadow-sm hover:border-primary/30",
@@ -2017,10 +2018,10 @@ function SortableCategoryItemRow({
         )}
       </div>
 
-      {/* Price with source indicator — hidden on mobile */}
-      <div className="hidden sm:flex text-right shrink-0 items-center gap-2">
+      {/* Price with source indicator */}
+      <div className="flex text-right shrink-0 items-center gap-2">
         <div className="flex flex-col items-end">
-          <span className="font-semibold text-sm text-primary">
+          <span className="font-semibold text-sm tabular-nums">
             ${item.menu_item.effective_price.toFixed(2)}
           </span>
           {item.menu_item.price_source !== "base" && (
@@ -2085,7 +2086,7 @@ function SortableCategoryItemRow({
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="hidden sm:flex h-8 w-8 text-muted-foreground hover:text-destructive"
+                  className="flex h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
                   onClick={(e) =>
                     handleRemoveItemFromCategory(
                       category.id,

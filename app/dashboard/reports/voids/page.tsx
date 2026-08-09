@@ -207,7 +207,7 @@ export default function VoidsReportPage() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
           <Input
             placeholder="Search item, staff, reason, order #..."
-            className="pl-9 h-9 text-sm rounded-lg bg-muted/40 border-0 focus-visible:ring-1"
+            className="pl-9 h-9 text-sm rounded-lg bg-muted/40 focus-visible:ring-1"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
