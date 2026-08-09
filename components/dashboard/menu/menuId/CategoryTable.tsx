@@ -2,6 +2,7 @@
 
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Switch } from '@/components/ui/switch'
 import {
     Table,
     TableBody,
@@ -10,13 +11,14 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/table'
-import { Eye, EyeOff, Globe, GripVertical, MapPin, Trash2 } from 'lucide-react'
+import { Globe, GripVertical, MapPin, Trash2 } from 'lucide-react'
 import { MenuCategory, MenuCategoryItem } from '@/types/menu'
 import { useState, type MouseEventHandler, type ReactNode } from 'react'
 import { DndContext, closestCenter, type DragEndEvent, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
 import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { CategoryItemsSheet } from './CategoryItemsSheet'
+import { cn } from '@/lib/utils'
 
 function SortableCategoryRow({
     id,
@@ -108,15 +110,14 @@ export function CategoryTable({
 
     return (
         <div className="space-y-4">
-            <div className="max-w-3xl overflow-x-auto rounded-2xl bg-card shadow-sm">
-                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-                <Table className="min-w-[500px]">
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                <Table variant="data" className="min-w-[640px]">
                     <TableHeader>
-                        <TableRow className="bg-muted/50">
+                        <TableRow>
                             {isReorderMode && <TableHead className="w-10" />}
-                            <TableHead className="w-[250px]">Category Name</TableHead>
-                            <TableHead className="w-[100px]">Status</TableHead>
-                            <TableHead className="w-[150px]">Location</TableHead>
+                            <TableHead className="w-[300px]">Category</TableHead>
+                            <TableHead className="w-[150px]">Status</TableHead>
+                            <TableHead className="w-[180px]">Location</TableHead>
                             <TableHead className="w-[80px] text-right">Actions</TableHead>
                         </TableRow>
                     </TableHeader>
@@ -132,41 +133,39 @@ export function CategoryTable({
                                     key={category.id}
                                     id={category.id}
                                     showHandle={isReorderMode}
-                                    className="group cursor-pointer hover:bg-muted/40"
+                                    className="group cursor-pointer"
                                     onClick={() => setItemsForCategory(category)}
                                 >
                                     <TableCell className="font-medium">
-                                        <div className="flex items-center gap-2">
+                                        <div className="flex min-w-0 flex-col gap-0.5">
                                             <span>{category.category?.name || 'Unknown'}</span>
                                             {customTitle && (
-                                                <Badge variant="outline" className="text-xs">
-                                                    Custom: {customTitle}
-                                                </Badge>
+                                                <span className="truncate text-xs font-normal text-muted-foreground">
+                                                    Displayed as {customTitle}
+                                                </span>
                                             )}
                                         </div>
                                     </TableCell>
                                     <TableCell onClick={(e) => e.stopPropagation()}>
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            className={category.is_active
-                                                ? "h-7 gap-1 rounded-full bg-emerald-50 px-2.5 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800"
-                                                : "h-7 gap-1 rounded-full bg-muted px-2.5 text-muted-foreground"
-                                            }
-                                            onClick={() => onToggleVisibility(category.category_id, !category.is_active)}
-                                        >
-                                            {category.is_active ? (
-                                                <>
-                                                    <Eye className="h-3 w-3" />
-                                                    <span className="text-xs">Active</span>
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <EyeOff className="h-3 w-3" />
-                                                    <span className="text-xs">Hidden</span>
-                                                </>
-                                            )}
-                                        </Button>
+                                        <div className="flex items-center gap-2">
+                                            <Switch
+                                                checked={category.is_active}
+                                                onCheckedChange={(checked) =>
+                                                    void onToggleVisibility(category.category_id, checked)
+                                                }
+                                                aria-label={`${category.is_active ? 'Hide' : 'Show'} ${category.category?.name || 'category'}`}
+                                            />
+                                            <span
+                                                className={cn(
+                                                    'text-sm font-medium',
+                                                    category.is_active
+                                                        ? 'text-green-600'
+                                                        : 'text-muted-foreground',
+                                                )}
+                                            >
+                                                {category.is_active ? 'Active' : 'Hidden'}
+                                            </span>
+                                        </div>
                                     </TableCell>
                                     <TableCell>
                                         {isGlobal ? (
@@ -221,8 +220,7 @@ export function CategoryTable({
                         </SortableContext>
                     </TableBody>
                 </Table>
-                </DndContext>
-            </div>
+            </DndContext>
 
             <CategoryItemsSheet
                 category={itemsForCategory}

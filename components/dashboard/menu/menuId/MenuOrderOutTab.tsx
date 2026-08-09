@@ -317,7 +317,7 @@ export function MenuOrderOutTab({
               description="This menu hasn't been synced to OrderOut yet."
             />
           ) : (
-            <Table>
+            <Table variant="data" className="min-w-[720px]">
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-[180px]">Date</TableHead>
@@ -332,11 +332,7 @@ export function MenuOrderOutTab({
                 {syncHistory.map((sync) => (
                   <React.Fragment key={sync.id}>
                     <TableRow
-                      className={
-                        sync.errorDetails
-                          ? "cursor-pointer hover:bg-muted/50"
-                          : ""
-                      }
+                      className={sync.errorDetails ? "cursor-pointer" : ""}
                       onClick={() => sync.errorDetails && toggleRow(sync.id)}
                     >
                       <TableCell className="text-sm">

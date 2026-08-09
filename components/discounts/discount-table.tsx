@@ -14,6 +14,7 @@ import {
 import { Switch } from '@/components/ui/switch'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -39,7 +40,7 @@ import {
     discountStatusLabel,
     discountStatusStyle,
 } from '@/lib/constants/discount-status'
-import { Eye, Globe, MapPin, MoreHorizontal, Pencil, Plus, Trash2, X } from 'lucide-react'
+import { CheckSquare, Eye, Globe, MapPin, MoreHorizontal, Pencil, Plus, Trash2, X } from 'lucide-react'
 
 interface DiscountTableProps {
     discounts: Discount[]
@@ -84,6 +85,7 @@ export function DiscountTable({
     showMobileReset = false,
     onResetFilters,
 }: DiscountTableProps) {
+    const [isSelectionMode, setIsSelectionMode] = useState(false)
     const [selectedIds, setSelectedIds] = useState<string[]>([])
     const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null)
     const [deleteMode, setDeleteMode] = useState<'soft' | 'hard'>('soft')
@@ -103,7 +105,7 @@ export function DiscountTable({
         [discounts.length, selectedIds.length],
     )
 
-    const columnCount = isSingleLocation ? 7 : 8
+    const columnCount = (isSingleLocation ? 7 : 8) - (isSelectionMode ? 0 : 1)
 
     const toggleSelection = (id: string) => {
         setSelectedIds((prev) => (prev.includes(id) ? prev.filter((v) => v !== id) : [...prev, id]))
@@ -155,19 +157,11 @@ export function DiscountTable({
         return 'No date range'
     }
 
-    /** DS-CTL-09 — soft tint + dot, colours from the constants module (D-11). */
-    const renderStatusBadge = (discount: Discount) => {
+    const renderStatus = (discount: Discount) => {
         const status = discountStatus(discount)
         const style = discountStatusStyle(status)
         return (
-            <span
-                className={cn(
-                    'inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium',
-                    style.bg,
-                    style.text,
-                )}
-            >
-                <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full', style.dot)} />
+            <span className={cn('shrink-0 text-sm font-medium', style.text)}>
                 {discountStatusLabel(status)}
             </span>
         )
@@ -176,25 +170,31 @@ export function DiscountTable({
     const renderScope = (discount: Discount) => {
         if (!discount.location_id) {
             return (
-                <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
-                    <Globe className="h-3.5 w-3.5 shrink-0" />
+                <Badge
+                    variant="secondary"
+                    className="gap-1 rounded-full border-0 bg-[#0C4FD1]/10 px-2.5 text-xs text-[#0C4FD1] dark:text-[#6CA0FF]"
+                >
+                    <Globe className="h-3 w-3 shrink-0" />
                     Global
-                </span>
+                </Badge>
             )
         }
         const name = locationNameById?.[discount.location_id]
         return (
-            <span className="inline-flex max-w-[160px] items-center gap-1.5 text-sm text-muted-foreground">
-                <MapPin className="h-3.5 w-3.5 shrink-0" />
+            <Badge
+                variant="secondary"
+                className="max-w-[160px] gap-1 rounded-full border-0 bg-[#0C4FD1]/10 px-2.5 text-xs text-[#0C4FD1] dark:text-[#6CA0FF]"
+            >
+                <MapPin className="h-3 w-3 shrink-0" />
                 <span className="truncate">{name ?? 'Location'}</span>
-            </span>
+            </Badge>
         )
     }
 
     const renderRows = () => {
         if (isLoading) {
             return Array.from({ length: 4 }).map((_, idx) => (
-                <TableRow key={idx} className="border-b border-border/60 last:border-0">
+                <TableRow key={idx}>
                     <TableCell colSpan={columnCount} className="py-3">
                         <Skeleton className="h-10 w-full" />
                     </TableCell>
@@ -228,22 +228,21 @@ export function DiscountTable({
         return discounts.map((discount) => {
             const expired = isDiscountExpired(discount)
             return (
-                <TableRow
-                    key={discount.id}
-                    className="border-b border-border/60 transition-colors last:border-0 hover:bg-muted/50"
-                >
-                    <TableCell className="w-10 py-3">
-                        <Checkbox
-                            checked={selectedIds.includes(discount.id)}
-                            onCheckedChange={() => toggleSelection(discount.id)}
-                            aria-label={`Select ${discount.name}`}
-                        />
-                    </TableCell>
+                <TableRow key={discount.id}>
+                    {isSelectionMode && (
+                        <TableCell className="w-10 py-3">
+                            <Checkbox
+                                checked={selectedIds.includes(discount.id)}
+                                onCheckedChange={() => toggleSelection(discount.id)}
+                                aria-label={`Select ${discount.name}`}
+                            />
+                        </TableCell>
+                    )}
                     <TableCell className="py-3 text-sm font-medium">
                         <button
                             type="button"
                             onClick={() => onView?.(discount.id)}
-                            className="max-w-[220px] truncate text-left transition-colors hover:text-[#0C4FD1] dark:hover:text-[#6CA0FF]"
+                            className="max-w-[220px] truncate text-left"
                         >
                             {discount.name}
                         </button>
@@ -264,7 +263,7 @@ export function DiscountTable({
                                 onCheckedChange={(checked) => onToggleStatus?.(discount.id, !!checked)}
                                 aria-label={`Toggle ${discount.name}`}
                             />
-                            {renderStatusBadge(discount)}
+                            {renderStatus(discount)}
                         </div>
                     </TableCell>
                     <TableCell className="hidden py-3 md:table-cell">
@@ -323,55 +322,75 @@ export function DiscountTable({
 
     return (
         <div className="min-w-0 space-y-3">
+            <div className="flex items-center px-1">
+                <Button
+                    variant="outline"
+                    size="sm"
+                    className={cn(
+                        'h-9 gap-2 rounded-full px-4 text-[0.8125rem] font-medium',
+                        isSelectionMode && 'bg-muted/70',
+                    )}
+                    onClick={() => {
+                        if (isSelectionMode) setSelectedIds([])
+                        setIsSelectionMode((current) => !current)
+                    }}
+                >
+                    <CheckSquare className="h-4 w-4" />
+                    {isSelectionMode ? 'Done' : 'Select'}
+                </Button>
+            </div>
+
             {/* Bulk action bar — an inset well, so it reads as one tinted strip
                 rather than a competing box beside the panel edge. */}
-            <div
-                className={cn(
-                    'flex flex-wrap items-center justify-between gap-3 rounded-2xl border-0 px-1 py-2.5 shadow-none transition-colors sm:px-4',
-                    hasSelection ? 'bg-muted/60' : 'bg-transparent',
-                )}
-            >
-                <div className="flex min-w-0 items-center gap-2.5">
-                    <Checkbox
-                        checked={allSelected}
-                        onCheckedChange={toggleAll}
-                        disabled={!discounts.length}
-                        aria-label="Select all discounts"
-                    />
-                    <span className="text-[0.8125rem] text-muted-foreground tabular-nums">
-                        {hasSelection ? `${selectedIds.length} selected` : 'Select all'}
-                    </span>
-                </div>
-
-                {hasSelection && (
-                    <div className="flex flex-wrap gap-2">
-                        <Button
-                            variant="outline"
-                            className={PILL_CONTROL}
-                            onClick={() => onBulkStatus?.(selectedIds, true)}
-                        >
-                            Activate
-                        </Button>
-                        <Button
-                            variant="outline"
-                            className={PILL_CONTROL}
-                            onClick={() => onBulkStatus?.(selectedIds, false)}
-                        >
-                            Deactivate
-                        </Button>
-                        <Button
-                            variant="outline"
-                            className={cn(
-                                PILL_CONTROL,
-                                'text-destructive hover:bg-destructive/10 hover:text-destructive',
-                            )}
-                            onClick={() => requestDelete({ kind: 'bulk', ids: selectedIds })}
-                        >
-                            Delete
-                        </Button>
+            {isSelectionMode && (
+                <div
+                    className={cn(
+                        'flex flex-wrap items-center justify-between gap-3 rounded-2xl border-0 px-3 py-2.5 shadow-none transition-colors sm:px-4',
+                        hasSelection ? 'bg-muted/60' : 'bg-muted/40',
+                    )}
+                >
+                    <div className="flex min-w-0 items-center gap-2.5">
+                        <Checkbox
+                            checked={allSelected}
+                            onCheckedChange={toggleAll}
+                            disabled={!discounts.length}
+                            aria-label="Select all discounts"
+                        />
+                        <span className="text-[0.8125rem] text-muted-foreground tabular-nums">
+                            {hasSelection ? `${selectedIds.length} selected` : 'Select all'}
+                        </span>
                     </div>
-                )}
-            </div>
+
+                    {hasSelection && (
+                        <div className="flex flex-wrap gap-2">
+                            <Button
+                                variant="outline"
+                                className={PILL_CONTROL}
+                                onClick={() => onBulkStatus?.(selectedIds, true)}
+                            >
+                                Activate
+                            </Button>
+                            <Button
+                                variant="outline"
+                                className={PILL_CONTROL}
+                                onClick={() => onBulkStatus?.(selectedIds, false)}
+                            >
+                                Deactivate
+                            </Button>
+                            <Button
+                                variant="outline"
+                                className={cn(
+                                    PILL_CONTROL,
+                                    'text-destructive hover:bg-destructive/10 hover:text-destructive',
+                                )}
+                                onClick={() => requestDelete({ kind: 'bulk', ids: selectedIds })}
+                            >
+                                Delete
+                            </Button>
+                        </div>
+                    )}
+                </div>
+            )}
 
             {showMobileReset && onResetFilters && (
                 <div className="flex px-1 sm:hidden">
@@ -493,40 +512,25 @@ export function DiscountTable({
                 </AlertDialogContent>
             </AlertDialog>
 
-            {/* §5 — hairlines, no frame. */}
-            <div className="-mx-2 overflow-x-auto px-2">
-                <Table>
-                    <TableHeader>
-                        <TableRow className="border-b border-border/60 hover:bg-transparent">
-                            <TableHead className="h-auto w-10 py-2.5" />
-                            <TableHead className="h-auto py-2.5 text-[0.8125rem] font-normal text-muted-foreground">
-                                Name
+            <Table variant="data">
+                <TableHeader>
+                    <TableRow>
+                        {isSelectionMode && <TableHead className="w-10" />}
+                        <TableHead>Name</TableHead>
+                        <TableHead className="hidden sm:table-cell">Type</TableHead>
+                        <TableHead className="hidden sm:table-cell">Value</TableHead>
+                        {!isSingleLocation && (
+                            <TableHead className="hidden md:table-cell">
+                                Scope
                             </TableHead>
-                            <TableHead className="hidden h-auto py-2.5 text-[0.8125rem] font-normal text-muted-foreground sm:table-cell">
-                                Type
-                            </TableHead>
-                            <TableHead className="hidden h-auto py-2.5 text-[0.8125rem] font-normal text-muted-foreground sm:table-cell">
-                                Value
-                            </TableHead>
-                            {!isSingleLocation && (
-                                <TableHead className="hidden h-auto py-2.5 text-[0.8125rem] font-normal text-muted-foreground md:table-cell">
-                                    Scope
-                                </TableHead>
-                            )}
-                            <TableHead className="h-auto py-2.5 text-[0.8125rem] font-normal text-muted-foreground">
-                                Status
-                            </TableHead>
-                            <TableHead className="hidden h-auto py-2.5 text-[0.8125rem] font-normal text-muted-foreground md:table-cell">
-                                Date range
-                            </TableHead>
-                            <TableHead className="h-auto py-2.5 text-right text-[0.8125rem] font-normal text-muted-foreground">
-                                Actions
-                            </TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>{renderRows()}</TableBody>
-                </Table>
-            </div>
+                        )}
+                        <TableHead>Status</TableHead>
+                        <TableHead className="hidden md:table-cell">Date range</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                </TableHeader>
+                <TableBody>{renderRows()}</TableBody>
+            </Table>
         </div>
     )
 }
