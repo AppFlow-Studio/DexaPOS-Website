@@ -12,13 +12,12 @@ import {
   MapPin,
   Trash2,
   RotateCcw,
-  Tag,
-  Hash,
-  ArrowUpDown,
   Utensils,
 } from "lucide-react";
 import { MenuCategory, MenuCategoryItem } from "@/types/menu";
-import { cn, isValidImageUrl } from "@/lib/utils";
+import { cn } from "@/lib/utils";
+import { useState } from "react";
+import { CategoryItemsSheet } from "./CategoryItemsSheet";
 
 interface CategoryGridProps {
   categories: MenuCategory[];
@@ -30,16 +29,14 @@ interface CategoryGridProps {
   onToggleVisibility: (categoryId: string, isActive: boolean) => Promise<void>;
   onResetOverride?: (categoryId: string) => Promise<void>;
   onRemoveCategory?: (categoryId: string) => void;
-  onItemClick?: (itemId: string) => void;
   onEditItem?: (
     item: MenuCategoryItem,
     category: MenuCategory,
     menuId: string,
   ) => void;
   hasOrderChanges?: boolean;
+  showReorderControls?: boolean;
 }
-
-const PREVIEW_LIMIT = 6;
 
 export function CategoryGrid({
   categories,
@@ -51,22 +48,23 @@ export function CategoryGrid({
   onToggleVisibility,
   onResetOverride,
   onRemoveCategory,
-  onItemClick,
+  onEditItem,
   hasOrderChanges = false,
+  showReorderControls = false,
 }: CategoryGridProps) {
   const isAllLocations = !selectedLocationId || selectedLocationId === "all";
   const canModifyCategories = isAllLocations || isMenuLocationOwned;
+  // Which category's item list is open, if any.
+  const [itemsForCategory, setItemsForCategory] =
+    useState<MenuCategory | null>(null);
 
   return (
+    <>
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 animate-in fade-in duration-300">
       {categories.map((category, index) => {
-        const items = category.items ?? [];
-        const itemCount = items.length;
         const categoryLocationId = category.category?.location_id;
         const isGlobal = !categoryLocationId;
         const isActive = category.is_active;
-        const previewItems = items.slice(0, PREVIEW_LIMIT);
-        const overflow = Math.max(0, itemCount - PREVIEW_LIMIT);
         const showResetButton =
           !isAllLocations &&
           category.category?.location_id === null &&
@@ -78,16 +76,15 @@ export function CategoryGrid({
             nested
             key={category.id}
             className={cn(
-              "group flex flex-col overflow-hidden transition-all duration-200",
+              "group flex min-h-0 flex-col overflow-hidden transition-all duration-200",
               "border-0 bg-card shadow-sm hover:shadow-md",
               !isActive && "opacity-70 bg-muted/30",
             )}
           >
             {/* Header strip */}
-            <div className="flex items-start justify-between gap-2 px-4 pt-4">
+            <div className="flex items-start justify-between gap-2 px-4 pt-3">
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <Tag className="h-4 w-4 text-primary shrink-0" />
                   <h3 className="font-semibold text-base truncate">
                     {category.category?.name || "Unknown"}
                   </h3>
@@ -97,47 +94,39 @@ export function CategoryGrid({
                     </Badge>
                   )}
                 </div>
-                <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
-                  {/* Borderless soft tints (D-11), with the dark variants the
-                      originals omitted (C4). */}
-                  {isGlobal ? (
+                {!isActive && (
+                  <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
                     <Badge
                       variant="outline"
-                      className="gap-1 rounded-full border-0 px-2 py-0 text-[10px] bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400"
+                      className="gap-1 rounded-full border-0 px-2 py-0 text-[10px] bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400"
                     >
-                      <Globe className="h-2.5 w-2.5" />
-                      Global
-                    </Badge>
-                  ) : (
-                    <Badge
-                      variant="outline"
-                      className="gap-1 rounded-full border-0 px-2 py-0 text-[10px] bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400"
-                    >
-                      <MapPin className="h-2.5 w-2.5" />
-                      {category.category?.location_name || "Location"}
-                    </Badge>
-                  )}
-                  <Badge
-                    variant="outline"
-                    className={cn(
-                      "gap-1 rounded-full border-0 px-2 py-0 text-[10px]",
-                      isActive
-                        ? "bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400"
-                        : "bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400",
-                    )}
-                  >
-                    {isActive ? (
-                      <Eye className="h-2.5 w-2.5" />
-                    ) : (
                       <EyeOff className="h-2.5 w-2.5" />
-                    )}
-                    {isActive ? "Active" : "Hidden"}
-                  </Badge>
-                </div>
+                      Hidden
+                    </Badge>
+                  </div>
+                )}
               </div>
 
-              {/* Reorder controls */}
-              <div className="flex flex-col -mr-1 -mt-1 opacity-60 group-hover:opacity-100 transition-opacity">
+              <div className="flex shrink-0 items-start gap-1">
+                {isGlobal ? (
+                  <Badge
+                    variant="outline"
+                    className="gap-1 rounded-full border-0 bg-emerald-50 px-2 py-0 text-[10px] text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400"
+                  >
+                    <Globe className="h-2.5 w-2.5" />
+                    Global
+                  </Badge>
+                ) : (
+                  <Badge
+                    variant="outline"
+                    className="gap-1 rounded-full border-0 bg-blue-50 px-2 py-0 text-[10px] text-blue-700 dark:bg-blue-900/20 dark:text-blue-400"
+                  >
+                    <MapPin className="h-2.5 w-2.5" />
+                    {category.category?.location_name || "Location"}
+                  </Badge>
+                )}
+              {showReorderControls && (
+              <div className="-mr-1 -mt-1 flex flex-col opacity-60 transition-opacity group-hover:opacity-100">
                 <Button
                   variant="ghost"
                   size="icon"
@@ -165,91 +154,28 @@ export function CategoryGrid({
                   <ChevronDown className="h-3.5 w-3.5" />
                 </Button>
               </div>
+              )}
+              </div>
             </div>
 
-            <div className="flex-1 px-4 pt-3 pb-4 flex flex-col gap-3">
-              {/* Description */}
-              {category.category?.description ? (
-                <p className="text-sm text-muted-foreground line-clamp-2">
-                  {category.category.description}
-                </p>
-              ) : (
-                <p className="text-sm text-muted-foreground/60 italic">
-                  No description
-                </p>
-              )}
-
-              {/* Stat row */}
-              <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                <span className="inline-flex items-center gap-1">
-                  <Hash className="h-3 w-3" />
-                  Order {category.display_order ?? "—"}
-                </span>
-                <span className="inline-flex items-center gap-1">
-                  <ArrowUpDown className="h-3 w-3" />
-                  {itemCount} {itemCount === 1 ? "item" : "items"}
-                </span>
-              </div>
-
-              {/* Item preview */}
-              <div className="rounded-2xl bg-muted/40 p-2">
-                {previewItems.length === 0 ? (
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground py-1.5 px-1">
-                    <Utensils className="h-3.5 w-3.5 opacity-60" />
-                    No items in this category
-                  </div>
-                ) : (
-                  <div className="flex flex-wrap gap-1.5">
-                    {previewItems.map((it) => {
-                      const itemName =
-                        (it as any).menu_item?.name ??
-                        (it as any).name ??
-                        "Item";
-                      const itemId =
-                        (it as any).menu_item?.id ??
-                        (it as any).menu_item_id ??
-                        (it as any).id;
-                      const img =
-                        (it as any).menu_item?.image ?? (it as any).image;
-                      return (
-                        <button
-                          key={itemId}
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (itemId) onItemClick?.(itemId);
-                          }}
-                          className="inline-flex items-center gap-1.5 rounded-full bg-background px-2.5 py-1 text-xs shadow-sm transition-colors hover:bg-muted max-w-40"
-                          title={itemName}
-                        >
-                          {isValidImageUrl(img) ? (
-                            <img
-                              src={img}
-                              alt=""
-                              className="h-4 w-4 rounded object-cover shrink-0"
-                            />
-                          ) : (
-                            <Utensils className="h-3 w-3 text-muted-foreground shrink-0" />
-                          )}
-                          <span className="truncate">{itemName}</span>
-                        </button>
-                      );
-                    })}
-                    {overflow > 0 && (
-                      <span className="inline-flex items-center rounded-full bg-background/60 px-2.5 py-1 text-xs text-muted-foreground">
-                        +{overflow} more
-                      </span>
-                    )}
-                  </div>
-                )}
-              </div>
-
+            <div className="flex flex-1 flex-col gap-2 px-4 pb-3 pt-2">
               {/* Footer actions */}
-              <div className="mt-auto flex items-center gap-1 flex-wrap pt-2">
+              <div className="relative mt-auto flex items-center gap-1 pt-2">
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-7 px-2 text-xs gap-1"
+                  className="h-7 gap-1 px-2 text-xs"
+                  onClick={() => setItemsForCategory(category)}
+                  title="See items in this category"
+                >
+                  <Utensils className="h-3.5 w-3.5" />
+                  Items
+                </Button>
+
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="absolute left-1/2 h-7 -translate-x-1/2 gap-1 px-2 text-xs"
                   onClick={() =>
                     onToggleVisibility(category.category_id, !isActive)
                   }
@@ -293,5 +219,18 @@ export function CategoryGrid({
         );
       })}
     </div>
+
+    <CategoryItemsSheet
+      category={itemsForCategory}
+      open={!!itemsForCategory}
+      onOpenChange={(open) => !open && setItemsForCategory(null)}
+      onEditItem={(item, category) => {
+        // Hand off to the normal edit flow, closing this panel first so the
+        // two overlays never stack.
+        setItemsForCategory(null);
+        onEditItem?.(item, category, menuId);
+      }}
+    />
+    </>
   );
 }

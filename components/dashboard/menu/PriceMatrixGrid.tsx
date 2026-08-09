@@ -5,10 +5,11 @@ import { Loader2, Globe, MapPin, Pencil, RotateCcw, BookOpen } from "lucide-reac
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useItemPriceMatrix } from "@/app/dashboard/hooks/useLocationScoped";
@@ -124,11 +125,11 @@ export function PriceMatrixGrid({ itemId, className }: PriceMatrixGridProps) {
         </p>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border">
+      <div className="overflow-x-auto overflow-y-hidden rounded-3xl border">
         <table className="w-full min-w-[720px] text-sm">
-          <thead className="bg-muted/50">
+          <thead className="sticky top-0 z-30 bg-muted">
             <tr>
-              <th className="sticky left-0 z-10 w-[220px] border-r bg-muted/50 px-3 py-2 text-left text-xs font-semibold text-muted-foreground">
+              <th className="sticky left-0 z-40 w-[220px] border-r bg-muted px-3 py-2 text-left text-xs font-semibold text-muted-foreground">
                 Scope
               </th>
               <th className="min-w-[100px] border-r px-3 py-2 text-center text-xs font-semibold text-muted-foreground">
@@ -271,9 +272,9 @@ export function PriceMatrixGrid({ itemId, className }: PriceMatrixGridProps) {
               );
             })}
           </tbody>
-          <tfoot className="bg-muted/30">
+          <tfoot className="sticky bottom-0 z-30 bg-muted">
             <tr className="border-t">
-              <td className="sticky left-0 z-10 border-r bg-muted/30 px-3 py-2 text-xs font-semibold">
+              <td className="sticky left-0 z-40 border-r bg-muted px-3 py-2 text-xs font-semibold">
                 Effective (what customers pay)
               </td>
               <EffectiveCell
@@ -294,7 +295,7 @@ export function PriceMatrixGrid({ itemId, className }: PriceMatrixGridProps) {
         </table>
       </div>
 
-      <div className="rounded-md border bg-muted/20 p-3 text-[11px] text-muted-foreground">
+      <div className="rounded-2xl border bg-muted/20 p-3 text-[11px] text-muted-foreground">
         <span className="mr-3">
           <span className="font-mono">↓</span> inherits from above
         </span>
@@ -364,8 +365,8 @@ function MatrixCell({
     <td className="border-r px-1 py-1 text-center">
       {hasOverride ? (
         supportsInlineEdit ? (
-          <Popover open={open} onOpenChange={setOpen}>
-            <PopoverTrigger asChild>
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
               <button
                 type="button"
                 className="flex w-full flex-col items-center gap-0.5 rounded px-2 py-1 text-sm font-semibold tabular-nums hover:bg-muted"
@@ -375,8 +376,12 @@ function MatrixCell({
                   <Pencil className="h-2 w-2" /> override
                 </span>
               </button>
-            </PopoverTrigger>
-            <PopoverContent align="center" className="w-[260px] p-3">
+            </DialogTrigger>
+            <DialogContent
+              showCloseButton={false}
+              className="w-[260px] max-w-[calc(100%-2rem)] gap-0 rounded-3xl p-3 max-sm:bottom-auto max-sm:left-1/2 max-sm:right-auto max-sm:top-1/2 max-sm:h-auto max-sm:w-[260px] max-sm:max-w-[calc(100%-2rem)] max-sm:-translate-x-1/2 max-sm:-translate-y-1/2 max-sm:rounded-3xl"
+            >
+              <DialogTitle className="sr-only">Edit price</DialogTitle>
               <InlinePriceEditor
                 itemId={itemId}
                 scope={{
@@ -388,8 +393,8 @@ function MatrixCell({
                 initialCashPrice={row!.cashPrice ?? null}
                 onClose={() => setOpen(false)}
               />
-            </PopoverContent>
-          </Popover>
+            </DialogContent>
+          </Dialog>
         ) : (
           <div className="flex w-full flex-col items-center gap-0.5 px-2 py-1 text-sm font-semibold tabular-nums">
             {formatPrice(row!.price)}
@@ -462,8 +467,8 @@ function L5MatrixCell({
 
   return (
     <td className="border-r px-1 py-1 text-center">
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogTrigger asChild>
           <button
             type="button"
             className={cn(
@@ -482,9 +487,13 @@ function L5MatrixCell({
               <span className="text-xs">↓ set</span>
             )}
           </button>
-        </PopoverTrigger>
-        <PopoverContent align="center" className="w-[280px] p-3">
-          <div className="mb-2 rounded border bg-rose-50 px-2 py-1.5">
+        </DialogTrigger>
+        <DialogContent
+          showCloseButton={false}
+          className="w-[280px] max-w-[calc(100%-2rem)] gap-0 rounded-3xl p-3 max-sm:bottom-auto max-sm:left-1/2 max-sm:right-auto max-sm:top-1/2 max-sm:h-auto max-sm:w-[280px] max-sm:max-w-[calc(100%-2rem)] max-sm:-translate-x-1/2 max-sm:-translate-y-1/2 max-sm:rounded-3xl"
+        >
+          <DialogTitle className="sr-only">Edit menu price override</DialogTitle>
+          <div className="mb-2 rounded-2xl border bg-rose-50 px-3 py-2">
             <p className="text-[10px] font-semibold text-rose-700">
               {menuName} menu at {locationName}
             </p>
@@ -524,8 +533,8 @@ function L5MatrixCell({
               Remove override (revert to L4)
             </Button>
           )}
-        </PopoverContent>
-      </Popover>
+        </DialogContent>
+      </Dialog>
     </td>
   );
 }
@@ -549,7 +558,7 @@ function EffectiveCell({
 }) {
   if (locationId === null) {
     return (
-      <td className="border-r bg-muted/10 px-3 py-2 text-center text-sm font-semibold tabular-nums">
+      <td className="border-r bg-muted px-3 py-2 text-center text-sm font-semibold tabular-nums">
         {formatPrice(globalPrice)}
       </td>
     );
@@ -563,7 +572,7 @@ function EffectiveCell({
   const source = l2 ? "override" : "global";
 
   return (
-    <td className="border-r bg-muted/10 px-3 py-2 text-center">
+    <td className="border-r bg-muted px-3 py-2 text-center">
       <div className="flex flex-col items-center">
         <span className="text-sm font-semibold tabular-nums">
           {formatPrice(effective)}

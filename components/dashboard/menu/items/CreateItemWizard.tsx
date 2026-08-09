@@ -565,10 +565,12 @@ export function CreateItemWizard({
             </div>
           </DialogHeader>
 
-          {/* Scrolling body — the only scroll container in the dialog. */}
-          <div className="thin-scrollbar flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-y-auto overflow-x-hidden lg:flex-row">
+          {/* Body. On desktop each column scrolls independently so the preview
+              does not ride along with the form; below `lg` the columns stack and
+              the single left pane carries the scroll. */}
+          <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden lg:flex-row">
             {/* LEFT COLUMN - FORM */}
-            <div className="min-w-0 flex-1 overflow-x-hidden px-4 py-5 sm:px-6">
+            <div className="thin-scrollbar min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-5 sm:px-6">
               {/* Context Banner */}
               <div className="mb-6 rounded-2xl border-0 bg-muted/60 p-3 shadow-none">
                 <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -1124,7 +1126,7 @@ export function CreateItemWizard({
             </div>
 
             {/* RIGHT COLUMN - PREVIEW */}
-            <div className="hidden w-90 shrink-0 bg-muted/30 px-6 py-5 lg:block">
+            <div className="thin-scrollbar hidden min-h-0 w-90 shrink-0 overflow-y-auto bg-muted/30 px-6 py-5 lg:block">
               <div className="space-y-8 pb-4">
                 <div className="flex items-center gap-2 mb-4 text-sm font-medium text-muted-foreground">
                   <Monitor className="h-4 w-4" /> POS Preview

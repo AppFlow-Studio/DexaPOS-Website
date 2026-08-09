@@ -2,7 +2,6 @@
 
 import { Panel, PanelSection } from '@/components/dashboard/shell'
 import { Button } from '@/components/ui/button'
-import { CdnImageUploadField } from '@/components/ui/cdn-image-upload-field'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Power, Settings, Info, AlertTriangle, Save, Trash2, Globe, MapPin } from 'lucide-react'
@@ -25,15 +24,10 @@ interface MenuSettingsTabProps {
     editedDescription: string
     editedLocationId: string | null
     hasSettingsChanges: boolean
-    imagePreviewUrl: string | null
-    isImageUploading: boolean
     isTogglingActive: boolean
     isSavingSettings: boolean
-    selectedImageFileName?: string | null
     selectedLocationId: string | null
     locations: LocationsModel[]
-    onClearImage: () => void
-    onImageSelect: (file: File | null) => void
     onNameChange: (name: string) => void
     onDescriptionChange: (description: string) => void
     onLocationChange: (locationId: string | null) => void
@@ -51,15 +45,10 @@ export function MenuSettingsTab({
     editedDescription,
     editedLocationId,
     hasSettingsChanges,
-    imagePreviewUrl,
-    isImageUploading,
     isTogglingActive,
     isSavingSettings,
-    selectedImageFileName,
     selectedLocationId,
     locations,
-    onClearImage,
-    onImageSelect,
     onNameChange,
     onDescriptionChange,
     onLocationChange,
@@ -233,19 +222,6 @@ export function MenuSettingsTab({
                             onChange={(e) => onDescriptionChange(e.target.value)}
                             placeholder="Enter menu description (optional)"
                             className="max-w-md"
-                        />
-                    </div>
-                    <div className="space-y-2 max-w-md">
-                        <Label>Menu Image</Label>
-                        <CdnImageUploadField
-                            disabled={isSavingSettings}
-                            helperText="Uploads to Bunny CDN when you save the menu."
-                            onClear={onClearImage}
-                            onFileSelect={onImageSelect}
-                            previewUrl={imagePreviewUrl}
-                            selectedFileName={selectedImageFileName}
-                            uploadLabel="Upload menu image"
-                            uploading={isImageUploading}
                         />
                     </div>
 

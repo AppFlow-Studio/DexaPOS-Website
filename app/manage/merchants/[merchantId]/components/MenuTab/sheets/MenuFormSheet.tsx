@@ -24,7 +24,6 @@ import {
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { CdnImageUploadField } from '@/components/ui/cdn-image-upload-field'
 import { Loader2, Globe, MapPin, Info } from 'lucide-react'
 import { toast } from 'sonner'
 import { useMerchantCdnImageUpload } from '@/lib/cdn/use-merchant-cdn-image-upload'
@@ -237,30 +236,6 @@ export function MenuFormSheet({
                           value={field.value || ''}
                         />
                       </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="image"
-                  render={() => (
-                    <FormItem>
-                      <FormLabel>Menu Image</FormLabel>
-                      <FormControl>
-                        <CdnImageUploadField
-                          disabled={isSubmitting}
-                          helperText="Uploads to Bunny CDN when you save the menu."
-                          onClear={imageUpload.clear}
-                          onFileSelect={imageUpload.selectFile}
-                          previewUrl={imageUpload.previewUrl}
-                          selectedFileName={imageUpload.selectedFileName}
-                          uploadLabel="Upload menu image"
-                          uploading={imageUpload.isUploading}
-                        />
-                      </FormControl>
-                      <FormDescription>Optional image for this menu</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}

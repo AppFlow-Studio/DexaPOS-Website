@@ -173,6 +173,11 @@ export function useUpdateScheduleMutation() {
       queryClient.invalidateQueries({
         queryKey: ["schedule", variables.scheduleId],
       });
+      // Assigned schedule cards use a separate menu-scoped query. Without
+      // invalidating it, edits save successfully but remain visually stale
+      // until the entire page is refreshed.
+      queryClient.invalidateQueries({ queryKey: ["menu-schedules"] });
+      queryClient.invalidateQueries({ queryKey: ["category-schedules"] });
       queryClient.invalidateQueries({ queryKey: ["menu-with-categories"] });
     },
     onError: (error) => {

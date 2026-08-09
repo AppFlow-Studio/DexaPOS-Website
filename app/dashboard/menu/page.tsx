@@ -11,7 +11,6 @@ import {
 } from '@/components/dashboard/shell'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { CdnImageUploadField } from '@/components/ui/cdn-image-upload-field'
 import {
   Utensils,
   Plus,
@@ -25,7 +24,6 @@ import {
 } from 'lucide-react'
 import * as React from "react";
 import { useMenus } from "../hooks/useMenus";
-import { ScopeContextStrip } from "@/components/dashboard/menu/ScopeContextStrip";
 import { useUserInfo } from "../../manage/hooks/useUserInfo.";
 import {
   Dialog,
@@ -45,8 +43,7 @@ import {
   FormField,
   FormItem,
   FormLabel,
-  FormMessage,
-  FormDescription
+  FormMessage
 } from '@/components/ui/form'
 import { toast } from 'sonner'
 import { useQueryClient } from '@tanstack/react-query'
@@ -426,7 +423,6 @@ export default function MenuPage () {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
-      <ScopeContextStrip />
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className='text-2xl font-bold tracking-tight'>Menus</h2>
@@ -461,7 +457,7 @@ export default function MenuPage () {
           </DialogTrigger>
           <DialogContent
             overlayClassName='bg-slate-950/40 backdrop-blur-md'
-            className='w-full max-w-[calc(100vw-1rem)] gap-0 overflow-hidden rounded-[28px] border bg-background p-0 shadow-[0_30px_100px_rgba(15,23,42,0.26)] sm:max-w-4xl'
+            className='w-full max-w-[calc(100vw-1rem)] gap-0 overflow-hidden rounded-[28px] border bg-background p-0 shadow-[0_30px_100px_rgba(15,23,42,0.26)] sm:max-w-xl'
           >
             <Form {...form}>
               <form
@@ -603,31 +599,6 @@ export default function MenuPage () {
                               {...field}
                             />
                           </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name='image'
-                      render={() => (
-                        <FormItem>
-                          <FormLabel>Menu Image</FormLabel>
-                          <FormControl>
-                            <CdnImageUploadField
-                              disabled={form.formState.isSubmitting}
-                              helperText='Uploads to Bunny CDN when you create the menu.'
-                              onClear={imageUpload.clear}
-                              onFileSelect={imageUpload.selectFile}
-                              previewUrl={imageUpload.previewUrl}
-                              selectedFileName={imageUpload.selectedFileName}
-                              uploadLabel='Upload menu image'
-                              uploading={imageUpload.isUploading}
-                            />
-                          </FormControl>
-                          <FormDescription>
-                            Optional image for this menu
-                          </FormDescription>
                           <FormMessage />
                         </FormItem>
                       )}

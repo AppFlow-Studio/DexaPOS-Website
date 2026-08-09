@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import { Panel, PanelSection } from '@/components/dashboard/shell'
 import { Button } from '@/components/ui/button'
 import { Empty } from '@/components/ui/empty'
@@ -8,6 +9,16 @@ import { Calendar, Plus } from 'lucide-react'
 import { WeeklyScheduleView } from '../WeeklyScheduleView'
 import { ScheduleCard } from '../ScheduleCard'
 import { SchedulesModel, ScheduleTimeSlotsModel } from '@/types/db-modles'
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 
 export type MenuScheduleAssignment = SchedulesModel & {
     schedule_time_slots: ScheduleTimeSlotsModel[]
@@ -36,6 +47,8 @@ export function MenuSchedulesTab({
     onRemoveSchedule,
     onEditSchedule,
 }: MenuSchedulesTabProps) {
+    const [pendingRemoval, setPendingRemoval] = useState<MenuScheduleAssignment | null>(null)
+
     return (
         <div className="space-y-4">
             {/* Weekly Schedule Overview */}
@@ -48,6 +61,18 @@ export function MenuSchedulesTab({
                 <PanelSection
                     icon={Calendar}
                     label="Assigned Schedule"
+                    action={
+                        menuSchedules.length > 0 ? (
+                            <Button
+                                variant="outline"
+                                onClick={onOpenScheduleSheet}
+                                className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+                            >
+                                <Plus className="mr-1.5 h-4 w-4" />
+                                Create schedule
+                            </Button>
+                        ) : undefined
+                    }
                     caption={
                         menuSchedules.length === 0
                             ? "No schedules assigned yet"
@@ -84,7 +109,10 @@ export function MenuSchedulesTab({
                                     ? (locationNameById?.[schedule.assignment_location_id] ?? 'Location')
                                     : 'Global'
                                 return (
-                                    <div key={`${schedule.id}:${schedule.assignment_location_id ?? 'global'}`} className="space-y-2">
+                                    <div
+                                        key={`${schedule.id}:${schedule.assignment_location_id ?? 'global'}`}
+                                        className="space-y-2"
+                                    >
                                         <div className="flex items-center gap-2">
                                             <span className="inline-flex items-center rounded-full bg-muted/60 px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
                                                 {scopeName}
@@ -93,7 +121,7 @@ export function MenuSchedulesTab({
                                         <ScheduleCard
                                             schedule={schedule}
                                             index={index}
-                                            onRemove={() => onRemoveSchedule(schedule.id, schedule.assignment_location_id)}
+                                            onRemove={() => setPendingRemoval(schedule)}
                                             onEdit={onEditSchedule ? () => onEditSchedule(schedule) : undefined}
                                         />
                                     </div>
@@ -103,6 +131,40 @@ export function MenuSchedulesTab({
                     )}
                 </PanelSection>
             </Panel>
+
+            <AlertDialog
+                open={!!pendingRemoval}
+                onOpenChange={(open) => {
+                    if (!open) setPendingRemoval(null)
+                }}
+            >
+                <AlertDialogContent className="rounded-3xl sm:rounded-3xl">
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Remove this schedule?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            {pendingRemoval
+                                ? `“${pendingRemoval.name}” will be removed from this menu. The schedule itself will remain available to use elsewhere.`
+                                : 'This schedule will be removed from the menu.'}
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={() => {
+                                if (!pendingRemoval) return
+                                onRemoveSchedule(
+                                    pendingRemoval.id,
+                                    pendingRemoval.assignment_location_id,
+                                )
+                                setPendingRemoval(null)
+                            }}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                            Remove schedule
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     )
 }

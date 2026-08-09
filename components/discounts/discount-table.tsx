@@ -39,7 +39,7 @@ import {
     discountStatusLabel,
     discountStatusStyle,
 } from '@/lib/constants/discount-status'
-import { Eye, Globe, MapPin, MoreHorizontal, Pencil, Plus, Trash2 } from 'lucide-react'
+import { Eye, Globe, MapPin, MoreHorizontal, Pencil, Plus, Trash2, X } from 'lucide-react'
 
 interface DiscountTableProps {
     discounts: Discount[]
@@ -54,6 +54,8 @@ interface DiscountTableProps {
     onView?: (id: string) => void
     onEdit?: (id: string) => void
     onCreate?: () => void
+    showMobileReset?: boolean
+    onResetFilters?: () => void
 }
 
 /** DS-CTL-01 — the canonical pill control. */
@@ -79,6 +81,8 @@ export function DiscountTable({
     onView,
     onEdit,
     onCreate,
+    showMobileReset = false,
+    onResetFilters,
 }: DiscountTableProps) {
     const [selectedIds, setSelectedIds] = useState<string[]>([])
     const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null)
@@ -323,7 +327,7 @@ export function DiscountTable({
                 rather than a competing box beside the panel edge. */}
             <div
                 className={cn(
-                    'flex flex-wrap items-center justify-between gap-3 rounded-2xl border-0 px-4 py-2.5 shadow-none transition-colors',
+                    'flex flex-wrap items-center justify-between gap-3 rounded-2xl border-0 px-1 py-2.5 shadow-none transition-colors sm:px-4',
                     hasSelection ? 'bg-muted/60' : 'bg-transparent',
                 )}
             >
@@ -368,6 +372,19 @@ export function DiscountTable({
                     </div>
                 )}
             </div>
+
+            {showMobileReset && onResetFilters && (
+                <div className="flex px-1 sm:hidden">
+                    <Button
+                        variant="ghost"
+                        onClick={onResetFilters}
+                        className="h-8 gap-2.5 rounded-full px-0 text-[0.8125rem] font-medium text-muted-foreground hover:bg-transparent hover:text-foreground"
+                    >
+                        <X className="h-4 w-4" />
+                        Reset
+                    </Button>
+                </div>
+            )}
 
             {/* Delete confirmation — shared by the row menu and the bulk bar, so
                 no discount is ever removed without an explicit confirm. */}

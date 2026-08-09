@@ -28,6 +28,8 @@ import { CategorySection } from "./CategorySection";
 
 interface SortableCategoryWrapperProps {
   category: MenuCategory;
+  /** When false the drag gutter is unmounted and the card spans full width. */
+  isReorderMode: boolean;
   menuId: string;
   isExpanded: boolean;
   onToggle: () => void;
@@ -60,6 +62,7 @@ interface SortableCategoryWrapperProps {
 
 function SortableCategoryWrapper({
   category,
+  isReorderMode,
   menuId,
   isExpanded,
   onToggle,
@@ -108,23 +111,24 @@ function SortableCategoryWrapper({
         isDragging && "opacity-50 z-50"
       )}
     >
-      {/* Drag handle — hidden until the row is hovered, matching the hint text
-          below the list. Kept mounted (not conditionally rendered) so the row
-          never reflows, and revealed on keyboard focus for a11y. */}
-      <div
-        {...attributes}
-        {...listeners}
-        className={cn(
-          "flex-shrink-0 w-10 flex items-center justify-center cursor-grab active:cursor-grabbing",
-          // Borderless: the handle reads as part of the card, not a separate
-          // gutter. Hover alone carries the affordance.
-          "rounded-l-2xl bg-transparent text-muted-foreground/40 hover:bg-muted/60 hover:text-muted-foreground",
-          "touch-none opacity-0 transition-[opacity,background-color,color] focus-visible:opacity-100 group-hover:opacity-100",
-          isDragging && "opacity-100"
-        )}
-      >
-        <GripVertical className="h-5 w-5 text-muted-foreground" />
-      </div>
+      {/* Drag gutter — only mounted in reorder mode, so the card spans the full
+          width the rest of the time. Inside the mode it is always visible (no
+          hover gating), since the user has explicitly opted in. */}
+      {isReorderMode && (
+        <div
+          {...attributes}
+          {...listeners}
+          className={cn(
+            "flex-shrink-0 w-10 flex items-center justify-center cursor-grab active:cursor-grabbing",
+            // Borderless: the handle reads as part of the card, not a separate
+            // gutter.
+            "rounded-l-2xl bg-transparent text-muted-foreground/40 hover:bg-muted/60 hover:text-muted-foreground",
+            "touch-none transition-colors"
+          )}
+        >
+          <GripVertical className="h-5 w-5 text-muted-foreground" />
+        </div>
+      )}
 
       <div className="flex-1 min-w-0">
         <CategorySection
@@ -181,6 +185,7 @@ function DragOverlayCategory({ category }: { category: MenuCategory }) {
 }
 
 interface DraggableCategoriesListProps {
+  isReorderMode?: boolean;
   categories: MenuCategory[];
   expandedCategories: Set<string>;
   selectedLocationId: string | null;
@@ -218,6 +223,7 @@ interface DraggableCategoriesListProps {
 }
 
 export function DraggableCategoriesList({
+  isReorderMode = false,
   categories,
   expandedCategories,
   selectedLocationId,
@@ -249,6 +255,8 @@ export function DraggableCategoriesList({
   onToggleCategoryItems,
 }: DraggableCategoriesListProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
+  // Reorder mode is opt-in: the drag gutter only takes horizontal space while
+  // the user is actually reordering, so cards are full-width the rest of the time.
   const showLocationPricing =
     selectedLocationId !== "all" && !!selectedLocationId;
 
@@ -353,6 +361,7 @@ export function DraggableCategoriesList({
             <SortableCategoryWrapper
               key={category.category_id}
               category={category}
+              isReorderMode={isReorderMode}
               menuId={menuId}
               isExpanded={expandedCategories.has(category.id)}
               onToggle={() => onToggleCategory(category.id)}

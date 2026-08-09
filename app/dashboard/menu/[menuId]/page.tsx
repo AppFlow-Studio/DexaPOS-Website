@@ -1,9 +1,8 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import { useMenuWithCategories } from "../../hooks/useMenu";
-import { ScopeContextStrip } from "@/components/dashboard/menu/ScopeContextStrip";
 import { useUserInfo } from "../../../manage/hooks/useUserInfo.";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -211,6 +210,33 @@ export default function MenuDetailPage() {
   // Preview modal state
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
 
+  // Tab rail scrolls horizontally on narrow screens; keep the active pill in
+  // view so selecting a tab near either edge brings it fully on-screen.
+  const [activeTab, setActiveTab] = useState("overview");
+  const tabRailRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    // Run after browser scroll restoration and Radix's active-state update.
+    // This prevents a refreshed rail from retaining an old horizontal offset
+    // that leaves the restored active tab outside the viewport.
+    let secondFrame = 0;
+    const firstFrame = window.requestAnimationFrame(() => {
+      secondFrame = window.requestAnimationFrame(() => {
+        const rail = tabRailRef.current;
+        const active = rail?.querySelector<HTMLElement>('[data-state="active"]');
+        if (!rail || !active) return;
+        const target =
+          active.offsetLeft - (rail.clientWidth - active.offsetWidth) / 2;
+        rail.scrollTo({ left: Math.max(0, target), behavior: "smooth" });
+      });
+    });
+
+    return () => {
+      window.cancelAnimationFrame(firstFrame);
+      if (secondFrame) window.cancelAnimationFrame(secondFrame);
+    };
+  }, [activeTab]);
+
   // Bulk selection state (categories tab only)
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
@@ -255,6 +281,19 @@ export default function MenuDetailPage() {
   // guidance even before they've connected OrderOut. Single-location accounts
   // resolve to their one location; multi-location on 'all' stays hidden.
   const showOrderOutTab = !!orderOutLocationId;
+
+  useEffect(() => {
+    const savedTab = window.sessionStorage.getItem(`menu:${menuId}:active-tab`);
+    const canRestore =
+      savedTab &&
+      ["overview", "categories", "schedules", "settings", "orderout"].includes(savedTab) &&
+      (savedTab !== "orderout" || showOrderOutTab);
+    if (canRestore && savedTab) {
+      // Session storage is external state; hydrate the last explicit tab choice.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setActiveTab(savedTab);
+    }
+  }, [menuId, showOrderOutTab]);
 
   // Surface out-of-band delivery-app sync failures (86 propagates async now).
   useOrderOutSyncAlerts(clerkOrgId, orderOutLocationId);
@@ -524,15 +563,6 @@ export default function MenuDetailPage() {
       }
       return next;
     });
-  };
-
-  const expandAllCategories = () => {
-    const allIds = new Set(menu?.categories?.map((c) => c.id) || []);
-    setExpandedCategories(allIds);
-  };
-
-  const collapseAllCategories = () => {
-    setExpandedCategories(new Set());
   };
 
   const handleEditMenuItem = (
@@ -1219,8 +1249,7 @@ export default function MenuDetailPage() {
   //TODO: Handle switching between location to location should send you back to menu
 
   return (
-    <PageShell>
-      <ScopeContextStrip menuName={menu?.name ?? null} />
+    <PageShell className="space-y-3">
       <MenuHeader
         menu={menu}
         locationName={menu.location_id ? locations?.find(l => l.id === menu.location_id)?.name : null}
@@ -1229,9 +1258,19 @@ export default function MenuDetailPage() {
         onPreview={() => setIsPreviewOpen(true)}
       />
 
-      <Tabs defaultValue="overview" className="space-y-4">
+      <Tabs
+        value={activeTab}
+        onValueChange={(tab) => {
+          setActiveTab(tab);
+          window.sessionStorage.setItem(`menu:${menuId}:active-tab`, tab);
+        }}
+        className="space-y-4"
+      >
         {/* Pill rail, not underline tabs. Classes are literal, not {TOKEN} — see C7. */}
-        <div className="w-full min-w-0 overflow-x-auto pb-1">
+        <div
+          ref={tabRailRef}
+          className="scrollbar-none w-full min-w-0 overflow-x-auto scroll-smooth"
+        >
         <TabsList className="inline-flex h-auto w-max flex-nowrap gap-0.5 rounded-full bg-muted/70 p-1">
           <TabsTrigger value="overview" className={TAB_PILL}>Overview</TabsTrigger>
           <TabsTrigger value="categories" className={cn(TAB_PILL, "gap-1.5")}>
@@ -1281,10 +1320,10 @@ export default function MenuDetailPage() {
           />
         </TabsContent>
 
-        <TabsContent value="categories" className="space-y-4">
-          {/* Sticky selection bar — matches items-page pattern */}
+        <TabsContent value="categories" className="flex flex-col gap-4">
+          {/* Selection bar stays in the page flow with the category content. */}
           {isSelectionMode && (
-            <div className="sticky top-0 z-20 mb-4 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl border-0 bg-primary/5 px-4 py-2.5 backdrop-blur">
+            <div className="order-2 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl border-0 bg-primary/5 px-4 py-2.5">
               <Badge variant="secondary" className="shrink-0 text-xs">
                 {selectedItemIds.size} of {totalSelectableItems} selected
               </Badge>
@@ -1394,8 +1433,6 @@ export default function MenuDetailPage() {
             menuId={menuId}
             isMenuLocationOwned={menu?.is_location_owned}
             onToggleCategory={toggleCategory}
-            onExpandAll={expandAllCategories}
-            onCollapseAll={collapseAllCategories}
             onItemClick={(itemId) =>
               router.push(`/dashboard/menu/items/${itemId}`)
             }
@@ -1458,15 +1495,10 @@ export default function MenuDetailPage() {
             editedDescription={editedDescription}
             editedLocationId={editedLocationId}
             hasSettingsChanges={hasSettingsChanges}
-            imagePreviewUrl={imageUpload.previewUrl}
-            isImageUploading={imageUpload.isUploading}
             isTogglingActive={isTogglingActive}
             isSavingSettings={isSavingSettings}
-            selectedImageFileName={imageUpload.selectedFileName}
             selectedLocationId={selectedLocationId}
             locations={locations ?? []}
-            onClearImage={imageUpload.clear}
-            onImageSelect={imageUpload.selectFile}
             onNameChange={setEditedName}
             onDescriptionChange={setEditedDescription}
             onLocationChange={setEditedLocationId}
@@ -1710,11 +1742,7 @@ export default function MenuDetailPage() {
           }))}
         onSuccess={() => {
           exitSelectionMode();
-          queryClient.invalidateQueries({
-            queryKey: ["menu-with-categories", menuId],
-          });
           invalidateOrderOutSync(queryClient);
-          refetchMenu();
         }}
       />
 
@@ -1739,11 +1767,7 @@ export default function MenuDetailPage() {
           }))}
         onSuccess={() => {
           exitSelectionMode();
-          queryClient.invalidateQueries({
-            queryKey: ["menu-with-categories", menuId],
-          });
           invalidateOrderOutSync(queryClient);
-          refetchMenu();
         }}
       />
 

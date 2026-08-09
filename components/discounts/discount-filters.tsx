@@ -23,7 +23,7 @@ interface DiscountFiltersProps {
 
 /** DS-CTL-03 — a tinted, borderless filter chip. Quieter than a pill control. */
 const FILTER_TRIGGER =
-    'h-9 w-auto gap-1.5 rounded-full border-0 bg-muted/60 px-4 text-[0.8125rem] font-medium text-muted-foreground shadow-none hover:bg-muted hover:text-foreground data-[state=open]:bg-muted data-[state=open]:text-foreground'
+    'h-9 w-full gap-1.5 rounded-full border-0 bg-muted/60 px-4 text-[0.8125rem] font-medium text-muted-foreground shadow-none hover:bg-muted hover:text-foreground data-[state=open]:bg-muted data-[state=open]:text-foreground sm:w-auto'
 
 export function DiscountFilters({ value, onChange }: DiscountFiltersProps) {
     const [search, setSearch] = useState(value.search ?? '')
@@ -51,9 +51,9 @@ export function DiscountFilters({ value, onChange }: DiscountFiltersProps) {
         !!value.hideExpired
 
     return (
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap sm:items-center">
             {/* DS-CTL-02 — filled, borderless search */}
-            <div className="relative min-w-0 flex-1 basis-[220px]">
+            <div className="relative min-w-0 w-full sm:flex-1 sm:basis-[220px]">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
                 <Input
                     id="discount-search"
@@ -118,7 +118,7 @@ export function DiscountFilters({ value, onChange }: DiscountFiltersProps) {
             {/* Bare checkbox on the panel ground, matching the table's
                 "Select all" — no pill, so it reads as a toggle rather than
                 as another filter chip. */}
-            <div className="flex h-9 shrink-0 items-center gap-2.5 px-1">
+            <div className="flex h-9 w-full shrink-0 items-center gap-2.5 px-1 sm:w-auto">
                 <Checkbox
                     id="discount-hide-expired"
                     checked={!!value.hideExpired}
@@ -136,7 +136,7 @@ export function DiscountFilters({ value, onChange }: DiscountFiltersProps) {
                 <Button
                     variant="ghost"
                     onClick={handleReset}
-                    className="h-9 shrink-0 gap-1.5 rounded-full px-4 text-[0.8125rem] font-medium text-muted-foreground hover:text-foreground"
+                    className="hidden h-9 shrink-0 gap-1.5 rounded-full px-4 text-[0.8125rem] font-medium text-muted-foreground hover:text-foreground sm:inline-flex"
                 >
                     <X className="h-3.5 w-3.5" />
                     Reset

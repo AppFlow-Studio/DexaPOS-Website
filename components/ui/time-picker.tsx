@@ -4,6 +4,7 @@ import * as React from 'react'
 import { cn } from '@/lib/utils'
 import { Button } from './button'
 import { Clock, ChevronUp, ChevronDown } from 'lucide-react'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './select'
 
 interface TimePickerProps {
     value?: string // "HH:MM" format (24h)
@@ -90,18 +91,19 @@ function WheelColumn({
                     {label}
                 </span>
             )}
-            <div className="relative">
+            <div className="flex h-[132px] flex-col overflow-hidden rounded-xl bg-muted/50">
                 {/* Increment button */}
                 <button
                     type="button"
                     onClick={decrement}
-                    className="absolute -top-1 left-1/2 -translate-x-1/2 -translate-y-full z-10 p-1 rounded-full hover:bg-muted transition-colors"
+                    aria-label={`Previous ${label?.toLowerCase() ?? 'value'}`}
+                    className="flex h-6 shrink-0 items-center justify-center transition-colors hover:bg-muted"
                 >
-                    <ChevronUp className="h-5 w-5 text-muted-foreground" />
+                    <ChevronUp className="h-4 w-4 text-muted-foreground" />
                 </button>
 
                 {/* Scroll container */}
-                <div className="relative h-[132px] overflow-hidden rounded-xl bg-muted/50">
+                <div className="relative h-[84px] overflow-hidden">
                     {/* Selection highlight */}
                     <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-[44px] bg-primary/10 border-y border-primary/20 pointer-events-none z-10" />
 
@@ -116,8 +118,8 @@ function WheelColumn({
                         onScroll={handleScroll}
                         style={{
                             scrollSnapType: 'y mandatory',
-                            paddingTop: ITEM_HEIGHT,
-                            paddingBottom: ITEM_HEIGHT,
+                            paddingTop: 20,
+                            paddingBottom: 20,
                         }}
                     >
                         {items.map((item, index) => {
@@ -147,9 +149,10 @@ function WheelColumn({
                 <button
                     type="button"
                     onClick={increment}
-                    className="absolute -bottom-1 left-1/2 -translate-x-1/2 translate-y-full z-10 p-1 rounded-full hover:bg-muted transition-colors"
+                    aria-label={`Next ${label?.toLowerCase() ?? 'value'}`}
+                    className="flex h-6 shrink-0 items-center justify-center transition-colors hover:bg-muted"
                 >
-                    <ChevronDown className="h-5 w-5 text-muted-foreground" />
+                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
                 </button>
             </div>
         </div>
@@ -418,51 +421,77 @@ export function TimeInput({ value = '09:00', onChange, className, disabled }: Ti
             disabled && "opacity-50 pointer-events-none",
             className
         )}>
-            <select
-                value={hour}
-                onChange={(e) => {
-                    const h = Number(e.target.value)
+            <Select
+                value={String(hour)}
+                onValueChange={(value) => {
+                    const h = Number(value)
                     setHour(h)
                     emitChange(h, minute, period)
                 }}
-                className="bg-transparent text-lg font-semibold cursor-pointer focus:outline-none text-center w-[2.75rem] px-1"
                 disabled={disabled}
             >
-                {HOURS.map(h => (
-                    <option key={h} value={h}>{h}</option>
-                ))}
-            </select>
+                <SelectTrigger
+                    size="sm"
+                    aria-label="Hour"
+                    className="w-[3.75rem] gap-1 border-0 bg-transparent px-1 text-lg font-semibold shadow-none focus-visible:ring-0"
+                >
+                    <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="max-h-60 min-w-[4.5rem]">
+                    {HOURS.map(h => (
+                        <SelectItem key={h} value={String(h)}>{h}</SelectItem>
+                    ))}
+                </SelectContent>
+            </Select>
 
             <span className="text-lg font-bold text-muted-foreground">:</span>
 
-            <select
-                value={minute}
-                onChange={(e) => {
-                    const m = Number(e.target.value)
+            <Select
+                value={String(minute)}
+                onValueChange={(value) => {
+                    const m = Number(value)
                     setMinute(m)
                     emitChange(hour, m, period)
                 }}
-                className="bg-transparent text-lg font-semibold cursor-pointer focus:outline-none text-center w-[3.25rem] px-1"
                 disabled={disabled}
             >
-                {MINUTES.map(m => (
-                    <option key={m} value={m}>{m.toString().padStart(2, '0')}</option>
-                ))}
-            </select>
+                <SelectTrigger
+                    size="sm"
+                    aria-label="Minute"
+                    className="w-[4.25rem] gap-1 border-0 bg-transparent px-1 text-lg font-semibold shadow-none focus-visible:ring-0"
+                >
+                    <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="max-h-60 min-w-[4.5rem]">
+                    {MINUTES.map(m => (
+                        <SelectItem key={m} value={String(m)}>
+                            {m.toString().padStart(2, '0')}
+                        </SelectItem>
+                    ))}
+                </SelectContent>
+            </Select>
 
-            <select
+            <Select
                 value={period}
-                onChange={(e) => {
-                    const p = e.target.value as 'AM' | 'PM'
+                onValueChange={(value) => {
+                    const p = value as 'AM' | 'PM'
                     setPeriod(p)
                     emitChange(hour, minute, p)
                 }}
-                className="bg-transparent text-sm font-semibold text-primary cursor-pointer focus:outline-none ml-1 px-1"
                 disabled={disabled}
             >
-                <option value="AM">AM</option>
-                <option value="PM">PM</option>
-            </select>
+                <SelectTrigger
+                    size="sm"
+                    aria-label="Period"
+                    className="ml-1 w-[4.25rem] gap-1 border-0 bg-transparent px-1 text-sm font-semibold text-primary shadow-none focus-visible:ring-0"
+                >
+                    <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="min-w-[4.5rem]">
+                    <SelectItem value="AM">AM</SelectItem>
+                    <SelectItem value="PM">PM</SelectItem>
+                </SelectContent>
+            </Select>
         </div>
     )
 }

@@ -59,10 +59,34 @@ export async function GetMenuWithCategories (
   const location_Id = locationId === 'all' ? null : locationId
   console.log('[GetMenuWithCategories] location_Id', location_Id)
 
-  const { data, error } = await supabase.rpc('get_menu_with_categories', {
+  let { data, error } = await supabase.rpc('get_menu_with_categories', {
     p_menu_id: menuId,
     p_location_id: location_Id || null
   })
+
+  // A location-owned menu has one concrete pricing context even when the
+  // dashboard's location selector is on "All". Calling the cascade RPC with a
+  // null location omits L2/L4/L5 overrides, so a successful bulk adjustment is
+  // written but the refreshed UI continues to show the global base price.
+  // Resolve the menu once, then rerun through its owning location so the
+  // displayed effective price matches what customers at that location pay.
+  if (!error && !location_Id && data) {
+    const unscopedMenu = data as MenuWithCategories
+    if (unscopedMenu.is_location_owned && unscopedMenu.location_id) {
+      const scopedResult = await supabase.rpc('get_menu_with_categories', {
+        p_menu_id: menuId,
+        p_location_id: unscopedMenu.location_id,
+      })
+      if (!scopedResult.error && scopedResult.data) {
+        data = scopedResult.data
+      } else if (scopedResult.error) {
+        console.error(
+          'Error resolving location-owned menu pricing:',
+          scopedResult.error,
+        )
+      }
+    }
+  }
   console.log('[GetMenuWithCategories] data', data)
 
   if (error) {

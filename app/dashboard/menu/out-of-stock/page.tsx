@@ -84,14 +84,18 @@ export default function OutOfStockPage() {
   // 86 reads as one block (with a "Restore group" action), not N loose rows.
   //
   // Optimistic snoozes can land with modifier_group_id === '' (use-snoozes.ts
-  // falls back to '' when the mutation can't resolve a group). An empty string
-  // is a valid Map key but NOT a valid React key, so bucket those rows under a
-  // per-option sentinel: they render as their own single-option group until the
-  // refetch supplies the real id, instead of colliding into one keyless block.
+  // falls back to '' when the mutation can't resolve a group). Fall back to
+  // the normalized group name so options such as the Milk Options set still
+  // read as one group while the refetch resolves their real parent id.
   const modifierGroups = Array.from(
     modifiers
       .reduce((map, m) => {
-        const bucket = m.modifier_group_id || `ungrouped:${m.modifier_group_item_id}`
+        const normalizedGroupName = (m.group_name ?? '').trim().toLocaleLowerCase()
+        const bucket =
+          m.modifier_group_id ||
+          (normalizedGroupName
+            ? `group-name:${normalizedGroupName}`
+            : `ungrouped:${m.modifier_group_item_id}`)
         const g = map.get(bucket) ?? {
           bucket,
           groupId: m.modifier_group_id,
@@ -330,42 +334,39 @@ export default function OutOfStockPage() {
                 value={modifiers.length}
                 caption="Grouped by modifier group so a whole-group 86 reads as one block."
               >
-                <div className="space-y-4">
+                <div className="divide-y divide-border/60">
                   {modifierGroups.map((grp) => (
                     <div
                       key={grp.bucket}
-                      // px-3 below `sm`: this card's padding compounds with the
-                      // section's own, and 32px of combined inset on a 320px
-                      // viewport is what pushes the rows past the edge.
-                      className="min-w-0 overflow-hidden rounded-2xl border border-border/60 bg-card px-3 py-4 shadow-none sm:px-4"
+                      className="min-w-0 py-4 first:pt-0 last:pb-0"
                     >
                       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
                         <div className="flex min-w-0 flex-1 basis-56 flex-wrap items-center gap-x-2 gap-y-1">
-                          <Layers className="h-4 w-4 shrink-0 text-muted-foreground" />
-                          <span className="min-w-0 break-words text-sm font-medium">
-                            {grp.groupName}
+                          <span className="inline-flex min-w-0 items-center gap-2 rounded-lg bg-muted/70 px-2.5 py-1.5">
+                            <Layers className="h-3.5 w-3.5 shrink-0 text-primary" />
+                            <span className="min-w-0 break-words text-sm font-semibold">
+                              {grp.groupName}
+                            </span>
                           </span>
                           <StatusBadge status="snoozed">
                             <span className="tabular-nums">{grp.options.length}</span>
                             &nbsp;out of stock
                           </StatusBadge>
                         </div>
-                        {/* A sentinel bucket (no resolved group id) always holds
-                            exactly one option, so restore it directly rather
-                            than firing a group mutation with an empty id. */}
-                        <RowAction
-                          label={grp.groupId ? 'Restore group' : 'Restore'}
-                          disabled={isRestoring}
-                          onClick={() =>
-                            grp.groupId
-                              ? handleRestoreGroup(grp.groupId)
-                              : handleRestoreModifier(grp.options[0].modifier_group_item_id)
-                          }
-                        />
+                        {/* A one-option group already has the row-level Restore
+                            action below, so only show this bulk action when it
+                            restores more than one modifier. */}
+                        {grp.groupId && grp.options.length > 1 && (
+                          <RowAction
+                            label="Restore group"
+                            disabled={isRestoring}
+                            onClick={() => handleRestoreGroup(grp.groupId!)}
+                          />
+                        )}
                       </div>
 
                       <div className="mt-1">
-                        <RowList>
+                        <div>
                           {grp.options.map((m) => (
                             <SnoozeRow
                               key={m.modifier_group_item_id}
@@ -376,7 +377,7 @@ export default function OutOfStockPage() {
                               onRestore={() => handleRestoreModifier(m.modifier_group_item_id)}
                             />
                           ))}
-                        </RowList>
+                        </div>
                       </div>
                     </div>
                   ))}

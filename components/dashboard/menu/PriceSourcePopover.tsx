@@ -152,10 +152,11 @@ export function PriceSourcePopover({
         </button>
       </PopoverTrigger>
       <PopoverContent
-        align="start"
-        className="w-[320px] overflow-hidden rounded-2xl p-0"
+        align="end"
+        collisionPadding={12}
+        className="w-[268px] overflow-hidden rounded-2xl p-0"
       >
-        <div className="border-b border-border/60 px-4 py-3">
+        <div className="border-b border-border/60 px-3 py-2.5">
           <div className="flex items-center justify-between gap-2">
             <div>
               <p className="text-sm font-semibold tabular-nums">
@@ -177,8 +178,8 @@ export function PriceSourcePopover({
 
         {mode === "view" ? (
           <>
-            <div className="px-4 py-3">
-              <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            <div className="px-3 py-2.5">
+              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                 Cascade
               </p>
               {matrixQuery.isLoading ? (

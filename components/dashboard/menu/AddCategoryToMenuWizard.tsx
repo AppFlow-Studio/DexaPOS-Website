@@ -430,15 +430,15 @@ export function AddCategoryToMenuWizard({
                                                     )}
                                                     onClick={() => canAddRemoveCategories && handleToggleCategory(category.id)}
                                                 >
-                                                    <div className="flex items-start justify-between gap-3">
+                                                    <div className="flex min-w-0 items-start justify-between gap-3">
                                                         <div className="flex-1 min-w-0">
-                                                            <div className="flex items-center gap-2 mb-1">
+                                                            <div className="flex flex-wrap items-center gap-2 mb-1 min-w-0">
                                                                 {isSelected ? (
                                                                     <CheckCircle2 className="h-5 w-5 text-primary shrink-0" />
                                                                 ) : (
                                                                     <div className="h-5 w-5 rounded-full border-2 border-muted-foreground shrink-0" />
                                                                 )}
-                                                                <span className="font-medium">{category.name}</span>
+                                                                <span className="min-w-0 font-medium break-words">{category.name}</span>
                                                             </div>
                                                             {category.description && (
                                                                 <p className="text-sm text-muted-foreground ml-7">
@@ -576,16 +576,21 @@ export function AddCategoryToMenuWizard({
                                                     )}
                                                     onClick={() => canAddRemoveCategories && handleToggleCategory(category.id)}
                                                 >
-                                                    <div className="flex items-start justify-between gap-3">
+                                                    <div className="flex min-w-0 items-start justify-between gap-3">
                                                         <div className="flex-1 min-w-0">
-                                                            <div className="flex items-center gap-2 mb-1">
+                                                            <div className="flex flex-wrap items-center gap-2 mb-1 min-w-0">
                                                                 {isSelected ? (
                                                                     <CheckCircle2 className="h-5 w-5 text-primary shrink-0" />
                                                                 ) : (
                                                                     <div className="h-5 w-5 rounded-full border-2 border-muted-foreground shrink-0" />
                                                                 )}
-                                                                <span className="font-medium">{category.name}</span>
-                                                                <Badge variant="outline" className="text-xs bg-purple-50 text-purple-600 border-purple-200">
+                                                                <span className="min-w-0 font-medium break-words">{category.name}</span>
+                                                                {/* Long location names must wrap rather than run past the
+                                                                    card edge, so the Badge's nowrap/shrink-0 are overridden. */}
+                                                                <Badge
+                                                                    variant="outline"
+                                                                    className="min-w-0 max-w-full shrink whitespace-normal break-words text-left text-xs bg-purple-50 text-purple-600 border-purple-200"
+                                                                >
                                                                     {category.location_name}
                                                                 </Badge>
                                                             </div>

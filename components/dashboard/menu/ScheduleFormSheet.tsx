@@ -446,7 +446,7 @@ export function ScheduleFormSheet({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         overlayClassName="bg-slate-950/40 backdrop-blur-md"
-        className="w-full max-w-[calc(100vw-1rem)] gap-0 overflow-hidden rounded-[28px] border-0 bg-background p-0 shadow-[0_30px_100px_rgba(15,23,42,0.26)] sm:max-w-3xl"
+        className="w-full max-w-[calc(100vw-1rem)] gap-0 overflow-hidden rounded-[28px] border-0 bg-background p-0 shadow-[0_30px_100px_rgba(15,23,42,0.26)] sm:max-w-2xl"
       >
         {showSuccess ? (
           // Success animation
@@ -546,7 +546,7 @@ export function ScheduleFormSheet({
 
                 {/* Day Selection */}
                 <BottomSheetSection title="Active Days">
-                  <div className="grid grid-cols-7 gap-1 sm:gap-2">
+                  <div className="grid grid-cols-7 gap-1 sm:flex sm:flex-wrap sm:gap-2">
                     {DAYS_OF_WEEK.map((day, index) => {
                       const isSelected = selectedDays.includes(index);
                       return (
@@ -555,7 +555,7 @@ export function ScheduleFormSheet({
                           type="button"
                           onClick={() => toggleDay(index)}
                           className={cn(
-                            "aspect-square min-w-0 rounded-xl text-xs sm:text-sm font-medium transition-all duration-200",
+                            "aspect-square min-w-0 rounded-xl text-xs font-medium transition-all duration-200 sm:size-14 sm:flex-none",
                             "flex items-center justify-center",
                             "active:scale-95",
                             isSelected
@@ -582,7 +582,7 @@ export function ScheduleFormSheet({
                         return (
                           <div
                             key={day}
-                            className="p-4 rounded-xl bg-muted/30 animate-in fade-in slide-in-from-bottom-2"
+                            className="rounded-xl bg-muted/30 p-3 animate-in fade-in slide-in-from-bottom-2"
                             style={{ animationDelay: `${dayIdx * 50}ms` }}
                           >
                             <div className="flex items-center justify-between mb-3">
@@ -651,28 +651,30 @@ export function ScheduleFormSheet({
                               {daySlots.map((slot, slotIdx) => (
                                 <div
                                   key={slot.id}
-                                  className="flex flex-wrap items-center gap-x-2 gap-y-2 animate-in fade-in slide-in-from-left-2"
+                                  className="flex items-start gap-2 animate-in fade-in slide-in-from-left-2 sm:flex-wrap sm:items-center"
                                   style={{
                                     animationDelay: `${slotIdx * 30}ms`,
                                   }}
                                 >
-                                  <TimeInput
-                                    value={slot.start_time}
-                                    onChange={(v) =>
-                                      updateTimeSlot(slot.id, "start_time", v)
-                                    }
-                                    className="flex-1 min-w-[130px]"
-                                  />
-                                  <span className="text-muted-foreground text-sm">
-                                    to
-                                  </span>
-                                  <TimeInput
-                                    value={slot.end_time}
-                                    onChange={(v) =>
-                                      updateTimeSlot(slot.id, "end_time", v)
-                                    }
-                                    className="flex-1 min-w-[130px]"
-                                  />
+                                  <div className="flex min-w-0 flex-1 flex-col gap-2 sm:contents">
+                                    <TimeInput
+                                      value={slot.start_time}
+                                      onChange={(v) =>
+                                        updateTimeSlot(slot.id, "start_time", v)
+                                      }
+                                      className="w-full sm:w-[180px] sm:flex-none"
+                                    />
+                                    <span className="hidden text-sm text-muted-foreground sm:inline">
+                                      to
+                                    </span>
+                                    <TimeInput
+                                      value={slot.end_time}
+                                      onChange={(v) =>
+                                        updateTimeSlot(slot.id, "end_time", v)
+                                      }
+                                      className="w-full sm:w-[180px] sm:flex-none"
+                                    />
+                                  </div>
                                   {daySlots.length > 1 && (
                                     <Button
                                       type="button"

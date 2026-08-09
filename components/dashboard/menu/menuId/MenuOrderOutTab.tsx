@@ -414,26 +414,26 @@ export function MenuOrderOutTab({
 
       {/* Section 4: Payload Preview (collapsible) */}
       {lastPayloadSnapshot && (
-        <Panel>
+        <Panel className="rounded-[2rem]">
           <PanelSection
             label={
-              <span className="flex items-center gap-2">
-                <Code className="h-[1.125rem] w-[1.125rem] shrink-0" />
-                Last Synced Payload
-              </span>
-            }
-            action={
               <button
                 type="button"
                 aria-expanded={showPayload}
                 onClick={() => setShowPayload(!showPayload)}
-                className="flex h-8 w-8 items-center justify-center rounded-full bg-muted/60 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                className="flex w-full items-center justify-between gap-3 text-left"
               >
-                {showPayload ? (
-                  <ChevronUp className="h-4 w-4" />
-                ) : (
-                  <ChevronDown className="h-4 w-4" />
-                )}
+                <span className="flex min-w-0 items-center gap-2">
+                  <Code className="h-[1.125rem] w-[1.125rem] shrink-0" />
+                  <span className="truncate">Last Synced Payload</span>
+                </span>
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted/60 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
+                  {showPayload ? (
+                    <ChevronUp className="h-4 w-4" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4" />
+                  )}
+                </span>
               </button>
             }
           >

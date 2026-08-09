@@ -1,16 +1,18 @@
 "use client";
 
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Empty } from "@/components/ui/empty";
 import {
   Tag,
-  Wand2,
+  FolderPlus,
   List,
   Table as TableIcon,
   LayoutGrid,
   Info,
   CheckSquare,
+  ArrowUpDown,
 } from "lucide-react";
 import { MenuCategory, MenuCategoryItem } from "@/types/menu";
 import { CategoryTable } from "./CategoryTable";
@@ -33,8 +35,6 @@ interface MenuCategoriesTabProps {
   menuId: string;
   isMenuLocationOwned?: boolean;
   onToggleCategory: (categoryId: string) => void;
-  onExpandAll: () => void;
-  onCollapseAll: () => void;
   onItemClick: (itemId: string) => void;
   onToggleVisibility: (categoryId: string, isActive: boolean) => Promise<void>;
   onResetOverride: (categoryId: string) => Promise<void>;
@@ -80,8 +80,6 @@ export function MenuCategoriesTab({
   menuId,
   isMenuLocationOwned,
   onToggleCategory,
-  onExpandAll,
-  onCollapseAll,
   onItemClick,
   onToggleVisibility,
   onResetOverride,
@@ -115,19 +113,22 @@ export function MenuCategoriesTab({
   onToggleSelectionMode,
 }: MenuCategoriesTabProps) {
   const isAllLocations = !selectedLocationId || selectedLocationId === "all";
+  const [isTableReorderMode, setIsTableReorderMode] = useState(false);
+  const [isGridReorderMode, setIsGridReorderMode] = useState(false);
+  const [isListReorderMode, setIsListReorderMode] = useState(false);
   // Cannot add/remove categories when location-scoped viewing a global menu
   const canModifyCategories = isAllLocations || isMenuLocationOwned;
 
   return (
-    <div className="space-y-4">
+    <div className="contents">
       {/* Controls */}
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="order-1 flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
-          {onToggleSelectionMode && (
+          {onToggleSelectionMode && categoryViewMode === "list" && (
             <Button
               variant={isSelectionMode ? "secondary" : "outline"}
               size="sm"
-              className="h-8 gap-1 px-3 text-xs"
+              className="order-2 h-8 gap-1 px-3 text-xs"
               onClick={onToggleSelectionMode}
             >
               <CheckSquare className="h-3.5 w-3.5" />
@@ -139,29 +140,9 @@ export function MenuCategoriesTab({
               )}
             </Button>
           )}
-          {categoryViewMode === "list" && (
-            <>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8 px-3 text-xs"
-                onClick={onExpandAll}
-              >
-                Expand All
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8 px-3 text-xs"
-                onClick={onCollapseAll}
-              >
-                Collapse All
-              </Button>
-            </>
-          )}
           {onViewModeChange && (
             // One pill rail, matching the tab rail — no bordered segments.
-            <div className="hidden sm:flex items-center gap-0.5 rounded-full bg-muted/70 p-1 h-8">
+            <div className="order-1 flex h-8 items-center gap-0.5 rounded-full bg-muted/70 p-1">
               <Button
                 variant="ghost"
                 size="sm"
@@ -170,7 +151,9 @@ export function MenuCategoriesTab({
                   categoryViewMode === "list" &&
                     "bg-background text-foreground shadow-sm ring-1 ring-border",
                 )}
-                onClick={() => onViewModeChange("list")}
+                onClick={() => {
+                  onViewModeChange("list");
+                }}
                 title="List view (drag to reorder)"
               >
                 <List className="h-3.5 w-3.5" />
@@ -183,7 +166,10 @@ export function MenuCategoriesTab({
                   categoryViewMode === "grid" &&
                     "bg-background text-foreground shadow-sm ring-1 ring-border",
                 )}
-                onClick={() => onViewModeChange("grid")}
+                onClick={() => {
+                  if (isSelectionMode) onToggleSelectionMode?.();
+                  onViewModeChange("grid");
+                }}
                 title="Grid view"
               >
                 <LayoutGrid className="h-3.5 w-3.5" />
@@ -196,44 +182,104 @@ export function MenuCategoriesTab({
                   categoryViewMode === "table" &&
                     "bg-background text-foreground shadow-sm ring-1 ring-border",
                 )}
-                onClick={() => onViewModeChange("table")}
+                onClick={() => {
+                  if (isSelectionMode) onToggleSelectionMode?.();
+                  onViewModeChange("table");
+                }}
                 title="Table view"
               >
                 <TableIcon className="h-3.5 w-3.5" />
               </Button>
             </div>
           )}
-        </div>
-        <div className="flex items-center gap-2">
+          {categoryViewMode === "table" && onViewModeChange && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="order-3 h-8 gap-1.5 rounded-full px-3 text-xs"
+              onClick={() => {
+                setIsTableReorderMode((current) => !current);
+              }}
+              title="Show drag handles in the table"
+            >
+              <ArrowUpDown className="h-3.5 w-3.5" />
+              {isTableReorderMode ? "Done" : "Reorder"}
+            </Button>
+          )}
+          {categoryViewMode === "grid" && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="order-3 h-8 gap-1.5 rounded-full px-3 text-xs"
+              onClick={() => setIsGridReorderMode((current) => !current)}
+            >
+              <ArrowUpDown className="h-3.5 w-3.5" />
+              {isGridReorderMode ? "Done" : "Reorder"}
+            </Button>
+          )}
+          {categoryViewMode === "list" && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="order-3 h-8 gap-1.5 rounded-full px-3 text-xs"
+              onClick={() => setIsListReorderMode((current) => !current)}
+            >
+              <ArrowUpDown className="h-3.5 w-3.5" />
+              {isListReorderMode ? "Done" : "Reorder"}
+            </Button>
+          )}
+          {(categoryViewMode === "table" || categoryViewMode === "grid") && hasCategoryOrderChanges && (
+            <>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="order-3 h-8 text-xs"
+                onClick={onResetCategoryOrder}
+                disabled={isSavingCategoryOrder}
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                className="order-3 h-8 text-xs"
+                onClick={onSaveCategoryOrder}
+                disabled={isSavingCategoryOrder}
+              >
+                {isSavingCategoryOrder ? "Saving…" : "Save order"}
+              </Button>
+            </>
+          )}
           {canModifyCategories ? (
             <Button
               onClick={onAddCategory}
               size="sm"
-              className="h-8 gap-1 px-3 text-xs"
+              className="order-4 ml-1 h-8 w-8 gap-1 rounded-full px-0 text-xs sm:w-auto sm:px-3"
+              aria-label="Add category"
             >
-              <Wand2 className="h-3.5 w-3.5" />
-              Add Category
+              <FolderPlus className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Add Category</span>
             </Button>
           ) : (
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <div>
+                  <div className="order-4 ml-1">
                     <Button
                       onClick={onAddCategory}
                       size="sm"
-                      className="h-8 gap-1 px-3 text-xs"
+                      className="h-8 w-8 gap-1 rounded-full px-0 text-xs sm:w-auto sm:px-3"
                       disabled={true}
+                      aria-label="Add category"
                     >
-                      <Wand2 className="h-3.5 w-3.5" />
-                      Add Category
+                      <FolderPlus className="h-3.5 w-3.5" />
+                      <span className="hidden sm:inline">Add Category</span>
                     </Button>
                   </div>
                 </TooltipTrigger>
                 <TooltipContent>
                   <p>
                     Cannot add or remove categories from global menus when
-                    viewing a specific location. Switch to "All Locations" to
+                    viewing a specific location. Switch to &ldquo;All Locations&rdquo; to
                     modify categories.
                   </p>
                 </TooltipContent>
@@ -243,6 +289,7 @@ export function MenuCategoriesTab({
         </div>
       </div>
 
+      <div className="order-3 space-y-4">
       {/* Hidden Categories */}
       <HiddenCategoriesCard
         menuId={menuId}
@@ -264,7 +311,7 @@ export function MenuCategoriesTab({
           action={
             canModifyCategories ? (
               <Button onClick={onAddCategory} className="gap-1">
-                <Wand2 className="h-4 w-4" />
+                <FolderPlus className="h-4 w-4" />
                 Add Category
               </Button>
             ) : undefined
@@ -277,21 +324,14 @@ export function MenuCategoriesTab({
             menuId={menuId}
             selectedLocationId={selectedLocationId}
             isMenuLocationOwned={isMenuLocationOwned}
-            onMoveUp={onMoveCategoryUp}
-            onMoveDown={onMoveCategoryDown}
             onToggleVisibility={onToggleVisibility}
             onResetOverride={onResetOverride}
             onRemoveCategory={onRemoveCategory}
+            onEditItem={onEditItem}
             hasOrderChanges={hasCategoryOrderChanges}
+            isReorderMode={isTableReorderMode}
+            onCategoryOrderChange={onCategoryOrderChange}
           />
-          {visibleCategories.length > 0 && (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Info className="h-4 w-4" />
-              <span>
-                This order determines how categories appear on the POS system
-              </span>
-            </div>
-          )}
         </>
       ) : categoryViewMode === "grid" ? (
         <>
@@ -305,16 +345,15 @@ export function MenuCategoriesTab({
             onToggleVisibility={onToggleVisibility}
             onResetOverride={onResetOverride}
             onRemoveCategory={onRemoveCategory}
-            onItemClick={onItemClick}
             onEditItem={onEditItem}
             hasOrderChanges={hasCategoryOrderChanges}
+            showReorderControls={isGridReorderMode}
           />
           {visibleCategories.length > 0 && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Info className="h-4 w-4" />
               <span>
-                Use the arrows on each card to reorder categories. Click any
-                item chip to open it.
+                Click Items to see the category items.
               </span>
             </div>
           )}
@@ -323,6 +362,7 @@ export function MenuCategoriesTab({
         <>
           {onCategoryOrderChange && onSaveCategoryOrder && (
             <DraggableCategoriesList
+              isReorderMode={isListReorderMode}
               categories={visibleCategories}
               expandedCategories={expandedCategories}
               selectedLocationId={selectedLocationId}
@@ -354,15 +394,9 @@ export function MenuCategoriesTab({
             />
           )}
 
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Info className="h-4 w-4" />
-            <span>
-              Drag categories to reorder. Hover on the left edge to see the drag
-              handle.
-            </span>
-          </div>
         </>
       )}
+      </div>
     </div>
   );
 }

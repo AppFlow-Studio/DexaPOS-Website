@@ -80,6 +80,20 @@ export default function DiscountsPage() {
     const handleCreate = () => router.push("/dashboard/discounts/new");
     const handleView = (id: string) => router.push(`/dashboard/discounts/${id}`);
     const handleEdit = (id: string) => router.push(`/dashboard/discounts/${id}/edit`);
+    const filtersAreDirty =
+        !!filters.search ||
+        (filters.isActive !== "all" && filters.isActive !== undefined) ||
+        (filters.sortBy ?? "display_order") !== "display_order" ||
+        (filters.sortDir ?? "asc") !== "asc" ||
+        !!filters.hideExpired;
+    const resetFilters = () =>
+        setFilters({
+            search: "",
+            isActive: "all",
+            sortBy: "display_order",
+            sortDir: "asc",
+            hideExpired: false,
+        });
 
     return (
         <PageShell>
@@ -156,6 +170,8 @@ export default function DiscountsPage() {
                         onDelete={(id, mode) => deleteOne.mutate({ id, mode })}
                         onView={handleView}
                         onEdit={handleEdit}
+                        showMobileReset={filtersAreDirty}
+                        onResetFilters={resetFilters}
                     />
                 </div>
             </Panel>
