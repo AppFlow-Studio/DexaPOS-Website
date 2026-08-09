@@ -14,11 +14,10 @@ import {
     PopoverContent,
     PopoverTrigger,
 } from '@/components/ui/popover'
-import { Info, Utensils, Star, DollarSign, CircleSlash, Layers } from 'lucide-react'
+import { Info, Utensils, Star, DollarSign, CircleSlash, Layers, Loader2, MoreHorizontal, RotateCcw } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { MenuCategoryItem } from '@/types/menu'
 import { PriceSourcePopover } from '@/components/dashboard/menu/PriceSourcePopover'
-import { ItemStockToggle } from '@/components/dashboard/menu/menuId/ItemStockToggle'
 import {
     priceSourceToLevel,
     scopeColor,
@@ -34,6 +33,17 @@ import { useClerkOrgId } from '@/app/dashboard/hooks/useLocationScoped'
 import { useActiveSnoozes } from '@/lib/queries/use-snoozes'
 import { isActivelySnoozed, snoozeShortLabel } from '@/lib/snooze'
 import { useState } from 'react'
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuSub,
+    DropdownMenuSubContent,
+    DropdownMenuSubTrigger,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { useRestoreItem, useSnoozeItem, type SnoozeDuration } from '@/lib/queries/use-snoozes'
 
 interface CategoryItemRowProps {
     item: MenuCategoryItem
@@ -65,6 +75,8 @@ export function CategoryItemRow({
 }: CategoryItemRowProps) {
     const menuItem = item.menu_item
     const [imageFailed, setImageFailed] = useState(false)
+    const snoozeItem = useSnoozeItem()
+    const restoreItem = useRestoreItem()
     const priceSource = menuItem?.price_source || 'base'
     const sourceLevel = priceSourceToLevel(priceSource)
     const isAllLocations = useIsAllLocations()
@@ -74,6 +86,22 @@ export function CategoryItemRow({
     // Query dedupes by key), so this is a single request per location, not per row.
     const clerkOrgId = useClerkOrgId()
     const gatedLocationId = useGatedLocationId()
+    const stockActionBusy = snoozeItem.isPending || restoreItem.isPending
+    const markOutOfStock = (duration: SnoozeDuration) => {
+        if (!clerkOrgId || !gatedLocationId) return
+        snoozeItem.mutate({
+            clerkOrgId,
+            menuItemId: item.menu_item_id,
+            locationId: gatedLocationId,
+            duration,
+            itemName: menuItem?.name,
+            image: menuItem?.image,
+        })
+    }
+    const restoreStock = () => {
+        if (!clerkOrgId || !gatedLocationId) return
+        restoreItem.mutate({ clerkOrgId, menuItemId: item.menu_item_id, locationId: gatedLocationId })
+    }
     const { data: activeSnoozes } = useActiveSnoozes(
         clerkOrgId,
         gatedLocationId ?? 'all',
@@ -238,40 +266,61 @@ export function CategoryItemRow({
                             )}
                         </div>
                         {!isSelectionMode && (
-                            <>
-                                {/* Out-of-stock (86) control is desktop-only; the
-                                    mobile row has no width for it. */}
-                                <div className="hidden sm:contents">
-                                    <ItemStockToggle
-                                        menuItemId={item.menu_item_id}
-                                        clerkOrgId={clerkOrgId}
-                                        locationId={gatedLocationId}
-                                        isOutOfStock={isOutOfStock}
-                                        itemName={menuItem?.name}
-                                        image={menuItem?.image}
-                                    />
-                                </div>
-                                <TooltipProvider>
-                                    <Tooltip>
-                                        <TooltipTrigger asChild>
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="hidden sm:inline-flex h-8 w-8"
-                                                onClick={(e) => {
-                                                    e.stopPropagation()
-                                                    onEdit()
-                                                }}
-                                            >
-                                                <DollarSign className="h-4 w-4" />
-                                            </Button>
-                                        </TooltipTrigger>
-                                        <TooltipContent>
-                                            <p>Edit state of this item in this menu/category context</p>
-                                        </TooltipContent>
-                                    </Tooltip>
-                                </TooltipProvider>
-                            </>
+                            <div onClick={(event) => event.stopPropagation()}>
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-8 w-8 rounded-full"
+                                            disabled={stockActionBusy}
+                                            aria-label={`Actions for ${menuItem?.name || 'item'}`}
+                                        >
+                                            {stockActionBusy
+                                                ? <Loader2 className="h-4 w-4 animate-spin" />
+                                                : <MoreHorizontal className="h-4 w-4" />}
+                                        </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end" className="w-56">
+                                        <DropdownMenuItem onClick={onEdit}>
+                                            <DollarSign className="mr-2 h-4 w-4" />
+                                            Edit item price
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onClick={onClick}>
+                                            <Info className="mr-2 h-4 w-4" />
+                                            View item details
+                                        </DropdownMenuItem>
+                                        <DropdownMenuSeparator />
+                                        {isOutOfStock && gatedLocationId ? (
+                                            <DropdownMenuItem onClick={restoreStock} className="text-green-700">
+                                                <RotateCcw className="mr-2 h-4 w-4" />
+                                                Restore item to stock
+                                            </DropdownMenuItem>
+                                        ) : (
+                                            <DropdownMenuSub>
+                                                <DropdownMenuSubTrigger disabled={!gatedLocationId}>
+                                                    <CircleSlash className="mr-2 h-4 w-4" />
+                                                    {gatedLocationId ? 'Mark out of stock' : 'Select a location first'}
+                                                </DropdownMenuSubTrigger>
+                                                <DropdownMenuSubContent>
+                                                    <DropdownMenuItem onClick={() => markOutOfStock({ kind: 'hours', hours: 1 })}>
+                                                        For 1 hour
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem onClick={() => markOutOfStock({ kind: 'hours', hours: 4 })}>
+                                                        For 4 hours
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem onClick={() => markOutOfStock({ kind: 'end_of_day' })}>
+                                                        Until end of day
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem onClick={() => markOutOfStock({ kind: 'until_manual' })}>
+                                                        Until manually restored
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuSubContent>
+                                            </DropdownMenuSub>
+                                        )}
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
+                            </div>
                         )}
                     </div>
                 </div>

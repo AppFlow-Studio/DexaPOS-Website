@@ -21,15 +21,15 @@ export function Panel({
   className,
   nested = false,
   padded = false,
-}: {
-  children: React.ReactNode
-  className?: string
+  ...divProps
+}: React.HTMLAttributes<HTMLDivElement> & {
   /** Renders at tier 2 (`rounded-2xl`) for a card nested inside a panel. */
   nested?: boolean
   padded?: boolean
 }) {
   return (
     <div
+      {...divProps}
       className={cn(
         'min-w-0 border bg-card',
         nested ? 'rounded-2xl' : 'rounded-3xl',

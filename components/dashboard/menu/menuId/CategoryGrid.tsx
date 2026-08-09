@@ -75,8 +75,17 @@ export function CategoryGrid({
           <Panel
             nested
             key={category.id}
+            role="button"
+            tabIndex={0}
+            onClick={() => setItemsForCategory(category)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                setItemsForCategory(category);
+              }
+            }}
             className={cn(
-              "group flex min-h-0 flex-col overflow-hidden transition-all duration-200",
+              "group flex min-h-0 cursor-pointer flex-col overflow-hidden transition-all duration-200",
               "border-0 bg-card shadow-sm hover:shadow-md",
               !isActive && "opacity-70 bg-muted/30",
             )}
@@ -160,7 +169,10 @@ export function CategoryGrid({
 
             <div className="flex flex-1 flex-col gap-2 px-4 pb-3 pt-2">
               {/* Footer actions */}
-              <div className="relative mt-auto flex items-center gap-1 pt-2">
+              <div
+                className="relative mt-auto flex items-center gap-1 pt-2"
+                onClick={(event) => event.stopPropagation()}
+              >
                 <Button
                   variant="ghost"
                   size="sm"

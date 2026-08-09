@@ -42,8 +42,8 @@ export function CategoryItemsSheet({
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
-        side="right"
-        className="flex w-full flex-col gap-0 p-0 sm:max-w-md"
+        side="bottom"
+        className="inset-x-auto left-1/2 flex h-[85dvh] w-full max-w-4xl -translate-x-1/2 flex-col gap-0 rounded-t-3xl border-0 p-0 sm:bottom-6 sm:h-[90dvh] sm:max-h-[44rem] sm:w-[calc(100%-3rem)] sm:rounded-3xl"
       >
         <SheetHeader className="space-y-1 border-b border-border/60 px-5 py-4 text-left">
           <SheetTitle className="truncate text-base">
