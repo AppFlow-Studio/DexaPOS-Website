@@ -411,6 +411,7 @@ function ItemCard({
                 <PriceSourcePopover
                   itemId={item.id}
                   currentPrice={item.effective_price}
+                  currentCashPrice={item.effective_cash_price ?? null}
                   sourceLevel={priceSourceToLevel(item.price_source)}
                   locationId={isAllLocations || isSingleLocation ? null : selectedLocationId}
                   canRemoveOverride={

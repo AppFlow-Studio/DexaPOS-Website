@@ -107,6 +107,10 @@ export function InlinePriceEditor({
       queryClient.invalidateQueries({ queryKey: ["categories-with-items"] });
       queryClient.invalidateQueries({ queryKey: ["item-price-matrix", itemId] });
       queryClient.invalidateQueries({ queryKey: ["menu-item", itemId] });
+      // The menu detail page (/dashboard/menu/[menuId]) reads its rows from
+      // these; without them an edited price only appeared after a manual reload.
+      queryClient.invalidateQueries({ queryKey: ["menu-with-categories"] });
+      queryClient.invalidateQueries({ queryKey: ["menu-basic"] });
       invalidateOrderOutSync(queryClient);
       onSaved?.();
       onClose?.();

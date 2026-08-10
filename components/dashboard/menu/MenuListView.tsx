@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { Empty } from "@/components/ui/empty";
 import {
@@ -244,7 +245,7 @@ function SortableTableRow({
     <TableRow
       ref={setNodeRef}
       style={style}
-      className={`group transition-colors hover:bg-muted/50 ${
+      className={`group border-0 bg-card/70 transition-colors hover:bg-muted/40 ${
         isDragging ? "bg-muted/80" : ""
       }`}
       onClick={() => handleRowClick(menu.id)}
@@ -269,35 +270,41 @@ function SortableTableRow({
           </span>
         </div>
       </TableCell>
-      <TableCell className="font-medium cursor-pointer">
-        <span className="group-hover:text-primary transition-colors">
-          {menu.name}
-        </span>
-      </TableCell>
-      <TableCell>
-        <span className="text-muted-foreground line-clamp-1 max-w-[300px]">
-          {menu.description || "—"}
-        </span>
+      <TableCell className="cursor-pointer">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
+            <Utensils className="h-4 w-4" />
+          </div>
+          <div className="min-w-0">
+            <div className="truncate text-sm font-medium">
+              {menu.name}
+            </div>
+            {menu.description && (
+              <div className="max-w-[280px] truncate text-xs text-muted-foreground">
+                {menu.description}
+              </div>
+            )}
+          </div>
+        </div>
       </TableCell>
       <TableCell>
         <LocationBadge menu={menu} />
       </TableCell>
       <TableCell>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-2" onClick={(event) => event.stopPropagation()}>
+          <Switch
+            checked={menu.is_active}
+            onCheckedChange={() => actions.onToggleActive(menu.id)}
+            aria-label={`${menu.is_active ? "Deactivate" : "Activate"} ${menu.name}`}
+          />
           <span
             className={cn(
-              "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium",
+              "text-sm font-medium",
               menu.is_active
-                ? "bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400"
-                : "bg-muted/60 text-muted-foreground"
+                ? "text-green-600"
+                : "text-muted-foreground"
             )}
           >
-            <span
-              className={cn(
-                "h-1.5 w-1.5 rounded-full",
-                menu.is_active ? "bg-green-500" : "bg-muted-foreground/40"
-              )}
-            />
             {menu.is_active ? "Active" : "Inactive"}
           </span>
           {isOnlineMenu && <OnlineMenuBadge />}
@@ -434,13 +441,15 @@ export function MenuListView({
           </div>
         </SortableContext>
       ) : (
-        <div className="thin-scrollbar min-w-0 rounded-2xl animate-in fade-in duration-300 overflow-x-auto">
-          <Table className="min-w-[700px]">
+          <Table
+            variant="data"
+            containerClassName="thin-scrollbar min-w-0 animate-in fade-in duration-300"
+            className="min-w-[760px]"
+          >
             <TableHeader>
-              <TableRow className="bg-muted/50">
+              <TableRow>
                 <TableHead className="w-[80px]">Order</TableHead>
                 <TableHead className="w-[300px]">Menu Name</TableHead>
-                <TableHead>Description</TableHead>
                 <TableHead className="w-[150px]">Location</TableHead>
                 <TableHead className="w-[100px]">Status</TableHead>
                 <TableHead className="w-[120px]">Created</TableHead>
@@ -466,7 +475,6 @@ export function MenuListView({
               </SortableContext>
             </TableBody>
           </Table>
-        </div>
       )}
     </DndContext>
   );
@@ -498,8 +506,8 @@ function LocationBadge({ menu }: { menu: MenuWithLocation }) {
   if (menu.location_id && menu.locations) {
     return (
       <Badge
-        variant="outline"
-        className="gap-1 bg-blue-50 text-blue-700 border-blue-200 max-w-full min-w-0"
+        variant="secondary"
+        className="max-w-full min-w-0 gap-1 rounded-full border-0 bg-[#0C4FD1]/10 px-2.5 text-xs text-[#0C4FD1] dark:text-[#6CA0FF]"
       >
         <MapPin className="h-3 w-3 shrink-0" />
         <span className="truncate">{menu.locations.name}</span>
@@ -509,8 +517,8 @@ function LocationBadge({ menu }: { menu: MenuWithLocation }) {
 
   return (
     <Badge
-      variant="outline"
-      className="gap-1 bg-emerald-50 text-emerald-700 border-emerald-200 shrink-0"
+      variant="secondary"
+      className="shrink-0 gap-1 rounded-full border-0 bg-emerald-50 px-2.5 text-xs text-emerald-700"
     >
       <Globe className="h-3 w-3" />
       Global

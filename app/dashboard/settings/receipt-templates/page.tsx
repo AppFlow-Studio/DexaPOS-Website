@@ -30,6 +30,10 @@ import { ReceiptPreview } from "./components/ReceiptPreview";
 import { ReceiptSettingsForm } from "./components/ReceiptSettingsForm";
 import { DEFAULT_TEMPLATE_VALUES, TEMPLATE_TYPES } from "./constants";
 import type { TemplateType, ReceiptTemplateFormData, ReceiptTemplate } from "./types";
+import {
+  LocationIndicator,
+  PageHeader,
+} from "@/components/dashboard/shell";
 
 function formDataFromTemplate(
   templateType: TemplateType,
@@ -201,14 +205,11 @@ export default function ReceiptTemplatesPage() {
   if (isAllLocations) {
     return (
       <div className="space-y-6">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">
-            Receipt Templates
-          </h2>
-          <p className="text-muted-foreground">
-            Customize receipt layouts for your POS printers
-          </p>
-        </div>
+        <PageHeader
+          title="Receipt templates"
+          subtitle="Customize receipt and ticket layouts for your POS printers."
+          indicator={<LocationIndicator isAllLocations locationName={null} />}
+        />
 
         <Card>
           <CardContent className="py-12 flex flex-col items-center justify-center text-center">
@@ -228,15 +229,16 @@ export default function ReceiptTemplatesPage() {
   if (isLoading) {
     return (
       <div className="space-y-6">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">
-            Receipt Templates
-          </h2>
-          <p className="text-muted-foreground">
-            Templates for{" "}
-            <span className="font-medium">{selectedLocation?.name}</span>
-          </p>
-        </div>
+        <PageHeader
+          title="Receipt templates"
+          subtitle="Customize receipt and ticket layouts for your POS printers."
+          indicator={
+            <LocationIndicator
+              isAllLocations={false}
+              locationName={selectedLocation?.name}
+            />
+          }
+        />
         <Skeleton className="h-10 w-full max-w-[800px]" />
         <div className="flex flex-col lg:flex-row gap-6">
           <Skeleton className="h-[500px] w-full lg:w-[380px]" />
@@ -250,15 +252,16 @@ export default function ReceiptTemplatesPage() {
   if (isError) {
     return (
       <div className="space-y-6">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">
-            Receipt Templates
-          </h2>
-          <p className="text-muted-foreground">
-            Templates for{" "}
-            <span className="font-medium">{selectedLocation?.name}</span>
-          </p>
-        </div>
+        <PageHeader
+          title="Receipt templates"
+          subtitle="Customize receipt and ticket layouts for your POS printers."
+          indicator={
+            <LocationIndicator
+              isAllLocations={false}
+              locationName={selectedLocation?.name}
+            />
+          }
+        />
         <Card>
           <CardContent className="py-12 flex flex-col items-center justify-center text-center">
             <AlertTriangle className="h-12 w-12 mb-4 text-destructive" />
@@ -284,16 +287,16 @@ export default function ReceiptTemplatesPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h2 className="text-2xl font-bold tracking-tight">
-          Receipt Templates
-        </h2>
-        <p className="text-muted-foreground">
-          Customize receipt layouts for{" "}
-          <span className="font-medium">{selectedLocation?.name}</span>
-        </p>
-      </div>
+      <PageHeader
+        title="Receipt templates"
+        subtitle="Preview and customize every receipt and kitchen ticket format."
+        indicator={
+          <LocationIndicator
+            isAllLocations={false}
+            locationName={selectedLocation?.name}
+          />
+        }
+      />
 
       {/* Tabs */}
       <TemplateTypeTabs activeTab={activeTab} onChange={handleTabChange} />

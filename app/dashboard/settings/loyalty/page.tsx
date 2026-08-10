@@ -37,11 +37,17 @@ import { useUserInfo} from '@/app/manage/hooks/useUserInfo.';
 import { useLocationStore } from '../../hooks/useLocationScoped';
 import { GetMenuItems } from '../../actions/menu-items';
 import type { LoyaltyProgram, Promotion } from '../../actions/loyalty-programs';
+import { useGatedLocation } from '@/stores/location-store';
+import {
+  LocationIndicator,
+  PageHeader,
+} from '@/components/dashboard/shell';
 
 export default function LoyaltySettingsPage() {
   const { data: userInfo } = useUserInfo();
   const clerkOrgId = userInfo?.members?.[0]?.organizations?.id;
   const { selectedLocationId } = useLocationStore();
+  const selectedLocation = useGatedLocation();
 
   // Loyalty programs
   const {
@@ -251,10 +257,16 @@ export default function LoyaltySettingsPage() {
   if (!mounted) {
     return (
       <div className="space-y-6">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Loyalty & Rewards</h2>
-          <p className="text-muted-foreground">Manage loyalty programs and promotions</p>
-        </div>
+        <PageHeader
+          title="Loyalty & rewards"
+          subtitle="Manage loyalty programs and promotions."
+          indicator={
+            <LocationIndicator
+              isAllLocations={!selectedLocationId || selectedLocationId === 'all'}
+              locationName={selectedLocation?.name}
+            />
+          }
+        />
         <div className="h-96 flex items-center justify-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
         </div>
@@ -264,13 +276,16 @@ export default function LoyaltySettingsPage() {
 
   return (
     <div className="space-y-8">
-      {/* Header */}
-      <div>
-        <h2 className="text-2xl font-bold tracking-tight">Loyalty & Rewards</h2>
-        <p className="text-muted-foreground">
-          Create loyalty programs and promotions to reward your customers
-        </p>
-      </div>
+      <PageHeader
+        title="Loyalty & rewards"
+        subtitle="Create programs and promotions that reward returning customers."
+        indicator={
+          <LocationIndicator
+            isAllLocations={!selectedLocationId || selectedLocationId === 'all'}
+            locationName={selectedLocation?.name}
+          />
+        }
+      />
 
       {/* LOYALTY PROGRAMS SECTION */}
       <div className="space-y-4">

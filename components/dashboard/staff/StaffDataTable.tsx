@@ -508,22 +508,12 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
                 {!primaryLocation.is_active ? " (inactive)" : ""}
               </Badge>
             )}
-            {otherLocations.slice(0, 2).map((loc) => (
-              <Badge
-                key={loc.location_id}
-                variant="secondary"
-                className="rounded-full border-0 px-2.5 text-xs"
-              >
-                {loc.location_name}
-                {!loc.is_active ? " (inactive)" : ""}
-              </Badge>
-            ))}
-            {otherLocations.length > 2 && (
+            {otherLocations.length > 0 && (
               <Badge
                 variant="secondary"
                 className="rounded-full border-0 px-2.5 text-xs"
               >
-                +{otherLocations.length - 2} more
+                +{otherLocations.length} more
               </Badge>
             )}
           </div>
@@ -861,9 +851,12 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
       )}
 
       {/* Wide-screen table */}
-      <div className="hidden overflow-hidden rounded-2xl bg-muted/20 xl:block">
-        <Table className="min-w-[900px] [&_td]:px-3 [&_td]:py-3 [&_th]:px-3">
-          <TableHeader className="bg-muted/50">
+      <Table
+        variant="data"
+        containerClassName="hidden xl:block"
+        className="min-w-[900px]"
+      >
+          <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => {
@@ -881,7 +874,7 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
               </TableRow>
             ))}
           </TableHeader>
-          <TableBody className="[&_tr]:border-0">
+          <TableBody>
             {isLoading ? (
               <TableRow>
                 <TableCell
@@ -924,8 +917,7 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
               </TableRow>
             )}
           </TableBody>
-        </Table>
-      </div>
+      </Table>
 
       {/* Phones and tablets use cards instead of a horizontally scrolling table. */}
       <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:hidden">

@@ -17,7 +17,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useClerkOrgId } from "@/app/dashboard/hooks/useLocationScoped";
-import { useGatedLocationId } from "@/stores/location-store";
+import { useGatedLocation, useGatedLocationId } from "@/stores/location-store";
 import {
   useTipPoolConfigs,
   useCreateTipPool,
@@ -38,6 +38,10 @@ import { TipOutRuleDialog, type TipOutRuleFormData } from "./components/TipOutRu
 import { PoolCard } from "./components/PoolCard";
 import { RuleCard } from "./components/RuleCard";
 import type { TipPoolConfigWithShares, TipOutRule, Role } from "@/app/dashboard/actions/tips";
+import {
+  LocationIndicator,
+  PageHeader,
+} from "@/components/dashboard/shell";
 
 // ─── Preview Calculator (pure client-side) ─────────────────────────────────
 
@@ -337,6 +341,7 @@ function PreviewPanel({
 
 export default function TipsSettingsPage() {
   const clerkOrgId = useClerkOrgId();
+  const selectedLocation = useGatedLocation();
   // Resolve to the gated location so single-location accounts (locked to 'all')
   // skip the "Select a Location" prompt. The shadowed `selectedLocationId` keeps
   // every `=== "all"` guard below correct.
@@ -443,12 +448,11 @@ export default function TipsSettingsPage() {
   if (selectedLocationId === "all") {
     return (
       <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold">Tip Configuration</h1>
-          <p className="text-muted-foreground mt-1 text-sm">
-            Set up tip pools and tip-out rules for your location
-          </p>
-        </div>
+        <PageHeader
+          title="Tips"
+          subtitle="Configure tip pools and tip-out rules."
+          indicator={<LocationIndicator isAllLocations locationName={null} />}
+        />
         <Card className="p-6 border-yellow-200 bg-yellow-50">
           <div className="flex items-start gap-3">
             <MapPin className="w-5 h-5 text-yellow-600 mt-0.5" />
@@ -467,12 +471,16 @@ export default function TipsSettingsPage() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold">Tip Configuration</h1>
-        <p className="text-muted-foreground mt-1 text-sm">
-          Set up tip pools and tip-out rules for your location
-        </p>
-      </div>
+      <PageHeader
+        title="Tips"
+        subtitle="Configure tip pools, role distribution, and tip-out rules."
+        indicator={
+          <LocationIndicator
+            isAllLocations={false}
+            locationName={selectedLocation?.name}
+          />
+        }
+      />
 
       {/* TIP POOLS */}
       <section className="space-y-4">

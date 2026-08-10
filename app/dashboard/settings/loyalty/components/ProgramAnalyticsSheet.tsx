@@ -1,9 +1,13 @@
 "use client";
 
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Table,
   TableBody,
@@ -21,43 +25,14 @@ import {
   Loader2,
 } from "lucide-react";
 import { useProgramAnalytics } from "../hooks/useLoyaltyProgram";
-import type { ProgramAnalytics } from "../../../actions/loyalty-programs";
 import { formatPhoneForDisplay } from "@/lib/phone";
+import { Panel, StatRow, StatTile } from "@/components/dashboard/shell";
 
 interface ProgramAnalyticsSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   clerkOrgId: string | undefined;
   programId: string | undefined;
-}
-
-function KPICard({
-  label,
-  value,
-  subtitle,
-  icon: Icon,
-}: {
-  label: string;
-  value: string | number;
-  subtitle?: string;
-  icon: React.ReactNode;
-}) {
-  return (
-    <Card className="border-none shadow-sm bg-white dark:bg-card">
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium text-muted-foreground">
-          {label}
-        </CardTitle>
-        <div className="text-muted-foreground">{Icon}</div>
-      </CardHeader>
-      <CardContent>
-        <div className="text-2xl font-bold">{value}</div>
-        {subtitle && (
-          <p className="text-xs text-muted-foreground mt-1">{subtitle}</p>
-        )}
-      </CardContent>
-    </Card>
-  );
 }
 
 export function ProgramAnalyticsSheet({
@@ -69,13 +44,16 @@ export function ProgramAnalyticsSheet({
   const { data: analytics, isLoading, error } = useProgramAnalytics(clerkOrgId, programId);
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
-        <SheetHeader className="mb-6">
-          <SheetTitle>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>
             {analytics?.program_name || "Program Analytics"}
-          </SheetTitle>
-        </SheetHeader>
+          </DialogTitle>
+          <DialogDescription>
+            Membership, reward activity, and customer value for this program.
+          </DialogDescription>
+        </DialogHeader>
 
         {isLoading ? (
           <div className="flex items-center justify-center py-12">
@@ -90,33 +68,34 @@ export function ProgramAnalyticsSheet({
           </Alert>
         ) : (
           <div className="space-y-6">
-            {/* KPI Cards */}
-            <div className="grid gap-3 grid-cols-2">
-              <KPICard
-                label="Total Members"
-                value={analytics.total_members}
-                subtitle={`${analytics.active_this_month} active`}
-                icon={<Users className="h-5 w-5" />}
-              />
-              <KPICard
-                label="Active Rate"
-                value={`${analytics.active_rate.toFixed(1)}%`}
-                subtitle="this month"
-                icon={<TrendingUp className="h-5 w-5" />}
-              />
-              <KPICard
-                label="Rewards Given"
-                value={analytics.rewards_given}
-                subtitle={`$${analytics.total_savings.toFixed(2)}`}
-                icon={<Gift className="h-5 w-5" />}
-              />
-              <KPICard
-                label="Total Savings"
-                value={`$${analytics.total_savings.toFixed(2)}`}
-                subtitle="customer value"
-                icon={<DollarSign className="h-5 w-5" />}
-              />
-            </div>
+            <Panel padded>
+              <StatRow columns={4}>
+                <StatTile
+                  label="Total members"
+                  value={analytics.total_members}
+                  meta={`${analytics.active_this_month} active`}
+                  icon={<Users />}
+                />
+                <StatTile
+                  label="Active rate"
+                  value={`${analytics.active_rate.toFixed(1)}%`}
+                  meta="This month"
+                  icon={<TrendingUp />}
+                />
+                <StatTile
+                  label="Rewards given"
+                  value={analytics.rewards_given}
+                  meta={`$${analytics.total_savings.toFixed(2)} saved`}
+                  icon={<Gift />}
+                />
+                <StatTile
+                  label="Total savings"
+                  value={`$${analytics.total_savings.toFixed(2)}`}
+                  meta="Customer value"
+                  icon={<DollarSign />}
+                />
+              </StatRow>
+            </Panel>
 
             {/* Alerts */}
             {(analytics.alerts.rewards_expiring_week > 0 || analytics.alerts.inactive_customers > 0) && (
@@ -184,7 +163,7 @@ export function ProgramAnalyticsSheet({
             )}
           </div>
         )}
-      </SheetContent>
-    </Sheet>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -32,7 +32,7 @@ import {
 import { useClerkOrgId } from '@/app/dashboard/hooks/useLocationScoped'
 import { useActiveSnoozes } from '@/lib/queries/use-snoozes'
 import { isActivelySnoozed, snoozeShortLabel } from '@/lib/snooze'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -75,6 +75,21 @@ export function CategoryItemRow({
 }: CategoryItemRowProps) {
     const menuItem = item.menu_item
     const [imageFailed, setImageFailed] = useState(false)
+    // The price popover is driven from the actions menu now that the row no
+    // longer shows an info icon. `priceMode` picks which pane it opens on.
+    const [isPriceOpen, setIsPriceOpen] = useState(false)
+    const [priceMode, setPriceMode] = useState<'view' | 'edit'>('view')
+
+    // The dropdown restores focus to its "..." trigger as it closes, which the
+    // popover's dismiss layer would read as a click-away. `onCloseAutoFocus`
+    // below suppresses that restore; the ref is set synchronously because that
+    // handler runs before the state updates here have committed.
+    const handingOffToPrice = useRef(false)
+    const openPriceFrom = (mode: 'view' | 'edit') => {
+        handingOffToPrice.current = true
+        setPriceMode(mode)
+        setIsPriceOpen(true)
+    }
     const snoozeItem = useSnoozeItem()
     const restoreItem = useRestoreItem()
     const priceSource = menuItem?.price_source || 'base'
@@ -237,6 +252,7 @@ export function CategoryItemRow({
                             <PriceSourcePopover
                                 itemId={menuItem?.id || item.menu_item_id}
                                 currentPrice={menuItem?.effective_price ?? 0}
+                                currentCashPrice={menuItem?.effective_cash_price ?? null}
                                 sourceLevel={sourceLevel}
                                 locationId={
                                     isAllLocations ? null : selectedLocation?.id ?? null
@@ -246,6 +262,12 @@ export function CategoryItemRow({
                                     isAllLocations,
                                     locationName: selectedLocation?.name ?? null,
                                 })}
+                                open={isPriceOpen}
+                                onOpenChange={(next) => {
+                                    setIsPriceOpen(next)
+                                    if (!next) handingOffToPrice.current = false
+                                }}
+                                initialMode={priceMode}
                             >
                                 <div className="flex items-center gap-1 whitespace-nowrap">
                                     {/* The `$` glyph is redundant beside a price;
@@ -254,7 +276,6 @@ export function CategoryItemRow({
                                     <span className="font-semibold">
                                         {menuItem?.effective_price?.toFixed(2) || '0.00'}
                                     </span>
-                                    <Info className="h-3 w-3 text-muted-foreground opacity-60 shrink-0" />
                                 </div>
                             </PriceSourcePopover>
                             {menuItem?.effective_cash_price && menuItem.effective_cash_price !== menuItem.effective_price && (
@@ -266,7 +287,10 @@ export function CategoryItemRow({
                             )}
                         </div>
                         {!isSelectionMode && (
-                            <div onClick={(event) => event.stopPropagation()}>
+                            <div
+                                className="hidden sm:block"
+                                onClick={(event) => event.stopPropagation()}
+                            >
                                 <DropdownMenu>
                                     <DropdownMenuTrigger asChild>
                                         <Button
@@ -281,10 +305,30 @@ export function CategoryItemRow({
                                                 : <MoreHorizontal className="h-4 w-4" />}
                                         </Button>
                                     </DropdownMenuTrigger>
-                                    <DropdownMenuContent align="end" className="w-56">
-                                        <DropdownMenuItem onClick={onEdit}>
+                                    <DropdownMenuContent
+                                        align="end"
+                                        className="w-56"
+                                        onCloseAutoFocus={(event) => {
+                                            // Suppress the focus-return to the
+                                            // trigger when we are handing off to
+                                            // the price popover; that refocus is
+                                            // what was dismissing it.
+                                            if (handingOffToPrice.current) {
+                                                event.preventDefault()
+                                            }
+                                        }}
+                                    >
+                                        <DropdownMenuItem
+                                            onClick={() => openPriceFrom('edit')}
+                                        >
                                             <DollarSign className="mr-2 h-4 w-4" />
-                                            Edit item price
+                                            Adjust price
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem
+                                            onClick={() => openPriceFrom('view')}
+                                        >
+                                            <Layers className="mr-2 h-4 w-4" />
+                                            View price breakdown
                                         </DropdownMenuItem>
                                         <DropdownMenuItem onClick={onClick}>
                                             <Info className="mr-2 h-4 w-4" />
@@ -340,7 +384,11 @@ export function CategoryItemRow({
                                 <span>Modifier out of stock</span>
                             </Badge>
                         )}
-                        {isOutOfStock ? (
+                        {!menuItem?.effective_availability ? (
+                            <Badge variant="destructive" className="text-[10px]">
+                                Unavailable
+                            </Badge>
+                        ) : isOutOfStock ? (
                             <Badge
                                 variant="outline"
                                 className="text-[10px] gap-1 border-amber-300 bg-amber-50 text-amber-700"
@@ -350,13 +398,7 @@ export function CategoryItemRow({
                                     {snoozeShortLabel(snoozedUntil as string)}
                                 </span>
                             </Badge>
-                        ) : (
-                            !menuItem?.effective_availability && (
-                                <Badge variant="destructive" className="text-[10px]">
-                                    Unavailable
-                                </Badge>
-                            )
-                        )}
+                        ) : null}
                         {showLocationPricing && getPriceSourceBadge()}
                     </div>
                 )}

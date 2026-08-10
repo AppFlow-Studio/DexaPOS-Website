@@ -64,6 +64,12 @@
 }
 
 .dashboard-sidebar-theme {
+  /* Keep dashboard body actions and selected controls on the same brand blue
+     as the active sidebar item. The global product theme remains unchanged
+     outside dashboard/manage layouts. */
+  --primary: #0c4fd1;
+  --primary-foreground: #ffffff;
+  --ring: #0c4fd1;
   --sidebar: #f8fafc;
   --sidebar-foreground: #475569;
   --sidebar-primary: #0c4fd1;
@@ -91,6 +97,9 @@
      from this at /70 (SidebarGroupLabel uses text-sidebar-foreground/70) */
   --sidebar-foreground: #9ca3af;
   /* Brand fill blue stays #0C4FD1 in dark per spec */
+  --primary: #0c4fd1;
+  --primary-foreground: #ffffff;
+  --ring: #6ca0ff;
   --sidebar-primary: #0c4fd1;
   --sidebar-primary-foreground: #ffffff;
   /* Active item bg ≈ 18% brand on dark */

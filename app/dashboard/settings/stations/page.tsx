@@ -54,6 +54,10 @@ import {
   useGatedLocation,
 } from "@/stores/location-store";
 import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
+import {
+  LocationIndicator,
+  PageHeader,
+} from "@/components/dashboard/shell";
 
 type SortColumn = "name" | "station_number" | "status" | "lastSeen";
 type SortDirection = "asc" | "desc";
@@ -306,16 +310,16 @@ export default function StationsPage() {
   if (!mounted) {
     return (
       <div className="space-y-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h2 className="text-2xl font-bold tracking-tight">
-              Station Management
-            </h2>
-            <p className="text-muted-foreground">
-              Configure and manage your POS stations
-            </p>
-          </div>
-        </div>
+        <PageHeader
+          title="Stations"
+          subtitle="Configure and manage your POS stations."
+          indicator={
+            <LocationIndicator
+              isAllLocations={isAllLocations}
+              locationName={selectedLocation?.name}
+            />
+          }
+        />
         <div className="h-96 flex items-center justify-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
         </div>
@@ -327,14 +331,11 @@ export default function StationsPage() {
   if (isAllLocations) {
     return (
       <div className="space-y-6">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">
-            Station Management
-          </h2>
-          <p className="text-muted-foreground">
-            Configure and manage your POS stations
-          </p>
-        </div>
+        <PageHeader
+          title="Stations"
+          subtitle="Configure and manage your POS stations."
+          indicator={<LocationIndicator isAllLocations locationName={null} />}
+        />
 
         <Card>
           <CardContent className="py-12 flex flex-col items-center justify-center text-center">
@@ -354,18 +355,17 @@ export default function StationsPage() {
   if (isLoading) {
     return (
       <div className="space-y-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h2 className="text-2xl font-bold tracking-tight">
-              Station Management
-            </h2>
-            <p className="text-muted-foreground">
-              Configure stations for{" "}
-              <span className="font-medium">{selectedLocation?.name}</span>
-            </p>
-          </div>
-          <Skeleton className="h-10 w-32" />
-        </div>
+        <PageHeader
+          title="Stations"
+          subtitle="Configure registers, kiosks, and kitchen displays."
+          indicator={
+            <LocationIndicator
+              isAllLocations={false}
+              locationName={selectedLocation?.name}
+            />
+          }
+          actions={<Skeleton className="h-10 w-32" />}
+        />
         <div className="flex gap-4">
           <Skeleton className="h-10 w-[300px]" />
           <Skeleton className="h-10 w-[180px]" />
@@ -384,15 +384,16 @@ export default function StationsPage() {
   if (isError) {
     return (
       <div className="space-y-6">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">
-            Station Management
-          </h2>
-          <p className="text-muted-foreground">
-            Configure stations for{" "}
-            <span className="font-medium">{selectedLocation?.name}</span>
-          </p>
-        </div>
+        <PageHeader
+          title="Stations"
+          subtitle="Configure registers, kiosks, and kitchen displays."
+          indicator={
+            <LocationIndicator
+              isAllLocations={false}
+              locationName={selectedLocation?.name}
+            />
+          }
+        />
         <Card>
           <CardContent className="py-12 flex flex-col items-center justify-center text-center">
             <AlertTriangle className="h-12 w-12 mb-4 text-destructive" />
@@ -417,22 +418,22 @@ export default function StationsPage() {
         </div>
       </div>
 
-      {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">
-            Station Management
-          </h2>
-          <p className="text-muted-foreground">
-            Configure stations for{" "}
-            <span className="font-medium">{selectedLocation?.name}</span>
-          </p>
-        </div>
-        <Button onClick={() => setIsAddDialogOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          Add Station
-        </Button>
-      </div>
+      <PageHeader
+        title="Stations"
+        subtitle="Configure registers, kiosks, and kitchen displays."
+        indicator={
+          <LocationIndicator
+            isAllLocations={false}
+            locationName={selectedLocation?.name}
+          />
+        }
+        actions={
+          <Button onClick={() => setIsAddDialogOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Add Station
+          </Button>
+        }
+      />
 
       {/* Filters & Bulk Actions */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
