@@ -13,6 +13,12 @@
 -- ============================================================================
 
 DROP FUNCTION IF EXISTS public.get_previous_orders_page_v1(
+  uuid, date, date, text, text, text, text, text, jsonb, int, boolean
+);
+
+-- Signature from the pre-review draft, in case an older build was ever applied
+-- somewhere. Harmless if it never existed.
+DROP FUNCTION IF EXISTS public.get_previous_orders_page_v1(
   uuid, date, public.order_type, text, jsonb, int
 );
 

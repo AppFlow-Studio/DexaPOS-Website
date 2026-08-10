@@ -3,8 +3,8 @@
 **Ticket:** [POS-PERF] AUD-9 — https://app.notion.com/p/3a88280c1b1d8148b69bee999480fb7e
 **Notion status at plan time:** Not started · Owner: Ali Dika (RPC) · Client: Ali Jaffal (store/screen)
 **Ticket branch:** `feat/landi-pay` (POS repo) · **This document covers the DB/RPC half only.**
-**Plan author:** Ali Awdi · **Date:** 2026-08-09 (rev 2026-08-10) · **Rev 6** — RPC implemented, see §11
-**⚠ Rev 6 corrects a material error in §3.3 carried by Rev 1–5.** See §12.
+**Plan author:** Ali Awdi · **Date:** 2026-08-09 (rev 2026-08-11) · **Rev 7** — RPC re-baselined against the production client, see §11
+**⚠ Rev 6 corrected a material error in §3.3. Rev 7 refutes A2 outright.** See §12.
 **Source:** Audit §9 (POS Rush-Lag Investigation, Phase 2)
 
 ---
@@ -201,6 +201,43 @@ transaction, and only with the EXPLAIN row that justifies it attached.
 ---
 
 ## 5. Proposed contract
+
+> ### ⚠ Rev 7 — this section was re-baselined against the production client
+>
+> Rev 1–6 modelled the "before" from the ticket text alone. The tablet repo has since
+> been read (`C:\Users\HP i5\Desktop\mdptech\dexa-pos\Dexa-POS`, read-only). The live path
+> is **`OrderService.getFilteredHistoryPage`** (`services/orderService.ts:1375`) — not
+> `getHistoryOrders`/`getHistoryOrdersByCursor`, which the index comment named and which
+> the store does not call for the list.
+>
+> **The specification for this RPC's `WHERE` clause is `services/historyOrderFilters.ts`
+> (`buildHistoryOrderQuery`), with tests at `__tests__/historyOrderFilters.test.ts`.**
+> Where this document and that module disagree, the module wins.
+>
+> **Confirmed by the read:**
+> - **A1 is right.** The store resolves bounds with `get_business_day_bounds` as
+>   *"Strategy 1: Server RPC (authoritative)"*, Luxon only as fallback → `start_hour`.
+> - **OFFSET is real** — `.range(offset, offset + limit - 1)` at line 1428. The keyset win
+>   stands. (`getHistoryOrdersByCursor` is keyset but unused — dead code.)
+> - **The payload is as heavy as claimed** — `*, order_items(*), order_payments(*),
+>   order_discounts(*)` plus joins to `stations`, `staff_profiles`, `online_orders`, at
+>   `HISTORY_PAGE_SIZE = 50`.
+>
+> **Refuted by the read:**
+> - **A2 was wrong and would have lost rows.** There is no fixed history status set; the
+>   base query applies **no status filter at all**. Status is a user-facing filter
+>   (`all/paid/unpaid/refunded/voided`) over `payment_status` + `status`. The old
+>   five-status hardcode would have hidden e.g. a paid takeout still at `ready`.
+> - **The filter model is far richer than two params** — channel is a four-way partition
+>   (non-online tabs explicitly exclude online sources so counts sum to All), provider
+>   filters `delivery_platform` tokens incl. a `house` case needing `IS NULL OR NOT IN`,
+>   plus an unconditional empty-draft exclusion.
+> - **§5.6 answered: yes, there is a search box** — five-column `ILIKE`.
+> - **`total_count` is required**, not just `has_more` — the tab counts and "N of M" pager
+>   need an exact total.
+> - **Ticket premise #1 is largely already fixed** — day bounds are already server-side.
+>
+> The signature below is superseded by the one in the migration; see §11.
 
 ```sql
 get_previous_orders_page_v1(
@@ -572,9 +609,27 @@ read it, match it, do not modify it.
 | [`supabase/migrations/20260810120100_idx_orders_history_keyset.sql`](../../../supabase/migrations/20260810120100_idx_orders_history_keyset.sql) | Companion index, separate file (`CONCURRENTLY`) |
 | [`supabase/migrations/rollback/20260810120000_get_previous_orders_page_v1_rollback.sql`](../../../supabase/migrations/rollback/20260810120000_get_previous_orders_page_v1_rollback.sql) | Drops both |
 
+**Current signature** (Rev 7, ported against `historyOrderFilters.ts`):
+
+```sql
+get_previous_orders_page_v1(
+  p_location_id uuid,
+  p_start_date date, p_end_date date,          -- window is a RANGE, not one day
+  p_channel text, p_status text, p_provider text, p_search text, p_sort text,
+  p_cursor jsonb, p_limit int, p_with_count boolean
+) RETURNS jsonb  -- {rows, next_cursor, has_more, total_count}
+```
+
+Four sort modes. The tiebreaker is `id ASC` under **every** sort including the DESC ones,
+so the keyset is a mixed-direction comparison and **cannot** collapse to a row-wise
+`(a,b) < (x,y)` — each sort gets its own explicit branch.
+
 **Verified:** structural lint only — balanced dollar-quoting, net-zero parens,
-`BEGIN`/`END IF` matched, no unused declarations. **Not executed against any database**,
-so it is unproven against a live planner and schema. Step 3 remains outstanding in full.
+`CASE`/`END` and `IF`/`END IF` matched, no unused declarations. **Not executed against any
+database**, so it is unproven against a live planner and schema. Step 3 remains
+outstanding in full, and the ported filter semantics are unproven against
+`__tests__/historyOrderFilters.test.ts` — running that suite's cases against the RPC is
+now the highest-value verification available.
 
 **Still open:** Steps 1 (baseline), 3 (EXPLAIN at Charcoal volume), 4 (fixtures), 5, 6;
 and Step 0 items 0.2, 0.4–0.9, 0.11, 0.12 plus ratification of 0.1/0.3/0.10.
@@ -617,3 +672,11 @@ and Step 0 items 0.2, 0.4–0.9, 0.11, 0.12 plus ratification of 0.1/0.3/0.10.
   `start_hour`. The RPC therefore uses `start_hour` and reuses `get_business_day_bounds`
   (§3.3). Resolved Step 0.1/0.3/0.10 as documented assumptions; index reclassified from
   "likely" to "required" (§2); added §11 implementation status.
+- **Rev 7** (2026-08-11) — **contract re-baselined against the production client**, which
+  was read for the first time. The live path is `getFilteredHistoryPage`, not the
+  functions the index comment named. A1 confirmed; **A2 refuted and rewritten** (no fixed
+  status set — the old hardcode would have hidden rows the screen shows); full
+  filter/sort/exclusion model ported from `historyOrderFilters.ts`; `total_count` added;
+  search and date-range answered (both exist); index reworked — the partial predicate is
+  invalid without a fixed status set, and `id ASC` under DESC sorts means one index cannot
+  serve all four sorts. See the box at the head of §5.
