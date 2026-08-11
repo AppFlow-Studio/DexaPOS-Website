@@ -1,9 +1,10 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { createElement, useMemo, useState } from 'react'
 import {
   AlertTriangle,
   CheckCircle2,
+  ChevronRight,
   Clock3,
   LifeBuoy,
   MapPin,
@@ -14,8 +15,22 @@ import {
 } from 'lucide-react'
 
 import { useMerchantDeviceActivity, useMerchantDeviceInventory } from '@/app/dashboard/hooks/useDeviceRegistry'
+import {
+  LocationIndicator,
+  PageHeader,
+  PageShell,
+  Panel,
+  StatRow,
+  StatTile,
+} from '@/components/dashboard/shell'
 import { Badge } from '@/components/ui/badge'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { Empty } from '@/components/ui/empty'
 import { Input } from '@/components/ui/input'
 import {
@@ -25,13 +40,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   formatDeviceCategory,
@@ -137,46 +146,15 @@ function getWarrantyState(date: string | null) {
   }
 }
 
-function StatCard({
-  label,
-  value,
-  detail,
-  icon: Icon,
-  loading = false,
-}: {
-  label: string
-  value: number
-  detail: string
-  icon: React.ElementType
-  loading?: boolean
-}) {
-  return (
-    <Card className="border-border/70 shadow-sm">
-      <CardContent className="flex items-start justify-between p-5">
-        <div className="space-y-1">
-          <div className="text-sm text-muted-foreground">{label}</div>
-          {loading ? (
-            <Skeleton className="h-8 w-16" />
-          ) : (
-            <div className="text-3xl font-semibold tracking-tight">{value}</div>
-          )}
-          <div className="text-xs text-muted-foreground">{detail}</div>
-        </div>
-        <div className="rounded-2xl border bg-muted/40 p-3 text-muted-foreground">
-          <Icon className="h-5 w-5" />
-        </div>
-      </CardContent>
-    </Card>
-  )
-}
-
 function ActivityRow({ item }: { item: DeviceActivityItem }) {
-  const TimelineIcon = getTimelineIcon(item)
+  const timelineIcon = createElement(getTimelineIcon(item), {
+    className: 'h-4 w-4',
+  })
 
   return (
-    <div className="flex gap-3 rounded-2xl border p-4">
-      <div className="mt-1 rounded-full border bg-muted/30 p-2 text-muted-foreground">
-        <TimelineIcon className="h-4 w-4" />
+    <div className="flex gap-3 rounded-2xl bg-muted/30 p-4">
+      <div className="mt-1 rounded-full bg-background/80 p-2 text-muted-foreground">
+        {timelineIcon}
       </div>
       <div className="min-w-0 flex-1 space-y-2">
         <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
@@ -203,7 +181,7 @@ function ActivityRow({ item }: { item: DeviceActivityItem }) {
   )
 }
 
-function DeviceHistorySheet({
+function DeviceHistoryDialog({
   device,
   open,
   onOpenChange,
@@ -216,107 +194,189 @@ function DeviceHistorySheet({
   const activity = activityQuery.data ?? []
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-2xl">
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="flex h-[min(800px,calc(100dvh-2rem))] flex-col gap-0 overflow-hidden p-0 sm:max-w-4xl max-sm:top-1/2 max-sm:right-auto max-sm:bottom-auto max-sm:left-1/2 max-sm:h-[calc(100dvh-2rem)] max-sm:max-w-[calc(100%-2rem)] max-sm:-translate-x-1/2 max-sm:-translate-y-1/2 max-sm:rounded-3xl max-sm:overflow-hidden">
         {!device ? null : (
           <>
-            <SheetHeader className="border-b pb-4">
-              <div className="flex items-start gap-3 pr-8">
-                <div className="rounded-2xl border bg-muted/40 p-3 text-muted-foreground">
-                  {(() => {
-                    const CategoryIcon = getDeviceCategoryIcon(device.device_category)
-                    return <CategoryIcon className="h-5 w-5" />
-                  })()}
+            <DialogHeader className="border-b border-border/60 px-5 py-5 pr-14 text-left sm:px-6 sm:pr-16">
+              <div className="flex items-start gap-3">
+                <div className="rounded-full bg-muted/60 p-2.5 text-muted-foreground">
+                  {createElement(getDeviceCategoryIcon(device.device_category), {
+                    className: 'h-5 w-5',
+                  })}
                 </div>
                 <div className="space-y-2">
                   <div className="flex flex-wrap items-center gap-2">
-                    <SheetTitle>{device.serial_number}</SheetTitle>
+                    <DialogTitle>{device.serial_number}</DialogTitle>
                     <Badge variant="outline" className={cn(getDeviceStatusClasses(device.status))}>
                       {formatDeviceStatus(device.status)}
                     </Badge>
-                    <Badge variant="outline">Read only</Badge>
+                    <Badge variant="secondary">Read only</Badge>
                   </div>
-                  <SheetDescription>
+                  <DialogDescription>
                     {device.manufacturer} {device.model_name} | {device.location_name ?? 'Location pending'}
-                  </SheetDescription>
+                  </DialogDescription>
                 </div>
               </div>
-            </SheetHeader>
+            </DialogHeader>
 
-            <div className="space-y-6 overflow-y-auto p-4">
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="rounded-2xl border bg-muted/20 p-4">
-                  <div className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Device overview</div>
-                  <div className="mt-3 space-y-2 text-sm">
-                    <div>Category: <span className="font-medium">{formatDeviceCategory(device.device_category)}</span></div>
-                    <div>Location: <span className="font-medium">{device.location_name ?? 'N/A'}</span></div>
-                    <div>Warranty: <span className="font-medium">{formatDate(device.warranty_expires_at)}</span></div>
-                    <div>Updated: <span className="font-medium">{formatDateTime(device.updated_at)}</span></div>
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border bg-muted/20 p-4">
-                  <div className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Support metadata</div>
-                  <div className="mt-3 space-y-2 text-sm">
-                    <div>Firmware: <span className="font-medium">{device.firmware_version ?? 'N/A'}</span></div>
-                    <div>App version: <span className="font-medium">{device.app_version ?? 'N/A'}</span></div>
-                    <div>
-                      Linked entity:
-                      <span className="font-medium">
-                        {' '}
-                        {device.linked_station_id
-                          ? 'Station'
-                          : device.linked_payment_terminal_id
-                            ? 'Payment terminal'
-                            : device.linked_printer_id
-                              ? 'Printer'
-                              : 'Pending linkage'}
-                      </span>
+            <ScrollArea className="min-h-0 flex-1">
+              <div className="space-y-6 p-4 sm:p-6">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="rounded-2xl bg-muted/30 p-4">
+                    <div className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Device overview</div>
+                    <div className="mt-3 space-y-2 text-sm">
+                      <div>Category: <span className="font-medium">{formatDeviceCategory(device.device_category)}</span></div>
+                      <div>Location: <span className="font-medium">{device.location_name ?? 'N/A'}</span></div>
+                      <div>Warranty: <span className="font-medium">{formatDate(device.warranty_expires_at)}</span></div>
+                      <div>Updated: <span className="font-medium">{formatDateTime(device.updated_at)}</span></div>
                     </div>
-                    <div>MAC: <span className="font-medium">{device.mac_address ?? 'N/A'}</span></div>
+                  </div>
+
+                  <div className="rounded-2xl bg-muted/30 p-4">
+                    <div className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Support metadata</div>
+                    <div className="mt-3 space-y-2 text-sm">
+                      <div>Firmware: <span className="font-medium">{device.firmware_version ?? 'N/A'}</span></div>
+                      <div>App version: <span className="font-medium">{device.app_version ?? 'N/A'}</span></div>
+                      <div>
+                        Linked entity:
+                        <span className="font-medium">
+                          {' '}
+                          {device.linked_station_id
+                            ? 'Station'
+                            : device.linked_payment_terminal_id
+                              ? 'Payment terminal'
+                              : device.linked_printer_id
+                                ? 'Printer'
+                                : 'Pending linkage'}
+                        </span>
+                      </div>
+                      <div>MAC: <span className="font-medium">{device.mac_address ?? 'N/A'}</span></div>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              <div className="space-y-3">
-                <div>
-                  <div className="text-base font-medium">Support history</div>
-                  <div className="text-sm text-muted-foreground">
-                    Read-only timeline of assignments, configuration changes, and support notes.
+                <div className="space-y-3">
+                  <div>
+                    <div className="text-base font-medium">Support history</div>
+                    <div className="text-sm text-muted-foreground">
+                      Read-only timeline of assignments, configuration changes, and support notes.
+                    </div>
                   </div>
+
+                  {activityQuery.isLoading ? (
+                    <div className="space-y-3">
+                      {Array.from({ length: 4 }).map((_, index) => (
+                        <Skeleton key={index} className="h-20 w-full" />
+                      ))}
+                    </div>
+                  ) : activityQuery.isError ? (
+                    <Empty
+                      icon={LifeBuoy}
+                      title="Support history unavailable"
+                      description={activityQuery.error?.message ?? 'Device activity could not be loaded.'}
+                    />
+                  ) : activity.length === 0 ? (
+                    <Empty
+                      icon={Clock3}
+                      title="No support history yet"
+                      description="This device does not have recorded assignments, configuration changes, or support notes yet."
+                    />
+                  ) : (
+                    <div className="space-y-3">
+                      {activity.map((item) => (
+                        <ActivityRow key={`${item.type}-${item.id}`} item={item} />
+                      ))}
+                    </div>
+                  )}
                 </div>
-
-                {activityQuery.isLoading ? (
-                  <div className="space-y-3">
-                    {Array.from({ length: 4 }).map((_, index) => (
-                      <Skeleton key={index} className="h-20 w-full" />
-                    ))}
-                  </div>
-                ) : activityQuery.isError ? (
-                  <Empty
-                    icon={LifeBuoy}
-                    title="Support history unavailable"
-                    description={activityQuery.error?.message ?? 'Device activity could not be loaded.'}
-                  />
-                ) : activity.length === 0 ? (
-                  <Empty
-                    icon={Clock3}
-                    title="No support history yet"
-                    description="This device does not have recorded assignments, configuration changes, or support notes yet."
-                  />
-                ) : (
-                  <div className="space-y-3">
-                    {activity.map((item) => (
-                      <ActivityRow key={`${item.type}-${item.id}`} item={item} />
-                    ))}
-                  </div>
-                )}
               </div>
-            </div>
+            </ScrollArea>
           </>
         )}
-      </SheetContent>
-    </Sheet>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function DeviceRow({
+  device,
+  onSelect,
+}: {
+  device: AdminDeviceInventoryRow
+  onSelect: (device: AdminDeviceInventoryRow) => void
+}) {
+  const categoryIcon = createElement(
+    getDeviceCategoryIcon(device.device_category),
+    { className: 'h-5 w-5' }
+  )
+  const warranty = getWarrantyState(device.warranty_expires_at)
+
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(device)}
+      className="grid w-full min-w-0 gap-4 rounded-2xl bg-muted/25 p-4 text-left transition-colors hover:bg-muted/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:grid-cols-[minmax(250px,1.5fr)_minmax(150px,0.9fr)_minmax(170px,1fr)_minmax(130px,0.75fr)_auto] lg:items-center"
+    >
+      <div className="flex min-w-0 items-start gap-3">
+        <div className="shrink-0 rounded-full bg-background/80 p-2.5 text-muted-foreground">
+          {categoryIcon}
+        </div>
+        <div className="min-w-0">
+          <p className="truncate font-semibold tracking-tight">
+            {device.serial_number}
+          </p>
+          <p className="truncate text-sm text-muted-foreground">
+            {device.manufacturer} {device.model_name}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {formatDeviceCategory(device.device_category)}
+          </p>
+        </div>
+      </div>
+
+      <div className="min-w-0">
+        <p className="text-xs uppercase tracking-[0.12em] text-muted-foreground lg:hidden">
+          Location
+        </p>
+        <p className="mt-1 flex items-center gap-1.5 truncate text-sm font-medium lg:mt-0">
+          <MapPin className="h-4 w-4 shrink-0 text-muted-foreground" />
+          <span className="truncate">{device.location_name ?? 'Not assigned'}</span>
+        </p>
+      </div>
+
+      <div>
+        <p className="text-xs uppercase tracking-[0.12em] text-muted-foreground lg:hidden">
+          Warranty
+        </p>
+        <Badge variant="secondary" className={cn('mt-1 border-0 lg:mt-0', warranty.tone)}>
+          {warranty.label}
+        </Badge>
+      </div>
+
+      <div>
+        <p className="text-xs uppercase tracking-[0.12em] text-muted-foreground lg:hidden">
+          Status
+        </p>
+        <Badge
+          variant="outline"
+          className={cn('mt-1 lg:mt-0', getDeviceStatusClasses(device.status))}
+        >
+          {formatDeviceStatus(device.status)}
+        </Badge>
+      </div>
+
+      <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground lg:justify-end">
+        <span className="flex items-center gap-1.5 lg:hidden">
+          <LifeBuoy className="h-4 w-4" />
+          View support history
+        </span>
+        {needsAttention(device.status) ? (
+          <Wrench className="h-4 w-4 text-amber-700" />
+        ) : null}
+        <ChevronRight className="h-4 w-4" />
+      </div>
+    </button>
   )
 }
 
@@ -331,7 +391,7 @@ export default function MerchantDevicesPage() {
   const isAllLocations = useIsAllLocations()
   const { selectedLocationId } = useLocationStore()
 
-  const devices = devicesQuery.data ?? []
+  const devices = useMemo(() => devicesQuery.data ?? [], [devicesQuery.data])
 
   const filteredDevices = useMemo(() => {
     const locationScoped =
@@ -374,98 +434,96 @@ export default function MerchantDevicesPage() {
   const hasFilters = Boolean(search.trim()) || status !== 'all'
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-        <div className="space-y-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-3xl font-semibold tracking-tight">Devices</h1>
-            <Badge variant="outline">Read only</Badge>
+    <PageShell>
+      <PageHeader
+        title="Devices"
+        subtitle="Review the hardware assigned to your business and its support history."
+        indicator={
+          <LocationIndicator
+            isAllLocations={isAllLocations}
+            locationName={selectedLocation?.name}
+          />
+        }
+        actions={
+          <Badge variant="secondary" className="h-8 rounded-full px-3 font-normal">
+            Read-only registry
+          </Badge>
+        }
+      />
+
+      <Panel padded>
+        <StatRow columns={4}>
+          <StatTile
+            label="Visible devices"
+            value={summary.total}
+            meta="Registry rows in this view"
+            icon={<Monitor />}
+            isLoading={devicesQuery.isLoading}
+          />
+          <StatTile
+            label="Deployed"
+            value={summary.deployed}
+            meta="Active production hardware"
+            icon={<CheckCircle2 />}
+            isLoading={devicesQuery.isLoading}
+          />
+          <StatTile
+            label="Needs attention"
+            value={summary.attention}
+            meta="Repair, loss, or RMA"
+            icon={<AlertTriangle />}
+            isLoading={devicesQuery.isLoading}
+          />
+          <StatTile
+            label="Warranty watch"
+            value={summary.warranty}
+            meta="Expired or within 60 days"
+            icon={<ShieldAlert />}
+            isLoading={devicesQuery.isLoading}
+          />
+        </StatRow>
+      </Panel>
+
+      <Panel className="overflow-hidden">
+        <section className="flex flex-col gap-4 px-4 py-5 sm:px-6 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <h2 className="font-semibold text-primary">Assigned hardware</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {filteredDevices.length} device{filteredDevices.length === 1 ? '' : 's'} in the current view.
+            </p>
           </div>
-          <p className="max-w-2xl text-sm text-muted-foreground">
-            Simplified hardware view for the equipment assigned to your business. Use the location selector in the header to narrow the grid.
-          </p>
-        </div>
 
-        <div className="rounded-2xl border bg-card px-4 py-3 text-sm text-muted-foreground shadow-sm">
-          {isAllLocations
-            ? 'Showing all visible locations in your dashboard scope.'
-            : `Showing devices for ${selectedLocation?.name ?? 'the selected location'}.`}
-        </div>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          label="Visible devices"
-          value={summary.total}
-          detail="Current registry rows in this view"
-          icon={Monitor}
-          loading={devicesQuery.isLoading}
-        />
-        <StatCard
-          label="Deployed"
-          value={summary.deployed}
-          detail="Active production hardware"
-          icon={CheckCircle2}
-          loading={devicesQuery.isLoading}
-        />
-        <StatCard
-          label="Needs attention"
-          value={summary.attention}
-          detail="Repair, loss, or RMA"
-          icon={AlertTriangle}
-          loading={devicesQuery.isLoading}
-        />
-        <StatCard
-          label="Warranty watch"
-          value={summary.warranty}
-          detail="Expired or within 60 days"
-          icon={ShieldAlert}
-          loading={devicesQuery.isLoading}
-        />
-      </div>
-
-      <Card className="shadow-sm">
-        <CardHeader className="border-b">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <CardTitle>Assigned hardware</CardTitle>
-              <CardDescription>
-                Card-based device list with clear health and warranty signals.
-              </CardDescription>
+          <div className="flex w-full flex-col gap-3 sm:flex-row lg:w-auto">
+            <div className="relative min-w-0 flex-1 sm:min-w-[280px]">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                className="h-10 rounded-full border-0 bg-muted/45 pl-10 shadow-none focus-visible:ring-1"
+                placeholder="Search serial, model, or location"
+              />
             </div>
 
-            <div className="flex w-full flex-col gap-3 md:flex-row lg:w-auto">
-              <div className="relative min-w-0 flex-1 md:min-w-[260px]">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  className="pl-9"
-                  placeholder="Search serial, model, or location"
-                />
-              </div>
-
-              <Select value={status} onValueChange={(value) => setStatus(value as MerchantStatusFilter)}>
-                <SelectTrigger className="w-full md:w-[220px]">
-                  <SelectValue placeholder="Status" />
-                </SelectTrigger>
-                <SelectContent align="end">
-                  {STATUS_FILTERS.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            <Select value={status} onValueChange={(value) => setStatus(value as MerchantStatusFilter)}>
+              <SelectTrigger className="h-10 w-full rounded-full bg-muted/45 shadow-none sm:w-[220px]">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent align="end">
+                {STATUS_FILTERS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-        </CardHeader>
+        </section>
 
-        <CardContent className="p-6">
+        <section className="border-t border-border/60 px-4 py-5 sm:px-6">
           {devicesQuery.isLoading ? (
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <div className="space-y-3">
               {Array.from({ length: 6 }).map((_, index) => (
-                <Skeleton key={index} className="h-[240px] w-full rounded-3xl" />
+                <Skeleton key={index} className="h-24 w-full rounded-2xl" />
               ))}
             </div>
           ) : devicesQuery.isError ? (
@@ -485,97 +543,27 @@ export default function MerchantDevicesPage() {
               }
             />
           ) : (
-            <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
-              {filteredDevices.map((device) => {
-                const CategoryIcon = getDeviceCategoryIcon(device.device_category)
-                const warranty = getWarrantyState(device.warranty_expires_at)
-
-                return (
-                  <button
-                    key={device.id}
-                    type="button"
-                    onClick={() => setSelectedDevice(device)}
-                    className="text-left"
-                  >
-                    <Card className="group h-full border-border/70 transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-lg">
-                      <CardContent className="space-y-4 p-5">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="flex items-start gap-3">
-                            <div className="rounded-2xl border bg-muted/40 p-3 text-muted-foreground">
-                              <CategoryIcon className="h-5 w-5" />
-                            </div>
-                            <div className="space-y-1">
-                              <div className="font-semibold tracking-tight">{device.serial_number}</div>
-                              <div className="text-sm text-muted-foreground">
-                                {device.manufacturer} {device.model_name}
-                              </div>
-                            </div>
-                          </div>
-                          <Badge variant="outline" className={cn(getDeviceStatusClasses(device.status))}>
-                            {formatDeviceStatus(device.status)}
-                          </Badge>
-                        </div>
-
-                        <div className="grid gap-3 sm:grid-cols-2">
-                          <div className="rounded-2xl border bg-muted/20 p-3">
-                            <div className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Location</div>
-                            <div className="mt-2 flex items-center gap-2 text-sm font-medium">
-                              <MapPin className="h-4 w-4 text-muted-foreground" />
-                              {device.location_name ?? 'Not assigned'}
-                            </div>
-                          </div>
-
-                          <div className="rounded-2xl border bg-muted/20 p-3">
-                            <div className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Warranty</div>
-                            <div className="mt-2">
-                              <Badge variant="outline" className={cn(warranty.tone)}>
-                                {warranty.label}
-                              </Badge>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="grid gap-2 text-sm text-muted-foreground">
-                          <div>Category: <span className="font-medium text-foreground">{formatDeviceCategory(device.device_category)}</span></div>
-                          <div>
-                            Linked to:
-                            <span className="font-medium text-foreground">
-                              {' '}
-                              {device.linked_station_id
-                                ? 'Station'
-                                : device.linked_payment_terminal_id
-                                  ? 'Payment terminal'
-                                  : device.linked_printer_id
-                                    ? 'Printer'
-                                    : 'Pending linkage'}
-                            </span>
-                          </div>
-                          <div>Firmware: <span className="font-medium text-foreground">{device.firmware_version ?? 'N/A'}</span></div>
-                        </div>
-
-                        <div className="flex items-center justify-between border-t pt-3 text-xs text-muted-foreground">
-                          <div className="flex items-center gap-2">
-                            <LifeBuoy className="h-4 w-4" />
-                            View support history
-                          </div>
-                          {needsAttention(device.status) ? (
-                            <div className="flex items-center gap-1 text-amber-700">
-                              <Wrench className="h-4 w-4" />
-                              Follow-up needed
-                            </div>
-                          ) : null}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </button>
-                )
-              })}
+            <div className="space-y-2">
+              <div className="hidden grid-cols-[minmax(250px,1.5fr)_minmax(150px,0.9fr)_minmax(170px,1fr)_minmax(130px,0.75fr)_auto] gap-4 px-4 pb-1 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground lg:grid">
+                <span>Device</span>
+                <span>Location</span>
+                <span>Warranty</span>
+                <span>Status</span>
+                <span className="sr-only">Actions</span>
+              </div>
+              {filteredDevices.map((device) => (
+                <DeviceRow
+                  key={device.id}
+                  device={device}
+                  onSelect={setSelectedDevice}
+                />
+              ))}
             </div>
           )}
-        </CardContent>
-      </Card>
+        </section>
+      </Panel>
 
-      <DeviceHistorySheet
+      <DeviceHistoryDialog
         device={selectedDevice}
         open={Boolean(selectedDevice)}
         onOpenChange={(open) => {
@@ -584,6 +572,6 @@ export default function MerchantDevicesPage() {
           }
         }}
       />
-    </div>
+    </PageShell>
   )
 }

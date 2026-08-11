@@ -1,12 +1,8 @@
 "use client";
 
 import { Pie, PieChart, Cell } from "recharts";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { ChartPie } from "lucide-react";
+import { Panel, PanelSection } from "@/components/dashboard/shell";
 import {
   ChartContainer,
   ChartTooltip,
@@ -50,12 +46,12 @@ export function OrderTypeChart({ data, isLoading }: OrderTypeChartProps) {
 
   if (isLoading) {
     return (
-      <Card className="border-none shadow-[0_2px_12px_rgba(0,0,0,0.06)] bg-card rounded-2xl">
-        <CardHeader className="px-5 pt-5 pb-3">
-          <div className="h-4 w-28 bg-muted animate-pulse rounded" />
-          <div className="h-3 w-36 bg-muted animate-pulse rounded mt-2" />
-        </CardHeader>
-        <CardContent className="px-5 pb-5">
+      <Panel className="h-full">
+        <PanelSection
+          icon={ChartPie}
+          label="Order sources"
+          caption="Distribution by fulfillment type."
+        >
           <div className="flex justify-center py-4">
             <div className="h-40 w-40 bg-muted animate-pulse rounded-full" />
           </div>
@@ -64,34 +60,34 @@ export function OrderTypeChart({ data, isLoading }: OrderTypeChartProps) {
               <div key={i} className="h-7 bg-muted animate-pulse rounded-lg" />
             ))}
           </div>
-        </CardContent>
-      </Card>
+        </PanelSection>
+      </Panel>
     );
   }
 
   if (chartData.length === 0) {
     return (
-      <Card className="border-none shadow-[0_2px_12px_rgba(0,0,0,0.06)] bg-card rounded-2xl">
-        <CardHeader className="px-5 pt-5 pb-3">
-          <CardTitle className="text-sm font-semibold">Order Sources</CardTitle>
-          <p className="text-xs text-muted-foreground">Distribution by type</p>
-        </CardHeader>
-        <CardContent className="flex items-center justify-center h-44">
-          <p className="text-sm text-muted-foreground">No data available</p>
-        </CardContent>
-      </Card>
+      <Panel className="h-full">
+        <PanelSection
+          icon={ChartPie}
+          label="Order sources"
+          caption="Distribution by fulfillment type."
+        >
+          <div className="flex h-44 items-center justify-center">
+            <p className="text-sm text-muted-foreground">No data available</p>
+          </div>
+        </PanelSection>
+      </Panel>
     );
   }
 
   return (
-    <Card className="border-none shadow-[0_2px_12px_rgba(0,0,0,0.06)] bg-card rounded-2xl">
-      <CardHeader className="px-5 pt-5 pb-3">
-        <CardTitle className="text-sm font-semibold">Order Sources</CardTitle>
-        <p className="text-xs text-muted-foreground">
-          {total.toLocaleString()} total orders by type
-        </p>
-      </CardHeader>
-      <CardContent className="px-5 pb-5">
+    <Panel className="h-full">
+      <PanelSection
+        icon={ChartPie}
+        label="Order sources"
+        caption={`${total.toLocaleString()} total orders by fulfillment type.`}
+      >
         {/* Donut chart */}
         <ChartContainer
           config={chartConfig}
@@ -169,7 +165,7 @@ export function OrderTypeChart({ data, isLoading }: OrderTypeChartProps) {
             );
           })}
         </div>
-      </CardContent>
-    </Card>
+      </PanelSection>
+    </Panel>
   );
 }

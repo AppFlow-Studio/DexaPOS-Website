@@ -12,13 +12,7 @@ import {
   Repeat2,
   ScanLine,
 } from "lucide-react";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Panel, PanelSection } from "@/components/dashboard/shell";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { getQrAnalyticsSnapshot, type QrAnalyticsSnapshot } from "../actions";
@@ -112,19 +106,12 @@ export function QrAnalyticsPanel({
   }, [data?.byHour]);
 
   return (
-    <Card>
-      <CardHeader className="space-y-4">
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div>
-            <CardTitle className="flex items-center gap-2">
-              <BarChart3 className="h-5 w-5 text-[#0C4FD1]" />
-              QR Analytics
-            </CardTitle>
-            <CardDescription>
-              Merchant-level QR funnel and table-order performance for the last{" "}
-              {rangeDays} days.
-            </CardDescription>
-          </div>
+    <Panel>
+      <PanelSection
+        icon={BarChart3}
+        label="QR analytics"
+        caption={`Merchant-level QR funnel and table-order performance for the last ${rangeDays} days.`}
+        action={
           <div className="flex items-center gap-2" aria-label="QR analytics range">
             {[7, 30].map((days) => (
               <Button
@@ -143,15 +130,15 @@ export function QrAnalyticsPanel({
               </Button>
             ))}
           </div>
-        </div>
+        }
+      >
+        <div className="space-y-6">
         {!qrEnabled ? (
-          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <div className="border-l-2 border-amber-500 bg-amber-50/60 px-4 py-3 text-sm text-amber-900 dark:bg-amber-950/20 dark:text-amber-200">
             QR analytics can still show historical activity, but new scans stay
             off until QR Table Ordering is enabled for this branch.
           </div>
         ) : null}
-      </CardHeader>
-      <CardContent className="space-y-6">
         {isLoading ? (
           <div
             className="flex items-center gap-2 text-sm text-muted-foreground"
@@ -429,7 +416,8 @@ export function QrAnalyticsPanel({
             </div>
           </>
         )}
-      </CardContent>
-    </Card>
+        </div>
+      </PanelSection>
+    </Panel>
   );
 }

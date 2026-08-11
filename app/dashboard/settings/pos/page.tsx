@@ -57,6 +57,10 @@ import {
   type PosUiScale,
   type StationPosConfigOverrides,
 } from "@/lib/pos/pos-config";
+import {
+  LocationIndicator,
+  PageHeader,
+} from "@/components/dashboard/shell";
 
 const INHERIT = "__inherit";
 
@@ -74,7 +78,7 @@ function SettingSwitch({
   onCheckedChange: (checked: boolean) => void;
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 rounded-xl border p-4">
+    <div className="flex items-center justify-between gap-4 rounded-xl bg-muted/35 p-4">
       <div className="space-y-1">
         <Label htmlFor={id} className="font-medium">
           {label}
@@ -213,14 +217,11 @@ export default function PosSettingsPage() {
   if (isAllLocations) {
     return (
       <div className="space-y-6">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">
-            POS Runtime Settings
-          </h2>
-          <p className="text-muted-foreground">
-            Configure location-level POS behavior and station overrides.
-          </p>
-        </div>
+        <PageHeader
+          title="POS defaults"
+          subtitle="Configure location-level POS behavior and station overrides."
+          indicator={<LocationIndicator isAllLocations locationName={null} />}
+        />
 
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12 text-center">
@@ -239,7 +240,16 @@ export default function PosSettingsPage() {
   if (isLoading) {
     return (
       <div className="space-y-6">
-        <Skeleton className="h-16 w-full" />
+        <PageHeader
+          title="POS defaults"
+          subtitle="Loading location behavior and station overrides."
+          indicator={
+            <LocationIndicator
+              isAllLocations={false}
+              locationName={selectedLocation?.name}
+            />
+          }
+        />
         <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
           <Skeleton className="h-[520px] w-full" />
           <Skeleton className="h-[520px] w-full" />
@@ -251,6 +261,16 @@ export default function PosSettingsPage() {
   if (isError) {
     return (
       <div className="space-y-6">
+        <PageHeader
+          title="POS defaults"
+          subtitle="Configure location-level POS behavior and station overrides."
+          indicator={
+            <LocationIndicator
+              isAllLocations={false}
+              locationName={selectedLocation?.name}
+            />
+          }
+        />
         <Alert variant="destructive">
           <Settings2 className="h-4 w-4" />
           <AlertTitle>Failed to load POS settings</AlertTitle>
@@ -266,27 +286,27 @@ export default function PosSettingsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <div className="flex items-center gap-2">
-            <h2 className="text-2xl font-bold tracking-tight">
-              POS Runtime Settings
-            </h2>
+      <PageHeader
+        title="POS defaults"
+        subtitle="Set location behavior, then override display and sound only where a station needs it."
+        indicator={
+          <LocationIndicator
+            isAllLocations={false}
+            locationName={selectedLocation?.name}
+          />
+        }
+        actions={
+          <>
             <Badge variant="secondary">Location defaults</Badge>
-          </div>
-          <p className="text-muted-foreground">
-            Set POS behavior for{" "}
-            <span className="font-medium">{selectedLocation?.name}</span>, then
-            override only display and sound per station.
-          </p>
-        </div>
-        <Button variant="outline" asChild>
-          <Link href="/dashboard/settings/stations">
-            <Monitor className="mr-2 h-4 w-4" />
-            Manage Stations
-          </Link>
-        </Button>
-      </div>
+            <Button variant="outline" asChild>
+              <Link href="/dashboard/settings/stations">
+                <Monitor className="mr-2 h-4 w-4" />
+                Manage Stations
+              </Link>
+            </Button>
+          </>
+        }
+      />
 
       <Alert>
         <Settings2 className="h-4 w-4" />

@@ -12,7 +12,6 @@ import {
   DatePreset,
 } from "@/components/dashboard/orders/DateRangePicker";
 import { subDays } from "date-fns";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   DollarSign,
   ShoppingCart,
@@ -37,6 +36,15 @@ import { useReportingQueryRange } from "../hooks/useReportingDateRange";
 import { fillDailyFinancialStats } from "@/lib/reporting/date-range";
 import { ReportExportButtons } from "./components/ReportExportButtons";
 import { formatDateForExport, type ExportColumn } from "@/utils/export";
+import {
+  LocationIndicator,
+  PageHeader,
+  PageShell,
+  Panel,
+  PanelSection,
+  StatRow,
+  StatTile,
+} from "@/components/dashboard/shell";
 
 type SalesOverviewRow = {
   date: string;
@@ -198,8 +206,6 @@ export default function ReportsPage() {
         : previousSales > 0
           ? `vs $${previousSales.toLocaleString("en-US", { maximumFractionDigits: 0 })} prev.`
           : "For selected period",
-      iconColor: "text-indigo-500",
-      iconBg: "bg-indigo-50",
     },
     {
       label: "Total Orders",
@@ -207,8 +213,6 @@ export default function ReportsPage() {
       icon: ShoppingCart,
       trend: null,
       description: isAnyError ? "Failed to load" : "Completed orders",
-      iconColor: "text-emerald-500",
-      iconBg: "bg-emerald-50",
     },
     {
       label: "Avg Order Value",
@@ -216,8 +220,6 @@ export default function ReportsPage() {
       icon: TrendingUp,
       trend: null,
       description: isAnyError ? "Failed to load" : "Per transaction",
-      iconColor: "text-amber-500",
-      iconBg: "bg-amber-50",
     },
     {
       label: "Top Order Type",
@@ -225,115 +227,106 @@ export default function ReportsPage() {
       icon: Tag,
       trend: null,
       description: isAnyError ? "Failed to load" : topOrderTypeEntry ? `${topOrderTypeEntry[1]} orders` : "No data",
-      iconColor: "text-purple-500",
-      iconBg: "bg-purple-50",
     },
   ];
 
   return (
-    <div className="min-h-full space-y-6 pb-8">
-      {/* ── Header ─────────────────────────────────────────────── */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Sales Overview</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {selectedLocation && !Array.isArray(selectedLocation)
-              ? selectedLocation.name
-              : "All Locations"}{" "}
-            · Sales performance and trends
-          </p>
-        </div>
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <DateRangePicker
-            dateFrom={dateRange.from}
-            dateTo={dateRange.to}
-            onDateRangeChange={handleDateRangeChange}
-            preset={preset}
-            onPresetChange={setPreset}
-          />
-          <ReportExportButtons
-            data={salesOverviewExport}
-            columns={salesOverviewColumns}
-            filenameBase="sales-overview"
-            pdfTitle="Sales Overview"
-            dateFrom={dateRange.from}
-            dateTo={dateRange.to}
+    <PageShell className="pb-8">
+      <PageHeader
+        title="Sales Overview"
+        subtitle="Review revenue, order volume, product performance, and sales mix for the selected period."
+        indicator={
+          <LocationIndicator
+            isAllLocations={!selectedLocation || Array.isArray(selectedLocation)}
             locationName={
               selectedLocation && !Array.isArray(selectedLocation)
                 ? selectedLocation.name
-                : "All Locations"
+                : null
             }
-            summaryCards={[
-              {
-                label: "Total Revenue",
-                value: `$${totalSales.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-              },
-              {
-                label: "Total Orders",
-                value: (financialKPIs?.summary.order_count ?? 0).toLocaleString(),
-              },
-              {
-                label: "Avg Order Value",
-                value: `$${(financialKPIs?.summary.avg_order_value ?? 0).toFixed(2)}`,
-              },
-            ]}
-            disabled={isLoading || kpisLoading || isAnyError}
           />
-        </div>
-      </div>
+        }
+        actions={
+          <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center">
+            <DateRangePicker
+              dateFrom={dateRange.from}
+              dateTo={dateRange.to}
+              onDateRangeChange={handleDateRangeChange}
+              preset={preset}
+              onPresetChange={setPreset}
+            />
+            <ReportExportButtons
+              data={salesOverviewExport}
+              columns={salesOverviewColumns}
+              filenameBase="sales-overview"
+              pdfTitle="Sales Overview"
+              dateFrom={dateRange.from}
+              dateTo={dateRange.to}
+              locationName={
+                selectedLocation && !Array.isArray(selectedLocation)
+                  ? selectedLocation.name
+                  : "All Locations"
+              }
+              summaryCards={[
+                {
+                  label: "Total Revenue",
+                  value: `$${totalSales.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                },
+                {
+                  label: "Total Orders",
+                  value: (financialKPIs?.summary.order_count ?? 0).toLocaleString(),
+                },
+                {
+                  label: "Avg Order Value",
+                  value: `$${(financialKPIs?.summary.avg_order_value ?? 0).toFixed(2)}`,
+                },
+              ]}
+              disabled={isLoading || kpisLoading || isAnyError}
+            />
+          </div>
+        }
+      />
 
-      {/* ── KPI Cards ──────────────────────────────────────────── */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-
-        {kpiCards.map((kpi) => (
-          <Card
-            key={kpi.label}
-            className="border-none shadow-[0_2px_12px_rgba(0,0,0,0.06)] bg-card rounded-2xl overflow-hidden"
-          >
-            <CardContent className="p-5">
-              <div className="flex items-center justify-between mb-4">
-                <div className={cn("p-2 rounded-xl", kpi.iconBg)}>
-                  <kpi.icon className={cn("h-4 w-4", kpi.iconColor)} />
-                </div>
-                {kpi.trend !== null && (
-                  <div
-                    className={cn(
-                      "flex items-center gap-0.5 text-xs font-semibold px-2 py-1 rounded-full",
-                      kpi.trend >= 0
-                        ? "bg-emerald-500/10 text-emerald-600"
-                        : "bg-red-500/10 text-red-500"
-                    )}
-                  >
-                    {kpi.trend >= 0 ? (
-                      <ArrowUpRight className="h-3 w-3" />
-                    ) : (
-                      <ArrowDownRight className="h-3 w-3" />
-                    )}
-                    {Math.abs(kpi.trend).toFixed(1)}%
-                  </div>
-                )}
-              </div>
-              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-                {kpi.label}
-              </p>
-              {kpi.value === null ? (
-                <div className="h-7 w-24 bg-muted animate-pulse rounded mt-1.5" />
-              ) : (
-                <p className="text-2xl font-bold mt-1 truncate">{kpi.value}</p>
-              )}
-              <p className="text-xs text-muted-foreground mt-1">
-                {kpi.description}
-              </p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <Panel padded>
+        <StatRow columns={4}>
+          {kpiCards.map((kpi) => (
+            <StatTile
+              key={kpi.label}
+              label={kpi.label}
+              icon={<kpi.icon />}
+              value={kpi.value ?? ""}
+              isLoading={kpi.value === null}
+              meta={
+                <span className="inline-flex max-w-full items-center gap-1.5">
+                  {kpi.trend !== null ? (
+                    <span
+                      className={cn(
+                        "inline-flex shrink-0 items-center gap-0.5 font-medium",
+                        kpi.trend >= 0
+                          ? "text-emerald-600"
+                          : "text-destructive"
+                      )}
+                    >
+                      {kpi.trend >= 0 ? (
+                        <ArrowUpRight className="h-3 w-3" />
+                      ) : (
+                        <ArrowDownRight className="h-3 w-3" />
+                      )}
+                      {Math.abs(kpi.trend).toFixed(1)}%
+                    </span>
+                  ) : null}
+                  <span className="truncate">{kpi.description}</span>
+                </span>
+              }
+            />
+          ))}
+        </StatRow>
+      </Panel>
 
       {/* ── Sales Chart (full-width) ────────────────────────────── */}
       <SalesChart data={chartData} isLoading={isLoading || kpisLoading} />
 
       {/* ── Bottom row: Order Sources / Top Items / Reports ──────── */}
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid min-w-0 gap-6 lg:grid-cols-3">
         {/* Order Sources */}
         <OrderTypeChart
           data={
@@ -350,16 +343,12 @@ export default function ReportsPage() {
         />
 
         {/* Top Selling Items */}
-        <Card className="border-none shadow-[0_2px_12px_rgba(0,0,0,0.06)] bg-card rounded-2xl">
-          <CardHeader className="px-5 pt-5 pb-3">
-            <CardTitle className="text-sm font-semibold">
-              Top Selling Items
-            </CardTitle>
-            <p className="text-xs text-muted-foreground">
-              Best performers this period
-            </p>
-          </CardHeader>
-          <CardContent className="px-5 pb-5">
+        <Panel className="h-full">
+          <PanelSection
+            icon={BarChart3}
+            label="Top selling items"
+            caption="Best-performing menu items for the selected period."
+          >
             {isLoading ? (
               <div className="space-y-3">
                 {[1, 2, 3, 4, 5].map((i) => (
@@ -374,13 +363,13 @@ export default function ReportsPage() {
                 No item data available
               </p>
             ) : (
-              <div className="space-y-0.5">
+              <div className="divide-y divide-border/60">
                 {(analytics?.bestSellingItems ?? [])
                   .slice(0, 6)
                   .map((item, i) => (
                     <div
                       key={item.item_name}
-                      className="flex items-center justify-between py-2.5 border-b border-border/50 last:border-0"
+                      className="flex min-w-0 items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
                     >
                       <div className="flex items-center gap-3 min-w-0">
                         <span className="text-xs font-bold text-muted-foreground w-4 shrink-0">
@@ -402,43 +391,39 @@ export default function ReportsPage() {
                   ))}
               </div>
             )}
-          </CardContent>
-        </Card>
+          </PanelSection>
+        </Panel>
 
         {/* Sub-report Navigation */}
-        <Card className="border-none shadow-[0_2px_12px_rgba(0,0,0,0.06)] bg-card rounded-2xl">
-          <CardHeader className="px-5 pt-5 pb-3">
-            <CardTitle className="text-sm font-semibold">
-              Detailed Reports
-            </CardTitle>
-            <p className="text-xs text-muted-foreground">
-              Drill down into specific areas
-            </p>
-          </CardHeader>
-          <CardContent className="px-5 pb-5">
-            <div className="space-y-0.5">
+        <Panel className="h-full">
+          <PanelSection
+            icon={FileText}
+            label="Detailed reports"
+            caption="Open a focused report for a deeper operational view."
+          >
+            <div className="divide-y divide-border/60">
               {SUB_REPORTS.map((report) => (
-                <Link key={report.href} href={report.href}>
-                  <div className="flex items-center justify-between py-2.5 border-b border-border/50 last:border-0 hover:bg-muted/50 rounded-lg px-2 -mx-2 transition-colors cursor-pointer group">
-                    <div className="flex items-center gap-3">
-                      <div className="p-1.5 bg-primary/10 rounded-lg shrink-0">
-                        <report.icon className="h-3.5 w-3.5 text-primary" />
-                      </div>
-                      <div>
+                <Link
+                  key={report.href}
+                  href={report.href}
+                  className="group flex min-w-0 items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
+                >
+                    <div className="flex min-w-0 items-center gap-3">
+                      <report.icon className="h-4 w-4 shrink-0 text-[#0C4FD1] dark:text-[#6CA0FF]" />
+                      <div className="min-w-0">
                         <p className="text-sm font-medium">{report.label}</p>
-                        <p className="text-[10px] text-muted-foreground">
+                        <p className="truncate text-[10px] text-muted-foreground">
                           {report.desc}
                         </p>
                       </div>
                     </div>
                     <ChevronRight className="h-4 w-4 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors shrink-0" />
-                  </div>
                 </Link>
               ))}
             </div>
-          </CardContent>
-        </Card>
+          </PanelSection>
+        </Panel>
       </div>
-    </div>
+    </PageShell>
   );
 }

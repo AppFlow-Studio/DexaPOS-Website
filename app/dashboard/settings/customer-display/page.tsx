@@ -31,6 +31,10 @@ import {
     optimizeImageForCdn,
     uploadCdnAsset,
 } from '@/lib/cdn/client'
+import {
+    LocationIndicator,
+    PageHeader,
+} from '@/components/dashboard/shell'
 
 // Types
 interface CfdImage {
@@ -353,10 +357,11 @@ export default function CustomerDisplaySettingsPage() {
     if (isAllLocations) {
         return (
             <div className="space-y-6">
-                <div>
-                    <h2 className="text-2xl font-bold">Customer Display Settings</h2>
-                    <p className="text-muted-foreground">Manage images for the Customer Facing Display (CFD)</p>
-                </div>
+                <PageHeader
+                    title="Customer display"
+                    subtitle="Manage images shown on the customer-facing display."
+                    indicator={<LocationIndicator isAllLocations locationName={null} />}
+                />
 
                 <Card>
                     <CardContent className="py-12 flex flex-col items-center justify-center text-center">
@@ -378,13 +383,16 @@ export default function CustomerDisplaySettingsPage() {
 
     return (
         <div className="space-y-6">
-            {/* Header */}
-            <div>
-                <h2 className="text-2xl font-bold">Customer Display Settings</h2>
-                <p className="text-muted-foreground">
-                    Manage carousel images for <span className="font-medium">{selectedLocation?.name}</span>'s Customer Facing Display.
-                </p>
-            </div>
+            <PageHeader
+                title="Customer display"
+                subtitle="Upload and manage the carousel shown to customers."
+                indicator={
+                    <LocationIndicator
+                        isAllLocations={false}
+                        locationName={selectedLocation?.name}
+                    />
+                }
+            />
 
             {/* Upload Section */}
             <Card>

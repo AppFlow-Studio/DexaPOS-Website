@@ -26,6 +26,7 @@ import {
   PaymentCardForm,
   type PaymentCardFormHandle,
 } from '@/app/sites/components/checkout/PaymentCardForm'
+import { PageHeader } from '@/components/dashboard/shell'
 
 interface BillingLocationOption {
   id: string
@@ -230,14 +231,14 @@ export function MerchantBillingSetupCard({
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Billing & Payment Method</h1>
-        <p className="text-muted-foreground">
-          {context === 'admin'
+      <PageHeader
+        title="Billing & payment method"
+        subtitle={
+          context === 'admin'
             ? `Manage subscription billing details for ${merchantName || 'this merchant'}.`
-            : 'Manage your subscription billing payment method.'}
-        </p>
-      </div>
+            : 'Manage your subscription billing payment method.'
+        }
+      />
 
       <Alert>
         <Shield className="h-4 w-4" />

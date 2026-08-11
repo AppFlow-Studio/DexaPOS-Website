@@ -1,13 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Panel, PanelSection } from "@/components/dashboard/shell";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -81,7 +75,6 @@ export function PushChannelsCard({
     let firstSyncId: string | null = null;
     for (const menu of syncedMenus) {
       // Sequentially — the server will reject rapid duplicates with cooldown.
-      // eslint-disable-next-line no-await-in-loop
       const result = await pushMutation.mutateAsync({
         clerkOrgId,
         menuId: menu.menuId,
@@ -104,49 +97,25 @@ export function PushChannelsCard({
   // Empty states
   if (!isOnboarded) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <Radio className="h-4 w-4" />
-            Push Menus to Connected Channels
-          </CardTitle>
-          <CardDescription>
-            Connect this location to OrderOut first.
-          </CardDescription>
-        </CardHeader>
-      </Card>
+      <Panel>
+        <PanelSection icon={Radio} label="Push menus to connected channels" caption="Connect this location to OrderOut first." />
+      </Panel>
     );
   }
 
   if (!hasMenus) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <Radio className="h-4 w-4" />
-            Push Menus to Connected Channels
-          </CardTitle>
-          <CardDescription>
-            Upload a menu to OrderOut first, then fan it out to delivery channels here.
-          </CardDescription>
-        </CardHeader>
-      </Card>
+      <Panel>
+        <PanelSection icon={Radio} label="Push menus to connected channels" caption="Upload a menu to OrderOut first, then send it to delivery channels here." />
+      </Panel>
     );
   }
 
   if (!hasChannels) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <Radio className="h-4 w-4" />
-            Push Menus to Connected Channels
-          </CardTitle>
-          <CardDescription>
-            Connect a delivery platform (UberEats, DoorDash, GrubHub) in the OrderOut dashboard first.
-          </CardDescription>
-        </CardHeader>
-      </Card>
+      <Panel>
+        <PanelSection icon={Radio} label="Push menus to connected channels" caption="Connect a delivery platform in OrderOut first." />
+      </Panel>
     );
   }
 
@@ -156,28 +125,22 @@ export function PushChannelsCard({
     : null;
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <CardTitle className="text-base flex items-center gap-2">
-              <Radio className="h-4 w-4" />
-              Push Menus to Connected Channels
-            </CardTitle>
-            <CardDescription>
-              Fan out an already-uploaded menu to your delivery platforms.
-            </CardDescription>
-          </div>
-          <div className="flex flex-wrap items-center gap-1.5 sm:shrink-0 sm:justify-end">
+    <Panel>
+      <PanelSection
+        icon={Radio}
+        label="Push menus to connected channels"
+        caption="Send an already-uploaded menu to your delivery platforms."
+        action={
+          <div className="flex flex-wrap items-center gap-1.5">
             {connectedChannels.map((c) => (
               <Badge key={c} variant="outline" className="text-xs">
                 {c}
               </Badge>
             ))}
           </div>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
+        }
+      >
+        <div className="space-y-4">
         <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_auto] gap-2">
           <Select value={selectedMenuId} onValueChange={setSelectedMenuId}>
             <SelectTrigger>
@@ -216,7 +179,7 @@ export function PushChannelsCard({
         </p>
 
         {activeSyncId && live && (
-          <div className="rounded-md border p-3 space-y-2 bg-muted/30">
+          <div className="space-y-2 rounded-2xl bg-muted/40 p-3">
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium">
                 Live status: {live.syncStatus}
@@ -229,7 +192,8 @@ export function PushChannelsCard({
             />
           </div>
         )}
-      </CardContent>
-    </Card>
+        </div>
+      </PanelSection>
+    </Panel>
   );
 }

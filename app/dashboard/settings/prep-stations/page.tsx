@@ -30,6 +30,10 @@ import {
   useGatedLocation,
 } from "@/stores/location-store";
 import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
+import {
+  LocationIndicator,
+  PageHeader,
+} from "@/components/dashboard/shell";
 
 export default function PrepStationsPage() {
   // Resolve to the gated location so single-location accounts (locked to 'all')
@@ -103,12 +107,16 @@ export default function PrepStationsPage() {
   if (!mounted) {
     return (
       <div className="space-y-6">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Prep Stations</h2>
-          <p className="text-muted-foreground">
-            Manage kitchen prep stations for KDS routing
-          </p>
-        </div>
+        <PageHeader
+          title="Prep stations"
+          subtitle="Manage kitchen routing and KDS preparation areas."
+          indicator={
+            <LocationIndicator
+              isAllLocations={isAllLocations}
+              locationName={selectedLocation?.name}
+            />
+          }
+        />
         <div className="h-96 flex items-center justify-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
         </div>
@@ -120,12 +128,11 @@ export default function PrepStationsPage() {
   if (isAllLocations) {
     return (
       <div className="space-y-6">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Prep Stations</h2>
-          <p className="text-muted-foreground">
-            Manage kitchen prep stations for KDS routing
-          </p>
-        </div>
+        <PageHeader
+          title="Prep stations"
+          subtitle="Manage kitchen routing and KDS preparation areas."
+          indicator={<LocationIndicator isAllLocations locationName={null} />}
+        />
 
         <Card>
           <CardContent className="py-12 flex flex-col items-center justify-center text-center">
@@ -144,18 +151,17 @@ export default function PrepStationsPage() {
   if (isLoading) {
     return (
       <div className="space-y-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h2 className="text-2xl font-bold tracking-tight">
-              Prep Stations
-            </h2>
-            <p className="text-muted-foreground">
-              Configure prep stations for{" "}
-              <span className="font-medium">{selectedLocation?.name}</span>
-            </p>
-          </div>
-          <Skeleton className="h-10 w-40" />
-        </div>
+        <PageHeader
+          title="Prep stations"
+          subtitle="Manage kitchen routing and KDS preparation areas."
+          indicator={
+            <LocationIndicator
+              isAllLocations={false}
+              locationName={selectedLocation?.name}
+            />
+          }
+          actions={<Skeleton className="h-10 w-40" />}
+        />
         <div className="space-y-3">
           {[...Array(3)].map((_, i) => (
             <Skeleton key={i} className="h-16 w-full" />
@@ -168,13 +174,16 @@ export default function PrepStationsPage() {
   if (isError) {
     return (
       <div className="space-y-6">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Prep Stations</h2>
-          <p className="text-muted-foreground">
-            Configure prep stations for{" "}
-            <span className="font-medium">{selectedLocation?.name}</span>
-          </p>
-        </div>
+        <PageHeader
+          title="Prep stations"
+          subtitle="Manage kitchen routing and KDS preparation areas."
+          indicator={
+            <LocationIndicator
+              isAllLocations={false}
+              locationName={selectedLocation?.name}
+            />
+          }
+        />
         <Card>
           <CardContent className="py-12 flex flex-col items-center justify-center text-center">
             <AlertTriangle className="h-12 w-12 mb-4 text-destructive" />
@@ -203,20 +212,22 @@ export default function PrepStationsPage() {
         </div>
       </div>
 
-      {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Prep Stations</h2>
-          <p className="text-muted-foreground">
-            Configure prep stations for{" "}
-            <span className="font-medium">{selectedLocation?.name}</span>
-          </p>
-        </div>
-        <Button onClick={() => setIsAddDialogOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          Add Prep Station
-        </Button>
-      </div>
+      <PageHeader
+        title="Prep stations"
+        subtitle="Route menu items and categories to the correct KDS preparation area."
+        indicator={
+          <LocationIndicator
+            isAllLocations={false}
+            locationName={selectedLocation?.name}
+          />
+        }
+        actions={
+          <Button onClick={() => setIsAddDialogOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Add Prep Station
+          </Button>
+        }
+      />
 
       {/* Info */}
       <div className="text-sm text-muted-foreground bg-muted/50 border rounded-lg p-3">

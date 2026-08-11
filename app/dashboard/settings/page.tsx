@@ -6,7 +6,6 @@
 // ============================================================================
 
 import * as React from 'react'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -17,20 +16,15 @@ import { Label } from '@/components/ui/label'
 import { useLocationTaxRates, useUpsertTaxRate, useDeactivateTaxRate } from '../hooks/useTaxRates'
 import { useGatedLocationId, useGatedLocation } from '@/stores/location-store'
 import { TAX_CATEGORIES, TAX_CATEGORY_LABELS, TAX_CATEGORY_DESCRIPTIONS, TaxCategory } from '@/types/tax'
-import { Plus, Edit, Trash2, AlertCircle, DollarSign, MapPin, CreditCard, Monitor, Flame, MonitorPlay, Receipt, Gift, ChevronRight, Settings2 } from 'lucide-react'
+import { Plus, Edit, Trash2, AlertCircle, DollarSign, MapPin, CreditCard } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
 import Link from 'next/link'
-
-const SETTINGS_SECTIONS = [
-    { title: 'Stations', description: 'POS stations, printers & terminals', href: '/dashboard/settings/stations', icon: Monitor },
-    { title: 'POS Settings', description: 'Location runtime POS defaults', href: '/dashboard/settings/pos', icon: Settings2 },
-    { title: 'Prep Stations', description: 'Kitchen & prep station config', href: '/dashboard/settings/prep-stations', icon: Flame },
-    { title: 'Customer Display', description: 'Customer-facing display settings', href: '/dashboard/settings/customer-display', icon: MonitorPlay },
-    { title: 'Receipt Templates', description: 'Receipt and ticket design', href: '/dashboard/settings/receipt-templates', icon: Receipt },
-    { title: 'Tip Configuration', description: 'Tip pools and distribution rules', href: '/dashboard/settings/tips', icon: DollarSign },
-    { title: 'Loyalty', description: 'Loyalty programs and promotions', href: '/dashboard/settings/loyalty', icon: Gift },
-    { title: 'Billing', description: 'Payment methods and billing setup', href: '/dashboard/settings/billing', icon: CreditCard },
-] as const
+import {
+    LocationIndicator,
+    PageHeader,
+    Panel,
+    PanelSection,
+} from '@/components/dashboard/shell'
 
 // ============================================================================
 // Main Component
@@ -98,60 +92,33 @@ export default function TaxSettingsPage() {
     // Render: All Locations View (Blocked)
     // ========================================================================
 
-    const settingsNav = (
-        <div className="space-y-3">
-            <div>
-                <h2 className="text-xl font-semibold">Settings</h2>
-                <p className="text-sm text-muted-foreground">Manage your POS configuration</p>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {SETTINGS_SECTIONS.map(({ title, description, href, icon: Icon }) => (
-                    <Link key={href} href={href}>
-                        <Card className="hover:bg-accent/50 transition-colors cursor-pointer h-full">
-                            <CardContent className="flex items-center gap-3 p-4">
-                                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                                    <Icon className="h-5 w-5 text-primary" />
-                                </div>
-                                <div className="min-w-0 flex-1">
-                                    <p className="font-medium text-sm truncate">{title}</p>
-                                    <p className="text-xs text-muted-foreground truncate">{description}</p>
-                                </div>
-                                <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
-                            </CardContent>
-                        </Card>
-                    </Link>
-                ))}
-            </div>
-        </div>
-    )
-
     if (isAllLocations) {
         return (
             <div className="space-y-6">
-                {settingsNav}
-                <div className="flex items-center justify-between gap-3">
-                    <div>
-                        <h2 className="text-2xl font-bold">Tax Settings</h2>
-                        <p className="text-muted-foreground">Configure location-specific tax rates</p>
-                    </div>
-                    <Button variant="outline" asChild>
+                <PageHeader
+                    title="General & tax"
+                    subtitle="Configure location-specific tax rates and account billing."
+                    indicator={<LocationIndicator isAllLocations locationName={null} />}
+                    actions={
+                      <Button variant="outline" asChild>
                         <Link href="/dashboard/settings/billing">
                             <CreditCard className="mr-2 h-4 w-4" />
                             Billing Method
                         </Link>
-                    </Button>
-                </div>
+                      </Button>
+                    }
+                />
 
-                <Card>
-                    <CardContent className="py-12 flex flex-col items-center justify-center text-center">
+                <Panel padded>
+                    <div className="flex min-h-64 flex-col items-center justify-center text-center">
                         <MapPin className="h-12 w-12 mb-4 text-muted-foreground" />
                         <h3 className="text-lg font-semibold mb-2">Select a Location</h3>
                         <p className="text-muted-foreground max-w-md">
                             Tax rates are location-specific. Please select a location from the dropdown above to
                             configure tax settings for that location.
                         </p>
-                    </CardContent>
-                </Card>
+                    </div>
+                </Panel>
             </div>
         )
     }
@@ -162,43 +129,41 @@ export default function TaxSettingsPage() {
 
     return (
         <div className="space-y-6">
-            {settingsNav}
-
-            {/* Header */}
-            <div className="flex items-center justify-between gap-3">
-                <div>
-                    <h2 className="text-2xl font-bold">Tax Settings</h2>
-                    <p className="text-muted-foreground">
-                        Configure tax rates for <span className="font-medium">{selectedLocation?.name}</span>
-                    </p>
-                </div>
-                <Button variant="outline" asChild>
+            <PageHeader
+                title="General & tax"
+                subtitle="Configure tax categories and rates for this location."
+                indicator={
+                    <LocationIndicator
+                        isAllLocations={false}
+                        locationName={selectedLocation?.name}
+                    />
+                }
+                actions={
+                  <Button variant="outline" asChild>
                     <Link href="/dashboard/settings/billing">
                         <CreditCard className="mr-2 h-4 w-4" />
                         Billing Method
                     </Link>
-                </Button>
-            </div>
+                  </Button>
+                }
+            />
 
             {/* Info Alert */}
             <Alert>
                 <AlertCircle className="h-4 w-4" />
                 <AlertTitle>How Tax Categories Work</AlertTitle>
                 <AlertDescription>
-                    Items belong to tax categories (e.g., "Alcohol", "Food"). Set the percentage rate for each
+                    Items belong to tax categories (e.g., &quot;Alcohol&quot;, &quot;Food&quot;). Set the percentage rate for each
                     category at this location. Items will automatically use the rate for their category.
                 </AlertDescription>
             </Alert>
 
-            {/* Tax Rates Table */}
-            <Card>
-                <CardHeader>
-                    <CardTitle>Tax Rates by Category</CardTitle>
-                    <CardDescription>
-                        Configure the tax percentage for each category at this location
-                    </CardDescription>
-                </CardHeader>
-                <CardContent>
+            <Panel>
+                <PanelSection
+                    icon={DollarSign}
+                    label="Tax rates by category"
+                    caption="Configure the tax percentage for each category at this location."
+                >
                     {isLoading ? (
                         <div className="space-y-3">
                             {[...Array(6)].map((_, i) => (
@@ -301,8 +266,8 @@ export default function TaxSettingsPage() {
                         </Table>
                         </div>
                     )}
-                </CardContent>
-            </Card>
+                </PanelSection>
+            </Panel>
 
             {/* Edit Dialog */}
             <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
