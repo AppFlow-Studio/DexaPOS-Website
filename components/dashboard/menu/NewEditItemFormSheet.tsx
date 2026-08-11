@@ -892,16 +892,6 @@ export function NewEditItemFormSheet({
   const [selectedModifiers, setSelectedModifiers] = React.useState<string[]>(
     [],
   );
-  const [expandedSections, setExpandedSections] = React.useState({
-    general: true,
-    pricing: true,
-    modifiers: false,
-    categories: false,
-    tax: false,
-    availability: false,
-    locationBadges: false,
-    recipe: false,
-  });
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [isResetting, setIsResetting] = React.useState(false);
   const [showAddModifier, setShowAddModifier] = React.useState(false);
@@ -932,6 +922,30 @@ export function NewEditItemFormSheet({
     fileNamePrefix: "item",
   });
   const draftHydratedRef = React.useRef(false);
+  const sectionTabsScrollRef = React.useRef<HTMLDivElement>(null);
+  const keepSelectedSectionVisible = React.useCallback((value: string) => {
+    requestAnimationFrame(() => {
+      const scroller = sectionTabsScrollRef.current;
+      const trigger = scroller?.querySelector<HTMLElement>(
+        `[data-item-section="${value}"]`,
+      );
+      if (!scroller || !trigger) return;
+
+      const scrollerRect = scroller.getBoundingClientRect();
+      const triggerRect = trigger.getBoundingClientRect();
+      const centeredLeft =
+        scroller.scrollLeft +
+        triggerRect.left -
+        scrollerRect.left -
+        (scrollerRect.width - triggerRect.width) / 2;
+      const maxScrollLeft = scroller.scrollWidth - scroller.clientWidth;
+
+      scroller.scrollTo({
+        left: Math.max(0, Math.min(centeredLeft, maxScrollLeft)),
+        behavior: "smooth",
+      });
+    });
+  }, []);
   const draftKey = React.useMemo(() => {
     const scopeKey = isAllLocations ? "global" : selectedLocationId ?? "location-none";
     const menuScope = menuId ?? "library";
@@ -1168,9 +1182,9 @@ export function NewEditItemFormSheet({
         if (cancelled) return;
         const ids = groups.map((g: any) => g.id);
         setSelectedModifiers(ids);
-        if (ids.length > 0) {
-          setExpandedSections((prev) => ({ ...prev, modifiers: true }));
-        }
+        // Previously auto-expanded the Modifiers collapsible. With tabs the
+        // sections are peers, so forcing the panel away from General on open
+        // would hide the fields the user came to edit.
       });
     } else {
       form.reset({
@@ -1252,10 +1266,6 @@ export function NewEditItemFormSheet({
       selectedModifiers,
     } satisfies NewEditItemDraft);
   }, [draftKey, editItem, open, selectedCategories, selectedModifiers, watchedValues]);
-
-  const toggleSection = (section: keyof typeof expandedSections) => {
-    setExpandedSections((prev) => ({ ...prev, [section]: !prev[section] }));
-  };
 
   const toggleCategory = (categoryId: string) => {
     setSelectedCategories((prev) =>
@@ -1870,9 +1880,13 @@ export function NewEditItemFormSheet({
         </DialogHeader>
 
           {/* Scrolling body — the only scroll container; see the note on DialogContent. */}
-          <div className="thin-scrollbar flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-y-auto overflow-x-hidden lg:flex-row">
+          {/* Body. On desktop each column scrolls independently (matching
+              CreateItemWizard) so the preview does not ride along with the form:
+              the parent is overflow-hidden and each column owns its scroll.
+              Below `lg` the columns stack and the form pane carries the scroll. */}
+          <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden lg:flex-row">
             {/* Form Section */}
-            <div className="min-w-0 shrink-0 space-y-4 overflow-x-hidden px-4 py-5 sm:px-6 lg:min-h-0 lg:flex-1 lg:shrink">
+            <div className="thin-scrollbar min-h-0 min-w-0 flex-1 space-y-4 overflow-y-auto overflow-x-hidden px-4 py-5 sm:px-6">
               {/* Editing Context Banner - Shows which level user is editing */}
               {editItem && editingContext.level > 1 && (
                 <EditingContextBanner
@@ -1900,28 +1914,47 @@ export function NewEditItemFormSheet({
               )}
 
               <div className="space-y-4">
-                  <div className="space-y-0">
-
-                    {/* SECTION 1: GENERAL (collapsible) */}
-                    <Collapsible
-                      open={expandedSections.general}
-                      onOpenChange={() => toggleSection("general")}
+                  <Tabs
+                    defaultValue="general"
+                    className="w-full"
+                    onValueChange={keepSelectedSectionVisible}
+                  >
+                    {/* Pill tabs mirroring CreateItemWizard. Classes are literal,
+                        not {TOKEN} — Tailwind does not scan computed strings (C7). */}
+                    <div
+                      ref={sectionTabsScrollRef}
+                      className="no-scrollbar mb-6 w-full min-w-0 overflow-x-auto pb-1"
                     >
-                      <CollapsibleTrigger asChild>
-                        <button type="button" className="flex items-center justify-between w-full group">
-                          <div className="flex items-center gap-2">
-                            <Settings2 className="h-4 w-4 text-muted-foreground" />
-                            <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Basic Information</span>
-                            {!editingContext.canEditBaseFields && editItem && (
-                              <Badge variant="outline" className="text-xs">
-                                View Only
-                              </Badge>
-                            )}
-                          </div>
-                          <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", expandedSections.general && "rotate-180")} />
-                        </button>
-                      </CollapsibleTrigger>
-                      <CollapsibleContent className="space-y-4 pt-4">
+                      <TabsList className="inline-flex h-auto w-max flex-nowrap gap-0.5 rounded-full bg-muted/70 p-1">
+                        {[
+                          { value: "general", label: "General" },
+                          { value: "pricing", label: "Pricing" },
+                          { value: "modifiers", label: "Modifiers" },
+                          { value: "categories", label: "Categories" },
+                          // Edit-only sections have no counterpart in the create
+                          // wizard; they stay, but only when editing.
+                          ...(editItem
+                            ? [{ value: "recipe", label: "Recipe" }]
+                            : []),
+                          { value: "tax", label: "Tax & Fees" },
+                          { value: "availability", label: "Availability" },
+                          ...(editItem && gatedLocationId
+                            ? [{ value: "locationBadges", label: "Badges" }]
+                            : []),
+                        ].map((t) => (
+                          <TabsTrigger
+                            key={t.value}
+                            value={t.value}
+                            data-item-section={t.value}
+                            className="shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-[0.8125rem] font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border"
+                          >
+                            {t.label}
+                          </TabsTrigger>
+                        ))}
+                      </TabsList>
+                    </div>
+
+                    <TabsContent value="general" className="space-y-4 mt-0">
 
                       <FormField
                         control={form.control}
@@ -2034,34 +2067,9 @@ export function NewEditItemFormSheet({
                           </FormItem>
                         )}
                       />
-                      </CollapsibleContent>
-                    </Collapsible>
+                    </TabsContent>
 
-                    {/* SECTION 2: PRICING & INVENTORY (collapsible) */}
-                    <Collapsible
-                      open={expandedSections.pricing}
-                      onOpenChange={() => toggleSection("pricing")}
-                      className="mt-6 pt-4"
-                    >
-                      <CollapsibleTrigger asChild>
-                        <button type="button" className="flex items-center justify-between w-full group">
-                          <div className="flex items-center gap-2">
-                            <DollarSign className="h-4 w-4 text-green-500" />
-                            <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Pricing & Inventory</span>
-                            <span
-                              className={cn(
-                                "inline-flex shrink-0 items-center rounded-full px-2.5 py-0.5 text-xs font-medium",
-                                LEVEL_INFO[editingContext.level].bgColor,
-                                LEVEL_INFO[editingContext.level].color,
-                              )}
-                            >
-                              {editingContext.priceLabel}
-                            </span>
-                          </div>
-                          <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", expandedSections.pricing && "rotate-180")} />
-                        </button>
-                      </CollapsibleTrigger>
-                      <CollapsibleContent className="space-y-4 pt-4">
+                    <TabsContent value="pricing" className="space-y-4 mt-0">
 
                       {/* Price Breakdown - Detailed vertical breakdown */}
                       {editItem && <PriceBreakdown />}
@@ -2187,25 +2195,9 @@ export function NewEditItemFormSheet({
                           </FormItem>
                         )}
                       />
-                      </CollapsibleContent>
-                    </Collapsible>
+                    </TabsContent>
 
-                    {/* SECTION 3: MODIFIERS (collapsible) */}
-                    <Collapsible
-                      open={expandedSections.modifiers}
-                      onOpenChange={() => toggleSection("modifiers")}
-                      className="mt-6 pt-4"
-                    >
-                      <CollapsibleTrigger asChild>
-                        <button type="button" className="flex items-center justify-between w-full group">
-                          <div className="flex items-center gap-2">
-                            <Layers className="h-4 w-4 text-purple-500" />
-                            <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Modifier Groups</span>
-                          </div>
-                          <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", expandedSections.modifiers && "rotate-180")} />
-                        </button>
-                      </CollapsibleTrigger>
-                      <CollapsibleContent className="space-y-4 pt-4">
+                    <TabsContent value="modifiers" className="space-y-4 mt-0">
 
                       {/* Modifier Info */}
                       <div className="space-y-1.5 px-1">
@@ -2672,35 +2664,9 @@ export function NewEditItemFormSheet({
                           </>
                         );
                       })()}
-                      </CollapsibleContent>
-                    </Collapsible>
+                    </TabsContent>
 
-                    {/* SECTION 4: CATEGORIES (collapsible) */}
-                    <Collapsible
-                      open={expandedSections.categories}
-                      onOpenChange={() => toggleSection("categories")}
-                      className="mt-6 pt-4"
-                    >
-                      <CollapsibleTrigger asChild>
-                        <button type="button" className="flex items-center justify-between w-full group">
-                          <div className="flex items-center gap-2">
-                            <Tag className="h-4 w-4 text-blue-500" />
-                            <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Categories</span>
-                            {selectedCategories.length > 0 && (
-                              <Badge variant="secondary" className="text-xs">
-                                {selectedCategories.length}
-                              </Badge>
-                            )}
-                            {!editingContext.canEditBaseFields && editItem && (
-                              <Badge variant="outline" className="text-xs ml-auto">
-                                View Only
-                              </Badge>
-                            )}
-                          </div>
-                          <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", expandedSections.categories && "rotate-180")} />
-                        </button>
-                      </CollapsibleTrigger>
-                      <CollapsibleContent className="space-y-3 pt-4">
+                    <TabsContent value="categories" className="space-y-4 mt-0">
                       {/* Suggestion for new items */}
                       {!editItem &&
                         selectedCategories.length === 0 &&
@@ -2808,25 +2774,9 @@ export function NewEditItemFormSheet({
                           )}
                         </div>
                       )}
-                      </CollapsibleContent>
-                    </Collapsible>
+                    </TabsContent>
 
-                    {/* SECTION 5: TAX & FEES (collapsible) */}
-                    <Collapsible
-                      open={expandedSections.tax}
-                      onOpenChange={() => toggleSection("tax")}
-                      className="mt-6 pt-4"
-                    >
-                      <CollapsibleTrigger asChild>
-                        <button type="button" className="flex items-center justify-between w-full group">
-                          <div className="flex items-center gap-2">
-                            <DollarSign className="h-4 w-4 text-emerald-500" />
-                            <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Tax &amp; Fees</span>
-                          </div>
-                          <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", expandedSections.tax && "rotate-180")} />
-                        </button>
-                      </CollapsibleTrigger>
-                      <CollapsibleContent className="space-y-4 pt-4">
+                    <TabsContent value="tax" className="space-y-4 mt-0">
                       {/* Tax Exempt Switch */}
                       <FormField
                         control={form.control}
@@ -2991,25 +2941,9 @@ export function NewEditItemFormSheet({
                           </AlertDescription>
                         </Alert>
                       )}
-                      </CollapsibleContent>
-                    </Collapsible>
+                    </TabsContent>
 
-                    {/* SECTION 6: AVAILABILITY (collapsible) */}
-                    <Collapsible
-                      open={expandedSections.availability}
-                      onOpenChange={() => toggleSection("availability")}
-                      className="mt-2 pt-4"
-                    >
-                      <CollapsibleTrigger asChild>
-                        <button type="button" className="flex items-center justify-between w-full group">
-                          <div className="flex items-center gap-2">
-                            <CheckCircle2 className="h-4 w-4 text-blue-500" />
-                            <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Availability &amp; Channels</span>
-                          </div>
-                          <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", expandedSections.availability && "rotate-180")} />
-                        </button>
-                      </CollapsibleTrigger>
-                      <CollapsibleContent className="space-y-4 pt-4">
+                    <TabsContent value="availability" className="space-y-4 mt-0">
                       {/* General Availability Toggle */}
                       <FormField
                         control={form.control}
@@ -3202,28 +3136,9 @@ export function NewEditItemFormSheet({
                         )
                       )}
 
-                      </CollapsibleContent>
-                    </Collapsible>
+                    </TabsContent>
 
-                    {/* SECTION 7: LOCATION BADGES (collapsible, edit-only, location-only).
-                        Shown whenever a concrete location resolves (specific location
-                        OR single-location account locked to 'all'). */}
-                    {editItem && gatedLocationId && (
-                    <Collapsible
-                      open={expandedSections.locationBadges}
-                      onOpenChange={() => toggleSection("locationBadges")}
-                      className="mt-2 pt-4"
-                    >
-                      <CollapsibleTrigger asChild>
-                        <button type="button" className="flex items-center justify-between w-full group">
-                          <div className="flex items-center gap-2">
-                            <Sparkles className="h-4 w-4 text-amber-500" />
-                            <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Location Badges</span>
-                          </div>
-                          <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", expandedSections.locationBadges && "rotate-180")} />
-                        </button>
-                      </CollapsibleTrigger>
-                      <CollapsibleContent className="space-y-3 pt-4">
+                    <TabsContent value="locationBadges" className="space-y-4 mt-0">
                         <div className="space-y-3">
                           <div className="flex items-center justify-between rounded-2xl border-0 bg-muted/60 p-3 shadow-none">
                             <div className="space-y-0.5">
@@ -3248,27 +3163,9 @@ export function NewEditItemFormSheet({
                             />
                           </div>
                         </div>
-                      </CollapsibleContent>
-                    </Collapsible>
-                    )}
+                    </TabsContent>
 
-                    {/* SECTION 8: RECIPE (collapsible, edit-only) */}
-                    {editItem && (
-                    <Collapsible
-                      open={expandedSections.recipe}
-                      onOpenChange={() => toggleSection("recipe")}
-                      className="mt-2 pt-4"
-                    >
-                      <CollapsibleTrigger asChild>
-                        <button type="button" className="flex items-center justify-between w-full group">
-                          <div className="flex items-center gap-2">
-                            <Tag className="h-4 w-4 text-muted-foreground" />
-                            <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Recipe</span>
-                          </div>
-                          <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", expandedSections.recipe && "rotate-180")} />
-                        </button>
-                      </CollapsibleTrigger>
-                      <CollapsibleContent className="space-y-4 pt-4">
+                    <TabsContent value="recipe" className="space-y-4 mt-0">
                       {editItem ? (
                         <RecipeManager
                           menuItemId={editItem.id}
@@ -3300,15 +3197,13 @@ export function NewEditItemFormSheet({
                           </p>
                         </div>
                       )}
-                      </CollapsibleContent>
-                    </Collapsible>
-                    )}
-                  </div>
+                    </TabsContent>
+                  </Tabs>
               </div>
             </div>
 
             {/* Preview Section */}
-            <div className="hidden w-[360px] shrink-0 bg-muted/30 px-6 py-5 lg:block">
+            <div className="thin-scrollbar hidden min-h-0 w-[360px] shrink-0 overflow-y-auto bg-muted/30 px-6 py-5 lg:block">
               {/* <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4 flex items-center gap-2">
                                 <Sparkles className="h-4 w-4" />
                                 Live Preview

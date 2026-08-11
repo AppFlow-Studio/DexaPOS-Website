@@ -60,6 +60,8 @@ export function PriceInputGroup({
 
   // Toggle: when ON, editing cash auto-calculates card at the dual pricing %
   const [autoCalcCard, setAutoCalcCard] = useState(true);
+  // Dual-pricing info tooltip — controlled so it can toggle on click/tap.
+  const [infoOpen, setInfoOpen] = useState(false);
 
   // Local string state so the user can type freely (e.g. "1." mid-entry)
   const [cardDisplay, setCardDisplay] = useState(price > 0 ? String(price) : "");
@@ -131,10 +133,21 @@ export function PriceInputGroup({
           )}
         </h4>
         {isDual && (
+          // Controlled + button trigger: Radix tooltips open on hover/focus
+          // only, and `asChild` onto a bare <svg> leaves nothing focusable — so
+          // clicking (and any touch device) did nothing. A real button with an
+          // explicit click toggle makes it work by pointer, touch and keyboard.
           <TooltipProvider>
-            <Tooltip>
+            <Tooltip open={infoOpen} onOpenChange={setInfoOpen}>
               <TooltipTrigger asChild>
-                <Info className="h-4 w-4 text-muted-foreground cursor-help" />
+                <button
+                  type="button"
+                  aria-label="About dual pricing"
+                  onClick={() => setInfoOpen((prev) => !prev)}
+                  className="rounded-full text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <Info className="h-4 w-4 cursor-help" />
+                </button>
               </TooltipTrigger>
               <TooltipContent className="max-w-xs">
                 <p>Dual Pricing is enabled.</p>

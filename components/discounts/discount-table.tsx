@@ -42,14 +42,12 @@ import {
 } from '@/lib/constants/discount-status'
 import {
     CheckSquare,
-    ChevronDown,
     Eye,
     Globe,
     MapPin,
     MoreHorizontal,
     Pencil,
     Plus,
-    Power,
     Trash2,
     X,
 } from 'lucide-react'
@@ -173,7 +171,7 @@ export function DiscountTable({
         const status = discountStatus(discount)
         const style = discountStatusStyle(status)
         return (
-            <span className={cn('shrink-0 text-sm font-medium', style.text)}>
+            <span className={cn('shrink-0 text-[11px] font-medium sm:text-sm', style.text)}>
                 {discountStatusLabel(status)}
             </span>
         )
@@ -269,40 +267,7 @@ export function DiscountTable({
                         <TableCell className="hidden py-3 md:table-cell">{renderScope(discount)}</TableCell>
                     )}
                     <TableCell className="py-3">
-                        <div className="sm:hidden">
-                            <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                    <button
-                                        type="button"
-                                        className={cn(
-                                            'inline-flex cursor-pointer items-center gap-1 rounded-md px-1.5 py-1 text-[11px] font-medium hover:bg-muted',
-                                            discountStatusStyle(discountStatus(discount)).text,
-                                        )}
-                                        aria-label={`Change status for ${discount.name}`}
-                                    >
-                                        {discountStatusLabel(discountStatus(discount))}
-                                        <ChevronDown className="h-3 w-3 shrink-0" />
-                                    </button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="start" className="min-w-32">
-                                    <DropdownMenuItem
-                                        className={cn(
-                                            'cursor-pointer',
-                                            discount.is_active &&
-                                                'text-destructive focus:text-destructive',
-                                        )}
-                                        onSelect={() =>
-                                            onToggleStatus?.(discount.id, !discount.is_active)
-                                        }
-                                    >
-                                        <Power className="mr-2 h-4 w-4" />
-                                        {discount.is_active ? 'Deactivate' : 'Activate'}
-                                    </DropdownMenuItem>
-                                </DropdownMenuContent>
-                            </DropdownMenu>
-                        </div>
-
-                        <div className="hidden items-center gap-2 sm:flex">
+                        <div className="flex items-center gap-1.5 sm:gap-2">
                             <Switch
                                 checked={discount.is_active}
                                 onCheckedChange={(checked) =>

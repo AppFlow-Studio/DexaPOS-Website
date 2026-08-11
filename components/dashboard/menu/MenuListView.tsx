@@ -6,12 +6,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { Empty } from "@/components/ui/empty";
 import {
@@ -29,8 +23,6 @@ import {
   Globe,
   GripVertical,
   Star,
-  ChevronDown,
-  Power,
 } from "lucide-react";
 import { MenuActionsDropdown } from "./MenuActionsDropdown";
 import { useIsSingleLocation } from "@/stores/location-store";
@@ -69,6 +61,10 @@ export interface MenuWithLocation {
     id: string;
     name: string;
   } | null;
+  available_locations?: Array<{
+    id: string;
+    name: string;
+  }> | null;
 }
 
 interface MenuListViewProps {
@@ -91,6 +87,8 @@ interface MenuListViewProps {
   /** Menu ids linked+active on OrderOut for the location (eligible to become primary) */
   linkedMenuIds?: string[];
   onSetOnlineMenu?: (menuId: string) => void;
+  /** Show effective menu availability across locations in the table view. */
+  showLocations?: boolean;
 }
 
 // Internal Helper Interface for Actions
@@ -195,7 +193,6 @@ function SortableGridCard({
             {menu.is_active ? "Active" : "Inactive"}
           </span>
           {isOnlineMenu && <OnlineMenuBadge />}
-          <LocationBadge menu={menu} />
 
           {/* Drag handle anchors the bottom-right corner. `ml-auto` keeps it
               pinned right even when the status badges wrap to a second line. */}
@@ -222,6 +219,7 @@ function SortableTableRow({
   isFiltered,
   onlineMenuId,
   linkedMenuIds,
+  showLocations,
 }: {
   menu: MenuWithLocation;
   handleRowClick: (id: string) => void;
@@ -229,6 +227,7 @@ function SortableTableRow({
   isFiltered?: boolean;
   onlineMenuId?: string | null;
   linkedMenuIds?: string[];
+  showLocations: boolean;
 }) {
   const isOnlineMenu = !!onlineMenuId && onlineMenuId === menu.id;
   const canSetOnlineMenu = linkedMenuIds?.includes(menu.id) ?? false;
@@ -298,47 +297,14 @@ function SortableTableRow({
           </div>
         </div>
       </TableCell>
-      <TableCell className="hidden sm:table-cell">
-        <LocationBadge menu={menu} />
-      </TableCell>
+      {showLocations && (
+        <TableCell className="hidden sm:table-cell">
+          <AvailableLocations menu={menu} />
+        </TableCell>
+      )}
       <TableCell>
         <div onClick={(event) => event.stopPropagation()}>
-          <div className="sm:hidden">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  className={cn(
-                    "inline-flex cursor-pointer items-center gap-1 text-[11px] font-medium",
-                    menu.is_active
-                      ? "text-green-600"
-                      : "text-muted-foreground",
-                  )}
-                  aria-label={`Change status for ${menu.name}`}
-                >
-                  {menu.is_active ? "Active" : "Inactive"}
-                  <ChevronDown className="h-3 w-3 shrink-0" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="min-w-32">
-                <DropdownMenuItem
-                  className={cn(
-                    "cursor-pointer",
-                    menu.is_active && "text-destructive focus:text-destructive",
-                  )}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    actions.onToggleActive(menu.id);
-                  }}
-                >
-                  <Power className="mr-2 h-4 w-4" />
-                  {menu.is_active ? "Deactivate" : "Activate"}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-
-          <div className="hidden items-center gap-2 sm:flex">
+          <div className="flex items-center gap-1.5 sm:gap-2">
             <Switch
               checked={menu.is_active}
               onCheckedChange={() => actions.onToggleActive(menu.id)}
@@ -346,7 +312,7 @@ function SortableTableRow({
             />
             <span
               className={cn(
-                "text-sm font-medium",
+                "text-[11px] font-medium sm:text-sm",
                 menu.is_active
                   ? "text-green-600"
                   : "text-muted-foreground",
@@ -354,7 +320,11 @@ function SortableTableRow({
             >
               {menu.is_active ? "Active" : "Inactive"}
             </span>
-            {isOnlineMenu && <OnlineMenuBadge />}
+            {isOnlineMenu && (
+              <span className="hidden sm:inline-flex">
+                <OnlineMenuBadge />
+              </span>
+            )}
           </div>
         </div>
       </TableCell>
@@ -393,6 +363,7 @@ export function MenuListView({
   onlineMenuId,
   linkedMenuIds,
   onSetOnlineMenu,
+  showLocations = false,
 }: MenuListViewProps) {
   const router = useRouter();
   const actions = { onToggleActive, onDelete, onDuplicate, onSettings, onSetOnlineMenu };
@@ -492,13 +463,24 @@ export function MenuListView({
           <Table
             variant="data"
             containerClassName="thin-scrollbar min-w-0 animate-in fade-in duration-300"
-            className="min-w-[400px] table-auto max-sm:[&_td]:px-1.5 max-sm:[&_th]:px-1.5 sm:min-w-[760px]"
+            className={cn(
+              "min-w-[400px] table-auto max-sm:[&_td]:px-1.5 max-sm:[&_th]:px-1.5",
+              showLocations ? "sm:min-w-[760px]" : "sm:min-w-[610px]",
+            )}
           >
+            <caption className="sr-only">Menus</caption>
             <TableHeader>
               <TableRow>
                 <TableHead className="hidden w-[80px] sm:table-cell">Order</TableHead>
                 <TableHead className="min-w-[210px] sm:w-[300px] sm:min-w-0">Menu Name</TableHead>
-                <TableHead className="hidden w-[150px] sm:table-cell">Location</TableHead>
+                {showLocations && (
+                  <TableHead
+                    scope="col"
+                    className="hidden w-[170px] sm:table-cell"
+                  >
+                    Locations
+                  </TableHead>
+                )}
                 <TableHead className="w-[90px] sm:w-[100px]">Status</TableHead>
                 <TableHead className="hidden w-[120px] sm:table-cell">Created</TableHead>
                 <TableHead className="w-[64px] text-right sm:w-[80px]">Actions</TableHead>
@@ -518,6 +500,7 @@ export function MenuListView({
                     isFiltered={isFiltered}
                     onlineMenuId={onlineMenuId}
                     linkedMenuIds={linkedMenuIds}
+                    showLocations={showLocations}
                   />
                 ))}
               </SortableContext>
@@ -525,6 +508,44 @@ export function MenuListView({
           </Table>
       )}
     </DndContext>
+  );
+}
+
+function AvailableLocations({ menu }: { menu: MenuWithLocation }) {
+  const locations = menu.available_locations;
+
+  if (locations == null) {
+    return <span className="text-muted-foreground">—</span>;
+  }
+
+  if (locations.length === 0) {
+    return (
+      <span className="text-xs text-muted-foreground">Not available</span>
+    );
+  }
+
+  return (
+    <div className="flex max-w-[220px] items-center gap-1">
+      <Badge
+        variant="secondary"
+        className="min-w-0 max-w-[130px] gap-1 rounded-full border-0 bg-muted/60 px-2.5 text-xs text-muted-foreground"
+      >
+        <MapPin className="h-3 w-3 shrink-0" />
+        <span className="truncate">{locations[0].name}</span>
+      </Badge>
+      {locations.length > 1 && (
+        <Badge
+          variant="secondary"
+          className="shrink-0 rounded-full border-0 bg-muted/60 px-2.5 text-xs text-muted-foreground tabular-nums"
+          title={locations
+            .slice(1)
+            .map(location => location.name)
+            .join(", ")}
+        >
+          +{locations.length - 1} more
+        </Badge>
+      )}
+    </div>
   );
 }
 

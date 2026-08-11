@@ -26,6 +26,11 @@ interface InlinePriceEditorProps {
   categoryId?: string | null;
   initialPrice: number | null;
   initialCashPrice?: number | null;
+  /**
+   * Cash price this scope inherits when the field is left blank. Shown in the
+   * placeholder so an empty box reads as "inherits $X" rather than just "empty".
+   */
+  inheritedCashPrice?: number | null;
   onClose?: () => void;
   onSaved?: () => void;
   className?: string;
@@ -51,6 +56,7 @@ export function InlinePriceEditor({
   categoryId,
   initialPrice,
   initialCashPrice,
+  inheritedCashPrice,
   onClose,
   onSaved,
   className,
@@ -161,7 +167,11 @@ export function InlinePriceEditor({
           value={cashPrice}
           onChange={(e) => setCashPrice(e.target.value)}
           className="h-8 text-sm"
-          placeholder="Leave blank for default"
+          placeholder={
+            inheritedCashPrice != null
+              ? `Inherits $${inheritedCashPrice.toFixed(2)}`
+              : "Leave blank for default"
+          }
         />
       </div>
       <div className="flex flex-col items-center gap-2 pt-1">

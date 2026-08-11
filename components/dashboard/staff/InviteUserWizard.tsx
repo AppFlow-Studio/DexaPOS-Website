@@ -3,15 +3,14 @@
 import * as React from "react";
 import { toast } from "sonner";
 import {
-  BottomSheet,
-  BottomSheetTrigger,
-  BottomSheetContent,
-  BottomSheetHeader,
-  BottomSheetBody,
-  BottomSheetFooter,
-  BottomSheetTitle,
-  BottomSheetDescription,
-} from "@/components/ui/bottom-sheet";
+  Dialog,
+  DialogTrigger,
+  DialogContent,
+  DialogHeader,
+  DialogFooter,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -75,8 +74,8 @@ interface InviteUserWizardProps {
   children?: React.ReactNode;
   defaultLocationId?: string;
   /**
-   * Set when the wizard is opened from inside a Sheet (e.g. the location detail
-   * sheet's Team tab) so it paints above it instead of behind the dimmed sheet.
+   * Set when the wizard is opened from another modal (for example, the location
+   * detail Team tab) so it paints above the parent dialog.
    */
   elevated?: boolean;
 }
@@ -376,7 +375,7 @@ export function InviteUserWizard({
     hourlyRate.trim() !== "" ||
     employmentType !== null;
 
-  // Called by the footer Cancel button AND the BottomSheet "X" button.
+  // Called by the footer Cancel button and the dialog close button.
   const handleRequestClose = () => {
     if (isFormDirty) {
       setShowDiscardConfirm(true);
@@ -476,11 +475,12 @@ export function InviteUserWizard({
   };
 
   return (
-    <BottomSheet open={open} onOpenChange={handleSheetOpenChange} elevated={elevated}>
-      {children && <BottomSheetTrigger asChild>{children}</BottomSheetTrigger>}
-      <BottomSheetContent
-        className="w-full"
-        height="95"
+    <Dialog open={open} onOpenChange={handleSheetOpenChange}>
+      {children && <DialogTrigger asChild>{children}</DialogTrigger>}
+      <DialogContent
+        elevation={elevated ? "above-sheet" : "default"}
+        overlayClassName="bg-background/60 backdrop-blur-md"
+        className="flex h-[92vh] max-h-[92vh] w-full max-w-[calc(100vw-1rem)] flex-col gap-0 overflow-hidden rounded-3xl border bg-card p-0 max-sm:h-dvh max-sm:max-h-none max-sm:overflow-hidden sm:max-w-5xl"
         onInteractOutside={(e) => e.preventDefault()}
         onEscapeKeyDown={(e) => e.preventDefault()}
       >
@@ -535,8 +535,8 @@ export function InviteUserWizard({
 
           {/* Main Content */}
           <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
-            <BottomSheetHeader className="border-b-0">
-              <BottomSheetTitle className="text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]">
+            <DialogHeader className="shrink-0 border-b-0 px-6 pb-4 pt-5 pr-14 text-left">
+              <DialogTitle className="text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]">
                 {currentStep === "type" && "Choose staff type"}
                 {currentStep === "details" &&
                   `Add ${staffType === "clerk" ? "dashboard user" : "POS staff"}`}
@@ -546,8 +546,8 @@ export function InviteUserWizard({
                 {currentStep === "pos_config" && "POS configuration"}
                 {currentStep === "review" &&
                   `Review and ${staffType === "clerk" ? "send invite" : "create staff"}`}
-              </BottomSheetTitle>
-              <BottomSheetDescription>
+              </DialogTitle>
+              <DialogDescription>
                 {currentStep === "type" &&
                   "Select whether this person needs dashboard access or POS-only access."}
                 {currentStep === "details" &&
@@ -560,10 +560,10 @@ export function InviteUserWizard({
                   "Configure PIN and employment details for POS access."}
                 {currentStep === "review" &&
                   "Review all details before proceeding."}
-              </BottomSheetDescription>
-            </BottomSheetHeader>
+              </DialogDescription>
+            </DialogHeader>
 
-            <BottomSheetBody className="flex-1 overflow-y-auto max-h-[calc(98vh-200px)]">
+            <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto px-6 py-4">
               {isLoading ? (
                 <div className="flex items-center justify-center h-full">
                   <div className="text-center space-y-2">
@@ -1358,9 +1358,9 @@ export function InviteUserWizard({
                   )}
                 </div>
               )}
-            </BottomSheetBody>
+            </div>
 
-            <BottomSheetFooter className="border-t-0 flex flex-col items-center justify-between">
+            <DialogFooter className="shrink-0 border-t-0 bg-background px-6 py-4">
               <div className="flex items-center justify-between w-full">
                 <div className="flex items-center gap-2">
                   <Button variant="ghost" className={pillButton} onClick={handleRequestClose}>
@@ -1403,13 +1403,13 @@ export function InviteUserWizard({
                   )}
                 </Button>
               </div>
-            </BottomSheetFooter>
+            </DialogFooter>
           </div>
         </div>
 
-        {/* Discard confirmation — rendered inside the sheet so it stacks above it */}
+        {/* Discard confirmation stays inside the dialog so it stacks above it. */}
         {showDiscardConfirm && (
-          <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/50 rounded-t-[20px]">
+          <div className="absolute inset-0 z-50 flex items-center justify-center rounded-3xl bg-black/50">
             <div className="bg-background rounded-2xl border shadow-lg p-6 max-w-sm w-full mx-4 space-y-4">
               <div className="space-y-2">
                 <h3 className="text-lg font-semibold">
@@ -1441,7 +1441,7 @@ export function InviteUserWizard({
             </div>
           </div>
         )}
-      </BottomSheetContent>
-    </BottomSheet>
+      </DialogContent>
+    </Dialog>
   );
 }

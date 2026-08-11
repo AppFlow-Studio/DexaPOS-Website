@@ -34,6 +34,10 @@ import {
   MapPin,
   Info,
   DollarSign,
+  CreditCard,
+  Monitor,
+  ShieldCheck,
+  ShieldX,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Empty } from "@/components/ui/empty";
@@ -77,6 +81,8 @@ import { Switch } from "@/components/ui/switch";
 import { GetItemIsPopular, SetItemPopular, GetItemIsNew, SetItemNew } from "../../../actions/location-menu-overrides";
 import { GetItemStock } from "../../../actions/stock";
 import { Flame, Package } from "lucide-react";
+import { CHANNEL_LABELS } from "@/types/inventory";
+import { TAX_CATEGORY_LABELS } from "@/types/tax";
 
 
 // ============================================================================
@@ -325,10 +331,7 @@ function PriceBreakdown({
         {/* Level 1 - Global Base */}
         <div
           className={cn(
-            "flex flex-wrap items-center justify-between gap-x-2 gap-y-1 rounded-2xl border-0 p-3 shadow-none",
-            isAllLocations
-              ? "bg-emerald-50 dark:bg-emerald-900/20"
-              : "bg-muted/60"
+            "flex flex-wrap items-center justify-between gap-x-2 gap-y-1 rounded-2xl border-0 bg-muted/60 p-3 shadow-none"
           )}
         >
           <div className="flex min-w-0 flex-1 basis-40 flex-wrap items-center gap-x-2 gap-y-1">
@@ -336,13 +339,13 @@ function PriceBreakdown({
               className={cn(
                 "flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-medium tabular-nums",
                 isAllLocations
-                  ? "bg-emerald-500 text-white"
+                  ? "bg-foreground/80 text-background"
                   : "bg-background text-muted-foreground"
               )}
             >
               1
             </div>
-            <Globe className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+            <Globe className="h-4 w-4 shrink-0 text-muted-foreground" />
             <span className="text-sm font-medium">Global Base</span>
             {isAllLocations && (
               <span className="inline-flex shrink-0 items-center rounded-full bg-background/70 px-2 py-0.5 text-xs font-medium text-muted-foreground">
@@ -351,12 +354,7 @@ function PriceBreakdown({
             )}
           </div>
           <div className="ml-auto shrink-0 text-right">
-            <div
-              className={cn(
-                "font-medium tabular-nums",
-                isAllLocations && "text-emerald-700 dark:text-emerald-400"
-              )}
-            >
+            <div className="font-medium tabular-nums">
               ${basePrice?.toFixed(2)}
             </div>
             {baseCashPrice && (
@@ -424,12 +422,13 @@ function PriceBreakdown({
           </div>
         )}
 
-        {/* Effective Price */}
-        <div className="rounded-2xl border-0 bg-muted/60 p-3 shadow-none">
+        {/* Effective Price — green marks what customers actually pay, so the
+            emphasis belongs here rather than on the Global Base rung above. */}
+        <div className="rounded-2xl border-0 bg-emerald-50 p-3 shadow-none dark:bg-emerald-900/20">
           <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
             <span className="text-sm font-medium">Effective Price</span>
             <div className="ml-auto text-right">
-              <span className="text-xl font-semibold tracking-[-0.02em] tabular-nums">
+              <span className="text-xl font-semibold tracking-[-0.02em] tabular-nums text-emerald-700 dark:text-emerald-400">
                 ${effectivePrice?.toFixed(2)}
               </span>
               {effectiveCashPrice && (
@@ -799,6 +798,40 @@ export default function MenuItemDetailPage() {
                   </div>
                 </div>
               )}
+
+              {/* Sales Channels */}
+              <div>
+                <div className="mb-2 flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                  <Globe className="h-4 w-4 shrink-0" />
+                  Sales Channels
+                </div>
+                {menuItem.effective_available_channels?.length ? (
+                  <div className="flex flex-wrap gap-2">
+                    {menuItem.effective_available_channels.map((channel) => {
+                      const ChannelIcon =
+                        channel === "pos"
+                          ? CreditCard
+                          : channel === "online"
+                            ? Globe
+                            : Monitor;
+
+                      return (
+                        <span
+                          key={channel}
+                          className="inline-flex shrink-0 items-center gap-1 rounded-full bg-muted/60 px-3 py-1 text-xs font-medium text-muted-foreground"
+                        >
+                          <ChannelIcon className="h-3 w-3 shrink-0" />
+                          {CHANNEL_LABELS[channel] || channel.toUpperCase()}
+                        </span>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    No sales channels enabled
+                  </p>
+                )}
+              </div>
 
               {/* Categories */}
               <div>
@@ -1243,6 +1276,20 @@ export default function MenuItemDetailPage() {
                 </span>
                 <span className="inline-flex shrink-0 items-center rounded-full bg-muted/60 px-2.5 py-0.5 text-xs font-medium text-muted-foreground tabular-nums">
                   {modifierGroups.length}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-3 py-2">
+                <span className="text-sm text-muted-foreground">Tax</span>
+                {/* The item stores a tax *category*, not a rate — the rate is
+                    location-scoped and not loaded here. Show the real stored
+                    value, and "—" when none is set rather than implying
+                    "Standard" for an item that has no category. */}
+                <span className="inline-flex shrink-0 items-center rounded-full bg-muted/60 px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+                  {menuItem.effective_is_tax_exempt
+                    ? "Tax Exempt"
+                    : TAX_CATEGORY_LABELS[menuItem.effective_tax_category] ||
+                      menuItem.effective_tax_category ||
+                      "—"}
                 </span>
               </div>
               <div className="flex items-center justify-between py-2">

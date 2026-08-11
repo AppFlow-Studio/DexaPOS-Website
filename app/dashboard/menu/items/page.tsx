@@ -2,17 +2,22 @@
 //TODO: Setup or remove the items detailed page
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import {
   Utensils,
   Plus,
   Search,
   Grid3x3,
   List,
+  Table2,
   Package,
   DollarSign,
   Edit3,
   Eye,
+  EyeOff,
   MoreVertical,
+  MoreHorizontal,
+  GripVertical,
   Tag,
   X,
   Filter,
@@ -36,9 +41,9 @@ import {
   Loader2,
 } from "lucide-react";
 import { useState, useMemo, useEffect } from "react";
+import Image from "next/image";
 import { useSearchParams } from "next/navigation";
 import { useCategoriesWithItems } from "../../hooks/useCategories";
-import { ScopeContextStrip } from "@/components/dashboard/menu/ScopeContextStrip";
 import { useModifierGroups } from "../../hooks/useModifierGroups";
 import { useUserInfo } from "../../../manage/hooks/useUserInfo.";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -53,8 +58,18 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import {
   Collapsible,
   CollapsibleContent,
@@ -99,6 +114,10 @@ import { useLocationTaxRates } from "../../hooks/useTaxRates";
 import { TAX_CATEGORY_LABELS } from "@/types/tax";
 import { AVAILABLE_CHANNELS } from "@/types/inventory";
 import { DeleteMenuItem } from "../../actions/menu-items";
+import {
+  UpdateCategory,
+  UpdateLocationCategoryOverride,
+} from "../../actions/categories";
 import { CreateItemWizard } from "@/components/dashboard/menu/items/CreateItemWizard";
 import { useManagerPermissions } from "../../hooks/useManagerPermissions";
 import {
@@ -125,6 +144,8 @@ import { BulkDeliveryPriceAdjustDialog } from "@/components/dashboard/menu/items
 // ============================================================================
 
 type ViewMode = "grid" | "list" | "categories";
+type ItemCategorySummary = FlatItem["categories"][number] &
+  Partial<Pick<CategoryWithItems, "is_active" | "effective_is_active">>;
 
 // ============================================================================
 // HELPER FUNCTIONS
@@ -214,6 +235,7 @@ function ItemCard({
 }) {
   const hasOverride = item.has_location_override;
   const priceStyle = priceSourceStyle(item.price_source);
+  const [failedImageUrl, setFailedImageUrl] = useState<string | null>(null);
 
   const isAllLocations = useIsAllLocations();
   const isSingleLocation = useIsSingleLocation();
@@ -230,6 +252,15 @@ function ItemCard({
       ? ((item.effective_price * taxRate.percentage) / 100).toFixed(2)
       : "0.00";
   const modifierGroupCount = item.modifier_groups?.length ?? 0;
+  const availabilityStyle = item.effective_availability
+    ? ITEM_AVAILABILITY_STYLES.available
+    : ITEM_AVAILABILITY_STYLES.unavailable;
+  const availableChannels = item.effective_available_channels ?? [];
+  const taxLabel = item.effective_is_tax_exempt
+    ? "Tax exempt"
+    : TAX_CATEGORY_LABELS[
+        item.effective_tax_category as keyof typeof TAX_CATEGORY_LABELS
+      ] || item.effective_tax_category;
 
   return (
     <div
@@ -238,13 +269,10 @@ function ItemCard({
     >
       <div
         className={cn(
-          // Borderless tinted surface: these cards sit inside a Panel (tier-2), so a
-          // border here would stack outlines two deep. Tint carries the separation.
-          "relative h-full cursor-pointer overflow-hidden rounded-2xl border-0 bg-muted/50 shadow-none transition-colors",
-          "hover:bg-muted",
-          hasOverride && "ring-1 ring-amber-500/30",
-          !item.effective_availability && "opacity-70",
-          isSelectionMode && isSelected && "ring-2 ring-primary border-primary/60",
+          "relative flex h-full cursor-pointer flex-col overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm transition-[transform,box-shadow,border-color]",
+          "hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md",
+          hasOverride && "border-amber-500/30",
+          isSelectionMode && isSelected && "border-primary/60 ring-2 ring-primary",
           isSelectionMode && !isSelected && "hover:ring-2 hover:ring-primary/40",
         )}
         onClick={
@@ -267,12 +295,16 @@ function ItemCard({
           </div>
         )}
         {/* Image Section */}
-        <div className="relative aspect-[4/3] overflow-hidden bg-background/60">
-          {isValidImageUrl(item.image) ? (
-            <img
+        <div className="relative aspect-[3/2] overflow-hidden bg-muted/40">
+          {isValidImageUrl(item.image) && failedImageUrl !== item.image ? (
+            <Image
               src={item.image}
               alt={item.name}
-              className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+              fill
+              sizes="(max-width: 767px) 100vw, (max-width: 1279px) 50vw, (max-width: 1535px) 33vw, 25vw"
+              unoptimized
+              className="object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+              onError={() => setFailedImageUrl(item.image)}
             />
           ) : (
             <div className="absolute inset-0 flex items-center justify-center">
@@ -280,129 +312,146 @@ function ItemCard({
             </div>
           )}
 
-          {/* Top badges */}
-          <div className="absolute top-2 left-2 right-2 flex items-start justify-between">
-            {/* Price source indicator */}
-            {item.price_source !== "base" && (
-              <span
-                className={cn(
-                  BADGE_SHELL,
-                  "backdrop-blur-sm",
-                  priceStyle.bg,
-                  priceStyle.text,
-                )}
-              >
-                <span
-                  className={cn("h-1.5 w-1.5 shrink-0 rounded-full", priceStyle.dot)}
-                />
-                {priceSourceLabel(item.price_source)}
-              </span>
-            )}
-
-            {/* Availability */}
-            {!item.effective_availability && (
-              <span
-                className={cn(
-                  BADGE_SHELL,
-                  "ml-auto backdrop-blur-sm",
-                  ITEM_AVAILABILITY_STYLES.unavailable.bg,
-                  ITEM_AVAILABILITY_STYLES.unavailable.text,
-                )}
-              >
-                <span
-                  className={cn(
-                    "h-1.5 w-1.5 shrink-0 rounded-full",
-                    ITEM_AVAILABILITY_STYLES.unavailable.dot,
-                  )}
-                />
-                Unavailable
-              </span>
-            )}
-          </div>
-
-          {/* Category badges at bottom */}
-          {item.categories.length > 0 && (
-            <div className="absolute bottom-2 left-2 right-2 flex flex-wrap gap-1">
-              {item.categories.slice(0, 2).map((cat) => {
-                const scope = categoryScopeStyle(cat.is_global);
-                return (
-                  <span
-                    key={cat.id}
-                    className={cn(
-                      BADGE_SHELL,
-                      "max-w-full backdrop-blur-sm",
-                      scope.bg,
-                      scope.text,
-                    )}
-                  >
-                    {cat.is_global ? (
-                      <Globe className="h-2.5 w-2.5 shrink-0" />
-                    ) : (
-                      <MapPin className="h-2.5 w-2.5 shrink-0" />
-                    )}
-                    <span className="truncate">{cat.name}</span>
-                  </span>
-                );
-              })}
-              {item.categories.length > 2 && (
-                <span
-                  className={cn(
-                    BADGE_SHELL,
-                    "bg-background/90 text-muted-foreground backdrop-blur-sm tabular-nums",
-                  )}
-                >
-                  +{item.categories.length - 2}
-                </span>
+          {item.price_source !== "base" && (
+            <span
+              className={cn(
+                BADGE_SHELL,
+                "absolute left-2 top-2 z-10 backdrop-blur-sm",
+                priceStyle.bg,
+                priceStyle.text,
               )}
-            </div>
+            >
+              <span
+                className={cn(
+                  "h-1.5 w-1.5 shrink-0 rounded-full",
+                  priceStyle.dot,
+                )}
+              />
+              {priceSourceLabel(item.price_source)}
+            </span>
           )}
 
-          {/* Hover overlay with actions */}
           {!isSelectionMode && (
-            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-end justify-center pb-14">
-              <div className="flex gap-2">
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  className="h-8 rounded-full bg-background/95 px-4 text-[0.8125rem] font-medium hover:bg-background"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onEdit();
-                  }}
-                >
-                  <Edit3 className="h-3.5 w-3.5 mr-1.5" />
-                  Edit
-                </Button>
-              </div>
+            <div
+              className="absolute right-2 top-2 z-20"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="secondary"
+                    size="icon-sm"
+                    className="rounded-full bg-background/90 shadow-sm backdrop-blur-sm hover:bg-background"
+                    aria-label={`Actions for ${item.name}`}
+                  >
+                    <MoreHorizontal className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-44 rounded-2xl">
+                  <DropdownMenuItem onSelect={onView}>
+                    <Eye className="h-4 w-4" />
+                    View details
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={onEdit}>
+                    <Edit3 className="h-4 w-4" />
+                    Edit item
+                  </DropdownMenuItem>
+                  {canDelete && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem variant="destructive" onSelect={onDelete}>
+                        <Trash2 className="h-4 w-4" />
+                        Delete item
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           )}
         </div>
 
         {/* Content Section */}
-        <div className="p-4">
-          <div className="space-y-2">
-            <h3 className="line-clamp-1 text-base font-semibold">
+        <div className="flex flex-1 flex-col p-4">
+          <div className="flex min-w-0 items-start gap-2">
+            <h3 className="min-w-0 flex-1 truncate text-base font-semibold">
               {item.name}
             </h3>
+            <span
+              className={cn(
+                BADGE_SHELL,
+                availabilityStyle.bg,
+                availabilityStyle.text,
+              )}
+            >
+              <span
+                className={cn(
+                  "h-1.5 w-1.5 shrink-0 rounded-full",
+                  availabilityStyle.dot,
+                )}
+              />
+              {item.effective_availability ? "Available" : "Unavailable"}
+            </span>
+          </div>
+
+          <div className="mt-1 min-h-10">
             {item.description && (
-              <p className="text-sm text-muted-foreground line-clamp-2">
+              <p className="line-clamp-2 text-sm leading-5 text-muted-foreground">
                 {item.description}
               </p>
             )}
+          </div>
+
+          {/* Categories intentionally follow the description. */}
+          <div className="mt-3 flex min-h-6 flex-wrap gap-1">
+            {item.categories.slice(0, 2).map((cat) => {
+              const scope = categoryScopeStyle(cat.is_global);
+              return (
+                <span
+                  key={cat.id}
+                  className={cn(
+                    BADGE_SHELL,
+                    "max-w-full",
+                    scope.bg,
+                    scope.text,
+                  )}
+                >
+                  {cat.is_global ? (
+                    <Globe className="h-2.5 w-2.5 shrink-0" />
+                  ) : (
+                    <MapPin className="h-2.5 w-2.5 shrink-0" />
+                  )}
+                  <span className="truncate">{cat.name}</span>
+                </span>
+              );
+            })}
+            {item.categories.length > 2 && (
+              <span
+                className={cn(
+                  BADGE_SHELL,
+                  "bg-muted/60 text-muted-foreground tabular-nums",
+                )}
+              >
+                +{item.categories.length - 2}
+              </span>
+            )}
+          </div>
+
+          <div className="mt-auto pt-4">
             <div
-              className="flex items-center justify-between pt-2"
-              onClick={(e) => {
+              className="flex items-end justify-between gap-3"
+              onClick={(event) => {
                 if (isSelectionMode) return;
-                e.stopPropagation();
+                event.stopPropagation();
               }}
             >
               {isSelectionMode ? (
-                <div className="flex items-baseline gap-2">
+                <div className="flex min-w-0 items-baseline gap-2">
                   <span className="text-lg font-medium tracking-[-0.02em] tabular-nums">
                     ${item.effective_price.toFixed(2)}
                   </span>
                   {hasOverride && item.base_price !== item.effective_price && (
-                    <span className="text-sm text-muted-foreground line-through tabular-nums">
+                    <span className="truncate text-xs text-muted-foreground line-through tabular-nums">
                       ${item.base_price.toFixed(2)}
                     </span>
                   )}
@@ -413,7 +462,11 @@ function ItemCard({
                   currentPrice={item.effective_price}
                   currentCashPrice={item.effective_cash_price ?? null}
                   sourceLevel={priceSourceToLevel(item.price_source)}
-                  locationId={isAllLocations || isSingleLocation ? null : selectedLocationId}
+                  locationId={
+                    isAllLocations || isSingleLocation
+                      ? null
+                      : selectedLocationId
+                  }
                   canRemoveOverride={
                     item.price_source === "location_item" && !isAllLocations
                   }
@@ -422,12 +475,12 @@ function ItemCard({
                     locationName: locationName || null,
                   })}
                 >
-                  <div className="flex items-baseline gap-2">
+                  <div className="flex min-w-0 items-baseline gap-2">
                     <span className="text-lg font-medium tracking-[-0.02em] tabular-nums">
                       ${item.effective_price.toFixed(2)}
                     </span>
                     {hasOverride && item.base_price !== item.effective_price && (
-                      <span className="text-sm text-muted-foreground line-through tabular-nums">
+                      <span className="truncate text-xs text-muted-foreground line-through tabular-nums">
                         ${item.base_price.toFixed(2)}
                       </span>
                     )}
@@ -435,62 +488,49 @@ function ItemCard({
                   </div>
                 </PriceSourcePopover>
               )}
-              {item.effective_cash_price && (
-                <span
-                  className={cn(
-                    BADGE_SHELL,
-                    "bg-muted/60 text-muted-foreground tabular-nums",
-                  )}
-                >
-                  Cash: ${item.effective_cash_price.toFixed(2)}
-                </span>
+
+              {item.effective_cash_price != null && (
+                <div className="shrink-0 text-right text-muted-foreground">
+                  <span className="block text-[10px] font-medium uppercase tracking-wide">
+                    Cash
+                  </span>
+                  <span className="text-xs font-medium tabular-nums">
+                    ${item.effective_cash_price.toFixed(2)}
+                  </span>
+                </div>
               )}
             </div>
 
-            {/* Tax & Channel Badges */}
-            <div className="mt-3 flex flex-wrap gap-1.5 pt-3">
+            <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border/60 pt-3 text-[11px] text-muted-foreground">
               {modifierGroupCount > 0 && (
-                <span
-                  className={cn(BADGE_SHELL, "bg-muted/60 text-muted-foreground")}
-                >
-                  <Layers className="h-2.5 w-2.5 shrink-0" />
+                <span className="inline-flex items-center gap-1">
+                  <Layers className="h-3 w-3 shrink-0" />
                   <span className="tabular-nums">{modifierGroupCount}</span>
-                  {modifierGroupCount === 1 ? "modifier group" : "modifier groups"}
+                  {modifierGroupCount === 1 ? "group" : "groups"}
                 </span>
               )}
 
-              {/* Tax Badge */}
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <span
+                    <button
+                      type="button"
                       className={cn(
-                        BADGE_SHELL,
-                        "cursor-help",
+                        "inline-flex items-center gap-1 rounded-full focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
                         item.effective_is_tax_exempt
-                          ? cn(TAX_BADGE_STYLES.exempt.bg, TAX_BADGE_STYLES.exempt.text)
-                          : cn(TAX_BADGE_STYLES.taxed.bg, TAX_BADGE_STYLES.taxed.text),
+                          ? TAX_BADGE_STYLES.exempt.text
+                          : TAX_BADGE_STYLES.taxed.text,
                       )}
+                      aria-label={`Tax details: ${taxLabel}`}
+                      onClick={(event) => event.stopPropagation()}
                     >
                       {item.effective_is_tax_exempt ? (
-                        <>
-                          <ShieldX className="h-2.5 w-2.5 shrink-0" />
-                          Tax Exempt
-                        </>
+                        <ShieldX className="h-3 w-3 shrink-0" />
                       ) : (
-                        <>
-                          <ShieldCheck className="h-2.5 w-2.5 shrink-0" />
-                          {TAX_CATEGORY_LABELS[
-                            item.effective_tax_category as keyof typeof TAX_CATEGORY_LABELS
-                          ] || item.effective_tax_category}
-                          {taxRate && (
-                            <span className="tabular-nums">
-                              : {taxRate.percentage}%
-                            </span>
-                          )}
-                        </>
+                        <ShieldCheck className="h-3 w-3 shrink-0" />
                       )}
-                    </span>
+                      <span>{taxLabel}</span>
+                    </button>
                   </TooltipTrigger>
                   <TooltipContent className="max-w-xs">
                     {item.effective_is_tax_exempt ? (
@@ -518,40 +558,22 @@ function ItemCard({
                 </Tooltip>
               </TooltipProvider>
 
-              {/* Channel Badges */}
-              {item.effective_available_channels?.map((channel) => (
-                <span
-                  key={channel}
-                  className={cn(BADGE_SHELL, "bg-muted/60 text-muted-foreground")}
-                >
+              {availableChannels.map((channel) => (
+                <span key={channel} className="inline-flex items-center gap-1">
                   {channel === "pos" && (
-                    <CreditCard className="h-2.5 w-2.5 shrink-0" />
+                    <CreditCard className="h-3 w-3 shrink-0" />
                   )}
                   {channel === "online" && (
-                    <Globe className="h-2.5 w-2.5 shrink-0" />
+                    <Globe className="h-3 w-3 shrink-0" />
                   )}
                   {channel === "kiosk" && (
-                    <Monitor className="h-2.5 w-2.5 shrink-0" />
+                    <Monitor className="h-3 w-3 shrink-0" />
                   )}
-                  {channel.toUpperCase()}
+                  {channel === "online" ? "Online" : channel.toUpperCase()}
                 </span>
               ))}
             </div>
           </div>
-          {canDelete && !isSelectionMode && (
-            <Button
-              size="sm"
-              variant="ghost"
-              className="mt-4 h-8 rounded-full px-3 text-[0.8125rem] font-medium text-destructive hover:bg-destructive/10 hover:text-destructive"
-              onClick={(e) => {
-                e.stopPropagation();
-                onDelete();
-              }}
-            >
-              <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-              Delete
-            </Button>
-          )}
         </div>
       </div>
     </div>
@@ -559,7 +581,7 @@ function ItemCard({
 }
 
 // ============================================================================
-// ITEM ROW COMPONENT (List View)
+// ITEM ROW COMPONENT (Horizontal Category View)
 // ============================================================================
 
 function ItemRow({
@@ -567,8 +589,7 @@ function ItemRow({
   onEdit,
   onView,
   onDelete,
-  index = 0,
-  taxRates = [],
+  showLocations = false,
   canDelete = false,
   isSelectionMode = false,
   isSelected = false,
@@ -578,210 +599,457 @@ function ItemRow({
   onEdit: () => void;
   onView: () => void;
   onDelete: () => void;
-  index?: number;
-  taxRates?: any[];
+  showLocations?: boolean;
   canDelete?: boolean;
   isSelectionMode?: boolean;
   isSelected?: boolean;
   onToggleSelect?: (id: string) => void;
 }) {
-  const hasOverride = item.has_location_override;
-  const priceStyle = priceSourceStyle(item.price_source);
-
-  // Tax info
-  const taxRate = taxRates.find(
-    (r) => r.tax_category === item.effective_tax_category,
-  );
-  const taxAmount =
-    taxRate && !item.effective_is_tax_exempt
-      ? ((item.effective_price * taxRate.percentage) / 100).toFixed(2)
-      : "0.00";
-  const modifierGroupCount = item.modifier_groups?.length ?? 0;
+  const activateRow = () => {
+    if (isSelectionMode) onToggleSelect?.(item.id);
+    else onView();
+  };
 
   return (
     <div
-      className="group animate-in fade-in slide-in-from-left-4"
-      style={{ animationDelay: `${Math.min(index * 20, 200)}ms` }}
+      className={cn(
+        "group flex min-w-0 cursor-pointer items-center gap-2 px-1 py-3 transition-colors hover:bg-muted/40 sm:gap-4 sm:px-2",
+        isSelectionMode && isSelected && "bg-primary/5",
+        !item.effective_availability && "opacity-65",
+      )}
+      onClick={activateRow}
     >
-      <div
-        className={cn(
-          "flex cursor-pointer items-center gap-4 rounded-2xl border-0 bg-muted/50 p-4 shadow-none transition-colors",
-          "hover:bg-muted",
-          hasOverride && "ring-1 ring-amber-500/30",
-          isSelectionMode && isSelected &&
-            "ring-2 ring-primary border-primary/50 bg-primary/5",
-          isSelectionMode && !isSelected && "hover:ring-1 hover:ring-primary/30",
-          !item.effective_availability && "opacity-70",
-        )}
-        onClick={
-          isSelectionMode ? () => onToggleSelect?.(item.id) : onView
-        }
-      >
-        {isSelectionMode && (
-          <div
-            className={cn(
-              "shrink-0 flex items-center justify-center w-7 h-7 rounded-full border-2 transition-all duration-200",
-              isSelected
-                ? "bg-primary border-primary text-primary-foreground"
-                : "bg-background border-border",
-            )}
-          >
-            {isSelected && <Check className="h-4 w-4" strokeWidth={3} />}
-          </div>
-        )}
-        {/* Image */}
-        <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-2xl bg-muted/60">
-          {isValidImageUrl(item.image) ? (
-            <img
-              src={item.image}
-              alt={item.name}
-              className="w-full h-full object-cover"
-            />
-          ) : (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <Utensils className="h-6 w-6 text-muted-foreground/50" />
-            </div>
+      {isSelectionMode ? (
+        <button
+          type="button"
+          aria-label={`${isSelected ? "Deselect" : "Select"} ${item.name}`}
+          aria-pressed={isSelected}
+          className={cn(
+            "flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 transition-colors focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
+            isSelected
+              ? "border-primary bg-primary text-primary-foreground"
+              : "border-border bg-background hover:border-primary/60",
           )}
-        </div>
+          onClick={(event) => {
+            event.stopPropagation();
+            onToggleSelect?.(item.id);
+          }}
+        >
+          {isSelected && <Check className="h-4 w-4" strokeWidth={3} />}
+        </button>
+      ) : (
+        <span
+          aria-hidden="true"
+          className="hidden h-8 w-7 shrink-0 items-center justify-center text-muted-foreground/40 sm:flex"
+        >
+          <GripVertical className="h-4 w-4" />
+        </span>
+      )}
 
-        {/* Content */}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex-1 min-w-0">
-              <h4 className="font-medium truncate">{item.name}</h4>
-              {item.description && (
-                <p className="text-sm text-muted-foreground truncate">
-                  {item.description}
-                </p>
-              )}
-              {/* Category, Tax & Channel tags */}
-              <div className="mt-2 flex flex-wrap gap-1">
-                {modifierGroupCount > 0 && (
-                  <span
-                    className={cn(BADGE_SHELL, "bg-muted/60 text-muted-foreground")}
-                  >
-                    <Layers className="h-2.5 w-2.5 shrink-0" />
-                    <span className="tabular-nums">{modifierGroupCount}</span>
-                    {modifierGroupCount === 1
-                      ? "modifier group"
-                      : "modifier groups"}
-                  </span>
-                )}
+      <span className="relative hidden h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-muted sm:block">
+        {isValidImageUrl(item.image) ? (
+          <Image
+            src={item.image}
+            alt={item.name}
+            fill
+            sizes="(max-width: 639px) 48px, 64px"
+            unoptimized
+            className="object-cover"
+          />
+        ) : (
+          <span className="absolute inset-0 flex items-center justify-center">
+            <Utensils className="h-6 w-6 text-muted-foreground/60" />
+          </span>
+        )}
+      </span>
 
-                {/* Category tags */}
-                {item.categories.slice(0, 3).map((cat) => {
-                  const scope = categoryScopeStyle(cat.is_global);
-                  return (
+      <button
+        type="button"
+        className="min-w-0 flex-1 rounded-md text-left focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+        aria-label={
+          isSelectionMode
+            ? `${isSelected ? "Deselect" : "Select"} ${item.name}`
+            : `View details for ${item.name}`
+        }
+        onClick={(event) => {
+          event.stopPropagation();
+          activateRow();
+        }}
+      >
+        <span className="block truncate text-sm font-medium sm:text-base">
+          {item.name}
+        </span>
+        {showLocations && item.available_locations !== null && (
+          <span className="mt-1 hidden min-w-0 flex-wrap gap-1 sm:flex">
+            {item.available_locations.length === 0 ? (
+              <span className="text-[11px] text-muted-foreground">
+                Not available
+              </span>
+            ) : (
+              <>
+                {item.available_locations
+                  .slice(0, item.available_locations.length > 3 ? 2 : 3)
+                  .map((location) => (
                     <span
-                      key={cat.id}
-                      className={cn(BADGE_SHELL, scope.bg, scope.text)}
-                    >
-                      {cat.is_global ? (
-                        <Globe className="h-2.5 w-2.5 shrink-0" />
-                      ) : (
-                        <MapPin className="h-2.5 w-2.5 shrink-0" />
+                      key={location.id}
+                      title={location.name}
+                      className={cn(
+                        BADGE_SHELL,
+                        "max-w-28 min-w-0 bg-muted/60 text-muted-foreground",
                       )}
-                      {cat.name}
+                    >
+                      <MapPin className="h-2.5 w-2.5 shrink-0" />
+                      <span className="truncate">{location.name}</span>
                     </span>
-                  );
-                })}
-                {item.categories.length > 3 && (
+                  ))}
+                {item.available_locations.length > 3 && (
                   <span
+                    title={item.available_locations
+                      .slice(2)
+                      .map((location) => location.name)
+                      .join(", ")}
                     className={cn(
                       BADGE_SHELL,
                       "bg-muted/60 text-muted-foreground tabular-nums",
                     )}
                   >
-                    +{item.categories.length - 3}
+                    +{item.available_locations.length - 2} more
                   </span>
                 )}
+              </>
+            )}
+          </span>
+        )}
+        {!item.effective_availability && (
+          <span className="mt-0.5 block text-[11px] text-destructive">
+            Unavailable
+          </span>
+        )}
+      </button>
 
-                {/* Tax Badge */}
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
+      <div className="hidden w-28 shrink-0 flex-col items-end sm:flex">
+        <div className="flex items-center gap-1 whitespace-nowrap">
+          <DollarSign className="hidden h-4 w-4 text-muted-foreground sm:block" />
+          <span className="font-semibold tabular-nums">
+            {item.effective_price.toFixed(2)}
+          </span>
+        </div>
+        {item.effective_cash_price != null && (
+          <span className="whitespace-nowrap text-[11px] text-muted-foreground sm:text-xs">
+            <span className="hidden sm:inline">Cash: </span>$
+            {item.effective_cash_price.toFixed(2)}
+          </span>
+        )}
+      </div>
+
+      {!isSelectionMode && (
+        <div className="shrink-0" onClick={(event) => event.stopPropagation()}>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 rounded-full"
+                aria-label={`Actions for ${item.name}`}
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-44">
+              <DropdownMenuLabel>Item actions</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={onView}>
+                <Eye className="mr-2 h-4 w-4" />
+                View details
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={onEdit}>
+                <Edit3 className="mr-2 h-4 w-4" />
+                Edit item
+              </DropdownMenuItem>
+              {canDelete && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onSelect={onDelete}
+                    className="text-destructive focus:text-destructive"
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Delete item
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================================
+// ITEM TABLE COMPONENT (Table View)
+// ============================================================================
+
+function ItemTable({
+  items,
+  onEditItem,
+  onViewItem,
+  onDeleteItem,
+  isAllLocations = false,
+  showLocations = false,
+  selectedLocationId = null,
+  isSelectionMode = false,
+  selectedItemIds,
+  onToggleSelect,
+}: {
+  items: FlatItem[];
+  onEditItem: (item: FlatItem) => void;
+  onViewItem: (item: FlatItem) => void;
+  onDeleteItem: (item: FlatItem) => void;
+  isAllLocations?: boolean;
+  showLocations?: boolean;
+  selectedLocationId?: string | null;
+  isSelectionMode?: boolean;
+  selectedItemIds: Set<string>;
+  onToggleSelect: (id: string) => void;
+}) {
+  return (
+    <Table
+      variant="data"
+      containerClassName="thin-scrollbar min-w-0 animate-in fade-in duration-300"
+      className={cn(
+        "min-w-[400px] table-auto max-sm:[&_td]:px-1.5 max-sm:[&_th]:px-1.5 sm:min-w-[500px]",
+        showLocations ? "md:min-w-[800px]" : "md:min-w-[640px]",
+      )}
+    >
+      <caption className="sr-only">Item library</caption>
+      <TableHeader>
+        <TableRow>
+          {isSelectionMode && (
+            <TableHead scope="col" className="w-12">
+              <span className="sr-only">Select</span>
+            </TableHead>
+          )}
+          <TableHead scope="col" className="min-w-[170px] sm:w-[240px]">
+            Item
+          </TableHead>
+          <TableHead scope="col" className="hidden min-w-[140px] md:table-cell">
+            Categories
+          </TableHead>
+          {showLocations && (
+            <TableHead
+              scope="col"
+              className="hidden min-w-[160px] md:table-cell"
+            >
+              Locations
+            </TableHead>
+          )}
+          <TableHead
+            scope="col"
+            className="hidden w-[110px] text-right sm:table-cell sm:w-[140px]"
+          >
+            <span className="block pr-2 sm:pr-5 lg:pr-7">Price</span>
+          </TableHead>
+          <TableHead scope="col" className="w-[110px]">Status</TableHead>
+          {!isSelectionMode && (
+            <TableHead scope="col" className="w-[56px] text-right">
+              Actions
+            </TableHead>
+          )}
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {items.map((item, index) => {
+          const hasOverride = item.has_location_override;
+          const priceStyle = priceSourceStyle(item.price_source);
+          const isSelected = selectedItemIds.has(item.id);
+          const itemCanDelete =
+            isAllLocations || item.location_id === selectedLocationId;
+          const availableLocations = item.available_locations;
+          const availabilityStyle = item.effective_availability
+            ? ITEM_AVAILABILITY_STYLES.available
+            : ITEM_AVAILABILITY_STYLES.unavailable;
+
+          const activateRow = () => {
+            if (isSelectionMode) {
+              onToggleSelect(item.id);
+            } else {
+              onViewItem(item);
+            }
+          };
+
+          return (
+            <TableRow
+              key={item.id}
+              data-state={isSelected ? "selected" : undefined}
+              aria-selected={isSelectionMode ? isSelected : undefined}
+              className={cn(
+                "group cursor-pointer border-0 bg-card/70 transition-colors hover:bg-muted/40 animate-in fade-in slide-in-from-left-2",
+              )}
+              style={{ animationDelay: `${Math.min(index * 20, 200)}ms` }}
+              onClick={activateRow}
+            >
+              {isSelectionMode && (
+                <TableCell onClick={(event) => event.stopPropagation()}>
+                  <button
+                    type="button"
+                    aria-label={`${isSelected ? "Deselect" : "Select"} ${item.name}`}
+                    aria-pressed={isSelected}
+                    onClick={() => onToggleSelect(item.id)}
+                    className={cn(
+                      "flex h-7 w-7 items-center justify-center rounded-full border-2 transition-colors focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
+                      isSelected
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border bg-background hover:border-primary/60",
+                    )}
+                  >
+                    {isSelected && (
+                      <Check className="h-4 w-4" strokeWidth={3} />
+                    )}
+                  </button>
+                </TableCell>
+              )}
+
+              <TableCell className="min-w-0">
+                <button
+                  type="button"
+                  aria-label={
+                    isSelectionMode
+                      ? `${isSelected ? "Deselect" : "Select"} ${item.name}`
+                      : `View details for ${item.name}`
+                  }
+                  className="flex min-w-0 max-w-full items-center gap-3 rounded-xl text-left focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    activateRow();
+                  }}
+                >
+                  <span className="relative hidden h-11 w-11 shrink-0 overflow-hidden rounded-xl bg-muted/60 sm:block">
+                    {isValidImageUrl(item.image) ? (
+                      <Image
+                        src={item.image}
+                        alt=""
+                        fill
+                        sizes="44px"
+                        unoptimized
+                        className="object-cover"
+                      />
+                    ) : (
+                      <span className="absolute inset-0 flex items-center justify-center">
+                        <Utensils className="h-5 w-5 text-muted-foreground/50" />
+                      </span>
+                    )}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-medium transition-colors group-hover:text-primary">
+                      {item.name}
+                    </span>
+                    {item.description && (
+                      <span
+                        className="hidden max-w-[260px] truncate text-xs text-muted-foreground sm:block"
+                        title={item.description}
+                      >
+                        {item.description}
+                      </span>
+                    )}
+                  </span>
+                </button>
+              </TableCell>
+
+              <TableCell className="hidden md:table-cell">
+                {item.categories.length > 0 ? (
+                  <div className="flex max-w-[220px] flex-wrap gap-1">
+                    {item.categories.slice(0, 2).map((category) => {
+                      const scope = categoryScopeStyle(category.is_global);
+                      return (
+                        <span
+                          key={category.id}
+                          className={cn(BADGE_SHELL, scope.bg, scope.text)}
+                        >
+                          {category.is_global ? (
+                            <Globe className="h-2.5 w-2.5 shrink-0" />
+                          ) : (
+                            <MapPin className="h-2.5 w-2.5 shrink-0" />
+                          )}
+                          <span className="max-w-[120px] truncate">
+                            {category.name}
+                          </span>
+                        </span>
+                      );
+                    })}
+                    {item.categories.length > 2 && (
                       <span
                         className={cn(
                           BADGE_SHELL,
-                          "cursor-help",
-                          item.effective_is_tax_exempt
-                            ? cn(
-                                TAX_BADGE_STYLES.exempt.bg,
-                                TAX_BADGE_STYLES.exempt.text,
-                              )
-                            : cn(
-                                TAX_BADGE_STYLES.taxed.bg,
-                                TAX_BADGE_STYLES.taxed.text,
-                              ),
+                          "bg-muted/60 text-muted-foreground tabular-nums",
                         )}
                       >
-                        {item.effective_is_tax_exempt ? (
-                          <>
-                            <ShieldX className="h-2.5 w-2.5 shrink-0" />
-                            Exempt
-                          </>
-                        ) : (
-                          <>
-                            <ShieldCheck className="h-2.5 w-2.5 shrink-0" />
-                            {TAX_CATEGORY_LABELS[
-                              item.effective_tax_category as keyof typeof TAX_CATEGORY_LABELS
-                            ] || item.effective_tax_category}
-                          </>
-                        )}
+                        +{item.categories.length - 2}
                       </span>
-                    </TooltipTrigger>
-                    <TooltipContent className="max-w-xs">
-                      {item.effective_is_tax_exempt ? (
-                        <p>Tax exempt</p>
-                      ) : taxRate ? (
-                        <div className="space-y-1">
-                          <p className="text-xs font-medium">{taxRate.name}</p>
-                          <p className="text-xs tabular-nums">
-                            Rate: {taxRate.percentage}% • Tax: ${taxAmount}
-                          </p>
-                        </div>
-                      ) : (
-                        <p className="text-xs text-amber-600 dark:text-amber-400">
-                          No rate set
-                        </p>
+                    )}
+                  </div>
+                ) : (
+                  <span className="text-xs text-muted-foreground">Uncategorized</span>
+                )}
+              </TableCell>
+
+              {showLocations && (
+                <TableCell className="hidden md:table-cell">
+                  {availableLocations === null ? (
+                    <span className="text-muted-foreground">—</span>
+                  ) : availableLocations.length === 0 ? (
+                    <span className="text-xs text-muted-foreground">
+                      Not available
+                    </span>
+                  ) : (
+                    <div className="flex max-w-[210px] items-center gap-1">
+                      <span
+                        className={cn(
+                          BADGE_SHELL,
+                          "min-w-0 bg-muted/60 text-muted-foreground",
+                        )}
+                      >
+                        <MapPin className="h-2.5 w-2.5 shrink-0" />
+                        <span className="max-w-[110px] truncate">
+                          {availableLocations[0].name}
+                        </span>
+                      </span>
+                      {availableLocations.length > 1 && (
+                        <span
+                          className={cn(
+                            BADGE_SHELL,
+                            "bg-muted/60 text-muted-foreground tabular-nums",
+                          )}
+                          title={availableLocations
+                            .slice(1)
+                            .map((location) => location.name)
+                            .join(", ")}
+                        >
+                          +{availableLocations.length - 1} more
+                        </span>
                       )}
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-
-                {/* Channel Badges */}
-                {item.effective_available_channels?.map((channel) => (
-                  <span
-                    key={channel}
-                    className={cn(BADGE_SHELL, "bg-muted/60 text-muted-foreground")}
-                  >
-                    {channel === "pos" && (
-                      <CreditCard className="h-2.5 w-2.5 shrink-0" />
-                    )}
-                    {channel === "online" && (
-                      <Globe className="h-2.5 w-2.5 shrink-0" />
-                    )}
-                    {channel === "kiosk" && (
-                      <Monitor className="h-2.5 w-2.5 shrink-0" />
-                    )}
-                    {channel.toUpperCase()}
-                  </span>
-                ))}
-              </div>
-            </div>
-
-            {/* Price and indicators */}
-            <div className="flex w-24 shrink-0 flex-col items-end gap-1">
-              <span className="font-medium leading-none tracking-[-0.02em] tabular-nums">
-                ${item.effective_price.toFixed(2)}
-              </span>
-              {hasOverride && item.base_price !== item.effective_price && (
-                <span className="text-xs leading-none text-muted-foreground line-through tabular-nums">
-                  ${item.base_price.toFixed(2)}
-                </span>
+                    </div>
+                  )}
+                </TableCell>
               )}
-              {(item.price_source !== "base" || !item.effective_availability) && (
-                <div className="flex items-center gap-1">
+
+              <TableCell className="hidden text-right sm:table-cell">
+                <div className="flex flex-col items-end gap-1 pr-2 sm:pr-5 lg:pr-7">
+                  <div className="flex items-baseline justify-end gap-1.5">
+                    <span className="font-medium tabular-nums">
+                      ${item.effective_price.toFixed(2)}
+                    </span>
+                    {hasOverride && item.base_price !== item.effective_price && (
+                      <span className="text-xs text-muted-foreground line-through tabular-nums">
+                        ${item.base_price.toFixed(2)}
+                      </span>
+                    )}
+                  </div>
+                  {item.effective_cash_price != null && (
+                    <span className="text-[11px] text-muted-foreground tabular-nums">
+                      Cash ${item.effective_cash_price.toFixed(2)}
+                    </span>
+                  )}
                   {item.price_source !== "base" && (
                     <span
                       className={cn(
@@ -790,98 +1058,93 @@ function ItemRow({
                         priceStyle.bg,
                         priceStyle.text,
                       )}
-                      title={priceSourceLabel(item.price_source)}
                     >
-                      {item.price_source === "location_item" ? (
-                        <MapPin className="h-2.5 w-2.5" />
-                      ) : item.price_source === "category" ? (
-                        <Tag className="h-2.5 w-2.5" />
-                      ) : (
-                        <Layers className="h-2.5 w-2.5" />
-                      )}
-                    </span>
-                  )}
-                  {!item.effective_availability && (
-                    <span
-                      className={cn(
-                        BADGE_SHELL,
-                        ITEM_AVAILABILITY_STYLES.unavailable.bg,
-                        ITEM_AVAILABILITY_STYLES.unavailable.text,
-                      )}
-                    >
-                      Off
+                      {priceSourceLabel(item.price_source)}
                     </span>
                   )}
                 </div>
-              )}
-            </div>
-          </div>
-        </div>
+              </TableCell>
 
-        {/* Actions */}
-        {!isSelectionMode && (
-          <div className="hidden w-20 shrink-0 flex-col gap-1 opacity-0 transition-opacity group-hover:opacity-100 md:flex">
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-7 w-full justify-start rounded-full px-2 text-[0.8125rem]"
-              onClick={(e) => {
-                e.stopPropagation();
-                onEdit();
-              }}
-            >
-              <Edit3 className="mr-1.5 h-3.5 w-3.5" />
-              Edit
-            </Button>
-            {canDelete && (
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-7 w-full justify-start rounded-full px-2 text-[0.8125rem] text-destructive hover:bg-destructive/10 hover:text-destructive"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDelete();
-                }}
-              >
-                <Trash2 className="h-3.5 w-3.5 mr-1.5" />
-                Delete
-              </Button>
-            )}
-          </div>
-        )}
+              <TableCell>
+                <div className="flex flex-col items-start gap-1">
+                  <span
+                    className={cn(
+                      BADGE_SHELL,
+                      availabilityStyle.bg,
+                      availabilityStyle.text,
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "h-1.5 w-1.5 rounded-full",
+                        availabilityStyle.dot,
+                      )}
+                    />
+                    {item.effective_availability ? "Available" : "Unavailable"}
+                  </span>
+                  {hasOverride && (
+                    <span
+                      className={cn(
+                        BADGE_SHELL,
+                        OVERRIDE_BADGE_STYLE.bg,
+                        OVERRIDE_BADGE_STYLE.text,
+                      )}
+                    >
+                      <Sparkles className="h-2.5 w-2.5 shrink-0" />
+                      Override
+                    </span>
+                  )}
+                </div>
+              </TableCell>
 
-        {/* Mobile dropdown */}
-        {!isSelectionMode && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 shrink-0 md:hidden"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <MoreVertical className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={onEdit}>
-                <Edit3 className="h-4 w-4 mr-2" />
-                Quick Edit
-              </DropdownMenuItem>
-              {canDelete && (
-                <DropdownMenuItem
-                  onClick={onDelete}
-                  className="text-destructive focus:text-destructive"
+              {!isSelectionMode && (
+                <TableCell
+                  className="text-right"
+                  onClick={(event) => event.stopPropagation()}
                 >
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Delete
-                </DropdownMenuItem>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        aria-label={`Actions for ${item.name}`}
+                      >
+                        <MoreVertical className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-44">
+                      <DropdownMenuLabel>Item actions</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onSelect={() => onViewItem(item)}>
+                        <Eye className="mr-2 h-4 w-4" />
+                        View details
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => onEditItem(item)}>
+                        <Edit3 className="mr-2 h-4 w-4" />
+                        Edit item
+                      </DropdownMenuItem>
+                      {itemCanDelete && (
+                        <>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            onSelect={() => onDeleteItem(item)}
+                            className="text-destructive focus:text-destructive"
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Delete item
+                          </DropdownMenuItem>
+                        </>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </TableCell>
               )}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
-      </div>
-    </div>
+            </TableRow>
+          );
+        })}
+      </TableBody>
+    </Table>
   );
 }
 
@@ -897,33 +1160,34 @@ function CategoryGroup({
   onEditItem,
   onViewItem,
   onDeleteItem,
+  showItemLocations = false,
   canDeleteItems = false,
-  taxRates = [],
   isAllLocations = false,
   selectedLocationId = null,
   isSelectionMode = false,
   selectedItemIds,
   onToggleSelect,
+  canToggleCategory = false,
+  isTogglingCategory = false,
+  onToggleCategoryActive,
 }: {
-  category: {
-    id: string;
-    name: string;
-    is_global: boolean;
-    location_name?: string | null;
-  };
+  category: ItemCategorySummary;
   items: FlatItem[];
   isExpanded: boolean;
   onToggle: () => void;
   onEditItem: (item: FlatItem) => void;
   onViewItem: (item: FlatItem) => void;
   onDeleteItem: (item: FlatItem) => void;
+  showItemLocations?: boolean;
   canDeleteItems?: boolean;
-  taxRates?: any[];
   isAllLocations?: boolean;
   selectedLocationId?: string | null;
   isSelectionMode?: boolean;
   selectedItemIds?: Set<string>;
   onToggleSelect?: (id: string) => void;
+  canToggleCategory?: boolean;
+  isTogglingCategory?: boolean;
+  onToggleCategoryActive?: (isActive: boolean) => void;
 }) {
   const selectedCount = isSelectionMode && selectedItemIds
     ? items.reduce((acc, it) => acc + (selectedItemIds.has(it.id) ? 1 : 0), 0)
@@ -931,138 +1195,162 @@ function CategoryGroup({
   const allSelected =
     isSelectionMode && items.length > 0 && selectedCount === items.length;
   const someSelected = isSelectionMode && selectedCount > 0 && !allSelected;
+  const categoryActive = isAllLocations
+    ? category.is_active
+    : (category.effective_is_active ?? category.is_active);
+  const hasCategoryState =
+    category.id !== "uncategorized" && typeof categoryActive === "boolean";
 
   return (
     <Collapsible open={isExpanded} onOpenChange={onToggle}>
       <div
         className={cn(
-          "min-w-0 overflow-hidden rounded-2xl border bg-card transition-colors",
+          "min-w-0 overflow-hidden rounded-3xl border bg-card transition-colors",
+          hasCategoryState && !categoryActive && "opacity-70",
           isSelectionMode && selectedCount > 0 && "ring-1 ring-primary/30",
         )}
       >
-        <CollapsibleTrigger asChild>
-          <div
-            className={cn(
-              "cursor-pointer px-6 py-4 transition-colors hover:bg-muted/50",
-              isSelectionMode && selectedCount > 0 && "bg-primary/5",
-            )}
-          >
-            <div className="flex min-w-0 items-center justify-between gap-2">
-              <div className="flex min-w-0 items-center gap-3 overflow-hidden">
-                {isExpanded ? (
-                  <ChevronDown className="h-5 w-5 shrink-0 text-muted-foreground" />
-                ) : (
-                  <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
-                )}
-                <div className="flex min-w-0 flex-wrap items-center gap-2">
-                  <h3 className="truncate text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]">
-                    {category.name}
-                  </h3>
-                  {(() => {
-                    const scope = categoryScopeStyle(category.is_global);
-                    return (
-                      <span className={cn(BADGE_SHELL, scope.bg, scope.text)}>
-                        {category.is_global ? (
-                          <>
-                            <Globe className="h-3 w-3 shrink-0" />
-                            Global
-                          </>
-                        ) : (
-                          <>
-                            <MapPin className="h-3 w-3 shrink-0" />
-                            {category.location_name || "Location"}
-                          </>
-                        )}
-                      </span>
-                    );
-                  })()}
-                </div>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                {isSelectionMode && (
-                  <>
-                    {selectedCount > 0 && (
-                      <span
-                        className={cn(BADGE_SHELL, "bg-primary/15 text-primary")}
-                      >
-                        <CheckCircle2 className="h-3 w-3 shrink-0" />
-                        <span className="tabular-nums">{selectedCount}</span>
-                        selected
-                      </span>
-                    )}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (!onToggleSelect) return;
-                        if (allSelected) {
-                          items.forEach((it) => {
-                            if (selectedItemIds?.has(it.id))
-                              onToggleSelect(it.id);
-                          });
-                        } else {
-                          items.forEach((it) => {
-                            if (!selectedItemIds?.has(it.id))
-                              onToggleSelect(it.id);
-                          });
-                        }
-                      }}
-                      className={cn(
-                        "flex items-center justify-center w-7 h-7 rounded-full border-2 transition-all duration-200",
-                        allSelected
-                          ? "bg-primary border-primary text-primary-foreground"
-                          : someSelected
-                            ? "bg-primary/20 border-primary text-primary"
-                            : "bg-background border-border hover:border-primary/60",
-                      )}
-                      aria-label={
-                        allSelected
-                          ? `Deselect all in ${category.name}`
-                          : `Select all in ${category.name}`
-                      }
-                    >
-                      {allSelected ? (
-                        <Check className="h-4 w-4" strokeWidth={3} />
-                      ) : someSelected ? (
-                        <span className="block w-2.5 h-0.5 bg-primary rounded-full" />
-                      ) : null}
-                    </button>
-                  </>
-                )}
-                <span
-                  className={cn(BADGE_SHELL, "bg-muted/60 text-muted-foreground")}
-                >
-                  <span className="tabular-nums">{items.length}</span>
-                  item{items.length !== 1 ? "s" : ""}
+        <div
+          className={cn(
+            "flex min-h-14 min-w-0 items-center justify-between gap-2 px-3 py-3 transition-colors sm:px-6",
+            isSelectionMode && selectedCount > 0 && "bg-primary/5",
+          )}
+        >
+          <CollapsibleTrigger asChild>
+            <button
+              type="button"
+              className="flex min-w-0 flex-1 items-center gap-2 rounded-lg text-left transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 sm:gap-3"
+              aria-label={`${isExpanded ? "Collapse" : "Expand"} ${category.name}`}
+            >
+              {isExpanded ? (
+                <ChevronDown className="h-5 w-5 shrink-0 text-muted-foreground" />
+              ) : (
+                <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
+              )}
+              <span className="flex min-w-0 flex-wrap items-center gap-2">
+                <span className="truncate text-base font-semibold sm:text-lg">
+                  {category.name}
                 </span>
+                {(() => {
+                  const scope = categoryScopeStyle(category.is_global);
+                  return (
+                    <span className={cn(BADGE_SHELL, scope.bg, scope.text)}>
+                      {category.is_global ? (
+                        <>
+                          <Globe className="h-3 w-3 shrink-0" />
+                          Global
+                        </>
+                      ) : (
+                        <>
+                          <MapPin className="h-3 w-3 shrink-0" />
+                          <span className="max-w-28 truncate sm:max-w-44">
+                            {category.location_name || "Location"}
+                          </span>
+                        </>
+                      )}
+                    </span>
+                  );
+                })()}
+              </span>
+            </button>
+          </CollapsibleTrigger>
+
+          <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+            {isSelectionMode && (
+              <>
+                {selectedCount > 0 && (
+                  <span
+                    className={cn(
+                      BADGE_SHELL,
+                      "hidden bg-primary/15 text-primary sm:inline-flex",
+                    )}
+                  >
+                    <CheckCircle2 className="h-3 w-3 shrink-0" />
+                    <span className="tabular-nums">{selectedCount}</span>
+                    selected
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!onToggleSelect) return;
+                    if (allSelected) {
+                      items.forEach((item) => {
+                        if (selectedItemIds?.has(item.id))
+                          onToggleSelect(item.id);
+                      });
+                    } else {
+                      items.forEach((item) => {
+                        if (!selectedItemIds?.has(item.id))
+                          onToggleSelect(item.id);
+                      });
+                    }
+                  }}
+                  className={cn(
+                    "flex h-7 w-7 items-center justify-center rounded-full border-2 transition-colors focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
+                    allSelected
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : someSelected
+                        ? "border-primary bg-primary/20 text-primary"
+                        : "border-border bg-background hover:border-primary/60",
+                  )}
+                  aria-label={
+                    allSelected
+                      ? `Deselect all in ${category.name}`
+                      : `Select all in ${category.name}`
+                  }
+                >
+                  {allSelected ? (
+                    <Check className="h-4 w-4" strokeWidth={3} />
+                  ) : someSelected ? (
+                    <span className="block h-0.5 w-2.5 rounded-full bg-primary" />
+                  ) : null}
+                </button>
+              </>
+            )}
+
+            {!isSelectionMode && hasCategoryState && (
+              <div className="flex items-center gap-2">
+                <Switch
+                  checked={categoryActive}
+                  onCheckedChange={(checked) => onToggleCategoryActive?.(checked)}
+                  disabled={!canToggleCategory || isTogglingCategory}
+                  aria-label={`${categoryActive ? "Hide" : "Show"} ${category.name}`}
+                />
+                {categoryActive ? (
+                  <Eye className="h-4 w-4 text-green-500" aria-hidden="true" />
+                ) : (
+                  <EyeOff
+                    className="h-4 w-4 text-muted-foreground"
+                    aria-hidden="true"
+                  />
+                )}
               </div>
-            </div>
+            )}
           </div>
-        </CollapsibleTrigger>
+        </div>
+
         <CollapsibleContent>
-          <div className="px-6 pb-6 pt-0">
+          <div className="px-3 pb-3 pt-0 sm:px-6 sm:pb-4">
             {items.length === 0 ? (
               <div className="py-8 text-center text-muted-foreground">
                 <Utensils className="mx-auto mb-2 h-8 w-8 opacity-50" />
                 <p className="text-sm">No items in this category</p>
               </div>
             ) : (
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                {items.map((item, idx) => {
-                  // Can delete if: viewing all locations OR item belongs to current location
+              <div className="divide-y divide-border/80">
+                {items.map((item) => {
                   const itemCanDelete = isAllLocations
                     ? true
-                    : !isAllLocations &&
-                      item.location_id === selectedLocationId;
+                    : item.location_id === selectedLocationId;
                   return (
-                    <ItemCard
+                    <ItemRow
                       key={item.id}
                       item={item}
-                      index={idx}
-                      taxRates={taxRates}
                       onEdit={() => onEditItem(item)}
                       onView={() => onViewItem(item)}
                       onDelete={() => onDeleteItem(item)}
+                      showLocations={showItemLocations}
                       canDelete={itemCanDelete && canDeleteItems}
                       isSelectionMode={isSelectionMode}
                       isSelected={selectedItemIds?.has(item.id) ?? false}
@@ -1090,8 +1378,14 @@ export default function MenuItemsPage() {
   const queryClient = useQueryClient();
   const searchParams = useSearchParams();
   const { selectedLocationId } = useLocationStore();
-  const { canCreate, isMember, isManager, assignedLocationIds } =
-    useManagerPermissions();
+  const {
+    canCreate,
+    canEditLocationEntity,
+    isOwnerOrAdmin,
+    isMember,
+    isManager,
+    assignedLocationIds,
+  } = useManagerPermissions();
 
   // Location context
   const { isAllLocations, locationName } = useLocationContext();
@@ -1155,6 +1449,9 @@ export default function MenuItemsPage() {
   const [bulkPriceDialogOpen, setBulkPriceDialogOpen] = useState(false);
   const [bulkDeliveryDialogOpen, setBulkDeliveryDialogOpen] = useState(false);
   const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [togglingCategoryIds, setTogglingCategoryIds] = useState<Set<string>>(
+    new Set(),
+  );
 
   const toggleItemSelected = (id: string) => {
     setSelectedItemIds((prev) => {
@@ -1185,6 +1482,35 @@ export default function MenuItemsPage() {
       ? (categoriesData.data as CategoryWithItems[])
       : [];
   }, [categoriesData?.data]);
+
+  // The flat item response already contains category associations. Keep those
+  // categories visible if the separate category metadata query is empty,
+  // delayed, or only returns a partial list.
+  const categoryOptions = useMemo<ItemCategorySummary[]>(() => {
+    const categoriesById = new Map<string, ItemCategorySummary>();
+
+    for (const category of categoriesList) {
+      categoriesById.set(category.id, {
+        id: category.id,
+        name: category.name,
+        location_id: category.location_id,
+        location_name: category.location_name,
+        is_global: category.is_global,
+        is_active: category.is_active,
+        effective_is_active: category.effective_is_active,
+      });
+    }
+
+    for (const item of itemsList) {
+      for (const category of item.categories) {
+        if (!categoriesById.has(category.id)) {
+          categoriesById.set(category.id, category);
+        }
+      }
+    }
+
+    return Array.from(categoriesById.values());
+  }, [categoriesList, itemsList]);
 
   // Filter items
   const filteredItems = useMemo(() => {
@@ -1219,11 +1545,11 @@ export default function MenuItemsPage() {
   const itemsByCategory = useMemo(() => {
     const groups = new Map<
       string,
-      { category: (typeof categoriesList)[0]; items: FlatItem[] }
+      { category: ItemCategorySummary; items: FlatItem[] }
     >();
 
     // Create groups for each category
-    for (const category of categoriesList) {
+    for (const category of categoryOptions) {
       groups.set(category.id, {
         category: category,
         items: [],
@@ -1233,10 +1559,12 @@ export default function MenuItemsPage() {
     // Add items to their categories
     for (const item of filteredItems) {
       for (const cat of item.categories) {
-        const group = groups.get(cat.id);
-        if (group) {
-          group.items.push(item);
+        let group = groups.get(cat.id);
+        if (!group) {
+          group = { category: cat, items: [] };
+          groups.set(cat.id, group);
         }
+        group.items.push(item);
       }
     }
 
@@ -1249,31 +1577,16 @@ export default function MenuItemsPage() {
         category: {
           id: "uncategorized",
           name: "Uncategorized",
-          description: null,
-          image: null,
-          display_order: 999,
           is_global: true,
           location_id: null,
           location_name: null,
-          is_active: true,
-          effective_is_active: true,
-          effective_display_order: 999,
-          effective_name: "Uncategorized",
-          items: [],
-          item_count: 0,
-          menu_count: 0,
-          has_location_override: false,
-          location_override: null,
-          created_at: "",
-          created_by: "",
-          updated_at: "",
-        } as CategoryWithItems,
+        },
         items: uncategorizedItems,
       });
     }
 
     return Array.from(groups.values()).filter((g) => g.items.length > 0);
-  }, [categoriesList, filteredItems]);
+  }, [categoryOptions, filteredItems]);
 
   // Stats
   const stats = useMemo(
@@ -1360,6 +1673,75 @@ export default function MenuItemsPage() {
 
   const collapseAllCategories = () => {
     setExpandedCategories(new Set());
+  };
+
+  const canToggleCategoryVisibility = (category: ItemCategorySummary) => {
+    if (category.id === "uncategorized" || isMember) return false;
+    if (isOwnerOrAdmin) return true;
+    if (!isManager) return false;
+
+    if (isAllLocations) {
+      return canEditLocationEntity(category.location_id);
+    }
+
+    return (
+      !!selectedLocationId &&
+      selectedLocationId !== "all" &&
+      assignedLocationIds.includes(selectedLocationId)
+    );
+  };
+
+  const handleToggleCategoryVisibility = async (
+    category: ItemCategorySummary,
+    isActive: boolean,
+  ) => {
+    if (!canToggleCategoryVisibility(category)) return;
+
+    setTogglingCategoryIds((previous) => {
+      const next = new Set(previous);
+      next.add(category.id);
+      return next;
+    });
+
+    try {
+      const result =
+        !isAllLocations &&
+        selectedLocationId &&
+        selectedLocationId !== "all"
+          ? await UpdateLocationCategoryOverride(
+              selectedLocationId,
+              category.id,
+              { isActive },
+            )
+          : await UpdateCategory(category.id, { is_active: isActive });
+
+      if (result.error) {
+        toast.error("Update failed", { description: result.error });
+        return;
+      }
+
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["categories"] }),
+        queryClient.invalidateQueries({ queryKey: ["categories-with-items"] }),
+        queryClient.invalidateQueries({ queryKey: ["menu-items"] }),
+        queryClient.invalidateQueries({ queryKey: ["menu-items-flat"] }),
+        refetch(),
+      ]);
+      invalidateOrderOutSync(queryClient);
+      toast.success(isActive ? "Category enabled" : "Category disabled", {
+        description: `“${category.name}” is now ${isActive ? "visible" : "hidden"}.`,
+      });
+    } catch {
+      toast.error("Update failed", {
+        description: "Unable to update the category. Please try again.",
+      });
+    } finally {
+      setTogglingCategoryIds((previous) => {
+        const next = new Set(previous);
+        next.delete(category.id);
+        return next;
+      });
+    }
   };
 
   // Handle deleting location override (reset to global)
@@ -1487,16 +1869,15 @@ export default function MenuItemsPage() {
     );
   }
 
-  const selectedCategory = categoriesList.find(
+  const selectedCategory = categoryOptions.find(
     (c) => c.id === selectedCategoryId,
   );
 
   return (
     <PageShell>
-      <ScopeContextStrip />
-
       <PageHeader
         title="Item Library"
+        stackActionsBelowIndicatorOnMobile
         subtitle={
           isSingleLocation
             ? "All items on your menu. Items live within categories."
@@ -1579,7 +1960,7 @@ export default function MenuItemsPage() {
               label="Total Items"
               icon={<Utensils />}
               value={stats.total}
-              meta={`In ${categoriesList.length} categories`}
+              meta={`In ${categoryOptions.length} categories`}
               isLoading={isLoading}
             />
             <StatTile
@@ -1654,7 +2035,7 @@ export default function MenuItemsPage() {
               </div>
 
               {/* Category Filter Toggle */}
-              {categoriesList.length > 0 && (
+              {categoryOptions.length > 0 && (
                 <Button
                   variant="ghost"
                   size="sm"
@@ -1707,10 +2088,10 @@ export default function MenuItemsPage() {
                 {(
                   [
                     { mode: "grid" as const, Icon: Grid3x3, label: "Grid view" },
-                    { mode: "list" as const, Icon: List, label: "List view" },
+                    { mode: "list" as const, Icon: Table2, label: "Table view" },
                     {
                       mode: "categories" as const,
-                      Icon: Layers,
+                      Icon: List,
                       label: "Category view",
                     },
                   ]
@@ -1736,7 +2117,7 @@ export default function MenuItemsPage() {
           </div>
 
           {/* Category Filter Pills */}
-          {showCategoryFilter && categoriesList.length > 0 && (
+          {showCategoryFilter && categoryOptions.length > 0 && (
             <div className="space-y-3 pt-4 animate-in fade-in slide-in-from-top-2 duration-200">
               <div className="flex flex-wrap gap-2">
                 <button
@@ -1754,7 +2135,7 @@ export default function MenuItemsPage() {
                     {itemsList.length}
                   </span>
                 </button>
-                {categoriesList.map((category) => {
+                {categoryOptions.map((category) => {
                   const count = categoryItemCounts[category.id] || 0;
                   const isActive = selectedCategoryId === category.id;
                   return (
@@ -1852,20 +2233,23 @@ export default function MenuItemsPage() {
 
         <div className="mt-6">
           {isSelectionMode && (
-            <div className="sticky top-0 z-20 mb-4 flex flex-wrap items-center gap-2 rounded-2xl border-0 bg-muted/60 px-4 py-2.5 shadow-none backdrop-blur-md animate-in fade-in slide-in-from-top-2 duration-200">
-              <div className="flex items-center gap-2 text-sm font-medium">
+            <div className="mb-4 grid w-full grid-cols-2 gap-2 rounded-2xl border-0 bg-muted/60 px-3 py-3 shadow-none animate-in fade-in slide-in-from-top-2 duration-200 sm:flex sm:flex-wrap sm:items-center sm:px-4 sm:py-2.5">
+              <div
+                className="col-span-2 flex min-w-0 items-center gap-2 text-sm font-medium sm:col-span-1"
+                aria-live="polite"
+              >
                 <CheckCircle2 className="h-4 w-4 text-primary" />
-                <span>
+                <span className="truncate">
                   <span className="tabular-nums">{selectedItemIds.size}</span> of{" "}
                   <span className="tabular-nums">{filteredItems.length}</span>{" "}
                   selected
                 </span>
               </div>
-              <div className="mx-1 h-5 w-px bg-border/60" />
+              <div className="mx-1 hidden h-5 w-px bg-border/60 sm:block" />
               <Button
                 size="sm"
                 variant="ghost"
-                className="h-7 gap-1 rounded-full px-3 text-xs"
+                className="h-8 w-full gap-1 rounded-full px-2 text-xs sm:h-7 sm:w-auto sm:px-3"
                 onClick={() => {
                   const allSelected =
                     filteredItems.length > 0 &&
@@ -1889,19 +2273,19 @@ export default function MenuItemsPage() {
               <Button
                 size="sm"
                 variant="ghost"
-                className="h-7 rounded-full px-3 text-xs"
+                className="h-8 w-full rounded-full px-2 text-xs sm:h-7 sm:w-auto sm:px-3"
                 onClick={clearSelection}
                 disabled={selectedItemIds.size === 0}
               >
                 Clear
               </Button>
-              <div className="ml-auto flex items-center gap-2">
+              <div className="col-span-2 grid grid-cols-2 gap-2 sm:ml-auto sm:flex sm:items-center">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button
                       size="sm"
                       variant="default"
-                      className="h-8 gap-1 rounded-full px-4 text-[0.8125rem] font-medium"
+                      className="h-8 w-full justify-center gap-1 rounded-full px-3 text-[0.8125rem] font-medium sm:w-auto sm:px-4"
                       disabled={selectedItemIds.size === 0}
                     >
                       Bulk edit
@@ -1928,7 +2312,7 @@ export default function MenuItemsPage() {
                 <Button
                   size="sm"
                   variant="ghost"
-                  className="h-8 gap-1 rounded-full px-3 text-[0.8125rem]"
+                  className="h-8 w-full justify-center gap-1 rounded-full px-3 text-[0.8125rem] sm:w-auto"
                   onClick={() => {
                     setIsSelectionMode(false);
                     clearSelection();
@@ -1943,9 +2327,9 @@ export default function MenuItemsPage() {
           {isLoading ? (
             <div
               className={
-                viewMode === "grid" || viewMode === "categories"
-                  ? "grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
-                  : "space-y-3"
+                viewMode === "grid"
+                  ? "grid gap-5 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
+                  : "space-y-2"
               }
             >
               {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
@@ -1953,7 +2337,7 @@ export default function MenuItemsPage() {
                   key={i}
                   className={cn(
                     "rounded-2xl",
-                    viewMode === "list" ? "h-20" : "h-64",
+                    viewMode === "grid" ? "h-[25rem]" : "h-20",
                   )}
                 />
               ))}
@@ -2009,32 +2393,36 @@ export default function MenuItemsPage() {
                 return (
                   <CategoryGroup
                     key={group.category.id}
-                    category={{
-                      id: group.category.id,
-                      name: group.category.name,
-                      is_global: group.category.is_global,
-                      location_name: group.category.location_name,
-                    }}
+                    category={group.category}
                     items={group.items}
                     isExpanded={expandedCategories.has(group.category.id)}
                     onToggle={() => toggleCategoryExpanded(group.category.id)}
                     onEditItem={handleQuickEdit}
                     onViewItem={handleViewDetails}
                     onDeleteItem={(item) => setDeletingItem(item)}
+                    showItemLocations={isAllLocations && !isSingleLocation}
                     canDeleteItems={canDelete}
-                    taxRates={taxRates}
                     isAllLocations={isAllLocations}
                     selectedLocationId={selectedLocationId}
                     isSelectionMode={isSelectionMode}
                     selectedItemIds={selectedItemIds}
                     onToggleSelect={toggleItemSelected}
+                    canToggleCategory={canToggleCategoryVisibility(
+                      group.category,
+                    )}
+                    isTogglingCategory={togglingCategoryIds.has(
+                      group.category.id,
+                    )}
+                    onToggleCategoryActive={(isActive) =>
+                      handleToggleCategoryVisibility(group.category, isActive)
+                    }
                   />
                 );
               })}
             </div>
           ) : viewMode === "grid" ? (
             // Grid View
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
               {filteredItems.map((item, index) => {
                 // Can delete if: viewing all locations OR item belongs to current location
                 const canDelete = isAllLocations
@@ -2059,30 +2447,19 @@ export default function MenuItemsPage() {
               })}
             </div>
           ) : (
-            // List View
-            <div className="space-y-2">
-              {filteredItems.map((item, index) => {
-                // Can delete if: viewing all locations OR item belongs to current location
-                const canDelete = isAllLocations
-                  ? true
-                  : !isAllLocations && item.location_id === selectedLocationId;
-                return (
-                  <ItemRow
-                    key={item.id}
-                    item={item}
-                    index={index}
-                    taxRates={taxRates}
-                    onEdit={() => handleQuickEdit(item)}
-                    onView={() => handleViewDetails(item)}
-                    onDelete={() => setDeletingItem(item)}
-                    canDelete={canDelete}
-                    isSelectionMode={isSelectionMode}
-                    isSelected={selectedItemIds.has(item.id)}
-                    onToggleSelect={toggleItemSelected}
-                  />
-                );
-              })}
-            </div>
+            // Table View
+            <ItemTable
+              items={filteredItems}
+              onEditItem={handleQuickEdit}
+              onViewItem={handleViewDetails}
+              onDeleteItem={(item) => setDeletingItem(item)}
+              isAllLocations={isAllLocations}
+              showLocations={isAllLocations && !isSingleLocation}
+              selectedLocationId={selectedLocationId}
+              isSelectionMode={isSelectionMode}
+              selectedItemIds={selectedItemIds}
+              onToggleSelect={toggleItemSelected}
+            />
           )}
         </div>
       </Panel>
