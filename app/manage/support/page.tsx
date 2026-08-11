@@ -3,8 +3,10 @@
 import React, { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   MessageSquare,
+  MessageSquarePlus,
   Clock,
   Users,
   TrendingUp,
@@ -33,13 +35,14 @@ import {
   SupportTicket,
   TicketFilters,
   TICKET_CATEGORY_LABELS,
-  TICKET_STATUS_LABELS,
   TICKET_STATUS_COLORS,
   TICKET_PRIORITY_COLORS,
   TICKET_PRIORITY_LABELS,
+  getTicketStatusLabel,
 } from "@/types/support-ticket";
 import { formatDistanceToNow } from "date-fns";
 import { useUserInfo } from "../hooks/useUserInfo.";
+import { useAdminPermissions } from "@/lib/hooks/useAdminPermissions";
 
 const STATUS_TABS = [
   { key: "open", label: "Open" },
@@ -78,7 +81,16 @@ function StatCard({
 
 function TicketRow({ ticket, onOpen }: { ticket: any; onOpen: () => void }) {
   const isUrgent = ticket.priority === "urgent" || ticket.priority === "high";
-  const isUnassigned = !ticket.assigned_to;
+  const isHQInternal = ticket.ticket_scope === "hq_internal";
+  const emailAssignees = Array.isArray(ticket.assigned_to_emails)
+    ? ticket.assigned_to_emails
+    : [];
+  const isUnassigned = !ticket.assigned_to && emailAssignees.length === 0;
+  const assignmentLabel = isHQInternal
+    ? emailAssignees.length > 1
+      ? `${emailAssignees[0]} +${emailAssignees.length - 1}`
+      : emailAssignees[0]
+    : ticket.assigned_to_name;
 
   return (
     <div
@@ -99,7 +111,7 @@ function TicketRow({ ticket, onOpen }: { ticket: any; onOpen: () => void }) {
               TICKET_STATUS_COLORS[ticket.status as keyof typeof TICKET_STATUS_COLORS]
             )}
           >
-            {TICKET_STATUS_LABELS[ticket.status as keyof typeof TICKET_STATUS_LABELS]}
+            {getTicketStatusLabel(ticket.status, ticket.ticket_scope)}
           </Badge>
           <Badge
             className={cn(
@@ -109,12 +121,19 @@ function TicketRow({ ticket, onOpen }: { ticket: any; onOpen: () => void }) {
           >
             {TICKET_PRIORITY_LABELS[ticket.priority as keyof typeof TICKET_PRIORITY_LABELS]}
           </Badge>
+          {isHQInternal && (
+            <Badge variant="outline" className="rounded-full text-xs">
+              Developer
+            </Badge>
+          )}
         </div>
         <p className="font-medium text-sm truncate">{ticket.subject}</p>
         <p className="text-xs text-muted-foreground mt-0.5">
-          {ticket.merchant?.name || "Unknown Merchant"}
-          {ticket.location?.name && ` · ${ticket.location.name}`}
-          {" · "}
+          {isHQInternal
+            ? "DEXA HQ"
+            : ticket.merchant?.name || "Unknown Merchant"}
+          {!isHQInternal && ticket.location?.name && ` / ${ticket.location.name}`}
+          {" / "}
           {TICKET_CATEGORY_LABELS[ticket.category as keyof typeof TICKET_CATEGORY_LABELS]}
         </p>
       </div>
@@ -129,7 +148,7 @@ function TicketRow({ ticket, onOpen }: { ticket: any; onOpen: () => void }) {
             isUnassigned ? "text-amber-600 font-semibold" : "text-muted-foreground"
           )}
         >
-          {isUnassigned ? "Unassigned" : ticket.assigned_to_name}
+          {isUnassigned ? "Unassigned" : assignmentLabel || "Assigned"}
         </p>
       </div>
 
@@ -142,6 +161,8 @@ export default function AdminSupportPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { data: userInfo } = useUserInfo();
+  const { hasPermission } = useAdminPermissions();
+  const canCreateTicket = hasPermission("hq.support.manage");
 
   const [activeStatus, setActiveStatus] = useState<string>("open");
   const [filters, setFilters] = useState<Omit<TicketFilters, "status">>({});
@@ -185,20 +206,30 @@ export default function AdminSupportPage() {
             Support Inbox
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Manage merchant support tickets
+            Manage merchant support requests and internal developer tickets
           </p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          className="self-start sm:self-auto flex-shrink-0"
-          onClick={() =>
-            queryClient.invalidateQueries({ queryKey: ["admin-support-tickets"] })
-          }
-        >
-          <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
-          Refresh
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="flex-shrink-0"
+            onClick={() =>
+              queryClient.invalidateQueries({ queryKey: ["admin-support-tickets"] })
+            }
+          >
+            <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+            Refresh
+          </Button>
+          {canCreateTicket && (
+            <Button size="sm" className="flex-shrink-0" asChild>
+              <Link href="/manage/support/new">
+                <MessageSquarePlus className="mr-1.5 h-3.5 w-3.5" />
+                New Developer Ticket
+              </Link>
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* KPI Cards */}
@@ -250,12 +281,26 @@ export default function AdminSupportPage() {
         <div className="relative flex-1 min-w-0 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search by merchant or ticket #..."
+            placeholder="Search by subject, submitter, or ticket #..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9"
           />
         </div>
+
+        <Select
+          value={(filters.ticket_scope as string) || "all"}
+          onValueChange={(v) => setFilter("ticket_scope", v as any)}
+        >
+          <SelectTrigger className="w-40">
+            <SelectValue placeholder="Ticket Scope" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Sources</SelectItem>
+            <SelectItem value="merchant">Merchant</SelectItem>
+            <SelectItem value="hq_internal">Developer Tickets</SelectItem>
+          </SelectContent>
+        </Select>
 
         <Select
           value={(filters.category as string) || "all"}

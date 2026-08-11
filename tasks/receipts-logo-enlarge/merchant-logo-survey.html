@@ -1,0 +1,221 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Merchant logos across restaurants</title>
+<style>
+*{box-sizing:border-box} body{margin:0;background:#0f1115;color:#e6e8ec;font:14px/1.55 ui-sans-serif,system-ui,"Segoe UI",sans-serif}
+.wrap{max-width:1500px;margin:0 auto;padding:32px 22px 60px}
+h2{font-size:23px;margin:0 0 6px} p.l{color:#9aa3b2;margin:0 0 6px;max-width:80ch} p.l b{color:#e6e8ec}
+#tally{margin:18px 0 0;padding:13px 15px;background:#161a21;border:1px solid #242a34;border-radius:9px;font:13px/1.7 ui-monospace,monospace}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(420px,1fr));gap:18px;margin-top:20px}
+.card{margin:0;background:#161a21;border:1px solid #242a34;border-radius:11px;padding:14px}
+.card[data-verdict=bad]{border-color:#5c2b2b} .card[data-verdict=ok]{border-color:#255c40} .card[data-verdict=warn]{border-color:#5c4a25}
+figcaption{display:flex;gap:8px;align-items:baseline;margin-bottom:11px}
+.idx{font:700 11px/1 ui-monospace,monospace;background:#232936;color:#9fb0c9;padding:4px 6px;border-radius:4px}
+.nm{font-weight:650}
+.pair{display:flex;gap:10px} .col{flex:1} .lbl{font-size:11px;color:#7d8798;margin-bottom:5px;text-align:center}
+.paper{background:#fff;color:#171717;padding:16px 12px;text-align:center;min-height:170px;display:flex;flex-direction:column;align-items:center;justify-content:flex-start}
+img.cur{width:64px;height:64px;object-fit:contain;margin-bottom:8px}
+img.big{height:120px;width:auto;max-width:70%;object-fit:contain;margin-bottom:8px}
+.biz{font:700 13px/1.2 sans-serif;letter-spacing:.02em} .ad{font-size:11px;color:#525252;margin-top:4px}
+.rep{margin-top:11px;font:12px/1.6 ui-monospace,monospace;color:#9aa3b2}
+.bad{color:#ff9b9b;font-weight:700} .ok{color:#6ee7a8;font-weight:700} .warn{color:#f2c078;font-weight:700}
+</style></head><body><div class="wrap">
+<h2>Does the baked-in background happen on other restaurants?</h2>
+<p class="l">Every merchant logo on staging, rendered through the real receipt CSS. Left = the 64px box shipping today. Right = the proposed 120px.</p>
+<p class="l">The readout samples each image's <b>own corner pixels</b> via canvas &mdash; it reports what is <b>inside the file</b>, not what our CSS draws.</p>
+<div id="tally">tallying&hellip;</div>
+<div class="grid">
+  <figure class="card" data-name="Appflow Studios">
+    <figcaption><span class="idx">01</span><span class="nm">Appflow Studios</span></figcaption>
+    <div class="pair">
+      <div class="col"><div class="lbl">today &middot; 64px</div>
+        <div class="paper"><img class="cur" src="https://hifouuofcaytijrkbvcy.supabase.co/storage/v1/object/public/Organizations-Logos/org_347CTMAZPtyetKNAzkfYk21vcO9.png" crossorigin="anonymous"><div class="biz">APPFLOW STUDIOS</div><div class="ad">432 Manor Rd</div></div></div>
+      <div class="col"><div class="lbl">120px</div>
+        <div class="paper"><img class="big" src="https://hifouuofcaytijrkbvcy.supabase.co/storage/v1/object/public/Organizations-Logos/org_347CTMAZPtyetKNAzkfYk21vcO9.png" crossorigin="anonymous"><div class="biz">APPFLOW STUDIOS</div><div class="ad">432 Manor Rd</div></div></div>
+    </div>
+    <div class="rep">measuring&hellip;</div>
+  </figure>
+  <figure class="card" data-name="Mikes Diner">
+    <figcaption><span class="idx">02</span><span class="nm">Mikes Diner</span></figcaption>
+    <div class="pair">
+      <div class="col"><div class="lbl">today &middot; 64px</div>
+        <div class="paper"><img class="cur" src="https://hifouuofcaytijrkbvcy.supabase.co/storage/v1/object/public/Organizations-Logos/org_34KRmxBIe1o8gmCQDziMjpKcz7t.png" crossorigin="anonymous"><div class="biz">MIKES DINER</div><div class="ad">432 Manor Rd</div></div></div>
+      <div class="col"><div class="lbl">120px</div>
+        <div class="paper"><img class="big" src="https://hifouuofcaytijrkbvcy.supabase.co/storage/v1/object/public/Organizations-Logos/org_34KRmxBIe1o8gmCQDziMjpKcz7t.png" crossorigin="anonymous"><div class="biz">MIKES DINER</div><div class="ad">432 Manor Rd</div></div></div>
+    </div>
+    <div class="rep">measuring&hellip;</div>
+  </figure>
+  <figure class="card" data-name="Mtech Team">
+    <figcaption><span class="idx">03</span><span class="nm">Mtech Team</span></figcaption>
+    <div class="pair">
+      <div class="col"><div class="lbl">today &middot; 64px</div>
+        <div class="paper"><img class="cur" src="https://hifouuofcaytijrkbvcy.supabase.co/storage/v1/object/public/Organizations-Logos/org_34LM8wn1PLpcpu8eCA7dvk8LydC.png" crossorigin="anonymous"><div class="biz">MTECH TEAM</div><div class="ad">432 Manor Rd</div></div></div>
+      <div class="col"><div class="lbl">120px</div>
+        <div class="paper"><img class="big" src="https://hifouuofcaytijrkbvcy.supabase.co/storage/v1/object/public/Organizations-Logos/org_34LM8wn1PLpcpu8eCA7dvk8LydC.png" crossorigin="anonymous"><div class="biz">MTECH TEAM</div><div class="ad">432 Manor Rd</div></div></div>
+    </div>
+    <div class="rep">measuring&hellip;</div>
+  </figure>
+  <figure class="card" data-name="Dexa POS HQ">
+    <figcaption><span class="idx">04</span><span class="nm">Dexa POS HQ</span></figcaption>
+    <div class="pair">
+      <div class="col"><div class="lbl">today &middot; 64px</div>
+        <div class="paper"><img class="cur" src="https://img.clerk.com/eyJ0eXBlIjoicHJveHkiLCJzcmMiOiJodHRwczovL2ltYWdlcy5jbGVyay5kZXYvdXBsb2FkZWQvaW1nXzMzejM2Wk10UjZBR0Z5QkNiYXpwWllxd3hSZCJ9?width=128" crossorigin="anonymous"><div class="biz">DEXA POS HQ</div><div class="ad">432 Manor Rd</div></div></div>
+      <div class="col"><div class="lbl">120px</div>
+        <div class="paper"><img class="big" src="https://img.clerk.com/eyJ0eXBlIjoicHJveHkiLCJzcmMiOiJodHRwczovL2ltYWdlcy5jbGVyay5kZXYvdXBsb2FkZWQvaW1nXzMzejM2Wk10UjZBR0Z5QkNiYXpwWllxd3hSZCJ9?width=128" crossorigin="anonymous"><div class="biz">DEXA POS HQ</div><div class="ad">432 Manor Rd</div></div></div>
+    </div>
+    <div class="rep">measuring&hellip;</div>
+  </figure>
+  <figure class="card" data-name="Charcoal Gardenia INC">
+    <figcaption><span class="idx">05</span><span class="nm">Charcoal Gardenia INC</span></figcaption>
+    <div class="pair">
+      <div class="col"><div class="lbl">today &middot; 64px</div>
+        <div class="paper"><img class="cur" src="https://dfwqakoyittmrwbqvxgw.supabase.co/storage/v1/object/public/merchant-logos/14d59c26-f553-458e-a1d8-9077ea918a77/logo.jpg" crossorigin="anonymous"><div class="biz">CHARCOAL GARDENIA INC</div><div class="ad">432 Manor Rd</div></div></div>
+      <div class="col"><div class="lbl">120px</div>
+        <div class="paper"><img class="big" src="https://dfwqakoyittmrwbqvxgw.supabase.co/storage/v1/object/public/merchant-logos/14d59c26-f553-458e-a1d8-9077ea918a77/logo.jpg" crossorigin="anonymous"><div class="biz">CHARCOAL GARDENIA INC</div><div class="ad">432 Manor Rd</div></div></div>
+    </div>
+    <div class="rep">measuring&hellip;</div>
+  </figure>
+  <figure class="card" data-name="Saucy INC">
+    <figcaption><span class="idx">06</span><span class="nm">Saucy INC</span></figcaption>
+    <div class="pair">
+      <div class="col"><div class="lbl">today &middot; 64px</div>
+        <div class="paper"><img class="cur" src="https://dfwqakoyittmrwbqvxgw.supabase.co/storage/v1/object/public/merchant-logos/5311e16a-fa2a-463b-bc37-474752772fa6/logo.png" crossorigin="anonymous"><div class="biz">SAUCY INC</div><div class="ad">432 Manor Rd</div></div></div>
+      <div class="col"><div class="lbl">120px</div>
+        <div class="paper"><img class="big" src="https://dfwqakoyittmrwbqvxgw.supabase.co/storage/v1/object/public/merchant-logos/5311e16a-fa2a-463b-bc37-474752772fa6/logo.png" crossorigin="anonymous"><div class="biz">SAUCY INC</div><div class="ad">432 Manor Rd</div></div></div>
+    </div>
+    <div class="rep">measuring&hellip;</div>
+  </figure>
+  <figure class="card" data-name="Appflow Studio Cafe">
+    <figcaption><span class="idx">07</span><span class="nm">Appflow Studio Cafe</span></figcaption>
+    <div class="pair">
+      <div class="col"><div class="lbl">today &middot; 64px</div>
+        <div class="paper"><img class="cur" src="https://hifouuofcaytijrkbvcy.supabase.co/storage/v1/object/public/Organizations-Logos/org_34ARCSCC3yZp6sUVeftZHvZnD8R.png" crossorigin="anonymous"><div class="biz">APPFLOW STUDIO CAFE</div><div class="ad">432 Manor Rd</div></div></div>
+      <div class="col"><div class="lbl">120px</div>
+        <div class="paper"><img class="big" src="https://hifouuofcaytijrkbvcy.supabase.co/storage/v1/object/public/Organizations-Logos/org_34ARCSCC3yZp6sUVeftZHvZnD8R.png" crossorigin="anonymous"><div class="biz">APPFLOW STUDIO CAFE</div><div class="ad">432 Manor Rd</div></div></div>
+    </div>
+    <div class="rep">measuring&hellip;</div>
+  </figure>
+  <figure class="card" data-name="Charcoal Gardenia">
+    <figcaption><span class="idx">08</span><span class="nm">Charcoal Gardenia</span></figcaption>
+    <div class="pair">
+      <div class="col"><div class="lbl">today &middot; 64px</div>
+        <div class="paper"><img class="cur" src="https://dexa-pos-uploads.b-cdn.net/organizations/org_3CMApg0lFQCHbv9vhKFryXP8vwm/logos/logo-1776185250231.png" crossorigin="anonymous"><div class="biz">CHARCOAL GARDENIA</div><div class="ad">432 Manor Rd</div></div></div>
+      <div class="col"><div class="lbl">120px</div>
+        <div class="paper"><img class="big" src="https://dexa-pos-uploads.b-cdn.net/organizations/org_3CMApg0lFQCHbv9vhKFryXP8vwm/logos/logo-1776185250231.png" crossorigin="anonymous"><div class="biz">CHARCOAL GARDENIA</div><div class="ad">432 Manor Rd</div></div></div>
+    </div>
+    <div class="rep">measuring&hellip;</div>
+  </figure>
+  <figure class="card" data-name="Charcoal Gardenia">
+    <figcaption><span class="idx">09</span><span class="nm">Charcoal Gardenia</span></figcaption>
+    <div class="pair">
+      <div class="col"><div class="lbl">today &middot; 64px</div>
+        <div class="paper"><img class="cur" src="https://dexa-pos-uploads.b-cdn.net/organizations/org_3CMADns3YwbGLletT5AEuniSOnO/logos/logo-1776184947613.png" crossorigin="anonymous"><div class="biz">CHARCOAL GARDENIA</div><div class="ad">432 Manor Rd</div></div></div>
+      <div class="col"><div class="lbl">120px</div>
+        <div class="paper"><img class="big" src="https://dexa-pos-uploads.b-cdn.net/organizations/org_3CMADns3YwbGLletT5AEuniSOnO/logos/logo-1776184947613.png" crossorigin="anonymous"><div class="biz">CHARCOAL GARDENIA</div><div class="ad">432 Manor Rd</div></div></div>
+    </div>
+    <div class="rep">measuring&hellip;</div>
+  </figure>
+  <figure class="card" data-name="Bora Bora">
+    <figcaption><span class="idx">10</span><span class="nm">Bora Bora</span></figcaption>
+    <div class="pair">
+      <div class="col"><div class="lbl">today &middot; 64px</div>
+        <div class="paper"><img class="cur" src="https://dexa-pos-uploads.b-cdn.net/organizations/org_3DgAXQz8zsnS47nS2Y0oi1UGWSz/logos/logo-1778693380498.webp" crossorigin="anonymous"><div class="biz">BORA BORA</div><div class="ad">432 Manor Rd</div></div></div>
+      <div class="col"><div class="lbl">120px</div>
+        <div class="paper"><img class="big" src="https://dexa-pos-uploads.b-cdn.net/organizations/org_3DgAXQz8zsnS47nS2Y0oi1UGWSz/logos/logo-1778693380498.webp" crossorigin="anonymous"><div class="biz">BORA BORA</div><div class="ad">432 Manor Rd</div></div></div>
+    </div>
+    <div class="rep">measuring&hellip;</div>
+  </figure>
+  <figure class="card" data-name="Joes Coffee Shop">
+    <figcaption><span class="idx">11</span><span class="nm">Joes Coffee Shop</span></figcaption>
+    <div class="pair">
+      <div class="col"><div class="lbl">today &middot; 64px</div>
+        <div class="paper"><img class="cur" src="https://hifouuofcaytijrkbvcy.supabase.co/storage/v1/object/public/Organizations-Logos/org_34LN9aMJGO4jNllGTvHH4CLB5gq.png" crossorigin="anonymous"><div class="biz">JOES COFFEE SHOP</div><div class="ad">432 Manor Rd</div></div></div>
+      <div class="col"><div class="lbl">120px</div>
+        <div class="paper"><img class="big" src="https://hifouuofcaytijrkbvcy.supabase.co/storage/v1/object/public/Organizations-Logos/org_34LN9aMJGO4jNllGTvHH4CLB5gq.png" crossorigin="anonymous"><div class="biz">JOES COFFEE SHOP</div><div class="ad">432 Manor Rd</div></div></div>
+    </div>
+    <div class="rep">measuring&hellip;</div>
+  </figure>
+  <figure class="card" data-name="Appflow Studio Cafe 2">
+    <figcaption><span class="idx">12</span><span class="nm">Appflow Studio Cafe 2</span></figcaption>
+    <div class="pair">
+      <div class="col"><div class="lbl">today &middot; 64px</div>
+        <div class="paper"><img class="cur" src="https://dexa-pos-uploads.b-cdn.net/organizations/org_3DOzcCulSnVSBb2Z4Y3qiQSAOev/logos/logo-1778167981281.jpeg" crossorigin="anonymous"><div class="biz">APPFLOW STUDIO CAFE 2</div><div class="ad">432 Manor Rd</div></div></div>
+      <div class="col"><div class="lbl">120px</div>
+        <div class="paper"><img class="big" src="https://dexa-pos-uploads.b-cdn.net/organizations/org_3DOzcCulSnVSBb2Z4Y3qiQSAOev/logos/logo-1778167981281.jpeg" crossorigin="anonymous"><div class="biz">APPFLOW STUDIO CAFE 2</div><div class="ad">432 Manor Rd</div></div></div>
+    </div>
+    <div class="rep">measuring&hellip;</div>
+  </figure>
+  <figure class="card" data-name="Appflow Studio Cafe">
+    <figcaption><span class="idx">13</span><span class="nm">Appflow Studio Cafe</span></figcaption>
+    <div class="pair">
+      <div class="col"><div class="lbl">today &middot; 64px</div>
+        <div class="paper"><img class="cur" src="https://dexa-pos-uploads.b-cdn.net/organizations/org_3DLxqg7RK4z61VRTk9xcV6iRwkX/logos/logo-1778075406673.jpeg" crossorigin="anonymous"><div class="biz">APPFLOW STUDIO CAFE</div><div class="ad">432 Manor Rd</div></div></div>
+      <div class="col"><div class="lbl">120px</div>
+        <div class="paper"><img class="big" src="https://dexa-pos-uploads.b-cdn.net/organizations/org_3DLxqg7RK4z61VRTk9xcV6iRwkX/logos/logo-1778075406673.jpeg" crossorigin="anonymous"><div class="biz">APPFLOW STUDIO CAFE</div><div class="ad">432 Manor Rd</div></div></div>
+    </div>
+    <div class="rep">measuring&hellip;</div>
+  </figure></div>
+</div>
+<script>
+var MAX = 400; // downscale before scanning; keeps 4000px photos fast
+function classify(img){
+  var w0=img.naturalWidth, h0=img.naturalHeight;
+  var s=Math.min(1, MAX/Math.max(w0,h0));
+  var w=Math.max(1,Math.round(w0*s)), h=Math.max(1,Math.round(h0*s));
+  var c=document.createElement('canvas'); c.width=w; c.height=h;
+  var x=c.getContext('2d',{willReadFrequently:true});
+  x.drawImage(img,0,0,w,h);
+  var px;
+  try { px=x.getImageData(0,0,w,h).data } catch(e){ return {err:'CORS-blocked'} }
+  function at(i,j){ var o=(j*w+i)*4; return [px[o],px[o+1],px[o+2],px[o+3]] }
+  var corners=[at(0,0),at(w-1,0),at(0,h-1),at(w-1,h-1)];
+  var transparent = corners.every(function(c){return c[3]<16});
+  var c0=corners[0];
+  var uniform = !transparent && corners.every(function(c){
+    return c[3]>240 && Math.abs(c[0]-c0[0])<8 && Math.abs(c[1]-c0[1])<8 && Math.abs(c[2]-c0[2])<8 });
+  var minx=w,maxx=-1,miny=h,maxy=-1;
+  for(var j=0;j<h;j++) for(var i=0;i<w;i++){
+    var o=(j*w+i)*4, a=px[o+3], isBg;
+    if(transparent) isBg = a<16;
+    else isBg = a>240 && Math.abs(px[o]-c0[0])<12 && Math.abs(px[o+1]-c0[1])<12 && Math.abs(px[o+2]-c0[2])<12;
+    if(!isBg){ if(i<minx)minx=i; if(i>maxx)maxx=i; if(j<miny)miny=j; if(j>maxy)maxy=j }
+  }
+  var cw=(maxx<0)?0:maxx-minx+1, ch=(maxy<0)?0:maxy-miny+1;
+  var pad = 100 - (100*cw*ch)/(w*h);
+  function hex(c){ return '#'+[c[0],c[1],c[2]].map(function(v){return v.toString(16).padStart(2,'0')}).join('') }
+  return {w0:w0,h0:h0,transparent:transparent,uniform:uniform,bg:hex(c0),
+          cw:Math.round(cw/s),ch:Math.round(ch/s),pad:pad,ar:(w0/h0)};
+}
+function verdictOf(r){
+  if(r.transparent) return ['ok','TRANSPARENT background — clean'];
+  if(r.uniform && r.bg.toLowerCase()==='#ffffff') return ['ok','opaque WHITE — invisible on white paper'];
+  if(r.uniform) return ['bad','opaque '+r.bg+' — BAKED-IN TILE'];
+  return ['warn','non-uniform edges — photo / complex background'];
+}
+var counts={ok:0,bad:0,warn:0,err:0};
+var cards=Array.prototype.slice.call(document.querySelectorAll('.card'));
+function process(k){
+  if(k>=cards.length){ render(); return }
+  var card=cards[k], img=card.querySelector('img.cur'), rep=card.querySelector('.rep');
+  function go(){
+    var r=classify(img);
+    if(r.err){ rep.textContent='! '+r.err; counts.err++; card.dataset.verdict='warn'; }
+    else {
+      var v=verdictOf(r); counts[v[0]]++; card.dataset.verdict=v[0];
+      rep.innerHTML='<span class="'+v[0]+'">'+v[1]+'</span><br>'
+        + 'file ' + r.w0 + '&times;' + r.h0 + ' (' + r.ar.toFixed(2) + ':1)<br>'
+        + 'mark ' + r.cw + '&times;' + r.ch + ' &middot; padding ' + r.pad.toFixed(0) + '%';
+    }
+    setTimeout(function(){process(k+1)},0);
+  }
+  if(img.complete && img.naturalWidth) go();
+  else { img.onload=go; img.onerror=function(){ rep.textContent='! failed to load'; counts.err++; setTimeout(function(){process(k+1)},0) } }
+}
+function render(){
+  document.getElementById('tally').innerHTML =
+    '<span class="bad">' + counts.bad + '</span> with a baked-in coloured tile &nbsp;&middot;&nbsp; ' +
+    '<span class="ok">' + counts.ok + '</span> clean (transparent or white) &nbsp;&middot;&nbsp; ' +
+    '<span class="warn">' + counts.warn + '</span> photo/complex &nbsp;&middot;&nbsp; ' +
+    counts.err + ' unreadable &nbsp; of ' + cards.length + ' merchants';
+  document.title = 'DONE ' + counts.bad + ' baked / ' + cards.length;
+}
+process(0);
+</script></body></html>

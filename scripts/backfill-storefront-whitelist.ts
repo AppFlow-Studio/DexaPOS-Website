@@ -8,7 +8,7 @@
  *
  * This only updates the LOCAL mirror. After this runs, ops must still
  * register any newly-listed origins in the NMI portal for Collect.js to
- * tokenize from them. See docs/RUNBOOK-PAYMENT-WHITELIST-SYNC.md.
+ * tokenize from them. See docs/features/online-ordering/RUNBOOK-PAYMENT-WHITELIST-SYNC.md.
  *
  * Usage:
  *   npx tsx scripts/backfill-storefront-whitelist.ts                  # all
@@ -121,7 +121,7 @@ async function main() {
     }
     console.log('')
     console.log('NEXT STEP: register each newly-listed origin in the NMI portal.')
-    console.log('See docs/RUNBOOK-PAYMENT-WHITELIST-SYNC.md §"How to mirror into the NMI portal".')
+    console.log('See docs/features/online-ordering/RUNBOOK-PAYMENT-WHITELIST-SYNC.md §"How to mirror into the NMI portal".')
   } else {
     console.log('No locations needed updating.')
   }

@@ -184,7 +184,7 @@ Menu items support a 5-level price override cascade:
 • For complex problems, throw more compute at it via subagents
 • One task per subagent for focused execution
 ## 3. Self-Improvement Loop
-• After ANY correction from the user: update tasks/lessons.md with the pattern
+• After ANY correction from the user: update docs/engineering/developer-experience/lessons.md with the pattern
 • Write rules for yourself that prevent the same mistake
 • Ruthlessly iterate on these lessons until mistake rate drops
 • Review lessons at session start for relevant project
@@ -204,12 +204,12 @@ Menu items support a 5-level price override cascade:
 • Zero context switching required from the user
 • Go fix failing Cl tests without being told how
 ##  Task Management
-1. Plan First: Write plan to tasks/todo. md with checkable items
+1. Plan First: Write checkable work items in the canonical document under `docs/features/<feature>/`
 2. Verify Plan: Check in before starting implementation
 3. Track Progress: Mark items complete as you go
 4. Explain Changes: High-level summary at each step
-5. Document Results: Add review section to tasks/todo.md
-6. Capture Lessons: Update tasks/lessons. md after corrections
+5. Document Results: Update the feature's existing plan, handoff, or QA document
+6. Capture Lessons: Update `docs/engineering/developer-experience/lessons.md` after corrections
 ##  Core Principles
 • Simplicity First: Make every change as simple as possible. Impact minimal code.
 • No Laziness: Find root causes. No temporary fixes. Senior developer standards.

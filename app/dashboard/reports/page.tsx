@@ -1,7 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { useFinancialKPIs, useOrderAnalytics } from "../hooks/useOrderAnalytics";
+import {
+  useFinancialKPIs,
+  useOrderAnalytics,
+  useRevenueBreakdown,
+  useDualPricingComparison,
+} from "../hooks/useOrderAnalytics";
 import {
   DateRangePicker,
   DatePreset,
@@ -30,6 +35,35 @@ import { OrderTypeChart } from "./components/OrderTypeChart";
 import { cn } from "@/lib/utils";
 import { useReportingQueryRange } from "../hooks/useReportingDateRange";
 import { fillDailyFinancialStats } from "@/lib/reporting/date-range";
+import { ReportExportButtons } from "./components/ReportExportButtons";
+import { formatDateForExport, type ExportColumn } from "@/utils/export";
+
+type SalesOverviewRow = {
+  date: string;
+  sales: number;
+  orders: number;
+  tax: number;
+  serviceCharges: number;
+  discounts: number;
+  cardRevenue: number;
+  cashRevenue: number;
+};
+
+const usd = (v: number) => `$${v.toFixed(2)}`;
+
+const salesOverviewBaseColumns: ExportColumn<SalesOverviewRow>[] = [
+  { key: "date", header: "Date", format: (v: string) => formatDateForExport(v) },
+  { key: "sales", header: "Net Sales", format: usd },
+  { key: "orders", header: "Orders", format: (v: number) => v.toLocaleString() },
+  { key: "tax", header: "Tax", format: usd },
+  { key: "serviceCharges", header: "Service Charge", format: usd },
+  { key: "discounts", header: "Discounts", format: usd },
+];
+
+const salesOverviewDualPricingColumns: ExportColumn<SalesOverviewRow>[] = [
+  { key: "cardRevenue", header: "Card Revenue", format: usd },
+  { key: "cashRevenue", header: "Cash Revenue", format: usd },
+];
 
 const SUB_REPORTS = [
   {
@@ -87,6 +121,15 @@ export default function ReportsPage() {
     queryDateRange.from,
     queryDateRange.to
   );
+  // Tax / service charge / discounts and dual-pricing for a complete export
+  const { data: revenueBreakdown } = useRevenueBreakdown(
+    queryDateRange.from,
+    queryDateRange.to
+  );
+  const { data: dualPricing } = useDualPricingComparison(
+    queryDateRange.from,
+    queryDateRange.to
+  );
 
   const handleDateRangeChange = (from: Date | null, to: Date | null) => {
     if (from && to) setDateRange({ from, to });
@@ -105,6 +148,32 @@ export default function ReportsPage() {
     sales: item.net_sales,
     orders: item.order_count,
   }));
+
+  // Enriched daily rows for CSV/PDF export (tax, service charge, discounts, tender split)
+  const revenueByDate = new Map(
+    (revenueBreakdown?.byDate ?? []).map((d) => [d.date, d])
+  );
+  const dualByDate = new Map(
+    (dualPricing?.byDate ?? []).map((d) => [d.date, d])
+  );
+  const hasDualPricing = dualPricing?.hasDualPricing ?? false;
+  const salesOverviewExport: SalesOverviewRow[] = chartData.map((row) => {
+    const rev = revenueByDate.get(row.date);
+    const dual = dualByDate.get(row.date);
+    return {
+      date: row.date,
+      sales: row.sales,
+      orders: row.orders,
+      tax: rev?.tax ?? 0,
+      serviceCharges: rev?.serviceCharges ?? 0,
+      discounts: rev?.discounts ?? 0,
+      cardRevenue: dual?.cardRevenue ?? 0,
+      cashRevenue: dual?.cashRevenue ?? 0,
+    };
+  });
+  const salesOverviewColumns = hasDualPricing
+    ? [...salesOverviewBaseColumns, ...salesOverviewDualPricingColumns]
+    : salesOverviewBaseColumns;
 
   const topOrderTypeEntry = Object.entries(
     analytics?.orderTypeBreakdown ?? {}
@@ -174,13 +243,43 @@ export default function ReportsPage() {
             · Sales performance and trends
           </p>
         </div>
-        <DateRangePicker
-          dateFrom={dateRange.from}
-          dateTo={dateRange.to}
-          onDateRangeChange={handleDateRangeChange}
-          preset={preset}
-          onPresetChange={setPreset}
-        />
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <DateRangePicker
+            dateFrom={dateRange.from}
+            dateTo={dateRange.to}
+            onDateRangeChange={handleDateRangeChange}
+            preset={preset}
+            onPresetChange={setPreset}
+          />
+          <ReportExportButtons
+            data={salesOverviewExport}
+            columns={salesOverviewColumns}
+            filenameBase="sales-overview"
+            pdfTitle="Sales Overview"
+            dateFrom={dateRange.from}
+            dateTo={dateRange.to}
+            locationName={
+              selectedLocation && !Array.isArray(selectedLocation)
+                ? selectedLocation.name
+                : "All Locations"
+            }
+            summaryCards={[
+              {
+                label: "Total Revenue",
+                value: `$${totalSales.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+              },
+              {
+                label: "Total Orders",
+                value: (financialKPIs?.summary.order_count ?? 0).toLocaleString(),
+              },
+              {
+                label: "Avg Order Value",
+                value: `$${(financialKPIs?.summary.avg_order_value ?? 0).toFixed(2)}`,
+              },
+            ]}
+            disabled={isLoading || kpisLoading || isAnyError}
+          />
+        </div>
       </div>
 
       {/* ── KPI Cards ──────────────────────────────────────────── */}

@@ -14,7 +14,7 @@
 import type { Database } from "@/database.types";
 
 /** Canonical order-source taxonomy stored in orders.order_source. */
-export type OrderSource = "pos" | "orderout" | "online_store" | "phone";
+export type OrderSource = "pos" | "kiosk" | "online_store" | "orderout";
 
 // ─── Delivery marketplaces (delivery_platform) ───
 
@@ -122,12 +122,12 @@ export function deliveryPlatformMatchValues(slug: string): string[] {
  */
 export const ORDER_SOURCE_META: Record<
   OrderSource,
-  { label: string; iconKey: "store" | "truck" | "globe" | "phone" }
+  { label: string; iconKey: "store" | "monitor" | "globe" | "truck" }
 > = {
-  pos: { label: "In-Store (POS)", iconKey: "store" },
-  orderout: { label: "Delivery App", iconKey: "truck" },
-  online_store: { label: "Online Store", iconKey: "globe" },
-  phone: { label: "Phone", iconKey: "phone" },
+  pos: { label: "In-Store", iconKey: "store" },
+  kiosk: { label: "Kiosk", iconKey: "monitor" },
+  online_store: { label: "Online", iconKey: "globe" },
+  orderout: { label: "Delivery Apps", iconKey: "truck" },
 };
 
 /** Channel options offered as the Channel filter on the Orders list. */
@@ -135,11 +135,23 @@ export const ORDER_SOURCE_OPTIONS: { value: OrderSource; label: string }[] = (
   Object.keys(ORDER_SOURCE_META) as OrderSource[]
 ).map((value) => ({ value, label: ORDER_SOURCE_META[value].label }));
 
+/** Normalize legacy aliases to the canonical reporting taxonomy. */
+export function normalizeOrderSource(
+  source: string | null | undefined
+): OrderSource {
+  const normalized = (source ?? "").trim().toLowerCase();
+  if (normalized === "kiosk") return "kiosk";
+  if (normalized === "online" || normalized === "online_store") {
+    return "online_store";
+  }
+  if (normalized === "orderout") return "orderout";
+  return "pos";
+}
+
 /** Label for an order_source value; tolerant of the legacy 'online' and nulls. */
 export function orderSourceLabel(source: string | null | undefined): string {
   if (!source) return "";
-  if (source === "online") return "Online Store"; // legacy pre-backfill value
-  return ORDER_SOURCE_META[source as OrderSource]?.label ?? source;
+  return ORDER_SOURCE_META[normalizeOrderSource(source)].label;
 }
 
 // ============================================================================
@@ -198,6 +210,34 @@ export interface CanonicalizeInput {
    * order, even when it has no online_orders link and no delivery_platform.
    */
   orderSource?: string | null;
+}
+
+/**
+ * Detect kiosk-only identity before platform bucketing/rendering.
+ * A real delivery marketplace remains authoritative over stray provider
+ * metadata such as `online_order_provider = 'kiosk'`.
+ */
+export function hasKioskPlatformIdentity(input: CanonicalizeInput): boolean {
+  if (normalizeOrderSource(input.orderSource) === "kiosk") {
+    return true;
+  }
+
+  const platformValues = [
+    input.deliveryPlatform,
+    input.deliveryCompany,
+    input.provider,
+  ];
+  const hasThirdPartyPlatform = platformValues.some((value) => {
+    const token = normalizePlatformSlug(value?.toString());
+    return Boolean(THIRD_PARTY_ALIASES[token]);
+  });
+
+  return (
+    !hasThirdPartyPlatform &&
+    platformValues.some(
+      (value) => normalizePlatformSlug(value?.toString()) === "kiosk"
+    )
+  );
 }
 
 /**

@@ -8,6 +8,9 @@ import {
   getPlatformLogo,
   FIRST_PARTY_SLUG,
   OTHER_SLUG,
+  hasKioskPlatformIdentity,
+  normalizeOrderSource,
+  orderSourceLabel,
 } from "../platform";
 
 describe("canonicalizePlatform", () => {
@@ -120,5 +123,35 @@ describe("OrderOut channel-code bridge (one source of truth)", () => {
   it("keeps the raw code for unknown channels instead of collapsing to Other", () => {
     expect(getChannelLabel("POSTMATES")).toBe("POSTMATES");
     expect(getChannelLogo("POSTMATES")).toBeNull();
+  });
+});
+
+describe("order source reporting taxonomy", () => {
+  it("normalizes canonical and legacy sources", () => {
+    expect(normalizeOrderSource("pos")).toBe("pos");
+    expect(normalizeOrderSource("kiosk")).toBe("kiosk");
+    expect(normalizeOrderSource("online")).toBe("online_store");
+    expect(normalizeOrderSource("online_store")).toBe("online_store");
+    expect(normalizeOrderSource("orderout")).toBe("orderout");
+    expect(normalizeOrderSource("phone")).toBe("pos");
+  });
+
+  it("uses the merchant-facing channel labels", () => {
+    expect(orderSourceLabel("pos")).toBe("In-Store");
+    expect(orderSourceLabel("kiosk")).toBe("Kiosk");
+    expect(orderSourceLabel("online_store")).toBe("Online");
+    expect(orderSourceLabel("orderout")).toBe("Delivery Apps");
+  });
+
+  it("detects kiosk identity in source and provider fields", () => {
+    expect(hasKioskPlatformIdentity({ orderSource: "kiosk" })).toBe(true);
+    expect(hasKioskPlatformIdentity({ provider: "KIOSK" })).toBe(true);
+    expect(hasKioskPlatformIdentity({ deliveryCompany: "grubhub" })).toBe(false);
+    expect(
+      hasKioskPlatformIdentity({
+        deliveryPlatform: "Grubhub",
+        provider: "KIOSK",
+      })
+    ).toBe(false);
   });
 });

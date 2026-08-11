@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef, useState, useCallback } from "react";
+import React, { useRef, useState, useCallback, useEffect } from "react";
 import { Paperclip, X, Loader2, CheckCircle2, AlertCircle, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AttachmentInput } from "@/types/support-ticket";
@@ -28,6 +28,7 @@ interface FileUploadInputProps {
   sessionId: string;
   disabled?: boolean;
   className?: string;
+  onUploadStateChange?: (isUploading: boolean) => void;
 }
 
 export default function FileUploadInput({
@@ -36,20 +37,23 @@ export default function FileUploadInput({
   sessionId,
   disabled,
   className,
+  onUploadStateChange,
 }: FileUploadInputProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [files, setFiles] = useState<UploadedFileState[]>([]);
   const [isDragging, setIsDragging] = useState(false);
 
-  const notifyParent = useCallback(
-    (updated: UploadedFileState[]) => {
-      const done = updated
-        .filter((f) => f.status === "done" && f.result)
-        .map((f) => f.result!);
-      onUploadsChange(done);
-    },
-    [onUploadsChange]
-  );
+  useEffect(() => {
+    onUploadStateChange?.(files.some((file) => file.status === "uploading"));
+  }, [files, onUploadStateChange]);
+
+  useEffect(() => {
+    const completedAttachments = files
+      .filter((file) => file.status === "done" && file.result)
+      .map((file) => file.result!);
+
+    onUploadsChange(completedAttachments);
+  }, [files, onUploadsChange]);
 
   const uploadFile = useCallback(
     async (fileState: UploadedFileState) => {
@@ -57,15 +61,13 @@ export default function FileUploadInput({
       const { signedUrl, path, error } = await getUploadUrl(file.name, id, sessionId);
 
       if (error || !signedUrl || !path) {
-        setFiles((prev) => {
-          const next = prev.map((f) =>
+        setFiles((prev) =>
+          prev.map((f) =>
             f.id === id
               ? { ...f, status: "error" as const, errorMessage: error || "Upload failed" }
               : f
-          );
-          notifyParent(next);
-          return next;
-        });
+          )
+        );
         return;
       }
 
@@ -85,26 +87,22 @@ export default function FileUploadInput({
           file_type: file.type,
         };
 
-        setFiles((prev) => {
-          const next = prev.map((f) =>
+        setFiles((prev) =>
+          prev.map((f) =>
             f.id === id ? { ...f, status: "done" as const, result } : f
-          );
-          notifyParent(next);
-          return next;
-        });
+          )
+        );
       } catch {
-        setFiles((prev) => {
-          const next = prev.map((f) =>
+        setFiles((prev) =>
+          prev.map((f) =>
             f.id === id
               ? { ...f, status: "error" as const, errorMessage: "Upload failed" }
               : f
-          );
-          notifyParent(next);
-          return next;
-        });
+          )
+        );
       }
     },
-    [getUploadUrl, sessionId, notifyParent]
+    [getUploadUrl, sessionId]
   );
 
   const processFiles = useCallback(
@@ -176,15 +174,11 @@ export default function FileUploadInput({
 
   const removeFile = useCallback(
     (id: string) => {
-      setFiles((prev) => {
-        const removed = prev.find((f) => f.id === id);
-        if (removed?.preview) URL.revokeObjectURL(removed.preview);
-        const next = prev.filter((f) => f.id !== id);
-        notifyParent(next);
-        return next;
-      });
+      const removed = files.find((file) => file.id === id);
+      if (removed?.preview) URL.revokeObjectURL(removed.preview);
+      setFiles((prev) => prev.filter((file) => file.id !== id));
     },
-    [notifyParent]
+    [files]
   );
 
   const canAddMore = files.length < MAX_FILES;

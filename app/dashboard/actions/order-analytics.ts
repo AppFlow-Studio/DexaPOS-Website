@@ -2,6 +2,15 @@
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { applyReportablePredicate } from "@/lib/reporting/recognized-order";
+import {
+  buildSalesByItemReportV2Args,
+  type SalesByItemReportV2Item,
+} from "@/lib/reporting/order-channel";
+import {
+  normalizeOrderSource,
+  ORDER_SOURCE_META,
+  type OrderSource,
+} from "@/lib/orderout/platform";
 
 export interface OrderAnalytics {
   salesToday: number;
@@ -623,13 +632,7 @@ export interface VoidsReport {
   refunds: RefundItem[];
 }
 
-export interface SalesByItemReportItem {
-  item_name: string;
-  category: string;
-  quantity_sold: number;
-  gross_sales: number;
-  net_sales: number;
-}
+export interface SalesByItemReportItem extends SalesByItemReportV2Item {}
 
 export interface CashFlowReportItem {
   order_number: string;
@@ -679,7 +682,8 @@ export async function GetSalesByItemReport(
   clerkOrgId: string,
   locationId: string | null,
   dateFrom: Date,
-  dateTo: Date
+  dateTo: Date,
+  orderSource: OrderSource | null = null
 ): Promise<SalesByItemReportItem[]> {
   const merchantId = await getMerchantId(clerkOrgId);
   if (!merchantId) {
@@ -688,14 +692,15 @@ export async function GetSalesByItemReport(
 
   const supabase = createServerSupabaseClient();
 
-  const { data: report, error } = await supabase.rpc(
-    "get_sales_by_item_report",
-    {
-      p_merchant_id: merchantId,
-      p_location_id: locationId === "all" ? null : locationId,
-      p_start_date: dateFrom.toISOString(),
-      p_end_date: dateTo.toISOString(),
-    }
+  const { data: report, error } = await (supabase as any).rpc(
+    "get_sales_by_item_report_v2",
+    buildSalesByItemReportV2Args({
+      merchantId,
+      locationId,
+      dateFrom,
+      dateTo,
+      orderSource,
+    })
   );
 
   if (error) {
@@ -1608,7 +1613,7 @@ import type {
   RevenueBreakdown,
   DualPricingComparison,
   DiscountImpact,
-  SalesSummaryRow,
+  SalesSummaryReportData,
   HourlySalesRow,
   KitchenPerformanceStats,
   TablePerformanceStats,
@@ -1951,10 +1956,24 @@ export async function GetSalesSummaryReport(
   clerkOrgId: string,
   locationId: string | null,
   dateFrom: Date,
-  dateTo: Date
-): Promise<SalesSummaryRow[]> {
+  dateTo: Date,
+  orderSource: OrderSource | null = null
+): Promise<SalesSummaryReportData> {
   const merchantId = await getMerchantId(clerkOrgId);
-  if (!merchantId) return [];
+  const emptyChannels = (
+    Object.entries(ORDER_SOURCE_META) as Array<
+      [OrderSource, (typeof ORDER_SOURCE_META)[OrderSource]]
+    >
+  ).map(([channel, metadata]) => ({
+    channel,
+    label: metadata.label,
+    orders: 0,
+    gross: 0,
+    net: 0,
+    avgTicket: 0,
+  }));
+
+  if (!merchantId) return { rows: [], byChannel: emptyChannels };
 
   const supabase = createServerSupabaseClient();
 
@@ -1962,7 +1981,7 @@ export async function GetSalesSummaryReport(
     supabase
       .from("orders")
       .select(
-        "created_at, subtotal, tax_amount, tip_amount, discount_amount, total_amount, status"
+        "created_at, subtotal, tax_amount, tip_amount, discount_amount, total_amount, status, order_source"
       )
       .eq("merchant_id", merchantId)
   )
@@ -1976,7 +1995,7 @@ export async function GetSalesSummaryReport(
   const { data: orders, error } = await query;
   if (error || !orders) {
     console.error("[GetSalesSummaryReport] Error:", error);
-    return [];
+    return { rows: [], byChannel: emptyChannels };
   }
 
   // Refunds are netted from the dedicated refunds source (order_payments),
@@ -1984,7 +2003,9 @@ export async function GetSalesSummaryReport(
   // Without this separate query the refunds column would silently read 0.
   let refundQuery = supabase
     .from("order_payments")
-    .select("refunded_amount, refunded_at, orders!inner(merchant_id, location_id)")
+    .select(
+      "refunded_amount, refunded_at, orders!inner(merchant_id, location_id, order_source)"
+    )
     .eq("orders.merchant_id", merchantId)
     .in("status", ["refunded", "partially_refunded"])
     .gte("refunded_at", dateFrom.toISOString())
@@ -1996,8 +2017,17 @@ export async function GetSalesSummaryReport(
 
   const { data: refundRows } = await refundQuery;
   const refundsByDate = new Map<string, number>();
+  const refundsByChannel = new Map<OrderSource, number>();
   for (const r of refundRows || []) {
     if (!r.refunded_at) continue;
+    const linkedOrder = Array.isArray(r.orders) ? r.orders[0] : r.orders;
+    const channel = normalizeOrderSource(linkedOrder?.order_source);
+    refundsByChannel.set(
+      channel,
+      (refundsByChannel.get(channel) || 0) + Number(r.refunded_amount || 0)
+    );
+    if (orderSource && channel !== orderSource) continue;
+
     const date = new Date(r.refunded_at).toISOString().split("T")[0];
     refundsByDate.set(
       date,
@@ -2016,8 +2046,25 @@ export async function GetSalesSummaryReport(
       refunds: number;
     }
   >();
+  const channelMap = new Map<
+    OrderSource,
+    { orders: number; gross: number; discounts: number }
+  >(
+    emptyChannels.map((channel) => [
+      channel.channel,
+      { orders: 0, gross: 0, discounts: 0 },
+    ])
+  );
 
   for (const o of orders) {
+    const channel = normalizeOrderSource(o.order_source);
+    const channelData = channelMap.get(channel)!;
+    channelData.orders += 1;
+    channelData.gross += Number(o.subtotal || 0);
+    channelData.discounts += Number(o.discount_amount || 0);
+
+    if (orderSource && channel !== orderSource) continue;
+
     const date = new Date(o.created_at).toISOString().split("T")[0];
     const existing = byDateMap.get(date) || {
       orderCount: 0,
@@ -2052,13 +2099,30 @@ export async function GetSalesSummaryReport(
     byDateMap.set(date, existing);
   }
 
-  return Array.from(byDateMap.entries())
+  const rows = Array.from(byDateMap.entries())
     .map(([date, data]) => ({
       date,
       ...data,
-      netSales: data.grossSales - data.discounts,
+      netSales: data.grossSales - data.discounts - data.refunds,
     }))
     .sort((a, b) => a.date.localeCompare(b.date));
+
+  const byChannel = emptyChannels.map((channel) => {
+    const totals = channelMap.get(channel.channel)!;
+    const refunds = refundsByChannel.get(channel.channel) || 0;
+    const net = totals.gross - totals.discounts - refunds;
+
+    return {
+      channel: channel.channel,
+      label: channel.label,
+      orders: totals.orders,
+      gross: totals.gross,
+      net,
+      avgTicket: totals.orders > 0 ? net / totals.orders : 0,
+    };
+  });
+
+  return { rows, byChannel };
 }
 
 /**
