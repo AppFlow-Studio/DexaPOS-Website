@@ -104,6 +104,12 @@ export interface BoardingApi {
   generateApiKeys(ctx: { epi: string }): Promise<ValorEnvelope>;
   /** Best-effort cleanup. Absence means partial state must be reported instead. */
   deleteMerchant?(ctx: { merchantId: string }): Promise<void>;
+  /**
+   * Best-effort per-location cleanup: remove a store created under a shared
+   * merchant. Used by `provisionLocation`, which must never delete the merchant
+   * (it is shared across every location the merchant runs).
+   */
+  deleteStore?(ctx: { merchantId: string; storeId: string }): Promise<void>;
 }
 
 /** Persists the boarded account. Supplied by the caller (service-role write). */
@@ -300,6 +306,259 @@ export async function runBoarding(
   }
 
   return account;
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Scalable onboarding: one Valor merchant, many locations.
+//
+// `runBoarding` above is the single-account primitive (1 merchant + 1 store +
+// 1 EPI, atomic, merchant-level rollback). It does NOT compose across a
+// merchant's locations: calling it per location would create a *new Valor
+// merchant every time*. A DEXA merchant is one Valor merchant with one store +
+// EPI per location, so onboarding is split into two operations:
+//
+//   boardMerchant()      — Merchant Add, once per DEXA merchant.
+//   provisionLocation()  — Store Add -> EPI Add -> keys -> persist, per location,
+//                          reusing the shared merchant. Rolls back the *store*
+//                          on failure, never the merchant.
+//
+// `onboardMerchant()` composes them: board once, then provision every location
+// with per-location isolation, so one bad location neither deletes the merchant
+// nor blocks the others. The same `provisionLocation()` is how a merchant adds a
+// location later (a new store years after boarding).
+// ────────────────────────────────────────────────────────────────────────────
+
+/** A boarded Valor merchant, reused across all of its locations. */
+export interface MerchantContext {
+  valorMerchantId: string;
+  newUserId: string;
+}
+
+/** One DEXA location to provision under an already-boarded merchant. */
+export interface LocationInput {
+  store: BoardingStoreDetails;
+  /** Null provisions a merchant-global account (single-location merchants). */
+  dexaLocationId: string | null;
+  epiLabel?: string;
+}
+
+export interface LocationFailure {
+  dexaLocationId: string | null;
+  error: unknown;
+}
+
+export interface OnboardResult {
+  merchant: MerchantContext;
+  /** Locations provisioned and persisted successfully. */
+  accounts: BoardedAccount[];
+  /**
+   * Locations that failed. The merchant and every successful location stay
+   * live — each failure is retryable via `provisionLocation` without re-boarding.
+   */
+  failures: LocationFailure[];
+}
+
+/**
+ * Board the Valor merchant (Merchant Add only).
+ *
+ * Runs once per DEXA merchant; the returned context is reused for every
+ * location. `params` supplies the merchant-level fields — the store/location
+ * fields are not consumed here (stores are created per location).
+ */
+export async function boardMerchant(
+  api: BoardingApi,
+  params: BoardingParams
+): Promise<MerchantContext> {
+  let body: ValorEnvelope;
+  try {
+    body = await api.createMerchant(params);
+  } catch (error) {
+    throw new BoardingError("merchant_add", "Valor Merchant Add failed", {}, false, {
+      cause: error,
+    });
+  }
+
+  const valorMerchantId = readMerchantId(body);
+  if (!valorMerchantId) {
+    throw new ValorIdentifierError("Merchant Add", "readMerchantId", body);
+  }
+
+  return { valorMerchantId, newUserId: readNewUserId(body) ?? valorMerchantId };
+}
+
+/**
+ * Provision one location under an already-boarded merchant.
+ *
+ * Store Add -> EPI Add -> Generate API Keys -> persist, for the single location
+ * described by `params.store` / `params.dexaLocationId`. On failure it rolls
+ * back the *store* (never the merchant, which is shared) and reports any store
+ * or EPI that outlived the failure on the thrown `BoardingError`.
+ */
+export async function provisionLocation(
+  api: BoardingApi,
+  merchant: MerchantContext,
+  params: BoardingParams,
+  persist: BoardingPersist
+): Promise<BoardedAccount> {
+  const created: BoardingError["orphaned"] = {};
+
+  const fail = async (
+    step: BoardingStep,
+    message: string,
+    cause?: unknown
+  ): Promise<never> => {
+    let cleanedUp = false;
+    // Store-level rollback only. Deleting the merchant here would tear down
+    // every other location that shares it.
+    if (created.valorStoreId && api.deleteStore) {
+      try {
+        await api.deleteStore({
+          merchantId: merchant.valorMerchantId,
+          storeId: created.valorStoreId,
+        });
+        cleanedUp = true;
+      } catch {
+        cleanedUp = false;
+      }
+    }
+    throw new BoardingError(step, message, { ...created }, cleanedUp, { cause });
+  };
+
+  // ── Store Add ──────────────────────────────────────────────────────────────
+  let storeBody: ValorEnvelope;
+  try {
+    storeBody = await api.createStore(params, {
+      merchantId: merchant.valorMerchantId,
+      newUserId: merchant.newUserId,
+    });
+  } catch (error) {
+    return fail("store_add", "Valor Store Add failed", error);
+  }
+
+  const valorStoreId = readStoreId(storeBody);
+  if (!valorStoreId) {
+    return fail(
+      "store_add",
+      new ValorIdentifierError("Store Add", "readStoreId", storeBody).message
+    );
+  }
+  created.valorStoreId = valorStoreId;
+
+  // ── EPI Add ────────────────────────────────────────────────────────────────
+  let epiBody: ValorEnvelope;
+  try {
+    epiBody = await api.createEpi(params, {
+      merchantId: merchant.valorMerchantId,
+      newUserId: merchant.newUserId,
+      storeId: valorStoreId,
+    });
+  } catch (error) {
+    return fail("epi_add", "Valor EPI Add failed", error);
+  }
+
+  const valorEpi = readEpi(epiBody);
+  if (!valorEpi) {
+    return fail(
+      "epi_add",
+      new ValorIdentifierError("EPI Add", "readEpi", epiBody).message
+    );
+  }
+  if (!isValidEpi(valorEpi)) {
+    return fail(
+      "epi_add",
+      `Valor EPI Add returned "${valorEpi}", which is not a 10-digit EPI ` +
+        "beginning with 2. readEpi() in identifiers.ts is probably reading the " +
+        "wrong field."
+    );
+  }
+  created.valorEpi = valorEpi;
+
+  // ── Generate API Keys ────────────────────────────────────────────────────────
+  let keysBody: ValorEnvelope;
+  try {
+    keysBody = await api.generateApiKeys({ epi: valorEpi });
+  } catch (error) {
+    return fail("generate_api_keys", "Valor Generate API Keys failed", error);
+  }
+
+  const valorAppId = readAppId(keysBody);
+  const valorAppKey = readAppKey(keysBody);
+  if (!valorAppId || !valorAppKey) {
+    return fail(
+      "generate_api_keys",
+      new ValorIdentifierError(
+        "Generate API Keys",
+        valorAppId ? "readAppKey" : "readAppId",
+        keysBody
+      ).message
+    );
+  }
+
+  const account: BoardedAccount = {
+    dexaMerchantId: params.dexaMerchantId,
+    dexaLocationId: params.dexaLocationId,
+    valorMerchantId: merchant.valorMerchantId,
+    valorStoreId,
+    valorEpi,
+    valorAppId,
+    valorAppKey,
+    fees: params.fees,
+  };
+
+  try {
+    await persist(account);
+  } catch (error) {
+    return fail(
+      "persist",
+      "Location provisioned on Valor but persisting merchant_processor_accounts failed",
+      error
+    );
+  }
+
+  return account;
+}
+
+/**
+ * Onboard a DEXA merchant and all of its locations.
+ *
+ * Boards the merchant once, then provisions each location independently. A
+ * location that fails is collected in `failures` and does NOT roll back the
+ * merchant or the locations already provisioned — partial success is durable
+ * and each failure is retryable with `provisionLocation`.
+ */
+export async function onboardMerchant(
+  api: BoardingApi,
+  merchantParams: BoardingParams,
+  locations: LocationInput[],
+  persist: BoardingPersist
+): Promise<OnboardResult> {
+  if (locations.length === 0) {
+    throw new RangeError("onboardMerchant requires at least one location");
+  }
+
+  const merchant = await boardMerchant(api, merchantParams);
+
+  const accounts: BoardedAccount[] = [];
+  const failures: LocationFailure[] = [];
+
+  for (const location of locations) {
+    const params: BoardingParams = {
+      merchant: merchantParams.merchant,
+      fees: merchantParams.fees,
+      dexaMerchantId: merchantParams.dexaMerchantId,
+      store: location.store,
+      dexaLocationId: location.dexaLocationId,
+      ...(location.epiLabel ? { epiLabel: location.epiLabel } : {}),
+    };
+
+    try {
+      accounts.push(await provisionLocation(api, merchant, params, persist));
+    } catch (error) {
+      failures.push({ dexaLocationId: location.dexaLocationId, error });
+    }
+  }
+
+  return { merchant, accounts, failures };
 }
 
 /**

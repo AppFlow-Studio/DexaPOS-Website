@@ -46,13 +46,20 @@ describe("resolveValorEndpoints", () => {
     );
   });
 
-  it("accepts production with an explicit base URL and disables demo mode", () => {
+  it("accepts production with all explicit host URLs and disables demo mode", () => {
+    // Production needs all four hosts supplied — the APIs are spread across
+    // transaction, vault and boarding hosts and none may be guessed.
     const endpoints = resolveValorEndpoints({
       VALOR_ENV: "production",
       VALOR_BASE_URL: "https://securelink.example.com/",
+      VALOR_VAULT_BASE_URL: "https://vault.example.com/",
+      VALOR_BOARDING_BASE_URL: "https://boarding.example.com/",
     });
     expect(endpoints.isDemo).toBe(false);
     expect(endpoints.transactionBaseUrl).toBe("https://securelink.example.com");
+    expect(endpoints.clientTokenBaseUrl).toBe("https://securelink.example.com");
+    expect(endpoints.vaultBaseUrl).toBe("https://vault.example.com");
+    expect(endpoints.boardingBaseUrl).toBe("https://boarding.example.com");
   });
 
   it("treats any unrecognized VALOR_ENV as sandbox", () => {

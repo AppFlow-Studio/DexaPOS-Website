@@ -583,4 +583,11 @@ export const adminKeys = {
       'orderout-synced-menus',
       locationId,
     ] as const,
+
+  // ============================================================================
+  // MERCHANT VALOR BOARDING (Admin View)
+  // ============================================================================
+
+  merchantValorBoarding: (merchantId: string) =>
+    [...adminKeys.merchants(), merchantId, 'valor-boarding'] as const,
 }

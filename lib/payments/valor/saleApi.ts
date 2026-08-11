@@ -156,8 +156,7 @@ function assertChargeable(money: Money): void {
  * is safe to pass to the browser. The APP key used to obtain it is not.
  */
 export async function getClientToken(
-  options: ValorRequestOptions,
-  txnType: "sale" | "auth" = "sale"
+  options: ValorRequestOptions
 ): Promise<ValorClientTokenResponse> {
   if (!isValidEpi(options.credentials.epi)) {
     throw new ValorConfigError(
@@ -165,9 +164,13 @@ export async function getClientToken(
     );
   }
 
+  // GetClientToken is POST /?gptoken on the :443 transaction host with
+  // txn_type "clientToken" ([V-create-page-token]). Confirmed live against
+  // sandbox — the prior /?saleapi= + txn_type "sale" guess on the :4430 host
+  // was rejected with error_no D07.
   const result = await postWithBodyCredentials<
     ValorEnvelopeWithClientToken
-  >("/?saleapi=", { txn_type: txnType }, options, "clientToken");
+  >("/?gptoken", { txn_type: "clientToken" }, options, "transaction");
 
   if (!isValorSuccess(result.body) || !result.body.clientToken) {
     throw new Error(

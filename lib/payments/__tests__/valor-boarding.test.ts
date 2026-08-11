@@ -15,10 +15,14 @@ import {
 } from "../valor/identifiers";
 import {
   assertCompleteFeeSchedule,
+  boardMerchant,
   BoardingError,
+  onboardMerchant,
+  provisionLocation,
   runBoarding,
   type BoardingApi,
   type BoardingParams,
+  type LocationInput,
 } from "../valor/boarding";
 
 const fees = {
@@ -256,6 +260,162 @@ describe("identifier probes", () => {
     expect(readEpi({ unrelated: true })).toBeNull();
     expect(readAppId({})).toBeNull();
     expect(readAppKey({})).toBeNull();
+  });
+});
+
+describe("boardMerchant", () => {
+  it("returns the merchant context, falling newUserId back to the merchant id", async () => {
+    const ctx = await boardMerchant(
+      happyApi({ createMerchant: async () => ({ mp_id: "MP1" }) }),
+      params
+    );
+    expect(ctx).toEqual({ valorMerchantId: "MP1", newUserId: "MP1" });
+  });
+
+  it("wraps a Merchant Add transport failure as BoardingError(merchant_add)", async () => {
+    const error = await expectBoardingError(
+      boardMerchant(
+        happyApi({
+          createMerchant: async () => {
+            throw new Error("boom");
+          },
+        }),
+        params
+      )
+    );
+    expect(error.step).toBe("merchant_add");
+  });
+
+  it("names readMerchantId when the merchant id is missing", async () => {
+    await expect(
+      boardMerchant(happyApi({ createMerchant: async () => ({ nothing: true }) }), params)
+    ).rejects.toThrow(/readMerchantId/);
+  });
+});
+
+const merchantCtx = { valorMerchantId: "MP1", newUserId: "U1" };
+
+describe("provisionLocation", () => {
+  it("provisions a store + EPI under the shared merchant and persists once", async () => {
+    const persist = vi.fn(async () => undefined);
+    const account = await provisionLocation(happyApi(), merchantCtx, params, persist);
+    expect(account.valorMerchantId).toBe("MP1");
+    expect(account.valorStoreId).toBe("ST1");
+    expect(account.valorEpi).toBe("2000000001");
+    expect(account.dexaLocationId).toBe("loc-1");
+    expect(persist).toHaveBeenCalledTimes(1);
+  });
+
+  it("rolls back the STORE, not the merchant, when EPI Add fails", async () => {
+    // The merchant is shared across every location, so per-location failure must
+    // never delete it — only the store this location just created.
+    const deleteStore = vi.fn(async () => undefined);
+    const deleteMerchant = vi.fn(async () => undefined);
+    const error = await expectBoardingError(
+      provisionLocation(
+        happyApi({
+          createEpi: async () => {
+            throw new Error("boom");
+          },
+          deleteStore,
+          deleteMerchant,
+        }),
+        merchantCtx,
+        params,
+        async () => undefined
+      )
+    );
+    expect(error.step).toBe("epi_add");
+    expect(deleteStore).toHaveBeenCalledWith({ merchantId: "MP1", storeId: "ST1" });
+    expect(deleteMerchant).not.toHaveBeenCalled();
+    expect(error.orphaned.valorStoreId).toBe("ST1");
+    expect(error.orphaned.valorMerchantId).toBeUndefined();
+  });
+
+  it("cleans up the store when the database write fails", async () => {
+    const deleteStore = vi.fn(async () => undefined);
+    const error = await expectBoardingError(
+      provisionLocation(happyApi({ deleteStore }), merchantCtx, params, async () => {
+        throw new Error("db down");
+      })
+    );
+    expect(error.step).toBe("persist");
+    expect(deleteStore).toHaveBeenCalled();
+    expect(error.cleanedUp).toBe(true);
+  });
+});
+
+describe("onboardMerchant — one merchant, many locations", () => {
+  const locations: LocationInput[] = [
+    { store: { ...params.store, storeName: "Loc A" }, dexaLocationId: "loc-a" },
+    { store: { ...params.store, storeName: "Loc B" }, dexaLocationId: "loc-b" },
+    { store: { ...params.store, storeName: "Loc C" }, dexaLocationId: "loc-c" },
+  ];
+
+  it("boards the merchant ONCE and provisions every location under it", async () => {
+    const createMerchant = vi.fn(async () => ({ mp_id: "MP1", newUserId: "U1" }));
+    let s = 0;
+    let e = 0;
+    const persist = vi.fn(async () => undefined);
+
+    const result = await onboardMerchant(
+      {
+        createMerchant,
+        createStore: async () => ({ store_id: `ST${++s}` }),
+        createEpi: async () => ({ epi: "200000001" + String(++e) }),
+        generateApiKeys: async () => ({ appid: "APPID", appkey: "APPKEY" }),
+        deleteStore: async () => undefined,
+      },
+      params,
+      locations,
+      persist
+    );
+
+    expect(createMerchant).toHaveBeenCalledTimes(1); // one Valor merchant, not three
+    expect(result.failures).toHaveLength(0);
+    expect(result.accounts).toHaveLength(3);
+    expect(result.accounts.every((a) => a.valorMerchantId === "MP1")).toBe(true);
+    expect(result.accounts.map((a) => a.dexaLocationId)).toEqual([
+      "loc-a",
+      "loc-b",
+      "loc-c",
+    ]);
+    expect(persist).toHaveBeenCalledTimes(3);
+  });
+
+  it("isolates a failing location — merchant and other locations survive", async () => {
+    let s = 0;
+    let e = 0;
+    const deleteMerchant = vi.fn(async () => undefined);
+
+    const result = await onboardMerchant(
+      {
+        createMerchant: async () => ({ mp_id: "MP1", newUserId: "U1" }),
+        createStore: async () => ({ store_id: `ST${++s}` }),
+        createEpi: async () => {
+          e += 1;
+          if (e === 2) throw new Error("epi boom for location B");
+          return { epi: "200000001" + String(e) };
+        },
+        generateApiKeys: async () => ({ appid: "APPID", appkey: "APPKEY" }),
+        deleteMerchant,
+        deleteStore: async () => undefined,
+      },
+      params,
+      locations,
+      async () => undefined
+    );
+
+    expect(result.accounts.map((a) => a.dexaLocationId)).toEqual(["loc-a", "loc-c"]);
+    expect(result.failures).toHaveLength(1);
+    expect(result.failures[0].dexaLocationId).toBe("loc-b");
+    expect(deleteMerchant).not.toHaveBeenCalled(); // shared merchant preserved
+  });
+
+  it("requires at least one location", async () => {
+    await expect(
+      onboardMerchant(happyApi(), params, [], async () => undefined)
+    ).rejects.toThrow(/at least one location/);
   });
 });
 

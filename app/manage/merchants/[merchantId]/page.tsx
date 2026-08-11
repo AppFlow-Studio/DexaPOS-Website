@@ -50,7 +50,7 @@ import { OnboardingStatusCard } from './components/OnboardingStatusCard'
 import { MerchantHeaderBar } from './components/MerchantHeaderBar'
 import { RiskStrip } from './components/RiskStrip'
 import { MidsSection } from './components/sections/MidsSection'
-import { NmiAccountsSection } from './components/sections/NmiAccountsSection'
+import { ValorBoardingSection } from './components/sections/ValorBoardingSection'
 import { SettlementsSection } from './components/sections/SettlementsSection'
 import { DisputesSection } from './components/sections/DisputesSection'
 import { SupportTicketsSection } from './components/sections/SupportTicketsSection'
@@ -64,7 +64,7 @@ type SectionKey =
     | 'notes'
     | 'audit'
     | 'mids'
-    | 'nmi-accounts'
+    | 'valor-boarding'
     | 'settlements'
     | 'disputes'
     | 'billing'
@@ -80,7 +80,7 @@ const VALID_SECTIONS: SectionKey[] = [
     'notes',
     'audit',
     'mids',
-    'nmi-accounts',
+    'valor-boarding',
     'settlements',
     'disputes',
     'billing',
@@ -220,7 +220,7 @@ export default function MerchantDetailsPage() {
                                 { value: 'notes', icon: StickyNote, label: 'Notes' },
                                 { value: 'audit', icon: History, label: 'Audit' },
                                 { value: 'mids', icon: CreditCard, label: 'MIDs' },
-                                { value: 'nmi-accounts', icon: CreditCard, label: 'NMI' },
+                                { value: 'valor-boarding', icon: CreditCard, label: 'Valor' },
                                 { value: 'settlements', icon: Banknote, label: 'Settlements' },
                                 { value: 'disputes', icon: ShieldCheck, label: 'Disputes' },
                                 { value: 'billing', icon: Receipt, label: 'Billing' },
@@ -269,8 +269,8 @@ export default function MerchantDetailsPage() {
                                 <NavItem value="mids" icon={CreditCard} active={activeTab === 'mids'} onClick={setActiveTab}>
                                     MIDs
                                 </NavItem>
-                                <NavItem value="nmi-accounts" icon={CreditCard} active={activeTab === 'nmi-accounts'} onClick={setActiveTab}>
-                                    NMI Accounts
+                                <NavItem value="valor-boarding" icon={CreditCard} active={activeTab === 'valor-boarding'} onClick={setActiveTab}>
+                                    Valor Boarding
                                 </NavItem>
                                 <NavItem value="settlements" icon={Banknote} active={activeTab === 'settlements'} onClick={setActiveTab}>
                                     Settlements
@@ -324,7 +324,7 @@ export default function MerchantDetailsPage() {
 
                             {activeTab === 'mids' && <MidsSection merchantId={merchantDetails.id} />}
 
-                            {activeTab === 'nmi-accounts' && <NmiAccountsSection merchantId={merchantDetails.id} />}
+                            {activeTab === 'valor-boarding' && <ValorBoardingSection merchantId={merchantDetails.id} />}
 
                             {activeTab === 'settlements' && (
                                 <SettlementsSection merchantId={merchantDetails.id} />

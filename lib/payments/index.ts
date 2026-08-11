@@ -15,6 +15,7 @@
  */
 
 import { createNmiProcessor } from "./nmi-adapter";
+import { createValorProcessor } from "./valor-adapter";
 import { resolveProcessorAccount, type ResolveAccountOptions } from "./resolver";
 import {
   PaymentProcessorError,
@@ -32,6 +33,7 @@ export {
   selectAccount,
 } from "./resolver";
 export { classifyNmiResult, createNmiProcessor } from "./nmi-adapter";
+export { createValorProcessor } from "./valor-adapter";
 
 /**
  * Build an adapter for an already-resolved account.
@@ -57,11 +59,11 @@ export function createProcessor(
     case "nmi":
       return createNmiProcessor({ apiKey: credentials.apiKey });
     case "valor":
-      // Landing with lib/payments/valor/ — see C2 phase 2.
-      throw new PaymentProcessorError(
-        "unsupported_processor",
-        "Valor processor is not implemented yet"
-      );
+      return createValorProcessor({
+        epi: credentials.epi,
+        appId: credentials.appId,
+        appKey: credentials.appKey,
+      });
   }
 }
 
