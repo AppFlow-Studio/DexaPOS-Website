@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/dashboard/shell";
-import { Globe, MapPin, Tablet } from "lucide-react";
+import { Globe, MapPin } from "lucide-react";
 import { MenuWithCategories } from "@/types/menu";
 
 interface MenuHeaderProps {
@@ -45,13 +45,12 @@ export function MenuHeader({
         <>
           {onPreview && (
             <Button
-              variant="ghost"
+              variant="outline"
               size="sm"
               onClick={onPreview}
-              className="h-8 gap-1.5 rounded-full"
+              className="h-8 cursor-pointer rounded-full font-medium shadow-sm"
             >
-              <Tablet className="h-4 w-4" />
-              Preview
+              POS Preview
             </Button>
           )}
           <Badge variant={menu.is_active ? "default" : "secondary"}>

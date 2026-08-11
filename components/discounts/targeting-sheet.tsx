@@ -2,13 +2,13 @@
 
 import { useState, useEffect } from 'react'
 import {
-    BottomSheet,
-    BottomSheetContent,
-    BottomSheetHeader,
-    BottomSheetTitle,
-    BottomSheetBody,
-    BottomSheetFooter,
-} from '@/components/ui/bottom-sheet'
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -87,20 +87,21 @@ export function TargetingSheet({
     }
 
     return (
-        <BottomSheet open={open} onOpenChange={onOpenChange}>
-            <BottomSheetContent height="95" className="flex flex-col">
-                {/* `border-0` overrides the shared primitive's divider rules —
-                    scoped here so other bottom sheets keep theirs. */}
-                <BottomSheetHeader className="border-0">
-                    <BottomSheetTitle className="text-[1.75rem] font-semibold tracking-[-0.02em]">
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent
+                overlayClassName="bg-slate-950/40 backdrop-blur-md"
+                className="flex max-h-[min(90dvh,760px)] w-full max-w-[calc(100vw-1rem)] flex-col gap-0 overflow-hidden rounded-[28px] border bg-background p-0 shadow-[0_30px_100px_rgba(15,23,42,0.26)] sm:max-w-2xl max-sm:top-1/2 max-sm:left-1/2 max-sm:right-auto max-sm:bottom-auto max-sm:h-auto max-sm:w-[calc(100%-1rem)] max-sm:max-w-2xl max-sm:-translate-x-1/2 max-sm:-translate-y-1/2 max-sm:rounded-[28px] max-sm:overflow-hidden"
+            >
+                <DialogHeader className="shrink-0 px-6 py-5 pr-14 text-left sm:text-left">
+                    <DialogTitle className="text-[1.625rem] font-semibold tracking-tight">
                         Configure targeting
-                    </BottomSheetTitle>
-                    <p className="mt-1 text-sm text-muted-foreground">
+                    </DialogTitle>
+                    <DialogDescription className="max-w-[60ch] leading-6">
                         Set which items, categories, and order types this discount applies to.
-                    </p>
-                </BottomSheetHeader>
+                    </DialogDescription>
+                </DialogHeader>
 
-                <BottomSheetBody className="flex-1 overflow-y-auto">
+                <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
                     <Tabs defaultValue="categories" className="w-full">
                         <div className="w-full min-w-0 overflow-x-auto pb-1">
                             <TabsList className="inline-flex h-auto w-max flex-nowrap gap-0.5 rounded-full bg-muted/70 p-1">
@@ -235,24 +236,24 @@ export function TargetingSheet({
                             </section>
                         </TabsContent>
                     </Tabs>
-                </BottomSheetBody>
+                </div>
 
-                <BottomSheetFooter className="flex gap-3 border-0">
+                <DialogFooter className="shrink-0 bg-background px-6 py-4 sm:justify-end">
                     <Button
                         variant="outline"
                         onClick={handleCancel}
-                        className="h-9 flex-1 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+                        className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
                     >
                         Cancel
                     </Button>
                     <Button
                         onClick={handleSave}
-                        className="h-9 flex-1 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+                        className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
                     >
                         Save targeting
                     </Button>
-                </BottomSheetFooter>
-            </BottomSheetContent>
-        </BottomSheet>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     )
 }

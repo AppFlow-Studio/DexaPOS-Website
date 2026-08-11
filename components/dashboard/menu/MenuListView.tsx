@@ -6,6 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { Empty } from "@/components/ui/empty";
 import {
@@ -23,6 +29,8 @@ import {
   Globe,
   GripVertical,
   Star,
+  ChevronDown,
+  Power,
 } from "lucide-react";
 import { MenuActionsDropdown } from "./MenuActionsDropdown";
 import { useIsSingleLocation } from "@/stores/location-store";
@@ -250,7 +258,10 @@ function SortableTableRow({
       }`}
       onClick={() => handleRowClick(menu.id)}
     >
-      <TableCell onClick={(e) => e.stopPropagation()}>
+      <TableCell
+        className="hidden sm:table-cell"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="flex items-center gap-1">
           {!isFiltered ? (
             <button
@@ -270,47 +281,84 @@ function SortableTableRow({
           </span>
         </div>
       </TableCell>
-      <TableCell className="cursor-pointer">
+      <TableCell className="min-w-0 cursor-pointer">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
+          <div className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground sm:flex">
             <Utensils className="h-4 w-4" />
           </div>
           <div className="min-w-0">
-            <div className="truncate text-sm font-medium">
+            <div className="whitespace-nowrap text-sm font-medium sm:truncate">
               {menu.name}
             </div>
             {menu.description && (
-              <div className="max-w-[280px] truncate text-xs text-muted-foreground">
+              <div className="hidden max-w-[280px] truncate text-xs text-muted-foreground sm:block">
                 {menu.description}
               </div>
             )}
           </div>
         </div>
       </TableCell>
-      <TableCell>
+      <TableCell className="hidden sm:table-cell">
         <LocationBadge menu={menu} />
       </TableCell>
       <TableCell>
-        <div className="flex items-center gap-2" onClick={(event) => event.stopPropagation()}>
-          <Switch
-            checked={menu.is_active}
-            onCheckedChange={() => actions.onToggleActive(menu.id)}
-            aria-label={`${menu.is_active ? "Deactivate" : "Activate"} ${menu.name}`}
-          />
-          <span
-            className={cn(
-              "text-sm font-medium",
-              menu.is_active
-                ? "text-green-600"
-                : "text-muted-foreground"
-            )}
-          >
-            {menu.is_active ? "Active" : "Inactive"}
-          </span>
-          {isOnlineMenu && <OnlineMenuBadge />}
+        <div onClick={(event) => event.stopPropagation()}>
+          <div className="sm:hidden">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className={cn(
+                    "inline-flex cursor-pointer items-center gap-1 text-[11px] font-medium",
+                    menu.is_active
+                      ? "text-green-600"
+                      : "text-muted-foreground",
+                  )}
+                  aria-label={`Change status for ${menu.name}`}
+                >
+                  {menu.is_active ? "Active" : "Inactive"}
+                  <ChevronDown className="h-3 w-3 shrink-0" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="min-w-32">
+                <DropdownMenuItem
+                  className={cn(
+                    "cursor-pointer",
+                    menu.is_active && "text-destructive focus:text-destructive",
+                  )}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    actions.onToggleActive(menu.id);
+                  }}
+                >
+                  <Power className="mr-2 h-4 w-4" />
+                  {menu.is_active ? "Deactivate" : "Activate"}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+
+          <div className="hidden items-center gap-2 sm:flex">
+            <Switch
+              checked={menu.is_active}
+              onCheckedChange={() => actions.onToggleActive(menu.id)}
+              aria-label={`${menu.is_active ? "Deactivate" : "Activate"} ${menu.name}`}
+            />
+            <span
+              className={cn(
+                "text-sm font-medium",
+                menu.is_active
+                  ? "text-green-600"
+                  : "text-muted-foreground",
+              )}
+            >
+              {menu.is_active ? "Active" : "Inactive"}
+            </span>
+            {isOnlineMenu && <OnlineMenuBadge />}
+          </div>
         </div>
       </TableCell>
-      <TableCell className="text-muted-foreground">
+      <TableCell className="hidden text-muted-foreground sm:table-cell">
         {new Date(menu.created_at).toLocaleDateString()}
       </TableCell>
       <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
@@ -444,16 +492,16 @@ export function MenuListView({
           <Table
             variant="data"
             containerClassName="thin-scrollbar min-w-0 animate-in fade-in duration-300"
-            className="min-w-[760px]"
+            className="min-w-[400px] table-auto max-sm:[&_td]:px-1.5 max-sm:[&_th]:px-1.5 sm:min-w-[760px]"
           >
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[80px]">Order</TableHead>
-                <TableHead className="w-[300px]">Menu Name</TableHead>
-                <TableHead className="w-[150px]">Location</TableHead>
-                <TableHead className="w-[100px]">Status</TableHead>
-                <TableHead className="w-[120px]">Created</TableHead>
-                <TableHead className="w-[80px] text-right">Actions</TableHead>
+                <TableHead className="hidden w-[80px] sm:table-cell">Order</TableHead>
+                <TableHead className="min-w-[210px] sm:w-[300px] sm:min-w-0">Menu Name</TableHead>
+                <TableHead className="hidden w-[150px] sm:table-cell">Location</TableHead>
+                <TableHead className="w-[90px] sm:w-[100px]">Status</TableHead>
+                <TableHead className="hidden w-[120px] sm:table-cell">Created</TableHead>
+                <TableHead className="w-[64px] text-right sm:w-[80px]">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -481,11 +529,14 @@ export function MenuListView({
 }
 
 // The location's canonical OrderOut online-ordering menu.
-function OnlineMenuBadge() {
+function OnlineMenuBadge({ className }: { className?: string }) {
   return (
     <Badge
       variant="outline"
-      className="gap-1 border-amber-200 bg-amber-50 text-amber-700 shrink-0"
+      className={cn(
+        "gap-1 border-amber-200 bg-amber-50 text-amber-700 shrink-0",
+        className,
+      )}
     >
       <Star className="h-3 w-3 fill-amber-400 text-amber-500" />
       Online menu

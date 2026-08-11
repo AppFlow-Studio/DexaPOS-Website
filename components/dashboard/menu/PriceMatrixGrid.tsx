@@ -213,6 +213,22 @@ export function PriceMatrixGrid({ itemId, className }: PriceMatrixGridProps) {
                         menuName={ctx.menuName}
                         categoryId={ctx.categoryId}
                         categoryName={ctx.categoryName}
+                        globalMenuPrice={
+                          matrix.levels.find(
+                            (row) =>
+                              row.level === 4 &&
+                              row.locationId === loc.id &&
+                              row.categoryId === ctx.categoryId,
+                          )?.price ??
+                          matrix.levels.find(
+                            (row) =>
+                              row.level === 3 && row.categoryId === ctx.categoryId,
+                          )?.price ??
+                          matrix.levels.find(
+                            (row) => row.level === 2 && row.locationId === loc.id,
+                          )?.price ??
+                          matrix.globalPrice
+                        }
                         row={
                           cellMap.get(
                             `5|${loc.id}|${ctx.categoryName}|${ctx.menuName}`,
@@ -420,6 +436,7 @@ function L5MatrixCell({
   menuName,
   categoryId,
   categoryName,
+  globalMenuPrice,
   row,
 }: {
   itemId: string;
@@ -429,6 +446,7 @@ function L5MatrixCell({
   menuName: string;
   categoryId: string;
   categoryName: string;
+  globalMenuPrice: number;
   row: PriceMatrixRow | null;
 }) {
   const [open, setOpen] = React.useState(false);
@@ -493,7 +511,7 @@ function L5MatrixCell({
           className="w-[280px] max-w-[calc(100%-2rem)] gap-0 rounded-3xl p-3 max-sm:bottom-auto max-sm:left-1/2 max-sm:right-auto max-sm:top-1/2 max-sm:h-auto max-sm:w-[280px] max-sm:max-w-[calc(100%-2rem)] max-sm:-translate-x-1/2 max-sm:-translate-y-1/2 max-sm:rounded-3xl"
         >
           <DialogTitle className="sr-only">Edit menu price override</DialogTitle>
-          <div className="mb-2 rounded-2xl border bg-rose-50 px-3 py-2">
+          <div className="mb-2 rounded-2xl bg-rose-50 px-3 py-2">
             <p className="text-[10px] font-semibold text-rose-700">
               {menuName} menu at {locationName}
             </p>
@@ -530,7 +548,7 @@ function L5MatrixCell({
               ) : (
                 <RotateCcw className="h-3.5 w-3.5" />
               )}
-              Remove override (revert to L4)
+              Return to global menu price ({formatPrice(globalMenuPrice)})
             </Button>
           )}
         </DialogContent>

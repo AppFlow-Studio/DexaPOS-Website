@@ -164,7 +164,7 @@ export function InlinePriceEditor({
           placeholder="Leave blank for default"
         />
       </div>
-      <div className="flex items-center justify-between gap-2 pt-1">
+      <div className="flex flex-col items-center gap-2 pt-1">
         <AffectsTag ctx={scope} variant="inline" />
         <div className="flex items-center gap-2">
           {onClose && (
