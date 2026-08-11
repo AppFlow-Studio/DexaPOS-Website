@@ -1153,29 +1153,54 @@ export function KioskEditor({ initialData }: { initialData: KioskEditorData }) {
               <CardDescription>Tipping, receipts, and menu metadata shown to customers.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <Label className="text-xs text-muted-foreground">Tip presets (%)</Label>
-                <Input
-                  value={draft.tip_presets.join(", ")}
-                  onChange={(event) =>
-                    updateDraft({
-                      tip_presets: event.target.value
-                        .split(",")
-                        .map((item) => Number.parseInt(item.trim(), 10))
-                        .filter((item) => Number.isFinite(item)),
-                    })
-                  }
-                />
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {draft.tip_presets.map((preset, index) => (
+                    <div key={index} className="flex items-center gap-1">
+                      <Input
+                        type="number"
+                        min={0}
+                        max={100}
+                        value={preset}
+                        onChange={(event) => {
+                          const next = [...draft.tip_presets];
+                          next[index] = Number(event.target.value);
+                          updateDraft({ tip_presets: next });
+                        }}
+                        aria-label={`Tip preset ${index + 1}`}
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
+                        onClick={() =>
+                          updateDraft({ tip_presets: draft.tip_presets.filter((_, i) => i !== index) })
+                        }
+                        aria-label={`Remove tip preset ${index + 1}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                  onClick={() => updateDraft({ tip_presets: [...draft.tip_presets, 0] })}
+                >
+                  <Plus className="h-4 w-4" />
+                  Add preset
+                </Button>
               </div>
 
               <div className="grid gap-2 sm:grid-cols-2">
                 <ToggleRow label="Tip screen" checked={draft.tip_screen_enabled} onCheckedChange={(value) => updateDraft({ tip_screen_enabled: value })} />
                 <ToggleRow label="Loyalty enrollment" checked={draft.loyalty_enrollment_enabled} onCheckedChange={(value) => updateDraft({ loyalty_enrollment_enabled: value })} />
                 <ToggleRow label="Auto-print receipt" checked={draft.auto_print_receipt} onCheckedChange={(value) => updateDraft({ auto_print_receipt: value })} />
-                <ToggleRow label="Email receipt prompt" checked={draft.receipt_email_prompt} onCheckedChange={(value) => updateDraft({ receipt_email_prompt: value })} />
-                <ToggleRow label="SMS receipt prompt" checked={draft.receipt_sms_prompt} onCheckedChange={(value) => updateDraft({ receipt_sms_prompt: value })} />
-                <ToggleRow label="Show calories" checked={draft.show_calorie_info} onCheckedChange={(value) => updateDraft({ show_calorie_info: value })} />
-                <ToggleRow label="Show allergens" checked={draft.show_allergens} onCheckedChange={(value) => updateDraft({ show_allergens: value })} />
               </div>
             </CardContent>
           </Card>
