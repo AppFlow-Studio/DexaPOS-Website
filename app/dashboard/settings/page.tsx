@@ -153,7 +153,7 @@ export default function TaxSettingsPage() {
                 <AlertCircle className="h-4 w-4" />
                 <AlertTitle>How Tax Categories Work</AlertTitle>
                 <AlertDescription>
-                    Items belong to tax categories (e.g., "Alcohol", "Food"). Set the percentage rate for each
+                    Items belong to tax categories (e.g., &quot;Alcohol&quot;, &quot;Food&quot;). Set the percentage rate for each
                     category at this location. Items will automatically use the rate for their category.
                 </AlertDescription>
             </Alert>

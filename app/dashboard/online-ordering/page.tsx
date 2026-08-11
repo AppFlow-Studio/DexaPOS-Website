@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { InfoIcon } from "@/components/ui/info-icon";
 import { Loader2, Globe, Clock3, CheckCircle2, AlertTriangle, Ban, ExternalLink, Building2, Store, Palette, Truck, Plug, LayoutTemplate, Check, Bell } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -74,9 +75,9 @@ function SettingsToggleRow({
 }) {
   return (
     <div className="flex min-w-0 items-start justify-between gap-4 border-t border-border/60 py-4 first:border-t-0 first:pt-0 last:pb-0">
-      <div className="min-w-0">
+      <div className="flex min-w-0 items-center gap-1.5">
         <p className="font-medium text-foreground">{title}</p>
-        <p className="mt-1 text-sm leading-6 text-muted-foreground">{description}</p>
+        <InfoIcon tip={description} side="top" asButton />
       </div>
       <Switch
         className="mt-0.5 shrink-0"
@@ -412,15 +413,19 @@ function CompletedSetupPanel({
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="merchant-online-store-slug">Store URL</Label>
+                <div className="flex items-center gap-1.5">
+                  <Label htmlFor="merchant-online-store-slug">Store URL</Label>
+                  <InfoIcon
+                    tip="Store URL changes are handled by HQ because they affect storefront payment configuration and reconciliation."
+                    side="top"
+                    asButton
+                  />
+                </div>
                 <Input
                   id="merchant-online-store-slug"
                   value={storeUrl || ""}
                   readOnly
                 />
-                <p className="text-xs text-muted-foreground">
-                  Store URL changes are handled by HQ because they affect storefront payment configuration and reconciliation.
-                </p>
               </div>
               <div className="space-y-2 md:col-span-2">
                 <Label htmlFor="merchant-online-store-description">Store Description</Label>
@@ -735,8 +740,16 @@ function CompletedSetupPanel({
             <CardContent className="space-y-6">
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
-                  <Label>Font</Label>
+                  <div className="flex items-center gap-1.5">
+                    <Label htmlFor="merchant-online-store-font">Font</Label>
+                    <InfoIcon
+                      tip="Font options are sourced from the fonts supported by the storefront."
+                      side="top"
+                      asButton
+                    />
+                  </div>
                   <select
+                    id="merchant-online-store-font"
                     value={settings.fontFamily || "DM Sans"}
                     onChange={(e) => onUpdate({ fontFamily: e.target.value })}
                     className="h-10 w-full rounded-md border bg-background px-3 text-sm"
@@ -747,9 +760,6 @@ function CompletedSetupPanel({
                       </option>
                     ))}
                   </select>
-                  <p className="text-xs text-muted-foreground">
-                    Font options are sourced from storefront supported Google Fonts.
-                  </p>
                 </div>
               </div>
 
