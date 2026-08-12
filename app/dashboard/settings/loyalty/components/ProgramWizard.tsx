@@ -30,6 +30,7 @@ import { useMenuItems } from '../../../hooks/useMenuItems';
 import { useCategories } from '../../../hooks/useCategories';
 import { useLocations } from '../../../hooks/useLocations';
 import { useUserInfo } from '@/app/manage/hooks/useUserInfo.';
+import { useClerkOrgId } from '@/app/dashboard/hooks/useLocationScoped';
 import { useIsSingleLocation } from '@/stores/location-store';
 import type { LoyaltyProgram, LoyaltyProgramInsert } from '../../../actions/loyalty-programs';
 
@@ -135,9 +136,8 @@ export function ProgramWizard({
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState<FormData>(INITIAL_FORM);
 
-  // Fetch user info to get clerkOrgId
   const { data: userInfo } = useUserInfo();
-  const clerkOrgId = userInfo?.members?.[0]?.organizations?.id;
+  const clerkOrgId = useClerkOrgId();
 
   // Fetch menu items and categories
   const { data: menuItems = [], isLoading: itemsLoading } = useMenuItems(clerkOrgId || '');

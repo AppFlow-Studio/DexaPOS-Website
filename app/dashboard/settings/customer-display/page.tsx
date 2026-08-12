@@ -298,8 +298,26 @@ export default function CustomerDisplaySettingsPage() {
                 global: { headers: token ? { Authorization: `Bearer ${token}` } : {} }
             })
 
-            // 1. Delete from Bunny CDN when the image is already migrated.
-            // 2. Fall back to legacy Supabase storage cleanup for pre-migration URLs.
+            // Delete the row first. A failed database delete must never leave a
+            // live carousel record pointing at a file that no longer exists.
+            const { data: deletedRecord, error: dbError } = await supabase
+                .from('cfd_carousel_images')
+                .delete()
+                .eq('id', deleteId)
+                .eq('location_id', selectedLocation.id)
+                .select('id')
+                .maybeSingle()
+
+            if (dbError) throw dbError
+            if (!deletedRecord) {
+                throw new Error('Image record was not found or could not be deleted')
+            }
+
+            setImages(prev => prev.filter(img => img.id !== deleteId))
+
+            // Backing-file cleanup is best effort. A failure here can leave an
+            // orphaned file, but cannot break an active customer-display record.
+            let backingFileCleanupFailed = false
             try {
                 const url = new URL(imageToDelete.image_url)
 
@@ -323,25 +341,20 @@ export default function CustomerDisplaySettingsPage() {
                             .remove([storagePath])
 
                         if (storageError) {
-                            console.error('Storage delete error:', storageError)
-                            toast.warning('Could not delete file from storage, but removing record.')
+                            throw storageError
                         }
                     }
                 }
             } catch (e) {
                 console.warn('Error deleting backing file during CFD image delete:', e)
+                backingFileCleanupFailed = true
             }
 
-            // 2. Delete from DB
-            const { error: dbError } = await supabase
-                .from('cfd_carousel_images')
-                .delete()
-                .eq('id', deleteId)
-
-            if (dbError) throw dbError
-
-            setImages(prev => prev.filter(img => img.id !== deleteId))
-            toast.success('Image deleted successfully')
+            if (backingFileCleanupFailed) {
+                toast.warning('Image was removed, but backing file cleanup could not be completed.')
+            } else {
+                toast.success('Image deleted successfully')
+            }
         } catch (error: any) {
             console.error('Error deleting image:', error)
             toast.error(`Failed to delete image: ${error.message}`)

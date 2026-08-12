@@ -42,6 +42,7 @@ import {
   LocationIndicator,
   PageHeader,
 } from "@/components/dashboard/shell";
+import { getLocalDateKey } from "@/lib/dates/local-date-key";
 
 // ─── Preview Calculator (pure client-side) ─────────────────────────────────
 
@@ -49,10 +50,12 @@ function PreviewPanel({
   pools,
   rules,
   roles,
+  timeZone,
 }: {
   pools: TipPoolConfigWithShares[];
   rules: TipOutRule[];
   roles: Role[];
+  timeZone?: string | null;
 }) {
   const [open, setOpen] = useState(false);
   // Per-role: {roleCode -> {chargedTips, cashTips, hours, sales}}
@@ -61,13 +64,22 @@ function PreviewPanel({
   >({});
 
   const setInput = (code: string, field: "chargedTips" | "cashTips" | "hours" | "sales", value: number) => {
-    setInputs((prev) => ({
-      ...prev,
-      [code]: { chargedTips: 0, cashTips: 0, hours: 0, sales: 0, ...(prev[code] || {}), [field]: value },
-    }));
+    setInputs((prev) => {
+      const current = prev[code] ?? {
+        chargedTips: 0,
+        cashTips: 0,
+        hours: 0,
+        sales: 0,
+      };
+
+      return {
+        ...prev,
+        [code]: { ...current, [field]: value },
+      };
+    });
   };
 
-  const today = new Date().toISOString().split("T")[0];
+  const today = getLocalDateKey(new Date(), timeZone);
 
   // Filter to active pools — already sorted by priority ASC, created_at ASC from server query
   const activePools = pools.filter(
@@ -574,7 +586,12 @@ export default function TipsSettingsPage() {
       </section>
 
       {/* PREVIEW CALCULATOR */}
-      <PreviewPanel pools={pools} rules={rules} roles={roles} />
+      <PreviewPanel
+        pools={pools}
+        rules={rules}
+        roles={roles}
+        timeZone={selectedLocation?.timezone}
+      />
 
       {/* DIALOGS */}
       <TipPoolDialog
@@ -583,6 +600,7 @@ export default function TipsSettingsPage() {
         pool={editingPool}
         roles={roles}
         poolCount={pools.length}
+        timeZone={selectedLocation?.timezone}
         isLoading={createPoolMutation.isPending || updatePoolMutation.isPending}
         onSubmit={editingPool ? handleUpdatePool : handleCreatePool}
       />
@@ -594,6 +612,7 @@ export default function TipsSettingsPage() {
         roles={roles}
         existingRules={rules}
         clerkOrgId={clerkOrgId}
+        timeZone={selectedLocation?.timezone}
         isLoading={createRuleMutation.isPending || updateRuleMutation.isPending}
         onSubmit={editingRule ? handleUpdateRule : handleCreateRule}
         onDeactivateRule={(ruleId) => toggleRuleMutation.mutate({ clerkOrgId: clerkOrgId!, ruleId, isActive: false })}

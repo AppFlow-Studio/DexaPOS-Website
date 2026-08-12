@@ -19,7 +19,7 @@ import {
   useGatedLocationId,
   useGatedLocation,
 } from "@/stores/location-store";
-import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
+import { useClerkOrgId } from "@/app/dashboard/hooks/useLocationScoped";
 import {
   useReceiptTemplates,
   useUpsertReceiptTemplate,
@@ -70,8 +70,7 @@ export default function ReceiptTemplatesPage() {
   const selectedLocationId = gatedLocationId ?? "all";
   const isAllLocations = !gatedLocationId;
   const selectedLocation = useGatedLocation();
-  const { data: userInfo } = useUserInfo();
-  const clerkOrgId = userInfo?.members?.[0]?.organizations?.id;
+  const clerkOrgId = useClerkOrgId();
 
   // Fetch templates
   const {
