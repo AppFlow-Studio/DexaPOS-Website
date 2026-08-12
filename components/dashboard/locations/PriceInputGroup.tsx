@@ -149,7 +149,11 @@ export function PriceInputGroup({
                   <Info className="h-4 w-4 cursor-help" />
                 </button>
               </TooltipTrigger>
-              <TooltipContent className="max-w-xs">
+              {/* z-[250]: TooltipContent portals at z-50, but the dialogs this
+                  group renders inside sit at z-[100]–z-[210], so the default
+                  tooltip painted *behind* the dialog and looked like nothing
+                  happened on click. */}
+              <TooltipContent className="z-[250] max-w-xs">
                 <p>Dual Pricing is enabled.</p>
                 <p>Edit either price — the other is auto-calculated at {percentage}%.</p>
               </TooltipContent>
