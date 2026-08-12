@@ -299,8 +299,8 @@ export function TeamTab({ location }: TeamTabProps) {
                 elevated
             />
 
-            {/* Opened from inside the location detail Sheet, so it has to clear
-                the sheet's z-index or it renders behind the dimmed backdrop. */}
+            {/* Opened from inside the location detail dialog, so it must render
+                above the parent modal and its dimmed backdrop. */}
             <InviteUserWizard
                 open={inviteOpen}
                 onOpenChange={setInviteOpen}

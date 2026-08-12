@@ -34,6 +34,8 @@ import {
   MapPin,
   Info,
   DollarSign,
+  CreditCard,
+  Monitor,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Empty } from "@/components/ui/empty";
@@ -77,11 +79,31 @@ import { Switch } from "@/components/ui/switch";
 import { GetItemIsPopular, SetItemPopular, GetItemIsNew, SetItemNew } from "../../../actions/location-menu-overrides";
 import { GetItemStock } from "../../../actions/stock";
 import { Flame, Package } from "lucide-react";
+import { CHANNEL_LABELS } from "@/types/inventory";
+import { TAX_CATEGORY_LABELS } from "@/types/tax";
+import { getTaxRateForCategory } from "../../../actions/tax-rates";
 
 
 // ============================================================================
 // TYPES & HELPERS
 // ============================================================================
+
+/**
+ * Render a row timestamp in the location's timezone, falling back to "—".
+ * `new Date(undefined)` yields "Invalid Date", which is what this page showed
+ * before; an absent or unparseable timestamp is not an error worth surfacing.
+ */
+function formatDate(
+  value: string | null | undefined,
+  timeZone?: string | null,
+): string {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleDateString(undefined, {
+    timeZone: timeZone ?? undefined,
+  });
+}
 
 type EditingContext = {
   level: 1 | 2 | 3 | 4 | 5;
@@ -325,10 +347,7 @@ function PriceBreakdown({
         {/* Level 1 - Global Base */}
         <div
           className={cn(
-            "flex flex-wrap items-center justify-between gap-x-2 gap-y-1 rounded-2xl border-0 p-3 shadow-none",
-            isAllLocations
-              ? "bg-emerald-50 dark:bg-emerald-900/20"
-              : "bg-muted/60"
+            "flex flex-wrap items-center justify-between gap-x-2 gap-y-1 rounded-2xl border-0 bg-muted/60 p-3 shadow-none"
           )}
         >
           <div className="flex min-w-0 flex-1 basis-40 flex-wrap items-center gap-x-2 gap-y-1">
@@ -336,13 +355,13 @@ function PriceBreakdown({
               className={cn(
                 "flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-medium tabular-nums",
                 isAllLocations
-                  ? "bg-emerald-500 text-white"
+                  ? "bg-foreground/80 text-background"
                   : "bg-background text-muted-foreground"
               )}
             >
               1
             </div>
-            <Globe className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+            <Globe className="h-4 w-4 shrink-0 text-muted-foreground" />
             <span className="text-sm font-medium">Global Base</span>
             {isAllLocations && (
               <span className="inline-flex shrink-0 items-center rounded-full bg-background/70 px-2 py-0.5 text-xs font-medium text-muted-foreground">
@@ -351,12 +370,7 @@ function PriceBreakdown({
             )}
           </div>
           <div className="ml-auto shrink-0 text-right">
-            <div
-              className={cn(
-                "font-medium tabular-nums",
-                isAllLocations && "text-emerald-700 dark:text-emerald-400"
-              )}
-            >
+            <div className="font-medium tabular-nums">
               ${basePrice?.toFixed(2)}
             </div>
             {baseCashPrice && (
@@ -424,12 +438,13 @@ function PriceBreakdown({
           </div>
         )}
 
-        {/* Effective Price */}
-        <div className="rounded-2xl border-0 bg-muted/60 p-3 shadow-none">
+        {/* Effective Price — green marks what customers actually pay, so the
+            emphasis belongs here rather than on the Global Base rung above. */}
+        <div className="rounded-2xl border-0 bg-emerald-50 p-3 shadow-none dark:bg-emerald-900/20">
           <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
             <span className="text-sm font-medium">Effective Price</span>
             <div className="ml-auto text-right">
-              <span className="text-xl font-semibold tracking-[-0.02em] tabular-nums">
+              <span className="text-xl font-semibold tracking-[-0.02em] tabular-nums text-emerald-700 dark:text-emerald-400">
                 ${effectivePrice?.toFixed(2)}
               </span>
               {effectiveCashPrice && (
@@ -494,6 +509,17 @@ export default function MenuItemDetailPage() {
     if (isAllLocations) return "All Locations";
     return currentLocation?.name || "Unknown Location";
   }, [isAllLocations, currentLocation]);
+
+  // Effective tax rate for this item's category at the active location.
+  // The item stores only a *category*; the percentage lives in `tax_rates`
+  // keyed by (location, category), so it needs its own lookup.
+  const itemTaxCategory = (item as LocationLibraryItem | undefined)
+    ?.effective_tax_category;
+  const { data: taxRate } = useQuery({
+    queryKey: ["tax-rate", gatedLocationId, itemTaxCategory],
+    queryFn: () => getTaxRateForCategory(gatedLocationId!, itemTaxCategory!),
+    enabled: !!gatedLocationId && !!itemTaxCategory,
+  });
 
   const editingContext = React.useMemo(
     () => getEditingContext(isAllLocations),
@@ -759,26 +785,32 @@ export default function MenuItemDetailPage() {
                     </div>
                   )}
 
-                  {menuItem.meal_types && menuItem.meal_types.length > 0 && (
-                    <div>
-                      <div className="text-sm font-medium text-muted-foreground mb-2">
-                        Meal Types
-                      </div>
-                      <div className="flex flex-wrap gap-1">
-                        {menuItem.meal_types.map((type: string) => (
-                          <span
-                            key={type}
-                            className="inline-flex shrink-0 items-center gap-1 rounded-full bg-muted/60 px-2.5 py-1 text-xs font-medium text-muted-foreground"
-                          >
-                            <Clock className="h-3 w-3 shrink-0" />
-                            {type}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
                 </div>
               </div>
+
+              {/* Meal Types — full width below the image/details row rather than
+                  inside the narrow details column, so the pills wrap across the
+                  card instead of stacking. One clock on the label, not one per
+                  pill: repeating the icon widened every pill enough to force a
+                  single-column stack on narrow screens. */}
+              {menuItem.meal_types && menuItem.meal_types.length > 0 && (
+                <div>
+                  <div className="mb-2 flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                    <Clock className="h-4 w-4 shrink-0" />
+                    Meal Types
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {menuItem.meal_types.map((type: string) => (
+                      <span
+                        key={type}
+                        className="inline-flex shrink-0 items-center rounded-full bg-muted/60 px-2.5 py-1 text-xs font-medium capitalize text-muted-foreground"
+                      >
+                        {type}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Allergens */}
               {menuItem.allergens && menuItem.allergens.length > 0 && (
@@ -799,6 +831,40 @@ export default function MenuItemDetailPage() {
                   </div>
                 </div>
               )}
+
+              {/* Sales Channels */}
+              <div>
+                <div className="mb-2 flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                  <Globe className="h-4 w-4 shrink-0" />
+                  Sales Channels
+                </div>
+                {menuItem.effective_available_channels?.length ? (
+                  <div className="flex flex-wrap gap-2">
+                    {menuItem.effective_available_channels.map((channel) => {
+                      const ChannelIcon =
+                        channel === "pos"
+                          ? CreditCard
+                          : channel === "online"
+                            ? Globe
+                            : Monitor;
+
+                      return (
+                        <span
+                          key={channel}
+                          className="inline-flex shrink-0 items-center gap-1 rounded-full bg-muted/60 px-3 py-1 text-xs font-medium text-muted-foreground"
+                        >
+                          <ChannelIcon className="h-3 w-3 shrink-0" />
+                          {CHANNEL_LABELS[channel] || channel.toUpperCase()}
+                        </span>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    No sales channels enabled
+                  </p>
+                )}
+              </div>
 
               {/* Categories */}
               <div>
@@ -899,55 +965,25 @@ export default function MenuItemDetailPage() {
                                     <div className="font-semibold break-words">
                                       {group.name}
                                     </div>
-                                    <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                                      {group.is_required && (
+                                    {/* Scope badge and description moved into the
+                                        expanded body — both are reference detail,
+                                        and in the collapsed header they competed
+                                        with the group name on narrow screens. */}
+                                    {group.is_required && (
+                                      <div className="mt-1 flex flex-wrap items-center gap-1.5">
                                         <span className="inline-flex max-w-full shrink-0 items-center rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-medium text-red-700 dark:bg-red-900/20 dark:text-red-400">
                                           Required
                                         </span>
-                                      )}
-                                      {(group as any).source === "location" ? (
-                                        <span className="inline-flex max-w-full shrink-0 items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-900/20 dark:text-blue-400">
-                                          <MapPin className="h-2.5 w-2.5 shrink-0" />
-                                          This Location
-                                        </span>
-                                      ) : (
-                                        <span className="inline-flex max-w-full shrink-0 items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400">
-                                          <Globe className="h-2.5 w-2.5 shrink-0" />
-                                          All Locations
-                                        </span>
-                                      )}
-                                    </div>
-                                    {group.description && (
-                                      <div className="text-sm text-muted-foreground line-clamp-1">
-                                        {group.description}
                                       </div>
                                     )}
-                                    <div className="flex flex-wrap gap-1 mt-2">
-                                      {group.items?.slice(0, 4).map((opt) => (
-                                        <span
-                                          key={opt.id}
-                                          className="inline-flex max-w-full shrink-0 items-center rounded-full bg-background px-2.5 py-0.5 text-xs font-medium text-muted-foreground"
-                                        >
-                                          <span className="truncate">{opt.name}</span>
-                                          {opt.price_modifier > 0 && (
-                                            <span className="ml-1 shrink-0 text-emerald-700 tabular-nums dark:text-emerald-400">
-                                              +${opt.price_modifier}
-                                            </span>
-                                          )}
-                                        </span>
-                                      ))}
-                                      {(group.items?.length || 0) > 4 && (
-                                        <span className="inline-flex shrink-0 items-center rounded-full bg-background px-2.5 py-0.5 text-xs font-medium text-muted-foreground tabular-nums">
-                                          +{group.items.length - 4} more
-                                        </span>
-                                      )}
-                                    </div>
+                                    {/* No option preview pills at any width — the
+                                        full option list with prices lives in the
+                                        expanded body below. */}
                                   </div>
                                 </div>
+                                {/* No option count here — the expanded body
+                                    already leads with "Options (N)". */}
                                 <div className="flex items-center gap-2 shrink-0">
-                                  <div className="hidden sm:block text-right text-sm text-muted-foreground whitespace-nowrap">
-                                    {group.items?.length || 0} options
-                                  </div>
                                   <ChevronDown
                                     className={cn(
                                       "h-5 w-5 text-muted-foreground transition-transform duration-200 shrink-0",
@@ -961,6 +997,28 @@ export default function MenuItemDetailPage() {
 
                           <CollapsibleContent>
                             <div className="px-4 pb-4 pt-0">
+                              {/* Full description — not clamped here, unlike the
+                                  single-line preview it replaced in the header. */}
+                              {group.description && (
+                                <p className="mt-4 text-sm text-muted-foreground">
+                                  {group.description}
+                                </p>
+                              )}
+
+                              {/* Scope: which locations this group applies to. */}
+                              <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                                {(group as any).source === "location" ? (
+                                  <span className="inline-flex max-w-full shrink-0 items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-900/20 dark:text-blue-400">
+                                    <MapPin className="h-2.5 w-2.5 shrink-0" />
+                                    This Location
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex max-w-full shrink-0 items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400">
+                                    <Globe className="h-2.5 w-2.5 shrink-0" />
+                                    All Locations
+                                  </span>
+                                )}
+                              </div>
                               <div className="mt-4 space-y-2">
                                 <h4 className="text-sm font-medium text-muted-foreground">
                                   Options (
@@ -1112,6 +1170,8 @@ export default function MenuItemDetailPage() {
               )}
             </div>
           </Panel>
+
+
         </div>
 
         {/* Right Column - Preview & Quick Info */}
@@ -1196,11 +1256,7 @@ export default function MenuItemDetailPage() {
             </div>
           </Panel>
 
-          {/* POS Preview
-              Deliberately NOT `sticky`: it sits mid-column, so pinning it left the
-              cards below (Quick Stats, Metadata) scrolling underneath and visually
-              swallowed by this panel. A sticky card only works as the last child of
-              the column. */}
+          {/* POS Preview, then Quick Stats and Metadata below it. */}
           <Panel padded>
             <h2 className="text-sm font-medium text-muted-foreground">
               POS Preview
@@ -1243,6 +1299,23 @@ export default function MenuItemDetailPage() {
                 </span>
                 <span className="inline-flex shrink-0 items-center rounded-full bg-muted/60 px-2.5 py-0.5 text-xs font-medium text-muted-foreground tabular-nums">
                   {modifierGroups.length}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-3 py-2">
+                <span className="text-sm text-muted-foreground">Tax</span>
+                {/* Show the actual rate the item is taxed at. The item stores
+                    only a category; the percentage comes from `tax_rates` for
+                    (location, category). Falls back to the category name when
+                    no rate is configured, or at All Locations where no single
+                    rate applies. */}
+                <span className="inline-flex shrink-0 items-center rounded-full bg-muted/60 px-2.5 py-0.5 text-xs font-medium text-muted-foreground tabular-nums">
+                  {menuItem.effective_is_tax_exempt
+                    ? "Tax Exempt"
+                    : taxRate?.data
+                      ? `${taxRate.data.percentage}%`
+                      : TAX_CATEGORY_LABELS[menuItem.effective_tax_category] ||
+                        menuItem.effective_tax_category ||
+                        "—"}
                 </span>
               </div>
               <div className="flex items-center justify-between py-2">
@@ -1296,17 +1369,13 @@ export default function MenuItemDetailPage() {
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Created</span>
                 <span>
-                  {new Date(menuItem.created_at).toLocaleDateString(undefined, {
-                    timeZone: currentLocation?.timezone ?? undefined,
-                  })}
+                  {formatDate(menuItem.created_at, currentLocation?.timezone)}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Updated</span>
                 <span>
-                  {new Date(menuItem.updated_at).toLocaleDateString(undefined, {
-                    timeZone: currentLocation?.timezone ?? undefined,
-                  })}
+                  {formatDate(menuItem.updated_at, currentLocation?.timezone)}
                 </span>
               </div>
               <div className="flex justify-between">
@@ -1317,6 +1386,7 @@ export default function MenuItemDetailPage() {
               </div>
             </div>
           </Panel>
+
         </div>
       </div>
 

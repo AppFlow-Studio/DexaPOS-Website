@@ -17,6 +17,8 @@ interface PageHeaderProps {
   indicator?: React.ReactNode
   /** Right-aligned buttons. Sits after `indicator` on the same row. */
   actions?: React.ReactNode
+  /** Places the action row beneath the indicator on narrow screens. */
+  stackActionsBelowIndicatorOnMobile?: boolean
   className?: string
 }
 
@@ -45,6 +47,7 @@ export function PageHeader({
   backLabel = 'Back',
   indicator,
   actions,
+  stackActionsBelowIndicatorOnMobile = false,
   className,
 }: PageHeaderProps) {
   return (
@@ -71,9 +74,21 @@ export function PageHeader({
             pushed "Add Items to Categories" off the right edge at ~360px). Wrapping
             onto a second line is the correct narrow-screen behaviour. */}
         {(indicator || actions) && (
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <div
+            className={cn(
+              'flex min-w-0 flex-wrap items-center gap-2',
+              stackActionsBelowIndicatorOnMobile &&
+                'max-sm:w-full max-sm:flex-col max-sm:items-start'
+            )}
+          >
             {indicator}
-            {actions}
+            {actions && stackActionsBelowIndicatorOnMobile ? (
+              <div className="flex min-w-0 flex-wrap items-center gap-2 max-sm:w-full">
+                {actions}
+              </div>
+            ) : (
+              actions
+            )}
           </div>
         )}
       </div>

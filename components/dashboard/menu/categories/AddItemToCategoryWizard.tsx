@@ -532,15 +532,6 @@ export function AddItemToCategoryWizard({
           {activeTab === "existing" && (
             <>
               <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-6 py-5">
-                {/* Context Banner */}
-                <div className="mb-4 rounded-2xl border-0 bg-muted/40 p-3">
-                  <div className="flex items-center gap-2 text-sm">
-                    <Tag className="h-4 w-4 text-primary" />
-                    <span className="font-medium">Adding to:</span>
-                    <Badge variant="outline" className="bg-background">{categoryName}</Badge>
-                  </div>
-                </div>
-
                 {/* Search */}
                 <div className="relative mb-4">
                   <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />

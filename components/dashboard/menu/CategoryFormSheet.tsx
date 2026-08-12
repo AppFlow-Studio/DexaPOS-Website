@@ -18,12 +18,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { CdnImageUploadField } from "@/components/ui/cdn-image-upload-field";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
+import { Switch } from "@/components/ui/switch";
 import {
   Form,
   FormControl,
@@ -33,20 +28,8 @@ import {
   FormMessage,
   FormDescription,
 } from "@/components/ui/form";
-import {
-  Tag,
-  ChevronDown,
-  ChevronRight,
-  Calendar,
-  Sparkles,
-  Palette,
-  Settings2,
-  MapPin,
-  Flame,
-  Info,
-} from "lucide-react";
+import { Tag, Settings2, MapPin, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useMerchantCdnImageUpload } from "@/lib/cdn/use-merchant-cdn-image-upload";
 import {
   CreateCategory,
   UpdateCategory,
@@ -78,7 +61,6 @@ import {
   useSetCategoryPrepDefault,
   useRemoveCategoryPrepDefault,
 } from "@/app/dashboard/hooks/usePrepStations";
-import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
 import { invalidateOrderOutSync } from "@/app/dashboard/hooks/useOrderOutMenuSync";
 import { CategorySnoozeControl } from "./CategorySnoozeControl";
 
@@ -92,12 +74,27 @@ const categorySchema = z.object({
     .string()
     .max(500, "Description must be less than 500 characters")
     .optional(),
-  image: z.string().optional(),
   display_order: z.number().min(0).optional().nullable(),
   is_active: z.boolean().default(true),
 });
 
 type CategoryFormValues = z.infer<typeof categorySchema>;
+
+type CategorySectionId =
+  | "basic"
+  | "scheduling"
+  | "kitchen"
+  | "advanced";
+
+const CATEGORY_SECTIONS: {
+  id: CategorySectionId;
+  label: string;
+}[] = [
+  { id: "basic", label: "Basic Info" },
+  { id: "scheduling", label: "Availability" },
+  { id: "kitchen", label: "Kitchen Routing" },
+  { id: "advanced", label: "Advanced" },
+];
 
 interface CategoryFormSheetProps {
   open: boolean;
@@ -119,9 +116,6 @@ export function CategoryFormSheet({
   editCategory,
 }: CategoryFormSheetProps) {
   const queryClient = useQueryClient();
-  const { data: userInfo } = useUserInfo();
-  const merchantId =
-    userInfo?.members?.[0]?.organizations?.merchants?.id || "";
   const [selectedMenu, setSelectedMenu] = React.useState<string | null>(null);
   const [selectedSchedules, setSelectedSchedules] = React.useState<string[]>(
     [],
@@ -142,19 +136,14 @@ export function CategoryFormSheet({
   const setCategoryPrepDefaultMutation = useSetCategoryPrepDefault();
   const removeCategoryPrepDefaultMutation = useRemoveCategoryPrepDefault();
 
-  const [expandedSections, setExpandedSections] = React.useState({
-    appearance: false,
-    scheduling: false,
-    advanced: false,
-  });
+  // Single-section navigation: one section is shown at a time, picked from the
+  // selector bar, instead of stacking every section as its own collapsible.
+  const [activeSection, setActiveSection] =
+    React.useState<CategorySectionId>("basic");
+  const sectionTabsScrollRef = React.useRef<HTMLDivElement>(null);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [scheduleOverrideDialog, setScheduleOverrideDialog] =
     React.useState<any>(null);
-  const imageUpload = useMerchantCdnImageUpload({
-    merchantId,
-    category: "menu-categories",
-    fileNamePrefix: "category",
-  });
 
   // Fetch location-scoped schedules
   const { data: locationSchedules } = useLocationScopedSchedules();
@@ -169,7 +158,6 @@ export function CategoryFormSheet({
     defaultValues: {
       name: "",
       description: "",
-      image: "",
       display_order: null,
       is_active: true,
     },
@@ -181,11 +169,9 @@ export function CategoryFormSheet({
       form.reset({
         name: editCategory.name || "",
         description: editCategory.description || "",
-        image: editCategory.image || "",
         display_order: editCategory.display_order || null,
         is_active: editCategory.is_active ?? true,
       });
-      imageUpload.reset(editCategory.image || null);
       // Set selected menu from editCategory
       if (editCategory.menu_id) {
         setSelectedMenu(editCategory.menu_id);
@@ -196,15 +182,78 @@ export function CategoryFormSheet({
       form.reset({
         name: "",
         description: "",
-        image: "",
         display_order: null,
         is_active: true,
       });
-      imageUpload.reset(null);
       setSelectedMenu(null);
       setSelectedSchedules([]);
     }
-  }, [editCategory, form, imageUpload.reset]);
+    setActiveSection("basic");
+  }, [editCategory, form]);
+
+  // Keep the selected pill centred in the tab strip so the bar tracks the
+  // selection on its own, without the user scrolling it. Mirrors
+  // NewEditItemFormSheet's keepSelectedSectionVisible.
+  const keepSelectedSectionVisible = React.useCallback((value: string) => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const scroller = sectionTabsScrollRef.current;
+        const trigger = scroller?.querySelector<HTMLElement>(
+          `[data-category-section="${value}"]`,
+        );
+        if (!scroller || !trigger) return;
+
+        const scrollerRect = scroller.getBoundingClientRect();
+        const triggerRect = trigger.getBoundingClientRect();
+        const centeredLeft =
+          scroller.scrollLeft +
+          triggerRect.left -
+          scrollerRect.left -
+          (scrollerRect.width - triggerRect.width) / 2;
+        const maxScrollLeft = scroller.scrollWidth - scroller.clientWidth;
+
+        scroller.scrollTo({
+          left: Math.max(0, Math.min(centeredLeft, maxScrollLeft)),
+          behavior: "smooth",
+        });
+      });
+    });
+  }, []);
+
+  const handleSectionSelect = React.useCallback(
+    (section: CategorySectionId) => {
+      setActiveSection(section);
+      // Run for every press, including the already-selected section. The effect
+      // below also covers resets and other programmatic selection changes.
+      keepSelectedSectionVisible(section);
+    },
+    [keepSelectedSectionVisible],
+  );
+
+  // Drive centring from the selection itself rather than only from the click,
+  // so it also runs after a reset and once the dialog has animated in (element
+  // widths are 0 until then, which would make an on-click measurement a no-op).
+  React.useEffect(() => {
+    if (!open) return;
+    keepSelectedSectionVisible(activeSection);
+  }, [open, activeSection, keepSelectedSectionVisible]);
+
+  // Kitchen Routing only has content for an existing category, so hide the tab
+  // entirely when creating one rather than offering an empty section.
+  const visibleSections = React.useMemo(
+    () =>
+      CATEGORY_SECTIONS.filter(
+        (section) => section.id !== "kitchen" || !!editCategory,
+      ),
+    [editCategory],
+  );
+
+  // Keep the selection valid if the visible set changes underneath it.
+  React.useEffect(() => {
+    if (!visibleSections.some((section) => section.id === activeSection)) {
+      setActiveSection("basic");
+    }
+  }, [visibleSections, activeSection]);
 
   // Load category schedules when editing
   React.useEffect(() => {
@@ -212,10 +261,6 @@ export function CategoryFormSheet({
       setSelectedSchedules(categorySchedules.map((s: any) => s.id));
     }
   }, [editCategory, categorySchedules]);
-
-  const toggleSection = (section: keyof typeof expandedSections) => {
-    setExpandedSections((prev) => ({ ...prev, [section]: !prev[section] }));
-  };
 
   const handleToggleSchedule = (scheduleId: string) => {
     if (!editCategory) {
@@ -259,8 +304,6 @@ export function CategoryFormSheet({
   };
 
   const onSubmit = async (values: CategoryFormValues) => {
-    let uploadedAsset: { cdnUrl: string; storagePath: string } | undefined;
-
     if (!clerkOrgId) {
       toast.error("Organization Not Found", {
         description: "Please ensure you are logged into an organization.",
@@ -268,29 +311,18 @@ export function CategoryFormSheet({
       return;
     }
 
-    if (imageUpload.hasPendingChange && !merchantId) {
-      toast.error("Merchant Not Found", {
-        description: "Please reload and try the upload again.",
-      });
-      return;
-    }
-
-    console.log("values NEW CATEGORY FORM SHEET", values);
-
     setIsSubmitting(true);
     try {
-      const resolvedImage = await imageUpload.resolveImageValue();
-      uploadedAsset = resolvedImage.uploadedAsset;
       let result;
 
       if (editCategory) {
-        // Update existing category
+        // Update existing category. `image` is intentionally omitted so any
+        // previously uploaded artwork is preserved rather than cleared.
         result = await UpdateCategory(
           editCategory.id,
           {
             name: values.name,
             description: values.description,
-            image: resolvedImage.value ?? undefined,
             display_order: values.display_order ?? undefined,
             is_active: values.is_active,
           },
@@ -304,7 +336,6 @@ export function CategoryFormSheet({
           {
             name: values.name,
             description: values.description,
-            image: resolvedImage.value ?? undefined,
             display_order: values.display_order ?? undefined,
             is_active: values.is_active,
             menu_id: selectedMenu || undefined,
@@ -313,9 +344,6 @@ export function CategoryFormSheet({
       }
 
       if (result.error) {
-        if (uploadedAsset) {
-          await imageUpload.cleanupUploadedAsset(uploadedAsset.storagePath).catch(console.error);
-        }
         toast.error("Operation Failed", {
           description: result.error,
         });
@@ -337,9 +365,6 @@ export function CategoryFormSheet({
       onOpenChange(false);
       onSuccess?.();
     } catch (error) {
-      if (uploadedAsset) {
-        await imageUpload.cleanupUploadedAsset(uploadedAsset.storagePath).catch(console.error);
-      }
       toast.error(editCategory ? "Update Failed" : "Creation Failed", {
         description: editCategory
           ? "Unable to update the category. Please try again."
@@ -357,41 +382,83 @@ export function CategoryFormSheet({
     onOpenChange(false);
   };
 
-  const watchedValues = form.watch();
-
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && handleClose()}>
       <DialogContent
-        overlayClassName="bg-slate-950/40 backdrop-blur-md"
-        className="w-full max-w-[calc(100vw-1rem)] gap-0 overflow-hidden rounded-3xl border bg-card p-0 sm:max-w-5xl xl:max-w-6xl"
+        overlayClassName="bg-background/60 backdrop-blur-md"
+        // Match the item editor: the dialog frame never scrolls. The inner body
+        // owns vertical scrolling, which keeps the header/footer fixed and avoids
+        // `100vw` overflowing behind the mobile browser scrollbar.
+        className="flex max-h-[92vh] w-full max-w-[calc(100vw-1rem)] flex-col gap-0 overflow-hidden rounded-3xl border bg-card p-0 max-sm:h-dvh max-sm:max-h-none max-sm:overflow-hidden sm:max-w-2xl"
       >
         <Form {...form}>
           <form
             id="category-form"
             onSubmit={form.handleSubmit(onSubmit)}
-            className="flex max-h-[min(92vh,960px)] flex-col"
+            className="flex min-h-0 min-w-0 flex-1 flex-col"
           >
-        <DialogHeader className="bg-card px-6 py-5 pr-14 text-left sm:text-left">
-          <DialogTitle className="flex items-center gap-2 text-[1.625rem] font-semibold tracking-tight">
-            <Tag className="h-5 w-5 text-primary" />
-            {editCategory ? "Edit Category" : "Create New Category"}
+        <DialogHeader className="min-w-0 shrink-0 bg-card px-4 py-5 pr-14 text-left sm:px-6 sm:text-left">
+          <DialogTitle className="flex min-w-0 items-center gap-2 text-xl font-semibold tracking-tight sm:text-[1.625rem]">
+            <Tag className="h-5 w-5 shrink-0 text-primary" />
+            <span className="min-w-0 truncate">
+              {editCategory ? "Edit Category" : "Create New Category"}
+            </span>
           </DialogTitle>
-          <DialogDescription className="max-w-[60ch] text-sm leading-6">
+          <DialogDescription className="min-w-0 break-words text-sm leading-6 sm:max-w-[60ch]">
             Categories help organize your menu items for easy navigation.
           </DialogDescription>
         </DialogHeader>
 
-          <div className="min-h-0 flex flex-1 flex-col overflow-hidden lg:flex-row">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
             {/* Form Section */}
-            <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
-                <div className="space-y-4">
-                  {/* Basic Info Section */}
-                  <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
-                    <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
-                      <Tag className="h-4 w-4" />
-                      Basic Information
-                    </h3>
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+              {/* Section selector bar — one section visible at a time. Pill
+                  tabs mirroring NewEditItemFormSheet. Classes are literal, not
+                  {TOKEN} — Tailwind does not scan computed strings (C7). */}
+              <div className="min-w-0 shrink-0 px-4 pt-5 sm:px-6">
+                <div
+                  ref={sectionTabsScrollRef}
+                  role="tablist"
+                  aria-label="Category settings sections"
+                  className="no-scrollbar w-full min-w-0 overflow-x-auto pb-1"
+                >
+                  <div className="inline-flex h-auto w-max flex-nowrap gap-0.5 rounded-full bg-muted/70 p-1">
+                    {visibleSections.map((section) => {
+                      const isActive = activeSection === section.id;
+                      return (
+                        <button
+                          key={section.id}
+                          type="button"
+                          role="tab"
+                          aria-selected={isActive}
+                          data-category-section={section.id}
+                          onClick={() => handleSectionSelect(section.id)}
+                          className={cn(
+                            "flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-4 py-2 text-[0.8125rem] font-medium transition-colors",
+                            isActive
+                              ? "bg-background text-foreground shadow-sm ring-1 ring-border"
+                              : "text-muted-foreground hover:text-foreground",
+                          )}
+                        >
+                          {section.label}
+                          {section.id === "scheduling" &&
+                            selectedSchedules.length > 0 && (
+                              <Badge variant="secondary" className="ml-0.5">
+                                {selectedSchedules.length}
+                              </Badge>
+                            )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
 
+              <div className="thin-scrollbar min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-5 sm:px-6">
+                <div className="min-w-0 space-y-4">
+                  {/* Basic Info Section */}
+                  {activeSection === "basic" && (
+                  <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
                     <FormField
                       control={form.control}
                       name="name"
@@ -401,7 +468,7 @@ export function CategoryFormSheet({
                           <FormControl>
                             <Input
                               placeholder="e.g., Appetizers, Main Course, Desserts"
-                              className="h-12 rounded-2xl bg-muted/50 text-lg focus-visible:bg-muted"
+                              className="h-11 rounded-2xl bg-muted/50 text-sm placeholder:text-sm focus-visible:bg-muted sm:h-12 sm:text-base sm:placeholder:text-base"
                               {...field}
                             />
                           </FormControl>
@@ -428,6 +495,7 @@ export function CategoryFormSheet({
                       )}
                     />
                   </div>
+                  )}
 
                   {/* Menu Assignment */}
                   {/* <div className="space-y-3 animate-in fade-in slide-in-from-bottom-4 duration-300" style={{ animationDelay: '100ms' }}>
@@ -471,83 +539,9 @@ export function CategoryFormSheet({
                                         </div>
                                     </div> */}
 
-                  {/* Appearance Section */}
-                  <Collapsible
-                    open={expandedSections.appearance}
-                    onOpenChange={() => toggleSection("appearance")}
-                  >
-                    <CollapsibleTrigger asChild>
-                      <button
-                        type="button"
-                        className="flex items-center justify-between w-full p-3 rounded-2xl bg-muted/50 hover:bg-muted transition-colors"
-                      >
-                        <span className="text-sm font-semibold flex items-center gap-2">
-                          <Palette className="h-4 w-4 text-pink-500" />
-                          Appearance
-                        </span>
-                        {expandedSections.appearance ? (
-                          <ChevronDown className="h-4 w-4 transition-transform duration-200" />
-                        ) : (
-                          <ChevronRight className="h-4 w-4 transition-transform duration-200" />
-                        )}
-                      </button>
-                    </CollapsibleTrigger>
-                    <CollapsibleContent className="pt-4 space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
-                      <FormField
-                        control={form.control}
-                        name="image"
-                        render={() => (
-                          <FormItem>
-                            <FormLabel>Category Image</FormLabel>
-                            <FormControl>
-                              <CdnImageUploadField
-                                disabled={isSubmitting}
-                                helperText="Uploads to Bunny CDN when you save the category."
-                                onClear={imageUpload.clear}
-                                onFileSelect={imageUpload.selectFile}
-                                previewUrl={imageUpload.previewUrl}
-                                selectedFileName={imageUpload.selectedFileName}
-                                uploadLabel="Upload category image"
-                                uploading={imageUpload.isUploading}
-                              />
-                            </FormControl>
-                            <FormDescription>
-                              Optional image to represent this category
-                            </FormDescription>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </CollapsibleContent>
-                  </Collapsible>
-
                   {/* Scheduling Section */}
-                  <Collapsible
-                    open={expandedSections.scheduling}
-                    onOpenChange={() => toggleSection("scheduling")}
-                  >
-                    <CollapsibleTrigger asChild>
-                      <button
-                        type="button"
-                        className="flex items-center justify-between w-full p-3 rounded-2xl bg-muted/50 hover:bg-muted transition-colors"
-                      >
-                        <span className="text-sm font-semibold flex items-center gap-2">
-                          <Calendar className="h-4 w-4 text-blue-500" />
-                          Availability Schedule
-                          {selectedSchedules.length > 0 && (
-                            <Badge variant="secondary" className="ml-2">
-                              {selectedSchedules.length}
-                            </Badge>
-                          )}
-                        </span>
-                        {expandedSections.scheduling ? (
-                          <ChevronDown className="h-4 w-4 transition-transform duration-200" />
-                        ) : (
-                          <ChevronRight className="h-4 w-4 transition-transform duration-200" />
-                        )}
-                      </button>
-                    </CollapsibleTrigger>
-                    <CollapsibleContent className="pt-4 space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
+                  {activeSection === "scheduling" && (
+                    <div className="space-y-3 animate-in fade-in slide-in-from-bottom-4 duration-300">
                       {!locationSchedules || locationSchedules.length === 0 ? (
                         <div className="text-center py-4 text-muted-foreground text-sm">
                           No schedules available. Create schedules first to
@@ -648,16 +642,12 @@ export function CategoryFormSheet({
                           ))}
                         </div>
                       )}
-                    </CollapsibleContent>
-                  </Collapsible>
+                    </div>
+                  )}
 
                   {/* Kitchen Routing (Prep Station Default) */}
-                  {editCategory && gatedLocation && (
+                  {activeSection === "kitchen" && editCategory && gatedLocation && (
                     <div className="space-y-3 animate-in fade-in slide-in-from-bottom-4 duration-300">
-                      <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
-                        <Flame className="h-4 w-4 text-orange-500" />
-                        Kitchen Routing
-                      </h3>
                       <p className="text-sm text-muted-foreground">
                         Set a default prep station for all items in this
                         category. Items can override this at the item level.
@@ -724,38 +714,22 @@ export function CategoryFormSheet({
                       )}
                     </div>
                   )}
-                  {editCategory && !gatedLocationId && (
-                    <div className="flex items-start gap-2 p-3 bg-muted/50 border-0 rounded-2xl text-sm">
-                      <Info className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0 dark:text-blue-400" />
-                      <p className="text-blue-800 dark:text-blue-300">
-                        Prep station routing is location-specific. Select a
-                        location to set a default prep station for this category.
-                      </p>
-                    </div>
-                  )}
+                  {activeSection === "kitchen" &&
+                    editCategory &&
+                    !gatedLocationId && (
+                      <div className="flex min-w-0 items-start gap-2 rounded-2xl border-0 bg-muted/50 p-3 text-sm">
+                        <Info className="mt-0.5 h-4 w-4 flex-shrink-0 text-blue-600 dark:text-blue-400" />
+                        <p className="min-w-0 text-blue-800 dark:text-blue-300">
+                          Prep station routing is location-specific. Select a
+                          location to set a default prep station for this
+                          category.
+                        </p>
+                      </div>
+                    )}
 
                   {/* Advanced Settings */}
-                  <Collapsible
-                    open={expandedSections.advanced}
-                    onOpenChange={() => toggleSection("advanced")}
-                  >
-                    <CollapsibleTrigger asChild>
-                      <button
-                        type="button"
-                        className="flex items-center justify-between w-full p-3 rounded-2xl bg-muted/50 hover:bg-muted transition-colors"
-                      >
-                        <span className="text-sm font-semibold flex items-center gap-2">
-                          <Settings2 className="h-4 w-4 text-gray-500" />
-                          Advanced Settings
-                        </span>
-                        {expandedSections.advanced ? (
-                          <ChevronDown className="h-4 w-4 transition-transform duration-200" />
-                        ) : (
-                          <ChevronRight className="h-4 w-4 transition-transform duration-200" />
-                        )}
-                      </button>
-                    </CollapsibleTrigger>
-                    <CollapsibleContent className="pt-4 space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
+                  {activeSection === "advanced" && (
+                    <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
                       <FormField
                         control={form.control}
                         name="display_order"
@@ -792,8 +766,8 @@ export function CategoryFormSheet({
                         control={form.control}
                         name="is_active"
                         render={({ field }) => (
-                          <FormItem className="flex items-center justify-between rounded-2xl border-0 bg-muted/50 p-4">
-                            <div className="space-y-0.5">
+                          <FormItem className="flex min-w-0 items-center justify-between gap-3 rounded-2xl border-0 bg-muted/50 p-4">
+                            <div className="min-w-0 space-y-0.5">
                               <FormLabel className="text-base">
                                 Active
                               </FormLabel>
@@ -802,25 +776,14 @@ export function CategoryFormSheet({
                               </FormDescription>
                             </div>
                             <FormControl>
-                              <button
-                                type="button"
-                                role="switch"
-                                aria-checked={field.value}
-                                onClick={() => field.onChange(!field.value)}
-                                className={cn(
-                                  "relative inline-flex h-6 w-11 items-center rounded-full transition-colors",
-                                  field.value ? "bg-primary" : "bg-muted",
-                                )}
-                              >
-                                <span
-                                  className={cn(
-                                    "inline-block h-4 w-4 transform rounded-full bg-white transition-transform",
-                                    field.value
-                                      ? "translate-x-6"
-                                      : "translate-x-1",
-                                  )}
-                                />
-                              </button>
+                              {/* Shared Switch rather than a hand-rolled track:
+                                  the local one mis-sized its thumb travel and
+                                  had no shrink-0, so it clipped on narrow rows. */}
+                              <Switch
+                                checked={field.value}
+                                onCheckedChange={field.onChange}
+                                className="shrink-0"
+                              />
                             </FormControl>
                           </FormItem>
                         )}
@@ -835,82 +798,19 @@ export function CategoryFormSheet({
                           className="mt-1"
                         />
                       )}
-                    </CollapsibleContent>
-                  </Collapsible>
-                </div>
-            </div>
-
-            {/* Preview Section */}
-            <div className="hidden min-h-0 w-[360px] shrink-0 overflow-y-auto border-l border-border/60 bg-card px-6 py-5 lg:block">
-              <div className="space-y-6 pb-4">
-              <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
-                <Sparkles className="h-4 w-4" />
-                Preview
-              </h3>
-
-              {/* Category Preview Card */}
-              <div className="bg-card rounded-3xl border border-border/60 p-4 transition-all duration-300">
-                {imageUpload.previewUrl ? (
-                  <div className="aspect-video rounded-2xl bg-muted mb-3 overflow-hidden">
-                    <img
-                      src={imageUpload.previewUrl}
-                      alt="Category preview"
-                      className="w-full h-full object-cover"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).style.display = "none";
-                      }}
-                    />
-                  </div>
-                ) : (
-                  <div className="aspect-video rounded-2xl bg-muted/50 mb-3 flex items-center justify-center">
-                    <Tag className="h-12 w-12 text-muted-foreground/30" />
-                  </div>
-                )}
-
-                <h4
-                  className={cn(
-                    "text-lg font-semibold transition-colors duration-200",
-                    watchedValues.name
-                      ? "text-foreground"
-                      : "text-muted-foreground/50",
+                    </div>
                   )}
-                >
-                  {watchedValues.name || "Category Name"}
-                </h4>
-
-                {watchedValues.description && (
-                  <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
-                    {watchedValues.description}
-                  </p>
-                )}
-
-                <div className="flex items-center gap-2 mt-3">
-                  <Badge
-                    variant={watchedValues.is_active ? "default" : "secondary"}
-                  >
-                    {watchedValues.is_active ? "Active" : "Inactive"}
-                  </Badge>
                 </div>
               </div>
-
-              {/* Info Summary */}
-              <div className="mt-6 space-y-2 text-sm">
-                {selectedSchedules.length > 0 && (
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <Calendar className="h-4 w-4 text-blue-500" />
-                    {selectedSchedules.length} schedule
-                    {selectedSchedules.length !== 1 ? "s" : ""} assigned
-                  </div>
-                )}
-              </div>
-              </div>
             </div>
+
           </div>
-        <DialogFooter className="shrink-0 bg-card px-6 py-4 sm:justify-end">
+        <DialogFooter className="min-w-0 shrink-0 gap-2 border-t border-border/60 bg-card px-4 py-4 sm:justify-end sm:px-6">
           <Button
             type="button"
             variant="outline"
             onClick={handleClose}
+            className="h-9 w-full rounded-full px-4 text-[0.8125rem] font-medium shadow-sm sm:w-auto"
           >
             Cancel
           </Button>
@@ -918,7 +818,7 @@ export function CategoryFormSheet({
             type="submit"
             form="category-form"
             disabled={isSubmitting}
-            className="min-w-[150px]"
+            className="h-9 w-full rounded-full px-4 text-[0.8125rem] font-medium sm:w-auto sm:min-w-[150px]"
           >
             {isSubmitting ? (
               <>
@@ -946,7 +846,11 @@ export function CategoryFormSheet({
             ) : (
               <>
                 {editCategory ? "Save Changes" : "Create Category"}
-                <AffectsTag ctx={{ level: 1 }} variant="save-button" />
+                {/* The "affects all locations" note needs room it doesn't have
+                    on a phone-width button. */}
+                <span className="hidden sm:contents">
+                  <AffectsTag ctx={{ level: 1 }} variant="save-button" />
+                </span>
               </>
             )}
           </Button>

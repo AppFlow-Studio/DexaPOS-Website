@@ -248,7 +248,80 @@ export async function GetMenus (clerkOrgId: string, locationId?: string | null) 
       console.error('Error getting menus:', error)
       return []
     }
-    return data as MenusModel[]
+
+    const menuRows = (data || []) as MenusModel[]
+    if (menuRows.length === 0) {
+      return menuRows
+    }
+
+    // Enrich the All Locations table without an N+1 query. A location-menu
+    // row is an explicit availability override; otherwise a global menu
+    // inherits the location's global-menu setting and its own base status.
+    const [locationsResult, assignmentsResult] = await Promise.all([
+      supabase
+        .from('locations')
+        .select('id, name, uses_global_menu')
+        .eq('merchant_id', merchant.id)
+        .eq('is_active', true)
+        .order('name'),
+      supabase
+        .from('location_menus')
+        .select('menu_id, location_id, is_active')
+        .in(
+          'menu_id',
+          menuRows.map(menu => menu.id)
+        )
+    ])
+
+    if (locationsResult.error || assignmentsResult.error) {
+      console.error('Error getting menu location availability:', {
+        locations: locationsResult.error?.message,
+        assignments: assignmentsResult.error?.message
+      })
+
+      return menuRows.map(menu => ({
+        ...menu,
+        available_locations: null
+      }))
+    }
+
+    const activeLocations = locationsResult.data || []
+    const assignmentByMenuAndLocation = new Map<string, boolean>()
+
+    for (const assignment of assignmentsResult.data || []) {
+      assignmentByMenuAndLocation.set(
+        `${assignment.menu_id}:${assignment.location_id}`,
+        assignment.is_active
+      )
+    }
+
+    return menuRows.map(menu => {
+      const eligibleLocations = menu.location_id
+        ? activeLocations.filter(location => location.id === menu.location_id)
+        : activeLocations
+
+      const availableLocations = menu.location_id
+        ? menu.is_active
+          ? eligibleLocations
+          : []
+        : eligibleLocations.filter(location => {
+            const assignment = assignmentByMenuAndLocation.get(
+              `${menu.id}:${location.id}`
+            )
+
+            return (
+              assignment ?? (menu.is_active && location.uses_global_menu)
+            )
+          })
+
+      return {
+        ...menu,
+        available_locations: availableLocations.map(location => ({
+          id: location.id,
+          name: location.name
+        }))
+      }
+    })
   }
 
   // // Location-specific view - get global menus with location status

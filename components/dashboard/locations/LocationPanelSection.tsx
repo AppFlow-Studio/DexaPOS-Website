@@ -64,18 +64,26 @@ export function LocationPanelSection({
 }
 
 /**
- * Field styling inside a panel: rounder, taller, and filled instead of outlined
- * — the border and drop shadow are dropped so fields read as soft wells rather
- * than boxes. Applied on a wrapper so the shared Input/Select/Textarea
- * primitives stay untouched everywhere else. The focus ring is kept: it is the
- * only remaining affordance for which field is active.
+ * Field styling inside a panel: taller and filled instead of outlined. Radius
+ * remains owned by the shared Input/Select/Textarea primitives, while the border
+ * and drop shadow are dropped so fields read as soft wells rather than boxes.
+ * The focus ring remains as the active-field affordance.
  */
 export const roundedFields = cn(
-  '[&_[data-slot=input]]:h-10 [&_[data-slot=input]]:rounded-xl',
+  '[&_[data-slot=input]]:h-10',
   '[&_[data-slot=input]]:border-transparent [&_[data-slot=input]]:shadow-none [&_[data-slot=input]]:bg-muted/50',
-  '[&_[data-slot=select-trigger]]:h-10 [&_[data-slot=select-trigger]]:rounded-xl',
+  '[&_[data-slot=select-trigger]]:h-10',
   '[&_[data-slot=select-trigger]]:border-transparent [&_[data-slot=select-trigger]]:shadow-none [&_[data-slot=select-trigger]]:bg-muted/50',
-  '[&_textarea]:rounded-xl [&_textarea]:border-transparent [&_textarea]:shadow-none [&_textarea]:bg-muted/50'
+  '[&_textarea]:border-transparent [&_textarea]:shadow-none [&_textarea]:bg-muted/50'
+)
+
+/** Canonical radii for interactive controls inside the location editor. */
+export const roundedPanelControls = cn(
+  roundedFields,
+  '[&_[data-slot=button]]:rounded-full',
+  '[&_[data-slot=input]]:rounded-full',
+  '[&_[data-slot=select-trigger]]:rounded-full',
+  '[&_[data-slot=textarea]]:rounded-2xl'
 )
 
 /**
@@ -83,8 +91,8 @@ export const roundedFields = cn(
  * this goes on the SelectContent itself.
  */
 export const roundedSelectContent = cn(
-  'rounded-xl p-1.5',
-  '[&_[data-slot=select-item]]:rounded-lg [&_[data-slot=select-item]]:py-2'
+  'rounded-2xl p-1.5',
+  '[&_[data-slot=select-item]]:rounded-full [&_[data-slot=select-item]]:py-2'
 )
 
 /** Pill action button sizing shared by the panels' Save/Edit/Cancel rows. */
@@ -105,9 +113,9 @@ export const phoneInputFilledVars = {
 } as React.CSSProperties
 
 export const roundedPhoneInput = cn(
-  'rounded-xl bg-muted/50',
-  '[&_.react-international-phone-input]:h-10 [&_.react-international-phone-input]:rounded-r-xl',
+  'rounded-full bg-muted/50',
+  '[&_.react-international-phone-input]:h-10 [&_.react-international-phone-input]:rounded-r-full',
   '[&_.react-international-phone-input]:border-transparent [&_.react-international-phone-input]:bg-transparent',
-  '[&_.react-international-phone-country-selector-button]:h-10 [&_.react-international-phone-country-selector-button]:rounded-l-xl',
+  '[&_.react-international-phone-country-selector-button]:h-10 [&_.react-international-phone-country-selector-button]:rounded-l-full',
   '[&_.react-international-phone-country-selector-button]:border-transparent [&_.react-international-phone-country-selector-button]:bg-transparent'
 )

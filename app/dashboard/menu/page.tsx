@@ -760,6 +760,7 @@ export default function MenuPage () {
             onlineMenuId={onlineMenu?.primaryMenuId ?? null}
             linkedMenuIds={onlineMenu?.linkedMenuIds ?? []}
             onSetOnlineMenu={handleSetOnlineMenu}
+            showLocations={isAllLocations && !isSingleLocation}
           />
           {filteredMenus.length > 0 && (
             <div className='flex items-center gap-2 mt-4 text-sm text-muted-foreground'>

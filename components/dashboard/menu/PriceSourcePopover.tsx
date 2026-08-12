@@ -128,30 +128,39 @@ export function PriceSourcePopover({
   const matrix = matrixQuery.data;
   const globalPrice = matrix?.globalPrice ?? null;
 
-  // Resolve L2 override (if any) for the displayed locationId
+  // Resolve the L2 rung (global category default) for the displayed context.
+  // L2 is not location-scoped — it applies across every location.
   const l2Override = React.useMemo(() => {
-    if (!matrix || !locationId) return null;
+    if (!matrix) return null;
     return (
       matrix.levels.find(
-        (r) => r.level === 2 && r.locationId === locationId,
+        (r) =>
+          r.level === 2 &&
+          (!editScope.categoryName || r.categoryName === editScope.categoryName),
       ) ?? null
     );
-  }, [matrix, locationId]);
+  }, [matrix, editScope.categoryName]);
 
   const sourceLabel = (() => {
     switch (sourceLevel) {
       case 1:
         return "Global";
       case 2:
-        return editScope.locationName
-          ? `${editScope.locationName} override`
-          : "Location override";
-      case 3:
         return editScope.categoryName
           ? `${editScope.categoryName} category`
           : "Category default";
-      case 4:
+      case 3:
+        if (editScope.categoryName && editScope.locationName) {
+          return `${editScope.categoryName} at ${editScope.locationName}`;
+        }
         return "Category at location";
+      case 4:
+        if (editScope.menuName && editScope.categoryName) {
+          return `${editScope.menuName} menu – ${editScope.categoryName}`;
+        }
+        return editScope.menuName
+          ? `${editScope.menuName} menu`
+          : "Menu category";
       case 5:
         if (editScope.menuName && editScope.locationName) {
           return `${editScope.menuName} menu at ${editScope.locationName}`;
@@ -236,9 +245,9 @@ export function PriceSourcePopover({
                   />
                   <CascadeRow
                     label={
-                      editScope.locationName
-                        ? `${editScope.locationName} override`
-                        : "Location override"
+                      l2Override?.categoryName ??
+                      editScope.categoryName ??
+                      "Category default"
                     }
                     price={l2Override?.price ?? null}
                     isWinner={sourceLevel === 2}

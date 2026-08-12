@@ -256,7 +256,7 @@ export function HoursTab({ location, onUpdate, setHasUnsavedChanges }: HoursTabP
                                                         handleDayChange(key, { open: value })
                                                     }
                                                 >
-                                                    <SelectTrigger className="flex-1 min-w-27.5 h-9 rounded-xl border-transparent bg-background shadow-none text-sm">
+                                                    <SelectTrigger className="flex-1 min-w-27.5 h-9 rounded-full border-transparent bg-background shadow-none text-sm">
                                                         <SelectValue />
                                                     </SelectTrigger>
                                                     <SelectContent className={roundedSelectContent}>
@@ -276,7 +276,7 @@ export function HoursTab({ location, onUpdate, setHasUnsavedChanges }: HoursTabP
                                                         handleDayChange(key, { close: value })
                                                     }
                                                 >
-                                                    <SelectTrigger className="flex-1 min-w-27.5 h-9 rounded-xl border-transparent bg-background shadow-none text-sm">
+                                                    <SelectTrigger className="flex-1 min-w-27.5 h-9 rounded-full border-transparent bg-background shadow-none text-sm">
                                                         <SelectValue />
                                                     </SelectTrigger>
                                                     <SelectContent className={roundedSelectContent}>

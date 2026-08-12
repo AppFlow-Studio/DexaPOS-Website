@@ -157,6 +157,30 @@ export function CreateItemWizard({
     fileNamePrefix: "item",
   });
   const draftHydratedRef = React.useRef(false);
+  const sectionTabsScrollRef = React.useRef<HTMLDivElement>(null);
+  const keepSelectedSectionVisible = React.useCallback((value: string) => {
+    requestAnimationFrame(() => {
+      const scroller = sectionTabsScrollRef.current;
+      const trigger = scroller?.querySelector<HTMLElement>(
+        `[data-item-section="${value}"]`,
+      );
+      if (!scroller || !trigger) return;
+
+      const scrollerRect = scroller.getBoundingClientRect();
+      const triggerRect = trigger.getBoundingClientRect();
+      const centeredLeft =
+        scroller.scrollLeft +
+        triggerRect.left -
+        scrollerRect.left -
+        (scrollerRect.width - triggerRect.width) / 2;
+      const maxScrollLeft = scroller.scrollWidth - scroller.clientWidth;
+
+      scroller.scrollTo({
+        left: Math.max(0, Math.min(centeredLeft, maxScrollLeft)),
+        behavior: "smooth",
+      });
+    });
+  }, []);
   const draftKey = React.useMemo(() => {
     const scopeKey = isAllLocations ? "global" : selectedLocationId ?? "location-none";
     return merchantId
@@ -600,9 +624,16 @@ export function CreateItemWizard({
                 )}
               </div>
 
-              <Tabs defaultValue="general" className="w-full">
+              <Tabs
+                defaultValue="general"
+                className="w-full"
+                onValueChange={keepSelectedSectionVisible}
+              >
                 {/* Classes are literal, not {TOKEN} — see C7. */}
-                <div className="mb-6 w-full min-w-0 overflow-x-auto pb-1">
+                <div
+                  ref={sectionTabsScrollRef}
+                  className="no-scrollbar mb-6 w-full min-w-0 overflow-x-auto pb-1"
+                >
                   <TabsList className="inline-flex h-auto w-max flex-nowrap gap-0.5 rounded-full bg-muted/70 p-1">
                     {[
                       { value: "general", label: "General" },
@@ -616,6 +647,7 @@ export function CreateItemWizard({
                       <TabsTrigger
                         key={t.value}
                         value={t.value}
+                        data-item-section={t.value}
                         className="shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-[0.8125rem] font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border"
                       >
                         {t.label}
