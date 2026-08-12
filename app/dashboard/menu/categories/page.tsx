@@ -1,6 +1,5 @@
 "use client";
 
-import { ScopeContextStrip } from "@/components/dashboard/menu/ScopeContextStrip";
 import {
   Card,
   CardContent,
@@ -83,11 +82,6 @@ import {
 import { cn, isValidImageUrl } from "@/lib/utils";
 import { CategoryWithItems, CategoryMenuItem } from "@/types/menu";
 import { useRouter } from "next/navigation";
-import {
-  LevelIndicator,
-  getEditingLevel,
-  EditingContextBanner,
-} from "@/components/dashboard/menu/LevelIndicator";
 import { Switch } from "@/components/ui/switch";
 import {
   Tooltip,
@@ -291,14 +285,6 @@ export default function CategoriesPage() {
   const categoriesWithOverrides = categoriesList.filter(
     (c) => c.location_override !== null,
   ).length;
-
-  // Get current editing level
-  const editingLevel = getEditingLevel({
-    isAllLocations,
-    menuId: null,
-    categoryId: null,
-    isMenuLocationOwned: false,
-  });
 
   // Helper to get items for a category from RPC data
   const getItemsForCategory = (categoryId: string): CategoryMenuItem[] => {
@@ -539,6 +525,17 @@ export default function CategoriesPage() {
     }
   };
 
+  // Who can open the Edit Category dialog.
+  //
+  // UpdateCategory writes the `categories` row itself, so edits to name /
+  // description / order / active always apply merchant-wide. That is why the
+  // all-locations view is the general entry point. A location-specific category
+  // is the safe exception: it exists only at its own location, so editing it
+  // while scoped there affects nothing else. Same shape as `canDelete`.
+  const canEditCategory = (category: CategoryWithItems) =>
+    isAllLocations ||
+    (!category.is_global && category.location_id === selectedLocationId);
+
   const handleEditCategory = (
     category: CategoryWithItems,
     e?: React.MouseEvent,
@@ -706,7 +703,6 @@ export default function CategoriesPage() {
   // console.log('categoriesList', categoriesList)
   return (
     <div className="space-y-6 animate-in fade-in duration-500 w-full min-w-0">
-      <ScopeContextStrip />
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <div className="flex items-center gap-3 flex-wrap">
@@ -775,15 +771,6 @@ export default function CategoriesPage() {
           </Button>
         </div>
       </div>
-
-      {/* Context Banner - only show when viewing a specific location */}
-      {!isAllLocations && (
-        <EditingContextBanner
-          level={2}
-          locationName={currentLocation?.name}
-          className="animate-in fade-in slide-in-from-top-2 duration-300"
-        />
-      )}
 
       {/* Stats Overview */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -1035,7 +1022,7 @@ export default function CategoriesPage() {
                         collisionPadding={12}
                         className="w-44 p-0.5"
                       >
-                        {isAllLocations && (
+                        {canEditCategory(category) && (
                           <DropdownMenuItem
                             className="gap-2 px-2 py-1.5"
                             onSelect={() => handleEditCategory(category)}
@@ -1404,8 +1391,14 @@ export default function CategoriesPage() {
                                 );
                               })()}
 
-                              {/* Edit button - only for global view */}
-                              {isAllLocations && (
+                              {/* Edit button — available in the all-locations
+                                  view, and for a category this location owns.
+                                  Editing writes the category's core fields
+                                  globally, but a location-specific category
+                                  exists only at this location, so there is no
+                                  cross-location surprise. Mirrors `canDelete`
+                                  below. */}
+                              {canEditCategory(category) && (
                                 <Button
                                   variant="ghost"
                                   size="icon"

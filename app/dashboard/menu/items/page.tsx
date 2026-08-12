@@ -114,11 +114,27 @@ import { useLocationTaxRates } from "../../hooks/useTaxRates";
 import { TAX_CATEGORY_LABELS } from "@/types/tax";
 import { AVAILABLE_CHANNELS } from "@/types/inventory";
 import { DeleteMenuItem } from "../../actions/menu-items";
+import { UpdateLocationCategoryItemsOrder } from "../../actions/item-assignments";
 import {
   UpdateCategory,
   UpdateLocationCategoryOverride,
 } from "../../actions/categories";
 import { CreateItemWizard } from "@/components/dashboard/menu/items/CreateItemWizard";
+import {
+  DndContext,
+  PointerSensor,
+  closestCenter,
+  type DragEndEvent,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  arrayMove,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { useManagerPermissions } from "../../hooks/useManagerPermissions";
 import {
   PageShell,
@@ -591,6 +607,7 @@ function ItemRow({
   onDelete,
   showLocations = false,
   canDelete = false,
+  canReorder = false,
   isSelectionMode = false,
   isSelected = false,
   onToggleSelect,
@@ -601,10 +618,23 @@ function ItemRow({
   onDelete: () => void;
   showLocations?: boolean;
   canDelete?: boolean;
+  canReorder?: boolean;
   isSelectionMode?: boolean;
   isSelected?: boolean;
   onToggleSelect?: (id: string) => void;
 }) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
+    id: item.id,
+    disabled: !canReorder || isSelectionMode,
+  });
+
   const activateRow = () => {
     if (isSelectionMode) onToggleSelect?.(item.id);
     else onView();
@@ -612,10 +642,16 @@ function ItemRow({
 
   return (
     <div
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+      }}
       className={cn(
         "group flex min-w-0 cursor-pointer items-center gap-2 px-1 py-3 transition-colors hover:bg-muted/40 sm:gap-4 sm:px-2",
         isSelectionMode && isSelected && "bg-primary/5",
         !item.effective_availability && "opacity-65",
+        isDragging && "relative z-20 rounded-xl bg-card opacity-70 shadow-lg ring-2 ring-primary/40",
       )}
       onClick={activateRow}
     >
@@ -638,12 +674,18 @@ function ItemRow({
           {isSelected && <Check className="h-4 w-4" strokeWidth={3} />}
         </button>
       ) : (
-        <span
-          aria-hidden="true"
-          className="hidden h-8 w-7 shrink-0 items-center justify-center text-muted-foreground/40 sm:flex"
+        <button
+          type="button"
+          {...attributes}
+          {...listeners}
+          disabled={!canReorder}
+          aria-label={`Drag ${item.name} to reorder`}
+          title={canReorder ? "Drag to reorder" : "Reordering is unavailable here"}
+          className="flex h-10 w-10 shrink-0 touch-none cursor-grab items-center justify-center rounded-lg text-muted-foreground/60 hover:bg-muted hover:text-foreground active:cursor-grabbing disabled:cursor-not-allowed disabled:opacity-40 sm:h-8 sm:w-7 sm:rounded-md"
+          onClick={(event) => event.stopPropagation()}
         >
-          <GripVertical className="h-4 w-4" />
-        </span>
+          <GripVertical className="h-5 w-5 sm:h-4 sm:w-4" />
+        </button>
       )}
 
       <span className="relative hidden h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-muted sm:block">
@@ -1170,6 +1212,8 @@ function CategoryGroup({
   canToggleCategory = false,
   isTogglingCategory = false,
   onToggleCategoryActive,
+  canReorderItems = false,
+  onReorderItems,
 }: {
   category: ItemCategorySummary;
   items: FlatItem[];
@@ -1188,7 +1232,60 @@ function CategoryGroup({
   canToggleCategory?: boolean;
   isTogglingCategory?: boolean;
   onToggleCategoryActive?: (isActive: boolean) => void;
+  canReorderItems?: boolean;
+  onReorderItems?: (
+    categoryId: string,
+    items: FlatItem[],
+  ) => Promise<boolean>;
 }) {
+  const [isSavingOrder, setIsSavingOrder] = useState(false);
+  const [draftItemOrder, setDraftItemOrder] = useState<string[] | null>(null);
+  const reorderSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+  );
+
+  const orderedItems = useMemo(() => {
+    if (!draftItemOrder) return items;
+
+    const itemsById = new Map(items.map((item) => [item.id, item]));
+    const draftItems = draftItemOrder
+      .map((itemId) => itemsById.get(itemId))
+      .filter((item): item is FlatItem => Boolean(item));
+    const draftIds = new Set(draftItemOrder);
+
+    return [
+      ...draftItems,
+      ...items.filter((item) => !draftIds.has(item.id)),
+    ];
+  }, [draftItemOrder, items]);
+
+  const handleItemDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (
+      !canReorderItems ||
+      isSavingOrder ||
+      !over ||
+      active.id === over.id
+    ) {
+      return;
+    }
+
+    const oldIndex = orderedItems.findIndex((item) => item.id === active.id);
+    const newIndex = orderedItems.findIndex((item) => item.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    const nextItems = arrayMove(orderedItems, oldIndex, newIndex);
+    setDraftItemOrder(nextItems.map((item) => item.id));
+  };
+
+  const handleSaveItemOrder = async () => {
+    if (!onReorderItems) return;
+    setIsSavingOrder(true);
+    const saved = await onReorderItems(category.id, orderedItems);
+    setIsSavingOrder(false);
+    if (saved) setDraftItemOrder(null);
+  };
+
   const selectedCount = isSelectionMode && selectedItemIds
     ? items.reduce((acc, it) => acc + (selectedItemIds.has(it.id) ? 1 : 0), 0)
     : 0;
@@ -1332,33 +1429,69 @@ function CategoryGroup({
 
         <CollapsibleContent>
           <div className="px-3 pb-3 pt-0 sm:px-6 sm:pb-4">
-            {items.length === 0 ? (
+            {orderedItems.length === 0 ? (
               <div className="py-8 text-center text-muted-foreground">
                 <Utensils className="mx-auto mb-2 h-8 w-8 opacity-50" />
                 <p className="text-sm">No items in this category</p>
               </div>
             ) : (
-              <div className="divide-y divide-border/80">
-                {items.map((item) => {
-                  const itemCanDelete = isAllLocations
-                    ? true
-                    : item.location_id === selectedLocationId;
-                  return (
-                    <ItemRow
-                      key={item.id}
-                      item={item}
-                      onEdit={() => onEditItem(item)}
-                      onView={() => onViewItem(item)}
-                      onDelete={() => onDeleteItem(item)}
-                      showLocations={showItemLocations}
-                      canDelete={itemCanDelete && canDeleteItems}
-                      isSelectionMode={isSelectionMode}
-                      isSelected={selectedItemIds?.has(item.id) ?? false}
-                      onToggleSelect={onToggleSelect}
-                    />
-                  );
-                })}
-              </div>
+              <DndContext
+                sensors={reorderSensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleItemDragEnd}
+              >
+                <SortableContext
+                  items={orderedItems.map((item) => item.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  <div className="divide-y divide-border/80">
+                    {orderedItems.map((item) => {
+                      const itemCanDelete = isAllLocations
+                        ? true
+                        : item.location_id === selectedLocationId;
+                      return (
+                        <ItemRow
+                          key={item.id}
+                          item={item}
+                          onEdit={() => onEditItem(item)}
+                          onView={() => onViewItem(item)}
+                          onDelete={() => onDeleteItem(item)}
+                          showLocations={showItemLocations}
+                          canDelete={itemCanDelete && canDeleteItems}
+                          canReorder={canReorderItems && !isSavingOrder}
+                          isSelectionMode={isSelectionMode}
+                          isSelected={selectedItemIds?.has(item.id) ?? false}
+                          onToggleSelect={onToggleSelect}
+                        />
+                      );
+                    })}
+                  </div>
+                </SortableContext>
+                {draftItemOrder && (
+                  <div className="mt-3 flex items-center justify-end gap-2 border-t pt-3">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={isSavingOrder}
+                      onClick={() => setDraftItemOrder(null)}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={isSavingOrder}
+                      onClick={handleSaveItemOrder}
+                    >
+                      {isSavingOrder && (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      )}
+                      Save order
+                    </Button>
+                  </div>
+                )}
+              </DndContext>
             )}
           </div>
         </CollapsibleContent>
@@ -1452,6 +1585,9 @@ export default function MenuItemsPage() {
   const [togglingCategoryIds, setTogglingCategoryIds] = useState<Set<string>>(
     new Set(),
   );
+  const [categoryItemOrderOverrides, setCategoryItemOrderOverrides] = useState<
+    Map<string, string[]>
+  >(new Map());
 
   const toggleItemSelected = (id: string) => {
     setSelectedItemIds((prev) => {
@@ -1585,8 +1721,48 @@ export default function MenuItemsPage() {
       });
     }
 
+    // The flat item RPC is alphabetic and does not carry category assignment
+    // order. Use the category-centric query as the source of truth so a saved
+    // drag order survives a refresh.
+    for (const category of categoriesList) {
+      const group = groups.get(category.id);
+      if (!group) continue;
+
+      const orderByItemId = new Map<string, number>();
+      for (const assignment of category.items ?? []) {
+        const existingOrder = orderByItemId.get(assignment.menu_item_id);
+        if (
+          existingOrder === undefined ||
+          assignment.display_order < existingOrder
+        ) {
+          orderByItemId.set(
+            assignment.menu_item_id,
+            assignment.display_order,
+          );
+        }
+      }
+
+      group.items.sort((a, b) => {
+        const aOrder = orderByItemId.get(a.id) ?? Number.MAX_SAFE_INTEGER;
+        const bOrder = orderByItemId.get(b.id) ?? Number.MAX_SAFE_INTEGER;
+        return aOrder - bOrder || a.name.localeCompare(b.name);
+      });
+
+      const optimisticOrder = categoryItemOrderOverrides.get(category.id);
+      if (optimisticOrder) {
+        const optimisticIndex = new Map(
+          optimisticOrder.map((itemId, index) => [itemId, index]),
+        );
+        group.items.sort(
+          (a, b) =>
+            (optimisticIndex.get(a.id) ?? Number.MAX_SAFE_INTEGER) -
+            (optimisticIndex.get(b.id) ?? Number.MAX_SAFE_INTEGER),
+        );
+      }
+    }
+
     return Array.from(groups.values()).filter((g) => g.items.length > 0);
-  }, [categoryOptions, filteredItems]);
+  }, [categoriesList, categoryItemOrderOverrides, categoryOptions, filteredItems]);
 
   // Stats
   const stats = useMemo(
@@ -1741,6 +1917,78 @@ export default function MenuItemsPage() {
         next.delete(category.id);
         return next;
       });
+    }
+  };
+
+  const canReorderCategoryItems = (category: ItemCategorySummary) => {
+    if (category.id === "uncategorized" || isMember) return false;
+    if (isOwnerOrAdmin) return true;
+    if (!isManager || isAllLocations) return false;
+
+    return (
+      !!selectedLocationId &&
+      selectedLocationId !== "all" &&
+      assignedLocationIds.includes(selectedLocationId)
+    );
+  };
+
+  const handleReorderCategoryItems = async (
+    categoryId: string,
+    reorderedItems: FlatItem[],
+  ): Promise<boolean> => {
+    const previousOrder = categoryItemOrderOverrides.get(categoryId);
+    setCategoryItemOrderOverrides((previous) => {
+      const next = new Map(previous);
+      next.set(
+        categoryId,
+        reorderedItems.map((item) => item.id),
+      );
+      return next;
+    });
+
+    const restorePreviousOrder = () => {
+      setCategoryItemOrderOverrides((previous) => {
+        const next = new Map(previous);
+        if (previousOrder) next.set(categoryId, previousOrder);
+        else next.delete(categoryId);
+        return next;
+      });
+    };
+
+    try {
+      const result = await UpdateLocationCategoryItemsOrder(
+        isAllLocations ? null : selectedLocationId,
+        null,
+        categoryId,
+        reorderedItems.map((item, index) => ({
+          menuItemId: item.id,
+          displayOrder: index + 1,
+        })),
+      );
+
+      if (result.error) {
+        restorePreviousOrder();
+        toast.error("Order not saved", { description: result.error });
+        return false;
+      }
+
+      await queryClient.invalidateQueries({
+        queryKey: ["categories-with-items", clerkOrgId],
+      });
+      setCategoryItemOrderOverrides((previous) => {
+        const next = new Map(previous);
+        next.delete(categoryId);
+        return next;
+      });
+      invalidateOrderOutSync(queryClient);
+      toast.success("Item order saved");
+      return true;
+    } catch {
+      restorePreviousOrder();
+      toast.error("Order not saved", {
+        description: "Unable to save the item order. Please try again.",
+      });
+      return false;
     }
   };
 
@@ -2416,6 +2664,8 @@ export default function MenuItemsPage() {
                     onToggleCategoryActive={(isActive) =>
                       handleToggleCategoryVisibility(group.category, isActive)
                     }
+                    canReorderItems={canReorderCategoryItems(group.category)}
+                    onReorderItems={handleReorderCategoryItems}
                   />
                 );
               })}
