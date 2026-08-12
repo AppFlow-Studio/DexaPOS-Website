@@ -403,60 +403,63 @@ function CompletedSetupPanel({
               caption="Keep customer-facing contact information current. Payment credentials and tips are managed by HQ."
             >
               <div className="grid gap-5 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="merchant-online-store-name">Store Name</Label>
-                <Input
-                  id="merchant-online-store-name"
-                  value={settings.storeName}
-                  onChange={(event) => onUpdate({ storeName: event.target.value })}
-                  placeholder="Store name shown on the storefront."
-                />
-              </div>
-              <div className="space-y-2">
-                <div className="flex items-center gap-1.5">
-                  <Label htmlFor="merchant-online-store-slug">Store URL</Label>
-                  <InfoIcon
-                    tip="Store URL changes are handled by HQ because they affect storefront payment configuration and reconciliation."
-                    side="top"
-                    asButton
+                <div className="space-y-2">
+                  <div className="flex min-h-7 items-center">
+                    <Label htmlFor="merchant-online-store-name">Store Name</Label>
+                  </div>
+                  <Input
+                    id="merchant-online-store-name"
+                    value={settings.storeName}
+                    onChange={(event) => onUpdate({ storeName: event.target.value })}
+                    placeholder="Store name shown on the storefront."
                   />
                 </div>
-                <Input
-                  id="merchant-online-store-slug"
-                  value={storeUrl || ""}
-                  readOnly
-                />
-              </div>
-              <div className="space-y-2 md:col-span-2">
-                <Label htmlFor="merchant-online-store-description">Store Description</Label>
-                <Textarea
-                  id="merchant-online-store-description"
-                  value={settings.description}
-                  onChange={(event) => onUpdate({ description: event.target.value })}
-                  placeholder="Short description shown on your storefront."
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="merchant-online-store-phone">Store Phone</Label>
-                <Input
-                  id="merchant-online-store-phone"
-                  value={settings.phone}
-                  onChange={(event) => onUpdate({ phone: event.target.value })}
-                  placeholder="(555) 555-5555"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="merchant-online-store-email">Store Email</Label>
-                <Input
-                  id="merchant-online-store-email"
-                  value={settings.email}
-                  onChange={(event) => onUpdate({ email: event.target.value })}
-                  placeholder="orders@merchant.com"
-                />
-              </div>
-              <div className="border-l-2 border-[#0C4FD1]/30 pl-4 text-sm leading-6 text-muted-foreground md:col-span-2">
-                Tips and payment credentials are restricted to HQ. If you need to change those values, contact HQ support.
-              </div>
+                <div className="space-y-2">
+                  <div className="flex min-h-7 items-center gap-1.5">
+                    <Label htmlFor="merchant-online-store-slug">Store URL</Label>
+                    <InfoIcon
+                      tip="Store URL changes are handled by HQ because they affect storefront payment configuration and reconciliation."
+                      side="top"
+                      asButton
+                    />
+                  </div>
+                  <Input
+                    id="merchant-online-store-slug"
+                    value={storeUrl || ""}
+                    readOnly
+                  />
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="merchant-online-store-description">Store Description</Label>
+                  <Textarea
+                    id="merchant-online-store-description"
+                    value={settings.description}
+                    onChange={(event) => onUpdate({ description: event.target.value })}
+                    placeholder="Short description shown on your storefront."
+                    className="border-0 bg-muted/60 shadow-none focus-visible:bg-background focus-visible:border-transparent"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="merchant-online-store-phone">Store Phone</Label>
+                  <Input
+                    id="merchant-online-store-phone"
+                    value={settings.phone}
+                    onChange={(event) => onUpdate({ phone: event.target.value })}
+                    placeholder="(555) 555-5555"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="merchant-online-store-email">Store Email</Label>
+                  <Input
+                    id="merchant-online-store-email"
+                    value={settings.email}
+                    onChange={(event) => onUpdate({ email: event.target.value })}
+                    placeholder="orders@merchant.com"
+                  />
+                </div>
+                <div className="border-l-2 border-[#0C4FD1]/30 pl-4 text-sm leading-6 text-muted-foreground md:col-span-2">
+                  Tips and payment credentials are restricted to HQ. If you need to change those values, contact HQ support.
+                </div>
               </div>
             </PanelSection>
           </Panel>

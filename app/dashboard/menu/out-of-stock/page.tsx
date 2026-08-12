@@ -168,8 +168,8 @@ export default function OutOfStockPage() {
 
   const header = (
     <PageHeader
-      title="86’d Items"
-      subtitle="Items, modifiers, and categories currently marked out of stock. 86ing hides them from the POS, your online store, and connected delivery apps."
+      title="Out of stock"
+      subtitle="Manage items, modifiers, and categories that are currently unavailable across the POS, online store, and connected delivery apps."
       indicator={
         <LocationIndicator
           isAllLocations={isAllLocations}
@@ -204,7 +204,7 @@ export default function OutOfStockPage() {
           <MessageState
             icon={MapPin}
             title="Select a Location"
-            description="Out-of-stock status is tracked per location. Pick a location from the top bar to see and manage its 86’d items."
+            description="Out-of-stock status is tracked per location. Pick a location from the top bar to see and manage unavailable items."
           />
         </Panel>
       </PageShell>
@@ -221,7 +221,7 @@ export default function OutOfStockPage() {
           <MessageState
             icon={AlertTriangle}
             tone="destructive"
-            title="Failed to load 86’d items"
+            title="Failed to load out-of-stock items"
             description={error instanceof Error ? error.message : 'Unknown error'}
           />
         </Panel>
@@ -237,7 +237,7 @@ export default function OutOfStockPage() {
         <Panel>
           <MessageState
             icon={CircleSlash}
-            title="Nothing is 86’d"
+            title="Everything is available"
             description="When you or the POS marks an item or modifier out of stock, it will show up here."
           />
         </Panel>
@@ -249,7 +249,7 @@ export default function OutOfStockPage() {
                 icon={FolderTree}
                 label="Categories"
                 value={categories.length}
-                caption="Every item inside these is hidden while the category is 86’d."
+                caption="Every item inside these is hidden while the category is out of stock."
               >
                 <RowList>
                   {categories.map((c) => (
@@ -273,7 +273,7 @@ export default function OutOfStockPage() {
                 icon={UtensilsCrossed}
                 label="Items"
                 value={items.length}
-                caption="Timed 86s. These come back on their own when the snooze expires."
+                caption="Temporarily out-of-stock items return automatically when their scheduled pause expires."
               >
                 <RowList>
                   {items.map((i) => (
@@ -297,7 +297,7 @@ export default function OutOfStockPage() {
                 icon={PowerOff}
                 label="Turned off"
                 value={turnedOff.length}
-                caption="Manually turned off at this location (not a timed 86). These stay off until switched back on."
+                caption="Manually disabled at this location. These stay unavailable until switched back on."
               >
                 <RowList>
                   {turnedOff.map((t) => (
@@ -332,7 +332,7 @@ export default function OutOfStockPage() {
                 icon={Layers}
                 label="Modifiers"
                 value={modifiers.length}
-                caption="Grouped by modifier group so a whole-group 86 reads as one block."
+                caption="Grouped by modifier group so an unavailable group appears as one block."
               >
                 <div className="divide-y divide-border/60">
                   {modifierGroups.map((grp) => (
