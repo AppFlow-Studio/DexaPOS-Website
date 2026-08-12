@@ -264,12 +264,12 @@ function ItemCard({
 
   return (
     <div
-      className="group animate-in fade-in slide-in-from-bottom-4"
+      className="group min-w-0 max-w-full animate-in fade-in slide-in-from-bottom-4"
       style={{ animationDelay: `${Math.min(index * 30, 300)}ms` }}
     >
       <div
         className={cn(
-          "relative flex h-full cursor-pointer flex-col overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm transition-[transform,box-shadow,border-color]",
+          "relative flex h-full w-full min-w-0 max-w-full cursor-pointer flex-col overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm transition-[transform,box-shadow,border-color]",
           "hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md",
           hasOverride && "border-amber-500/30",
           isSelectionMode && isSelected && "border-primary/60 ring-2 ring-primary",
@@ -372,7 +372,7 @@ function ItemCard({
         </div>
 
         {/* Content Section */}
-        <div className="flex flex-1 flex-col p-4">
+        <div className="flex min-w-0 flex-1 flex-col p-4">
           <div className="flex min-w-0 items-start gap-2">
             <h3 className="min-w-0 flex-1 truncate text-base font-semibold">
               {item.name}
@@ -394,9 +394,9 @@ function ItemCard({
             </span>
           </div>
 
-          <div className="mt-1 min-h-10">
+          <div className="mt-1 min-h-8 min-w-0">
             {item.description && (
-              <p className="line-clamp-2 text-sm leading-5 text-muted-foreground">
+              <p className="line-clamp-2 break-words text-xs leading-4 text-muted-foreground [overflow-wrap:anywhere]">
                 {item.description}
               </p>
             )}
@@ -2328,7 +2328,7 @@ export default function MenuItemsPage() {
             <div
               className={
                 viewMode === "grid"
-                  ? "grid gap-5 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
+                  ? "grid min-w-0 grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
                   : "space-y-2"
               }
             >
@@ -2422,7 +2422,7 @@ export default function MenuItemsPage() {
             </div>
           ) : viewMode === "grid" ? (
             // Grid View
-            <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+            <div className="grid min-w-0 grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
               {filteredItems.map((item, index) => {
                 // Can delete if: viewing all locations OR item belongs to current location
                 const canDelete = isAllLocations
