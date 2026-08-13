@@ -75,17 +75,7 @@ export function MenuSettingsTab({
                         : 'This menu is currently inactive and hidden from customers'
                 }
                 action={
-                    /* Soft tint + dot, not a solid saturated fill (D-11). */
-                    <span className={cn(
-                        "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium",
-                        menu.is_active
-                            ? "bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400"
-                            : "bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400"
-                    )}>
-                        <span className={cn(
-                            "h-1.5 w-1.5 rounded-full",
-                            menu.is_active ? "bg-green-500" : "bg-amber-500"
-                        )} />
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-muted/60 px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
                         {menu.is_active ? 'Active' : 'Inactive'}
                     </span>
                 }
@@ -125,12 +115,7 @@ export function MenuSettingsTab({
                 <div className="space-y-6">
                     {/* Current scope indicator — tier-3 inset, borderless tinted fill */}
                     <div className="flex items-center gap-3 rounded-2xl border-0 bg-muted/60 p-4 shadow-none">
-                        <div className={cn(
-                            "h-9 w-9 rounded-full flex items-center justify-center shrink-0",
-                            isGlobal
-                                ? "bg-blue-500/15 text-blue-600 dark:text-blue-400"
-                                : "bg-orange-500/15 text-orange-600 dark:text-orange-400"
-                        )}>
+                        <div className="h-9 w-9 rounded-full flex items-center justify-center shrink-0 bg-background text-muted-foreground">
                             {isGlobal ? <Globe className="h-4 w-4" /> : <MapPin className="h-4 w-4" />}
                         </div>
                         <div className="min-w-0">
@@ -146,12 +131,7 @@ export function MenuSettingsTab({
                                 }
                             </p>
                         </div>
-                        <span className={cn(
-                            "ml-auto shrink-0 inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium",
-                            isGlobal
-                                ? "bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400"
-                                : "bg-orange-50 text-orange-700 dark:bg-orange-900/20 dark:text-orange-400"
-                        )}>
+                        <span className="ml-auto shrink-0 inline-flex items-center rounded-full bg-background px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
                             {isGlobal ? 'Global' : 'Location-specific'}
                         </span>
                     </div>
@@ -170,14 +150,14 @@ export function MenuSettingsTab({
                             <SelectContent>
                                 <SelectItem value="global">
                                     <div className="flex items-center gap-2">
-                                        <Globe className="h-4 w-4 text-blue-500" />
+                                        <Globe className="h-4 w-4 text-muted-foreground" />
                                         <span>Global (all locations)</span>
                                     </div>
                                 </SelectItem>
                                 {locations.map(loc => (
                                     <SelectItem key={loc.id} value={loc.id}>
                                         <div className="flex items-center gap-2">
-                                            <MapPin className="h-4 w-4 text-orange-500" />
+                                            <MapPin className="h-4 w-4 text-muted-foreground" />
                                             <span>{loc.name}</span>
                                         </div>
                                     </SelectItem>

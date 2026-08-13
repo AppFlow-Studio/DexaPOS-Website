@@ -25,8 +25,6 @@ import {
   Image as ImageIcon,
   Tag,
   Clock,
-  CheckCircle2,
-  XCircle,
   Sparkles,
   Globe,
   Building2,
@@ -219,14 +217,10 @@ function EditingContextIndicator({
     <TooltipProvider delayDuration={100}>
       <Tooltip>
         <TooltipTrigger asChild>
-          <div
-            className={cn(
-              "flex min-w-0 max-w-full cursor-help items-center gap-2 rounded-full border-0 px-3 py-2 shadow-none transition-colors",
-              levelInfo.bgColor,
-              levelInfo.color
-            )}
-          >
-            <Icon className="h-4 w-4 shrink-0" />
+          {/* Neutral pill: the cascade level is stated in words, and the
+              tooltip below carries the full explanation. The level's colour
+              stays in the tooltip, where it labels a specific row. */}
+          <div className="flex min-w-0 max-w-full cursor-help items-center gap-2 rounded-full border-0 bg-muted/60 px-3 py-2 text-muted-foreground shadow-none transition-colors">
             <span className="min-w-0 text-sm font-medium">
               {levelInfo.name}
             </span>
@@ -715,19 +709,8 @@ export default function MenuItemDetailPage() {
             {menuItem.name}
           </h1>
           <div className="mt-2 flex w-full min-w-0 flex-col items-start gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-            <span
-              className={cn(
-                "inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium",
-                menuItem.effective_availability
-                  ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400"
-                  : "bg-muted/60 text-muted-foreground"
-              )}
-            >
-              {menuItem.effective_availability ? (
-                <><CheckCircle2 className="h-3 w-3 shrink-0" />Available</>
-              ) : (
-                <><XCircle className="h-3 w-3 shrink-0" />Unavailable</>
-              )}
+            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-muted/60 px-2.5 py-1 text-xs font-medium text-muted-foreground">
+              {menuItem.effective_availability ? "Available" : "Unavailable"}
             </span>
             <EditingContextIndicator
               context={editingContext}
@@ -743,10 +726,7 @@ export default function MenuItemDetailPage() {
         <div className="lg:col-span-2 space-y-6 min-w-0">
           {/* Basic Info Card */}
           <Panel padded>
-            <h2 className="flex items-center gap-2 text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]">
-              <Sparkles className="h-4 w-4 shrink-0" />
-              Item Details
-            </h2>
+            <h2 className="text-[1.0625rem] font-semibold">Item Details</h2>
             <div className="mt-4 space-y-6">
               <div className="flex gap-4 sm:grid sm:grid-cols-2 sm:gap-6">
                 {/* Image */}
@@ -949,8 +929,7 @@ export default function MenuItemDetailPage() {
                         <div
                           className={cn(
                             "overflow-hidden rounded-2xl border-0 bg-muted/60 shadow-none transition-colors animate-in fade-in slide-in-from-left-4",
-                            expandedModifiers[mg.id] &&
-                              "ring-2 ring-violet-500/20"
+                            expandedModifiers[mg.id] && "ring-2 ring-border"
                           )}
                           style={{ animationDelay: `${index * 50}ms` }}
                         >
@@ -958,8 +937,8 @@ export default function MenuItemDetailPage() {
                             <div className="cursor-pointer p-4">
                               <div className="flex min-w-0 items-center justify-between gap-3">
                                 <div className="flex min-w-0 flex-1 items-center gap-4">
-                                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-violet-500/10">
-                                    <Layers className="h-5 w-5 text-violet-500" />
+                                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted/60">
+                                    <Layers className="h-5 w-5 text-muted-foreground" />
                                   </div>
                                   <div className="flex-1 min-w-0">
                                     <div className="font-semibold break-words">

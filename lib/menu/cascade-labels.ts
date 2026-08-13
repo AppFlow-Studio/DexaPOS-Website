@@ -209,61 +209,33 @@ export interface ScopeColor {
 }
 
 /**
- * Tailwind classes for each scope level. Color hierarchy:
- *   emerald = safe-global (L1, affects everything)
- *   violet  = category default (L2, global category)
- *   blue    = branch-scoped (L3, branch category)
- *   amber   = menu-global (L4, global menu)
- *   rose    = branch menu (L5, most specific)
+ * Tailwind classes for a scope badge — one neutral grey for every level.
  *
- * Every entry carries a `dark:` variant. Without one, a `bg-*-50` tint renders
- * as a near-white block on the dark dashboard card, which is a class of bug an
- * engineer testing in light mode never reproduces (C4 in the design system).
+ * This used to hand each cascade level its own hue (emerald / violet / blue /
+ * amber / rose). In practice that painted the menu UI with five colours whose
+ * meaning had to be memorised: a rose "Menu at location" pill said nothing to a
+ * merchant that the words did not already say, and the same five tints reappeared
+ * on badges, popovers and cascade rows until colour read as decoration.
+ *
+ * The level is always stated in words right beside the colour, so the words do
+ * the work and the badge stays quiet. `level` is still taken so call sites and
+ * the `ScopeColor` shape do not have to change, and so a future surface that
+ * genuinely needs per-level colour can reintroduce it in one place.
  *
  * ⚠️ These strings live in a `.ts` file, which Tailwind does not scan (C7).
  * They generate CSS only because each class is also written literally in some
- * `.tsx`. Before introducing a *new* class here, grep the `.tsx` files for it —
- * an unmatched class lands in the DOM with no rule behind it and the element
- * silently inherits.
+ * `.tsx` — `bg-muted/60` and `text-muted-foreground` are, extensively. Before
+ * introducing a *new* class here, grep the `.tsx` files for it: an unmatched
+ * class lands in the DOM with no rule behind it and the element silently
+ * inherits.
  */
-export function scopeColor(level: CascadeLevel): ScopeColor {
-  switch (level) {
-    case 1:
-      return {
-        text: "text-emerald-700 dark:text-emerald-400",
-        bg: "bg-emerald-50 dark:bg-emerald-900/20",
-        border: "border-emerald-200 dark:border-emerald-900",
-        dot: "bg-emerald-500",
-      };
-    case 2:
-      return {
-        text: "text-violet-700 dark:text-violet-400",
-        bg: "bg-violet-50 dark:bg-violet-900/20",
-        border: "border-violet-200 dark:border-violet-900",
-        dot: "bg-violet-500",
-      };
-    case 3:
-      return {
-        text: "text-blue-700 dark:text-blue-400",
-        bg: "bg-blue-50 dark:bg-blue-900/20",
-        border: "border-blue-200 dark:border-blue-900",
-        dot: "bg-blue-500",
-      };
-    case 4:
-      return {
-        text: "text-amber-700 dark:text-amber-400",
-        bg: "bg-amber-50 dark:bg-amber-900/20",
-        border: "border-amber-200 dark:border-amber-900",
-        dot: "bg-amber-500",
-      };
-    case 5:
-      return {
-        text: "text-rose-700 dark:text-rose-400",
-        bg: "bg-rose-50 dark:bg-rose-900/20",
-        border: "border-rose-200 dark:border-rose-900",
-        dot: "bg-rose-500",
-      };
-  }
+export function scopeColor(_level: CascadeLevel): ScopeColor {
+  return {
+    text: "text-muted-foreground",
+    bg: "bg-muted/60",
+    border: "border-border",
+    dot: "bg-muted-foreground/40",
+  };
 }
 
 // ============================================================================

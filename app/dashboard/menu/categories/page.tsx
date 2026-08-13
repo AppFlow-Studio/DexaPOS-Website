@@ -710,18 +710,9 @@ export default function CategoriesPage() {
             {/* Location scope indicator — hidden for single-location accounts */}
             {!isSingleLocation && (
               <Badge
-                variant={isAllLocations ? "secondary" : "default"}
-                className={cn(
-                  "gap-1.5 animate-in fade-in slide-in-from-left-2 duration-300",
-                  !isAllLocations &&
-                    "bg-blue-500/10 text-blue-600 border-blue-200",
-                )}
+                variant="secondary"
+                className="animate-in fade-in slide-in-from-left-2 gap-1.5 border-0 bg-muted/60 font-medium text-muted-foreground duration-300"
               >
-                {isAllLocations ? (
-                  <Globe className="h-3 w-3" />
-                ) : (
-                  <MapPin className="h-3 w-3" />
-                )}
                 {isAllLocations
                   ? "All Locations"
                   : currentLocation?.name || "Location"}
@@ -789,10 +780,10 @@ export default function CategoriesPage() {
         <Card className="rounded-3xl transition-all hover:shadow-md">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Items</CardTitle>
-            <Utensils className="h-4 w-4 text-blue-500" />
+            <Utensils className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-blue-600">{totalItems}</div>
+            <div className="text-2xl font-bold">{totalItems}</div>
             <p className="text-xs text-muted-foreground">
               Items across categories
             </p>
@@ -801,12 +792,10 @@ export default function CategoriesPage() {
         <Card className="rounded-3xl transition-all hover:shadow-md">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Active</CardTitle>
-            <Eye className="h-4 w-4 text-green-500" />
+            <Eye className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">
-              {activeCategories}
-            </div>
+            <div className="text-2xl font-bold">{activeCategories}</div>
             <p className="text-xs text-muted-foreground">
               {isAllLocations ? "Globally active" : "Active at location"}
             </p>
@@ -817,19 +806,10 @@ export default function CategoriesPage() {
             <CardTitle className="text-sm font-medium">
               {isAllLocations ? "In Menus" : "With Overrides"}
             </CardTitle>
-            {isAllLocations ? (
-              <Sparkles className="h-4 w-4 text-purple-500" />
-            ) : (
-              <Settings2 className="h-4 w-4 text-amber-500" />
-            )}
+            <Settings2 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div
-              className={cn(
-                "text-2xl font-bold",
-                isAllLocations ? "text-purple-600" : "text-amber-600",
-              )}
-            >
+            <div className="text-2xl font-bold">
               {isAllLocations
                 ? categoriesList.reduce(
                     (acc, c) => acc + (c.menu_count || 0),
@@ -1160,18 +1140,16 @@ export default function CategoriesPage() {
                                 <span className="hidden min-w-0 flex-wrap items-center gap-2 sm:flex">
                                   {category.location_id === null ? (
                                     <Badge
-                                      variant="outline"
-                                      className="text-xs bg-emerald-50 text-emerald-600 border-emerald-200"
+                                      variant="secondary"
+                                      className="border-0 bg-muted/60 text-xs font-medium text-muted-foreground"
                                     >
-                                      <Globe className="h-3 w-3 mr-1" />
                                       Global
                                     </Badge>
                                   ) : (
                                     <Badge
-                                      variant="outline"
-                                      className="min-w-0 text-xs bg-purple-50 text-purple-600 border-purple-200"
+                                      variant="secondary"
+                                      className="min-w-0 border-0 bg-muted/60 text-xs font-medium text-muted-foreground"
                                     >
-                                      <MapPin className="h-3 w-3 mr-1 shrink-0" />
                                       <span className="min-w-0 truncate">
                                         {category.location_name}
                                       </span>
@@ -1179,10 +1157,9 @@ export default function CategoriesPage() {
                                   )}
                                   {!isAllLocations && category.location_override && (
                                     <Badge
-                                      variant="outline"
-                                      className="text-xs bg-blue-50 text-blue-600 border-blue-200"
+                                      variant="secondary"
+                                      className="border-0 bg-muted/60 text-xs font-medium text-muted-foreground"
                                     >
-                                      <Settings2 className="h-3 w-3 mr-1" />
                                       Override
                                     </Badge>
                                   )}
@@ -1512,18 +1489,16 @@ export default function CategoriesPage() {
                           <div className="mb-3 flex min-w-0 flex-wrap items-center gap-2 sm:hidden">
                             {category.location_id === null ? (
                               <Badge
-                                variant="outline"
-                                className="text-xs bg-emerald-50 text-emerald-600 border-emerald-200"
+                                variant="secondary"
+                                className="border-0 bg-muted/60 text-xs font-medium text-muted-foreground"
                               >
-                                <Globe className="mr-1 h-3 w-3 shrink-0" />
                                 Global
                               </Badge>
                             ) : (
                               <Badge
-                                variant="outline"
-                                className="min-w-0 max-w-full text-xs bg-purple-50 text-purple-600 border-purple-200"
+                                variant="secondary"
+                                className="min-w-0 max-w-full border-0 bg-muted/60 text-xs font-medium text-muted-foreground"
                               >
-                                <MapPin className="mr-1 h-3 w-3 shrink-0" />
                                 <span className="min-w-0 truncate">
                                   {category.location_name}
                                 </span>
@@ -1531,10 +1506,9 @@ export default function CategoriesPage() {
                             )}
                             {!isAllLocations && category.location_override && (
                               <Badge
-                                variant="outline"
-                                className="text-xs bg-blue-50 text-blue-600 border-blue-200"
+                                variant="secondary"
+                                className="border-0 bg-muted/60 text-xs font-medium text-muted-foreground"
                               >
-                                <Settings2 className="mr-1 h-3 w-3 shrink-0" />
                                 Override
                               </Badge>
                             )}

@@ -16,7 +16,7 @@ import {
   arrayMove,
   SortableContext,
   useSortable,
-  verticalListSortingStrategy,
+  rectSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { GripVertical, Save, RotateCcw, Loader2 } from "lucide-react";
@@ -35,11 +35,11 @@ type ModifierItem = ModifierGroupItemsModel & {
 
 interface SortableOptionRowProps {
   item: ModifierItem;
-  index: number;
-  children: React.ReactNode;
+  /** Receives the grip so the card itself can place it inside its own padding. */
+  children: (dragHandle: React.ReactNode) => React.ReactNode;
 }
 
-function SortableOptionRow({ item, index, children }: SortableOptionRowProps) {
+function SortableOptionRow({ item, children }: SortableOptionRowProps) {
   const {
     attributes,
     listeners,
@@ -51,28 +51,28 @@ function SortableOptionRow({ item, index, children }: SortableOptionRowProps) {
 
   const style = { transform: CSS.Transform.toString(transform), transition };
 
+  // Handed to the card rather than rendered beside it: sitting outside, the
+  // grip pushed the card in by ~24px at every width and left a ragged left
+  // edge against the group card above it.
+  const dragHandle = (
+    <button
+      {...attributes}
+      {...listeners}
+      className="flex h-6 w-6 shrink-0 cursor-grab items-center justify-center rounded-full touch-none text-muted-foreground hover:bg-background/80 hover:text-foreground active:cursor-grabbing"
+      aria-label={`Drag ${item.name} to reorder`}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <GripVertical className="h-3.5 w-3.5" />
+    </button>
+  );
+
   return (
     <div
       ref={setNodeRef}
       style={style}
       className={cn("min-w-0", isDragging && "opacity-50 z-50")}
     >
-      <div className="flex min-w-0 items-start gap-2">
-        {/* Grip: the drag affordance at every width. */}
-        <button
-          {...attributes}
-          {...listeners}
-          className="mt-3 flex h-7 w-7 shrink-0 cursor-grab items-center justify-center rounded-full touch-none hover:bg-muted active:cursor-grabbing sm:h-6 sm:w-6"
-          aria-label={`Drag ${item.name} to reorder`}
-        >
-          <GripVertical className="h-4 w-4 text-muted-foreground sm:h-3.5 sm:w-3.5" />
-        </button>
-        {/* Position number: desktop only — the grip takes its place on mobile. */}
-        <span className="mt-3.5 hidden h-4 w-4 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-medium tabular-nums text-muted-foreground sm:flex">
-          {index + 1}
-        </span>
-        <div className="min-w-0 flex-1">{children}</div>
-      </div>
+      {children(dragHandle)}
     </div>
   );
 }
@@ -85,7 +85,10 @@ interface SortableModifierItemListProps {
   onOrderChange: (items: ModifierItem[]) => void;
   onSave: () => Promise<void>;
   onReset: () => void;
-  renderItem: (item: ModifierItem) => React.ReactNode;
+  renderItem: (
+    item: ModifierItem,
+    dragHandle: React.ReactNode,
+  ) => React.ReactNode;
 }
 
 export function SortableModifierItemList({
@@ -186,14 +189,18 @@ export function SortableModifierItemList({
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
+        {/* Two per row from `sm` up. `rectSortingStrategy`, not the vertical
+            one: in a grid the items also move horizontally, and the vertical
+            strategy only ever offsets along Y — the preview would slide the
+            wrong way on every drag that crosses a column. */}
         <SortableContext
           items={items.map((i) => i.id)}
-          strategy={verticalListSortingStrategy}
+          strategy={rectSortingStrategy}
         >
-          <div className="min-w-0 space-y-2">
-            {items.map((item, index) => (
-              <SortableOptionRow key={item.id} item={item} index={index}>
-                {renderItem(item)}
+          <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2">
+            {items.map((item) => (
+              <SortableOptionRow key={item.id} item={item}>
+                {(dragHandle) => renderItem(item, dragHandle)}
               </SortableOptionRow>
             ))}
           </div>

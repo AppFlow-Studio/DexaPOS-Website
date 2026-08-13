@@ -542,7 +542,7 @@ function MatrixCell({
             </DialogTrigger>
             <DialogContent
               showCloseButton={false}
-              className="w-[260px] max-w-[calc(100%-2rem)] gap-0 rounded-3xl p-3 max-sm:bottom-auto max-sm:left-1/2 max-sm:right-auto max-sm:top-1/2 max-sm:h-auto max-sm:w-[260px] max-sm:max-w-[calc(100%-2rem)] max-sm:-translate-x-1/2 max-sm:-translate-y-1/2 max-sm:rounded-3xl"
+              className="w-[340px] max-w-[calc(100%-2rem)] gap-0 rounded-3xl p-4 max-sm:bottom-auto max-sm:left-1/2 max-sm:right-auto max-sm:top-1/2 max-sm:h-auto max-sm:w-[260px] max-sm:max-w-[calc(100%-2rem)] max-sm:-translate-x-1/2 max-sm:-translate-y-1/2 max-sm:rounded-3xl max-sm:p-3"
             >
               <DialogTitle className="sr-only">Edit price</DialogTitle>
               <InlinePriceEditor
@@ -663,16 +663,16 @@ function L5MatrixCell({
         </DialogTrigger>
         <DialogContent
           showCloseButton={false}
-          className="w-[280px] max-w-[calc(100%-2rem)] gap-0 overflow-hidden rounded-3xl p-3 [&>*]:min-w-0 max-sm:bottom-auto max-sm:left-1/2 max-sm:right-auto max-sm:top-1/2 max-sm:h-auto max-sm:w-[280px] max-sm:max-w-[calc(100%-2rem)] max-sm:-translate-x-1/2 max-sm:-translate-y-1/2 max-sm:rounded-3xl"
+          className="w-[360px] max-w-[calc(100%-2rem)] gap-0 overflow-hidden rounded-3xl p-4 [&>*]:min-w-0 max-sm:bottom-auto max-sm:left-1/2 max-sm:right-auto max-sm:top-1/2 max-sm:h-auto max-sm:w-[280px] max-sm:max-w-[calc(100%-2rem)] max-sm:-translate-x-1/2 max-sm:-translate-y-1/2 max-sm:rounded-3xl max-sm:p-3"
         >
           <DialogTitle className="sr-only">Edit menu price override</DialogTitle>
           {/* Names here are merchant-supplied and can be long; break them
               rather than letting them widen the fixed-width dialog. */}
-          <div className="mb-2 min-w-0 rounded-2xl bg-rose-50 px-3 py-2">
-            <p className="break-words text-[10px] font-semibold text-rose-700">
+          <div className="mb-3 min-w-0 rounded-2xl bg-rose-50 px-3 py-2 max-sm:mb-2">
+            <p className="break-words text-xs font-semibold text-rose-700 max-sm:text-[10px]">
               {menuName} menu at {locationName}
             </p>
-            <p className="break-words text-[10px] text-rose-600">
+            <p className="break-words text-xs text-rose-600 max-sm:text-[10px]">
               {categoryName} category
             </p>
           </div>

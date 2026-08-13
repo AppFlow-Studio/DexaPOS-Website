@@ -3,48 +3,45 @@ import type { BadgeStyle } from "./table-status";
 /**
  * Single source of truth for the badge presentation on the Item Library.
  *
- * Mirrors `TABLE_STATUS_STYLES` and `PAYMENT_STATUS_STYLES` — a dot, a text
- * colour and a soft tint — so every badge in the product reads as one system
- * (D-11). Replaces the `bg-blue-50 text-blue-700 border-blue-200` triples that
- * used to be written inline at six separate call sites in `menu/items/page.tsx`,
- * where a new `price_source` could silently render with no colour at all.
+ * Every badge here is deliberately NEUTRAL — one muted grey pill, no per-meaning
+ * hue, no dot, no icon. The previous scheme gave each concept its own colour
+ * (emerald = global, violet = location, plus five cascade colours) and painted
+ * the label in that same hue on a matching tint. At a glance that read as
+ * decoration rather than information: a wall of coloured chips where the colour
+ * had to be memorised to mean anything.
  *
- * Every entry carries a `dark:` variant: the light-only tints these replaced
- * turned into near-white blocks on the dark dashboard card (C4).
+ * The words carry the meaning now. `dot` is kept in the shape only because
+ * `BadgeStyle` is shared with the table/payment status styles, which still use
+ * it legitimately; the menu surfaces no longer render it.
+ *
+ * If a future surface genuinely needs colour to separate two states at speed,
+ * add it there deliberately — don't reintroduce it here, where it fans out to
+ * every badge on four pages at once.
  */
 
 export type { BadgeStyle };
+
+/**
+ * The one grey every badge on these surfaces resolves to. `bg-muted/60` sits
+ * just off the card surface in both themes, so the pill stays visible without
+ * announcing itself.
+ */
+const NEUTRAL: BadgeStyle = {
+  dot: "bg-muted-foreground/40",
+  text: "text-muted-foreground",
+  bg: "bg-muted/60",
+};
 
 /**
  * Which level of the 5-tier pricing cascade supplied an item's effective price.
  * Keys match `FlatItem["price_source"]`.
  */
 export const PRICE_SOURCE_STYLES: Record<string, BadgeStyle> = {
-  base: {
-    dot: "bg-slate-400",
-    text: "text-slate-700 dark:text-slate-300",
-    bg: "bg-slate-100 dark:bg-slate-800/40",
-  },
-  location_item: {
-    dot: "bg-blue-500",
-    text: "text-blue-700 dark:text-blue-400",
-    bg: "bg-blue-50 dark:bg-blue-900/20",
-  },
-  category: {
-    dot: "bg-emerald-500",
-    text: "text-emerald-700 dark:text-emerald-400",
-    bg: "bg-emerald-50 dark:bg-emerald-900/20",
-  },
-  location_category: {
-    dot: "bg-violet-500",
-    text: "text-violet-700 dark:text-violet-400",
-    bg: "bg-violet-50 dark:bg-violet-900/20",
-  },
-  location_menu: {
-    dot: "bg-orange-500",
-    text: "text-orange-700 dark:text-orange-400",
-    bg: "bg-orange-50 dark:bg-orange-900/20",
-  },
+  base: NEUTRAL,
+  location_item: NEUTRAL,
+  category: NEUTRAL,
+  location_category: NEUTRAL,
+  location_menu: NEUTRAL,
 };
 
 export function priceSourceStyle(source: string | null | undefined): BadgeStyle {
@@ -64,16 +61,8 @@ export function priceSourceLabel(source: string | null | undefined): string {
  * category headers.
  */
 export const CATEGORY_SCOPE_STYLES: Record<"global" | "location", BadgeStyle> = {
-  global: {
-    dot: "bg-emerald-500",
-    text: "text-emerald-700 dark:text-emerald-400",
-    bg: "bg-emerald-50 dark:bg-emerald-900/20",
-  },
-  location: {
-    dot: "bg-violet-500",
-    text: "text-violet-700 dark:text-violet-400",
-    bg: "bg-violet-50 dark:bg-violet-900/20",
-  },
+  global: NEUTRAL,
+  location: NEUTRAL,
 };
 
 export function categoryScopeStyle(isGlobal: boolean): BadgeStyle {
@@ -85,35 +74,34 @@ export function categoryScopeStyle(isGlobal: boolean): BadgeStyle {
  * available item needs no marker, and badging every card would be noise.
  */
 export const ITEM_AVAILABILITY_STYLES: Record<"available" | "unavailable", BadgeStyle> = {
-  available: {
-    dot: "bg-emerald-500",
-    text: "text-emerald-700 dark:text-emerald-400",
-    bg: "bg-emerald-50 dark:bg-emerald-900/20",
-  },
-  unavailable: {
-    dot: "bg-red-500",
-    text: "text-red-700 dark:text-red-400",
-    bg: "bg-red-50 dark:bg-red-900/20",
-  },
+  available: NEUTRAL,
+  unavailable: NEUTRAL,
 };
 
-/** Tax treatment: exempt items are flagged amber, taxed items stay neutral. */
+/** Tax treatment. "Exempt" vs "Taxed" is carried by the word, not a colour. */
 export const TAX_BADGE_STYLES: Record<"exempt" | "taxed", BadgeStyle> = {
-  exempt: {
-    dot: "bg-amber-500",
-    text: "text-amber-700 dark:text-amber-400",
-    bg: "bg-amber-50 dark:bg-amber-900/20",
-  },
-  taxed: {
-    dot: "bg-slate-400",
-    text: "text-muted-foreground",
-    bg: "bg-muted/60",
-  },
+  exempt: NEUTRAL,
+  taxed: NEUTRAL,
 };
 
 /** Item carries a location-specific price override on top of the global one. */
-export const OVERRIDE_BADGE_STYLE: BadgeStyle = {
-  dot: "bg-amber-500",
-  text: "text-amber-700 dark:text-amber-400",
-  bg: "bg-amber-50 dark:bg-amber-900/20",
-};
+export const OVERRIDE_BADGE_STYLE: BadgeStyle = NEUTRAL;
+
+/**
+ * A modifier group is scoped exactly like a category — global to the merchant,
+ * or owned by one location — so it reuses the same emerald/violet pair rather
+ * than inventing a third colour for the same idea.
+ */
+export function modifierScopeStyle(isGlobal: boolean): BadgeStyle {
+  return categoryScopeStyle(isGlobal);
+}
+
+/**
+ * The badge for a plain count (options, linked items). Kept here so the
+ * modifiers page never falls back to a bordered `<Badge variant="outline">`,
+ * which reads as a different system beside these pills.
+ */
+export const COUNT_BADGE_STYLE: BadgeStyle = NEUTRAL;
+
+/** Modifier options assigned at the item level vs. inherited by a category. */
+export const LINKED_ITEM_BADGE_STYLE: BadgeStyle = NEUTRAL;

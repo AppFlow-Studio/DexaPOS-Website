@@ -138,14 +138,17 @@ export function CategorySnoozeControl({
           disabled={busy}
           className="w-full shrink-0 sm:w-auto"
         >
+          {/* `size-3.5`, not `h-3.5 w-3.5`: the Button base sets every icon to
+              `size-4` unless the class list already matches `size-*`, and under
+              `transition-all` a freshly-mounted spinner animates between the two
+              sizes while it spins — which reads as vibrating. Spacing comes from
+              the base `gap-1.5`; an extra `mr-*` here double-spaces. */}
           {busy ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            <Loader2 className="size-3.5 animate-spin" />
           ) : (
-            <>
-              <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
-              Restore
-            </>
+            <RotateCcw className="size-3.5" />
           )}
+          Restore
         </Button>
       </div>
     );
@@ -173,13 +176,11 @@ export function CategorySnoozeControl({
           className="w-full shrink-0 sm:w-auto"
         >
           {busy ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            <Loader2 className="size-3.5 animate-spin" />
           ) : (
-            <>
-              <CircleSlash className="mr-1.5 h-3.5 w-3.5" />
-              Mark out of stock
-            </>
+            <CircleSlash className="size-3.5" />
           )}
+          Mark out of stock
         </Button>
       </div>
 

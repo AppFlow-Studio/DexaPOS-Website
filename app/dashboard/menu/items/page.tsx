@@ -21,13 +21,11 @@ import {
   Tag,
   X,
   Filter,
-  MapPin,
   Info,
   ChevronDown,
   ChevronRight,
   Globe,
   Layers,
-  Sparkles,
   CreditCard,
   Monitor,
   ShieldCheck,
@@ -145,8 +143,6 @@ import {
   LocationIndicator,
 } from "@/components/dashboard/shell";
 import {
-  priceSourceStyle,
-  priceSourceLabel,
   categoryScopeStyle,
   ITEM_AVAILABILITY_STYLES,
   TAX_BADGE_STYLES,
@@ -250,7 +246,6 @@ function ItemCard({
   onToggleSelect?: (id: string) => void;
 }) {
   const hasOverride = item.has_location_override;
-  const priceStyle = priceSourceStyle(item.price_source);
   const [failedImageUrl, setFailedImageUrl] = useState<string | null>(null);
 
   const isAllLocations = useIsAllLocations();
@@ -328,25 +323,6 @@ function ItemCard({
             </div>
           )}
 
-          {item.price_source !== "base" && (
-            <span
-              className={cn(
-                BADGE_SHELL,
-                "absolute left-2 top-2 z-10 backdrop-blur-sm",
-                priceStyle.bg,
-                priceStyle.text,
-              )}
-            >
-              <span
-                className={cn(
-                  "h-1.5 w-1.5 shrink-0 rounded-full",
-                  priceStyle.dot,
-                )}
-              />
-              {priceSourceLabel(item.price_source)}
-            </span>
-          )}
-
           {!isSelectionMode && (
             <div
               className="absolute right-2 top-2 z-20"
@@ -400,12 +376,6 @@ function ItemCard({
                 availabilityStyle.text,
               )}
             >
-              <span
-                className={cn(
-                  "h-1.5 w-1.5 shrink-0 rounded-full",
-                  availabilityStyle.dot,
-                )}
-              />
               {item.effective_availability ? "Available" : "Unavailable"}
             </span>
           </div>
@@ -432,11 +402,6 @@ function ItemCard({
                     scope.text,
                   )}
                 >
-                  {cat.is_global ? (
-                    <Globe className="h-2.5 w-2.5 shrink-0" />
-                  ) : (
-                    <MapPin className="h-2.5 w-2.5 shrink-0" />
-                  )}
                   <span className="truncate">{cat.name}</span>
                 </span>
               );
@@ -740,7 +705,6 @@ function ItemRow({
                         "max-w-28 min-w-0 bg-muted/60 text-muted-foreground",
                       )}
                     >
-                      <MapPin className="h-2.5 w-2.5 shrink-0" />
                       <span className="truncate">{location.name}</span>
                     </span>
                   ))}
@@ -903,7 +867,6 @@ function ItemTable({
       <TableBody>
         {items.map((item, index) => {
           const hasOverride = item.has_location_override;
-          const priceStyle = priceSourceStyle(item.price_source);
           const isSelected = selectedItemIds.has(item.id);
           const itemCanDelete =
             isAllLocations || item.location_id === selectedLocationId;
@@ -1008,11 +971,6 @@ function ItemTable({
                           key={category.id}
                           className={cn(BADGE_SHELL, scope.bg, scope.text)}
                         >
-                          {category.is_global ? (
-                            <Globe className="h-2.5 w-2.5 shrink-0" />
-                          ) : (
-                            <MapPin className="h-2.5 w-2.5 shrink-0" />
-                          )}
                           <span className="max-w-[120px] truncate">
                             {category.name}
                           </span>
@@ -1051,7 +1009,6 @@ function ItemTable({
                           "min-w-0 bg-muted/60 text-muted-foreground",
                         )}
                       >
-                        <MapPin className="h-2.5 w-2.5 shrink-0" />
                         <span className="max-w-[110px] truncate">
                           {availableLocations[0].name}
                         </span>
@@ -1092,18 +1049,6 @@ function ItemTable({
                       Cash ${item.effective_cash_price.toFixed(2)}
                     </span>
                   )}
-                  {item.price_source !== "base" && (
-                    <span
-                      className={cn(
-                        BADGE_SHELL,
-                        "px-1.5",
-                        priceStyle.bg,
-                        priceStyle.text,
-                      )}
-                    >
-                      {priceSourceLabel(item.price_source)}
-                    </span>
-                  )}
                 </div>
               </TableCell>
 
@@ -1116,12 +1061,6 @@ function ItemTable({
                       availabilityStyle.text,
                     )}
                   >
-                    <span
-                      className={cn(
-                        "h-1.5 w-1.5 rounded-full",
-                        availabilityStyle.dot,
-                      )}
-                    />
                     {item.effective_availability ? "Available" : "Unavailable"}
                   </span>
                   {hasOverride && (
@@ -1132,7 +1071,6 @@ function ItemTable({
                         OVERRIDE_BADGE_STYLE.text,
                       )}
                     >
-                      <Sparkles className="h-2.5 w-2.5 shrink-0" />
                       Override
                     </span>
                   )}
@@ -1333,17 +1271,11 @@ function CategoryGroup({
                   return (
                     <span className={cn(BADGE_SHELL, scope.bg, scope.text)}>
                       {category.is_global ? (
-                        <>
-                          <Globe className="h-3 w-3 shrink-0" />
-                          Global
-                        </>
+                        "Global"
                       ) : (
-                        <>
-                          <MapPin className="h-3 w-3 shrink-0" />
-                          <span className="max-w-28 truncate sm:max-w-44">
-                            {category.location_name || "Location"}
-                          </span>
-                        </>
+                        <span className="max-w-28 truncate sm:max-w-44">
+                          {category.location_name || "Location"}
+                        </span>
                       )}
                     </span>
                   );
@@ -2135,25 +2067,10 @@ export default function MenuItemsPage() {
         }
         indicator={
           !isSingleLocation ? (
-            <div className="flex flex-wrap items-center gap-2">
-              <LocationIndicator
-                isAllLocations={isAllLocations}
-                locationName={locationName}
-              />
-              {!isAllLocations && stats.withOverrides > 0 && (
-                <span
-                  className={cn(
-                    BADGE_SHELL,
-                    OVERRIDE_BADGE_STYLE.bg,
-                    OVERRIDE_BADGE_STYLE.text,
-                  )}
-                >
-                  <Sparkles className="h-3 w-3 shrink-0" />
-                  <span className="tabular-nums">{stats.withOverrides}</span>
-                  with local pricing
-                </span>
-              )}
-            </div>
+            <LocationIndicator
+              isAllLocations={isAllLocations}
+              locationName={locationName}
+            />
           ) : undefined
         }
         actions={
@@ -2399,11 +2316,6 @@ export default function MenuItemsPage() {
                         count === 0 && !isActive && "opacity-50",
                       )}
                     >
-                      {category.is_global ? (
-                        <Globe className="h-3 w-3 shrink-0" />
-                      ) : (
-                        <MapPin className="h-3 w-3 shrink-0" />
-                      )}
                       {category.name}
                       <span className="tabular-nums opacity-70">{count}</span>
                     </button>
