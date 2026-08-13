@@ -55,6 +55,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { DatePopover } from "./DatePopover";
 import type { TipPoolConfigWithShares, Role } from "@/app/dashboard/actions/tips";
+import { getLocalDateKey } from "@/lib/dates/local-date-key";
 
 interface TipPoolDialogProps {
   open: boolean;
@@ -62,6 +63,7 @@ interface TipPoolDialogProps {
   pool?: TipPoolConfigWithShares | null;
   roles: Role[];
   poolCount: number;
+  timeZone?: string | null;
   isLoading?: boolean;
   onSubmit: (data: TipPoolFormData) => void;
 }
@@ -86,20 +88,22 @@ export interface TipPoolFormData {
   }[];
 }
 
-const defaultFormData: TipPoolFormData = {
-  name: "",
-  description: "",
-  distribution_method: "percentage",
-  tip_source: "charged_tips",
-  source_percentage: 100,
-  contributing_role_codes: [],
-  is_active: true,
-  effective_date: new Date().toISOString().split("T")[0],
-  end_date: null,
-  priority: 100,
-  policy_interval: "full_workday",
-  role_shares: [],
-};
+function createDefaultFormData(timeZone?: string | null): TipPoolFormData {
+  return {
+    name: "",
+    description: "",
+    distribution_method: "percentage",
+    tip_source: "charged_tips",
+    source_percentage: 100,
+    contributing_role_codes: [],
+    is_active: true,
+    effective_date: getLocalDateKey(new Date(), timeZone),
+    end_date: null,
+    priority: 100,
+    policy_interval: "full_workday",
+    role_shares: [],
+  };
+}
 
 export function TipPoolDialog({
   open,
@@ -107,10 +111,13 @@ export function TipPoolDialog({
   pool,
   roles,
   poolCount,
+  timeZone,
   isLoading,
   onSubmit,
 }: TipPoolDialogProps) {
-  const [formData, setFormData] = useState<TipPoolFormData>({ ...defaultFormData });
+  const [formData, setFormData] = useState<TipPoolFormData>(() =>
+    createDefaultFormData(timeZone),
+  );
   const [showUnderWarning, setShowUnderWarning] = useState(false);
 
   useEffect(() => {
@@ -144,13 +151,10 @@ export function TipPoolDialog({
         })),
       });
     } else {
-      setFormData({
-        ...defaultFormData,
-        effective_date: new Date().toISOString().split("T")[0],
-      });
+      setFormData(createDefaultFormData(timeZone));
     }
     setShowUnderWarning(false);
-  }, [pool, open]);
+  }, [pool, open, timeZone]);
 
   const set = <K extends keyof TipPoolFormData>(field: K, value: TipPoolFormData[K]) =>
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -623,7 +627,7 @@ export function TipPoolDialog({
               <div>
                 <Label>Receiving Roles & Shares *</Label>
                 <p className="text-xs text-muted-foreground mb-2">
-                  Roles that <strong>receive</strong> from this pool and how it's split
+                  Roles that <strong>receive</strong> from this pool and how it is split
                 </p>
 
                 {validationErrors.role_shares && (

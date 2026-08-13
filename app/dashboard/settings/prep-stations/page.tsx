@@ -29,7 +29,7 @@ import {
   useGatedLocationId,
   useGatedLocation,
 } from "@/stores/location-store";
-import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
+import { useClerkOrgId } from "@/app/dashboard/hooks/useLocationScoped";
 import {
   LocationIndicator,
   PageHeader,
@@ -42,8 +42,7 @@ export default function PrepStationsPage() {
   const selectedLocationId = gatedLocationId ?? "all";
   const isAllLocations = !gatedLocationId;
   const selectedLocation = useGatedLocation();
-  const { data: userInfo } = useUserInfo();
-  const clerkOrgId = userInfo?.members?.[0]?.organizations?.id;
+  const clerkOrgId = useClerkOrgId();
 
   const {
     data: prepStations = [],

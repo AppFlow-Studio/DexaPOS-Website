@@ -25,6 +25,7 @@ import {
     Panel,
     PanelSection,
 } from '@/components/dashboard/shell'
+import { getTaxPercentageError } from '@/lib/settings/tax-validation'
 
 // ============================================================================
 // Main Component
@@ -48,6 +49,9 @@ export default function TaxSettingsPage() {
     } | null>(null)
 
     const taxRates = taxRatesData?.data || []
+    const percentageError = editing
+        ? getTaxPercentageError(editing.percentage)
+        : null
 
     // ========================================================================
     // Handlers
@@ -65,10 +69,9 @@ export default function TaxSettingsPage() {
     const handleSave = async () => {
         if (!editing) return
 
-        const percentage = parseFloat(editing.percentage)
-        if (isNaN(percentage) || percentage < 0 || percentage > 100) {
-            return
-        }
+        if (percentageError) return
+
+        const percentage = Number(editing.percentage)
 
         const result = await upsertMutation.mutateAsync({
             taxCategory: editing.category,
@@ -313,13 +316,21 @@ export default function TaxSettingsPage() {
                                     }
                                     placeholder="8.875"
                                     className="pr-8"
+                                    aria-invalid={Boolean(percentageError)}
+                                    aria-describedby="rate-percentage-help"
                                 />
                                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
                                     %
                                 </span>
                             </div>
-                            <p className="text-xs text-muted-foreground">
-                                Enter the tax percentage (e.g., 8.875 for 8.875%)
+                            <p
+                                id="rate-percentage-help"
+                                className={percentageError
+                                    ? 'text-xs text-destructive'
+                                    : 'text-xs text-muted-foreground'}
+                                role={percentageError ? 'alert' : undefined}
+                            >
+                                {percentageError || 'Enter the tax percentage (e.g., 8.875 for 8.875%)'}
                             </p>
                         </div>
 
@@ -350,7 +361,7 @@ export default function TaxSettingsPage() {
                             disabled={
                                 !editing ||
                                 !editing.name.trim() ||
-                                isNaN(parseFloat(editing.percentage)) ||
+                                Boolean(percentageError) ||
                                 upsertMutation.isPending
                             }
                         >
