@@ -1364,7 +1364,8 @@ export function StaffDetailSheet({
   return (
     <BottomSheet open={open} onOpenChange={onOpenChange} elevated={elevated}>
       <BottomSheetContent
-        className="mx-auto w-full max-w-6xl bottom-[2.5dvh] h-[95dvh] overflow-hidden rounded-b-[20px] border-b data-[state=closed]:duration-[400ms] data-[state=closed]:ease-[cubic-bezier(0.32,0.72,0,1)]"
+        className="staff-detail-dialog-motion mx-auto w-full max-w-6xl bottom-[2.5dvh] h-[95dvh] overflow-hidden rounded-b-[20px] border-b"
+        overlayClassName="staff-detail-dialog-overlay-motion"
         height="95"
       >
         <BottomSheetHeader className="flex flex-col gap-2">

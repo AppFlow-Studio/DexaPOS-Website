@@ -516,8 +516,8 @@ export function ModifierFormSheet({
                           control={form.control}
                           name="is_required"
                           render={({ field }) => (
-                            <FormItem className="flex items-center justify-between rounded-lg border p-4">
-                              <div className="space-y-0.5">
+                            <FormItem className="flex min-w-0 items-center justify-between gap-4 overflow-hidden rounded-lg border p-4">
+                              <div className="min-w-0 flex-1 space-y-0.5">
                                 <FormLabel className="text-base">Required</FormLabel>
                                 <FormDescription>
                                   Customer must select an option
@@ -527,6 +527,7 @@ export function ModifierFormSheet({
                                 <Switch
                                   checked={field.value}
                                   onCheckedChange={field.onChange}
+                                  className="shrink-0"
                                 />
                               </FormControl>
                             </FormItem>
@@ -966,8 +967,8 @@ export function ModifierFormSheet({
                   control={optionForm.control}
                   name="is_active"
                   render={({ field }) => (
-                    <FormItem className="flex items-center justify-between rounded-lg border p-4">
-                      <div className="space-y-0.5">
+                    <FormItem className="flex min-w-0 items-center justify-between gap-4 overflow-hidden rounded-lg border p-4">
+                      <div className="min-w-0 flex-1 space-y-0.5">
                         <FormLabel className="text-base">Active</FormLabel>
                         <FormDescription>
                           Inactive options won&apos;t appear in the POS
@@ -977,6 +978,7 @@ export function ModifierFormSheet({
                         <Switch
                           checked={field.value}
                           onCheckedChange={field.onChange}
+                          className="shrink-0"
                         />
                       </FormControl>
                     </FormItem>
@@ -988,8 +990,8 @@ export function ModifierFormSheet({
                   control={optionForm.control}
                   name="is_default"
                   render={({ field }) => (
-                    <FormItem className="flex items-center justify-between rounded-lg border p-4 bg-yellow-50 dark:bg-yellow-950 border-yellow-200 dark:border-yellow-800">
-                      <div className="space-y-0.5">
+                    <FormItem className="flex min-w-0 items-center justify-between gap-4 overflow-hidden rounded-lg border p-4 bg-yellow-50 dark:bg-yellow-950 border-yellow-200 dark:border-yellow-800">
+                      <div className="min-w-0 flex-1 space-y-0.5">
                         <FormLabel className="text-base flex items-center gap-2">
                           <Sparkles className="h-4 w-4 text-yellow-600" />
                           Set as Default
@@ -1005,7 +1007,7 @@ export function ModifierFormSheet({
                              field.onChange(checked);
                            }}
                            className={cn(
-                             "data-[state=checked]:bg-yellow-500",
+                             "shrink-0 data-[state=checked]:bg-yellow-500",
                            )}
                         />
                       </FormControl>

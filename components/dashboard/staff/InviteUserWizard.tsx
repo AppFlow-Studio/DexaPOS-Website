@@ -45,7 +45,6 @@ import {
   ChevronRight,
   ChevronLeft,
   Users,
-  Building2,
   Lock,
   DollarSign,
   UserCheck,
@@ -536,7 +535,7 @@ export function InviteUserWizard({
           {/* Main Content */}
           <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
             <DialogHeader className="shrink-0 border-b-0 px-6 pb-4 pt-5 pr-14 text-left">
-              <DialogTitle className="text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]">
+              <DialogTitle className="text-[1.0625rem] font-semibold">
                 {currentStep === "type" && "Choose staff type"}
                 {currentStep === "details" &&
                   `Add ${staffType === "clerk" ? "dashboard user" : "POS staff"}`}
@@ -918,13 +917,12 @@ export function InviteUserWizard({
                     <div className="space-y-4">
                       {isAdminRole ? (
                         /* ── Admin / Owner: auto-assigned, show info banner ── */
-                        <div className="flex items-start gap-3 rounded-xl bg-blue-50 p-4 dark:bg-blue-900/20">
-                          <Info className="mt-0.5 h-5 w-5 shrink-0 text-blue-600 dark:text-blue-400" />
+                        <div className="rounded-xl bg-muted/60 p-4">
                           <div>
-                            <p className="text-sm font-medium text-blue-900 dark:text-blue-100">
+                            <p className="text-sm font-medium">
                               Auto-assigned to all locations
                             </p>
-                            <p className="mt-1 text-sm text-blue-700 dark:text-blue-300">
+                            <p className="mt-1 text-sm text-muted-foreground">
                               Owners and Admins automatically receive access to
                               all {locations.length} location
                               {locations.length !== 1 ? "s" : ""}. Any new
@@ -941,13 +939,12 @@ export function InviteUserWizard({
                       )}
                       <div className="space-y-2">
                         {locations.length === 0 ? (
-                          <div className="flex items-start gap-3 rounded-xl bg-amber-50 p-4 dark:bg-amber-900/20">
-                            <Building2 className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
+                          <div className="rounded-xl bg-muted/60 p-4">
                             <div>
-                              <p className="text-sm font-medium text-amber-900 dark:text-amber-100">
+                              <p className="text-sm font-medium">
                                 No locations set up yet
                               </p>
-                              <p className="mt-1 text-sm text-amber-700 dark:text-amber-300">
+                              <p className="mt-1 text-sm text-muted-foreground">
                                 This staff member will be added to your merchant account without a location assignment. You can assign them to a location once you create one.
                               </p>
                             </div>
@@ -997,8 +994,8 @@ export function InviteUserWizard({
                                   <div className="flex items-center gap-2">
                                     {primaryLocationId === location.id ? (
                                       <Badge
-                                        variant="default"
-                                        className="rounded-full text-xs font-medium px-2.5 py-0.5"
+                                        variant="secondary"
+                                        className="rounded-full border-0 bg-muted/60 px-2.5 py-0.5 text-xs font-medium text-muted-foreground"
                                       >
                                         Primary
                                       </Badge>
@@ -1332,8 +1329,8 @@ export function InviteUserWizard({
                                     {location.name}
                                     {isPrimary && (
                                       <Badge
-                                        variant="default"
-                                        className="rounded-full text-xs font-medium px-2.5 py-0.5"
+                                        variant="secondary"
+                                        className="rounded-full border-0 bg-muted/60 px-2.5 py-0.5 text-xs font-medium text-muted-foreground"
                                       >
                                         Primary
                                       </Badge>
@@ -1360,17 +1357,21 @@ export function InviteUserWizard({
               )}
             </div>
 
-            <DialogFooter className="shrink-0 border-t-0 bg-background px-6 py-4">
-              <div className="flex items-center justify-between w-full">
-                <div className="flex items-center gap-2">
-                  <Button variant="ghost" className={pillButton} onClick={handleRequestClose}>
+            <DialogFooter className="shrink-0 border-t-0 bg-background px-3 py-4 sm:px-6">
+              <div className="flex w-full min-w-0 items-center justify-between gap-1">
+                <div className="flex min-w-0 items-center gap-0 sm:gap-2">
+                  <Button
+                    variant="ghost"
+                    className={cn(pillButton, "max-sm:gap-1 max-sm:px-2")}
+                    onClick={handleRequestClose}
+                  >
                     Cancel
                   </Button>
                   <Button
                     variant="ghost"
                     onClick={handleBack}
                     disabled={currentStepIndex === 0}
-                    className={pillButton}
+                    className={cn(pillButton, "max-sm:gap-1 max-sm:px-2")}
                   >
                     <ChevronLeft className="h-4 w-4" />
                     Back
@@ -1384,7 +1385,10 @@ export function InviteUserWizard({
                     inviteClerkStaff.isPending ||
                     createClerkUserDirectly.isPending
                   }
-                  className={pillButton}
+                  className={cn(
+                    pillButton,
+                    "shrink-0 max-sm:gap-1 max-sm:px-2",
+                  )}
                 >
                   {currentStepIndex === STEPS.length - 1 ? (
                     <>

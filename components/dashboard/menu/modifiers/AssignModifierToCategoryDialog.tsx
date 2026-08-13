@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Search, Loader2, Info, CheckCircle2, Globe, MapPin } from "lucide-react";
+import { Search, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { GetCategories } from "@/app/dashboard/actions/categories";
 import {
@@ -204,8 +204,8 @@ export function AssignModifierToCategoryDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[90vh] w-full max-w-none flex-col overflow-hidden sm:max-w-xl">
-        <DialogHeader className="pr-10 text-left">
+      <DialogContent className="flex h-dvh max-h-dvh min-h-0 w-full max-w-none flex-col overflow-hidden sm:h-auto sm:max-h-[90vh] sm:max-w-xl">
+        <DialogHeader className="shrink-0 pr-10 text-left">
           <DialogTitle className="text-left">
             Add &quot;{modifierGroup.name}&quot; to Categories
           </DialogTitle>
@@ -215,28 +215,34 @@ export function AssignModifierToCategoryDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {/* Scope context banner */}
-        {!isAllLocations ? (
-          <div className="flex items-start gap-2 rounded-2xl border-0 bg-blue-50 p-3 text-xs text-blue-800 dark:bg-blue-950/40 dark:text-blue-200">
-            <MapPin className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-            <span>
-              Assigning from this location view will apply modifiers{" "}
-              <strong>only at this location</strong>. Items in the category get
-              location-scoped assignments. Removing also cleans up location assignments.
-            </span>
-          </div>
-        ) : (
-          <div className="flex items-start gap-2 rounded-2xl border-0 bg-emerald-50 p-3 text-xs text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200">
-            <Globe className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-            <span>
-              Assigning to a category applies this modifier to all current and
-              future items <strong>at all locations</strong>. Removing also removes
-              from items (unless covered by another category).
-            </span>
-          </div>
-        )}
+        {/* Scope context banner — one neutral panel; the sentence names the
+            scope, so it does not also need a colour. */}
+        <div className="flex shrink-0 items-start gap-2 rounded-2xl border-0 bg-muted/60 p-3 text-xs text-muted-foreground">
+          <span>
+            {!isAllLocations ? (
+              <>
+                Assigning from this location view will apply modifiers{" "}
+                <strong className="font-medium text-foreground">
+                  only at this location
+                </strong>
+                . Items in the category get location-scoped assignments.
+                Removing also cleans up location assignments.
+              </>
+            ) : (
+              <>
+                Assigning to a category applies this modifier to all current and
+                future items{" "}
+                <strong className="font-medium text-foreground">
+                  at all locations
+                </strong>
+                . Removing also removes from items (unless covered by another
+                category).
+              </>
+            )}
+          </span>
+        </div>
 
-        <div className="relative">
+        <div className="relative shrink-0">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
           <Input
             placeholder="Search categories..."
@@ -246,7 +252,7 @@ export function AssignModifierToCategoryDialog({
           />
         </div>
 
-        <div className="flex-1 overflow-y-auto min-h-0 max-h-[400px] space-y-2 pr-2">
+        <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-2 sm:max-h-[400px]">
           {isLoading ? (
             <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin mr-2" />
@@ -299,7 +305,10 @@ export function AssignModifierToCategoryDialog({
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     {!category.menu_id && (
-                      <Badge variant="outline" className="text-[10px]">
+                      <Badge
+                        variant="secondary"
+                        className="border-0 bg-muted/60 text-[10px] font-medium text-muted-foreground"
+                      >
                         Global
                       </Badge>
                     )}
@@ -308,19 +317,9 @@ export function AssignModifierToCategoryDialog({
                       const isGlobalAssignment = assignment?.source === "global";
                       return (
                         <Badge
-                          variant="outline"
-                          className={cn(
-                            "text-[10px] gap-1",
-                            isGlobalAssignment
-                              ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                              : "bg-blue-50 text-blue-700 border-blue-200",
-                          )}
+                          variant="secondary"
+                          className="gap-1 border-0 bg-muted/60 text-[10px] font-medium text-muted-foreground"
                         >
-                          {isGlobalAssignment ? (
-                            <Globe className="h-2.5 w-2.5" />
-                          ) : (
-                            <MapPin className="h-2.5 w-2.5" />
-                          )}
                           {isGlobalAssignment ? "Global" : "This Location"}
                         </Badge>
                       );
@@ -340,7 +339,7 @@ export function AssignModifierToCategoryDialog({
           )}
         </div>
 
-        <DialogFooter className="flex-col gap-2 sm:flex-row sm:items-center sm:gap-0">
+        <DialogFooter className="shrink-0 flex-col gap-2 sm:flex-row sm:items-center sm:gap-0">
           <div className="min-w-0 flex-1 text-sm text-muted-foreground">
             {selectedIds.size > 0 && (
               <span className="text-primary">

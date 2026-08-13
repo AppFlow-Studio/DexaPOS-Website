@@ -20,6 +20,12 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
@@ -46,6 +52,7 @@ import {
   Edit3,
   Sparkles,
   MapPin,
+  MoreHorizontal,
 } from "lucide-react";
 import {
   Tooltip,
@@ -585,9 +592,9 @@ export function ModifierGroupFormSheet({
       <Dialog open={open} onOpenChange={(isOpen) => !isOpen && handleClose()}>
         <DialogContent
           overlayClassName="bg-slate-950/40 backdrop-blur-md"
-          className="w-full max-w-none gap-0 overflow-hidden max-h-[92vh] rounded-3xl border bg-card p-0 shadow-[0_30px_100px_rgba(15,23,42,0.26)] sm:max-w-5xl xl:max-w-6xl"
+          className="h-dvh max-h-dvh w-full max-w-none gap-0 overflow-hidden rounded-none border-0 bg-card p-0 shadow-[0_30px_100px_rgba(15,23,42,0.26)] sm:h-auto sm:max-h-[92vh] sm:max-w-5xl sm:rounded-3xl sm:border xl:max-w-6xl"
         >
-          <div className="flex max-h-[92vh] min-h-0 min-w-0 flex-col">
+          <div className="flex h-full min-h-0 min-w-0 flex-col sm:max-h-[92vh]">
           <DialogHeader className="shrink-0 min-w-0 bg-card px-4 sm:px-6 pt-6 pb-4 pr-14 sm:pr-14 text-left sm:text-left">
             <DialogTitle className="flex min-w-0 items-center gap-2 text-xl font-semibold tracking-tight sm:text-[1.625rem]">
               <Layers className="h-5 w-5 shrink-0 text-purple-500" />
@@ -754,8 +761,8 @@ export function ModifierGroupFormSheet({
                           control={form.control}
                           name="is_required"
                           render={({ field }: { field: any }) => (
-                            <FormItem className="flex items-center justify-between rounded-2xl border-0 bg-muted/60 p-4 shadow-none">
-                              <div className="space-y-0.5">
+                            <FormItem className="flex min-w-0 items-center justify-between gap-4 overflow-hidden rounded-2xl border-0 bg-muted/60 p-4 shadow-none">
+                              <div className="min-w-0 flex-1 space-y-0.5">
                                 <FormLabel className="text-base">
                                   Required
                                 </FormLabel>
@@ -776,7 +783,7 @@ export function ModifierGroupFormSheet({
                                   }}
                                   disabled={!canEditStructure}
                                   className={cn(
-                                    "relative inline-flex h-6 w-11 items-center rounded-full transition-colors",
+                                    "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors",
                                     field.value ? "bg-primary" : "bg-muted",
                                     !canEditStructure &&
                                       "opacity-50 cursor-not-allowed",
@@ -911,7 +918,7 @@ export function ModifierGroupFormSheet({
                             <div
                               key={option.id}
                               className={cn(
-                                "flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2 p-3 rounded-2xl border transition-colors duration-200",
+                                "grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 rounded-2xl border p-3 transition-colors duration-200 sm:grid-cols-[auto_minmax(0,1fr)_auto_auto]",
                                 "group animate-in fade-in slide-in-from-left-4 hover:bg-muted/50",
                                 option.is_active
                                   ? "bg-card"
@@ -919,14 +926,14 @@ export function ModifierGroupFormSheet({
                               )}
                               style={{ animationDelay: `${index * 50}ms` }}
                             >
-                              <div className="flex shrink-0 items-center gap-2">
+                              <div className="hidden shrink-0 items-center gap-2 sm:flex">
                                 <span className="w-5 text-center text-xs font-medium text-muted-foreground tabular-nums">
                                   {index + 1}
                                 </span>
                                 <GripVertical className="h-4 w-4 shrink-0 cursor-grab text-muted-foreground" />
                               </div>
 
-                              <div className="min-w-0 flex-1 basis-40">
+                              <div className="min-w-0">
                                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                                   <span className="min-w-0 break-words font-medium">
                                     {option.name}
@@ -963,7 +970,7 @@ export function ModifierGroupFormSheet({
                                 )}
                               </div>
 
-                              <div className="shrink-0 text-right tabular-nums">
+                              <div className="hidden shrink-0 text-right tabular-nums sm:block">
                                 <span
                                   className={cn(
                                     "font-semibold",
@@ -980,103 +987,105 @@ export function ModifierGroupFormSheet({
                               </div>
 
                               {canEditStructure ? (
-                                <div className="flex shrink-0 flex-wrap items-center gap-1 transition-opacity [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100">
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => moveOption(option.id, "up")}
-                                    disabled={index === 0}
-                                    aria-label={`Move ${option.name} up`}
-                                  >
-                                    <ChevronUp className="h-4 w-4" />
-                                  </Button>
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => moveOption(option.id, "down")}
-                                    disabled={index === options.length - 1}
-                                    aria-label={`Move ${option.name} down`}
-                                  >
-                                    <ChevronDown className="h-4 w-4" />
-                                  </Button>
-                                  {/* Set Default Toggle */}
-                                  <TooltipProvider>
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <Button
-                                          type="button"
-                                          variant={
-                                            option.is_default
-                                              ? "default"
-                                              : "ghost"
-                                          }
-                                          size="sm"
-                                          onClick={() =>
-                                            handleToggleDefault(option.id)
-                                          }
-                                          className={cn(
-                                            option.is_default &&
-                                              "bg-yellow-500 hover:bg-yellow-600",
-                                          )}
-                                        >
-                                          <Sparkles className="h-4 w-4" />
-                                        </Button>
-                                      </TooltipTrigger>
-                                      <TooltipContent>
-                                        <p>
-                                          {option.is_default
-                                            ? "Remove default"
-                                            : (watchedValues.max_selections && watchedValues.max_selections > 1)
-                                              ? "Add as default"
-                                              : "Set as default"}
-                                        </p>
-                                      </TooltipContent>
-                                    </Tooltip>
-                                  </TooltipProvider>
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => handleEditOption(option)}
-                                  >
-                                    <Edit3 className="h-4 w-4" />
-                                  </Button>
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() =>
-                                      handleDeleteOption(option.id)
-                                    }
-                                    className="text-destructive hover:text-destructive"
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
-                                </div>
+                                <>
+                                  <div className="hidden shrink-0 items-center gap-1 transition-opacity sm:flex [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100">
+                                    {/* Desktop actions; ordering arrows are mobile-only. */}
+                                    <TooltipProvider>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <Button
+                                            type="button"
+                                            variant={
+                                              option.is_default
+                                                ? "default"
+                                                : "ghost"
+                                            }
+                                            size="sm"
+                                            onClick={() =>
+                                              handleToggleDefault(option.id)
+                                            }
+                                            className={cn(
+                                              option.is_default &&
+                                                "bg-yellow-500 hover:bg-yellow-600",
+                                            )}
+                                          >
+                                            <Sparkles className="h-4 w-4" />
+                                          </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                          <p>
+                                            {option.is_default
+                                              ? "Remove default"
+                                              : (watchedValues.max_selections && watchedValues.max_selections > 1)
+                                                ? "Add as default"
+                                                : "Set as default"}
+                                          </p>
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    </TooltipProvider>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => handleEditOption(option)}
+                                    >
+                                      <Edit3 className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() =>
+                                        handleDeleteOption(option.id)
+                                      }
+                                      className="text-destructive hover:text-destructive"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon-sm"
+                                        className="shrink-0 rounded-full sm:hidden"
+                                        aria-label={`More actions for ${option.name}`}
+                                      >
+                                        <MoreHorizontal className="h-4 w-4" />
+                                      </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent
+                                      align="end"
+                                      className="z-[120] w-44 rounded-xl"
+                                    >
+                                      <DropdownMenuItem
+                                        onSelect={() => handleToggleDefault(option.id)}
+                                      >
+                                        <Sparkles className="h-4 w-4" />
+                                        {option.is_default
+                                          ? "Remove default"
+                                          : "Set as default"}
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem
+                                        onSelect={() => handleEditOption(option)}
+                                      >
+                                        <Edit3 className="h-4 w-4" />
+                                        Edit option
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem
+                                        variant="destructive"
+                                        onSelect={() => handleDeleteOption(option.id)}
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                        Delete option
+                                      </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
+                                </>
                               ) : (
-                                <div className="flex shrink-0 flex-wrap items-center gap-1">
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => moveOption(option.id, "up")}
-                                    disabled={index === 0}
-                                    aria-label={`Move ${option.name} up`}
-                                  >
-                                    <ChevronUp className="h-4 w-4" />
-                                  </Button>
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => moveOption(option.id, "down")}
-                                    disabled={index === options.length - 1}
-                                    aria-label={`Move ${option.name} down`}
-                                  >
-                                    <ChevronDown className="h-4 w-4" />
-                                  </Button>
+                                <div className="shrink-0">
                                   <Button
                                     type="button"
                                     variant="outline"
@@ -1085,12 +1094,78 @@ export function ModifierGroupFormSheet({
                                       setSelectedItemForOverride(option);
                                       setOverrideDialogOpen(true);
                                     }}
+                                    className="hidden sm:inline-flex"
                                   >
-                                    <Settings2 className="h-4 w-4 mr-1" />
-                                    Edit State
+                                    <Settings2 className="mr-1 h-4 w-4" />
+                                    Edit state
                                   </Button>
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon-sm"
+                                        className="rounded-full sm:hidden"
+                                        aria-label={`More actions for ${option.name}`}
+                                      >
+                                        <MoreHorizontal className="h-4 w-4" />
+                                      </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent
+                                      align="end"
+                                      className="z-[120] w-40 rounded-xl"
+                                    >
+                                      <DropdownMenuItem
+                                        onSelect={() => {
+                                          setSelectedItemForOverride(option);
+                                          setOverrideDialogOpen(true);
+                                        }}
+                                      >
+                                        <Settings2 className="h-4 w-4" />
+                                        Edit state
+                                      </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
                                 </div>
                               )}
+
+                              <div className="col-span-2 flex min-w-0 items-center justify-between sm:hidden">
+                                <div className="flex items-center gap-1">
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon-sm"
+                                    onClick={() => moveOption(option.id, "up")}
+                                    disabled={index === 0}
+                                    aria-label={`Move ${option.name} up`}
+                                  >
+                                    <ChevronUp className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon-sm"
+                                    onClick={() => moveOption(option.id, "down")}
+                                    disabled={index === options.length - 1}
+                                    aria-label={`Move ${option.name} down`}
+                                  >
+                                    <ChevronDown className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                                <span
+                                  className={cn(
+                                    "shrink-0 text-right font-semibold tabular-nums",
+                                    option.price_modifier > 0
+                                      ? "text-green-600"
+                                      : option.price_modifier < 0
+                                        ? "text-red-500"
+                                        : "text-muted-foreground",
+                                  )}
+                                >
+                                  {option.price_modifier > 0 ? "+" : ""}$
+                                  {option.price_modifier.toFixed(2)}
+                                </span>
+                              </div>
                             </div>
                           ))}
                         </div>
@@ -1365,8 +1440,8 @@ export function ModifierGroupFormSheet({
                   control={optionForm.control}
                   name="is_active"
                   render={({ field }: { field: any }) => (
-                    <FormItem className="flex items-center justify-between rounded-2xl border-0 bg-muted/60 p-4 shadow-none">
-                      <div className="space-y-0.5">
+                    <FormItem className="flex min-w-0 items-center justify-between gap-4 overflow-hidden rounded-2xl border-0 bg-muted/60 p-4 shadow-none">
+                      <div className="min-w-0 flex-1 space-y-0.5">
                         <FormLabel className="text-base">Active</FormLabel>
                         <FormDescription>
                           Inactive options won't appear in the POS
@@ -1379,7 +1454,7 @@ export function ModifierGroupFormSheet({
                           aria-checked={field.value}
                           onClick={() => field.onChange(!field.value)}
                           className={cn(
-                            "relative inline-flex h-6 w-11 items-center rounded-full transition-colors",
+                            "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors",
                             field.value ? "bg-primary" : "bg-muted",
                           )}
                         >
@@ -1400,8 +1475,8 @@ export function ModifierGroupFormSheet({
                   control={optionForm.control}
                   name="is_default"
                   render={({ field }: { field: any }) => (
-                    <FormItem className="flex items-center justify-between rounded-2xl border-0 bg-yellow-50 p-4 shadow-none dark:bg-yellow-950/40">
-                      <div className="space-y-0.5">
+                    <FormItem className="flex min-w-0 items-center justify-between gap-4 overflow-hidden rounded-2xl border-0 bg-yellow-50 p-4 shadow-none dark:bg-yellow-950/40">
+                      <div className="min-w-0 flex-1 space-y-0.5">
                         <FormLabel className="text-base flex items-center gap-2">
                           <Sparkles className="h-4 w-4 text-yellow-600" />
                           Set as Default
@@ -1430,7 +1505,7 @@ export function ModifierGroupFormSheet({
                             field.onChange(!field.value);
                           }}
                           className={cn(
-                            "relative inline-flex h-6 w-11 items-center rounded-full transition-colors",
+                            "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors",
                             field.value ? "bg-yellow-500" : "bg-muted",
                           )}
                         >

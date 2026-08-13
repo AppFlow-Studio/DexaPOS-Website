@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { ScopeContextStrip } from "@/components/dashboard/menu/ScopeContextStrip";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   DndContext,
@@ -944,12 +943,12 @@ const sensors = useSensors(
             {/* The "Default" tag is gone: the Default toggle sits right below
                 and already states it, so the badge was the same fact twice.
                 The description takes the freed space on the name row. */}
-            <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
-              <span className="min-w-0 break-words text-sm font-medium">
+            <div className="flex min-w-0 flex-nowrap items-center gap-x-2 gap-y-0.5 sm:flex-wrap sm:items-baseline">
+              <span className="min-w-0 truncate text-sm font-medium sm:break-words">
                 {item.name}
               </span>
               {item.description && (
-                <span className="min-w-0 truncate text-[11px] text-muted-foreground">
+                <span className="hidden min-w-0 truncate text-[11px] text-muted-foreground sm:inline">
                   {item.description}
                 </span>
               )}
@@ -970,11 +969,12 @@ const sensors = useSensors(
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-7 gap-1 rounded-full px-2.5 text-xs"
+                aria-label={`Reset ${item.name} to global`}
+                className="h-7 w-7 gap-1 rounded-full px-0 text-xs sm:w-auto sm:px-2.5"
                 onClick={() => handleResetItemOverride(item.id)}
               >
                 <RotateCcw className="size-3 shrink-0" />
-                Reset
+                <span className="hidden sm:inline">Reset</span>
               </Button>
             )}
             {canEditStructure(group) && (
@@ -995,17 +995,17 @@ const sensors = useSensors(
             previous single `auto-fit,minmax(7rem,1fr)` grid put every control
             on its own row at this width, making one option ~440px tall — a
             10-option group became a 4,400px scroll. */}
-        {/* Now that the price label is inline, the row is a simple wrapping
-            flex instead of a two-column grid — the fixed columns left a wide
-            gap beside the narrow price field. `mt-auto` pins the controls to
-            the bottom so two cards sharing a row line up even when one name
-            wraps to a second line. */}
-        <div className="mt-auto flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
+        {/* Mobile uses two columns so the labels and switches never collide:
+            Price and Default share the first row, with Active right-aligned
+            below. From `sm` up, all three controls share one row. */}
+        <div className="mt-auto grid min-w-0 grid-cols-2 items-center gap-x-2 gap-y-2 sm:grid-cols-3">
           {/* Label sits beside the field, not stacked above it — the stacked
               caption cost a full row per option and read as "Price Modifier",
               which is the column name, not what a merchant calls it. */}
           <div className="flex min-w-0 items-center gap-2">
-            <span className="shrink-0 text-xs text-muted-foreground">Price</span>
+            <span className="hidden shrink-0 text-xs text-muted-foreground sm:inline">
+              Price
+            </span>
             <div className="relative w-20 shrink-0">
               <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
                 $
@@ -1029,33 +1029,35 @@ const sensors = useSensors(
             </div>
           </div>
 
-          {/* Switches flow inline beside the price on the same wrapping row. */}
-          <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
-            <div className="flex min-w-0 items-center gap-2">
-              <div className="text-xs text-muted-foreground">Active</div>
+          {!isOverrideScope && (
+            <div className="flex min-w-0 items-center justify-self-end gap-2 sm:justify-self-center">
+              <div className="text-xs text-muted-foreground">Default</div>
               <Switch
-                checked={!!effectiveActive}
+                checked={draft.isDefault ?? item.is_default ?? false}
                 onCheckedChange={(checked) =>
-                  setItemDraft(item.id, { isActive: checked })
+                  setItemDraft(item.id, { isDefault: checked })
                 }
                 disabled={isSaving}
                 className="shrink-0"
               />
             </div>
+          )}
 
-            {!isOverrideScope && (
-              <div className="flex min-w-0 items-center gap-2">
-                <div className="text-xs text-muted-foreground">Default</div>
-                <Switch
-                  checked={draft.isDefault ?? item.is_default ?? false}
-                  onCheckedChange={(checked) =>
-                    setItemDraft(item.id, { isDefault: checked })
-                  }
-                  disabled={isSaving}
-                  className="shrink-0"
-                />
-              </div>
+          <div
+            className={cn(
+              "flex min-w-0 items-center justify-self-end gap-2 sm:col-span-1 sm:col-start-3",
+              isOverrideScope ? "col-start-2" : "col-span-2",
             )}
+          >
+            <div className="text-xs text-muted-foreground">Active</div>
+            <Switch
+              checked={!!effectiveActive}
+              onCheckedChange={(checked) =>
+                setItemDraft(item.id, { isActive: checked })
+              }
+              disabled={isSaving}
+              className="shrink-0"
+            />
           </div>
         </div>
       </div>
@@ -1080,12 +1082,11 @@ const sensors = useSensors(
           <Plus className="h-3.5 w-3.5 shrink-0" />
           Add Option
         </div>
-        {/* Name and price share the first row on a phone; description spans it.
-            Four stacked full-width inputs made this form taller than the
-            option list it sits under. */}
+        {/* On mobile, Name and Description are matching full-width fields.
+            Price and Default share the next row and Add is centered below. */}
         <div className="grid min-w-0 grid-cols-2 gap-3 md:grid-cols-4">
           <Input
-            className="h-9 min-w-0 text-[0.8125rem]"
+            className="col-span-2 h-9 min-w-0 text-[0.8125rem] md:col-span-1"
             placeholder="Name"
             value={draft.name}
             onChange={(e) =>
@@ -1122,22 +1123,24 @@ const sensors = useSensors(
               }))
             }
           />
-          <div className="col-span-2 flex min-w-0 items-center gap-2 md:col-span-1">
-            <span className="shrink-0 text-xs text-muted-foreground">
-              Default
-            </span>
-            <Switch
-              checked={draft.isDefault}
-              onCheckedChange={(checked) =>
-                setNewItemDrafts((prev) => ({
-                  ...prev,
-                  [group.id]: { ...draft, isDefault: checked },
-                }))
-              }
-            />
+          <div className="contents md:col-span-1 md:flex md:min-w-0 md:items-center md:gap-2">
+            <div className="flex min-w-0 items-center justify-self-end gap-2 md:justify-self-auto">
+              <span className="shrink-0 text-xs text-muted-foreground">
+                Default
+              </span>
+              <Switch
+                checked={draft.isDefault}
+                onCheckedChange={(checked) =>
+                  setNewItemDrafts((prev) => ({
+                    ...prev,
+                    [group.id]: { ...draft, isDefault: checked },
+                  }))
+                }
+              />
+            </div>
             <Button
               size="sm"
-              className="ml-auto h-8 gap-1.5 rounded-full px-4 text-xs"
+              className="col-span-2 h-8 justify-self-center gap-1.5 rounded-full px-4 text-xs md:ml-auto"
               disabled={draft.isSaving}
               onClick={() => handleCreateItem(group)}
             >
@@ -1158,8 +1161,6 @@ const sensors = useSensors(
 
   return (
     <PageShell>
-      <ScopeContextStrip />
-
       {/* No `stackActionsBelowIndicatorOnMobile`: that flag exists for the Item
           Library's two long buttons. With a single action here it only pushed
           "Create Group" onto its own full-width row, costing ~60px of a 740px
@@ -1312,18 +1313,12 @@ const sensors = useSensors(
           </div>
 
           {/* Reorder affordance — sits directly above the list it describes.
-              On phones the grips are hidden until "Reorder" is tapped, so the
-              hint doubles as the control. */}
+              On phones the compact button is enough without helper text. */}
           <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-2 text-xs text-muted-foreground">
             {canReorderLibraryGroups ? (
               <>
                 <GripVertical className="hidden h-3.5 w-3.5 shrink-0 sm:block" />
                 <span className="hidden sm:inline">Drag groups to reorder.</span>
-                <span className="sm:hidden">
-                  {isOrderingGroups
-                    ? "Drag the grips to reorder."
-                    : "Groups can be reordered."}
-                </span>
                 <Button
                   variant="ghost"
                   size="sm"
@@ -1464,7 +1459,7 @@ const sensors = useSensors(
                         onClick={() => toggleExpand(group.id)}
                         aria-expanded={!!expandedGroups[group.id]}
                         aria-label={`${expandedGroups[group.id] ? "Collapse" : "Expand"} ${group.name}`}
-                        className="flex min-w-0 flex-1 items-start gap-2 rounded-xl text-left focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 sm:gap-3"
+                        className="flex min-w-0 flex-1 items-center gap-2 rounded-xl text-left focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 sm:gap-3"
                       >
                         {/* The icon tile is decoration, not information — at 320px
                             it and the drag handle together cost 68px, which is
@@ -1480,71 +1475,12 @@ const sensors = useSensors(
                           <span className="block text-sm font-semibold leading-snug break-words sm:truncate sm:text-base">
                             {group.name}
                           </span>
-                          {/* Reserved, not filled: "No description" was pure
-                              noise repeated down the list. The line keeps its
-                              height so cards stay the same size either way. */}
-                          <span className="mt-0.5 block min-h-4 truncate text-[11px] leading-4 text-muted-foreground">
-                            {group.description}
-                          </span>
+                          {group.description && (
+                            <span className="mt-0.5 hidden truncate text-[11px] leading-4 text-muted-foreground sm:block">
+                              {group.description}
+                            </span>
+                          )}
 
-                          <span className="mt-2 flex flex-wrap gap-1.5">
-                            <Tag style={modifierScopeStyle(!group.location_id)}>
-                              {scopeBadge}
-                            </Tag>
-                            {/* Selection rules: what the POS will actually
-                                enforce when this group is shown. */}
-                            <Tag style={COUNT_BADGE_STYLE}>{ruleLabel}</Tag>
-                            {hasDefaultConflict && (
-                              <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-900/20 dark:text-amber-400">
-                                <AlertTriangle className="h-2.5 w-2.5 shrink-0" />
-                                <span className="tabular-nums">
-                                  {defaultCount}
-                                </span>
-                                defaults
-                              </span>
-                            )}
-                            {locationOverride && canOverrideOnly(group) && (
-                              <Tag style={OVERRIDE_BADGE_STYLE} dot>
-                                Overridden
-                              </Tag>
-                            )}
-                            {/* "linked" is load-bearing: this counts the menu
-                                items USING this group, while the body below
-                                counts the options INSIDE it. A bare "3 items"
-                                beside "Options (3)" reads as the same number
-                                twice. */}
-                            {globalLinkedCount > 0 && (
-                              <Tag style={modifierScopeStyle(true)}>
-                                <span className="tabular-nums">
-                                  {globalLinkedCount}
-                                </span>
-                                linked item{globalLinkedCount !== 1 ? "s" : ""}
-                              </Tag>
-                            )}
-                            {locationLinkedCount > 0 && (
-                              <Tag style={LINKED_ITEM_BADGE_STYLE}>
-                                <span className="tabular-nums">
-                                  {locationLinkedCount}
-                                </span>
-                                linked item{locationLinkedCount !== 1 ? "s" : ""}{" "}
-                                (location)
-                              </Tag>
-                            )}
-                            {globalLinkedCount === 0 &&
-                              locationLinkedCount === 0 && (
-                                <Tag style={COUNT_BADGE_STYLE}>
-                                  0 linked items
-                                </Tag>
-                              )}
-                            {categoryCount > 0 && (
-                              <Tag style={LINKED_ITEM_BADGE_STYLE}>
-                                <span className="tabular-nums">
-                                  {categoryCount}
-                                </span>
-                                categor{categoryCount !== 1 ? "ies" : "y"} linked
-                              </Tag>
-                            )}
-                          </span>
                         </span>
                       </button>
 
@@ -1665,8 +1601,93 @@ const sensors = useSensors(
                     </div>
 
                     {expandedGroups[group.id] && (
-                      <div className="min-w-0 space-y-3 border-t border-border/60 pt-4 animate-in fade-in slide-in-from-top-1 duration-200">
-                        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                      <div className="min-w-0 space-y-3 animate-in fade-in slide-in-from-top-1 duration-200">
+                        {/* Keep linked-item context beside the group heading,
+                            before the divider and the option editor. */}
+                        {(globalLinkedCount > 0 || locationLinkedCount > 0) && (
+                          <div className="min-w-0 space-y-3">
+                            <div className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground">
+                              <Utensils className="hidden h-3.5 w-3.5 shrink-0 sm:block" />
+                              Linked Items
+                              <span className="tabular-nums">
+                                ({globalLinkedCount + locationLinkedCount})
+                              </span>
+                            </div>
+
+                            {globalLinkedCount > 0 && (
+                              <div className="hidden min-w-0 flex-col gap-1.5 sm:flex sm:flex-row sm:items-baseline sm:gap-2">
+                                <div className="flex shrink-0 items-center gap-1 text-xs font-medium text-muted-foreground">
+                                  Global (
+                                  <span className="tabular-nums">
+                                    {globalLinkedCount}
+                                  </span>
+                                  )
+                                </div>
+                                <div className="flex min-w-0 flex-1 flex-wrap gap-1.5">
+                                  {group.menu_item_modifier_groups?.map((link) => (
+                                    <Tag key={link.id} style={COUNT_BADGE_STYLE}>
+                                      {link.menu_item?.name || "Unknown"}
+                                    </Tag>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {locationLinkedCount > 0 && !isAllLocations && (
+                              <div className="hidden min-w-0 flex-col gap-1.5 sm:flex sm:flex-row sm:items-baseline sm:gap-2">
+                                <div className="flex shrink-0 items-center gap-1 text-xs font-medium text-muted-foreground">
+                                  This Location (
+                                  <span className="tabular-nums">
+                                    {locationLinkedCount}
+                                  </span>
+                                  )
+                                </div>
+                                <div className="flex min-w-0 flex-1 flex-wrap gap-1.5">
+                                  {group.location_item_modifier_groups?.map((link) => (
+                                    <Tag
+                                      key={link.id}
+                                      style={LINKED_ITEM_BADGE_STYLE}
+                                    >
+                                      {link.menu_item?.name || "Unknown"}
+                                    </Tag>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {locationLinkedCount > 0 && isAllLocations && locationBreakdown && (
+                              <div className="hidden min-w-0 space-y-2 sm:block">
+                                {Object.entries(locationBreakdown).map(([locId, info]) => (
+                                  <div
+                                    key={locId}
+                                    className="flex min-w-0 flex-col gap-1.5 sm:flex-row sm:items-baseline sm:gap-2"
+                                  >
+                                    <div className="flex min-w-0 shrink-0 items-center gap-1 text-xs font-medium text-muted-foreground sm:max-w-40">
+                                      <span className="truncate">{info.name}</span>
+                                      <span className="shrink-0 tabular-nums">
+                                        ({info.count})
+                                      </span>
+                                    </div>
+                                    <div className="flex min-w-0 flex-1 flex-wrap gap-1.5">
+                                      {group.location_item_modifier_groups
+                                        ?.filter((link) => link.location_id === locId)
+                                        .map((link) => (
+                                          <Tag
+                                            key={link.id}
+                                            style={LINKED_ITEM_BADGE_STYLE}
+                                          >
+                                            {link.menu_item?.name || "Unknown"}
+                                          </Tag>
+                                        ))}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 border-t border-border/60 pt-4">
                           <div className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground">
                             <SlidersHorizontal className="h-3.5 w-3.5 shrink-0" />
                             Options
@@ -1762,96 +1783,6 @@ const sensors = useSensors(
                         })()}
 
                         {renderNewItemForm(group)}
-
-                        {/* Linked Items Breakdown */}
-                        {(globalLinkedCount > 0 || locationLinkedCount > 0) && (
-                          <div className="min-w-0 space-y-3 border-t border-border/60 pt-4">
-                            <div className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground">
-                              <Utensils className="h-3.5 w-3.5 shrink-0" />
-                              Linked Items
-                              <span className="tabular-nums">
-                                ({globalLinkedCount + locationLinkedCount})
-                              </span>
-                            </div>
-
-                            {/* Global assignments. The label sits beside its
-                                badges from `sm` up and stacks above them on a
-                                phone, where a fixed label column would leave
-                                the badges only a sliver of the row. */}
-                            {globalLinkedCount > 0 && (
-                              <div className="flex min-w-0 flex-col gap-1.5 sm:flex-row sm:items-baseline sm:gap-2">
-                                <div className="flex shrink-0 items-center gap-1 text-xs font-medium text-muted-foreground">
-                                  Global (
-                                  <span className="tabular-nums">
-                                    {globalLinkedCount}
-                                  </span>
-                                  )
-                                </div>
-                                <div className="flex min-w-0 flex-1 flex-wrap gap-1.5">
-                                  {group.menu_item_modifier_groups?.map((link) => (
-                                    <Tag key={link.id} style={COUNT_BADGE_STYLE}>
-                                      {link.menu_item?.name || "Unknown"}
-                                    </Tag>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Location-scoped assignments */}
-                            {locationLinkedCount > 0 && !isAllLocations && (
-                              <div className="flex min-w-0 flex-col gap-1.5 sm:flex-row sm:items-baseline sm:gap-2">
-                                <div className="flex shrink-0 items-center gap-1 text-xs font-medium text-muted-foreground">
-                                  This Location (
-                                  <span className="tabular-nums">
-                                    {locationLinkedCount}
-                                  </span>
-                                  )
-                                </div>
-                                <div className="flex min-w-0 flex-1 flex-wrap gap-1.5">
-                                  {group.location_item_modifier_groups?.map((link) => (
-                                    <Tag
-                                      key={link.id}
-                                      style={LINKED_ITEM_BADGE_STYLE}
-                                    >
-                                      {link.menu_item?.name || "Unknown"}
-                                    </Tag>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-
-                            {/* All Locations view — show per-location breakdown */}
-                            {locationLinkedCount > 0 && isAllLocations && locationBreakdown && (
-                              <div className="min-w-0 space-y-2">
-                                {Object.entries(locationBreakdown).map(([locId, info]) => (
-                                  <div
-                                    key={locId}
-                                    className="flex min-w-0 flex-col gap-1.5 sm:flex-row sm:items-baseline sm:gap-2"
-                                  >
-                                    <div className="flex min-w-0 shrink-0 items-center gap-1 text-xs font-medium text-muted-foreground sm:max-w-40">
-                                      <span className="truncate">{info.name}</span>
-                                      <span className="shrink-0 tabular-nums">
-                                        ({info.count})
-                                      </span>
-                                    </div>
-                                    <div className="flex min-w-0 flex-1 flex-wrap gap-1.5">
-                                      {group.location_item_modifier_groups
-                                        ?.filter((link) => link.location_id === locId)
-                                        .map((link) => (
-                                          <Tag
-                                            key={link.id}
-                                            style={LINKED_ITEM_BADGE_STYLE}
-                                          >
-                                            {link.menu_item?.name || "Unknown"}
-                                          </Tag>
-                                        ))}
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        )}
                       </div>
                     )}
                   </div>

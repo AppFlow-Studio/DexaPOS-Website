@@ -4,15 +4,14 @@ import { ColumnDef } from "@tanstack/react-table";
 import { StaffShift } from "@/types/staff";
 import { calculateShiftDuration } from "@/utils/exportTimesheets";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Eye, MoreHorizontal, Pencil } from "lucide-react";
+import { Copy, Eye, MoreHorizontal, Pencil } from "lucide-react";
 import { differenceInMinutes, format } from "date-fns";
+import { cn } from "@/lib/utils";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
@@ -20,6 +19,43 @@ interface TimesheetColumnsOptions {
   onAdjustShift?: (shift: StaffShift) => void;
   onViewShift?: (shift: StaffShift) => void;
 }
+
+const SHIFT_STATUS_STYLES: Record<
+  string,
+  { label: string; bg: string; text: string; dot: string }
+> = {
+  active: {
+    label: "Active",
+    bg: "bg-emerald-50 dark:bg-emerald-950/40",
+    text: "text-emerald-700 dark:text-emerald-300",
+    dot: "bg-emerald-500",
+  },
+  completed: {
+    label: "Completed",
+    bg: "bg-muted/60",
+    text: "text-muted-foreground",
+    dot: "bg-muted-foreground/60",
+  },
+  approved: {
+    label: "Approved",
+    bg: "bg-blue-50 dark:bg-blue-950/40",
+    text: "text-blue-700 dark:text-blue-300",
+    dot: "bg-blue-500",
+  },
+  rejected: {
+    label: "Rejected",
+    bg: "bg-red-50 dark:bg-red-950/40",
+    text: "text-red-700 dark:text-red-300",
+    dot: "bg-red-500",
+  },
+};
+
+const FALLBACK_STATUS_STYLE = {
+  label: "Unknown",
+  bg: "bg-muted/60",
+  text: "text-muted-foreground",
+  dot: "bg-muted-foreground/60",
+};
 
 function getBreakDurationMinutes(
   breakLog: NonNullable<StaffShift["break_logs"]>[number],
@@ -56,7 +92,7 @@ export function createColumns({
           ? `${profile.first_name} ${profile.last_name}`
           : "Unknown";
         return (
-          <div className="flex items-center gap-2">
+          <div className="flex min-w-44 items-center gap-2.5">
             <Avatar className="h-8 w-8">
               <AvatarImage src={profile?.avatar_url || undefined} alt={name} />
               <AvatarFallback>
@@ -64,9 +100,7 @@ export function createColumns({
                 {profile?.last_name?.[0]}
               </AvatarFallback>
             </Avatar>
-            <div className="flex flex-col">
-              <span className="text-sm font-medium">{name}</span>
-            </div>
+            <span className="truncate text-sm font-medium">{name}</span>
           </div>
         );
       },
@@ -74,19 +108,30 @@ export function createColumns({
     {
       accessorKey: "location.name",
       header: "Location",
-      cell: ({ row }) => row.original.location?.name || "N/A",
+      cell: ({ row }) => (
+        <span className="whitespace-nowrap text-muted-foreground">
+          {row.original.location?.name || "N/A"}
+        </span>
+      ),
     },
     {
       accessorKey: "clock_in_time",
       header: "Date",
-      cell: ({ row }) =>
-        format(new Date(row.getValue("clock_in_time")), "MMM dd"),
+      cell: ({ row }) => (
+        <span className="whitespace-nowrap tabular-nums">
+          {format(new Date(row.getValue("clock_in_time")), "MMM dd, yyyy")}
+        </span>
+      ),
     },
     {
       accessorFn: (row) => row.clock_in_time,
       id: "clock_in",
       header: "In",
-      cell: ({ row }) => format(new Date(row.original.clock_in_time), "h:mm a"),
+      cell: ({ row }) => (
+        <span className="whitespace-nowrap tabular-nums">
+          {format(new Date(row.original.clock_in_time), "h:mm a")}
+        </span>
+      ),
     },
     {
       accessorFn: (row) => row.clock_out_time,
@@ -95,33 +140,37 @@ export function createColumns({
       cell: ({ row }) => {
         const out = row.original.clock_out_time;
         return out ? (
-          format(new Date(out), "h:mm a")
+          <span className="whitespace-nowrap tabular-nums">
+            {format(new Date(out), "h:mm a")}
+          </span>
         ) : (
-          <span className="text-muted-foreground italic">Active</span>
+          <span className="text-muted-foreground">—</span>
         );
       },
     },
     {
       id: "breaks",
       header: "Break",
+      meta: { numeric: true },
       cell: ({ row }) => {
         const breaks = row.original.break_logs || [];
         const totalMinutes = breaks.reduce(
           (acc, b) => acc + getBreakDurationMinutes(b),
           0,
         );
-        return totalMinutes > 0 ? `${totalMinutes}m` : "-";
+        return totalMinutes > 0 ? `${totalMinutes}m` : "—";
       },
     },
     {
       id: "total",
       header: "Total",
+      meta: { numeric: true },
       cell: ({ row }) => {
         const hours = calculateShiftDuration(row.original);
         const h = Math.floor(hours);
         const m = Math.round((hours - h) * 60);
         return (
-          <span className="font-medium">
+          <span className="whitespace-nowrap font-medium tabular-nums">
             {h}h {m}m
           </span>
         );
@@ -130,11 +179,16 @@ export function createColumns({
     {
       id: "pay",
       header: "Est. Pay",
+      meta: { numeric: true },
       cell: ({ row }) => {
         const hours = calculateShiftDuration(row.original);
         const rate = row.original.hourly_rate_snapshot;
-        if (!rate) return <span className="text-muted-foreground">-</span>;
-        return <span>${(hours * rate).toFixed(2)}</span>;
+        if (!rate) return <span className="text-muted-foreground">—</span>;
+        return (
+          <span className="whitespace-nowrap tabular-nums">
+            ${(hours * rate).toFixed(2)}
+          </span>
+        );
       },
     },
     {
@@ -145,25 +199,30 @@ export function createColumns({
         const isAdjusted = Boolean(
           row.original.is_verified && row.original.notes,
         );
-        const variant =
-          status === "approved"
-            ? "default"
-            : status === "active"
-              ? "secondary"
-              : "outline";
+        const style = SHIFT_STATUS_STYLES[status] ?? {
+          ...FALLBACK_STATUS_STYLE,
+          label: status || FALLBACK_STATUS_STYLE.label,
+        };
         return (
           <div className="flex flex-wrap items-center gap-1.5">
-            <Badge variant={variant} className="capitalize">
-              {status}
-            </Badge>
+            <span
+              className={cn(
+                "inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium",
+                style.bg,
+                style.text,
+              )}
+            >
+              <span className={cn("h-1.5 w-1.5 rounded-full", style.dot)} />
+              {style.label}
+            </span>
             {isAdjusted ? (
-              <Badge
-                variant="outline"
-                className="border-amber-300 bg-amber-50 text-amber-700"
+              <span
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-950/40 dark:text-amber-300"
                 title={row.original.notes ?? "Manual adjustment"}
               >
-                ADJUSTED
-              </Badge>
+                <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                Adjusted
+              </span>
             ) : null}
           </div>
         );
@@ -171,22 +230,27 @@ export function createColumns({
     },
     {
       id: "actions",
+      header: "",
       cell: ({ row }) => {
         const shift = row.original;
 
         return (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="h-8 w-8 p-0">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="rounded-full"
+              >
                 <span className="sr-only">Open menu</span>
                 <MoreHorizontal className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuLabel>Actions</DropdownMenuLabel>
               <DropdownMenuItem
                 onClick={() => navigator.clipboard.writeText(shift.id)}
               >
+                <Copy className="mr-2 h-4 w-4" />
                 Copy Shift ID
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => onAdjustShift?.(shift)}>

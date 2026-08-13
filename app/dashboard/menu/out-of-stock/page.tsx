@@ -22,7 +22,6 @@ import {
   Panel,
   PanelSection,
 } from '@/components/dashboard/shell'
-import { availabilityStatusStyle } from '@/lib/constants/availability-status'
 import { cn } from '@/lib/utils'
 import {
   useGatedLocationId,
@@ -343,7 +342,7 @@ export default function OutOfStockPage() {
                       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
                         <div className="flex min-w-0 flex-1 basis-56 flex-wrap items-center gap-x-2 gap-y-1">
                           <span className="inline-flex min-w-0 items-center gap-2 rounded-lg bg-muted/70 px-2.5 py-1.5">
-                            <Layers className="h-3.5 w-3.5 shrink-0 text-primary" />
+                            <Layers className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                             <span className="min-w-0 break-words text-sm font-semibold">
                               {grp.groupName}
                             </span>
@@ -412,7 +411,6 @@ function StatusBadge({
   children: React.ReactNode
   className?: string
 }) {
-  const style = availabilityStatusStyle(status)
   return (
     <span
       className={cn(
@@ -421,16 +419,14 @@ function StatusBadge({
         // compressing. Letting it shrink inside a `flex-1` column next to a
         // rigid button ellipsised the label at 320px even with room to spare.
         'inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-medium',
-        style.bg,
-        style.text,
+        // Neutral in both states: every row on this page is already out of
+        // stock, so an amber pill on each one coloured the whole list without
+        // separating anything from anything.
+        'bg-muted/60 text-muted-foreground',
         className,
       )}
     >
-      {Icon ? (
-        <Icon className="h-3 w-3 shrink-0" />
-      ) : (
-        <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full', style.dot)} />
-      )}
+      {Icon && <Icon className="h-3 w-3 shrink-0" />}
       {children}
     </span>
   )

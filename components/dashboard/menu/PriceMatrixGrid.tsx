@@ -668,11 +668,11 @@ function L5MatrixCell({
           <DialogTitle className="sr-only">Edit menu price override</DialogTitle>
           {/* Names here are merchant-supplied and can be long; break them
               rather than letting them widen the fixed-width dialog. */}
-          <div className="mb-3 min-w-0 rounded-2xl bg-rose-50 px-3 py-2 max-sm:mb-2">
-            <p className="break-words text-xs font-semibold text-rose-700 max-sm:text-[10px]">
+          <div className="mb-3 min-w-0 rounded-2xl bg-muted/60 px-3 py-2 max-sm:mb-2">
+            <p className="break-words text-xs font-semibold max-sm:text-[10px]">
               {menuName} menu at {locationName}
             </p>
-            <p className="break-words text-xs text-rose-600 max-sm:text-[10px]">
+            <p className="break-words text-xs text-muted-foreground max-sm:text-[10px]">
               {categoryName} category
             </p>
           </div>
@@ -697,7 +697,7 @@ function L5MatrixCell({
               type="button"
               size="sm"
               variant="ghost"
-              className="mt-2 h-auto w-full justify-center gap-2 whitespace-normal py-1.5 text-center text-xs text-rose-700 hover:bg-rose-50 hover:text-rose-800"
+              className="mt-2 h-auto w-full justify-center gap-2 whitespace-normal py-1.5 text-center text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
               onClick={() => resetMutation.mutate()}
               disabled={resetMutation.isPending}
             >

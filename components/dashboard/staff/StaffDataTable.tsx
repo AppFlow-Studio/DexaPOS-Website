@@ -24,8 +24,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -628,56 +626,45 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuLabel>Actions</DropdownMenuLabel>
               <DropdownMenuItem onClick={() => handleRowClick(staff)}>
                 <Edit className="mr-2 h-4 w-4" />
                 Edit Details
               </DropdownMenuItem>
               {!staff.is_clerk_user && (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onClick={handleResetPIN}
-                    disabled={!primaryLocation}
-                  >
-                    <KeyRound className="mr-2 h-4 w-4" />
-                    Reset PIN
-                  </DropdownMenuItem>
-                </>
+                <DropdownMenuItem
+                  onClick={handleResetPIN}
+                  disabled={!primaryLocation}
+                >
+                  <KeyRound className="mr-2 h-4 w-4" />
+                  Reset PIN
+                </DropdownMenuItem>
               )}
               {/* Upgrade to Dashboard User â€” only for POS-only staff */}
               {!staff.is_clerk_user && !staff.user_id && (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => handleUpgradeClick(staff)}>
-                    <ShieldCheck className="mr-2 h-4 w-4" />
-                    Upgrade to Dashboard User
-                  </DropdownMenuItem>
-                </>
+                <DropdownMenuItem onClick={() => handleUpgradeClick(staff)}>
+                  <ShieldCheck className="mr-2 h-4 w-4" />
+                  Upgrade to Dashboard User
+                </DropdownMenuItem>
               )}
               {/* Demote to POS-Only â€” only for Clerk staff */}
               {staff.is_clerk_user && staff.user_id && (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onClick={() => {
-                      if (
-                        confirm(
-                          `Demote ${staff.display_name} to POS-only? This will revoke their dashboard access.`,
-                        )
-                      ) {
-                        demoteClerk.mutate(staff.member_id);
-                      }
-                    }}
-                    disabled={demoteClerk.isPending}
-                    className="text-orange-600"
-                  >
-                    <Shield className="mr-2 h-4 w-4" />
-                    Demote to POS-Only
-                  </DropdownMenuItem>
-                </>
+                <DropdownMenuItem
+                  onClick={() => {
+                    if (
+                      confirm(
+                        `Demote ${staff.display_name} to POS-only? This will revoke their dashboard access.`,
+                      )
+                    ) {
+                      demoteClerk.mutate(staff.member_id);
+                    }
+                  }}
+                  disabled={demoteClerk.isPending}
+                  className="text-orange-600"
+                >
+                  <Shield className="mr-2 h-4 w-4" />
+                  Demote to POS-Only
+                </DropdownMenuItem>
               )}
-              <DropdownMenuSeparator />
               <DropdownMenuItem
                 onClick={handleDeactivate}
                 disabled={!primaryLocation}
@@ -743,15 +730,15 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
             className="h-10 w-full rounded-full pl-10"
           />
         </div>
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
+        <div className="grid min-w-0 grid-cols-2 items-center gap-2 sm:flex sm:flex-wrap">
           <Select
             value={statusFilter}
             onValueChange={(v) =>
               setStatusFilter(v as "all" | "active" | "inactive")
             }
           >
-            <SelectTrigger className="h-9 min-w-0 flex-1 rounded-full border-0 bg-muted/60 px-3 shadow-none sm:w-[140px] sm:flex-none">
-              <Filter className="mr-2 h-4 w-4" />
+            <SelectTrigger className="h-9 w-full min-w-0 rounded-full border-0 bg-muted/60 px-3 shadow-none [&>span]:truncate sm:w-[140px] sm:flex-none">
+              <Filter className="mr-2 h-4 w-4 shrink-0" />
               <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent>
@@ -761,8 +748,8 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
             </SelectContent>
           </Select>
           <Select value={roleFilter} onValueChange={setRoleFilter}>
-            <SelectTrigger className="h-9 min-w-0 flex-1 rounded-full border-0 bg-muted/60 px-3 shadow-none sm:w-[170px] sm:flex-none">
-              <Shield className="mr-2 h-4 w-4" />
+            <SelectTrigger className="h-9 w-full min-w-0 rounded-full border-0 bg-muted/60 px-3 shadow-none [&>span]:truncate sm:w-[170px] sm:flex-none">
+              <Shield className="mr-2 hidden h-4 w-4 shrink-0 sm:block" />
               <SelectValue placeholder="Role" />
             </SelectTrigger>
             <SelectContent>
@@ -778,7 +765,7 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
             <Button
               variant="ghost"
               size="sm"
-              className="h-9 rounded-full px-3 text-muted-foreground"
+              className="col-span-2 h-9 rounded-full px-3 text-muted-foreground sm:col-span-1"
               onClick={() => {
                 setStatusFilter("active");
                 setRoleFilter("all");
@@ -856,7 +843,7 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
         containerClassName="hidden xl:block"
         className="min-w-[900px]"
       >
-          <TableHeader>
+          <TableHeader className="[&_tr]:border-0">
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => {
@@ -925,7 +912,7 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
           Array.from({ length: 4 }).map((_, index) => (
             <div key={index} className="rounded-2xl border-0 bg-muted/45 p-4">
               <div className="flex items-center gap-3">
-                <Skeleton className="h-10 w-10 rounded-full" />
+                <Skeleton className="h-4 w-4 rounded" />
                 <div className="min-w-0 flex-1 space-y-2">
                   <Skeleton className="h-4 w-32 max-w-full" />
                   <Skeleton className="h-3 w-44 max-w-full" />
@@ -940,9 +927,6 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
         ) : visibleRows.length > 0 ? (
           visibleRows.map((row) => {
             const staff = row.original;
-            const initials = `${staff.first_name?.[0] || ""}${
-              staff.last_name?.[0] || ""
-            }`.toUpperCase();
             const activeLocations = staff.location_assignments.filter(
               (assignment) => assignment.is_active,
             );
@@ -979,17 +963,8 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
                   <button
                     type="button"
                     onClick={() => handleRowClick(staff)}
-                    className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                    className="min-w-0 flex-1 text-left"
                   >
-                    <Avatar className="h-10 w-10 shrink-0 bg-muted">
-                      <AvatarFallback className="bg-muted text-xs text-muted-foreground">
-                        {staff.avatar_url ? (
-                          <UserRound className="h-[1.125rem] w-[1.125rem]" />
-                        ) : (
-                          initials
-                        )}
-                      </AvatarFallback>
-                    </Avatar>
                     <span className="min-w-0 flex-1">
                       <span className="flex min-w-0 items-center gap-2">
                         <span className="truncate text-sm font-semibold">
@@ -1008,35 +983,26 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
                   </button>
                 </div>
 
-                <dl className="mt-5 grid min-w-0 grid-cols-2 gap-x-4 gap-y-4">
+                <div className="mt-6 grid min-w-0 grid-cols-2 gap-x-4 gap-y-5">
                   <div className="min-w-0">
-                    <dt className="text-[0.6875rem] font-medium uppercase tracking-[0.12em] text-muted-foreground">
-                      Role
-                    </dt>
-                    <dd className="mt-1 truncate text-sm font-medium">
+                    <p className="break-words text-sm font-medium leading-snug">
                       {primaryRole}
-                    </dd>
+                    </p>
                   </div>
                   <div className="min-w-0">
-                    <dt className="text-[0.6875rem] font-medium uppercase tracking-[0.12em] text-muted-foreground">
-                      Location
-                    </dt>
-                    <dd className="mt-1 truncate text-sm font-medium">
+                    <p className="break-words text-sm font-medium leading-snug">
                       {primaryLocation?.location_name || "None"}
                       {locations.length > 1 && (
                         <span className="ml-1 text-muted-foreground">
                           +{locations.length - 1}
                         </span>
                       )}
-                    </dd>
+                    </p>
                   </div>
                   <div className="min-w-0">
-                    <dt className="text-[0.6875rem] font-medium uppercase tracking-[0.12em] text-muted-foreground">
-                      POS access
-                    </dt>
-                    <dd
+                    <p
                       className={cn(
-                        "mt-1 flex items-center gap-1.5 text-sm font-medium",
+                        "flex items-center gap-1.5 text-sm font-medium",
                         hasPin
                           ? "text-emerald-700 dark:text-emerald-300"
                           : "text-muted-foreground",
@@ -1044,19 +1010,16 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
                     >
                       {hasPin && <CheckCircle2 className="h-3.5 w-3.5" />}
                       {hasPin ? "PIN set" : "No PIN"}
-                    </dd>
+                    </p>
                   </div>
                   <div className="min-w-0">
-                    <dt className="text-[0.6875rem] font-medium uppercase tracking-[0.12em] text-muted-foreground">
-                      Account
-                    </dt>
-                    <dd className="mt-1 text-sm font-medium">
+                    <p className="break-words text-sm font-medium leading-snug">
                       {staff.is_clerk_user ? "Dashboard user" : "POS only"}
-                    </dd>
+                    </p>
                   </div>
-                </dl>
+                </div>
 
-                <div className="mt-5 flex items-center justify-between gap-3 border-t border-border/60 pt-4">
+                <div className="mt-6 flex items-center justify-between gap-3 pt-1">
                   <div className="flex min-w-0 items-center gap-2">
                     <Switch
                       checked={staff.overall_is_active}
@@ -1106,12 +1069,7 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
       <StaffDetailSheet
         staff={selectedStaff}
         open={isDetailOpen && !!selectedStaff}
-        onOpenChange={(open) => {
-          setIsDetailOpen(open);
-          if (!open) {
-            setSelectedStaff(null);
-          }
-        }}
+        onOpenChange={setIsDetailOpen}
       />
 
       {/* Upgrade POS to Dashboard dialog */}

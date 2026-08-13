@@ -434,6 +434,25 @@ html:has([data-template]) body[data-scroll-locked] {
   animation: panel-out 0.2s cubic-bezier(0.32, 0.72, 0, 1) both;
 }
 
+/* Staff details is a large bottom-anchored workspace, but it should feel like
+   the Edit/Upgrade dialogs rather than a mobile drawer. These selectors
+   override BottomSheet's full-height slide only for that workspace. */
+.staff-detail-dialog-motion[data-state="open"] {
+  animation: panel-in 0.32s cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+
+.staff-detail-dialog-motion[data-state="closed"] {
+  animation: panel-out 0.2s cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+
+.staff-detail-dialog-overlay-motion[data-state="open"] {
+  animation: overlay-in 0.25s ease both;
+}
+
+.staff-detail-dialog-overlay-motion[data-state="closed"] {
+  animation: overlay-out 0.2s ease both;
+}
+
 /* Confirm dialogs that should rise from below instead of the AlertDialog
    primitive's diagonal zoom-from-top.
 
