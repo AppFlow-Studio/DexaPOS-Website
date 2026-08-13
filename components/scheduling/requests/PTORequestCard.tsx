@@ -61,7 +61,7 @@ export function PTORequestCard({
           </Button>
           <Button
             size="sm"
-            className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+            className="flex-1"
             onClick={onApprove}
           >
             <Check className="h-4 w-4 mr-1" />

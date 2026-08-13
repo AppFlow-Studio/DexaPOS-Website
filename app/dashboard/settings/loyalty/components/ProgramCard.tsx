@@ -32,18 +32,19 @@ export function ProgramCard({
   isToggling = false,
 }: ProgramCardProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const displayColor = program.display_color ?? '#6366f1';
 
   // Get icon based on program type
   const getIcon = () => {
     switch (program.program_type) {
       case 'points':
-        return <Star className="h-5 w-5" style={{ color: program.display_color }} />;
+        return <Star className="h-5 w-5" style={{ color: displayColor }} />;
       case 'punch_card':
-        return <Coffee className="h-5 w-5" style={{ color: program.display_color }} />;
+        return <Coffee className="h-5 w-5" style={{ color: displayColor }} />;
       case 'visits':
-        return <Hash className="h-5 w-5" style={{ color: program.display_color }} />;
+        return <Hash className="h-5 w-5" style={{ color: displayColor }} />;
       default:
-        return <Star className="h-5 w-5" style={{ color: program.display_color }} />;
+        return <Star className="h-5 w-5" style={{ color: displayColor }} />;
     }
   };
 
@@ -95,7 +96,7 @@ export function ProgramCard({
   };
 
   return (
-    <Card className="overflow-hidden border-l-4" style={{ borderLeftColor: program.display_color }}>
+    <Card className="overflow-hidden border-l-4" style={{ borderLeftColor: displayColor }}>
       <div className="flex items-center justify-between gap-3 p-4">
         <div className="flex items-start gap-4 flex-1 min-w-0">
           {/* Icon */}
@@ -120,7 +121,7 @@ export function ProgramCard({
         <div className="flex items-center gap-3 shrink-0">
           <div className="flex items-center gap-2">
             <Switch
-              checked={program.is_active}
+              checked={Boolean(program.is_active)}
               onCheckedChange={(checked) => onToggle(program.id, checked)}
               disabled={isToggling}
               aria-label="Toggle program"

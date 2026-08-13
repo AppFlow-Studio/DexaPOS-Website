@@ -159,7 +159,7 @@ const navMain = [
         icon: List,
       },
       {
-        title: "86'd Items",
+        title: "Out of stock",
         url: "/dashboard/menu/out-of-stock",
         icon: CircleSlash,
       },

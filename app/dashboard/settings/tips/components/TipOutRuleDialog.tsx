@@ -26,6 +26,7 @@ import { AlertCircle, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { DatePopover } from "./DatePopover";
 import type { TipOutRule, Role } from "@/app/dashboard/actions/tips";
+import { getLocalDateKey } from "@/lib/dates/local-date-key";
 
 interface TipOutRuleDialogProps {
   open: boolean;
@@ -34,6 +35,7 @@ interface TipOutRuleDialogProps {
   roles: Role[];
   existingRules: TipOutRule[];
   clerkOrgId: string | undefined;
+  timeZone?: string | null;
   isLoading?: boolean;
   onSubmit: (data: TipOutRuleFormData) => void;
   onDeactivateRule?: (ruleId: string) => void;
@@ -49,15 +51,17 @@ export interface TipOutRuleFormData {
   end_date: string | null;
 }
 
-const defaultFormData: TipOutRuleFormData = {
-  from_role_code: "",
-  to_role_code: "",
-  tip_out_type: "percentage_of_sales",
-  tip_out_value: 0,
-  is_active: true,
-  effective_date: new Date().toISOString().split("T")[0],
-  end_date: null,
-};
+function createDefaultFormData(timeZone?: string | null): TipOutRuleFormData {
+  return {
+    from_role_code: "",
+    to_role_code: "",
+    tip_out_type: "percentage_of_sales",
+    tip_out_value: 0,
+    is_active: true,
+    effective_date: getLocalDateKey(new Date(), timeZone),
+    end_date: null,
+  };
+}
 
 export function TipOutRuleDialog({
   open,
@@ -66,11 +70,14 @@ export function TipOutRuleDialog({
   roles,
   existingRules,
   clerkOrgId,
+  timeZone,
   isLoading,
   onSubmit,
   onDeactivateRule,
 }: TipOutRuleDialogProps) {
-  const [formData, setFormData] = useState<TipOutRuleFormData>({ ...defaultFormData });
+  const [formData, setFormData] = useState<TipOutRuleFormData>(() =>
+    createDefaultFormData(timeZone),
+  );
 
   // Reset form when dialog opens/closes or rule changes
   useEffect(() => {
@@ -87,13 +94,9 @@ export function TipOutRuleDialog({
         end_date: rule.end_date ?? null,
       });
     } else {
-      setFormData({
-        ...defaultFormData,
-        effective_date: new Date().toISOString().split("T")[0],
-        end_date: null,
-      });
+      setFormData(createDefaultFormData(timeZone));
     }
-  }, [rule, open]);
+  }, [rule, open, timeZone]);
 
   // ─── Reciprocity check (client-side) ──────────────────────
   const conflictingRule = useMemo(() => {

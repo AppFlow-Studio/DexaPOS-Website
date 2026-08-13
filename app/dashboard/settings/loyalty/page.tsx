@@ -33,8 +33,8 @@ import {
   AlertDialogCancel,
 } from '@/components/ui/alert-dialog';
 import { Plus, AlertTriangle, Loader2, Gift, Sparkles } from 'lucide-react';
-import { useUserInfo} from '@/app/manage/hooks/useUserInfo.';
-import { useLocationStore } from '../../hooks/useLocationScoped';
+import { useUserInfo } from '@/app/manage/hooks/useUserInfo.';
+import { useClerkOrgId, useLocationStore } from '../../hooks/useLocationScoped';
 import { GetMenuItems } from '../../actions/menu-items';
 import type { LoyaltyProgram, Promotion } from '../../actions/loyalty-programs';
 import { useGatedLocation } from '@/stores/location-store';
@@ -45,7 +45,7 @@ import {
 
 export default function LoyaltySettingsPage() {
   const { data: userInfo } = useUserInfo();
-  const clerkOrgId = userInfo?.members?.[0]?.organizations?.id;
+  const clerkOrgId = useClerkOrgId();
   const { selectedLocationId } = useLocationStore();
   const selectedLocation = useGatedLocation();
 
@@ -479,7 +479,7 @@ export default function LoyaltySettingsPage() {
             <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 border">
               <div
                 className="h-8 w-8 rounded-full flex-shrink-0"
-                style={{ backgroundColor: programToDelete.display_color }}
+                style={{ backgroundColor: programToDelete.display_color ?? '#6366f1' }}
               />
               <div>
                 <p className="font-medium">{programToDelete.name}</p>

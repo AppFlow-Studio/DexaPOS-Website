@@ -136,7 +136,7 @@ export function PromotionCard({
         <div className="flex items-center gap-1.5 ml-2 shrink-0">
           <div className="flex items-center gap-1.5">
             <Switch
-              checked={promotion.is_active}
+              checked={Boolean(promotion.is_active)}
               onCheckedChange={(checked) => onToggle(promotion.id, checked)}
               disabled={isToggling}
               aria-label="Toggle promotion"
