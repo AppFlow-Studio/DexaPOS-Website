@@ -17,6 +17,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select'
+import { useIsSingleLocation } from '@/stores/location-store'
 
 interface MenuSettingsTabProps {
     menu: MenuWithCategories
@@ -69,6 +70,7 @@ export function MenuSettingsTab({
     onCancelSettings,
     onDeleteMenu,
 }: MenuSettingsTabProps) {
+    const isSingleLocation = useIsSingleLocation()
     const currentLocation = editedLocationId
         ? locations.find(l => l.id === editedLocationId)
         : null
@@ -147,7 +149,8 @@ export function MenuSettingsTab({
                 </CardContent>
             </Card>
 
-            {/* Menu Scope */}
+            {/* Menu scope only has meaning when the merchant can choose among locations. */}
+            {!isSingleLocation && (
             <Card>
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">
@@ -240,6 +243,7 @@ export function MenuSettingsTab({
                     </div>
                 </CardContent>
             </Card>
+            )}
 
             {/* General Settings */}
             <Card>

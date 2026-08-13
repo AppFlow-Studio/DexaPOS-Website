@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { MenuCategory, MenuCategoryItem } from "@/types/menu";
 import { cn, isValidImageUrl } from "@/lib/utils";
+import { useIsSingleLocation } from "@/stores/location-store";
 
 interface CategoryGridProps {
   categories: MenuCategory[];
@@ -54,6 +55,7 @@ export function CategoryGrid({
   onItemClick,
   hasOrderChanges = false,
 }: CategoryGridProps) {
+  const isSingleLocation = useIsSingleLocation();
   const isAllLocations = !selectedLocationId || selectedLocationId === "all";
   const canModifyCategories = isAllLocations || isMenuLocationOwned;
 
@@ -96,7 +98,7 @@ export function CategoryGrid({
                   )}
                 </div>
                 <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
-                  {isGlobal ? (
+                  {!isSingleLocation && (isGlobal ? (
                     <Badge
                       variant="outline"
                       className="gap-1 text-[10px] px-1.5 py-0 bg-emerald-50 text-emerald-700 border-emerald-200"
@@ -112,7 +114,7 @@ export function CategoryGrid({
                       <MapPin className="h-2.5 w-2.5" />
                       {category.category?.location_name || "Location"}
                     </Badge>
-                  )}
+                  ))}
                   <Badge
                     variant="outline"
                     className={cn(

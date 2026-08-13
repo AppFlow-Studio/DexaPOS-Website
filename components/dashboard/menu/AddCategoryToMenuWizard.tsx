@@ -31,7 +31,11 @@ import {
     ToggleCategoryInMenu,
     UpdateLocationMenuCategoryOverride,
 } from '@/app/dashboard/actions/categories'
-import { useLocationStore, useIsAllLocations } from '@/stores/location-store'
+import {
+    useLocationStore,
+    useIsAllLocations,
+    useIsSingleLocation,
+} from '@/stores/location-store'
 import { useUserInfo } from '@/app/manage/hooks/useUserInfo.'
 
 interface AddCategoryToMenuWizardProps {
@@ -58,6 +62,7 @@ export function AddCategoryToMenuWizard({
     const queryClient = useQueryClient()
     const { selectedLocationId } = useLocationStore()
     const isAllLocations = useIsAllLocations()
+    const isSingleLocation = useIsSingleLocation()
     const { data: userInfo } = useUserInfo()
     const merchantId = userInfo?.members?.[0]?.organizations?.merchants?.id
     const effectiveUserRole = userRole || userInfo?.members?.[0]?.role
@@ -151,8 +156,12 @@ export function AddCategoryToMenuWizard({
     }, [availableCategories, searchQuery])
 
     // Separate global and location categories
-    const globalCategories = filteredCategories.filter(cat => cat.is_global)
-    const locationCategories = filteredCategories.filter(cat => !cat.is_global)
+    const globalCategories = isSingleLocation
+        ? filteredCategories
+        : filteredCategories.filter(cat => cat.is_global)
+    const locationCategories = isSingleLocation
+        ? []
+        : filteredCategories.filter(cat => !cat.is_global)
 
     // Reset on close
     React.useEffect(() => {
@@ -382,8 +391,14 @@ export function AddCategoryToMenuWizard({
                                 <div className="space-y-3">
                                     <div className="flex flex-wrap items-center justify-between gap-2">
                                         <div className="flex min-w-0 items-center gap-2">
-                                            <Globe className="h-4 w-4 shrink-0 text-muted-foreground" />
-                                            <Label className="truncate text-sm font-semibold">Global Categories</Label>
+                                            {isSingleLocation ? (
+                                                <Tag className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                            ) : (
+                                                <Globe className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                            )}
+                                            <Label className="truncate text-sm font-semibold">
+                                                {isSingleLocation ? 'Categories' : 'Global Categories'}
+                                            </Label>
                                             <Badge variant="secondary" className="text-xs">
                                                 {globalCategories.length}
                                             </Badge>

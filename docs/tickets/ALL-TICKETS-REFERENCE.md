@@ -472,6 +472,24 @@ Single index for active ticket streams and their source trackers.
 - The engineering group message and POS repository restructure remain manual,
   separately verified follow-ups.
 
+## Stream W: Single-Location Menu - Admin Web Core Scope
+
+1. Website implementation and QA plan:
+- `docs/features/menu-management/PLAN-2026-08-13-SINGLE-LOCATION-MENU-WEBSITE.md`
+
+2. Backend/RPC companion:
+- `docs/features/menu-management/PLAN-2026-06-06-SINGLE-LOCATION-GLOBAL-MODIFIER-RECIPE-RPCS.md`
+
+3. Scope notes:
+- Website repository only in this pass.
+- Exactly one active accessible location removes global/location framing from
+  menu-management UI while writes continue to target the core/base contract.
+- Physical-location controls use the gated concrete location.
+- Multi-location scope and override behavior remains unchanged.
+- POS framing is a separate ticket and was not changed in this repository.
+- No new migration is introduced or executed by this branch.
+- Website code is complete; single- and multi-location manual QA is pending.
+
 ## Notes
 
 1. Keep this file updated whenever a new ticket stream starts.

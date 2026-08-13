@@ -340,12 +340,16 @@ function ItemCard({
                   variant="secondary"
                   className={cn(
                     "text-[10px] px-1.5 py-0 bg-background/90 backdrop-blur-sm",
-                    cat.is_global
-                      ? "border-emerald-200 text-emerald-700"
-                      : "border-purple-200 text-purple-700",
+                    isSingleLocation
+                      ? "border-border text-foreground"
+                      : cat.is_global
+                        ? "border-emerald-200 text-emerald-700"
+                        : "border-purple-200 text-purple-700",
                   )}
                 >
-                  {cat.is_global ? (
+                  {isSingleLocation ? (
+                    <Tag className="h-2.5 w-2.5 mr-0.5" />
+                  ) : cat.is_global ? (
                     <Globe className="h-2.5 w-2.5 mr-0.5" />
                   ) : (
                     <MapPin className="h-2.5 w-2.5 mr-0.5" />
@@ -587,6 +591,7 @@ function ItemRow({
   const hasOverride = item.has_location_override;
   const priceColors =
     PRICE_SOURCE_COLORS[item.price_source] || PRICE_SOURCE_COLORS.base;
+  const isSingleLocation = useIsSingleLocation();
 
   // Tax info
   const taxRate = taxRates.find(
@@ -674,12 +679,16 @@ function ItemRow({
                     variant="outline"
                     className={cn(
                       "text-[10px] px-1.5 py-0",
-                      cat.is_global
-                        ? "border-emerald-200 text-emerald-700"
-                        : "border-purple-200 text-purple-700",
+                      isSingleLocation
+                        ? "border-border text-foreground"
+                        : cat.is_global
+                          ? "border-emerald-200 text-emerald-700"
+                          : "border-purple-200 text-purple-700",
                     )}
                   >
-                    {cat.is_global ? (
+                    {isSingleLocation ? (
+                      <Tag className="h-2.5 w-2.5 mr-0.5" />
+                    ) : cat.is_global ? (
                       <Globe className="h-2.5 w-2.5 mr-0.5" />
                     ) : (
                       <MapPin className="h-2.5 w-2.5 mr-0.5" />
@@ -911,6 +920,7 @@ function CategoryGroup({
   selectedItemIds?: Set<string>;
   onToggleSelect?: (id: string) => void;
 }) {
+  const isSingleLocation = useIsSingleLocation();
   const selectedCount = isSelectionMode && selectedItemIds
     ? items.reduce((acc, it) => acc + (selectedItemIds.has(it.id) ? 1 : 0), 0)
     : 0;
@@ -943,7 +953,7 @@ function CategoryGroup({
                 <div className="flex items-center gap-2 min-w-0 flex-wrap">
                   <Tag className="h-5 w-5 text-primary shrink-0" />
                   <CardTitle className="text-lg truncate">{category.name}</CardTitle>
-                  {category.is_global ? (
+                  {!isSingleLocation && (category.is_global ? (
                     <Badge
                       variant="outline"
                       className="text-xs bg-emerald-50 text-emerald-600 border-emerald-200 shrink-0"
@@ -959,7 +969,7 @@ function CategoryGroup({
                       <MapPin className="h-3 w-3 mr-1" />
                       {category.location_name || "Location"}
                     </Badge>
-                  )}
+                  ))}
                 </div>
               </div>
               <div className="flex items-center gap-2 shrink-0">
@@ -1412,7 +1422,9 @@ export default function MenuItemsPage() {
       }
 
       toast.success("Item Deleted", {
-        description: isAllLocations
+        description: isSingleLocation
+          ? `"${deletingItem.name}" has been permanently deleted.`
+          : isAllLocations
           ? `"${deletingItem.name}" has been permanently deleted from all locations.`
           : `"${deletingItem.name}" has been permanently deleted.`,
       });
@@ -1765,7 +1777,9 @@ export default function MenuItemsPage() {
                         count === 0 && "opacity-50",
                       )}
                     >
-                      {category.is_global ? (
+                      {isSingleLocation ? (
+                        <Tag className="h-3 w-3" />
+                      ) : category.is_global ? (
                         <Globe className="h-3 w-3" />
                       ) : (
                         <MapPin className="h-3 w-3" />

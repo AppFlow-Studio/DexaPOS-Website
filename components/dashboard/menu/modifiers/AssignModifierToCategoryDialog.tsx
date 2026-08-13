@@ -25,6 +25,7 @@ import {
 } from "@/app/dashboard/actions/modifier-assignments";
 import { CategoriesModel } from "@/types/db-modles";
 import { invalidateOrderOutSync } from "@/app/dashboard/hooks/useOrderOutMenuSync";
+import { useIsSingleLocation } from "@/stores/location-store";
 
 interface ModifierGroupForAssignment {
   id: string;
@@ -60,6 +61,7 @@ export function AssignModifierToCategoryDialog({
   onSuccess,
 }: AssignModifierToCategoryDialogProps) {
   const queryClient = useQueryClient();
+  const isSingleLocation = useIsSingleLocation();
 
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -216,7 +218,15 @@ export function AssignModifierToCategoryDialog({
         </DialogHeader>
 
         {/* Scope context banner */}
-        {!isAllLocations ? (
+        {isSingleLocation ? (
+          <div className="flex items-start gap-2 rounded-lg border bg-muted/40 p-2.5 text-xs text-muted-foreground">
+            <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+            <span>
+              Category assignments apply this modifier to current and future
+              items in the category.
+            </span>
+          </div>
+        ) : !isAllLocations ? (
           <div className="flex items-start gap-2 p-2.5 bg-blue-50 text-blue-800 rounded-lg text-xs border border-blue-100">
             <MapPin className="h-3.5 w-3.5 mt-0.5 shrink-0" />
             <span>
@@ -300,7 +310,7 @@ export function AssignModifierToCategoryDialog({
                     )}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    {!category.menu_id && (
+                    {!isSingleLocation && !category.menu_id && (
                       <Badge variant="outline" className="text-[10px]">
                         Global
                       </Badge>
@@ -318,12 +328,16 @@ export function AssignModifierToCategoryDialog({
                               : "bg-blue-50 text-blue-700 border-blue-200",
                           )}
                         >
-                          {isGlobalAssignment ? (
+                          {!isSingleLocation && (isGlobalAssignment ? (
                             <Globe className="h-2.5 w-2.5" />
                           ) : (
                             <MapPin className="h-2.5 w-2.5" />
-                          )}
-                          {isGlobalAssignment ? "Global" : "This Location"}
+                          ))}
+                          {isSingleLocation
+                            ? "Assigned"
+                            : isGlobalAssignment
+                              ? "Global"
+                              : "This Location"}
                         </Badge>
                       );
                     })()}

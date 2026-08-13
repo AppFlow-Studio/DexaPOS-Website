@@ -23,6 +23,7 @@ import {
   type BulkMenuDeliveryRounding,
 } from "@/app/dashboard/actions/bulk-menu-delivery-price-adjustment";
 import { invalidateOrderOutSync } from "@/app/dashboard/hooks/useOrderOutMenuSync";
+import { useIsSingleLocation } from "@/stores/location-store";
 
 type Scope = "all_locations" | "this_location";
 
@@ -77,6 +78,7 @@ export function BulkMenuDeliveryPriceAdjustDialog({
   onSuccess,
 }: BulkMenuDeliveryPriceAdjustDialogProps) {
   const queryClient = useQueryClient();
+  const isSingleLocation = useIsSingleLocation();
 
   const [operation, setOperation] = useState<BulkMenuDeliveryOp>("markup_pct");
   const [value, setValue] = useState<string>("");
@@ -233,6 +235,7 @@ export function BulkMenuDeliveryPriceAdjustDialog({
           )}
 
           {/* Scope */}
+          {!isSingleLocation && (
           <div className="space-y-2">
             <Label>Apply to</Label>
             <RadioGroup
@@ -271,6 +274,7 @@ export function BulkMenuDeliveryPriceAdjustDialog({
               </label>
             </RadioGroup>
           </div>
+          )}
 
           {/* Preview */}
           {previewRows.length > 0 && (

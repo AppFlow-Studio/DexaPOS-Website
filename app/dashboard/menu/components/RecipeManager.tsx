@@ -42,6 +42,7 @@ import {
   Check,
   ChevronsUpDown,
 } from "lucide-react";
+import { useIsSingleLocation } from "@/stores/location-store";
 import {
   Command,
   CommandEmpty,
@@ -84,6 +85,7 @@ export function RecipeManager({
   locationId,
   isEditable = true,
 }: RecipeManagerProps) {
+  const isSingleLocation = useIsSingleLocation();
   const queryClient = useQueryClient();
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [openCombobox, setOpenCombobox] = useState(false);
@@ -334,7 +336,7 @@ export function RecipeManager({
                           <span className="font-medium text-sm">
                             {item?.name || "Unknown Item"}
                           </span>
-                          {item?.location_id ? (
+                          {!isSingleLocation && (item?.location_id ? (
                             <Badge variant="outline" className="text-xs gap-1">
                               <MapPin className="h-2.5 w-2.5" />
                               Local
@@ -347,7 +349,7 @@ export function RecipeManager({
                               <Globe className="h-2.5 w-2.5" />
                               Global
                             </Badge>
-                          )}
+                          ))}
                         </div>
                         <div className="text-xs text-muted-foreground">
                           {ing.quantity_used} {item?.unit_type} × $
@@ -484,7 +486,7 @@ export function RecipeManager({
                                     (${item.cost_per_unit?.toFixed(2)}/
                                     {item.unit_type})
                                   </span>
-                                  {item.location_id ? (
+                                  {!isSingleLocation && (item.location_id ? (
                                     <Badge
                                       variant="outline"
                                       className="text-xs gap-1"
@@ -500,7 +502,7 @@ export function RecipeManager({
                                       <Globe className="h-2.5 w-2.5" />
                                       Global
                                     </Badge>
-                                  )}
+                                  ))}
                                 </div>
                               </CommandItem>
                             ))}

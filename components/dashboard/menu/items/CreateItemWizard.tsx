@@ -1070,7 +1070,9 @@ export function CreateItemWizard({
                         <Tag className="mx-auto mb-2 h-8 w-8 opacity-50" />
                         <p>No categories available in this scope.</p>
                         <p className="mt-1 text-xs">
-                          {isAllLocations
+                          {isSingleLocation
+                            ? "Create a category first."
+                            : isAllLocations
                             ? "Create a global category first."
                             : "Create a category for this location first."}
                         </p>

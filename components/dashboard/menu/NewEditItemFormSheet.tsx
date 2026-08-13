@@ -1807,12 +1807,17 @@ export function NewEditItemFormSheet({
             {editItem ? "Edit Menu Item" : "Create New Menu Item"}
           </DialogTitle>
           <DialogDescription asChild><div className="space-y-2 max-w-[80ch] text-sm leading-6 text-muted-foreground">
-            <span>{editingContext.description}</span>
+            <span>
+              {isSingleLocation
+                ? "Update this item's details, pricing, availability, and customization options."
+                : editingContext.description}
+            </span>
 
             {/* Context Badges */}
             {editItem && (
               <div className="flex flex-wrap items-center gap-2 mt-2">
                 {/* Level Badge */}
+                {!isSingleLocation && (
                 <Badge
                   variant="outline"
                   className={cn(
@@ -1836,6 +1841,7 @@ export function NewEditItemFormSheet({
                   {editingContext.level === 5 && <MapPin className="h-3 w-3" />}
                   Level {editingContext.level}
                 </Badge>
+                )}
 
                 {/* Location Badge */}
                 {!isAllLocations && (
@@ -1917,7 +1923,7 @@ export function NewEditItemFormSheet({
                           <div className="flex items-center gap-2">
                             <Settings2 className="h-4 w-4 text-muted-foreground" />
                             <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Basic Information</span>
-                            {!editingContext.canEditBaseFields && editItem && (
+                            {!isSingleLocation && !editingContext.canEditBaseFields && editItem && (
                               <Badge variant="outline" className="text-xs">
                                 View Only
                               </Badge>
@@ -2074,7 +2080,7 @@ export function NewEditItemFormSheet({
                       <CollapsibleContent className="space-y-4 pt-4">
 
                       {/* Price Breakdown - Detailed vertical breakdown */}
-                      {editItem && <PriceBreakdown />}
+                      {editItem && !isSingleLocation && <PriceBreakdown />}
 
                       {/* Price Inputs */}
                       <div className="space-y-2">
@@ -2368,7 +2374,7 @@ export function NewEditItemFormSheet({
                                                   Required
                                                 </Badge>
                                               )}
-                                              {group.source === "location" ? (
+                                              {!isSingleLocation && (group.source === "location" ? (
                                                 <Badge
                                                   variant="outline"
                                                   className="text-[10px] h-4 px-1.5 gap-0.5 bg-blue-50 text-blue-700 border-blue-200"
@@ -2382,7 +2388,7 @@ export function NewEditItemFormSheet({
                                                 >
                                                   Global
                                                 </Badge>
-                                              ) : null}
+                                              ) : null)}
                                             </div>
                                             <div className="text-xs text-muted-foreground">
                                               {group.modifier_group_items
@@ -2505,14 +2511,16 @@ export function NewEditItemFormSheet({
                                                             </div>
                                                           )}
                                                         </div>
-                                                        <Badge
-                                                          variant="outline"
-                                                          className="text-[10px]"
-                                                        >
-                                                          {canOverrideOnly
-                                                            ? "Location Override"
-                                                            : "Global"}
-                                                        </Badge>
+                                                        {!isSingleLocation && (
+                                                          <Badge
+                                                            variant="outline"
+                                                            className="text-[10px]"
+                                                          >
+                                                            {canOverrideOnly
+                                                              ? "Location Override"
+                                                              : "Global"}
+                                                          </Badge>
+                                                        )}
                                                       </div>
 
                                                       {/* Read-only display of modifier items */}
@@ -2648,7 +2656,9 @@ export function NewEditItemFormSheet({
                               <div className="text-xs text-muted-foreground bg-muted/40 border rounded-md p-2">
                                 Modifier links are managed from the Modifiers page.
                                 Use &quot;Add to Item&quot; or &quot;Add to Category&quot; buttons there
-                                to assign modifiers globally or at this location.
+                                {isSingleLocation
+                                  ? " to assign modifiers."
+                                  : " to assign modifiers globally or at this location."}
                               </div>
                             )}
                           </>
@@ -2760,7 +2770,7 @@ export function NewEditItemFormSheet({
                                   )}
                                 >
                                   {category.name}
-                                  {category.is_global !== undefined && (
+                                  {!isSingleLocation && category.is_global !== undefined && (
                                     <span className="inline-flex items-center gap-0.5 text-[10px] opacity-70">
                                       {category.is_global ? (
                                         <Globe className="h-3 w-3" />
@@ -3007,7 +3017,9 @@ export function NewEditItemFormSheet({
                               </FormLabel>
                               <FormDescription>
                                 {editingContext.level === 1 &&
-                                  "Master switch - affects all locations and menus"}
+                                  (isSingleLocation
+                                    ? "Controls whether this item is available for sale"
+                                    : "Master switch - affects all locations and menus")}
                                 {editingContext.level === 2 &&
                                   "Toggle availability at this location"}
                                 {editingContext.level >= 3 &&
