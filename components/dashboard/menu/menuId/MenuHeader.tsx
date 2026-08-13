@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, Globe, MapPin, Tablet } from "lucide-react";
 import { MenuWithCategories } from "@/types/menu";
+import { useIsSingleLocation } from "@/stores/location-store";
 
 interface MenuHeaderProps {
   menu: MenuWithCategories;
@@ -20,6 +21,8 @@ export function MenuHeader({
   onNavigateToMenus,
   onPreview,
 }: MenuHeaderProps) {
+  const isSingleLocation = useIsSingleLocation();
+
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
       <div className="flex-1 min-w-0">
@@ -40,6 +43,7 @@ export function MenuHeader({
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <h2 className="text-2xl font-bold tracking-tight">{menu.name}</h2>
+          {!isSingleLocation && (
           <Badge variant={menu.is_location_owned ? "secondary" : "default"}>
             {menu.is_location_owned ? (
               <div className="flex items-center gap-1.5">
@@ -53,6 +57,7 @@ export function MenuHeader({
               </div>
             )}
           </Badge>
+          )}
         </div>
         {menu.description && (
           <p className="text-muted-foreground">{menu.description}</p>

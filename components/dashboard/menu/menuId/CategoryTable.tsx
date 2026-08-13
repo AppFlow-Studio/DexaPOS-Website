@@ -13,6 +13,7 @@ import {
 import { GripVertical, ChevronUp, ChevronDown, Eye, EyeOff, Globe, MapPin, Trash2 } from 'lucide-react'
 import { MenuCategory } from '@/types/menu'
 import { LocationBadge } from '@/components/dashboard/menu/MenuListView'
+import { useIsSingleLocation } from '@/stores/location-store'
 
 interface CategoryTableProps {
     categories: MenuCategory[]
@@ -39,6 +40,7 @@ export function CategoryTable({
     onRemoveCategory,
     hasOrderChanges = false,
 }: CategoryTableProps) {
+    const isSingleLocation = useIsSingleLocation()
     const isAllLocations = !selectedLocationId || selectedLocationId === 'all'
     const canModifyCategories = isAllLocations || isMenuLocationOwned
 
@@ -54,7 +56,7 @@ export function CategoryTable({
                             <TableHead className="w-[100px]">Display Order</TableHead>
                             <TableHead className="w-[100px]">Status</TableHead>
                             <TableHead className="w-[100px]">Item Count</TableHead>
-                            <TableHead className="w-[150px]">Location</TableHead>
+                            {!isSingleLocation && <TableHead className="w-[150px]">Location</TableHead>}
                             <TableHead className="w-[120px] text-right">Actions</TableHead>
                         </TableRow>
                     </TableHeader>
@@ -66,7 +68,7 @@ export function CategoryTable({
 
                             return (
                                 <TableRow key={category.id} className="group">
-                                    <TableCell>
+                                    {!isSingleLocation && <TableCell>
                                         <div className="flex items-center gap-1">
                                             <GripVertical className="h-4 w-4 text-muted-foreground" />
                                             <div className="flex flex-col gap-0.5">
@@ -101,7 +103,7 @@ export function CategoryTable({
                                                 {category.display_order ?? '—'}
                                             </span>
                                         </div>
-                                    </TableCell>
+                                    </TableCell>}
                                     <TableCell className="font-medium">
                                         <div className="flex items-center gap-2">
                                             <span>{category.category?.name || 'Unknown'}</span>

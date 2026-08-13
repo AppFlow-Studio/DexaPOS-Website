@@ -9,6 +9,7 @@ import { Calendar, Plus } from 'lucide-react'
 import { WeeklyScheduleView } from '../WeeklyScheduleView'
 import { ScheduleCard } from '../ScheduleCard'
 import { SchedulesModel, ScheduleTimeSlotsModel } from '@/types/db-modles'
+import { useIsSingleLocation } from '@/stores/location-store'
 
 export type MenuScheduleAssignment = SchedulesModel & {
     schedule_time_slots: ScheduleTimeSlotsModel[]
@@ -37,6 +38,8 @@ export function MenuSchedulesTab({
     onRemoveSchedule,
     onEditSchedule,
 }: MenuSchedulesTabProps) {
+    const isSingleLocation = useIsSingleLocation()
+
     return (
         <div className="space-y-4">
             {/* Weekly Schedule Overview */}
@@ -92,16 +95,18 @@ export function MenuSchedulesTab({
                     ) : (
                         <div className="space-y-4">
                             {menuSchedules.map((schedule, index) => {
-                                const scopeName = schedule.assignment_location_id
+                                const scopeName = isSingleLocation
+                                    ? null
+                                    : schedule.assignment_location_id
                                     ? (locationNameById?.[schedule.assignment_location_id] ?? 'Location')
                                     : 'Global'
                                 return (
                                     <div key={`${schedule.id}:${schedule.assignment_location_id ?? 'global'}`} className="space-y-2">
-                                        <div className="flex items-center gap-2">
+                                        {!isSingleLocation && <div className="flex items-center gap-2">
                                             <Badge variant={schedule.assignment_location_id ? 'outline' : 'secondary'}>
                                                 {scopeName}
                                             </Badge>
-                                        </div>
+                                        </div>}
                                         <ScheduleCard
                                             schedule={schedule}
                                             index={index}

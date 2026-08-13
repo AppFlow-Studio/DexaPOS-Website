@@ -613,7 +613,9 @@ export default function CategoriesPage() {
 
       toast.success("Order Saved", {
         description:
-          selectedLocationId && selectedLocationId !== "all"
+          isSingleLocation
+            ? "Item display order has been updated."
+            : selectedLocationId && selectedLocationId !== "all"
             ? "Item display order has been updated for this location."
             : "Item display order has been updated globally.",
       });
@@ -774,7 +776,11 @@ export default function CategoriesPage() {
               {activeCategories}
             </div>
             <p className="text-xs text-muted-foreground">
-              {isAllLocations ? "Globally active" : "Active at location"}
+              {isSingleLocation
+                ? "Active categories"
+                : isAllLocations
+                  ? "Globally active"
+                  : "Active at location"}
             </p>
           </CardContent>
         </Card>
@@ -1372,7 +1378,7 @@ export default function CategoriesPage() {
                                 Customized
                               </Badge>
                             )}
-                            {category.location_id === null && (
+                            {!isSingleLocation && category.location_id === null && (
                               <Badge
                                 variant="outline"
                                 className="text-xs bg-green-50 text-green-600 border-green-200"
@@ -1381,7 +1387,7 @@ export default function CategoriesPage() {
                                 Global
                               </Badge>
                             )}
-                            {category.location_id !== null && (
+                            {!isSingleLocation && category.location_id !== null && (
                               <Badge
                                 variant="outline"
                                 className="text-xs bg-purple-50 text-purple-600 border-purple-200"
@@ -1860,7 +1866,16 @@ export default function CategoriesPage() {
               Delete Category
             </DialogTitle>
             <DialogDescription>
-              {deletingCategory?.is_global ? (
+              {isSingleLocation ? (
+                <>
+                  Are you sure you want to delete &quot;
+                  {deletingCategory?.name}&quot;? This will unlink all items from
+                  this category.
+                  <span className="block mt-2 font-medium text-foreground">
+                    This action cannot be undone.
+                  </span>
+                </>
+              ) : deletingCategory?.is_global ? (
                 <>
                   Are you sure you want to delete the global category &quot;
                   {deletingCategory?.name}&quot;? This will remove it from all

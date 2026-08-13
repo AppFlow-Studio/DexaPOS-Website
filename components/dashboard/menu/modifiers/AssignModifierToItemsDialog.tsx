@@ -24,6 +24,7 @@ import {
 } from "@/app/dashboard/actions/modifier-assignments";
 import { MenuItemsModel } from "@/types/db-modles";
 import { invalidateOrderOutSync } from "@/app/dashboard/hooks/useOrderOutMenuSync";
+import { useIsSingleLocation } from "@/stores/location-store";
 
 interface ModifierGroupForAssignment {
   id: string;
@@ -55,6 +56,7 @@ export function AssignModifierToItemsDialog({
   onSuccess,
 }: AssignModifierToItemsDialogProps) {
   const queryClient = useQueryClient();
+  const isSingleLocation = useIsSingleLocation();
 
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -141,11 +143,15 @@ export function AssignModifierToItemsDialog({
         return;
       }
 
-      const scope = isAllLocations ? "globally" : "at this location";
+      const scope = isSingleLocation
+        ? ""
+        : isAllLocations
+          ? " globally"
+          : " at this location";
       const msg =
         result.skippedCount && result.skippedCount > 0
-          ? `Assigned ${scope} to ${result.assignedCount} item(s) (${result.skippedCount} already had it)`
-          : `Assigned ${scope} to ${result.assignedCount} item(s)`;
+          ? `Assigned${scope} to ${result.assignedCount} item(s) (${result.skippedCount} already had it)`
+          : `Assigned${scope} to ${result.assignedCount} item(s)`;
       toast.success(msg);
 
       queryClient.invalidateQueries({ queryKey: ["modifier-groups"] });
@@ -174,7 +180,12 @@ export function AssignModifierToItemsDialog({
         </DialogHeader>
 
         {/* Scope context banner */}
-        {!isAllLocations ? (
+        {isSingleLocation ? (
+          <div className="flex items-start gap-2 rounded-lg border bg-muted/40 p-2.5 text-xs text-muted-foreground">
+            <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+            <span>Assignments update the items in your menu.</span>
+          </div>
+        ) : !isAllLocations ? (
           <div className="flex items-start gap-2 p-2.5 bg-blue-50 text-blue-800 rounded-lg text-xs border border-blue-100">
             <MapPin className="h-3.5 w-3.5 mt-0.5 shrink-0" />
             <span>
@@ -252,7 +263,12 @@ export function AssignModifierToItemsDialog({
                         ${Number(item.price).toFixed(2)}
                       </span>
                     )}
-                    {isGlobalAssigned && (
+                    {isSingleLocation && isAssigned && (
+                      <Badge variant="outline" className="text-[10px]">
+                        Assigned
+                      </Badge>
+                    )}
+                    {!isSingleLocation && isGlobalAssigned && (
                       <Badge
                         variant="outline"
                         className="text-[10px] gap-1 bg-emerald-50 text-emerald-700 border-emerald-200"
@@ -261,7 +277,7 @@ export function AssignModifierToItemsDialog({
                         Global
                       </Badge>
                     )}
-                    {isLocationAssigned && !isGlobalAssigned && (
+                    {!isSingleLocation && isLocationAssigned && !isGlobalAssigned && (
                       <Badge
                         variant="outline"
                         className="text-[10px] gap-1 bg-blue-50 text-blue-700 border-blue-200"
