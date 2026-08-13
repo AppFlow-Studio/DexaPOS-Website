@@ -131,4 +131,3 @@ match.
 - Single-location and multi-location manual QA: pending.
 - POS ticket: intentionally not implemented in this repository.
 - Database migration execution: intentionally not part of this branch.
-

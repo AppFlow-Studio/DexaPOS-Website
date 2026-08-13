@@ -17,4 +17,3 @@ export function canReorderModifierLibrary({
   if (isSingleLocation) return true;
   return !isAllLocations || scopeFilter === "global";
 }
-
