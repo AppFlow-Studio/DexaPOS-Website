@@ -11,14 +11,14 @@ describe("AffectsTag (pure / roleAware=false)", () => {
     expect(html).toContain("all locations");
   });
 
-  it("renders L2 with location name", () => {
+  it("renders L2 with category name", () => {
     const html = renderToString(
       <AffectsTag
-        ctx={{ level: 2, locationName: "Downtown" }}
+        ctx={{ level: 2, categoryName: "Burgers" }}
         roleAware={false}
       />,
     );
-    expect(html).toContain("Downtown only");
+    expect(html).toContain("Burgers category, all locations");
   });
 
   it("renders L3 with category name", () => {
@@ -31,14 +31,14 @@ describe("AffectsTag (pure / roleAware=false)", () => {
     expect(html).toContain("Burgers");
   });
 
-  it("renders L4 combining category + location", () => {
+  it("renders L4 combining menu + category", () => {
     const html = renderToString(
       <AffectsTag
-        ctx={{ level: 4, categoryName: "Burgers", locationName: "Downtown" }}
+        ctx={{ level: 4, menuName: "Lunch", categoryName: "Burgers" }}
         roleAware={false}
       />,
     );
-    expect(html).toContain("Burgers at Downtown only");
+    expect(html).toContain("Lunch menu – Burgers, all locations");
   });
 
   it("renders L5 combining menu + location", () => {
@@ -67,6 +67,22 @@ describe("AffectsTag (pure / roleAware=false)", () => {
       />,
     );
     expect(html).toContain("rounded-full");
+  });
+
+  it("keeps location-only item save copy out of the category cascade", () => {
+    const html = renderToString(
+      <AffectsTag
+        ctx={{
+          level: 3,
+          scopeType: "location-item",
+          locationName: "Downtown Hamra",
+        }}
+        roleAware={false}
+      />,
+    );
+
+    expect(html).toContain("Downtown Hamra only");
+    expect(html).not.toMatch(/category\s+category/i);
   });
 });
 

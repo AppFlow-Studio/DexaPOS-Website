@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { CircleSlash, RotateCcw, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { DateTimePopover } from "@/components/dashboard/menu/DateTimePopover";
 import { useGatedLocationId } from "@/stores/location-store";
 import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
 import { isActivelySnoozed, snoozeLabel } from "@/lib/snooze";
@@ -25,7 +25,7 @@ import {
  * useGatedLocationId() and fetches its own snooze state + clerkOrgId.
  */
 
-/** Current local time as a value for <input type="datetime-local"> (min bound). */
+/** Current local time as a `yyyy-MM-ddTHH:mm` string (min bound for the picker). */
 function nowLocalInput(): string {
   const d = new Date(Date.now() - new Date().getTimezoneOffset() * 60000);
   return d.toISOString().slice(0, 16);
@@ -106,22 +106,25 @@ export function CategorySnoozeControl({
     return (
       <div
         className={cn(
-          "flex items-center justify-between gap-3 rounded-2xl border-0 bg-amber-500/10 p-3 dark:bg-amber-400/10",
+          // Stacks on narrow widths for the same reason as the panel header
+          // below: beside a shrink-0 button the status text had no room and was
+          // being truncated mid-word ("Out of stock — un…").
+          "flex flex-col gap-3 rounded-2xl border-0 bg-amber-500/10 p-3 dark:bg-amber-400/10 sm:flex-row sm:items-center sm:justify-between",
           className,
         )}
       >
-        <div className="flex min-w-0 items-center gap-2">
-          <CircleSlash className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+        <div className="flex min-w-0 items-start gap-2">
+          <CircleSlash className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
           <div className="min-w-0">
-            <p className="truncate text-sm font-medium text-amber-800 dark:text-amber-200">
+            <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
               {snoozeLabel(snoozedUntil)}
             </p>
             {snooze?.snooze_reason ? (
-              <p className="truncate text-xs text-amber-700 dark:text-amber-300">
+              <p className="text-xs text-amber-700 dark:text-amber-300">
                 {snooze.snooze_reason}
               </p>
             ) : (
-              <p className="truncate text-xs text-amber-700 dark:text-amber-300">
+              <p className="text-xs text-amber-700 dark:text-amber-300">
                 Every item in this category is marked Sold Out.
               </p>
             )}
@@ -133,7 +136,7 @@ export function CategorySnoozeControl({
           size="sm"
           onClick={restore}
           disabled={busy}
-          className="shrink-0"
+          className="w-full shrink-0 sm:w-auto"
         >
           {busy ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -150,8 +153,10 @@ export function CategorySnoozeControl({
 
   return (
     <div className={cn("space-y-3 rounded-2xl border-0 bg-muted/50 p-3", className)}>
-      <div className="flex items-center justify-between gap-3">
-        <div className="space-y-0.5">
+      {/* Stack on narrow widths. Side-by-side, the shrink-0 button keeps its
+          full width and squeezes the copy into a two-word-per-line column. */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0 space-y-0.5">
           <p className="text-sm font-medium">Category out of stock (86)</p>
           <p className="text-xs text-muted-foreground">
             Temporarily mark every item in this category Sold Out on online
@@ -165,7 +170,7 @@ export function CategorySnoozeControl({
           size="sm"
           disabled={busy}
           onClick={() => setOpen((v) => !v)}
-          className="shrink-0"
+          className="w-full shrink-0 sm:w-auto"
         >
           {busy ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -219,21 +224,22 @@ export function CategorySnoozeControl({
             </Button>
           </div>
 
-          <div className="flex items-end gap-2">
-            <div className="flex-1 space-y-1">
+          {/* min-w-0 + a wrapping row: the Set button was pushing the input
+              past the panel edge, which cropped the native picker's calendar
+              against the dialog's overflow-hidden frame. */}
+          <div className="flex min-w-0 flex-wrap items-end gap-2">
+            <div className="min-w-0 flex-1 basis-[12rem] space-y-1">
               <label
                 htmlFor={`cat-snooze-until-${categoryId}`}
                 className="text-xs font-medium text-muted-foreground"
               >
                 Custom — out of stock until
               </label>
-              <Input
+              <DateTimePopover
                 id={`cat-snooze-until-${categoryId}`}
-                type="datetime-local"
                 min={nowLocalInput()}
                 value={customValue}
-                onChange={(e) => setCustomValue(e.target.value)}
-                className="h-9"
+                onChange={setCustomValue}
               />
             </div>
             <Button
@@ -241,6 +247,7 @@ export function CategorySnoozeControl({
               size="sm"
               disabled={busy || !customValue}
               onClick={applyCustom}
+              className="shrink-0"
             >
               Set
             </Button>

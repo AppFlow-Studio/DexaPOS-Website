@@ -335,6 +335,30 @@ export async function updateModifierItem(params: UpdateModifierItemParams) {
   return { success: true, level: "global" };
 }
 
+/**
+ * Keep the first occurrence of each `id`, preserving order.
+ *
+ * The library RPC joins through tables that carry no uniqueness guarantee on
+ * their logical key (`category_items` is one row per item/category/menu,
+ * `location_item_overrides` has only a PK on `id`), so rows can repeat. React
+ * keys off these ids, so duplicates must not reach the UI.
+ */
+function dedupeById<T extends { id?: string | null }>(rows: unknown): T[] {
+  if (!Array.isArray(rows)) return [];
+  const seen = new Set<string>();
+  const unique: T[] = [];
+
+  for (const row of rows as T[]) {
+    const id = row?.id;
+    if (!id) continue;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    unique.push(row);
+  }
+
+  return unique;
+}
+
 export async function getItemsForLocationFlat(
   merchantId: string,
   locationId?: string | null,
@@ -360,7 +384,7 @@ export async function getItemsForLocationFlat(
   }
 
   // Transform to FlatItem type
-  const items: FlatItem[] = data.map((item: any) => ({
+  const items: FlatItem[] = dedupeById<any>(data).map((item: any) => ({
     id: item.id,
     name: item.name,
     description: item.description,
@@ -401,8 +425,10 @@ export async function getItemsForLocationFlat(
     // Location override details (L2)
     location_override: item.location_override,
 
-    // Categories this item belongs to
-    categories: item.categories || [],
+    // Categories this item belongs to.
+    // category_items holds one row per (item, category, menu), so an item in the
+    // same category across two menus comes back duplicated. Dedupe by id.
+    categories: dedupeById(item.categories),
 
     // Enriched below when viewing every location.
     available_locations: null,

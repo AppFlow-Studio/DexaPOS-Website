@@ -389,7 +389,12 @@ export function CategoryFormSheet({
         // Match the item editor: the dialog frame never scrolls. The inner body
         // owns vertical scrolling, which keeps the header/footer fixed and avoids
         // `100vw` overflowing behind the mobile browser scrollbar.
-        className="flex max-h-[92vh] w-full max-w-[calc(100vw-1rem)] flex-col gap-0 overflow-hidden rounded-3xl border bg-card p-0 max-sm:h-dvh max-sm:max-h-none max-sm:overflow-hidden sm:max-w-2xl"
+        //
+        // Height is fixed (not just capped) so the frame stays the same size on
+        // every section — short tabs like Basic Info would otherwise collapse the
+        // dialog and make it jump when switching sections. `max-h` still guards
+        // short viewports; mobile keeps its full-screen `h-dvh`.
+        className="flex h-[36rem] max-h-[92vh] w-full max-w-[calc(100vw-1rem)] flex-col gap-0 overflow-hidden rounded-3xl border bg-card p-0 max-sm:h-dvh max-sm:max-h-none max-sm:overflow-hidden sm:max-w-2xl"
       >
         <Form {...form}>
           <form

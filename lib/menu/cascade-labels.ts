@@ -26,6 +26,12 @@ export type CascadeLevel = 1 | 2 | 3 | 4 | 5;
 
 export interface ScopeContext {
   level: CascadeLevel;
+  /**
+   * A branch-level item override does not belong to the category cascade, but
+   * it still uses the branch colour/icon treatment. Mark it explicitly so the
+   * UI does not describe an item-only save as a category change.
+   */
+  scopeType?: "cascade" | "location-item";
   locationName?: string | null;
   categoryName?: string | null;
   menuName?: string | null;
@@ -45,6 +51,10 @@ export interface ScopeContext {
  *   {level:5, menuName:"Lunch", locationName:"Downtown"} → "Lunch menu at Downtown"
  */
 export function scopeLabel(ctx: ScopeContext): string {
+  if (ctx.scopeType === "location-item") {
+    return ctx.locationName ? `${ctx.locationName} only` : "This location only";
+  }
+
   switch (ctx.level) {
     case 1:
       return "Everywhere";
@@ -89,6 +99,10 @@ export function scopeLabel(ctx: ScopeContext): string {
  *   {level:5, menuName:"Lunch", locationName:"Downtown"} → "Lunch menu at Downtown only"
  */
 export function affectsLabel(ctx: ScopeContext): string {
+  if (ctx.scopeType === "location-item") {
+    return ctx.locationName ? `${ctx.locationName} only` : "this location only";
+  }
+
   switch (ctx.level) {
     case 1:
       return "all locations";
@@ -97,19 +111,20 @@ export function affectsLabel(ctx: ScopeContext): string {
         ? `${ctx.categoryName} category, all locations`
         : "this category, all locations";
     case 3: {
-      const cat = ctx.categoryName || "this category";
       const loc = ctx.locationName || "this branch";
-      return `${cat} category at ${loc} only`;
+      return ctx.categoryName
+        ? `${ctx.categoryName} category at ${loc} only`
+        : `this category at ${loc} only`;
     }
     case 4: {
-      const menu = ctx.menuName || "this menu";
+      const menu = ctx.menuName ? `${ctx.menuName} menu` : "this menu";
       const cat = ctx.categoryName ? ` – ${ctx.categoryName}` : "";
-      return `${menu} menu${cat}, all locations`;
+      return `${menu}${cat}, all locations`;
     }
     case 5: {
-      const menu = ctx.menuName || "this menu";
+      const menu = ctx.menuName ? `${ctx.menuName} menu` : "this menu";
       const loc = ctx.locationName || "this branch";
-      return `${menu} menu at ${loc} only`;
+      return `${menu} at ${loc} only`;
     }
   }
 }
@@ -119,6 +134,11 @@ export function affectsLabel(ctx: ScopeContext): string {
 // ============================================================================
 
 export function scopeDescription(ctx: ScopeContext): string {
+  if (ctx.scopeType === "location-item") {
+    const loc = ctx.locationName || "this location";
+    return `Changes apply to this item at ${loc} only.`;
+  }
+
   switch (ctx.level) {
     case 1:
       return "Changes here apply everywhere by default.";

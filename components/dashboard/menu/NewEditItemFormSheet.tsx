@@ -66,8 +66,7 @@ import {
   CheckCircle2,
   Plus,
   X,
-  Grip,
-  GripVertical,
+  ArrowUpDown,
   Search,
   Loader2,
   Flame,
@@ -99,30 +98,9 @@ import {
 } from "@/stores/location-store";
 import { useItemSnooze } from "@/lib/queries/use-snoozes";
 import { setItemAvailabilityScoped } from "@/app/dashboard/actions/menu-items-rpc";
-import {
-  DndContext,
-  closestCenter,
-  MouseSensor,
-  TouchSensor,
-  useSensor,
-  useSensors,
-  DragEndEvent,
-} from "@dnd-kit/core";
-import {
-  arrayMove,
-  SortableContext,
-  useSortable,
-  verticalListSortingStrategy,
-} from "@dnd-kit/sortable";
-import { CSS as DndCSS } from "@dnd-kit/utilities";
 import ModifierItemRow, { ExtendedModifierItem } from "./ModifierItemRow";
 import { LocationLibraryItem, ModifierGroup, ModifierItem } from "@/types/menu";
-import {
-  LevelIndicator,
-  EditingContextBanner,
-  getEditingLevel,
-  type PricingLevel,
-} from "./LevelIndicator";
+import { ScopeBanner } from "./ScopeBanner";
 import { AffectsTag } from "./AffectsTag";
 import { DisabledFieldBanner } from "./DisabledFieldBanner";
 import { CascadeLadder } from "./CascadeLadder";
@@ -689,21 +667,6 @@ interface ModifierGroupSearchListProps {
   onSelect: (groupId: string) => void;
 }
 
-function SortableModifierGroupRow({ id, children }: { id: string; children: React.ReactNode }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
-  return (
-    <div
-      ref={setNodeRef}
-      style={{ transform: DndCSS.Transform.toString(transform), transition }}
-      className={isDragging ? "opacity-50 z-50" : undefined}
-      {...attributes}
-      {...listeners}
-    >
-      {children}
-    </div>
-  );
-}
-
 function ModifierGroupSearchList({
   availableGroups,
   onSelect,
@@ -774,9 +737,6 @@ function ModifierGroupSearchList({
                 onClick={() => onSelect(group.id)}
                 className="group flex w-full items-center gap-3 rounded-2xl bg-background p-2.5 text-left transition-colors hover:bg-accent"
               >
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted transition-colors group-hover:bg-violet-100 dark:group-hover:bg-violet-900/30">
-                  <Layers className="h-4 w-4 text-muted-foreground transition-colors group-hover:text-violet-600 dark:group-hover:text-violet-400" />
-                </div>
                 <div className="flex-1 min-w-0">
                   <div className="font-medium text-sm flex items-center gap-2">
                     {group.name}
@@ -788,9 +748,6 @@ function ModifierGroupSearchList({
                         Required
                       </Badge>
                     )}
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    {group.modifier_group_items?.length || 0} options
                   </div>
                 </div>
                 <Plus className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
@@ -892,6 +849,8 @@ export function NewEditItemFormSheet({
   const [selectedModifiers, setSelectedModifiers] = React.useState<string[]>(
     [],
   );
+  const [isReorderingModifiers, setIsReorderingModifiers] =
+    React.useState(false);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [isResetting, setIsResetting] = React.useState(false);
   const [showAddModifier, setShowAddModifier] = React.useState(false);
@@ -992,6 +951,7 @@ export function NewEditItemFormSheet({
       const isLibraryLocationScope = !isAllLocations && !menuId && !categoryId;
       return {
         level: (isLibraryLocationScope ? 3 : editingContext.level) as CascadeLevel,
+        scopeType: isLibraryLocationScope ? "location-item" : "cascade",
         locationName: isAllLocations ? null : currentLocationName,
         categoryName: categoryName ?? null,
         menuName: menuName ?? null,
@@ -1284,63 +1244,54 @@ export function NewEditItemFormSheet({
     );
   };
 
-  const modifierDndSensors = useSensors(
-    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 5 } }),
-  );
+  const moveSelectedModifier = async (
+    modifierId: string,
+    direction: "up" | "down",
+  ) => {
+    if (!canManageModifierLinks || isReorderingModifiers) return;
 
-  const handleModifierDragEnd = async (event: DragEndEvent) => {
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
+    const currentIndex = selectedModifiers.indexOf(modifierId);
+    if (currentIndex === -1) return;
+
+    const targetIndex =
+      direction === "up" ? currentIndex - 1 : currentIndex + 1;
+    if (targetIndex < 0 || targetIndex >= selectedModifiers.length) return;
+
+    const previous = [...selectedModifiers];
+    const reordered = [...selectedModifiers];
+    [reordered[currentIndex], reordered[targetIndex]] = [
+      reordered[targetIndex],
+      reordered[currentIndex],
+    ];
+
+    // Move immediately in the UI. New items persist this order on Save; edits
+    // also persist immediately so the arrows never appear unresponsive.
+    setSelectedModifiers(reordered);
     if (!editItem) return;
 
-    const reordered = (() => {
-      const oldIndex = selectedModifiers.indexOf(active.id as string);
-      const newIndex = selectedModifiers.indexOf(over.id as string);
-      if (oldIndex === -1 || newIndex === -1) return null;
-      return arrayMove(selectedModifiers, oldIndex, newIndex);
-    })();
-    if (!reordered) return;
+    setIsReorderingModifiers(true);
+    try {
+      const locationId = isAllLocations ? null : (selectedLocationId ?? null);
+      const result = await ReorderMenuItemModifierGroups(
+        editItem.id,
+        reordered.map((groupId, index) => ({
+          modifierGroupId: groupId,
+          displayOrder: index + 1,
+        })),
+        locationId,
+      );
 
-    // Update UI immediately (optimistic)
-    setSelectedModifiers(reordered);
-
-    // Call the RPC directly — this writes only menu_item_modifier_groups.display_order
-    // for this specific item, never touching library order or other items
-    const locationId = isAllLocations ? null : (selectedLocationId ?? null);
-    const result = await ReorderMenuItemModifierGroups(
-      editItem.id,
-      reordered.map((groupId, idx) => ({ modifierGroupId: groupId, displayOrder: idx + 1 })),
-      locationId,
-    );
-    if (result.error) {
-      toast.error("Failed to save modifier order", { description: result.error });
-      // Rollback
-      setSelectedModifiers(selectedModifiers);
+      if (!result.error) return;
+      setSelectedModifiers(previous);
+      toast.error("Failed to save modifier order", {
+        description: result.error,
+      });
+    } catch {
+      setSelectedModifiers(previous);
+      toast.error("Failed to save modifier order");
+    } finally {
+      setIsReorderingModifiers(false);
     }
-  };
-
-  const moveSelectedModifier = (modifierId: string, direction: "up" | "down") => {
-    if (!canManageModifierLinks) return;
-
-    setSelectedModifiers((prev) => {
-      const currentIndex = prev.indexOf(modifierId);
-      if (currentIndex === -1) return prev;
-
-      const targetIndex =
-        direction === "up" ? currentIndex - 1 : currentIndex + 1;
-
-      if (targetIndex < 0 || targetIndex >= prev.length) {
-        return prev;
-      }
-
-      const next = [...prev];
-      [next[currentIndex], next[targetIndex]] = [
-        next[targetIndex],
-        next[currentIndex],
-      ];
-      return next;
-    });
   };
 
   const toggleAllergen = (allergen: string) => {
@@ -1817,33 +1768,18 @@ export function NewEditItemFormSheet({
             })}
             className="flex min-h-0 min-w-0 flex-1 flex-col"
           >
-        <DialogHeader className="shrink-0 px-4 py-5 pr-14 text-left sm:px-6 sm:text-left">
-          <DialogTitle className="flex items-center gap-2 text-[1.75rem] font-semibold tracking-[-0.02em]">
-            <Sparkles className="h-5 w-5 shrink-0 text-primary" />
-            {editItem ? "Edit Menu Item" : "Create New Menu Item"}
+        <DialogHeader className="min-w-0 shrink-0 px-4 py-4 pr-14 text-left sm:px-6 sm:py-5 sm:text-left">
+          <DialogTitle className="flex min-w-0 items-center text-xl font-semibold tracking-tight sm:text-[1.625rem]">
+            <span className="min-w-0 truncate">
+              {editItem ? "Edit Menu Item" : "Create New Menu Item"}
+            </span>
           </DialogTitle>
-          <DialogDescription asChild><div className="space-y-2 max-w-[80ch] text-sm leading-6 text-muted-foreground">
+          <DialogDescription asChild><div className="max-w-[80ch] space-y-2 text-sm leading-5 text-muted-foreground sm:leading-6">
             <span>{editingContext.description}</span>
 
             {/* Context Badges */}
             {editItem && (
               <div className="flex flex-wrap items-center gap-2 mt-2">
-                {/* Level Badge */}
-                <span
-                  className={cn(
-                    "inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium",
-                    LEVEL_INFO[editingContext.level].bgColor,
-                    LEVEL_INFO[editingContext.level].color,
-                  )}
-                >
-                  {editingContext.level === 1 && <Globe className="h-3 w-3" />}
-                  {editingContext.level === 2 && <Tag className="h-3 w-3" />}
-                  {editingContext.level === 3 && <Building2 className="h-3 w-3" />}
-                  {editingContext.level === 4 && <MenuIcon className="h-3 w-3" />}
-                  {editingContext.level === 5 && <MapPin className="h-3 w-3" />}
-                  Level <span className="tabular-nums">{editingContext.level}</span>
-                </span>
-
                 {/* Location Badge */}
                 {!isAllLocations && (
                   <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-muted/60 px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
@@ -1886,11 +1822,11 @@ export function NewEditItemFormSheet({
               Below `lg` the columns stack and the form pane carries the scroll. */}
           <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden lg:flex-row">
             {/* Form Section */}
-            <div className="thin-scrollbar min-h-0 min-w-0 flex-1 space-y-4 overflow-y-auto overflow-x-hidden px-4 py-5 sm:px-6">
+            <div className="thin-scrollbar min-h-0 min-w-0 flex-1 space-y-4 overflow-y-auto overflow-x-hidden overscroll-contain px-4 py-4 sm:px-6 sm:py-5">
               {/* Editing Context Banner - Shows which level user is editing */}
               {editItem && editingContext.level > 1 && (
-                <EditingContextBanner
-                  level={editingContext.level as PricingLevel}
+                <ScopeBanner
+                  level={editingContext.level as CascadeLevel}
                   locationName={
                     !isAllLocations ? "Current Location" : undefined
                   }
@@ -1923,7 +1859,7 @@ export function NewEditItemFormSheet({
                         not {TOKEN} — Tailwind does not scan computed strings (C7). */}
                     <div
                       ref={sectionTabsScrollRef}
-                      className="no-scrollbar mb-6 w-full min-w-0 overflow-x-auto pb-1"
+                      className="no-scrollbar mb-4 w-full min-w-0 overflow-x-auto pb-1 sm:mb-6"
                     >
                       <TabsList className="inline-flex h-auto w-max flex-nowrap gap-0.5 rounded-full bg-muted/70 p-1">
                         {[
@@ -2199,22 +2135,41 @@ export function NewEditItemFormSheet({
 
                     <TabsContent value="modifiers" className="space-y-4 mt-0">
 
-                      {/* Modifier Info */}
-                      <div className="space-y-1.5 px-1">
-                        <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-                          <Info className="h-3 w-3 shrink-0" />
-                          Add or remove groups here. Edit individual options in the{" "}
-                          <Link
-                            href="/dashboard/menu/modifiers"
-                            className="font-medium underline underline-offset-2 hover:text-primary"
-                          >
-                            Modifiers page
-                          </Link>.
-                        </p>
-                        <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-                          <GripVertical className="h-3 w-3 shrink-0" />
-                          Drag to reorder — order is saved per-item and does not affect other items or the library.
-                        </p>
+                      {/* Modifier guidance changes with the permissions for this scope. */}
+                      <div className="rounded-2xl bg-muted/50 px-3 py-2.5 text-xs leading-5 text-muted-foreground">
+                        {canManageModifierLinks ? (
+                          <div className="space-y-1">
+                            <p className="flex items-start gap-1.5">
+                              <Info className="mt-1 h-3 w-3 shrink-0" />
+                              <span>
+                                Add or remove groups here. Edit option details on the{" "}
+                                <Link
+                                  href="/dashboard/menu/modifiers"
+                                  className="font-medium text-foreground underline underline-offset-2 hover:text-primary"
+                                >
+                                  Modifiers page
+                                </Link>.
+                              </span>
+                            </p>
+                            <p className="flex items-start gap-1.5">
+                              <ArrowUpDown className="mt-1 h-3 w-3 shrink-0" />
+                              <span>Use the arrows to reorder groups for this item.</span>
+                            </p>
+                          </div>
+                        ) : (
+                          <p className="flex items-start gap-1.5">
+                            <Info className="mt-1 h-3 w-3 shrink-0" />
+                            <span>
+                              Group assignments are managed on the{" "}
+                              <Link
+                                href="/dashboard/menu/modifiers"
+                                className="font-medium text-foreground underline underline-offset-2 hover:text-primary"
+                              >
+                                Modifiers page
+                              </Link>. Stock controls remain available for this location.
+                            </span>
+                          </p>
+                        )}
                       </div>
                       {(() => {
                         // Build selected groups with enriched data from editItem (has location-specific overrides)
@@ -2302,15 +2257,6 @@ export function NewEditItemFormSheet({
                                 </p>
                               </div>
                             ) : (
-                              <DndContext
-                                sensors={modifierDndSensors}
-                                collisionDetection={closestCenter}
-                                onDragEnd={handleModifierDragEnd}
-                              >
-                              <SortableContext
-                                items={selectedGroups.map((g: any) => g.id)}
-                                strategy={verticalListSortingStrategy}
-                              >
                               <div className="space-y-2">
                                 {selectedGroups.map(
                                   (group: any, index: number) => {
@@ -2325,7 +2271,7 @@ export function NewEditItemFormSheet({
                                       !isLocationOwnedGroup;
 
                                     return (
-                                      <SortableModifierGroupRow key={group.id} id={group.id}>
+                                      <div key={group.id}>
                                       {/* White group card on the sheet's own white
                                           body, so it needs a hairline ring to read as
                                           a distinct surface. The options region below
@@ -2335,25 +2281,28 @@ export function NewEditItemFormSheet({
                                       <div
                                         className="overflow-hidden rounded-2xl border-0 bg-card shadow-none ring-1 ring-border/60"
                                       >
-                                        {/* `flex-wrap` + a `basis` floor on the info
-                                            column: this row packs a drag handle, icon,
-                                            title, a wide "86 whole group" button and
-                                            reorder controls. Unwrapped, the info column
-                                            was crushed to a few characters on mobile and
-                                            the title rendered one letter per line. */}
-                                        <div className="flex flex-wrap items-center gap-3 p-3">
-                                          {/* Drag Handle */}
-                                          <div className="shrink-0 cursor-grab text-muted-foreground/50 active:cursor-grabbing">
-                                            <Grip className="h-4 w-4" />
-                                          </div>
-
-                                          {/* Icon */}
-                                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-violet-100 dark:bg-violet-900/40">
-                                            <Layers className="h-4 w-4 text-violet-600 dark:text-violet-400" />
-                                          </div>
+                                        {/* `flex-wrap` + a `basis` floor keeps the group
+                                            name readable beside stock and reorder controls. */}
+                                        <div className="relative grid min-w-0 grid-cols-1 gap-3 p-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+                                          {canManageModifierLinks && (
+                                            <Button
+                                              type="button"
+                                              variant="ghost"
+                                              size="sm"
+                                              className="absolute right-2 top-2 h-8 gap-1 px-2 text-xs text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                                              onClick={() =>
+                                                toggleModifier(group.id)
+                                              }
+                                              aria-label={`Remove ${group.name} from this item`}
+                                              title="Remove from this item (the modifier group stays in the library)"
+                                            >
+                                              <X className="h-3.5 w-3.5" />
+                                              Remove
+                                            </Button>
+                                          )}
 
                                           {/* Info */}
-                                          <div className="min-w-0 flex-1 basis-40">
+                                          <div className="min-w-0 pr-20 sm:col-span-2">
                                             <div className="font-medium text-sm flex items-center gap-2 flex-wrap">
                                               {group.name}
                                               {group.is_required && (
@@ -2382,14 +2331,7 @@ export function NewEditItemFormSheet({
                                             </div>
                                             <div className="flex flex-wrap items-baseline gap-x-1.5 text-xs text-muted-foreground">
                                               <span className="whitespace-nowrap">
-                                                <span className="tabular-nums">
-                                                  {group.modifier_group_items
-                                                    ?.length || 0}
-                                                </span>{" "}
-                                                options
-                                              </span>
-                                              <span className="whitespace-nowrap">
-                                                • Min:{" "}
+                                                Min:{" "}
                                                 <span className="tabular-nums">
                                                   {group.min_selections || 0}
                                                 </span>
@@ -2410,24 +2352,26 @@ export function NewEditItemFormSheet({
                                             optionIds={(
                                               group.modifier_group_items ?? []
                                             ).map((o: any) => o.id)}
-                                            className="shrink-0"
+                                            className="w-full items-center justify-center sm:col-start-2 sm:row-start-2 sm:ml-auto sm:w-auto sm:items-end sm:justify-end"
                                           />
 
-                                          {/* Reorder / Remove Controls */}
+                                          {/* Reorder controls */}
                                           {canManageModifierLinks && (
-                                            <div className="flex items-center gap-1">
+                                            <div className="flex w-full items-center gap-1 sm:col-start-1 sm:row-start-2">
                                               <Button
                                                 type="button"
                                                 variant="ghost"
                                                 size="icon"
-                                                className="h-7 w-7 text-muted-foreground"
+                                                className="h-8 w-8 text-muted-foreground"
                                                 onClick={() =>
                                                   moveSelectedModifier(
                                                     group.id,
                                                     "up",
                                                   )
                                                 }
-                                                disabled={index === 0}
+                                                disabled={
+                                                  isReorderingModifiers || index === 0
+                                                }
                                                 aria-label={`Move ${group.name} up`}
                                               >
                                                 <ChevronUp className="h-4 w-4" />
@@ -2436,7 +2380,7 @@ export function NewEditItemFormSheet({
                                                 type="button"
                                                 variant="ghost"
                                                 size="icon"
-                                                className="h-7 w-7 text-muted-foreground"
+                                                className="h-8 w-8 text-muted-foreground"
                                                 onClick={() =>
                                                   moveSelectedModifier(
                                                     group.id,
@@ -2444,24 +2388,13 @@ export function NewEditItemFormSheet({
                                                   )
                                                 }
                                                 disabled={
+                                                  isReorderingModifiers ||
                                                   index ===
                                                   selectedGroups.length - 1
                                                 }
                                                 aria-label={`Move ${group.name} down`}
                                               >
                                                 <ChevronDown className="h-4 w-4" />
-                                              </Button>
-                                              <Button
-                                                type="button"
-                                                variant="ghost"
-                                                size="icon"
-                                                className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                                                onClick={() =>
-                                                  toggleModifier(group.id)
-                                                }
-                                                aria-label={`Remove ${group.name}`}
-                                              >
-                                                <X className="h-4 w-4" />
                                               </Button>
                                             </div>
                                           )}
@@ -2472,20 +2405,21 @@ export function NewEditItemFormSheet({
                                           group.modifier_group_items &&
                                           group.modifier_group_items.length >
                                             0 && (
-                                            <div className="space-y-1 bg-card px-3 py-2">
+                                            <div className="bg-muted/30 px-3 py-2">
                                               <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-1 flex items-center gap-1.5">
                                                 <span>Options Preview</span>
                                                 <Badge
                                                   variant="outline"
                                                   className="text-[9px] h-3.5 px-1"
                                                 >
-                                                  Read-only
+                                                  Details read-only
                                                 </Badge>
                                               </div>
-                                              {group.modifier_group_items.map(
-                                                (
-                                                  item: FlatItem["modifier_groups"][number]["items"][number],
-                                                ) => {
+                                              <div className="overflow-hidden rounded-xl bg-card ring-1 ring-border/50 divide-y divide-border/50">
+                                                {group.modifier_group_items.map(
+                                                  (
+                                                    item: FlatItem["modifier_groups"][number]["items"][number],
+                                                  ) => {
                                                   const itemOverride =
                                                     item.location_override;
                                                   const price =
@@ -2500,51 +2434,33 @@ export function NewEditItemFormSheet({
                                                   const canOverrideOnly =
                                                     isOverrideScope;
                                                   return (
-                                                    <div
-                                                      key={item.id}
-                                                      className="flex flex-col gap-2 rounded-2xl border-0 bg-muted/60 px-3 py-2 shadow-none"
-                                                    >
+                                                    <div key={item.id} className="flex flex-col gap-2 px-3 py-2.5">
                                                       <div className="flex items-center justify-between gap-2">
                                                         <div>
                                                           <div className="font-medium text-sm">
                                                             {item.name}
                                                           </div>
                                                           {item.description && (
-                                                            <div className="text-xs text-muted-foreground">
+                                                            <div className="hidden text-xs text-muted-foreground sm:block">
                                                               {item.description}
                                                             </div>
                                                           )}
                                                         </div>
-                                                        <Badge
-                                                          variant="outline"
-                                                          className="text-[10px]"
-                                                        >
-                                                          {canOverrideOnly
-                                                            ? "Location Override"
-                                                            : "Global"}
-                                                        </Badge>
+                                                        <span className="shrink-0 text-[10px] font-medium text-muted-foreground">
+                                                          {canOverrideOnly ? "Location override" : "Global"}
+                                                        </span>
                                                       </div>
 
-                                                      {/* Read-only display of modifier items */}
-                                                      <div className="grid grid-cols-2 gap-3 items-center opacity-75">
-                                                        <div>
-                                                          <label className="text-xs text-muted-foreground">
-                                                            Price
-                                                          </label>
-                                                          <div className="text-sm font-medium">
-                                                            $
-                                                            {(
-                                                              price ?? 0
-                                                            ).toFixed(2)}
-                                                          </div>
-                                                        </div>
-
-                                                        <div>
-                                                          <label className="text-xs text-muted-foreground">
-                                                            Status
-                                                          </label>
-                                                          <div className="flex items-center gap-1.5">
-                                                            <div
+                                                      {/* On desktop the values and stock action form the
+                                                          lower row. On mobile the values span the row and
+                                                          the action sits centered underneath. */}
+                                                      <div className="mt-0.5 flex flex-col gap-2.5 sm:mt-3 sm:flex-row sm:items-center sm:justify-between">
+                                                        <div className="flex w-full items-center justify-between text-sm opacity-75 sm:w-auto sm:justify-start sm:gap-4">
+                                                          <span className="font-medium tabular-nums">
+                                                            ${(price ?? 0).toFixed(2)}
+                                                          </span>
+                                                          <span className="flex items-center gap-1.5">
+                                                            <span
                                                               className={cn(
                                                                 "h-2 w-2 shrink-0 rounded-full",
                                                                 isActive
@@ -2552,40 +2468,27 @@ export function NewEditItemFormSheet({
                                                                   : "bg-muted-foreground/40",
                                                               )}
                                                             />
-                                                            <span className="text-sm">
-                                                              {isActive
-                                                                ? "Active"
-                                                                : "Inactive"}
-                                                            </span>
-                                                          </div>
+                                                            {isActive ? "Active" : "Inactive"}
+                                                          </span>
                                                         </div>
-                                                      </div>
-
-                                                      {/* Out of stock (86) — per-location, interactive
-                                                          (price/status above stay read-only). item.id is
-                                                          the modifier_group_items.id the snooze keys on. */}
-                                                      <div className="flex items-center justify-between gap-2 pt-2">
-                                                        <span className="text-xs text-muted-foreground">
-                                                          Out of stock (86)
-                                                        </span>
                                                         <ModifierStockToggle
                                                           modifierGroupItemId={item.id}
+                                                          className="w-full items-center justify-center sm:w-auto sm:items-end sm:justify-end"
                                                         />
                                                       </div>
                                                     </div>
                                                   );
-                                                },
-                                              )}
+                                                  },
+                                                )}
+                                              </div>
                                             </div>
                                           )}
                                       </div>
-                                      </SortableModifierGroupRow>
+                                      </div>
                                     );
                                   },
                                 )}
                               </div>
-                              </SortableContext>
-                              </DndContext>
                             )}
 
                             {/* Add Modifier Section (All Levels) */}
@@ -2654,13 +2557,6 @@ export function NewEditItemFormSheet({
                               </div>
                             )}
 
-                            {!canManageModifierLinks && (
-                              <div className="rounded-2xl border-0 bg-muted/60 p-2 text-xs text-muted-foreground shadow-none">
-                                Modifier links are managed from the Modifiers page.
-                                Use &quot;Add to Item&quot; or &quot;Add to Category&quot; buttons there
-                                to assign modifiers globally or at this location.
-                              </div>
-                            )}
                           </>
                         );
                       })()}
@@ -3248,12 +3144,20 @@ export function NewEditItemFormSheet({
               </div>
             </div>
           </div>
-        <DialogFooter className="shrink-0 gap-2 bg-card px-4 py-4 sm:justify-end sm:px-6">
+        <DialogFooter className="min-w-0 shrink-0 grid grid-cols-2 gap-2 border-t border-border/60 bg-card px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:flex sm:justify-end sm:px-6 sm:py-4">
+          <div className="col-span-2 flex min-w-0 justify-center sm:hidden">
+            <AffectsTag
+              ctx={scopeCtx}
+              variant="inline"
+              prefix="Changes apply to "
+              hideIcon
+            />
+          </div>
           <Button
             type="button"
             variant="outline"
             onClick={handleClose}
-            className="h-9 w-full rounded-full px-4 text-[0.8125rem] font-medium shadow-sm sm:w-auto"
+            className="h-11 w-full rounded-full px-4 text-[0.8125rem] font-medium shadow-sm sm:h-9 sm:w-auto"
           >
             Cancel
           </Button>
@@ -3261,7 +3165,7 @@ export function NewEditItemFormSheet({
             type="submit"
             form="item-form"
             disabled={isSubmitting}
-            className="h-9 w-full rounded-full px-4 text-[0.8125rem] font-medium sm:w-auto sm:min-w-[150px]"
+            className="h-11 w-full rounded-full px-4 text-[0.8125rem] font-medium sm:h-9 sm:w-auto sm:min-w-[150px]"
           >
             {isSubmitting ? (
               <>
@@ -3288,8 +3192,10 @@ export function NewEditItemFormSheet({
               </>
             ) : (
               <>
-                {editItem ? "Save" : "Create Item"}
-                <AffectsTag ctx={scopeCtx} variant="save-button" />
+                {editItem ? "Save changes" : "Create item"}
+                <span className="hidden sm:contents">
+                  <AffectsTag ctx={scopeCtx} variant="save-button" />
+                </span>
               </>
             )}
           </Button>

@@ -38,7 +38,6 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MenuCategory, MenuCategoryItem } from "@/types/menu";
-import { LevelIndicator, getEditingLevel } from "../LevelIndicator";
 import { DraggableItemsList } from "./DraggableItemsList";
 import { RemoveCategoryFromMenu } from "@/app/dashboard/actions/categories";
 import { toast } from "sonner";
@@ -133,14 +132,6 @@ export function CategorySection({
   // Check if this category has a location-specific override
   const hasLocationOverride =
     category.category?.has_menu_category_override || false;
-
-  // Get editing level for this context
-  const editingLevel = getEditingLevel({
-    isAllLocations,
-    menuId,
-    categoryId: category.category_id,
-    isMenuLocationOwned,
-  });
 
   const handleToggleVisibility = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -304,13 +295,6 @@ export function CategorySection({
 
             {/* Controls */}
             <div className="flex flex-shrink-0 items-center gap-2 sm:gap-3">
-              {/* Level indicator */}
-              {showLocationPricing && (
-                <span className="hidden sm:inline-flex">
-                  <LevelIndicator level={editingLevel} variant="inline" />
-                </span>
-              )}
-
               {/* Reset override button */}
               {hasLocationOverride && !isAllLocations && (
                 <TooltipProvider>
