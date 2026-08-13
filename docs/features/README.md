@@ -24,6 +24,7 @@ without hiding ownership.
 | [`subscriptions/`](subscriptions/README.md) | Subscription tier behavior and QA |
 | [`support-messaging/`](support-messaging/README.md) | Support tickets, email notifications, and Telnyx messaging |
 | [`tables-floorplan/`](tables-floorplan/README.md) | Floor plans and table-management data contracts |
+| [`website-builder/`](website-builder/README.md) | Merchant drag-and-drop website builder, section rendering, and publish pipeline |
 
 If a document spans several features, place it under `docs/handoffs/` or the
 appropriate cross-cutting engineering/quality folder and link to it from each
