@@ -23,7 +23,7 @@ export function PTORequestCard({
   onDeny,
 }: PTORequestCardProps) {
   return (
-    <Card className="bg-card border">
+    <Card className="rounded-2xl border bg-card">
       <CardContent className="p-4 space-y-3">
         <div className="flex items-start justify-between">
           <div className="space-y-1">
@@ -44,7 +44,7 @@ export function PTORequestCard({
         </div>
 
         {reason && (
-          <p className="text-sm text-muted-foreground bg-muted/50 p-2 rounded">
+          <p className="rounded-xl bg-muted/50 p-2 text-sm text-muted-foreground">
             "{reason}"
           </p>
         )}

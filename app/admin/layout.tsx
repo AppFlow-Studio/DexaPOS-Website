@@ -1,22 +1,7 @@
 import Link from "next/link";
-import { Barlow, Barlow_Condensed } from "next/font/google";
 import ErrorBoundary from "@/components/marketing/ErrorBoundary";
 import "./cms-theme.css";
 import "./admin.css";
-
-const barlow = Barlow({
-  subsets: ["latin"],
-  weight: ["300", "400", "500", "600", "700"],
-  variable: "--font-barlow",
-  display: "swap",
-});
-
-const barlowCondensed = Barlow_Condensed({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700", "800"],
-  variable: "--font-barlow-condensed",
-  display: "swap",
-});
 
 export default function AdminLayout({
   children,
@@ -24,7 +9,7 @@ export default function AdminLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className={`admin-shell ${barlow.variable} ${barlowCondensed.variable}`}>
+    <div className="admin-shell">
       <nav className="admin-nav">
         <div className="admin-nav-inner">
           <Link href="/admin" className="admin-logo">

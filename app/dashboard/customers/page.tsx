@@ -27,6 +27,7 @@ export default function CustomersPage() {
   const [selectedCustomer, setSelectedCustomer] =
     useState<CustomerListItem | null>(null);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [profileInitialTab, setProfileInitialTab] = useState<"overview" | "orders">("overview");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isCampaignOpen, setIsCampaignOpen] = useState(false);
 
@@ -40,6 +41,7 @@ export default function CustomersPage() {
     if (match) {
       const frameId = window.requestAnimationFrame(() => {
         setSelectedCustomer(match);
+        setProfileInitialTab("overview");
         setIsProfileOpen(true);
         router.replace("/dashboard/customers");
       });
@@ -66,6 +68,13 @@ export default function CustomersPage() {
 
   const handleViewProfile = (customer: CustomerListItem) => {
     setSelectedCustomer(customer);
+    setProfileInitialTab("overview");
+    setIsProfileOpen(true);
+  };
+
+  const handleViewOrders = (customer: CustomerListItem) => {
+    setSelectedCustomer(customer);
+    setProfileInitialTab("orders");
     setIsProfileOpen(true);
   };
 
@@ -122,14 +131,17 @@ export default function CustomersPage() {
             customers={filteredData}
             isLoading={isLoading}
             onViewProfile={handleViewProfile}
+            onViewOrders={handleViewOrders}
           />
         </PanelSection>
       </Panel>
 
       <CustomerProfileSheet
+        key={`${selectedCustomer?.id ?? "none"}-${profileInitialTab}`}
         customer={selectedCustomer}
         open={isProfileOpen}
         onOpenChange={setIsProfileOpen}
+        initialTab={profileInitialTab}
       />
 
       <CreateCustomerDialog

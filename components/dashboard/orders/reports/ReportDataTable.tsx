@@ -46,6 +46,11 @@ function isNumericColumn(columnDef: ColumnDef<any, any>): boolean {
   return NUMERIC_HEADER.test(header)
 }
 
+function isMobileHidden(columnDef: ColumnDef<any, any>): boolean {
+  const meta = columnDef.meta as { mobileHidden?: boolean } | undefined
+  return meta?.mobileHidden === true
+}
+
 interface ReportDataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[]
   data: TData[]
@@ -97,6 +102,8 @@ export function ReportDataTable<TData, TValue>({
                     key={header.id}
                     className={cn(
                       'h-auto py-2.5 text-[0.8125rem] font-normal text-muted-foreground',
+                      isMobileHidden(header.column.columnDef) &&
+                        'hidden sm:table-cell',
                       isNumericColumn(header.column.columnDef) && 'text-right'
                     )}
                   >
@@ -133,6 +140,8 @@ export function ReportDataTable<TData, TValue>({
                       key={cell.id}
                       className={cn(
                         'py-3 text-sm',
+                        isMobileHidden(cell.column.columnDef) &&
+                          'hidden sm:table-cell',
                         isNumericColumn(cell.column.columnDef) &&
                           'text-right tabular-nums'
                       )}

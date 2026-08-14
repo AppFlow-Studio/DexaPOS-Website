@@ -48,6 +48,8 @@ const DIETARY_PREFERENCES = [
   'Shellfish Allergy'
 ]
 
+const MUTED_FIELD_CLASS = 'border-0 bg-muted/60 shadow-none focus-visible:ring-1'
+
 const SEATING_PREFERENCES = ['Indoor', 'Outdoor', 'Bar', 'Booth', 'Window']
 
 const VIP_LEVELS = ['None', 'Silver', 'Gold', 'Platinum']
@@ -111,6 +113,8 @@ export function DetailsTab ({ customer, merchantId }: DetailsTabProps) {
   // Initialize form with profile data
   useEffect(() => {
     if (profileDetails) {
+      // Hydrate the editable draft when the asynchronously loaded profile changes.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setName(profileDetails.name || '')
       setPhone(profileDetails.phone || '')
       setEmail(profileDetails.email || '')
@@ -193,7 +197,7 @@ export function DetailsTab ({ customer, merchantId }: DetailsTabProps) {
     return (
       <div className='space-y-6'>
         {[...Array(3)].map((_, i) => (
-          <Card key={i}>
+          <Card key={i} className='rounded-2xl border-0 bg-muted/35 shadow-none'>
             <CardHeader>
               <Skeleton className='h-4 w-32' />
             </CardHeader>
@@ -220,7 +224,7 @@ export function DetailsTab ({ customer, merchantId }: DetailsTabProps) {
   return (
     <div className='space-y-6'>
       {/* Contact Information */}
-      <Card>
+      <Card className='rounded-2xl border-0 bg-muted/35 shadow-none'>
         <CardHeader className='flex flex-row items-center justify-between'>
           <CardTitle className='text-sm'>Contact Information</CardTitle>
           <Button
@@ -273,19 +277,24 @@ export function DetailsTab ({ customer, merchantId }: DetailsTabProps) {
             <div className='space-y-3'>
               <div>
                 <label className='text-sm font-medium'>Name</label>
-                <Input value={name} onChange={e => setName(e.target.value)} />
+                <Input className={MUTED_FIELD_CLASS} value={name} onChange={e => setName(e.target.value)} />
               </div>
               <div>
                 <label className='text-sm font-medium'>Phone</label>
-                <PhoneInput value={phone} onChange={setPhone} />
+                <PhoneInput
+                  value={phone}
+                  onChange={setPhone}
+                  className='[&_.react-international-phone-country-selector-button]:!border-0 [&_.react-international-phone-country-selector-button]:!bg-muted/60 [&_.react-international-phone-input]:!border-0 [&_.react-international-phone-input]:!bg-muted/60'
+                />
               </div>
               <div>
                 <label className='text-sm font-medium'>Email</label>
-                <Input value={email} onChange={e => setEmail(e.target.value)} />
+                <Input className={MUTED_FIELD_CLASS} value={email} onChange={e => setEmail(e.target.value)} />
               </div>
               <div>
                 <label className='text-sm font-medium'>Address</label>
                 <Input
+                  className={MUTED_FIELD_CLASS}
                   value={address}
                   onChange={e => setAddress(e.target.value)}
                 />
@@ -296,7 +305,7 @@ export function DetailsTab ({ customer, merchantId }: DetailsTabProps) {
       </Card>
 
       {/* Personal Details */}
-      <Card>
+      <Card className='rounded-2xl border-0 bg-muted/35 shadow-none'>
         <CardHeader>
           <CardTitle className='text-sm'>Personal Details</CardTitle>
         </CardHeader>
@@ -346,6 +355,7 @@ export function DetailsTab ({ customer, merchantId }: DetailsTabProps) {
                 <div>
                   <label className='text-sm font-medium'>Birthday</label>
                   <Input
+                    className={MUTED_FIELD_CLASS}
                     type='date'
                     value={birthday}
                     onChange={e => setBirthday(e.target.value)}
@@ -354,6 +364,7 @@ export function DetailsTab ({ customer, merchantId }: DetailsTabProps) {
                 <div>
                   <label className='text-sm font-medium'>Anniversary</label>
                   <Input
+                    className={MUTED_FIELD_CLASS}
                     type='date'
                     value={anniversary}
                     onChange={e => setAnniversary(e.target.value)}
@@ -364,10 +375,10 @@ export function DetailsTab ({ customer, merchantId }: DetailsTabProps) {
               <div>
                 <label className='text-sm font-medium'>VIP Level</label>
                 <Select value={vipLevel} onValueChange={setVipLevel}>
-                  <SelectTrigger>
+                  <SelectTrigger className={MUTED_FIELD_CLASS}>
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className='border-0'>
                     {VIP_LEVELS.map(level => (
                       <SelectItem key={level} value={level}>
                         {level}
@@ -380,6 +391,7 @@ export function DetailsTab ({ customer, merchantId }: DetailsTabProps) {
               <div>
                 <label className='text-sm font-medium'>Company Name</label>
                 <Input
+                  className={MUTED_FIELD_CLASS}
                   value={companyName}
                   onChange={e => setCompanyName(e.target.value)}
                 />
@@ -390,7 +402,7 @@ export function DetailsTab ({ customer, merchantId }: DetailsTabProps) {
       </Card>
 
       {/* Dining Preferences */}
-      <Card>
+      <Card className='rounded-2xl border-0 bg-muted/35 shadow-none'>
         <CardHeader>
           <CardTitle className='text-sm'>Dining Preferences</CardTitle>
         </CardHeader>
@@ -467,6 +479,7 @@ export function DetailsTab ({ customer, merchantId }: DetailsTabProps) {
               <div>
                 <label className='text-sm font-medium'>Allergy Notes</label>
                 <Textarea
+                  className={MUTED_FIELD_CLASS}
                   value={allergyNotes}
                   onChange={e => setAllergyNotes(e.target.value)}
                   placeholder='e.g., Severe peanut allergy — alert kitchen'
@@ -480,10 +493,10 @@ export function DetailsTab ({ customer, merchantId }: DetailsTabProps) {
                   value={preferredServerId}
                   onValueChange={setPreferredServerId}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className={MUTED_FIELD_CLASS}>
                     <SelectValue placeholder='Select a server' />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className='border-0'>
                     {staffProfiles?.map((staff: any) => (
                       <SelectItem key={staff.id} value={staff.id}>
                         {staff.display_name}
@@ -497,6 +510,7 @@ export function DetailsTab ({ customer, merchantId }: DetailsTabProps) {
                 <div>
                   <label className='text-sm font-medium'>Preferred Table</label>
                   <Input
+                    className={MUTED_FIELD_CLASS}
                     value={preferredTable}
                     onChange={e => setPreferredTable(e.target.value)}
                     placeholder='e.g., Booth 3'
@@ -510,10 +524,10 @@ export function DetailsTab ({ customer, merchantId }: DetailsTabProps) {
                     value={preferredSeating}
                     onValueChange={setPreferredSeating}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className={MUTED_FIELD_CLASS}>
                       <SelectValue placeholder='Select' />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className='border-0'>
                       {SEATING_PREFERENCES.map(seating => (
                         <SelectItem key={seating} value={seating}>
                           {seating}
@@ -529,7 +543,7 @@ export function DetailsTab ({ customer, merchantId }: DetailsTabProps) {
       </Card>
 
       {/* Tags */}
-      <Card>
+      <Card className='rounded-2xl border-0 bg-muted/35 shadow-none'>
         <CardHeader>
           <CardTitle className='text-sm'>Tags</CardTitle>
         </CardHeader>
@@ -558,10 +572,10 @@ export function DetailsTab ({ customer, merchantId }: DetailsTabProps) {
                   handleAddTag(value)
                 }
               }}>
-                <SelectTrigger>
+                <SelectTrigger className={MUTED_FIELD_CLASS}>
                   <SelectValue placeholder='Select from suggested tags...' />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className='border-0'>
                   {suggestedNewTags.length > 0 ? (
                     suggestedNewTags.map(tag => (
                       <SelectItem key={tag} value={tag}>
@@ -582,6 +596,7 @@ export function DetailsTab ({ customer, merchantId }: DetailsTabProps) {
               <label className='text-sm font-medium mb-2 block'>Custom Tag</label>
               <div className='flex gap-2'>
                 <Input
+                  className={MUTED_FIELD_CLASS}
                   value={tagInput}
                   onChange={e => setTagInput(e.target.value)}
                   placeholder='Create a custom tag...'
@@ -609,7 +624,7 @@ export function DetailsTab ({ customer, merchantId }: DetailsTabProps) {
       </Card>
 
       {/* Notes */}
-      <Card>
+      <Card className='rounded-2xl border-0 bg-muted/35 shadow-none'>
         <CardHeader>
           <CardTitle className='text-sm'>Notes</CardTitle>
         </CardHeader>
@@ -617,6 +632,7 @@ export function DetailsTab ({ customer, merchantId }: DetailsTabProps) {
           {/* Add Note */}
           <div className='space-y-2'>
             <Textarea
+              className={MUTED_FIELD_CLASS}
               placeholder='Add a note...'
               value={noteText}
               onChange={e => setNoteText(e.target.value)}
@@ -643,11 +659,11 @@ export function DetailsTab ({ customer, merchantId }: DetailsTabProps) {
 
           {/* Notes List */}
           {notes && notes.length > 0 && (
-            <div className='space-y-2 pt-4 border-t'>
+            <div className='space-y-2 pt-4'>
               {notes.map((note: any) => (
                 <div
                   key={note.id}
-                  className='bg-muted/30 p-3 rounded-lg border border-muted/50 hover:bg-muted/50 transition-colors'
+                  className='rounded-xl border-0 bg-muted/60 p-3 transition-colors hover:bg-muted'
                 >
                   <div className='flex items-start justify-between gap-2'>
                     <div className='flex-1 min-w-0'>

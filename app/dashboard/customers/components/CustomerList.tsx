@@ -31,6 +31,7 @@ interface CustomerListProps {
   customers: CustomerListItem[];
   isLoading: boolean;
   onViewProfile?: (customer: CustomerListItem) => void;
+  onViewOrders?: (customer: CustomerListItem) => void;
 }
 
 /**
@@ -107,10 +108,12 @@ function CustomerTags({ customer }: { customer: CustomerListItem }) {
 function CustomerActions({
   customer,
   onViewProfile,
+  onViewOrders,
   alwaysVisible = false,
 }: {
   customer: CustomerListItem;
   onViewProfile?: (customer: CustomerListItem) => void;
+  onViewOrders?: (customer: CustomerListItem) => void;
   alwaysVisible?: boolean;
 }) {
   return (
@@ -139,7 +142,14 @@ function CustomerActions({
         >
           View Profile
         </DropdownMenuItem>
-        <DropdownMenuItem>View Orders</DropdownMenuItem>
+        <DropdownMenuItem
+          onClick={(event) => {
+            event.stopPropagation();
+            onViewOrders?.(customer);
+          }}
+        >
+          View Orders
+        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem className="text-destructive focus:text-destructive">
           Delete Customer
@@ -153,6 +163,7 @@ export function CustomerList({
   customers,
   isLoading,
   onViewProfile,
+  onViewOrders,
 }: CustomerListProps) {
   if (isLoading) {
     return (
@@ -230,6 +241,7 @@ export function CustomerList({
                   <CustomerActions
                     customer={customer}
                     onViewProfile={onViewProfile}
+                    onViewOrders={onViewOrders}
                   />
                 </TableCell>
               </TableRow>
@@ -253,19 +265,22 @@ export function CustomerList({
                   className="flex min-w-0 flex-1 items-center gap-3 text-left"
                   onClick={() => onViewProfile?.(customer)}
                 >
-                  <CustomerAvatar customer={customer} className="h-10 w-10" />
+                  <CustomerAvatar customer={customer} className="hidden h-10 w-10 sm:flex" />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-medium">
                       {getCustomerDisplayName(customer)}
                     </span>
-                    <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-                      {phone || customer.email || "No contact info"}
-                    </span>
+                    {customer.email ? (
+                      <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                        {customer.email}
+                      </span>
+                    ) : null}
                   </span>
                 </button>
                 <CustomerActions
                   customer={customer}
                   onViewProfile={onViewProfile}
+                  onViewOrders={onViewOrders}
                   alwaysVisible
                 />
               </div>

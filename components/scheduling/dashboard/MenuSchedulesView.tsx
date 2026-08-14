@@ -152,7 +152,7 @@ export function MenuSchedulesView() {
           </Button>
         </section>
 
-        <section className="border-t border-border/60 px-4 py-6 sm:px-6">
+        <section className="px-4 py-6 sm:px-6">
           <StatRow columns={isSingleLocation ? 3 : 4}>
             <StatTile
               label="Total schedules"
@@ -187,7 +187,7 @@ export function MenuSchedulesView() {
           </StatRow>
         </section>
 
-        <section className="border-t border-border/60 px-4 py-6 sm:px-6">
+        <section className="px-4 py-6 sm:px-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h3 className="font-semibold">All schedules</h3>
@@ -271,6 +271,12 @@ export function MenuSchedulesView() {
                           <h4 className="font-semibold truncate">
                             {schedule.name}
                           </h4>
+                          {!isSingleLocation && (
+                            <span
+                              className="h-0 basis-full sm:hidden"
+                              aria-hidden="true"
+                            />
+                          )}
                           {!isSingleLocation &&
                             (schedule.location_id ? (
                               <Badge variant="secondary" className="text-xs">
@@ -280,27 +286,21 @@ export function MenuSchedulesView() {
                             ) : (
                               <Badge
                                 variant="secondary"
-                                className="bg-emerald-100 text-xs text-emerald-700"
+                                className="text-xs"
                               >
                                 <Globe className="mr-1 h-2.5 w-2.5" />
                                 Global
                               </Badge>
                             ))}
                           <Badge
-                            variant={
-                              schedule.is_active ? "default" : "secondary"
-                            }
-                            className={cn(
-                              "border-0 text-xs",
-                              schedule.is_active &&
-                                "bg-emerald-100 text-emerald-700 hover:bg-emerald-100"
-                            )}
+                            variant="secondary"
+                            className="border-0 text-xs"
                           >
                             {schedule.is_active ? "Active" : "Inactive"}
                           </Badge>
                         </div>
                         {schedule.description && (
-                          <p className="mb-3 text-sm text-muted-foreground">
+                          <p className="mb-3 hidden text-sm text-muted-foreground sm:block">
                             {schedule.description}
                           </p>
                         )}
@@ -309,7 +309,7 @@ export function MenuSchedulesView() {
                           {days.length === 0 ? (
                             <Badge
                               variant="secondary"
-                              className="bg-amber-100 text-xs text-amber-700"
+                              className="text-xs"
                             >
                               No time slots
                             </Badge>

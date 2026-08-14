@@ -1,12 +1,6 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -93,6 +87,7 @@ interface CustomerProfileSheetProps {
   customer: CustomerListItem | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  initialTab?: "overview" | "orders";
 }
 
 // =============================================================================
@@ -230,7 +225,7 @@ function AddTagDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-125">
+      <DialogContent className="rounded-[24px] border-0 bg-white dark:bg-background sm:max-w-125">
         <DialogHeader>
           <DialogTitle>Add Tag</DialogTitle>
         </DialogHeader>
@@ -240,10 +235,10 @@ function AddTagDialog({
           <div>
             <label className="text-sm font-medium mb-2 block">Suggested Tags</label>
             <Select onValueChange={handleAddSuggestedTag}>
-              <SelectTrigger>
+              <SelectTrigger className="w-full border-0 bg-muted/60 shadow-none">
                 <SelectValue placeholder="Select from suggested tags..." />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="border-0">
                 {suggestedNewTags.length > 0 ? (
                   suggestedNewTags.map(tag => (
                     <SelectItem key={tag} value={tag}>
@@ -264,6 +259,7 @@ function AddTagDialog({
             <label className="text-sm font-medium mb-2 block">Custom Tag</label>
             <div className="flex gap-2">
               <Input
+                className="border-0 bg-muted/60 shadow-none focus-visible:ring-1"
                 placeholder="Or create a custom tag..."
                 value={customTag}
                 onChange={(e) => setCustomTag(e.target.value)}
@@ -283,7 +279,7 @@ function AddTagDialog({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -311,12 +307,13 @@ function AddNoteDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-125">
+      <DialogContent className="rounded-[24px] border-0 bg-white dark:bg-background sm:max-w-125">
         <DialogHeader>
           <DialogTitle>Customer Notes</DialogTitle>
         </DialogHeader>
         <div className="py-4">
           <Textarea
+            className="border-0 bg-muted/60 shadow-none focus-visible:ring-1"
             placeholder="Add notes about this customer..."
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
@@ -325,7 +322,7 @@ function AddNoteDialog({
           />
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button onClick={() => onSave(notes)} disabled={isLoading}>
             {isLoading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
             Save Notes
@@ -364,11 +361,13 @@ export function CustomerProfileSheet({
   customer,
   open,
   onOpenChange,
+  initialTab = "overview",
 }: CustomerProfileSheetProps) {
   const [showAddTag, setShowAddTag] = useState(false);
   const [showAddNote, setShowAddNote] = useState(false);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [isOrderDetailOpen, setIsOrderDetailOpen] = useState(false);
+  const [profileOpenedAt] = useState(Date.now);
 
   const { data: userInfo } = useUserInfo();
   const clerkOrgId =
@@ -447,7 +446,7 @@ export function CustomerProfileSheet({
   const createdAt = profile?.customer?.created_at ?? null;
   const customerSince = createdAt
     ? (() => {
-        const months = Math.floor((Date.now() - new Date(createdAt).getTime()) / (1000 * 60 * 60 * 24 * 30));
+        const months = Math.floor((profileOpenedAt - new Date(createdAt).getTime()) / (1000 * 60 * 60 * 24 * 30));
         if (months < 1) return "Less than a month";
         if (months === 1) return "1 month";
         if (months < 12) return `${months} months`;
@@ -506,9 +505,9 @@ export function CustomerProfileSheet({
 
   return (
     <>
-      <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent
-          className="sm:max-w-225 w-full overflow-y-auto px-0 bg-background"
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent
+          className="flex max-h-[90dvh] w-[calc(100vw-2rem)] max-w-6xl flex-col gap-0 overflow-hidden rounded-[28px] border-0 bg-white p-0 dark:bg-background max-sm:h-dvh max-sm:max-h-none max-sm:w-screen max-sm:max-w-none max-sm:overflow-hidden max-sm:rounded-none sm:max-w-6xl"
           // Keep the profile open when interacting with a nested overlay opened
           // from inside it (e.g. the order detail bottom sheet). Without this,
           // a click on the portaled order sheet counts as "outside" and
@@ -522,13 +521,13 @@ export function CustomerProfileSheet({
             if (t?.closest('[data-slot^="bottom-sheet"]')) e.preventDefault();
           }}
         >
-          <div className="px-8 py-8 border-b border-border/50 bg-gradient-to-b from-muted/20 to-background">
-            <SheetHeader className="space-y-5">
-              <div className="flex justify-between items-start gap-4">
+          <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto bg-white dark:bg-background">
+            <DialogHeader className="space-y-5 px-5 pb-0 pt-7 text-left sm:px-8 sm:pt-8">
+              <div className="flex flex-col items-start justify-between gap-4 sm:flex-row">
                 <div className="space-y-4 flex-1">
-                  <SheetTitle className="text-4xl font-bold tracking-tight text-left text-foreground">
+                  <DialogTitle className="text-left text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
                     {getCustomerDisplayName(customerData as any)}
-                  </SheetTitle>
+                  </DialogTitle>
                   <div className="flex gap-2.5 flex-wrap items-center">
                     {profile?.customer?.tags?.map((tag) => (
                       <Badge key={tag} variant="secondary" className="px-3 py-1.5 text-xs font-semibold rounded-full">
@@ -538,7 +537,7 @@ export function CustomerProfileSheet({
                     <Button
                       variant="outline"
                       size="sm"
-                      className="px-3 py-1.5 text-xs font-medium rounded-full bg-muted/50 border-muted/40 text-muted-foreground hover:bg-muted/70 hover:text-foreground transition-colors"
+                      className="rounded-full border-0 bg-muted/60 px-3 py-1.5 text-xs font-medium text-muted-foreground shadow-none transition-colors hover:bg-muted hover:text-foreground"
                       onClick={() => setShowAddTag(true)}
                     >
                       <Plus className="w-3.5 h-3.5 mr-1.5" /> Tag
@@ -554,67 +553,75 @@ export function CustomerProfileSheet({
                   </div>
                 </div>
 
-                <div className="flex flex-col items-end gap-2.5 text-sm bg-muted/30 rounded-lg p-4 border border-muted/50">
-                  <div className="flex items-center gap-2.5 text-foreground font-semibold">
+                <div className="flex min-w-0 w-full flex-col items-start gap-2.5 rounded-2xl border-0 bg-muted/60 p-4 text-sm sm:w-auto sm:max-w-md sm:items-end">
+                  <div className="flex min-w-0 w-full items-center gap-2.5 font-semibold text-foreground">
                     <Phone className="h-4 w-4 text-primary" />
-                    {customerData.phone ? formatPhoneForDisplay(customerData.phone) : <span className="text-muted-foreground">No phone</span>}
+                    {customerData.phone ? (
+                      <span className="min-w-0 truncate" title={formatPhoneForDisplay(customerData.phone)}>
+                        {formatPhoneForDisplay(customerData.phone)}
+                      </span>
+                    ) : <span className="text-muted-foreground">No phone</span>}
                   </div>
-                  <div className="flex items-center gap-2.5 text-foreground font-semibold">
+                  <div className="flex min-w-0 w-full items-center gap-2.5 font-semibold text-foreground">
                     <Mail className="h-4 w-4 text-primary" />
-                    {customerData.email || <span className="text-muted-foreground">No email</span>}
+                    {customerData.email ? (
+                      <span className="min-w-0 truncate" title={customerData.email}>{customerData.email}</span>
+                    ) : <span className="text-muted-foreground">No email</span>}
                   </div>
                 </div>
               </div>
-            </SheetHeader>
+            </DialogHeader>
 
             {/* Tab Configs with counts from top-level hooks */}
-            <Tabs defaultValue="overview" className="mt-8">
-              <TabsList className="bg-transparent h-auto p-0 space-x-8 border-b border-border/50 rounded-none w-full justify-start">
+            <Tabs defaultValue={initialTab} className="mt-8">
+              <div className="no-scrollbar w-full overflow-x-auto px-5 sm:px-8">
+              <TabsList className="inline-flex h-auto w-max flex-nowrap gap-1 rounded-full bg-muted/70 p-1">
                 <TabsTrigger
                   value="overview"
-                  className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 py-3 text-muted-foreground data-[state=active]:text-foreground font-semibold bg-transparent shadow-none border-b-2 border-transparent transition-colors hover:text-foreground"
+                  className="shrink-0 rounded-full border-0 px-4 py-2 font-semibold text-muted-foreground shadow-none transition-colors hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
                 >
                   Overview
                 </TabsTrigger>
                 <TabsTrigger
                   value="orders"
-                  className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 py-3 text-muted-foreground data-[state=active]:text-foreground font-semibold bg-transparent shadow-none border-b-2 border-transparent transition-colors hover:text-foreground"
+                  className="shrink-0 rounded-full border-0 px-4 py-2 font-semibold text-muted-foreground shadow-none transition-colors hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
                 >
                   Orders
                 </TabsTrigger>
                 <TabsTrigger
                   value="bookings"
-                  className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 py-3 text-muted-foreground data-[state=active]:text-foreground font-semibold bg-transparent shadow-none border-b-2 border-transparent transition-colors hover:text-foreground"
+                  className="shrink-0 rounded-full border-0 px-4 py-2 font-semibold text-muted-foreground shadow-none transition-colors hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
                 >
                   Bookings
                 </TabsTrigger>
                 <TabsTrigger
                   value="feedback"
-                  className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 py-3 text-muted-foreground data-[state=active]:text-foreground font-semibold bg-transparent shadow-none border-b-2 border-transparent transition-colors hover:text-foreground"
+                  className="shrink-0 rounded-full border-0 px-4 py-2 font-semibold text-muted-foreground shadow-none transition-colors hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
                 >
                   Feedback
                 </TabsTrigger>
                 <TabsTrigger
                   value="loyalty"
-                  className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 py-3 text-muted-foreground data-[state=active]:text-foreground font-semibold bg-transparent shadow-none border-b-2 border-transparent transition-colors hover:text-foreground"
+                  className="shrink-0 rounded-full border-0 px-4 py-2 font-semibold text-muted-foreground shadow-none transition-colors hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
                 >
                   Loyalty
                 </TabsTrigger>
                 <TabsTrigger
                   value="marketing"
-                  className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 py-3 text-muted-foreground data-[state=active]:text-foreground font-semibold bg-transparent shadow-none border-b-2 border-transparent transition-colors hover:text-foreground"
+                  className="shrink-0 rounded-full border-0 px-4 py-2 font-semibold text-muted-foreground shadow-none transition-colors hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
                 >
                   Marketing
                 </TabsTrigger>
                 <TabsTrigger
                   value="details"
-                  className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 py-3 text-muted-foreground data-[state=active]:text-foreground font-semibold bg-transparent shadow-none border-b-2 border-transparent transition-colors hover:text-foreground"
+                  className="shrink-0 rounded-full border-0 px-4 py-2 font-semibold text-muted-foreground shadow-none transition-colors hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
                 >
                   Details
                 </TabsTrigger>
               </TabsList>
+              </div>
 
-              <div className="px-8 py-8">
+              <div className="px-5 py-7 sm:px-8 sm:py-8">
                 <TabsContent value="overview" className="space-y-8 animate-in fade-in-50 duration-300 m-0">
                   <OverviewTab
                     lastVisitRelative={lastVisitRelative}
@@ -679,8 +686,8 @@ export function CustomerProfileSheet({
               </div>
             </Tabs>
           </div>
-        </SheetContent>
-      </Sheet>
+        </DialogContent>
+      </Dialog>
 
       <AddTagDialog open={showAddTag} onOpenChange={setShowAddTag} onAdd={handleAddTag} isLoading={addTagMutation.isPending} existingTags={profile?.customer?.tags || []} />
       <AddNoteDialog open={showAddNote} onOpenChange={setShowAddNote} onSave={handleSaveNotes} isLoading={updateNotesMutation.isPending} currentNotes={profile?.customer?.notes || null} />

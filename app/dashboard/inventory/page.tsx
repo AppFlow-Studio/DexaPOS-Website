@@ -82,6 +82,11 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { InventoryItemWithVendor } from "@/types/inventory";
 import {
+  inventoryStockState,
+  purchaseOrderStatusLabel,
+  purchaseOrderStatusStyle,
+} from "@/lib/constants/inventory-status";
+import {
   PurchaseOrderWithDetails,
   VendorWithStats,
 } from "./hooks/useInventoryManagement";
@@ -158,7 +163,9 @@ function StockStatusBadge({
   // ========================================================================
   // LOCATION VIEW / FALLBACK: Show simple status
   // ========================================================================
-  if (stockMode === "out_of_stock") {
+  const stockState = inventoryStockState(stockMode, currentStock, reorderPoint);
+
+  if (stockState === "out_of_stock") {
     return (
       <Badge variant="destructive" className="gap-1">
         <span className="h-1.5 w-1.5 rounded-full bg-current animate-pulse" />
@@ -167,28 +174,7 @@ function StockStatusBadge({
     );
   }
 
-  if (stockMode === "in_stock") {
-    return (
-      <Badge
-        variant="outline"
-        className="border-emerald-500/50 text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30"
-      >
-        In Stock
-      </Badge>
-    );
-  }
-
-  // stock_tracking mode
-  if (currentStock === 0) {
-    return (
-      <Badge variant="destructive" className="gap-1">
-        <span className="h-1.5 w-1.5 rounded-full bg-current animate-pulse" />
-        Out of Stock
-      </Badge>
-    );
-  }
-
-  if (currentStock <= reorderPoint) {
+  if (stockState === "low_stock") {
     return (
       <Badge
         variant="outline"
@@ -231,23 +217,15 @@ function ScopeBadge({ locationId }: { locationId: string | null }) {
 }
 
 function POStatusBadge({ status }: { status: string }) {
-  const styles: Record<string, string> = {
-    draft: "bg-secondary text-secondary-foreground",
-    pending:
-      "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400 border-amber-200 dark:border-amber-800",
-    received:
-      "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800",
-    paid: "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400 border-blue-200 dark:border-blue-800",
-    cancelled:
-      "bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-400 border-rose-200 dark:border-rose-800",
-  };
+  const style = purchaseOrderStatusStyle(status);
 
   return (
     <Badge
-      variant="outline"
-      className={cn("capitalize", styles[status] || styles.draft)}
+      variant="secondary"
+      className={cn("gap-1.5 border-0", style.bg, style.text)}
     >
-      {status}
+      <span className={cn("h-1.5 w-1.5 rounded-full", style.dot)} />
+      {purchaseOrderStatusLabel(status)}
     </Badge>
   );
 }

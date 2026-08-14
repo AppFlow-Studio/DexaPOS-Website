@@ -19,6 +19,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import {
+  cashDrawerStatus,
+  type CashDrawerState,
+} from '@/lib/constants/cash-drawer-status'
 import type { CashDrawerListItem } from '@/lib/queries/use-cash-drawers'
 
 interface CashDrawerCardProps {
@@ -38,25 +42,26 @@ function formatUSD(amount: number) {
   })
 }
 
-function DrawerStatus({ drawer }: { drawer: CashDrawerListItem }) {
+function DrawerStatus({ status }: { status: CashDrawerState }) {
   return (
     <div className="flex flex-wrap items-center gap-2">
-      {!drawer.is_active ? (
+      {status === 'inactive' ? (
         <Badge variant="secondary" className="text-xs">
           Inactive
         </Badge>
       ) : null}
-      {drawer.is_open ? (
+      {status === 'open' ? (
         <Badge className="bg-emerald-100 text-emerald-900 hover:bg-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-200">
           <DoorOpen className="mr-1 h-3 w-3" />
           Open
         </Badge>
-      ) : (
+      ) : null}
+      {status === 'closed' ? (
         <Badge variant="outline">
           <DoorClosed className="mr-1 h-3 w-3" />
           Closed
         </Badge>
-      )}
+      ) : null}
     </div>
   )
 }
@@ -67,18 +72,22 @@ function DrawerActions({
   onDeactivate,
   onOpenSession,
   onCloseSession,
+  status,
   compact = false,
-}: Omit<CashDrawerCardProps, 'layout'> & { compact?: boolean }) {
+}: Omit<CashDrawerCardProps, 'layout'> & {
+  status: CashDrawerState
+  compact?: boolean
+}) {
   return (
     <div className="flex min-w-0 items-center justify-end gap-2">
-      {drawer.is_active && drawer.is_open ? (
+      {status === 'open' ? (
         <Button
           className={compact ? 'min-w-0 flex-1 rounded-full' : 'min-w-32 rounded-full'}
           onClick={() => onCloseSession(drawer)}
         >
           Close Session
         </Button>
-      ) : drawer.is_active ? (
+      ) : status === 'closed' ? (
         <Button
           className={compact ? 'min-w-0 flex-1 rounded-full' : 'min-w-32 rounded-full'}
           onClick={() => onOpenSession(drawer)}
@@ -99,7 +108,7 @@ function DrawerActions({
             <Edit className="mr-2 h-4 w-4" />
             Edit
           </DropdownMenuItem>
-          {drawer.is_active && !drawer.is_open ? (
+          {status === 'closed' ? (
             <>
               <DropdownMenuSeparator />
               <DropdownMenuItem
@@ -126,19 +135,21 @@ export function CashDrawerCard({
   layout = 'card',
 }: CashDrawerCardProps) {
   const session = drawer.current_session
+  const status = cashDrawerStatus(drawer.is_active, drawer.is_open)
   const actionProps = {
     drawer,
     onEdit,
     onDeactivate,
     onOpenSession,
     onCloseSession,
+    status,
   }
 
   if (layout === 'row') {
     return (
       <div
         className={`grid min-w-[900px] grid-cols-[minmax(170px,1.2fr)_minmax(130px,1fr)_minmax(170px,1.2fr)_105px_180px] items-center gap-4 px-5 py-4 transition-colors hover:bg-muted/40 ${
-          drawer.is_active ? '' : 'opacity-60'
+          status === 'inactive' ? 'opacity-60' : ''
         }`}
       >
         <div className="flex min-w-0 items-center gap-3">
@@ -179,7 +190,7 @@ export function CashDrawerCard({
         </div>
 
         <div>
-          <DrawerStatus drawer={drawer} />
+          <DrawerStatus status={status} />
         </div>
 
         <div>
@@ -192,7 +203,7 @@ export function CashDrawerCard({
   return (
     <article
       className={`min-w-0 rounded-2xl border-0 bg-muted/45 p-4 transition-colors hover:bg-muted/65 ${
-        drawer.is_active ? '' : 'opacity-60'
+        status === 'inactive' ? 'opacity-60' : ''
       }`}
     >
       <div className="flex min-w-0 items-start gap-3">
@@ -207,7 +218,7 @@ export function CashDrawerCard({
             {drawer.drawer_number !== null ? `Drawer #${drawer.drawer_number}` : 'No drawer number'}
           </p>
         </div>
-        <DrawerStatus drawer={drawer} />
+        <DrawerStatus status={status} />
       </div>
 
       <dl className="mt-5 grid min-w-0 grid-cols-2 gap-x-4 gap-y-4">

@@ -61,7 +61,7 @@ export function WeeklyScheduleCard({
   return (
     <div
       className={cn(
-        "group cursor-pointer rounded-2xl bg-muted/30 px-4 py-4 transition-colors hover:bg-muted/50",
+        "group min-w-0 max-w-full cursor-pointer rounded-2xl bg-muted/30 px-4 py-4 transition-colors hover:bg-muted/50",
         isExpired && "opacity-70",
         hasChanges && "bg-amber-500/10 hover:bg-amber-500/20"
       )}
@@ -88,14 +88,14 @@ export function WeeklyScheduleCard({
           <div className="min-w-0">
             <h3
               className={cn(
-                "truncate font-semibold",
+                "break-words font-semibold sm:truncate",
                 isExpired && "text-muted-foreground"
               )}
             >
               {schedule.name}
             </h3>
             <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-              <span className="tabular-nums">
+              <span className="min-w-0 break-words tabular-nums">
                 {format(parseISO(schedule.startDate), "MMM d")} -{" "}
                 {format(parseISO(schedule.endDate), "MMM d, yyyy")}
               </span>
@@ -137,7 +137,7 @@ export function WeeklyScheduleCard({
         </div>
 
         <div
-          className="flex items-center justify-end gap-1"
+          className="flex w-full min-w-0 flex-wrap items-center justify-end gap-1 sm:w-auto sm:flex-nowrap"
           onClick={(e) => e.stopPropagation()}
         >
           <Button variant="ghost" size="icon-sm" onClick={onEdit} aria-label="Edit schedule dates">

@@ -672,3 +672,9 @@ html:has([data-template]) body[data-scroll-locked] {
 [data-slot="dropdown-menu-content"] [data-slot="dropdown-menu-item"] {
   border-radius: 9999px;
 }
+/* Reports use spacing and muted surfaces instead of horizontal separators. */
+.reports-without-horizontal-lines tr,
+.reports-without-horizontal-lines .divide-y > :not(:last-child) {
+  border-top-width: 0 !important;
+  border-bottom-width: 0 !important;
+}

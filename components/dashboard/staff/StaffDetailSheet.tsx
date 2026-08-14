@@ -10,10 +10,8 @@ import {
   BottomSheetTitle,
   BottomSheetDescription,
 } from "@/components/ui/bottom-sheet";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
 import {
   Select,
   SelectContent,
@@ -167,10 +165,6 @@ export function StaffDetailSheet({
       ) || null,
     [displayStaff?.location_assignments, selectedAssignmentLocationId]
   );
-
-  const initials = `${displayStaff?.first_name?.[0] || ""}${
-    displayStaff?.last_name?.[0] || ""
-  }`.toUpperCase();
 
   const activeLocations = displayStaff?.location_assignments?.filter(
     (a) => a.is_active
@@ -568,9 +562,8 @@ export function StaffDetailSheet({
   ];
 
   const profilePanel = (
-    <section className="rounded-3xl border bg-card p-6 shadow-sm">
+    <section className="rounded-3xl bg-muted/40 p-4">
       <SectionHeader
-        icon={Mail}
         title="Personal & Contact Info"
         description="Core profile details shown to the merchant team."
         action={
@@ -688,9 +681,9 @@ export function StaffDetailSheet({
   );
 
   const assignmentPanel = (
-    <section className="rounded-3xl border bg-card p-6 shadow-sm">
-      <div className="mb-5 flex items-center justify-between gap-3">
-        <div>
+    <section className="rounded-3xl bg-muted/40 p-4">
+      <div className="mb-5 grid min-w-0 gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-start">
+        <div className="min-w-0">
           <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">
             Permissions & Assignment
           </h3>
@@ -701,7 +694,7 @@ export function StaffDetailSheet({
         {primaryLocation && !isEditMode && (
           <Button
             variant="outline"
-            className="gap-2"
+            className="max-w-full gap-2 whitespace-normal"
             onClick={() => setIsEditMode(true)}
           >
             <Edit className="h-4 w-4" />
@@ -844,7 +837,7 @@ export function StaffDetailSheet({
           )}
         </div>
       ) : (
-        <div className="rounded-2xl border border-dashed p-6 text-sm text-muted-foreground">
+        <div className="rounded-2xl bg-muted/60 p-6 text-sm text-muted-foreground">
           No primary location is assigned to this staff member yet.
         </div>
       )}
@@ -852,7 +845,7 @@ export function StaffDetailSheet({
   );
 
   const posAccessPanel = (
-    <section className="rounded-3xl border bg-card p-6 shadow-sm">
+    <section className="rounded-3xl bg-muted/40 p-4">
       <SectionHeader
         icon={KeyRound}
         title="Employee Access Key"
@@ -914,8 +907,6 @@ export function StaffDetailSheet({
           </div>
         )}
 
-        <Separator />
-
         <div className="grid gap-3 sm:grid-cols-2">
           <StatusPill
             label="PIN Status"
@@ -938,7 +929,7 @@ export function StaffDetailSheet({
     <div className="space-y-6">
       {staff.is_clerk_user ? (
         <>
-          <section className="rounded-3xl border bg-card p-6 shadow-sm">
+          <section className="rounded-3xl bg-muted/40 p-4">
             <SectionHeader
               icon={Lock}
               title="Dashboard Access"
@@ -1019,7 +1010,7 @@ export function StaffDetailSheet({
           </section>
 
           {staff.user_id && (
-            <section className="rounded-3xl border border-orange-200 bg-orange-50/40 p-6 shadow-sm dark:bg-orange-950/10">
+            <section className="rounded-3xl bg-orange-50/40 p-4 dark:bg-orange-950/10">
               <SectionHeader
                 icon={Shield}
                 title="Demote To POS-Only"
@@ -1051,7 +1042,7 @@ export function StaffDetailSheet({
           )}
         </>
       ) : (
-        <section className="rounded-3xl border bg-card p-6 shadow-sm">
+        <section className="rounded-3xl bg-muted/40 p-4">
           <SectionHeader
             icon={ArrowUpCircle}
             title="Upgrade To Dashboard User"
@@ -1118,9 +1109,9 @@ export function StaffDetailSheet({
   );
 
   const locationsPanel = (
-    <section className="rounded-3xl border bg-card p-6 shadow-sm">
-      <div className="mb-5 flex items-center justify-between gap-3">
-        <div>
+    <section className="rounded-3xl bg-muted/40 p-4">
+      <div className="mb-5 grid min-w-0 gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-start">
+        <div className="min-w-0">
           <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">
             Positions & Location Assignments
           </h3>
@@ -1128,13 +1119,13 @@ export function StaffDetailSheet({
             Open a location assignment to manage role, status, and PIN.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2 md:justify-end">
           <Badge variant="outline">{activeLocations.length} active</Badge>
           {availableLocationsToAdd.length > 0 && (
             <Button
               variant="outline"
               size="sm"
-              className="gap-2"
+              className="max-w-full gap-2 whitespace-normal"
               onClick={() => {
                 setShowAddLocation(!showAddLocation);
                 if (primaryLocation) {
@@ -1149,7 +1140,7 @@ export function StaffDetailSheet({
       </div>
 
       {showAddLocation && (
-        <div className="mb-4 border-b border-border pb-4">
+        <div className="mb-4 pb-4">
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <Label className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
@@ -1209,7 +1200,7 @@ export function StaffDetailSheet({
         </div>
       )}
 
-      <div className="divide-y divide-border">
+      <div>
         {displayStaff.location_assignments.map((assignment) => (
           <div
             key={`${assignment.location_id}:${assignment.role_code}`}
@@ -1333,8 +1324,8 @@ export function StaffDetailSheet({
   );
 
   const activityPanel = (
-    <section className="rounded-3xl border bg-card shadow-sm">
-      <div className="border-b px-6 py-5">
+    <section className="rounded-3xl bg-muted/40">
+      <div className="px-6 py-5">
         <SectionHeader
           icon={Activity}
           title="Activity Log"
@@ -1364,11 +1355,11 @@ export function StaffDetailSheet({
   return (
     <BottomSheet open={open} onOpenChange={onOpenChange} elevated={elevated}>
       <BottomSheetContent
-        className="staff-detail-dialog-motion mx-auto w-full max-w-6xl bottom-[2.5dvh] h-[95dvh] overflow-hidden rounded-b-[20px] border-b"
+        className="staff-detail-dialog-motion mx-auto bottom-[2.5dvh] h-[95dvh] w-full max-w-6xl overflow-hidden rounded-b-[20px] border-0 bg-white max-sm:inset-0 max-sm:h-dvh max-sm:max-h-dvh max-sm:max-w-none max-sm:rounded-none"
         overlayClassName="staff-detail-dialog-overlay-motion"
         height="95"
       >
-        <BottomSheetHeader className="flex flex-col gap-2">
+        <BottomSheetHeader className="flex flex-col gap-2 border-b-0 bg-white">
           <BottomSheetTitle>
             {displayStaff.first_name} {displayStaff.last_name}
           </BottomSheetTitle>
@@ -1377,20 +1368,10 @@ export function StaffDetailSheet({
             dashboard.
           </BottomSheetDescription>
         </BottomSheetHeader>
-        <BottomSheetBody className="flex-1 overflow-y-auto">
-          <div className="space-y-6 p-1">
-            <section className="rounded-[28px] border bg-gradient-to-br from-slate-50 via-white to-slate-50/70 p-6 shadow-sm dark:from-card dark:via-card dark:to-card">
-              <div className="flex items-start gap-4">
-                <Avatar className="h-20 w-20 border border-slate-200 shadow-sm dark:border-border">
-                  <AvatarImage
-                    src={displayStaff.avatar_url || undefined}
-                    alt={displayStaff.display_name}
-                  />
-                  <AvatarFallback className="text-lg font-semibold text-foreground">
-                    {initials}
-                  </AvatarFallback>
-                </Avatar>
-
+        <BottomSheetBody className="flex-1 overflow-x-hidden overflow-y-auto bg-white px-4 sm:px-6">
+          <div className="min-w-0 space-y-6 p-1">
+            <section className="rounded-[28px] bg-muted/40 p-4">
+              <div className="flex items-start">
                 <div className="min-w-0 flex-1 space-y-3">
                   <div className="space-y-2">
                     <div className="flex flex-wrap items-center gap-2">
@@ -1430,8 +1411,8 @@ export function StaffDetailSheet({
 
             <div className="grid gap-6 xl:grid-cols-[260px_minmax(0,1fr)]">
               <aside className="space-y-4 xl:sticky xl:top-0 xl:self-start">
-                <div className="rounded-3xl border bg-card p-3 shadow-sm">
-                  <div className="mb-3 border-b border-border px-2 pb-4 pt-2">
+                <div className="rounded-3xl bg-muted/40 p-3">
+                  <div className="mb-3 px-2 pb-4 pt-2">
                     <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
                       Staff Overview
                     </p>
@@ -1490,33 +1471,31 @@ export function StaffDetailSheet({
             )}
           </div>
         </BottomSheetBody>
-        <BottomSheetFooter>
-          <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
-            <div className="flex flex-wrap items-center gap-2">
-              <Button variant="outline" onClick={() => onOpenChange(false)}>
-                Close
+        <BottomSheetFooter className="border-t-0 bg-white">
+          <div className="flex w-full items-center justify-between gap-2 sm:justify-end">
+            <Button variant="outline" onClick={() => onOpenChange(false)}>
+              Close
+            </Button>
+            {staff.overall_is_active ? (
+              <Button
+                variant="destructive"
+                className="gap-2"
+                onClick={handleStatusToggle}
+                disabled={!primaryLocation}
+              >
+                <UserX className="h-4 w-4" />
+                Deactivate
               </Button>
-              {staff.overall_is_active ? (
-                <Button
-                  variant="destructive"
-                  className="gap-2"
-                  onClick={handleStatusToggle}
-                  disabled={!primaryLocation}
-                >
-                  <UserX className="h-4 w-4" />
-                  Deactivate
-                </Button>
-              ) : (
-                <Button
-                  className="gap-2"
-                  onClick={handleStatusToggle}
-                  disabled={!primaryLocation}
-                >
-                  <UserCheck className="h-4 w-4" />
-                  Reactivate
-                </Button>
-              )}
-            </div>
+            ) : (
+              <Button
+                className="gap-2"
+                onClick={handleStatusToggle}
+                disabled={!primaryLocation}
+              >
+                <UserCheck className="h-4 w-4" />
+                Reactivate
+              </Button>
+            )}
           </div>
         </BottomSheetFooter>
       </BottomSheetContent>
@@ -1531,26 +1510,33 @@ function SectionHeader({
   action,
   className,
 }: {
-  icon: React.ComponentType<{ className?: string }>;
+  icon?: React.ComponentType<{ className?: string }>;
   title: string;
   description: string;
   action?: React.ReactNode;
   className?: string;
 }) {
   return (
-    <div className={cn("mb-5 flex items-start justify-between gap-3", className)}>
-      <div className="flex items-start gap-3">
-        <div className="mt-0.5 rounded-full bg-slate-100 p-2 text-slate-600">
-          <Icon className="h-4 w-4" />
-        </div>
-        <div>
+    <div
+      className={cn(
+        "mb-5 flex items-start justify-between gap-3 max-sm:flex-col max-sm:items-stretch",
+        className,
+      )}
+    >
+      <div className="flex min-w-0 items-start gap-3">
+        {Icon ? (
+          <div className="mt-0.5 shrink-0 rounded-full bg-slate-100 p-2 text-slate-600">
+            <Icon className="h-4 w-4" />
+          </div>
+        ) : null}
+        <div className="min-w-0">
           <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">
             {title}
           </h3>
           <p className="mt-1 text-sm text-muted-foreground">{description}</p>
         </div>
       </div>
-      {action ? <div className="shrink-0">{action}</div> : null}
+      {action ? <div className="shrink-0 max-sm:w-full">{action}</div> : null}
     </div>
   );
 }

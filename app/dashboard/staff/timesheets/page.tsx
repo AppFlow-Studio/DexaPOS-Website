@@ -13,7 +13,13 @@ import {
   DateRangePicker,
   type DatePreset,
 } from "@/components/dashboard/orders/DateRangePicker";
-import { Clock3, Download, Store, UserRound, WalletCards } from "lucide-react";
+import {
+  Clock3,
+  Download,
+  Store,
+  UserRound,
+  WalletCards,
+} from "lucide-react";
 import {
   downloadTimesheetCSV,
   calculateShiftDuration,
@@ -249,10 +255,10 @@ export default function TimesheetsPage() {
 
         <div className="mt-5 border-t border-border/60 pt-2">
           <ReportDataTable
-          columns={tableColumns}
-          data={filteredShifts}
-          loading={isLoading}
-        />
+            columns={tableColumns}
+            data={filteredShifts}
+            loading={isLoading}
+          />
         </div>
       </Panel>
 

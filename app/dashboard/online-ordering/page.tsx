@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   useOnlineOrderingSettings,
   type OnlineOrderingSettings,
@@ -73,7 +73,7 @@ function SettingsToggleRow({
   disabled?: boolean;
 }) {
   return (
-    <div className="flex min-w-0 items-start justify-between gap-4 border-t border-border/60 py-4 first:border-t-0 first:pt-0 last:pb-0">
+    <div className="flex min-w-0 items-start justify-between gap-4 py-4 first:pt-0 last:pb-0">
       <div className="flex min-w-0 items-center gap-1.5">
         <p className="font-medium text-foreground">{title}</p>
         <InfoIcon tip={description} side="top" asButton />
@@ -314,6 +314,25 @@ function CompletedSetupPanel({
   const [showOrderOutForm, setShowOrderOutForm] = useState(false);
   const [uploading, setUploading] = useState<Record<string, boolean>>({});
   const [hoursModalOpen, setHoursModalOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState("store");
+  const sectionRailRef = useRef<HTMLDivElement>(null);
+  const sectionTriggerRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+
+  useEffect(() => {
+    const rail = sectionRailRef.current;
+    const trigger = sectionTriggerRefs.current[activeSection];
+    if (!rail || !trigger) return;
+
+    const railRect = rail.getBoundingClientRect();
+    const triggerRect = trigger.getBoundingClientRect();
+    const centeredOffset =
+      triggerRect.left - railRect.left - (railRect.width - triggerRect.width) / 2;
+
+    rail.scrollTo({
+      left: Math.max(0, rail.scrollLeft + centeredOffset),
+      behavior: "smooth",
+    });
+  }, [activeSection]);
 
   const locationDefaults = useMemo(() => {
     return {
@@ -420,13 +439,13 @@ function CompletedSetupPanel({
         </PanelSection>
       </Panel>
 
-      <Tabs defaultValue="store" className="space-y-6">
+      <Tabs value={activeSection} onValueChange={setActiveSection} className="space-y-6">
         {/* Canonical pill rail (DS-CTL-05). The previous rail was a bordered
             `bg-card` track whose active tab was carried by text colour alone —
             on a card-coloured track that reads as a link, not a selected tab.
             The active pill now lifts to `bg-background` with a hairline ring.
             Classes are literal, not `{TOKEN}` — C7. */}
-        <div className="w-full min-w-0 overflow-x-auto pb-1">
+        <div ref={sectionRailRef} className="w-full min-w-0 overflow-x-auto pb-1">
           <TabsList className="inline-flex h-auto w-max flex-nowrap gap-0.5 rounded-full bg-muted/70 p-1">
             {(
               [
@@ -439,6 +458,9 @@ function CompletedSetupPanel({
             ).map(({ value, label, Icon }) => (
               <TabsTrigger
                 key={value}
+                ref={(node) => {
+                  sectionTriggerRefs.current[value] = node;
+                }}
                 value={value}
                 className="shrink-0 gap-2 whitespace-nowrap rounded-full px-4 py-2 text-[0.8125rem] font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border"
               >
@@ -1031,7 +1053,7 @@ function CompletedSetupPanel({
                 </div>
               </div>
 
-              <div className="border-t border-border/60 pt-6">
+              <div className="pt-6">
                 <div className="flex flex-col gap-4">
                   <div>
                     <h3 className="text-base font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]">QR Table Ordering</h3>

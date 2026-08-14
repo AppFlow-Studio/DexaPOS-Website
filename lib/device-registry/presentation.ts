@@ -14,51 +14,10 @@ import {
 } from 'lucide-react'
 
 import type { DeviceActivityItem, DeviceCategory, DeviceLifecycleStatus } from '@/types/device-registry'
-
-const STATUS_META: Record<
-  DeviceLifecycleStatus,
-  {
-    label: string
-    classes: string
-  }
-> = {
-  in_warehouse: {
-    label: 'In Warehouse',
-    classes: 'border-blue-200 bg-blue-50 text-blue-700',
-  },
-  allocated: {
-    label: 'Allocated',
-    classes: 'border-violet-200 bg-violet-50 text-violet-700',
-  },
-  shipped: {
-    label: 'Shipped',
-    classes: 'border-indigo-200 bg-indigo-50 text-indigo-700',
-  },
-  provisioning: {
-    label: 'Provisioning',
-    classes: 'border-teal-200 bg-teal-50 text-teal-700',
-  },
-  deployed: {
-    label: 'Deployed',
-    classes: 'border-green-200 bg-green-50 text-green-700',
-  },
-  in_repair: {
-    label: 'In Repair',
-    classes: 'border-amber-200 bg-amber-50 text-amber-700',
-  },
-  decommissioned: {
-    label: 'Decommissioned',
-    classes: 'border-zinc-200 bg-zinc-100 text-zinc-700',
-  },
-  lost: {
-    label: 'Lost',
-    classes: 'border-red-200 bg-red-50 text-red-700',
-  },
-  rma: {
-    label: 'RMA',
-    classes: 'border-orange-200 bg-orange-50 text-orange-700',
-  },
-}
+import {
+  deviceLifecycleStatusLabel,
+  deviceLifecycleStatusStyle,
+} from '@/lib/constants/device-status'
 
 const CATEGORY_META: Record<
   DeviceCategory,
@@ -77,11 +36,12 @@ const CATEGORY_META: Record<
 }
 
 export function formatDeviceStatus(status: DeviceLifecycleStatus) {
-  return STATUS_META[status]?.label ?? status
+  return deviceLifecycleStatusLabel(status)
 }
 
 export function getDeviceStatusClasses(status: DeviceLifecycleStatus) {
-  return STATUS_META[status]?.classes ?? 'border-border bg-muted text-muted-foreground'
+  const style = deviceLifecycleStatusStyle(status)
+  return `${style.bg} ${style.text} border-0`
 }
 
 export function formatDeviceCategory(category: DeviceCategory) {

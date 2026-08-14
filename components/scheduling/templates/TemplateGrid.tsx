@@ -76,14 +76,14 @@ function DraggableShiftCard({
         // Prevent click if dragging
         if (!isDragging) onClick();
       }}
-      className="relative bg-primary/5 hover:bg-primary/10 border-l-4 border-l-primary border-y border-r border-y-primary/10 border-r-primary/10 p-2 rounded-r-md cursor-grab active:cursor-grabbing transition-all shadow-sm hover:shadow-md group/card touch-none"
+      className="group/card relative cursor-grab touch-none rounded-r-md border-y border-r border-y-primary/10 border-r-primary/10 border-l-4 border-l-primary bg-primary/5 p-2 shadow-sm transition-all hover:bg-primary/10 hover:shadow-md active:cursor-grabbing"
     >
-      <div className="flex items-center justify-between mb-1">
+      <div className="mb-1 flex items-center justify-between">
         <span className="text-xs font-bold text-foreground/90 truncate mr-2">
           {shift.role}
         </span>
       </div>
-      <div className="text-[10px] font-medium text-muted-foreground flex items-center gap-1">
+      <div className="flex items-center gap-1 text-[10px] font-medium text-muted-foreground">
         <Clock className="w-3 h-3" />
         {format(parseISO(shift.startTime), "HH:mm")} -{" "}
         {format(parseISO(shift.endTime), "HH:mm")}
@@ -113,7 +113,7 @@ function DroppableCell({
   return (
     <div
       ref={setNodeRef}
-      className={`flex-1 min-w-[80px] sm:min-w-[140px] p-2 border-r last:border-r-0 relative min-h-[100px] group/cell transition-colors flex flex-col gap-2 ${
+      className={`group/cell relative flex min-h-[100px] w-[50cqw] flex-none flex-col gap-2 border-r p-2 transition-colors last:border-r-0 sm:w-[140px] ${
         isOver
           ? "bg-primary/15 ring-2 ring-primary/20 ring-inset"
           : "hover:bg-muted/10"
@@ -124,9 +124,10 @@ function DroppableCell({
       {!hasShift && (
         <button
           onClick={onAdd}
-          className={`w-full flex-1 min-h-[40px] flex items-center justify-center rounded-md border border-dashed transition-all duration-200 h-full border-muted-foreground/10 bg-transparent text-muted-foreground/20 hover:border-primary/30 hover:bg-primary/5 hover:text-primary/70 opacity-0 group-hover/cell:opacity-100`}
+          className="flex h-full min-h-8 w-full flex-1 items-center justify-center rounded-md border border-dashed border-muted-foreground/15 bg-transparent text-muted-foreground/45 opacity-100 transition-colors hover:border-primary/30 hover:bg-primary/5 hover:text-primary/70 sm:min-h-10 sm:opacity-0 sm:group-hover/cell:opacity-100"
+          aria-label="Add shift"
         >
-          <Plus className="w-5 h-5" />
+          <Plus className="h-3 w-3 sm:h-5 sm:w-5" />
         </button>
       )}
     </div>
@@ -189,7 +190,7 @@ const TemplateGrid: React.FC<TemplateGridProps> = ({
 
   const calculateTotalHours = (employeeId: string) => {
     const totalMinutes = shifts
-      .filter((s) => s.employeeId === employeeId)
+      .filter((shift) => shift.employeeId === employeeId)
       .reduce((total, shift) => {
         if (!shift.startTime || !shift.endTime) return total;
         const start = parseISO(shift.startTime);
@@ -197,6 +198,7 @@ const TemplateGrid: React.FC<TemplateGridProps> = ({
         if (!isValid(start) || !isValid(end)) return total;
         return total + differenceInMinutes(end, start);
       }, 0);
+
     return (totalMinutes / 60).toFixed(1);
   };
 
@@ -206,20 +208,20 @@ const TemplateGrid: React.FC<TemplateGridProps> = ({
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      <div className="flex-1 bg-background rounded-lg overflow-x-auto border shadow-sm">
-        <div className="min-w-[700px] sm:min-w-[900px]">
-        {/* Header Row */}
-        <div className="flex bg-muted/50 border-b">
-          <div className="w-40 sm:w-64 p-3 sm:p-4 border-r flex-shrink-0 bg-muted/20 sticky left-0 z-20">
+      <div className="h-full min-h-0 w-full overflow-auto rounded-3xl border bg-white [container-type:inline-size]">
+        <div className="w-max min-w-full">
+          {/* Header Row */}
+          <div className="sticky top-0 z-30 flex border-b bg-white">
+          <div className="sticky left-0 z-40 w-[50cqw] flex-none border-r bg-white p-3 sm:w-64 sm:p-4">
             <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Employee
             </span>
           </div>
-          <div className="flex-1 flex min-w-0">
+          <div className="flex flex-none">
             {weekDates.map((date, i) => (
               <div
                 key={i}
-                className="flex-1 min-w-[80px] sm:min-w-[140px] p-3 text-center border-r last:border-r-0 flex flex-col items-center justify-center bg-muted/20"
+                className="flex w-[50cqw] flex-none flex-col items-center justify-center border-r bg-white p-3 text-center last:border-r-0 sm:w-[140px]"
               >
                 <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                   {format(date, "EEE")}
@@ -230,38 +232,31 @@ const TemplateGrid: React.FC<TemplateGridProps> = ({
               </div>
             ))}
           </div>
-        </div>
+          </div>
 
-        {/* Grid Body */}
-        <div className="overflow-y-auto max-h-[calc(100vh-300px)]">
+          {/* Grid Body */}
+          <div>
           {employees.map((employee, index) => (
             <div
               key={employee.id}
               className="flex border-b group transition-colors hover:bg-muted/5 even:bg-muted/[0.02]"
             >
               {/* Employee Column */}
-              <div className="w-40 sm:w-64 p-3 sm:p-4 flex items-center border-r bg-background/50 flex-shrink-0 sticky left-0 z-10 backdrop-blur-sm">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/10 flex items-center justify-center mr-3 shadow-sm flex-shrink-0 text-primary font-bold text-sm">
-                  {employee.fullName
-                    .split(" ")
-                    .map((n) => n[0])
-                    .join("")
-                    .slice(0, 2)}
-                </div>
+              <div className="sticky left-0 z-20 flex w-[50cqw] flex-none items-center border-r bg-white p-3 sm:w-64 sm:p-4">
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm font-semibold text-foreground truncate">
+                  <div className="truncate text-sm font-semibold text-foreground">
                     {employee.fullName}
                   </div>
-                  <div className="text-xs text-muted-foreground truncate flex items-center gap-1.5">
+                  <div className="hidden items-center gap-1.5 truncate text-xs text-muted-foreground sm:flex">
                     <span className="capitalize">{employee.role}</span>
-                    <span className="w-1 h-1 rounded-full bg-muted-foreground/30" />
+                    <span className="h-1 w-1 rounded-full bg-muted-foreground/30" />
                     <span>{calculateTotalHours(employee.id)}h</span>
                   </div>
                 </div>
               </div>
 
               {/* Days Columns */}
-              <div className="flex-1 flex min-w-0">
+              <div className="flex flex-none">
                 {weekDates.map((date) => {
                   const dayOfWeek = date.getDay();
                   const dayShifts = getShiftsForDayAndEmployee(
@@ -291,7 +286,7 @@ const TemplateGrid: React.FC<TemplateGridProps> = ({
               </div>
             </div>
           ))}
-        </div>
+          </div>
         </div>
       </div>
 

@@ -47,8 +47,8 @@
   --danger-soft:  #FBE3E3;
 
   /* ───── Type ───── */
-  --font:         var(--font-barlow), -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-display: var(--font-barlow-condensed), -apple-system, BlinkMacSystemFont, sans-serif;
+  --font:         'Barlow', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-display: 'Barlow Condensed', -apple-system, BlinkMacSystemFont, sans-serif;
   --maxw: 1200px;
   --gutter: 32px;
 

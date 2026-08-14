@@ -481,7 +481,7 @@ export function ScheduleFormSheet({
                   "mt-3 p-3 rounded-lg border flex items-center gap-2",
                   isAllLocations
                     ? "bg-emerald-50 border-emerald-200 dark:bg-emerald-950/30 dark:border-emerald-800"
-                    : "bg-purple-50 border-purple-200 dark:bg-purple-950/30 dark:border-purple-800"
+                    : "border-transparent bg-muted/50"
                 )}
               >
                 {isAllLocations ? (
@@ -498,12 +498,12 @@ export function ScheduleFormSheet({
                   </>
                 ) : (
                   <>
-                    <MapPin className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+                    <MapPin className="h-4 w-4 text-muted-foreground" />
                     <div>
-                      <p className="text-sm font-medium text-purple-700 dark:text-purple-300">
+                      <p className="text-sm font-medium text-foreground">
                         Location-Specific Schedule
                       </p>
-                      <p className="text-xs text-purple-600 dark:text-purple-400">
+                      <p className="text-xs text-muted-foreground">
                         Only for:{" "}
                         {selectedLocation?.name || "Selected Location"}
                       </p>
@@ -559,7 +559,7 @@ export function ScheduleFormSheet({
                             "flex items-center justify-center",
                             "active:scale-95",
                             isSelected
-                              ? "bg-primary text-primary-foreground shadow-md scale-105"
+                              ? "scale-105 bg-[#0C4FD1] text-white shadow-md hover:bg-[#0A43B5]"
                               : "bg-muted/50 text-muted-foreground hover:bg-muted"
                           )}
                         >
@@ -742,7 +742,7 @@ export function ScheduleFormSheet({
                   type="button"
                   onClick={handleSubmit}
                   disabled={!isValid || isSubmitting}
-                  className="sm:min-w-[180px]"
+                  className="bg-[#0C4FD1] text-white hover:bg-[#0A43B5] sm:min-w-[180px]"
                 >
                   {isSubmitting ? (
                     <>

@@ -210,29 +210,29 @@ export function OpenShiftsSheet({
             onValueChange={setActiveTab}
             className="flex min-h-0 flex-1 flex-col"
           >
-            <TabsList className="grid h-auto w-full shrink-0 grid-cols-4 rounded-none border-b border-border/60 bg-transparent p-0">
+            <TabsList className="mx-4 mt-4 grid h-auto w-auto shrink-0 grid-cols-4 gap-2 !rounded-2xl bg-transparent p-1 sm:mx-6">
               <TabsTrigger
                 value="open-shifts"
-                className="min-w-0 rounded-none border-b-2 border-transparent px-2 py-3 text-xs data-[state=active]:border-primary data-[state=active]:bg-transparent sm:text-sm"
+                className="min-w-0 !rounded-full border-0 bg-muted/50 px-2 py-2.5 text-xs data-[state=active]:bg-white data-[state=active]:shadow-sm focus-visible:!rounded-full sm:text-sm"
               >
                 <span className="truncate">Open shifts</span>
                 <TabBadge count={openShiftsCount} />
               </TabsTrigger>
               <TabsTrigger
                 value="drops"
-                className="min-w-0 rounded-none border-b-2 border-transparent px-2 py-3 text-xs data-[state=active]:border-primary data-[state=active]:bg-transparent sm:text-sm"
+                className="min-w-0 !rounded-full border-0 bg-muted/50 px-2 py-2.5 text-xs data-[state=active]:bg-white data-[state=active]:shadow-sm focus-visible:!rounded-full sm:text-sm"
               >
                 Drops <TabBadge count={dropCount} />
               </TabsTrigger>
               <TabsTrigger
                 value="swaps"
-                className="min-w-0 rounded-none border-b-2 border-transparent px-2 py-3 text-xs data-[state=active]:border-primary data-[state=active]:bg-transparent sm:text-sm"
+                className="min-w-0 !rounded-full border-0 bg-muted/50 px-2 py-2.5 text-xs data-[state=active]:bg-white data-[state=active]:shadow-sm focus-visible:!rounded-full sm:text-sm"
               >
                 Swaps <TabBadge count={swapCount} />
               </TabsTrigger>
               <TabsTrigger
                 value="pto"
-                className="min-w-0 rounded-none border-b-2 border-transparent px-2 py-3 text-xs data-[state=active]:border-primary data-[state=active]:bg-transparent sm:text-sm"
+                className="min-w-0 !rounded-full border-0 bg-muted/50 px-2 py-2.5 text-xs data-[state=active]:bg-white data-[state=active]:shadow-sm focus-visible:!rounded-full sm:text-sm"
               >
                 PTO <TabBadge count={ptoCount} />
               </TabsTrigger>
@@ -253,7 +253,7 @@ export function OpenShiftsSheet({
                   </div>
                 ) : (
                   openShifts.map((shift) => (
-                    <Card key={shift.id} className="bg-card border">
+                    <Card key={shift.id} className="rounded-2xl border bg-card">
                       <CardContent className="p-4 space-y-3">
                         <div className="flex items-start justify-between">
                           <div className="space-y-1">
