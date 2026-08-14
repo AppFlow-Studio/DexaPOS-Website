@@ -4,6 +4,7 @@ import * as React from 'react'
 import {
     ColumnDef,
     ColumnFiltersState,
+    OnChangeFn,
     SortingState,
     VisibilityState,
     flexRender,
@@ -81,6 +82,12 @@ interface OrdersDataTableProps {
     locationsMap?: Map<string, string>
     pageSize?: number
     hideOrderStatus?: boolean
+    serverPaginated?: boolean
+    searchValue?: string
+    onSearchChange?: (value: string) => void
+    sortingValue?: SortingState
+    onSortingChange?: OnChangeFn<SortingState>
+    searchPlaceholder?: string
 }
 
 // Format date to "Today at 9:53 pm" or "Dec 15 at 2:30 pm"
@@ -183,8 +190,23 @@ const COLUMN_LABELS: Record<string, string> = {
     created_by: 'Staff',
 }
 
-export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showLocationColumn, locationsMap, pageSize = 50, hideOrderStatus = false }: OrdersDataTableProps) {
-    const [sorting, setSorting] = React.useState<SortingState>([
+export function OrdersDataTable({
+    data,
+    isLoading,
+    onOrderClick,
+    readOnly,
+    showLocationColumn,
+    locationsMap,
+    pageSize = 50,
+    hideOrderStatus = false,
+    serverPaginated = false,
+    searchValue,
+    onSearchChange,
+    sortingValue,
+    onSortingChange,
+    searchPlaceholder = 'Search orders...',
+}: OrdersDataTableProps) {
+    const [localSorting, setLocalSorting] = React.useState<SortingState>([
         { id: 'created_at', desc: true },
     ])
     const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
@@ -196,6 +218,25 @@ export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showL
         ORDERS_COLUMN_VIS_KEY,
     )
     const [globalFilter, setGlobalFilter] = React.useState('')
+    const sorting = sortingValue ?? localSorting
+    const effectiveSearch = searchValue ?? globalFilter
+    const handleSortingChange: OnChangeFn<SortingState> = (updater) => {
+        if (onSortingChange) {
+            onSortingChange(updater)
+            return
+        }
+        setLocalSorting(updater)
+    }
+    const handleSearchChange: OnChangeFn<string> = (updater) => {
+        const nextValue =
+            typeof updater === 'function' ? updater(effectiveSearch) : updater
+
+        if (onSearchChange) {
+            onSearchChange(nextValue)
+            return
+        }
+        setGlobalFilter(nextValue)
+    }
     const router = useRouter()
     const isAllLocations = useIsAllLocations()
     const { locations, setSelectedLocation } = useLocationStore()
@@ -582,13 +623,16 @@ export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showL
         data,
         columns: visibleColumns,
         getCoreRowModel: getCoreRowModel(),
-        getSortedRowModel: getSortedRowModel(),
-        getFilteredRowModel: getFilteredRowModel(),
-        getPaginationRowModel: getPaginationRowModel(), // Required for pagination
-        onSortingChange: setSorting,
+        getSortedRowModel: serverPaginated ? undefined : getSortedRowModel(),
+        getFilteredRowModel: serverPaginated ? undefined : getFilteredRowModel(),
+        getPaginationRowModel: serverPaginated ? undefined : getPaginationRowModel(),
+        manualSorting: serverPaginated,
+        manualFiltering: serverPaginated,
+        manualPagination: serverPaginated,
+        onSortingChange: handleSortingChange,
         onColumnFiltersChange: setColumnFilters,
         onColumnVisibilityChange: setColumnVisibility,
-        onGlobalFilterChange: setGlobalFilter,
+        onGlobalFilterChange: handleSearchChange,
         initialState: {
             pagination: {
                 pageSize,
@@ -598,7 +642,7 @@ export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showL
             sorting,
             columnFilters,
             columnVisibility,
-            globalFilter,
+            globalFilter: effectiveSearch,
         },
 
     })
@@ -611,9 +655,9 @@ export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showL
                 <div className="relative flex-1 max-w-sm">
                     <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
                     <Input
-                        placeholder="Search orders..."
-                        value={globalFilter}
-                        onChange={(e) => setGlobalFilter(e.target.value)}
+                        placeholder={searchPlaceholder}
+                        value={effectiveSearch}
+                        onChange={(e) => handleSearchChange(e.target.value)}
                         className="pl-9"
                     />
                 </div>
@@ -717,7 +761,7 @@ export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showL
                 </Table>
 
             {/* Results count & Pagination */}
-            <div className="flex items-center justify-between pt-2">
+            {!serverPaginated && <div className="flex items-center justify-between pt-2">
                 <div className="text-xs text-muted-foreground/70">
                     Page {table.getState().pagination.pageIndex + 1} of{" "}
                     {table.getPageCount()}
@@ -764,7 +808,7 @@ export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showL
                         <ChevronsRight className="h-4 w-4" />
                     </Button>
                 </div>
-            </div>
+            </div>}
 
             {/* Print Receipt. No admin actions here — Refund and Void are their
                 own menu items and open the dialog below directly. */}

@@ -2,6 +2,12 @@
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { LogAuditEvent } from "./audit-logs";
+import type { PaginatedResult, PaginationParams } from "@/types/pagination";
+import {
+  buildPaginationMeta,
+  emptyPaginatedResult,
+  normalizePagination,
+} from "@/lib/pagination";
 
 // =============================================================================
 // Types
@@ -157,14 +163,16 @@ async function generateInvoiceNumber(
 export async function GetInvoices(
   clerkOrgId: string,
   locationId?: string | null,
-  status?: InvoiceStatus | null
-): Promise<Invoice[]> {
-  if (!clerkOrgId) return [];
+  status?: InvoiceStatus | null,
+  pagination?: PaginationParams,
+): Promise<PaginatedResult<Invoice>> {
+  if (!clerkOrgId) return emptyPaginatedResult(pagination);
 
   const merchantId = await getMerchantId(clerkOrgId);
-  if (!merchantId) return [];
+  if (!merchantId) return emptyPaginatedResult(pagination);
 
   const supabase = createServerSupabaseClient();
+  const normalizedPagination = normalizePagination(pagination);
 
   let query = supabase
     .from("invoices")
@@ -187,13 +195,13 @@ export async function GetInvoices(
       created_at,
       updated_at,
       customer:customers(id, name, email, phone)
-    `
+    `,
+      { count: "exact" },
     )
     .eq("merchant_id", merchantId)
     // Only the merchant's own customer invoices — platform_to_merchant bills
     // (HQ → merchant, §5) are payables and must not pollute this list.
-    .eq("bill_type", "merchant_to_customer")
-    .order("created_at", { ascending: false });
+    .eq("bill_type", "merchant_to_customer");
 
   if (locationId && locationId !== "all") {
     query = query.eq("location_id", locationId);
@@ -203,14 +211,23 @@ export async function GetInvoices(
     query = query.eq("status", status);
   }
 
-  const { data, error } = await query;
+  const { data, error, count } = await query
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
+    .range(
+      normalizedPagination.offset,
+      normalizedPagination.offset + normalizedPagination.pageSize - 1,
+    );
 
   if (error) {
     console.error("[GetInvoices] error:", error);
-    return [];
+    return emptyPaginatedResult(pagination);
   }
 
-  return (data as Invoice[]) || [];
+  return {
+    data: (data as Invoice[]) || [],
+    pagination: buildPaginationMeta(count ?? 0, pagination),
+  };
 }
 
 export async function GetInvoice(

@@ -1,8 +1,8 @@
 "use client";
 
-import { useCustomers } from "./hooks/useCustomers";
+import { useCustomerProfile, useCustomers } from "./hooks/useCustomers";
 import { CustomerList } from "./components/CustomerList";
-import { useState, useMemo, useEffect } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,9 @@ import { CustomerProfileSheet } from "./components/CustomerProfileSheet";
 import { CreateCustomerDialog } from "./components/CreateCustomerDialog";
 import { CreateCampaignDialog } from "./components/campaigns/CreateCampaignDialog";
 import type { CustomerListItem } from "@/types/customer";
-import { getCustomerDisplayName } from "@/types/customer";
+import { PaginationBar } from "@/components/dashboard/PaginationBar";
+import { buildPaginationMeta } from "@/lib/pagination";
+import { useDebounce } from "@/lib/hooks/useDebounce";
 import {
   PageHeader,
   PageShell,
@@ -20,10 +22,30 @@ import {
 } from "@/components/dashboard/shell";
 
 export default function CustomersPage() {
-  const { data: customers = [], isLoading } = useCustomers();
   const searchParams = useSearchParams();
   const router = useRouter();
   const [searchTerm, setSearchTerm] = useState("");
+  const debouncedSearch = useDebounce(searchTerm, 300);
+  const requestedPage = Number(searchParams.get("page"));
+  const page = Number.isFinite(requestedPage)
+    ? Math.max(1, Math.floor(requestedPage))
+    : 1;
+  const pageSize = 25;
+  const {
+    data: customerResult,
+    isLoading,
+    isFetching,
+  } = useCustomers({
+    page,
+    pageSize,
+    search: debouncedSearch || undefined,
+  });
+  const customers = useMemo(
+    () => customerResult?.data ?? [],
+    [customerResult?.data],
+  );
+  const pagination =
+    customerResult?.pagination ?? buildPaginationMeta(0, { page, pageSize });
   const [selectedCustomer, setSelectedCustomer] =
     useState<CustomerListItem | null>(null);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -34,9 +56,38 @@ export default function CustomersPage() {
   // that customer's profile once the list has loaded, then clears the param so
   // closing the sheet doesn't re-open it.
   const deepLinkCustomerId = searchParams.get("customerId");
+  const { data: deepLinkProfile } = useCustomerProfile(deepLinkCustomerId);
+
+  const setPage = useCallback((nextPage: number) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (nextPage <= 1) params.delete("page");
+    else params.set("page", String(nextPage));
+    const query = params.toString();
+    router.replace(query ? `/dashboard/customers?${query}` : "/dashboard/customers", {
+      scroll: false,
+    });
+  }, [router, searchParams]);
+
   useEffect(() => {
-    if (!deepLinkCustomerId || customers.length === 0) return;
-    const match = customers.find((c) => c.id === deepLinkCustomerId);
+    if (!deepLinkCustomerId) return;
+    const currentPageMatch = customers.find((c) => c.id === deepLinkCustomerId);
+    const profileCustomer = deepLinkProfile?.customer;
+    const match: CustomerListItem | undefined =
+      currentPageMatch ||
+      (profileCustomer
+        ? {
+            id: profileCustomer.id,
+            name: profileCustomer.name,
+            phone: profileCustomer.phone,
+            email: profileCustomer.email,
+            lifetime_spend: profileCustomer.lifetime_spend,
+            visits: profileCustomer.visits,
+            last_visit: profileCustomer.last_visit,
+            total_orders: profileCustomer.total_orders,
+            avg_spend: profileCustomer.avg_spend,
+            tags: profileCustomer.tags,
+          }
+        : undefined);
     if (match) {
       const frameId = window.requestAnimationFrame(() => {
         setSelectedCustomer(match);
@@ -46,23 +97,13 @@ export default function CustomersPage() {
 
       return () => window.cancelAnimationFrame(frameId);
     }
-  }, [deepLinkCustomerId, customers, router]);
+  }, [deepLinkCustomerId, deepLinkProfile, customers, router]);
 
-  // Filter customers based on search term
-  const filteredData = useMemo(() => {
-    if (!searchTerm.trim()) return customers;
-
-    const term = searchTerm.toLowerCase();
-    return customers.filter((customer) => {
-      const name = getCustomerDisplayName(customer).toLowerCase();
-      const email = customer.email?.toLowerCase() || "";
-      const phone = customer.phone || "";
-
-      return (
-        name.includes(term) || email.includes(term) || phone.includes(term)
-      );
-    });
-  }, [customers, searchTerm]);
+  useEffect(() => {
+    if (customerResult && page > customerResult.pagination.totalPages) {
+      setPage(customerResult.pagination.totalPages);
+    }
+  }, [customerResult, page, setPage]);
 
   const handleViewProfile = (customer: CustomerListItem) => {
     setSelectedCustomer(customer);
@@ -104,7 +145,7 @@ export default function CustomersPage() {
             <span className="inline-flex h-8 items-center rounded-full bg-muted px-3 text-xs font-medium text-muted-foreground tabular-nums">
               {isLoading
                 ? "Loading customers"
-                : `${filteredData.length} customer${filteredData.length === 1 ? "" : "s"}`}
+                : `${pagination.total.toLocaleString()} customer${pagination.total === 1 ? "" : "s"}`}
             </span>
           }
         >
@@ -114,14 +155,23 @@ export default function CustomersPage() {
               placeholder="Search by name, phone, or email..."
               className="h-10 rounded-full border-0 bg-muted/60 pl-9 shadow-none focus-visible:ring-1"
               value={searchTerm}
-              onChange={(event) => setSearchTerm(event.target.value)}
+              onChange={(event) => {
+                setSearchTerm(event.target.value);
+                if (page !== 1) setPage(1);
+              }}
             />
           </div>
 
           <CustomerList
-            customers={filteredData}
+            customers={customers}
             isLoading={isLoading}
             onViewProfile={handleViewProfile}
+          />
+          <PaginationBar
+            pagination={pagination}
+            onPageChange={setPage}
+            isLoading={isFetching}
+            itemLabel="customers"
           />
         </PanelSection>
       </Panel>

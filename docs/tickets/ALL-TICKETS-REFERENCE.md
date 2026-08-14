@@ -472,6 +472,27 @@ Single index for active ticket streams and their source trackers.
 - The engineering group message and POS repository restructure remain manual,
   separately verified follow-ups.
 
+## Stream W: Merchant Backend Pagination
+
+1. Website implementation and QA tracker:
+- `docs/features/orders/FEATURE-2026-08-14-MERCHANT-BACKEND-PAGINATION.md`
+
+2. Implemented scope:
+- Shared pagination metadata and responsive controls.
+- Backend pagination, exact totals, server search, and stable ordering for the
+  merchant Customers directory.
+- Backend pagination, exact totals, server filtering/search/sorting, and a
+  narrow KPI query for the merchant Orders page.
+- Backend pagination and exact totals for merchant Invoices while preserving
+  the existing database-authoritative KPI RPC.
+
+3. Scope decisions:
+- Existing paginated pages remain unchanged.
+- Reorder-sensitive menu-management lists are intentionally not paginated.
+- Payments, Transactions, and Timesheets need separate aggregate
+  contracts before their visible rows can be safely paginated.
+- Authenticated manual QA remains required; no Playwright dependency was added.
+
 ## Notes
 
 1. Keep this file updated whenever a new ticket stream starts.

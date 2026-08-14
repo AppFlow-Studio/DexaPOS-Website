@@ -1,11 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import {
-  useIsAllLocations,
-  useSelectedLocation,
-} from "@/stores/location-store";
-import { useOrders } from "../hooks/useOrder";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import type { OnChangeFn, SortingState } from "@tanstack/react-table";
+import { useOrderOverview, useOrdersPage } from "../hooks/useOrder";
 import { isOrderReportable } from "@/lib/reporting/recognized-order";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -22,9 +19,9 @@ import {
 import Link from "next/link";
 import { OrdersDataTable } from "@/components/dashboard/orders/OrdersDataTable";
 import {
-  Order,
   OrderResponse,
   OrderStatus,
+  OrderSortField,
   OrderType,
   PaymentMethod,
   OrderFilters,
@@ -43,12 +40,23 @@ import {
 } from "recharts";
 
 import { cn } from "@/lib/utils";
+import { PaginationBar } from "@/components/dashboard/PaginationBar";
+import { buildPaginationMeta } from "@/lib/pagination";
+import { useDebounce } from "@/lib/hooks/useDebounce";
 
 export default function OrdersPage() {
-  const selectedLocation = useSelectedLocation();
-  const isAllLocations = useIsAllLocations();
   const searchParams = useSearchParams();
   const router = useRouter();
+  const requestedPage = Number(searchParams.get("page"));
+  const page = Number.isFinite(requestedPage)
+    ? Math.max(1, Math.floor(requestedPage))
+    : 1;
+  const pageSize = 25;
+  const [orderSearch, setOrderSearch] = useState("");
+  const debouncedOrderSearch = useDebounce(orderSearch, 300);
+  const [orderSorting, setOrderSorting] = useState<SortingState>([
+    { id: "created_at", desc: true },
+  ]);
 
   // Parse filters from URL
   const filters: OrderFilters = useMemo(() => {
@@ -87,18 +95,35 @@ export default function OrdersPage() {
     };
   }, [searchParams]);
 
+  const activeSort = orderSorting[0];
+  const sortBy: OrderSortField =
+    activeSort?.id === "order_display"
+      ? "display_number"
+      : activeSort?.id === "status" || activeSort?.id === "total_amount"
+        ? activeSort.id
+        : "created_at";
+
   const {
-    data: orders,
-    isLoading,
+    data: orderResult,
+    isLoading: isLoadingOrders,
+    isFetching: isFetchingOrders,
     refetch: refetchOrders,
-  } = useOrders(filters);
+  } = useOrdersPage(filters, {
+    page,
+    pageSize,
+    search: debouncedOrderSearch,
+    sortBy,
+    sortDirection: activeSort?.desc === false ? "asc" : "desc",
+  });
 
   const [selectedOrder, setSelectedOrder] = useState<OrderResponse | null>(
     null
   );
   const [isDetailOpen, setIsDetailOpen] = useState(false);
 
-  const ordersList = Array.isArray(orders) ? orders : [];
+  const ordersList = orderResult?.data ?? [];
+  const pagination =
+    orderResult?.pagination ?? buildPaginationMeta(0, { page, pageSize });
 
   // Stats dataset: same date-range + location as the table, but NOT narrowed by the
   // table's status/type/payment chips. This keeps the KPI cards a stable glance metric
@@ -107,8 +132,51 @@ export default function OrdersPage() {
     () => ({ dateRange: filters.dateRange }),
     [filters.dateRange]
   );
-  const { data: statsOrders } = useOrders(statsFilters);
-  const statsList = Array.isArray(statsOrders) ? statsOrders : [];
+  const { data: statsOrders, isLoading: isLoadingStats } = useOrderOverview(
+    statsFilters.dateRange,
+  );
+  const statsList = useMemo(
+    () => (Array.isArray(statsOrders) ? statsOrders : []),
+    [statsOrders],
+  );
+
+  const setPage = useCallback(
+    (nextPage: number) => {
+      const params = new URLSearchParams(searchParams.toString());
+      if (nextPage <= 1) params.delete("page");
+      else params.set("page", String(nextPage));
+      const query = params.toString();
+      router.replace(query ? `/dashboard/orders?${query}` : "/dashboard/orders", {
+        scroll: false,
+      });
+    },
+    [router, searchParams],
+  );
+
+  const handleOrderSearchChange = useCallback(
+    (value: string) => {
+      setOrderSearch(value);
+      setPage(1);
+    },
+    [setPage],
+  );
+
+  const handleOrderSortingChange = useCallback<OnChangeFn<SortingState>>(
+    (updater) => {
+      setOrderSorting((current) => {
+        const next = typeof updater === "function" ? updater(current) : updater;
+        return next.slice(0, 1);
+      });
+      setPage(1);
+    },
+    [setPage],
+  );
+
+  useEffect(() => {
+    if (orderResult && page > orderResult.pagination.totalPages) {
+      setPage(orderResult.pagination.totalPages);
+    }
+  }, [orderResult, page, setPage]);
 
   const OPEN_STATUSES = ORDER_STATUS_GROUPS.open as readonly OrderStatus[];
 
@@ -130,6 +198,7 @@ export default function OrdersPage() {
     from.setDate(from.getDate() - (days - 1));
     from.setHours(0, 0, 0, 0);
     const params = new URLSearchParams(searchParams.toString());
+    params.delete("page");
     params.set("from", from.toISOString());
     params.set("to", to.toISOString());
     router.push(`?${params.toString()}`);
@@ -427,7 +496,7 @@ export default function OrdersPage() {
             // intrinsic width, so a wide figure like "$2,674.53" pushes past
             // the column instead of the text scaling down inside it.
             <div key={tile.key} className="min-w-0 px-4">
-              {isLoading ? (
+              {isLoadingStats ? (
                 <div className="space-y-3">
                   <Skeleton className="h-4 w-20" />
                   <Skeleton className="h-9 w-24" />
@@ -523,13 +592,13 @@ export default function OrdersPage() {
         <OrderFiltersComponent className="mt-4 w-full" />
 
         <div className="mt-4">
-          {isLoading && ordersList.length === 0 ? (
+          {isLoadingOrders && ordersList.length === 0 ? (
             <div className="space-y-2">
               <Skeleton className="h-10 w-full" />
               <Skeleton className="h-10 w-full" />
               <Skeleton className="h-10 w-full" />
             </div>
-          ) : ordersList.length === 0 ? (
+          ) : ordersList.length === 0 && !orderSearch ? (
             <Empty
               icon={ShoppingBag}
               title={"No orders found"}
@@ -538,10 +607,22 @@ export default function OrdersPage() {
           ) : (
             <OrdersDataTable
               data={ordersList}
-              isLoading={isLoading}
+              isLoading={isFetchingOrders}
               onOrderClick={handleOrderClick}
+              serverPaginated
+              searchValue={orderSearch}
+              onSearchChange={handleOrderSearchChange}
+              searchPlaceholder="Search order number or customer..."
+              sortingValue={orderSorting}
+              onSortingChange={handleOrderSortingChange}
             />
           )}
+          <PaginationBar
+            pagination={pagination}
+            onPageChange={setPage}
+            isLoading={isFetchingOrders}
+            itemLabel="orders"
+          />
         </div>
       </div>
 
