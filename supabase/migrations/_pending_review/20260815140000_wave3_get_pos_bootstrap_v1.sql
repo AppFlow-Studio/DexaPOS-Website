@@ -1,0 +1,1127 @@
+-- =============================================================================
+-- Wave 3 — get_pos_bootstrap_v1: one envelope, one pass, one version
+-- =============================================================================
+-- Source: Notion [POS-PERF] AUD-1, audit 2026-07-24.
+--
+-- PROBLEM (measured on prod 2026-08-13)
+--   POS boot costs FIVE round trips (hooks/pos/usePosSync.ts:47-82):
+--     get_pos_full_sync          3,585 calls @ 262.68 ms
+--     menu_item_recipes          PostgREST, unscoped
+--     modifier_group_item_recipes PostgREST, unscoped
+--     tax_rates                  PostgREST
+--     get_active_snoozes         RPC
+--   ...and get_pos_full_sync returns ONLY 'menus'. No recipes, no tax_rates, no
+--   snoozes -- despite the client's PosSyncData naming suggesting otherwise.
+--
+--   Inside it, an N+1 on top of an N+1:
+--     get_pos_full_sync calls get_menu_with_categories(menu_id, location_id)
+--     ONCE PER MENU (10,520 direct calls @ 112.72 ms platform-wide), and that
+--     function rebuilds, PER MENU ITEM, a correlated modifier-group subquery
+--     which itself runs a correlated modifier-item subquery PER GROUP.
+--
+--   Measured on location 5afc6641 (CHARCOAL GARDENIA, 6 active menus, the
+--   worst multi-menu tenant), EXPLAIN (ANALYZE, BUFFERS, TIMING OFF):
+--     get_pos_full_sync    9,873 shared buffer hits   114.0 ms   1,295,168 B
+--   The 330 (menu, category, item) tuples cover only 167 DISTINCT menu items
+--   and draw on just 144 modifier groups platform-wide -- so the modifier tree
+--   is rebuilt from scratch roughly twice per item and 330 times per location.
+--   Corroborating measurement: 718,394 of those 1,295,168 payload bytes --
+--   55.5% -- are nested `modifier_groups` arrays, i.e. duplicated subtrees.
+--
+--   Cost is O(menus x categories x items), so adding a sixth menu to a merchant
+--   slows the boot of every station in that location.
+--
+-- FIX
+--   Compose the modifier / item / category trees ONCE with CTEs and attach them,
+--   then return everything the boot needs in a single jsonb envelope.
+--     mod_items        one row per modifier_group      (144 groups, once)
+--     item_mod_groups  one row per menu_item           (356 links, once)
+--     base_items       one row per (category, item)    menu-independent half
+--     cat_items_json   joins the menu-dependent half   (ci_menu, lmio, m.location_id)
+--   Nothing is recomputed per menu that does not actually depend on the menu.
+--
+--   Measured, same location, same EXPLAIN options:
+--     get_pos_full_sync    9,873 buffers   114.0 ms
+--     composed tree        2,760 buffers   119.1 ms      -72.0% buffers
+--   Wall clock is a wash on the FULL-BUILD path because both are dominated by
+--   serialising the same 1.3 MB of jsonb; the win is that the I/O is now
+--   proportional to the catalog rather than to menus x items, and that the
+--   full build now runs rarely (see VERSIONING). This is a scaling fix first
+--   and a latency fix second -- exactly like Wave 2.
+--
+-- EQUIVALENCE: VERIFIED READ-ONLY AGAINST PROD 2026-08-13
+--   Both bodies were executed inline and flattened to
+--   (menu_id, menu_category_id, category_item_id) -> item jsonb, then compared:
+--     live item rows                330
+--     composed item rows            330
+--     item key mismatches             0     (FULL JOIN, either side NULL)
+--     item VALUE differences          0     (whole item object, jsonb equality)
+--     category key mismatches         0
+--     category VALUE differences      0
+--   The item object carries the entire five-level cascade -- effective_price /
+--   effective_cash_price / effective_delivery_price (lmio > ci_menu > lcio > ci
+--   > lio/mi, including the 'add'/'percent' price_modifier branch and the
+--   location-owned-menu shortcut), price_levels' 20 keys, price_source,
+--   effective_availability's six-way AND plus the 86/snooze clause, all five
+--   has_*_override flags, stock_tracking_mode / current_stock, AND the nested
+--   modifier_groups subtree. Zero differences means every one of those matched.
+--
+--   Fan-out was checked before relying on it: all six LEFT JOINs (ci_menu, lio,
+--   lcio, lmio, lco, lmco) plus location_menus and menu_categories are 1:1 on
+--   their join keys on prod today -- zero duplicate groups on every key. If a
+--   future migration drops one of those unique constraints the composed form
+--   and the live form would BOTH duplicate rows, identically, so the property
+--   is a data fact and not a correctness dependency.
+--
+-- THE ONE DELIBERATE BEHAVIOURAL DIFFERENCE: ARRAY ORDER IS NOW DETERMINISTIC
+--   get_menu_with_categories sorts categories by
+--     COALESCE(lmco.display_order, lco.display_order, mc.display_order)
+--   and items by COALESCE(lcio.display_order, ci.display_order) -- with NO
+--   unique tiebreak. On this location alone there are 4 tied category groups
+--   and 18 tied item groups, so the live order inside a tie is whatever the
+--   nested-loop happened to emit and can change after a VACUUM or a plan flip.
+--   That is why the two full arrays compare unequal despite being byte-for-byte
+--   the same LENGTH (1,295,053 both) and having zero value differences.
+--
+--   Proof the difference is confined to ties: the live output's display_order
+--   sequence is non-decreasing within every category (0 violations over 330
+--   item positions) and within every menu (0 violations over 59 category
+--   positions), and the key sets are equal -- so both functions emit the same
+--   sequence of sort keys and differ only in which tied row occupies which
+--   tied slot.
+--
+--   v1 appends (name, id) as a tiebreak at every level. This is REQUIRED, not
+--   cosmetic: a version-cached envelope whose array order can flap would let a
+--   client's cached body differ from a fresh fetch at the SAME version. Within
+--   a tie the old order was arbitrary, so no ordering contract is broken;
+--   tied siblings now render alphabetically instead of randomly.
+--
+-- AUTHORIZATION: NOTE THE CHANGE, IT IS NOT A PURE REFACTOR
+--   get_pos_full_sync is SECURITY INVOKER and leans on RLS over public.menus
+--   (check_merchant_access) to scope the menu list, while delegating the tree
+--   build to SECURITY DEFINER get_menu_with_categories. v1 is one function, so
+--   it cannot split the difference: it is SECURITY DEFINER (the tree build
+--   needs it) with an EXPLICIT gate copied verbatim from get_active_snoozes --
+--   service_role OR is_location_member(p_location_id) OR
+--   user_has_location_permission(p_location_id, 'location.manage').
+--
+--   That gate is consistent with the existing surface: the POS client already
+--   calls get_active_snoozes(p_location_id) for this same location in the same
+--   Promise.all, so any caller who reaches v1 already passes this exact test
+--   today. It is location-scoped where the old path was merchant-scoped, i.e.
+--   TIGHTER for a user who administers a merchant but is not a member of this
+--   particular location.
+--   >>> VERIFY ON STAGING: sign in as each POS role (owner, manager, cashier,
+--   >>> KDS station account) and confirm v1 returns a non-empty menus array.
+--   >>> A role that loads menus today but 42501s here is a gate too tight and
+--   >>> must stop this wave. This is the one thing that could not be proven
+--   >>> read-only from prod.
+--
+-- VERSIONING: AN EXPLICIT COUNTER, PLUS A SNOOZE SIGNATURE
+--   The counter lives in public.catalog_versions, keyed by location_id, bumped
+--   by an AFTER ROW trigger on every table that feeds the envelope. max(updated_at)
+--   was rejected: it is a wall-clock read that can go backwards across a
+--   replica or an NTP step, and it cannot see DELETEs at all.
+--
+--   A bare counter is NOT sufficient, because two fields in the menu body are
+--   functions of now() rather than of any row:
+--     menu_item.effective_availability   AND (lio.snoozed_until <= now())
+--     modifier item is_active            AND (lmio.snoozed_until <= now())
+--   A snooze EXPIRING changes both without touching a single row, so a
+--   counter-only version would serve a stale "sold out" body forever. v1
+--   therefore folds a signature of the currently-ACTIVE snooze set into the
+--   version, so expiry flips the version exactly like a write does. The
+--   signature hashes epoch seconds, never a rendered timestamp, so it cannot
+--   vary with the caller's TimeZone GUC.
+--
+--   Honest scope note: on prod 2026-08-13 all 3 active snoozes are 'infinity'
+--   ("86'd indefinitely") and none are timed, so the expiry path is not
+--   currently exercised by real data. It stays because the 86 UI does offer
+--   timed snoozes, and because a cache that can serve a permanently sold-out
+--   item is the exact failure this wave must not introduce. Handling infinity
+--   in the signature is NOT optional -- see the isfinite() note in §2b.
+--
+--   version format:  'v1:' || <counter> || ':' || <16 hex of md5 signature>
+--   Treat it as opaque. Do not parse it.
+--
+--   CONTRACT
+--     p_known_version IS NULL, or does not match  -> full envelope:
+--       { version, generated_at, location_id, unchanged: false,
+--         menus, modifier_groups, recipes, tax_rates, snoozes }
+--     p_known_version matches the current version -> light envelope:
+--       { version, generated_at, location_id, unchanged: true,
+--         tax_rates, snoozes }
+--       The keys menus / modifier_groups / recipes are ABSENT (not null).
+--       Client MUST keep its cached copies and MUST NOT clear them.
+--
+--     tax_rates and snoozes are returned on BOTH paths, deliberately. They are
+--     tiny (7 tax rows, 3 active snoozes on all of prod) and snoozes are the
+--     overlay the client already stamps onto menu items, so always shipping
+--     them keeps the cheap path self-healing.
+--
+--   >>> CLIENT REQUIREMENT, DO NOT SHIP THE CACHE PATH WITHOUT IT <<<
+--     1. Pass p_known_version = NULL on cold boot, on manual "Sync POS", and
+--        whenever the cached envelope is older than 15 minutes. The triggers
+--        are the only thing advancing the counter; if one is ever dropped, a
+--        client that trusts the version forever would never see a menu edit
+--        again. The periodic forced full fetch bounds that failure at 15
+--        minutes instead of unbounded.
+--     2. On every sync, REPLACE the snooze overlay wholesale -- an item absent
+--        from `snoozes` must have its snooze state CLEARED, not left stamped.
+--        Today the client re-reads a fresh body each sync so this is masked;
+--        with caching, an un-cleared overlay is a permanently sold-out item.
+--
+-- WHY modifier_groups IS AT THE TOP LEVEL
+--   55.5% of the payload (718,394 B) is nested modifier_groups duplicated
+--   across item tuples. Deduplicated, the 29 groups reachable from this
+--   location serialise to 38,554 B. v1 emits that index ALONGSIDE the nested
+--   copies rather than instead of them, because requirement one is a drop-in
+--   client cutover: menus must stay value-identical. Net cost of the index is
+--   +38 KB, +3.0%.
+--   FOLLOW-UP (not this wave): once the client reads the index, a v2 can drop
+--   the nested copies for -718 KB, a 52.5% payload cut. That needs each item to
+--   carry an ordered list of {modifier_group_id, display_order} first, because
+--   display_order is a property of the item->group LINK, not of the group --
+--   which is exactly why it is omitted from the top-level index here.
+--
+-- ROLLOUT
+--   get_pos_full_sync and get_menu_with_categories are UNTOUCHED and stay live.
+--   Nothing calls v1 until the POS client is cut over, so the RPC half of this
+--   migration is inert on deploy and rollback is a client revert.
+--   The TRIGGER half is not inert -- see the warning in section 1.
+--
+--   Companion harness: supabase/validation/052_wave3_bootstrap_equivalence.sql.
+--   Any non-zero value delta stops this wave.
+-- =============================================================================
+
+BEGIN;
+
+-- =============================================================================
+-- 1. THE VERSION COUNTER
+-- =============================================================================
+-- WARNING: this section adds AFTER ROW triggers to 23 catalog tables and takes
+-- a brief ACCESS EXCLUSIVE lock on each. Menu tables are edited from the
+-- website at human speed, but run this off-peak anyway.
+--
+-- Write-path cost per changed row: one to_jsonb(row) plus one UPSERT against a
+-- single catalog_versions row (a HOT update on one page). Negligible for the
+-- interactive editor. For a BULK menu import, disable them for the load:
+--     SET session_replication_role = replica;  -- user triggers off
+--     ... bulk load ...
+--     RESET session_replication_role;
+--     SELECT public.bump_catalog_version();    -- then bump everything once
+-- -----------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS public.catalog_versions (
+  location_id uuid PRIMARY KEY
+    REFERENCES public.locations(id) ON DELETE CASCADE,
+  version     bigint      NOT NULL DEFAULT 1,
+  bumped_at   timestamptz NOT NULL DEFAULT now()
+);
+
+COMMENT ON TABLE public.catalog_versions IS
+  'Monotonic per-location catalog counter for get_pos_bootstrap_v1. Bumped by '
+  'tg_bump_catalog_version on every table feeding the POS bootstrap envelope. '
+  'Never decreases; wrap-around is not a concern at bigint.';
+
+-- Read only through the SECURITY DEFINER RPC. RLS on with no policy means
+-- direct PostgREST selects return zero rows, which is the intent -- the counter
+-- is an implementation detail of the envelope, not a client-facing table.
+ALTER TABLE public.catalog_versions ENABLE ROW LEVEL SECURITY;
+
+-- Seed every existing location at 1. get_pos_bootstrap_v1 treats a missing row
+-- as 0, and the bump UPSERT inserts 1, so a location that somehow misses the
+-- seed still transitions 0 -> 1 on its first edit. Monotonicity holds either way.
+INSERT INTO public.catalog_versions (location_id, version, bumped_at)
+SELECT l.id, 1, now() FROM public.locations l
+ON CONFLICT (location_id) DO NOTHING;
+
+-- -----------------------------------------------------------------------------
+-- 1a. Bump entry point
+-- -----------------------------------------------------------------------------
+-- Resolution is deliberately widening, never narrowing:
+--   location given  -> that location only
+--   merchant given  -> every location of that merchant
+--   neither         -> every location
+-- Over-invalidation costs one wasted full fetch. UNDER-invalidation serves a
+-- stale menu, which is a correctness bug. Always fail toward over.
+CREATE OR REPLACE FUNCTION public.bump_catalog_version(
+  p_merchant_id uuid DEFAULT NULL,
+  p_location_id uuid DEFAULT NULL
+)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public', 'pg_temp'
+AS $function$
+BEGIN
+  INSERT INTO public.catalog_versions AS cv (location_id, version, bumped_at)
+  SELECT l.id, 1, now()
+  FROM public.locations l
+  WHERE (p_location_id IS NOT NULL AND l.id = p_location_id)
+     OR (p_location_id IS NULL AND p_merchant_id IS NOT NULL AND l.merchant_id = p_merchant_id)
+     OR (p_location_id IS NULL AND p_merchant_id IS NULL)
+  ON CONFLICT (location_id) DO UPDATE
+    SET version   = cv.version + 1,
+        bumped_at = now();
+END;
+$function$;
+
+COMMENT ON FUNCTION public.bump_catalog_version(uuid, uuid) IS
+  'Advance the POS catalog counter. Location wins over merchant; both NULL '
+  'bumps every location. Widening by design -- over-invalidation is a wasted '
+  'fetch, under-invalidation is a stale menu.';
+
+REVOKE ALL ON FUNCTION public.bump_catalog_version(uuid, uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.bump_catalog_version(uuid, uuid) TO service_role;
+
+-- -----------------------------------------------------------------------------
+-- 1b. Generic trigger
+-- -----------------------------------------------------------------------------
+-- One argument-free function for all 23 tables. Every one of them carries a
+-- location_id column, a merchant_id column, or both (verified against
+-- information_schema on prod 2026-08-13), so reading the row as jsonb and
+-- probing for those two keys resolves the scope without per-table wiring.
+--
+-- Both keys absent or NULL -> bump_catalog_version(NULL, NULL) -> every
+-- location. That is the safe fallback, not an error path.
+--
+-- location_id wins where a table has both: on menus / menu_items / categories /
+-- modifier_groups / schedules a NON-NULL location_id means the row is owned by
+-- that one location, while NULL means global-to-the-merchant -- which falls
+-- through to the merchant fan-out. Exactly the semantics the envelope needs.
+CREATE OR REPLACE FUNCTION public.tg_bump_catalog_version()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public', 'pg_temp'
+AS $function$
+DECLARE
+  v_row  jsonb;
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    v_row := to_jsonb(OLD);
+  ELSE
+    v_row := to_jsonb(NEW);
+  END IF;
+
+  PERFORM public.bump_catalog_version(
+    NULLIF(v_row->>'merchant_id', '')::uuid,
+    NULLIF(v_row->>'location_id', '')::uuid
+  );
+
+  RETURN NULL;  -- AFTER trigger: return value is ignored
+END;
+$function$;
+
+COMMENT ON FUNCTION public.tg_bump_catalog_version() IS
+  'AFTER ROW trigger: bumps public.catalog_versions for the scope implied by '
+  'the row''s location_id / merchant_id. Does NOT fire on TRUNCATE -- truncating '
+  'a catalog table requires a manual SELECT public.bump_catalog_version().';
+
+-- -----------------------------------------------------------------------------
+-- 1c. Attach to every table that feeds the envelope
+-- -----------------------------------------------------------------------------
+-- The list is exhaustive against get_pos_bootstrap_v1 below. If you add a table
+-- to the envelope, add it here in the same commit or the version will lie.
+DO $do$
+DECLARE
+  t text;
+  catalog_tables text[] := ARRAY[
+    -- menu spine
+    'menus', 'location_menus', 'menu_categories', 'location_menu_category_overrides',
+    'categories', 'location_category_overrides',
+    -- items and the five price levels
+    'category_items', 'menu_items', 'location_item_overrides',
+    'location_category_item_overrides', 'location_menu_item_overrides',
+    -- modifiers
+    'modifier_groups', 'modifier_group_items', 'menu_item_modifier_groups',
+    'location_item_modifier_groups', 'location_modifier_group_overrides',
+    'location_modifier_item_overrides',
+    -- schedules
+    'menu_schedules', 'schedules', 'schedule_time_slots',
+    -- non-menu envelope members
+    'tax_rates', 'menu_item_recipes', 'modifier_group_item_recipes'
+  ];
+BEGIN
+  FOREACH t IN ARRAY catalog_tables LOOP
+    EXECUTE format('DROP TRIGGER IF EXISTS trg_bump_catalog_version ON public.%I', t);
+    EXECUTE format(
+      'CREATE TRIGGER trg_bump_catalog_version
+         AFTER INSERT OR UPDATE OR DELETE ON public.%I
+         FOR EACH ROW EXECUTE FUNCTION public.tg_bump_catalog_version()', t);
+  END LOOP;
+END
+$do$;
+
+-- =============================================================================
+-- 2. get_pos_bootstrap_v1
+-- =============================================================================
+CREATE OR REPLACE FUNCTION public.get_pos_bootstrap_v1(
+  p_location_id   uuid,
+  p_known_version text DEFAULT NULL
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path TO 'public', 'pg_temp'
+AS $function$
+DECLARE
+  v_merchant_id uuid;
+  v_counter     bigint;
+  v_snooze_sig  text;
+  v_version     text;
+  v_tax_rates   jsonb;
+  v_snoozes     jsonb;
+  v_menus       jsonb;
+  v_mod_groups  jsonb;
+  v_recipes     jsonb;
+BEGIN
+  -- ---------------------------------------------------------------------------
+  -- 2a. Authorization. SECURITY DEFINER bypasses RLS on every table below, so
+  --     this gate IS the access control. Copied verbatim from get_active_snoozes.
+  -- ---------------------------------------------------------------------------
+  IF NOT (
+    auth.role() = 'service_role'
+    OR public.is_location_member(p_location_id)
+    OR public.user_has_location_permission(p_location_id, 'location.manage')
+  ) THEN
+    RAISE EXCEPTION 'Not authorized to bootstrap location %', p_location_id
+      USING ERRCODE = '42501';
+  END IF;
+
+  SELECT l.merchant_id INTO v_merchant_id
+  FROM public.locations l WHERE l.id = p_location_id;
+
+  -- ---------------------------------------------------------------------------
+  -- 2b. Version = explicit counter + active-snooze signature.
+  --     Missing counter row reads as 0; the bump UPSERT inserts 1, so the first
+  --     edit after a missed seed still advances. Never decreases.
+  -- ---------------------------------------------------------------------------
+  SELECT cv.version INTO v_counter
+  FROM public.catalog_versions cv WHERE cv.location_id = p_location_id;
+  v_counter := COALESCE(v_counter, 0);
+
+  -- Epoch seconds, never a rendered timestamp: ::text on a timestamptz renders
+  -- through the session TimeZone GUC, which would make the version depend on
+  -- the caller's connection settings. That is the clock-skew class of bug this
+  -- whole design exists to avoid.
+  --
+  -- isfinite() guard is NOT defensive padding. 'infinity' is how the 86 UI
+  -- expresses "sold out indefinitely", and on prod 2026-08-13 it is the ONLY
+  -- value present: 3 of 3 active snoozes (2 location_item_overrides, 1
+  -- location_modifier_item_overrides) are infinity, 0 are timed. infinity
+  -- passes the `> now()` filter and then raises 0A000 "cannot convert infinity
+  -- to bigint" -- which would have made this function throw for every location
+  -- that has ever 86'd anything. Caught by running this block read-only against
+  -- prod before shipping.
+  SELECT md5(p_location_id::text || '|' || COALESCE(string_agg(sig, ',' ORDER BY sig), ''))
+  INTO v_snooze_sig
+  FROM (
+    SELECT 'i:' || lio.menu_item_id::text || '@'
+             || CASE WHEN isfinite(lio.snoozed_until)
+                     THEN EXTRACT(EPOCH FROM lio.snoozed_until)::bigint::text
+                     ELSE 'inf' END AS sig
+    FROM public.location_item_overrides lio
+    WHERE lio.location_id = p_location_id
+      AND lio.snoozed_until IS NOT NULL
+      AND lio.snoozed_until > now()
+    UNION ALL
+    SELECT 'm:' || lmi.modifier_group_item_id::text || '@'
+             || CASE WHEN isfinite(lmi.snoozed_until)
+                     THEN EXTRACT(EPOCH FROM lmi.snoozed_until)::bigint::text
+                     ELSE 'inf' END
+    FROM public.location_modifier_item_overrides lmi
+    WHERE lmi.location_id = p_location_id
+      AND lmi.snoozed_until IS NOT NULL
+      AND lmi.snoozed_until > now()
+    UNION ALL
+    SELECT 'c:' || lco.category_id::text || '@'
+             || CASE WHEN isfinite(lco.snoozed_until)
+                     THEN EXTRACT(EPOCH FROM lco.snoozed_until)::bigint::text
+                     ELSE 'inf' END
+    FROM public.location_category_overrides lco
+    WHERE lco.location_id = p_location_id
+      AND lco.snoozed_until IS NOT NULL
+      AND lco.snoozed_until > now()
+  ) s;
+
+  v_version := 'v1:' || v_counter::text || ':' || left(v_snooze_sig, 16);
+
+  -- ---------------------------------------------------------------------------
+  -- 2c. Always-on members: tax_rates and snoozes.
+  --     Column list and filters mirror hooks/pos/usePosSync.ts:68-73 exactly.
+  -- ---------------------------------------------------------------------------
+  SELECT COALESCE(jsonb_agg(
+           jsonb_build_object(
+             'id',            tr.id,
+             'location_id',   tr.location_id,
+             'name',          tr.name,
+             'percentage',    tr.percentage,
+             'tax_category',  tr.tax_category,
+             'is_active',     tr.is_active,
+             'created_at',    tr.created_at,
+             'updated_at',    tr.updated_at
+           ) ORDER BY tr.name, tr.id
+         ), '[]'::jsonb)
+  INTO v_tax_rates
+  FROM public.tax_rates tr
+  WHERE tr.location_id = p_location_id
+    AND tr.is_active = true;
+
+  -- Same three-key shape get_active_snoozes returns, same orderings, so the
+  -- client's existing mapper (usePosSync.ts:124-147) reads it unchanged.
+  SELECT jsonb_build_object(
+    'items', (
+      SELECT COALESCE(jsonb_agg(
+        jsonb_build_object(
+          'kind',          'item',
+          'menu_item_id',  lio.menu_item_id,
+          'name',          mi.name,
+          'image',         mi.image,
+          'snoozed_until', lio.snoozed_until,
+          'snooze_reason', lio.snooze_reason,
+          'updated_at',    lio.updated_at
+        ) ORDER BY mi.name, lio.menu_item_id
+      ), '[]'::jsonb)
+      FROM public.location_item_overrides lio
+      JOIN public.menu_items mi ON mi.id = lio.menu_item_id
+      WHERE lio.location_id = p_location_id
+        AND lio.snoozed_until IS NOT NULL
+        AND lio.snoozed_until > now()
+    ),
+    'modifiers', (
+      SELECT COALESCE(jsonb_agg(
+        jsonb_build_object(
+          'kind',                   'modifier',
+          'modifier_group_item_id', lmi.modifier_group_item_id,
+          'modifier_group_id',      mgi.modifier_group_id,
+          'name',                   mgi.name,
+          'group_name',             mg.name,
+          'snoozed_until',          lmi.snoozed_until,
+          'snooze_reason',          lmi.snooze_reason,
+          'updated_at',             lmi.updated_at
+        ) ORDER BY mg.name, mgi.name, lmi.modifier_group_item_id
+      ), '[]'::jsonb)
+      FROM public.location_modifier_item_overrides lmi
+      JOIN public.modifier_group_items mgi ON mgi.id = lmi.modifier_group_item_id
+      JOIN public.modifier_groups mg ON mg.id = mgi.modifier_group_id
+      WHERE lmi.location_id = p_location_id
+        AND lmi.snoozed_until IS NOT NULL
+        AND lmi.snoozed_until > now()
+    ),
+    'categories', (
+      SELECT COALESCE(jsonb_agg(
+        jsonb_build_object(
+          'kind',          'category',
+          'category_id',   lco.category_id,
+          'name',          c.name,
+          'image',         c.image,
+          'snoozed_until', lco.snoozed_until,
+          'snooze_reason', lco.snooze_reason,
+          'updated_at',    lco.updated_at
+        ) ORDER BY c.name, lco.category_id
+      ), '[]'::jsonb)
+      FROM public.location_category_overrides lco
+      JOIN public.categories c ON c.id = lco.category_id
+      WHERE lco.location_id = p_location_id
+        AND lco.snoozed_until IS NOT NULL
+        AND lco.snoozed_until > now()
+    )
+  ) INTO v_snoozes;
+
+  -- ---------------------------------------------------------------------------
+  -- 2d. Cheap path. menus / modifier_groups / recipes are ABSENT, not null.
+  -- ---------------------------------------------------------------------------
+  IF p_known_version IS NOT NULL AND p_known_version = v_version THEN
+    RETURN jsonb_build_object(
+      'version',     v_version,
+      'generated_at', now(),
+      'location_id', p_location_id,
+      'unchanged',   true,
+      'tax_rates',   v_tax_rates,
+      'snoozes',     v_snoozes
+    );
+  END IF;
+
+  -- ---------------------------------------------------------------------------
+  -- 2e. Recipes.
+  --     Shape matches what the client already builds from the two PostgREST
+  --     reads: {id, menu_item_id | modifier_group_item_id, inventory_item_id,
+  --     quantity}, quantity <- quantity_used. The NULL inventory_item_id filter
+  --     on menu_item_recipes mirrors the client's `.filter(row =>
+  --     !!row.inventory_item_id)`; modifier recipes are unfiltered, as today.
+  --     Scoped by merchant_id -- the tenant key both tables' RLS policies use.
+  --     BOTH TABLES ARE EMPTY ON PROD (0 rows), so the shape is asserted from
+  --     the client mapper, not observed. See the report's unverified list.
+  -- ---------------------------------------------------------------------------
+  SELECT jsonb_build_object(
+    'menu_items', (
+      SELECT COALESCE(jsonb_agg(
+        jsonb_build_object(
+          'id',                r.id,
+          'menu_item_id',      r.menu_item_id,
+          'inventory_item_id', r.inventory_item_id,
+          'quantity',          COALESCE(r.quantity_used, 0)
+        ) ORDER BY r.id
+      ), '[]'::jsonb)
+      FROM public.menu_item_recipes r
+      WHERE r.merchant_id = v_merchant_id
+        AND r.inventory_item_id IS NOT NULL
+    ),
+    'modifier_group_items', (
+      SELECT COALESCE(jsonb_agg(
+        jsonb_build_object(
+          'id',                      r.id,
+          'modifier_group_item_id',  r.modifier_group_item_id,
+          'inventory_item_id',       r.inventory_item_id,
+          'quantity',                COALESCE(r.quantity_used, 0)
+        ) ORDER BY r.id
+      ), '[]'::jsonb)
+      FROM public.modifier_group_item_recipes r
+      WHERE r.merchant_id = v_merchant_id
+    )
+  ) INTO v_recipes;
+
+  -- ---------------------------------------------------------------------------
+  -- 2f. THE MENU TREE. This is the wave.
+  -- ---------------------------------------------------------------------------
+  WITH
+  -- Once per modifier group for this location (144 groups on prod), not once
+  -- per (menu, category, item, group) as get_menu_with_categories does.
+  mod_items AS (
+    SELECT mgi.modifier_group_id,
+           jsonb_agg(
+             jsonb_build_object(
+               'id',            mgi.id,
+               'name',          mgi.name,
+               'price_modifier', COALESCE(lmi.price_modifier, mgi.price_modifier),
+               'is_active', (
+                 mgi.is_active = true
+                 AND COALESCE(lmi.is_active, true) = true
+                 AND (lmi.snoozed_until IS NULL OR lmi.snoozed_until <= now())
+               ),
+               'snoozed_until',       lmi.snoozed_until,
+               'snooze_reason',       lmi.snooze_reason,
+               'stock_tracking_mode', COALESCE(lmi.stock_tracking_mode, 'in_stock'),
+               'current_stock',       lmi.current_stock
+             )
+             ORDER BY COALESCE(lmi.display_order, mgi.display_order), mgi.name, mgi.id
+           ) AS items_json
+    FROM public.modifier_group_items mgi
+    LEFT JOIN public.location_modifier_item_overrides lmi
+      ON lmi.modifier_group_item_id = mgi.id
+     AND lmi.location_id = p_location_id
+    GROUP BY mgi.modifier_group_id
+  ),
+  -- UNION dedups on (menu_item_id, modifier_group_id, display_order), matching
+  -- get_menu_with_categories' per-item UNION exactly: adding menu_item_id to
+  -- the tuple keeps the dedup per item while hoisting it out of the loop.
+  item_group_links AS (
+    SELECT menu_item_id, modifier_group_id, display_order
+    FROM public.menu_item_modifier_groups
+    UNION
+    SELECT menu_item_id, modifier_group_id, display_order
+    FROM public.location_item_modifier_groups
+    WHERE location_id = p_location_id
+  ),
+  -- Once per menu_item (356 on prod). The modifier subtree does not depend on
+  -- the menu or the category, which is why the live N+1 was pure waste.
+  item_mod_groups AS (
+    SELECT l.menu_item_id,
+           jsonb_agg(
+             jsonb_build_object(
+               'id',             mg.id,
+               'name',           mg.name,
+               'min_selections', mg.min_selections,
+               'max_selections', mg.max_selections,
+               'is_required',    mg.is_required,
+               'is_active',      COALESCE(lmgo.is_active, true),
+               'display_order',  COALESCE(lmgo.display_order, l.display_order),
+               'items',          COALESCE(mi_agg.items_json, '[]'::jsonb)
+             )
+             ORDER BY COALESCE(lmgo.display_order, l.display_order), mg.name, mg.id
+           ) AS groups_json
+    FROM item_group_links l
+    JOIN public.modifier_groups mg ON mg.id = l.modifier_group_id
+    LEFT JOIN public.location_modifier_group_overrides lmgo
+      ON lmgo.modifier_group_id = mg.id
+     AND lmgo.location_id = p_location_id
+    LEFT JOIN mod_items mi_agg ON mi_agg.modifier_group_id = mg.id
+    GROUP BY l.menu_item_id
+  ),
+  -- Menu selection: predicate copied verbatim from get_pos_full_sync.
+  scoped_menus AS (
+    SELECT m.id, m.merchant_id, m.location_id, m.name, m.description,
+           m.is_active, m.created_at, m.updated_at,
+           COALESCE(lm.display_order, m.display_order) AS eff_display_order
+    FROM public.menus m
+    LEFT JOIN public.location_menus lm
+      ON lm.menu_id = m.id AND lm.location_id = p_location_id
+    WHERE m.merchant_id = v_merchant_id
+      AND (m.location_id IS NULL OR m.location_id = p_location_id)
+      AND (
+        (m.location_id = p_location_id AND m.is_active = true)
+        OR (m.location_id IS NULL AND (m.is_active = true OR lm.is_active = true))
+      )
+  ),
+  -- Category rows, carrying the owning menu's location_id because
+  -- effective_price branches on it.
+  scoped_mc AS (
+    SELECT mc.id AS mc_id, mc.menu_id, mc.category_id,
+           mc.display_order AS mc_display_order, mc.is_active AS mc_is_active,
+           mc.custom_title AS mc_custom_title, mc.custom_image AS mc_custom_image,
+           sm.location_id AS menu_location_id,
+           c.name AS c_name, c.description AS c_description,
+           c.image AS c_image, c.location_id AS c_location_id,
+           lco.id AS lco_id, lco.display_order AS lco_display_order,
+           lco.is_active AS lco_is_active,
+           lco.snoozed_until AS lco_snoozed_until, lco.snooze_reason AS lco_snooze_reason,
+           lmco.id AS lmco_id, lmco.display_order AS lmco_display_order,
+           lmco.is_active AS lmco_is_active, lmco.custom_title AS lmco_custom_title
+    FROM scoped_menus sm
+    JOIN public.menu_categories mc ON mc.menu_id = sm.id
+    JOIN public.categories c ON c.id = mc.category_id
+    LEFT JOIN public.location_category_overrides lco
+      ON lco.category_id = c.id AND lco.location_id = p_location_id
+    LEFT JOIN public.location_menu_category_overrides lmco
+      ON lmco.category_id = c.id AND lmco.menu_id = mc.menu_id
+     AND lmco.location_id = p_location_id
+    WHERE COALESCE(lmco.is_active, lco.is_active, mc.is_active, true) = true
+  ),
+  -- The MENU-INDEPENDENT half of an item: global category row, base item,
+  -- location item override, branch category override, modifier subtree.
+  -- Built once per (category, menu_item) instead of once per menu as well.
+  base_items AS (
+    SELECT ci.category_id, ci.menu_item_id,
+           ci.id AS ci_id, ci.display_order AS ci_display_order,
+           ci.is_featured AS ci_is_featured, ci.is_available AS ci_is_available,
+           ci.custom_price AS ci_custom_price,
+           ci.custom_cash_price AS ci_custom_cash_price,
+           ci.custom_delivery_price AS ci_custom_delivery_price,
+           mi.name AS mi_name, mi.description AS mi_description, mi.image AS mi_image,
+           mi.allergens AS mi_allergens, mi.meal_types AS mi_meal_types,
+           mi.dietary_flags AS mi_dietary_flags, mi.card_bg_color AS mi_card_bg_color,
+           mi.availability AS mi_availability, mi.price AS mi_price,
+           mi.cash_price AS mi_cash_price, mi.delivery_price AS mi_delivery_price,
+           mi.stock_tracking_mode AS mi_stock_tracking_mode,
+           lio.id AS lio_id, lio.custom_price AS lio_custom_price,
+           lio.custom_cash_price AS lio_custom_cash_price,
+           lio.custom_delivery_price AS lio_custom_delivery_price,
+           lio.price_modifier AS lio_price_modifier,
+           lio.price_modifier_type AS lio_price_modifier_type,
+           lio.is_available AS lio_is_available,
+           lio.snoozed_until AS lio_snoozed_until, lio.snooze_reason AS lio_snooze_reason,
+           lio.stock_tracking_mode AS lio_stock_tracking_mode,
+           lio.current_stock AS lio_current_stock,
+           lcio.id AS lcio_id, lcio.display_order AS lcio_display_order,
+           lcio.is_featured AS lcio_is_featured, lcio.is_available AS lcio_is_available,
+           lcio.custom_price AS lcio_custom_price,
+           lcio.custom_cash_price AS lcio_custom_cash_price,
+           lcio.custom_delivery_price AS lcio_custom_delivery_price,
+           img.groups_json
+    FROM public.category_items ci
+    JOIN public.menu_items mi ON mi.id = ci.menu_item_id
+    LEFT JOIN public.location_item_overrides lio
+      ON lio.menu_item_id = mi.id AND lio.location_id = p_location_id
+    LEFT JOIN public.location_category_item_overrides lcio
+      ON lcio.menu_item_id = mi.id AND lcio.category_id = ci.category_id
+     AND lcio.location_id = p_location_id
+    LEFT JOIN item_mod_groups img ON img.menu_item_id = mi.id
+    WHERE ci.menu_id IS NULL
+      AND COALESCE(ci.is_available, true) = true
+      AND ci.category_id IN (SELECT category_id FROM scoped_mc)
+  ),
+  -- Attach the MENU-DEPENDENT half: ci_menu (menu-specific global category row)
+  -- and lmio (branch menu override). Only these two, plus menu_location_id,
+  -- actually vary by menu.
+  cat_items_json AS (
+    SELECT smc.menu_id, smc.category_id,
+      jsonb_agg(
+        jsonb_build_object(
+          'id',            b.ci_id,
+          'menu_item_id',  b.menu_item_id,
+          'category_id',   smc.category_id,
+          'display_order', COALESCE(b.lcio_display_order, b.ci_display_order),
+          'is_featured',   COALESCE(b.lcio_is_featured, b.ci_is_featured),
+          'menu_item', jsonb_build_object(
+            'id',            b.menu_item_id,
+            'name',          b.mi_name,
+            'description',   b.mi_description,
+            'image',         b.mi_image,
+            'allergens',     b.mi_allergens,
+            'meal_types',    b.mi_meal_types,
+            'dietary_flags', b.mi_dietary_flags,
+            'card_bg_color', b.mi_card_bg_color,
+
+            -- AVAILABILITY: AND across all five levels, plus the 86/snooze
+            -- clause. Term order and COALESCE defaults copied verbatim.
+            'effective_availability', (
+              b.mi_availability = true                              -- L1 base item
+              AND COALESCE(b.lio_is_available, true) = true         -- L2 location item
+              AND COALESCE(b.ci_is_available, true) = true          -- global category row
+              AND COALESCE(ci_menu.is_available, true) = true       -- global menu-category row
+              AND COALESCE(b.lcio_is_available, true) = true        -- branch category override
+              AND COALESCE(lmio.is_available, true) = true          -- branch menu override
+              AND (b.lio_snoozed_until IS NULL OR b.lio_snoozed_until <= now())
+            ),
+            'snoozed_until', b.lio_snoozed_until,
+            'snooze_reason', b.lio_snooze_reason,
+
+            'price_levels', jsonb_build_object(
+              'level_1_base',                        b.mi_price,
+              'level_2_location_item',               b.lio_custom_price,
+              'level_2_modifier',                    b.lio_price_modifier,
+              'level_2_modifier_type',               b.lio_price_modifier_type,
+              'level_3_category',                    b.ci_custom_price,
+              'level_3_category_cash',               b.ci_custom_cash_price,
+              'level_3_category_delivery',           b.ci_custom_delivery_price,
+              'level_3_menu_category',               ci_menu.custom_price,
+              'level_3_menu_category_cash',          ci_menu.custom_cash_price,
+              'level_3_menu_category_delivery',      ci_menu.custom_delivery_price,
+              'level_4_location_category',           b.lcio_custom_price,
+              'level_4_location_category_cash',      b.lcio_custom_cash_price,
+              'level_4_location_category_delivery',  b.lcio_custom_delivery_price,
+              'level_5_location_menu',               lmio.custom_price,
+              'level_5_location_menu_cash',          lmio.custom_cash_price,
+              'level_5_location_menu_delivery',      lmio.custom_delivery_price,
+              'level_1_delivery',                    b.mi_delivery_price,
+              'level_1_cash',                        b.mi_cash_price,
+              'level_2_location_item_delivery',      b.lio_custom_delivery_price
+            ),
+
+            -- EFFECTIVE PRICE. UI L5 > L4 > L3 > L2 > L1
+            --                  DB lmio > ci_menu > lcio > ci > lio/mi
+            -- Location-owned menus take the short cascade; note it reads ci
+            -- (global category row), NOT ci_menu. Preserved as-is.
+            'effective_price', CASE
+              WHEN smc.menu_location_id IS NOT NULL
+                THEN COALESCE(b.ci_custom_price, b.mi_price)
+              ELSE COALESCE(
+                lmio.custom_price,
+                ci_menu.custom_price,
+                b.lcio_custom_price,
+                b.ci_custom_price,
+                CASE
+                  WHEN b.lio_price_modifier_type = 'add'
+                       AND b.lio_price_modifier IS NOT NULL
+                    THEN b.mi_price + b.lio_price_modifier
+                  WHEN b.lio_price_modifier_type = 'percent'
+                       AND b.lio_price_modifier IS NOT NULL
+                    THEN b.mi_price * (1 + b.lio_price_modifier / 100)
+                  WHEN b.lio_custom_price IS NOT NULL
+                    THEN b.lio_custom_price
+                  ELSE NULL
+                END,
+                b.mi_price
+              )
+            END,
+
+            'effective_cash_price', CASE
+              WHEN smc.menu_location_id IS NOT NULL
+                THEN COALESCE(b.ci_custom_cash_price, b.mi_cash_price)
+              ELSE COALESCE(
+                lmio.custom_cash_price,
+                ci_menu.custom_cash_price,
+                b.lcio_custom_cash_price,
+                b.ci_custom_cash_price,
+                b.lio_custom_cash_price,
+                b.mi_cash_price
+              )
+            END,
+
+            'effective_delivery_price', CASE
+              WHEN smc.menu_location_id IS NOT NULL
+                THEN COALESCE(b.ci_custom_delivery_price, b.mi_delivery_price)
+              ELSE COALESCE(
+                lmio.custom_delivery_price,
+                ci_menu.custom_delivery_price,
+                b.lcio_custom_delivery_price,
+                b.ci_custom_delivery_price,
+                b.lio_custom_delivery_price,
+                b.mi_delivery_price
+              )
+            END,
+
+            -- price_source deliberately ignores the location-owned-menu branch
+            -- above, exactly as the live function does. Do not "fix" this here;
+            -- it would be a silent contract change.
+            'price_source', CASE
+              WHEN lmio.custom_price IS NOT NULL     THEN 'location_menu'
+              WHEN ci_menu.custom_price IS NOT NULL  THEN 'menu_category'
+              WHEN b.lcio_custom_price IS NOT NULL   THEN 'location_category'
+              WHEN b.ci_custom_price IS NOT NULL     THEN 'category'
+              WHEN b.lio_custom_price IS NOT NULL
+                   OR b.lio_price_modifier IS NOT NULL THEN 'location_item'
+              ELSE 'base'
+            END,
+
+            'has_location_item_override',     (b.lio_id IS NOT NULL),
+            'has_category_override',          (b.ci_custom_price IS NOT NULL),
+            'has_menu_category_override',     (ci_menu.id IS NOT NULL),
+            'has_location_category_override', (b.lcio_id IS NOT NULL),
+            'has_location_menu_override',     (lmio.id IS NOT NULL),
+
+            'stock_tracking_mode', COALESCE(
+              NULLIF(b.lio_stock_tracking_mode, 'use_default'),
+              b.mi_stock_tracking_mode
+            ),
+            'current_stock', b.lio_current_stock,
+
+            'modifier_groups', COALESCE(b.groups_json, '[]'::jsonb)
+          )
+        )
+        ORDER BY COALESCE(b.lcio_display_order, b.ci_display_order),
+                 b.mi_name, b.ci_id            -- determinism tiebreak, see header
+      ) AS items_json
+    FROM scoped_mc smc
+    JOIN base_items b ON b.category_id = smc.category_id
+    LEFT JOIN public.category_items ci_menu
+      ON ci_menu.menu_item_id = b.menu_item_id
+     AND ci_menu.category_id  = b.category_id
+     AND ci_menu.menu_id      = smc.menu_id
+    LEFT JOIN public.location_menu_item_overrides lmio
+      ON lmio.menu_item_id = b.menu_item_id
+     AND lmio.menu_id      = smc.menu_id
+     AND lmio.category_id  = b.category_id
+     AND lmio.location_id  = p_location_id
+    GROUP BY smc.menu_id, smc.category_id
+  ),
+  menu_cats_json AS (
+    SELECT smc.menu_id,
+      jsonb_agg(
+        jsonb_build_object(
+          'id',            smc.mc_id,
+          'category_id',   smc.category_id,
+          'display_order', COALESCE(smc.lmco_display_order, smc.lco_display_order,
+                                    smc.mc_display_order),
+          'is_active',     COALESCE(smc.lmco_is_active, smc.lco_is_active,
+                                    smc.mc_is_active, true),
+          -- Raw category snooze state. A snoozed category stays is_active=true;
+          -- consumers mark its items Sold Out themselves.
+          'snoozed_until', smc.lco_snoozed_until,
+          'snooze_reason', smc.lco_snooze_reason,
+          'category', jsonb_build_object(
+            'id',          smc.category_id,
+            -- Note the name cascade skips lco.custom_title. Preserved verbatim.
+            'name',        COALESCE(smc.lmco_custom_title, smc.mc_custom_title, smc.c_name),
+            'description', smc.c_description,
+            'image',       COALESCE(smc.mc_custom_image, smc.c_image),
+            'has_location_override',      (smc.lco_id IS NOT NULL),
+            'has_menu_category_override', (smc.lmco_id IS NOT NULL),
+            'location_id', smc.c_location_id
+          ),
+          'items', COALESCE(cij.items_json, '[]'::jsonb)
+        )
+        ORDER BY COALESCE(smc.lmco_display_order, smc.lco_display_order,
+                          smc.mc_display_order),
+                 smc.c_name, smc.mc_id         -- determinism tiebreak, see header
+      ) AS categories_json
+    FROM scoped_mc smc
+    LEFT JOIN cat_items_json cij
+      ON cij.menu_id = smc.menu_id AND cij.category_id = smc.category_id
+    GROUP BY smc.menu_id
+  ),
+  menu_scheds_json AS (
+    SELECT ms.menu_id,
+      jsonb_agg(
+        jsonb_build_object(
+          'id', ms.id,
+          -- NULL when the schedule row is missing, matching the live
+          -- correlated subquery's NULL result.
+          'schedule', CASE WHEN s.id IS NULL THEN NULL ELSE jsonb_build_object(
+            'id',   s.id,
+            'name', s.name,
+            'time_slots', COALESCE((
+              SELECT jsonb_agg(
+                       jsonb_build_object(
+                         'id',          ts.id,
+                         'day_of_week', ts.day_of_week,
+                         'start_time',  ts.start_time,
+                         'end_time',    ts.end_time
+                       ) ORDER BY ts.day_of_week, ts.start_time, ts.id
+                     )
+              FROM public.schedule_time_slots ts
+              WHERE ts.schedule_id = s.id
+            ), '[]'::jsonb)
+          ) END
+        ) ORDER BY ms.id                       -- live has NO order by here at all
+      ) AS schedules_json
+    FROM public.menu_schedules ms
+    LEFT JOIN public.schedules s ON s.id = ms.schedule_id
+    WHERE ms.menu_id IN (SELECT id FROM scoped_menus)
+    GROUP BY ms.menu_id
+  )
+  SELECT COALESCE(
+    jsonb_agg(
+      jsonb_build_object(
+        'id',                sm.id,
+        'merchant_id',       sm.merchant_id,
+        'location_id',       sm.location_id,
+        'name',              sm.name,
+        'description',       sm.description,
+        'is_active',         sm.is_active,
+        'is_global',         (sm.location_id IS NULL),
+        'is_location_owned', (sm.location_id IS NOT NULL),
+        'created_at',        sm.created_at,
+        'updated_at',        sm.updated_at,
+        'categories',        COALESCE(mcj.categories_json, '[]'::jsonb),
+        'schedules',         COALESCE(msj.schedules_json, '[]'::jsonb),
+        -- get_pos_full_sync injects this by jsonb concat after the fact; same
+        -- resulting key, built inline.
+        'display_order',     sm.eff_display_order
+      )
+      ORDER BY sm.eff_display_order NULLS LAST, sm.name, sm.id
+    ), '[]'::jsonb
+  )
+  INTO v_menus
+  FROM scoped_menus sm
+  LEFT JOIN menu_cats_json  mcj ON mcj.menu_id = sm.id
+  LEFT JOIN menu_scheds_json msj ON msj.menu_id = sm.id;
+
+  -- ---------------------------------------------------------------------------
+  -- 2g. Deduplicated modifier-group index.
+  --     Additive: the same groups still appear nested inside every menu_item.
+  --     display_order is intentionally ABSENT -- it belongs to the item->group
+  --     link, not to the group. See the header for what a v2 needs before the
+  --     nested copies can be dropped.
+  -- ---------------------------------------------------------------------------
+  WITH reachable_items AS (
+    SELECT DISTINCT ci.menu_item_id
+    FROM public.menus m
+    LEFT JOIN public.location_menus lm
+      ON lm.menu_id = m.id AND lm.location_id = p_location_id
+    JOIN public.menu_categories mc ON mc.menu_id = m.id
+    JOIN public.category_items ci
+      ON ci.category_id = mc.category_id
+     AND ci.menu_id IS NULL
+     AND COALESCE(ci.is_available, true) = true
+    WHERE m.merchant_id = v_merchant_id
+      AND (m.location_id IS NULL OR m.location_id = p_location_id)
+      AND (
+        (m.location_id = p_location_id AND m.is_active = true)
+        OR (m.location_id IS NULL AND (m.is_active = true OR lm.is_active = true))
+      )
+  ),
+  reachable_groups AS (
+    SELECT DISTINCT l.modifier_group_id
+    FROM (
+      SELECT menu_item_id, modifier_group_id FROM public.menu_item_modifier_groups
+      UNION
+      SELECT menu_item_id, modifier_group_id FROM public.location_item_modifier_groups
+      WHERE location_id = p_location_id
+    ) l
+    JOIN reachable_items ri ON ri.menu_item_id = l.menu_item_id
+  ),
+  group_items AS (
+    SELECT mgi.modifier_group_id,
+           jsonb_agg(
+             jsonb_build_object(
+               'id',             mgi.id,
+               'name',           mgi.name,
+               'price_modifier', COALESCE(lmi.price_modifier, mgi.price_modifier),
+               'is_active', (
+                 mgi.is_active = true
+                 AND COALESCE(lmi.is_active, true) = true
+                 AND (lmi.snoozed_until IS NULL OR lmi.snoozed_until <= now())
+               ),
+               'snoozed_until',       lmi.snoozed_until,
+               'snooze_reason',       lmi.snooze_reason,
+               'stock_tracking_mode', COALESCE(lmi.stock_tracking_mode, 'in_stock'),
+               'current_stock',       lmi.current_stock
+             )
+             ORDER BY COALESCE(lmi.display_order, mgi.display_order), mgi.name, mgi.id
+           ) AS items_json
+    FROM public.modifier_group_items mgi
+    LEFT JOIN public.location_modifier_item_overrides lmi
+      ON lmi.modifier_group_item_id = mgi.id AND lmi.location_id = p_location_id
+    WHERE mgi.modifier_group_id IN (SELECT modifier_group_id FROM reachable_groups)
+    GROUP BY mgi.modifier_group_id
+  )
+  SELECT COALESCE(
+    jsonb_agg(
+      jsonb_build_object(
+        'id',             mg.id,
+        'name',           mg.name,
+        'min_selections', mg.min_selections,
+        'max_selections', mg.max_selections,
+        'is_required',    mg.is_required,
+        'is_active',      COALESCE(lmgo.is_active, true),
+        'items',          COALESCE(gi.items_json, '[]'::jsonb)
+      ) ORDER BY mg.name, mg.id
+    ), '[]'::jsonb
+  )
+  INTO v_mod_groups
+  FROM reachable_groups rg
+  JOIN public.modifier_groups mg ON mg.id = rg.modifier_group_id
+  LEFT JOIN public.location_modifier_group_overrides lmgo
+    ON lmgo.modifier_group_id = mg.id AND lmgo.location_id = p_location_id
+  LEFT JOIN group_items gi ON gi.modifier_group_id = mg.id;
+
+  RETURN jsonb_build_object(
+    'version',         v_version,
+    'generated_at',    now(),
+    'location_id',     p_location_id,
+    'unchanged',       false,
+    'menus',           COALESCE(v_menus, '[]'::jsonb),
+    'modifier_groups', COALESCE(v_mod_groups, '[]'::jsonb),
+    'recipes',         v_recipes,
+    'tax_rates',       v_tax_rates,
+    'snoozes',         v_snoozes
+  );
+END;
+$function$;
+
+COMMENT ON FUNCTION public.get_pos_bootstrap_v1(uuid, text) IS
+  'Single-envelope POS boot: menus + modifier_groups + recipes + tax_rates + '
+  'snoozes, replacing get_pos_full_sync plus four side queries. Menu tree is '
+  'value-identical to get_pos_full_sync (verified 330/330 items, 0 diffs) but '
+  'composed once instead of once per menu, and array order is now deterministic. '
+  'Pass p_known_version to skip the heavy body when unchanged=true; tax_rates '
+  'and snoozes always ship. See AUD-1.';
+
+REVOKE ALL ON FUNCTION public.get_pos_bootstrap_v1(uuid, text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.get_pos_bootstrap_v1(uuid, text)
+  TO authenticated, service_role;
+
+COMMIT;
+
+-- =============================================================================
+-- ROLLBACK
+-- =============================================================================
+-- Two independent halves. The RPC half is inert until the client cuts over, so
+-- reverting only the TRIGGER half is a valid partial rollback (the version then
+-- stops advancing -- if you do that, make sure no shipped client is passing
+-- p_known_version, or it will cache the menu forever).
+--
+-- -- RPC half:
+-- BEGIN;
+-- DROP FUNCTION IF EXISTS public.get_pos_bootstrap_v1(uuid, text);
+-- COMMIT;
+--
+-- -- Trigger/counter half:
+-- BEGIN;
+-- DO $do$
+-- DECLARE t text;
+-- BEGIN
+--   FOREACH t IN ARRAY ARRAY[
+--     'menus','location_menus','menu_categories','location_menu_category_overrides',
+--     'categories','location_category_overrides','category_items','menu_items',
+--     'location_item_overrides','location_category_item_overrides',
+--     'location_menu_item_overrides','modifier_groups','modifier_group_items',
+--     'menu_item_modifier_groups','location_item_modifier_groups',
+--     'location_modifier_group_overrides','location_modifier_item_overrides',
+--     'menu_schedules','schedules','schedule_time_slots','tax_rates',
+--     'menu_item_recipes','modifier_group_item_recipes'
+--   ] LOOP
+--     EXECUTE format('DROP TRIGGER IF EXISTS trg_bump_catalog_version ON public.%I', t);
+--   END LOOP;
+-- END $do$;
+-- DROP FUNCTION IF EXISTS public.tg_bump_catalog_version();
+-- DROP FUNCTION IF EXISTS public.bump_catalog_version(uuid, uuid);
+-- DROP TABLE IF EXISTS public.catalog_versions;
+-- COMMIT;
+--
+-- get_pos_full_sync and get_menu_with_categories are untouched throughout.
+-- =============================================================================
