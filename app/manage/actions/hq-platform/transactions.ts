@@ -259,6 +259,7 @@ interface PlatformSettlementBatchRpcRow {
   refund_amount: number | string | null
   net_deposit: number | string | null
   status: string | null
+  origin: string | null
   linked_payment_count: number | string | null
   linked_payment_amount: number | string | null
   discrepancy_amount: number | string | null
@@ -290,6 +291,8 @@ export interface PlatformSettlementBatch {
   refund_amount: number
   net_deposit: number
   status: string
+  /** How the batch was settled: pos_manual | pos_auto | valor_webhook | hq_manual. */
+  origin?: string | null
   linked_payment_count: number
   linked_payment_amount: number
   discrepancy_amount: number
@@ -1069,6 +1072,7 @@ function mapRpcRowToSettlementBatch(row: PlatformSettlementBatchRpcRow): Platfor
     refund_amount: Number(row.refund_amount || 0),
     net_deposit: Number(row.net_deposit || 0),
     status: row.status || 'unknown',
+    origin: row.origin || null,
     linked_payment_count: Number(row.linked_payment_count || 0),
     linked_payment_amount: Number(row.linked_payment_amount || 0),
     discrepancy_amount: Number(row.discrepancy_amount || 0),
