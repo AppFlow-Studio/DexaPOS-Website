@@ -224,9 +224,17 @@ export default function FinancialsPage() {
         </div>
       </Tabs>
 
-      <div className="grid min-w-0 gap-6 xl:grid-cols-[440px_minmax(0,1fr)]">
+      {/* Transactions gets the full page width — it has no left-column summary,
+          so a 440px empty gutter would just squeeze the table. */}
+      <div
+        className={
+          activeTab === "transactions"
+            ? "grid min-w-0 gap-6"
+            : "grid min-w-0 gap-6 xl:grid-cols-[440px_minmax(0,1fr)]"
+        }
+      >
       {/* LEFT COLUMN: Controls & Summaries */}
-      <div className="min-w-0 space-y-4">
+      <div className={cn("min-w-0 space-y-4", activeTab === "transactions" && "hidden")}>
 
         {/* Scrollable Summary Cards - Hidden Scrollbar */}
         <div className="space-y-4">

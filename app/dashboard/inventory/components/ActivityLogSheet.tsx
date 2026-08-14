@@ -157,7 +157,7 @@ export function ActivityLogSheet({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex h-dvh w-full max-w-none flex-col gap-0 overflow-hidden rounded-none bg-card p-0 sm:h-[min(800px,calc(100dvh-2rem))] sm:max-w-4xl sm:rounded-3xl">
+      <DialogContent className="flex h-dvh w-full max-w-none flex-col gap-0 overflow-hidden max-sm:overflow-hidden rounded-none bg-card p-0 sm:h-[min(800px,calc(100dvh-2rem))] sm:max-w-4xl sm:rounded-3xl">
         <DialogHeader className="bg-card px-5 py-5 pr-14 text-left sm:px-6 sm:pr-16">
           <DialogTitle className="flex items-center gap-2">
             <Clock className="h-5 w-5 text-muted-foreground" />

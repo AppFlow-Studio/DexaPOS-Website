@@ -158,7 +158,7 @@ export function AddItemDialog({ open, onOpenChange }: AddItemDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="flex max-h-dvh w-full max-w-none flex-col gap-0 overflow-hidden rounded-none bg-card p-0 max-sm:h-auto max-sm:top-auto max-sm:translate-y-0 sm:h-[min(760px,calc(100dvh-1rem))] sm:w-[calc(100%-1rem)] sm:max-h-[90vh] sm:max-w-lg sm:rounded-3xl"
+        className="flex max-h-dvh w-full max-w-none flex-col gap-0 overflow-hidden max-sm:overflow-hidden rounded-none bg-card p-0 max-sm:h-auto max-sm:top-auto max-sm:translate-y-0 sm:h-[min(760px,calc(100dvh-1rem))] sm:w-[calc(100%-1rem)] sm:max-h-[90vh] sm:max-w-lg sm:rounded-3xl"
         overlayClassName="bg-black/35 backdrop-blur-md"
       >
         <DialogHeader className="shrink-0 px-5 pb-4 pt-5 pr-14 sm:px-6 sm:pt-6 sm:pr-16">

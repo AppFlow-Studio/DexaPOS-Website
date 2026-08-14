@@ -351,7 +351,7 @@ export function EditItemDialog({
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent
-          className="flex max-h-dvh w-full max-w-none flex-col gap-0 overflow-hidden rounded-none p-0 max-sm:h-auto max-sm:top-auto max-sm:translate-y-0 sm:h-auto sm:max-h-[90vh] sm:w-[calc(100%-1rem)] sm:max-w-[450px] sm:rounded-3xl"
+          className="flex max-h-dvh w-full max-w-none flex-col gap-0 overflow-hidden max-sm:overflow-hidden rounded-none p-0 max-sm:h-auto max-sm:top-auto max-sm:translate-y-0 sm:h-auto sm:max-h-[90vh] sm:w-[calc(100%-1rem)] sm:max-w-[450px] sm:rounded-3xl"
           overlayClassName="bg-black/35 backdrop-blur-md"
         >
           <DialogHeader className="shrink-0 px-6 pt-6 pb-4">
@@ -529,7 +529,7 @@ export function EditItemDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="flex max-h-dvh w-full max-w-none flex-col gap-0 overflow-hidden rounded-none p-0 max-sm:h-auto max-sm:top-auto max-sm:translate-y-0 sm:h-auto sm:max-h-[90vh] sm:w-[calc(100%-1rem)] sm:max-w-[550px] sm:rounded-3xl"
+        className="flex max-h-dvh w-full max-w-none flex-col gap-0 overflow-hidden max-sm:overflow-hidden rounded-none p-0 max-sm:h-auto max-sm:top-auto max-sm:translate-y-0 sm:h-auto sm:max-h-[90vh] sm:w-[calc(100%-1rem)] sm:max-w-[550px] sm:rounded-3xl"
         overlayClassName="bg-black/35 backdrop-blur-md"
       >
         <DialogHeader className="shrink-0 px-6 pt-6 pb-4">

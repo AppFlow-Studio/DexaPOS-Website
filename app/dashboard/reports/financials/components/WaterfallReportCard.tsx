@@ -136,7 +136,7 @@ function ValidationBanner({
 }) {
   if (validation.is_balanced) {
     return (
-      <div className="flex items-center gap-3 rounded-xl border border-border/70 bg-muted/35 p-4">
+      <div className="flex items-center gap-3 rounded-2xl border border-border/70 bg-muted/35 p-4">
         <CheckCircle2 className="h-5 w-5 shrink-0 text-muted-foreground" />
         <div>
           <p className="text-sm font-medium text-foreground">
@@ -152,7 +152,7 @@ function ValidationBanner({
   }
 
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-border/70 bg-muted/35 p-4">
+    <div className="flex items-center gap-3 rounded-2xl border border-border/70 bg-muted/35 p-4">
       <AlertTriangle className="h-5 w-5 shrink-0 text-muted-foreground" />
       <div>
         <p className="text-sm font-medium text-foreground">
