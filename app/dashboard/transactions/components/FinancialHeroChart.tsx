@@ -306,10 +306,10 @@ export function FinancialHeroChart({
             value={activeMetric}
             onValueChange={(v) => setActiveMetric(v as MetricType)}
           >
-            <SelectTrigger className="w-full sm:w-[150px] h-9 bg-muted/50 border-border/60 rounded-lg text-sm font-medium">
+            <SelectTrigger className="w-full sm:w-[150px] h-9 bg-muted/50 border-border/60 rounded-full text-sm font-medium">
               <SelectValue placeholder="Select metric" />
             </SelectTrigger>
-            <SelectContent className="rounded-lg">
+            <SelectContent className="rounded-2xl">
               <SelectItem value="net_sales">Net Sales</SelectItem>
               <SelectItem value="gross_sales">Gross Revenue</SelectItem>
               <SelectItem value="order_count">Total Orders</SelectItem>

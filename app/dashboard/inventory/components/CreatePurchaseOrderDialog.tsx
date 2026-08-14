@@ -167,7 +167,7 @@ export function CreatePurchaseOrderDialog({
   if (isAllLocations) {
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-[450px]">
+        <DialogContent className="sm:max-w-[450px] sm:rounded-3xl">
           <DialogHeader>
             <div className="flex items-center gap-3">
               <div className="p-2.5 rounded-xl bg-amber-500/20 border border-amber-500/10">
@@ -199,7 +199,7 @@ export function CreatePurchaseOrderDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[700px] sm:rounded-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <div className="flex items-center gap-3">
             <div className="p-2.5 rounded-xl bg-gradient-to-br from-emerald-500/20 to-emerald-500/5 border border-emerald-500/10">
@@ -237,7 +237,7 @@ export function CreatePurchaseOrderDialog({
                   <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-[400px] p-0 z-[100]">
+              <PopoverContent className="w-[400px] overflow-hidden rounded-2xl p-0 z-[100]">
                 <Command>
                   <CommandInput placeholder="Search vendors..." />
                   <CommandList>
@@ -312,7 +312,7 @@ export function CreatePurchaseOrderDialog({
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-[min(500px,calc(100vw-2rem))] p-0 z-[100]">
+                <PopoverContent className="w-[min(500px,calc(100vw-2rem))] overflow-hidden rounded-2xl p-0 z-[100]">
                   <Command>
                     <CommandInput placeholder="Search items..." />
                     <CommandList>

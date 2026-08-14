@@ -33,6 +33,7 @@ import {
   Package,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { DatePopover } from "../../settings/tips/components/DatePopover";
 import { WasteReason, LogWasteInput } from "../../actions/waste";
 
 export interface WastePickItem {
@@ -146,13 +147,15 @@ export function LogWasteDialog({
               Inventory Item <span className="text-red-500">*</span>
             </Label>
             <Select value={itemId} onValueChange={setItemId}>
-              <SelectTrigger className="h-11 w-full">
+              <SelectTrigger className="h-11 w-full min-w-0 rounded-2xl border-0 bg-muted/60 shadow-none hover:bg-muted [&>span]:min-w-0 [&>span]:truncate">
                 <SelectValue placeholder="Select an item to log waste against" />
               </SelectTrigger>
               <SelectContent
                 position="popper"
                 sideOffset={4}
-                className="max-h-[70vh] min-h-105 w-(--radix-select-trigger-width)"
+                avoidCollisions
+                collisionPadding={16}
+                className="max-h-[min(20rem,var(--radix-select-content-available-height))] w-(--radix-select-trigger-width)"
               >
                 {items.length === 0 && (
                   <div className="px-3 py-2 text-sm text-muted-foreground">
@@ -225,7 +228,7 @@ export function LogWasteDialog({
                   placeholder="0"
                   value={quantity}
                   onChange={(e) => setQuantity(e.target.value)}
-                  className="h-11 pr-14 text-base font-medium"
+                  className="h-11 rounded-2xl border-0 bg-muted/60 pr-14 text-base font-medium shadow-none"
                 />
                 <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-muted-foreground">
                   {selectedItem?.unit_type ?? "units"}
@@ -249,13 +252,12 @@ export function LogWasteDialog({
               >
                 Waste Date
               </Label>
-              <Input
+              <DatePopover
                 id="waste-date"
-                type="date"
                 value={wasteDate}
                 max={todayISO()}
-                onChange={(e) => setWasteDate(e.target.value)}
-                className="h-11"
+                onChange={(v) => setWasteDate(v ?? todayISO())}
+                className="h-11 rounded-2xl border-0 bg-muted/60 shadow-none hover:bg-muted"
               />
             </div>
           </div>
@@ -316,7 +318,7 @@ export function LogWasteDialog({
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={2}
-              className="resize-none"
+              className="resize-none border-0 bg-muted/60 shadow-none focus-visible:bg-muted/40"
             />
           </div>
         </form>

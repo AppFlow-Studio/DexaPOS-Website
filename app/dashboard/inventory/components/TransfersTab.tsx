@@ -152,10 +152,15 @@ export function TransfersTab({ items, isAllLocations }: TransfersTabProps) {
           </p>
         </div>
       ) : (
-        <div className="-mx-2 overflow-x-auto px-2">
-          <Table>
-            <TableHeader>
-              <TableRow className="border-border/60 hover:bg-transparent">
+        <>
+          {/* Wide-screen table */}
+          <Table
+            variant="data"
+            containerClassName="hidden lg:block"
+            className="min-w-[820px]"
+          >
+            <TableHeader className="[&_tr]:border-0">
+              <TableRow className="hover:bg-transparent">
                 <TableHead>Transfer #</TableHead>
                 <TableHead>Route</TableHead>
                 <TableHead>Status</TableHead>
@@ -166,30 +171,32 @@ export function TransfersTab({ items, isAllLocations }: TransfersTabProps) {
             </TableHeader>
             <TableBody>
               {transfers.map((t) => {
-                const isDestination =
-                  t.to_location_id === selectedLocationId;
+                const isDestination = t.to_location_id === selectedLocationId;
                 const isSource = t.from_location_id === selectedLocationId;
                 return (
-                  <TableRow key={t.id} className="border-border/60 last:border-0 hover:bg-muted/50">
+                  <TableRow key={t.id}>
                     <TableCell className="font-mono font-medium">
                       {t.transfer_number}
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1.5 text-sm">
                         <span>{t.from_location?.name ?? "—"}</span>
-                        <ArrowRightLeft className="h-3 w-3 text-muted-foreground" />
+                        <ArrowRightLeft className="h-3 w-3 shrink-0 text-muted-foreground" />
                         <span>{t.to_location?.name ?? "—"}</span>
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline">
+                      <Badge
+                        variant="secondary"
+                        className="w-fit rounded-full border-0 px-2.5 text-xs font-medium"
+                      >
                         {STATUS_LABELS[t.status]}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
                       {t.items_count ?? 0}
                     </TableCell>
-                    <TableCell className="whitespace-nowrap text-muted-foreground">
+                    <TableCell className="whitespace-nowrap tabular-nums text-muted-foreground">
                       {new Date(t.created_at).toLocaleDateString()}
                     </TableCell>
                     <TableCell className="text-right">
@@ -197,7 +204,7 @@ export function TransfersTab({ items, isAllLocations }: TransfersTabProps) {
                         <Button
                           size="sm"
                           variant="outline"
-                          className="gap-1.5"
+                          className="h-8 gap-1.5 rounded-full px-3"
                           onClick={() => {
                             setReceiveTransferId(t.id);
                             setReceiveOpen(true);
@@ -211,7 +218,7 @@ export function TransfersTab({ items, isAllLocations }: TransfersTabProps) {
                         <Button
                           size="sm"
                           variant="ghost"
-                          className="gap-1.5 text-rose-600"
+                          className="h-8 gap-1.5 rounded-full px-3 text-rose-600"
                           disabled={cancelTransfer.isPending}
                           onClick={() => cancelTransfer.mutate(t.id)}
                         >
@@ -236,7 +243,90 @@ export function TransfersTab({ items, isAllLocations }: TransfersTabProps) {
               })}
             </TableBody>
           </Table>
-        </div>
+
+          {/* Phones and tablets use cards instead of a horizontally scrolling table. */}
+          <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:hidden">
+            {transfers.map((t) => {
+              const isDestination = t.to_location_id === selectedLocationId;
+              const isSource = t.from_location_id === selectedLocationId;
+              return (
+                <article
+                  key={t.id}
+                  className="min-w-0 rounded-2xl border-0 bg-muted/45 p-4"
+                >
+                  <div className="flex min-w-0 items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate font-mono text-sm font-semibold">
+                        {t.transfer_number}
+                      </p>
+                      <p className="mt-0.5 text-xs tabular-nums text-muted-foreground">
+                        {new Date(t.created_at).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <Badge
+                      variant="secondary"
+                      className="shrink-0 rounded-full border-0 px-2.5 text-xs font-medium"
+                    >
+                      {STATUS_LABELS[t.status]}
+                    </Badge>
+                  </div>
+
+                  <div className="mt-5 grid min-w-0 grid-cols-2 gap-x-4 gap-y-4">
+                    <div className="min-w-0">
+                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                        Route
+                      </p>
+                      <p className="mt-0.5 break-words text-sm font-medium leading-snug">
+                        {t.from_location?.name ?? "—"}
+                        <ArrowRightLeft className="mx-1.5 inline h-3 w-3 align-middle text-muted-foreground" />
+                        {t.to_location?.name ?? "—"}
+                      </p>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                        Items
+                      </p>
+                      <p className="mt-0.5 text-sm font-medium tabular-nums">
+                        {t.items_count ?? 0}
+                      </p>
+                    </div>
+                  </div>
+
+                  {t.status === "in_transit" && (isDestination || isSource) && (
+                    <div className="mt-5 flex items-center justify-end gap-2 pt-1">
+                      {isDestination && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8 gap-1.5 rounded-full px-3"
+                          onClick={() => {
+                            setReceiveTransferId(t.id);
+                            setReceiveOpen(true);
+                          }}
+                        >
+                          <PackageCheck className="h-3.5 w-3.5" />
+                          Receive
+                        </Button>
+                      )}
+                      {isSource && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 gap-1.5 rounded-full px-3 text-rose-600"
+                          disabled={cancelTransfer.isPending}
+                          onClick={() => cancelTransfer.mutate(t.id)}
+                        >
+                          <XCircle className="h-3.5 w-3.5" />
+                          Cancel
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                </article>
+              );
+            })}
+          </div>
+        </>
       )}
 
       <CreateTransferDialog

@@ -28,6 +28,18 @@ const REASON_LABELS: Record<WasteReason, string> = {
   other: "Other",
 };
 
+/** `waste_date` is a date-only string; parse as local time so the day never
+ *  shifts backwards the way `new Date("2026-05-18")` (UTC) would. */
+const formatWasteDate = (value: string) => {
+  const [y, m, d] = value.split("-").map(Number);
+  if (!y || !m || !d) return value;
+  return new Date(y, m - 1, d).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+};
+
 interface WasteTabProps {
   items: WastePickItem[];
   isAllLocations: boolean;
@@ -97,10 +109,15 @@ export function WasteTab({ items, isAllLocations }: WasteTabProps) {
           </p>
         </div>
       ) : (
-        <div className="-mx-2 overflow-x-auto px-2">
-          <Table>
-            <TableHeader>
-              <TableRow className="border-border/60 hover:bg-transparent">
+        <>
+          {/* Wide-screen table */}
+          <Table
+            variant="data"
+            containerClassName="hidden lg:block"
+            className="min-w-[840px]"
+          >
+            <TableHeader className="[&_tr]:border-0">
+              <TableRow className="hover:bg-transparent">
                 <TableHead>Date</TableHead>
                 <TableHead>Item</TableHead>
                 <TableHead>Reason</TableHead>
@@ -112,15 +129,18 @@ export function WasteTab({ items, isAllLocations }: WasteTabProps) {
             </TableHeader>
             <TableBody>
               {logs.map((log) => (
-                <TableRow key={log.id} className="border-border/60 last:border-0 hover:bg-muted/50">
-                  <TableCell className="whitespace-nowrap">
-                    {log.waste_date}
+                <TableRow key={log.id}>
+                  <TableCell className="whitespace-nowrap tabular-nums">
+                    {formatWasteDate(log.waste_date)}
                   </TableCell>
                   <TableCell className="font-medium">
                     {log.inventory_item?.name ?? "—"}
                   </TableCell>
                   <TableCell>
-                    <Badge variant="secondary">
+                    <Badge
+                      variant="secondary"
+                      className="w-fit rounded-full border-0 px-2.5 text-xs font-medium"
+                    >
                       {REASON_LABELS[log.reason] ?? log.reason}
                     </Badge>
                   </TableCell>
@@ -134,13 +154,77 @@ export function WasteTab({ items, isAllLocations }: WasteTabProps) {
                     {log.logged_by_name ?? "—"}
                   </TableCell>
                   <TableCell className="max-w-[220px] truncate text-muted-foreground">
-                    {log.notes ?? ""}
+                    {log.notes ?? "—"}
                   </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
-        </div>
+
+          {/* Phones and tablets use cards instead of a horizontally scrolling table. */}
+          <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:hidden">
+            {logs.map((log) => (
+              <article
+                key={log.id}
+                className="min-w-0 rounded-2xl border-0 bg-muted/45 p-4"
+              >
+                <div className="flex min-w-0 items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold">
+                      {log.inventory_item?.name ?? "—"}
+                    </p>
+                    <p className="mt-0.5 text-xs tabular-nums text-muted-foreground">
+                      {formatWasteDate(log.waste_date)}
+                    </p>
+                  </div>
+                  <Badge
+                    variant="secondary"
+                    className="shrink-0 rounded-full border-0 px-2.5 text-xs font-medium"
+                  >
+                    {REASON_LABELS[log.reason] ?? log.reason}
+                  </Badge>
+                </div>
+
+                <div className="mt-5 grid min-w-0 grid-cols-2 gap-x-4 gap-y-4">
+                  <div className="min-w-0">
+                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                      Quantity
+                    </p>
+                    <p className="mt-0.5 break-words text-sm font-medium tabular-nums">
+                      {log.quantity} {log.inventory_item?.unit_type ?? ""}
+                    </p>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                      Est. Cost
+                    </p>
+                    <p className="mt-0.5 text-sm font-medium tabular-nums">
+                      ${(log.estimated_cost ?? 0).toFixed(2)}
+                    </p>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                      Logged By
+                    </p>
+                    <p className="mt-0.5 break-words text-sm font-medium leading-snug">
+                      {log.logged_by_name ?? "—"}
+                    </p>
+                  </div>
+                  {log.notes && (
+                    <div className="min-w-0">
+                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                        Notes
+                      </p>
+                      <p className="mt-0.5 break-words text-sm leading-snug text-muted-foreground">
+                        {log.notes}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </article>
+            ))}
+          </div>
+        </>
       )}
 
       {items.length === 0 && !isLoading && (

@@ -37,7 +37,6 @@ import {
     MoreHorizontal,
     Search,
     ArrowUpDown,
-    Eye,
     X,
     Printer,
     RotateCcw,
@@ -529,11 +528,6 @@ export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showL
                             className="rounded-2xl"
                             onClick={(e) => e.stopPropagation()}
                         >
-                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                            <DropdownMenuItem onClick={() => handleRowClick(order)}>
-                                <Eye className="mr-2 h-4 w-4" />
-                                View Details
-                            </DropdownMenuItem>
                             {order.order_type === 'qr_dine_in' && order.table_number ? (
                                 <DropdownMenuItem onClick={() => handleViewOnFloorPlan(order)}>
                                     <MapPin className="mr-2 h-4 w-4" />
@@ -542,7 +536,6 @@ export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showL
                             ) : null}
                             {!readOnly && (
                                 <>
-                                    <DropdownMenuSeparator />
                                     <DropdownMenuItem onClick={() => setReceiptOrder(order)}>
                                         <Printer className="mr-2 h-4 w-4" />
                                         Print Receipt
@@ -550,7 +543,6 @@ export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showL
                                     {order.status !== 'void' && order.status !== 'cancelled' && (
                                         <>
                                             <DropdownMenuItem
-                                                className="text-orange-600"
                                                 onClick={() => openRefundVoid(order, 'refund')}
                                             >
                                                 <RotateCcw className="mr-2 h-4 w-4" />

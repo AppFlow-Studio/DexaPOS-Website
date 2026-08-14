@@ -2,10 +2,11 @@
 
 import React, { useState, useMemo } from "react";
 import { subDays } from "date-fns";
-import { CreditCard, FileSpreadsheet } from "lucide-react";
+import { CreditCard, FileSpreadsheet, Receipt } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ReportPanel as Card, ReportPanelContent as CardContent, ReportPanelHeader as CardHeader, ReportPanelTitle as CardTitle } from "@/components/dashboard/reports/ReportPanel";
-import { PageHeader, PageShell } from "@/components/dashboard/shell";
+import { PageHeader, PageShell, Panel, PanelSection } from "@/components/dashboard/shell";
+import { cn } from "@/lib/utils";
 import {
   useFinancialKPIs,
   useWaterfallReport,
@@ -44,6 +45,8 @@ export default function FinancialsPage() {
   const [preset, setPreset] = useState<DatePreset>("last_30_days");
 
   const [activeTab, setActiveTab] = useState("overview");
+  /** Tabs with no left-column summary render across the full page width. */
+  const isFullWidthTab = activeTab === "transactions" || activeTab === "payments";
   const [selectedOrder, setSelectedOrder] = useState<OrderResponse | null>(
     null
   );
@@ -224,17 +227,17 @@ export default function FinancialsPage() {
         </div>
       </Tabs>
 
-      {/* Transactions gets the full page width — it has no left-column summary,
-          so a 440px empty gutter would just squeeze the table. */}
+      {/* Transactions and Payments have no left-column summary, so the 440px
+          gutter would just squeeze them — they take the full page width. */}
       <div
         className={
-          activeTab === "transactions"
+          isFullWidthTab
             ? "grid min-w-0 gap-6"
             : "grid min-w-0 gap-6 xl:grid-cols-[440px_minmax(0,1fr)]"
         }
       >
       {/* LEFT COLUMN: Controls & Summaries */}
-      <div className={cn("min-w-0 space-y-4", activeTab === "transactions" && "hidden")}>
+      <div className={cn("min-w-0 space-y-4", isFullWidthTab && "hidden")}>
 
         {/* Scrollable Summary Cards - Hidden Scrollbar */}
         <div className="space-y-4">
@@ -424,18 +427,20 @@ export default function FinancialsPage() {
         )}
 
         {activeTab === "transactions" && (
-          <Card className="flex min-h-[420px] w-full flex-col overflow-hidden">
-            <CardContent className="p-0 flex-1 overflow-hidden min-h-0 flex flex-col">
-              <div className="flex-1 overflow-auto min-h-0 px-4 pb-4">
-                <OrdersDataTable
-                  data={orders || []}
-                  isLoading={isLoadingOrders}
-                  onOrderClick={handleOrderClick}
-                  hideOrderStatus
-                />
-              </div>
-            </CardContent>
-          </Card>
+          <Panel>
+            <PanelSection
+              icon={Receipt}
+              label="Transactions"
+              caption="Every order in the selected period. Click a row to open its receipt."
+            >
+              <OrdersDataTable
+                data={orders || []}
+                isLoading={isLoadingOrders}
+                onOrderClick={handleOrderClick}
+                hideOrderStatus
+              />
+            </PanelSection>
+          </Panel>
         )}
 
         {activeTab === "payments" && (

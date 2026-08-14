@@ -75,7 +75,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { InventoryItemWithVendor } from "@/types/inventory";
@@ -328,60 +327,32 @@ function PurchaseOrderActions({
   ) => void;
   alwaysVisible?: boolean;
 }) {
+  // Receiving only applies to a submitted (pending) order. Everything else —
+  // draft, already received, paid, cancelled — leaves the button inert.
+  const canReceive = purchaseOrder.status === "pending";
+
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon"
-          className={cn(
-            "h-8 w-8 rounded-full transition-opacity",
-            !alwaysVisible &&
-              "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100",
-          )}
-          onClick={(event) => event.stopPropagation()}
-        >
-          <span className="sr-only">Open purchase order actions</span>
-          <MoreHorizontal className="h-4 w-4" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        {purchaseOrder.status === "draft" && (
-          <DropdownMenuItem onClick={() => onStatusChange("pending")}>
-            Submit Order
-          </DropdownMenuItem>
-        )}
-        {purchaseOrder.status === "pending" && (
-          <DropdownMenuItem
-            onClick={() => {
-              const quantities: Record<string, number> = {};
-              purchaseOrder.items?.forEach((item) => {
-                quantities[item.id] = item.quantity_ordered;
-              });
-              onStatusChange("received", quantities);
-            }}
-          >
-            Mark as Received
-          </DropdownMenuItem>
-        )}
-        {purchaseOrder.status === "received" && (
-          <DropdownMenuItem onClick={() => onStatusChange("paid")}>
-            Mark as Paid
-          </DropdownMenuItem>
-        )}
-        {purchaseOrder.status === "draft" && (
-          <>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              className="text-destructive"
-              onClick={() => onStatusChange("cancelled")}
-            >
-              Cancel Order
-            </DropdownMenuItem>
-          </>
-        )}
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <Button
+      variant="outline"
+      size="sm"
+      disabled={!canReceive}
+      className={cn(
+        "h-8 rounded-full transition-opacity",
+        !alwaysVisible &&
+          "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100",
+      )}
+      onClick={(event) => {
+        event.stopPropagation();
+        if (!canReceive) return;
+        const quantities: Record<string, number> = {};
+        purchaseOrder.items?.forEach((item) => {
+          quantities[item.id] = item.quantity_ordered;
+        });
+        onStatusChange("received", quantities);
+      }}
+    >
+      Mark as Received
+    </Button>
   );
 }
 
@@ -1224,10 +1195,6 @@ export default function InventoryPage() {
                           <p className="truncate text-sm font-medium">
                             {item.name}
                           </p>
-                          <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                            {item.sku || "No SKU"}
-                            {item.category ? ` / ${item.category}` : ""}
-                          </p>
                         </div>
                         <InventoryItemActions
                           item={item}
@@ -1270,11 +1237,11 @@ export default function InventoryPage() {
                             )}
                           </dd>
                         </div>
-                        <div className="min-w-0">
+                        <div className="min-w-0 text-right">
                           <dt className="text-[0.6875rem] font-medium uppercase tracking-[0.12em] text-muted-foreground">
                             Status
                           </dt>
-                          <dd className="mt-1">
+                          <dd className="mt-1 flex justify-end">
                             {showMultiLocationContext ? (
                               <span className="text-sm text-muted-foreground">
                                 Aggregate view
@@ -1303,11 +1270,11 @@ export default function InventoryPage() {
                           </dd>
                         </div>
                         {!isSingleLocation && (
-                          <div className="min-w-0">
+                          <div className="min-w-0 text-right">
                             <dt className="text-[0.6875rem] font-medium uppercase tracking-[0.12em] text-muted-foreground">
                               Scope
                             </dt>
-                            <dd className="mt-1">
+                            <dd className="mt-1 flex justify-end">
                               <ScopeBadge locationId={item.location_id} compact />
                             </dd>
                           </div>
@@ -1382,22 +1349,25 @@ export default function InventoryPage() {
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
                                 <DropdownMenuItem
-                                  onClick={() => {
+                                  onClick={(event) => {
+                                    // Without this the click bubbles to the card,
+                                    // which re-opens the detail panel behind the dialog.
+                                    event.stopPropagation();
                                     setIsDetailSheetOpen(false);
                                     setEditingVendor(vendor);
                                   }}
                                 >
                                   Edit Vendor
                                 </DropdownMenuItem>
-                                <DropdownMenuSeparator />
                                 {/* Only allow delete if not a global vendor when in location view */}
                                 {isAllLocations ||
                                 vendor.location_id !== null ? (
                                   <DropdownMenuItem
                                     className="text-destructive"
-                                    onClick={() =>
-                                      setDeleteVendorTarget(vendor)
-                                    }
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      setDeleteVendorTarget(vendor);
+                                    }}
                                   >
                                     Delete Vendor
                                   </DropdownMenuItem>

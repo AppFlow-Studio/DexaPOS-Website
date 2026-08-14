@@ -2,12 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -97,10 +97,10 @@ export function CountDetailSheet({
   };
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-2xl flex flex-col">
-        <SheetHeader>
-          <SheetTitle className="flex items-center gap-2">
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="flex max-h-dvh w-full max-w-none flex-col gap-0 overflow-hidden max-sm:overflow-hidden rounded-none bg-card p-0 max-sm:h-auto max-sm:top-auto max-sm:translate-y-0 sm:h-[min(760px,calc(100dvh-2rem))] sm:max-h-[90vh] sm:w-[calc(100%-1rem)] sm:max-w-2xl sm:rounded-3xl">
+        <DialogHeader className="shrink-0 bg-card px-5 pb-4 pt-5 pr-14 text-left sm:px-6 sm:pt-6 sm:pr-16">
+          <DialogTitle className="flex items-center gap-2">
             {detail?.count.count_name ?? "Inventory Count"}
             {status && (
               <Badge
@@ -110,13 +110,13 @@ export function CountDetailSheet({
                 {status.replace("_", " ")}
               </Badge>
             )}
-          </SheetTitle>
-          <SheetDescription>
+          </DialogTitle>
+          <DialogDescription>
             {detail?.count.assigned_to_name
               ? `Assigned to ${detail.count.assigned_to_name}`
               : "Enter the physical counted quantity for each item."}
-          </SheetDescription>
-        </SheetHeader>
+          </DialogDescription>
+        </DialogHeader>
 
         {isLoading || !detail ? (
           <div className="space-y-2 px-4">
@@ -127,7 +127,7 @@ export function CountDetailSheet({
         ) : (
           <>
             {/* Controls */}
-            <div className="flex items-center justify-between px-4 py-2 border-y">
+            <div className="flex shrink-0 items-center justify-between bg-card px-5 py-2 sm:px-6">
               <span className="text-sm text-muted-foreground">
                 {detail.items.length} items
               </span>
@@ -149,10 +149,10 @@ export function CountDetailSheet({
             </div>
 
             {/* Items table */}
-            <div className="flex-1 overflow-y-auto">
+            <div className="min-h-0 flex-1 overflow-y-auto bg-card px-5 sm:px-6">
               <Table>
-                <TableHeader className="sticky top-0 bg-background">
-                  <TableRow>
+                <TableHeader className="sticky top-0 bg-card [&_tr]:border-0">
+                  <TableRow className="border-0">
                     <TableHead>Item</TableHead>
                     {!blindCount && (
                       <TableHead className="text-right">Expected</TableHead>
@@ -292,7 +292,7 @@ export function CountDetailSheet({
             </div>
           </>
         )}
-      </SheetContent>
-    </Sheet>
+      </DialogContent>
+    </Dialog>
   );
 }
