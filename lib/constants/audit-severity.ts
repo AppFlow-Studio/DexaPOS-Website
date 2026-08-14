@@ -1,18 +1,13 @@
 /**
  * Single source of truth for audit-log `severity` presentation.
  *
- * Mirrors the shape of `PAYMENT_STATUS_STYLES` in `payment-status.ts` — a dot,
- * a text colour and a tint — so every status/severity badge in the product
- * reads as one system. Replaces the `text-primary` (violet, not brand blue —
- * see UI-DESIGN-SYSTEM.md C5) and ad-hoc red/amber pairs the audit log
- * previously carried in `lib/audit/sentence-templates.ts`.
+ * The chip carries a light tint with BLACK text — not the coloured text of the
+ * earlier `text-red-700` / `text-amber-700` pairs. The tint alone signals
+ * severity; black keeps an 11px label legible on both tints, in both themes.
+ *
+ * Card borders and icon tints were removed separately: severity reads from
+ * this one chip, so a warning row is not also outlined, tinted and iconised.
  */
-
-export interface BadgeStyle {
-  dot: string;
-  text: string;
-  bg: string;
-}
 
 export type AuditSeverity = "info" | "warning" | "critical" | "error";
 
@@ -23,45 +18,25 @@ export const AUDIT_SEVERITY_LABELS: Record<AuditSeverity, string> = {
   error: "Error",
 };
 
-export const AUDIT_SEVERITY_STYLES: Record<AuditSeverity, BadgeStyle> = {
-  info: {
-    dot: "bg-[#0C4FD1] dark:bg-[#6CA0FF]",
-    text: "text-[#0C4FD1] dark:text-[#6CA0FF]",
-    bg: "bg-[#0C4FD1]/10 dark:bg-[#6CA0FF]/10",
-  },
-  warning: {
-    dot: "bg-amber-500",
-    text: "text-amber-700 dark:text-amber-400",
-    bg: "bg-amber-50 dark:bg-amber-900/20",
-  },
-  critical: {
-    dot: "bg-red-500",
-    text: "text-red-700 dark:text-red-400",
-    bg: "bg-red-50 dark:bg-red-900/20",
-  },
-  error: {
-    dot: "bg-red-500",
-    text: "text-red-700 dark:text-red-400",
-    bg: "bg-red-50 dark:bg-red-900/20",
-  },
+/**
+ * Neutral tint + coloured text, per severity.
+ *
+ * One shared grey chip carries the severity in the *text* colour, so the row
+ * stays quiet while the word still reads as a warning. The dark-theme text
+ * lightens (`-400`) because `amber-700` / `red-700` fail contrast on the dark
+ * chip.
+ */
+export const AUDIT_SEVERITY_CHIP: Record<AuditSeverity, string> = {
+  info: "bg-muted text-muted-foreground",
+  warning: "bg-muted text-amber-700 dark:text-amber-400",
+  critical: "bg-muted text-red-700 dark:text-red-400",
+  error: "bg-muted text-red-700 dark:text-red-400",
 };
 
-/** Card left-border tint — deliberately transparent for `info` so only real issues draw the eye. */
-export const AUDIT_SEVERITY_BORDER: Record<AuditSeverity, string> = {
-  info: "border-l-transparent",
-  warning: "border-l-amber-400",
-  critical: "border-l-red-500",
-  error: "border-l-red-500",
-};
-
-export function auditSeverityStyle(severity: string | null | undefined): BadgeStyle {
-  return AUDIT_SEVERITY_STYLES[(severity as AuditSeverity) ?? "info"] ?? AUDIT_SEVERITY_STYLES.info;
+export function auditSeverityChip(severity: string | null | undefined): string {
+  return AUDIT_SEVERITY_CHIP[(severity as AuditSeverity) ?? "info"] ?? AUDIT_SEVERITY_CHIP.info;
 }
 
 export function auditSeverityLabel(severity: string | null | undefined): string {
   return AUDIT_SEVERITY_LABELS[(severity as AuditSeverity) ?? "info"] ?? "Info";
-}
-
-export function auditSeverityBorder(severity: string | null | undefined): string {
-  return AUDIT_SEVERITY_BORDER[(severity as AuditSeverity) ?? "info"] ?? AUDIT_SEVERITY_BORDER.info;
 }

@@ -90,8 +90,8 @@ export function AddVendorDialog({ open, onOpenChange }: AddVendorDialogProps) {
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-gradient-to-br from-blue-500/20 to-blue-500/5 border border-blue-500/10">
-              <Truck className="h-5 w-5 text-blue-500" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted/60">
+              <Truck className="h-4 w-4 text-muted-foreground" />
             </div>
             <div className="flex-1">
               <DialogTitle>Add Vendor</DialogTitle>
@@ -104,7 +104,7 @@ export function AddVendorDialog({ open, onOpenChange }: AddVendorDialogProps) {
             {isSingleLocation ? null : isGlobalView ? (
               <Badge
                 variant="outline"
-                className="gap-1 text-emerald-600 border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30"
+                className="gap-1 bg-muted/60 text-muted-foreground"
               >
                 <Globe className="h-3 w-3" />
                 Global
@@ -121,10 +121,10 @@ export function AddVendorDialog({ open, onOpenChange }: AddVendorDialogProps) {
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 mt-4">
           {/* Info banner explaining scope — hidden for single-location accounts. */}
           {!isSingleLocation && (
-            <div className="p-3 rounded-lg bg-muted/50 border text-sm text-muted-foreground">
+            <div className="rounded-2xl border-0 bg-muted/60 p-3 text-sm text-muted-foreground">
               {isGlobalView ? (
                 <>
-                  <Globe className="h-4 w-4 inline mr-2 text-emerald-600" />
+                  <Globe className="mr-2 inline h-4 w-4" />
                   This vendor will be available to <strong>all locations</strong>.
                 </>
               ) : (

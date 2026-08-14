@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -41,7 +40,6 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { useLocationStore, useSelectedLocation, useIsSingleLocation } from "@/stores/location-store";
 import {
@@ -84,7 +82,6 @@ import { InventoryItemWithVendor } from "@/types/inventory";
 import {
   inventoryStockState,
   purchaseOrderStatusLabel,
-  purchaseOrderStatusStyle,
 } from "@/lib/constants/inventory-status";
 import {
   PurchaseOrderWithDetails,
@@ -108,6 +105,7 @@ function StockStatusBadge({
   inStockLocations,
   lowStockLocations,
   outOfStockLocations,
+  compact = false,
 }: {
   stockMode: string;
   currentStock: number;
@@ -117,6 +115,8 @@ function StockStatusBadge({
   inStockLocations?: number;
   lowStockLocations?: number;
   outOfStockLocations?: number;
+  /** Hides the leading dot/icon — used on mobile cards where the label speaks for itself. */
+  compact?: boolean;
 }) {
   // ========================================================================
   // GLOBAL VIEW: Show location breakdown
@@ -130,8 +130,8 @@ function StockStatusBadge({
     // Priority: Show worst status first
     if (outCount > 0) {
       return (
-        <Badge variant="destructive" className="gap-1 text-xs">
-          <span className="h-1.5 w-1.5 rounded-full bg-current animate-pulse" />
+        <Badge variant="secondary" className="gap-1 border-0 text-xs text-muted-foreground">
+          {!compact && <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/60" />}
           {outCount}/{total} Out
         </Badge>
       );
@@ -139,11 +139,8 @@ function StockStatusBadge({
 
     if (lowCount > 0) {
       return (
-        <Badge
-          variant="outline"
-          className="border-amber-500/50 text-amber-600 bg-amber-50 dark:bg-amber-950/30 gap-1 text-xs"
-        >
-          <AlertTriangle className="h-3 w-3" />
+        <Badge variant="secondary" className="gap-1 border-0 text-xs text-muted-foreground">
+          {!compact && <AlertTriangle className="h-3 w-3" />}
           {lowCount}/{total} Low
         </Badge>
       );
@@ -151,10 +148,7 @@ function StockStatusBadge({
 
     // All locations in stock
     return (
-      <Badge
-        variant="outline"
-        className="border-emerald-500/50 text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30 text-xs"
-      >
+      <Badge variant="secondary" className="border-0 text-xs text-muted-foreground">
         {inCount}/{total} In Stock
       </Badge>
     );
@@ -167,8 +161,8 @@ function StockStatusBadge({
 
   if (stockState === "out_of_stock") {
     return (
-      <Badge variant="destructive" className="gap-1">
-        <span className="h-1.5 w-1.5 rounded-full bg-current animate-pulse" />
+      <Badge variant="secondary" className="gap-1 border-0 text-muted-foreground">
+        {!compact && <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/60" />}
         Out of Stock
       </Badge>
     );
@@ -176,55 +170,48 @@ function StockStatusBadge({
 
   if (stockState === "low_stock") {
     return (
-      <Badge
-        variant="outline"
-        className="border-amber-500/50 text-amber-600 bg-amber-50 dark:bg-amber-950/30 gap-1"
-      >
-        <AlertTriangle className="h-3 w-3" />
+      <Badge variant="secondary" className="gap-1 border-0 text-muted-foreground">
+        {!compact && <AlertTriangle className="h-3 w-3" />}
         Low Stock
       </Badge>
     );
   }
 
   return (
-    <Badge
-      variant="outline"
-      className="border-emerald-500/50 text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30"
-    >
+    <Badge variant="secondary" className="border-0 text-muted-foreground">
       In Stock
     </Badge>
   );
 }
 
-function ScopeBadge({ locationId }: { locationId: string | null }) {
+function ScopeBadge({
+  locationId,
+  compact = false,
+}: {
+  locationId: string | null;
+  /** Hides the leading Globe/MapPin icon — used on mobile cards. */
+  compact?: boolean;
+}) {
   if (!locationId) {
     return (
-      <Badge
-        variant="outline"
-        className="gap-1 text-xs text-emerald-600 border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30"
-      >
-        <Globe className="h-3 w-3" />
+      <Badge variant="secondary" className="gap-1 border-0 text-xs text-muted-foreground">
+        {!compact && <Globe className="h-3 w-3" />}
         Global
       </Badge>
     );
   }
   return (
-    <Badge variant="outline" className="gap-1 text-xs">
-      <MapPin className="h-3 w-3" />
+    <Badge variant="secondary" className="gap-1 border-0 text-xs text-muted-foreground">
+      {!compact && <MapPin className="h-3 w-3" />}
       Local
     </Badge>
   );
 }
 
 function POStatusBadge({ status }: { status: string }) {
-  const style = purchaseOrderStatusStyle(status);
-
   return (
-    <Badge
-      variant="secondary"
-      className={cn("gap-1.5 border-0", style.bg, style.text)}
-    >
-      <span className={cn("h-1.5 w-1.5 rounded-full", style.dot)} />
+    <Badge variant="secondary" className="gap-1.5 border-0 text-muted-foreground">
+      <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/60" />
       {purchaseOrderStatusLabel(status)}
     </Badge>
   );
@@ -283,12 +270,14 @@ function InventoryItemActions({
   isAllLocations,
   onEdit,
   onDelete,
-  alwaysVisible = false,
+  onEditStock,
+  alwaysVisible = true,
 }: {
   item: InventoryItemWithVendor;
   isAllLocations: boolean;
   onEdit: () => void;
   onDelete: () => void;
+  onEditStock?: () => void;
   alwaysVisible?: boolean;
 }) {
   return (
@@ -310,7 +299,9 @@ function InventoryItemActions({
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         <DropdownMenuItem onClick={onEdit}>Edit Item</DropdownMenuItem>
-        <DropdownMenuSeparator />
+        {onEditStock && (
+          <DropdownMenuItem onClick={onEditStock}>Edit Stock</DropdownMenuItem>
+        )}
         {isAllLocations || item.location_id !== null ? (
           <DropdownMenuItem className="text-destructive" onClick={onDelete}>
             Delete Item
@@ -666,7 +657,7 @@ export default function InventoryPage() {
 
     return (
       <div className="space-y-3 text-sm">
-        <div className="flex items-center gap-2 p-3 bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-300 rounded-md border border-amber-200 dark:border-amber-900">
+        <div className="flex items-center gap-2 rounded-xl bg-muted/50 p-3 text-foreground">
           <AlertTriangle className="h-5 w-5 shrink-0" />
           <p className="font-medium">
             This item is used in {totalCount} recipe
@@ -694,7 +685,7 @@ export default function InventoryPage() {
   }, [isLoadingUsage, usageData]);
 
   return (
-    <PageShell>
+    <PageShell className="inventory-neutral-badges">
       <PageHeader
         title="Inventory Management"
         subtitle={
@@ -712,46 +703,53 @@ export default function InventoryPage() {
             />
           ) : undefined
         }
+        stackActionsBelowIndicatorOnMobile
         actions={
           <>
-            <Button
-              variant="outline"
-              className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
-              onClick={() => setIsActivityLogOpen(true)}
-            >
-              <Clock className="mr-1.5 h-4 w-4" />
-              Activity Log
-            </Button>
-            {!isAllLocations && (
+            {/* Row 1 on mobile: Activity Log + Log Expense */}
+            <div className="flex min-w-0 items-center gap-2 max-sm:w-full">
               <Button
                 variant="outline"
-                className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
-                onClick={() => setIsExpenseDialogOpen(true)}
+                className="h-9 flex-1 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm sm:flex-none"
+                onClick={() => setIsActivityLogOpen(true)}
               >
-                <Receipt className="mr-1.5 h-4 w-4" />
-                Log Expense
+                <Clock className="mr-1.5 h-4 w-4" />
+                Activity Log
               </Button>
-            )}
-            <Button
-              variant="outline"
-              className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
-            >
-              <Download className="mr-1.5 h-4 w-4" />
-              Export
-            </Button>
-            {activeTab !== "waste" &&
-              activeTab !== "counts" &&
-              activeTab !== "transfers" &&
-              activeTab !== "dashboard" &&
-              activeTab !== "reports" && (
+              {!isAllLocations && (
                 <Button
-                  className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
-                  onClick={getAddButtonAction()}
+                  variant="outline"
+                  className="h-9 flex-1 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm sm:flex-none"
+                  onClick={() => setIsExpenseDialogOpen(true)}
                 >
-                  <Plus className="mr-1.5 h-4 w-4" />
-                  {getAddButtonLabel()}
+                  <Receipt className="mr-1.5 h-4 w-4" />
+                  Log Expense
                 </Button>
               )}
+            </div>
+            {/* Row 2 on mobile: Export + Add Item */}
+            <div className="flex min-w-0 items-center gap-2 max-sm:w-full">
+              <Button
+                variant="outline"
+                className="h-9 flex-1 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm sm:flex-none"
+              >
+                <Download className="mr-1.5 h-4 w-4" />
+                Export
+              </Button>
+              {activeTab !== "waste" &&
+                activeTab !== "counts" &&
+                activeTab !== "transfers" &&
+                activeTab !== "dashboard" &&
+                activeTab !== "reports" && (
+                  <Button
+                    className="h-9 flex-1 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm sm:flex-none"
+                    onClick={getAddButtonAction()}
+                  >
+                    <Plus className="mr-1.5 h-4 w-4" />
+                    {getAddButtonLabel()}
+                  </Button>
+                )}
+            </div>
           </>
         }
       />
@@ -820,7 +818,7 @@ export default function InventoryPage() {
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <div className="px-4 pt-5 sm:px-6">
             <div className="flex flex-col gap-4 md:flex-row md:flex-wrap md:items-center md:justify-between min-w-0">
-              <div className="overflow-x-auto w-full min-w-0">
+              <div className="no-scrollbar w-full min-w-0 overflow-x-auto pb-1">
               <TabsList className="h-auto w-max flex-nowrap justify-start rounded-full border-0 bg-muted/60 p-1">
                 <TabsTrigger
                   value="catalog"
@@ -928,8 +926,16 @@ export default function InventoryPage() {
                       )}
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent align="end" className="w-72 p-0">
-                    <div className="flex items-center justify-between px-4 py-3 border-b">
+                  <PopoverContent
+                    align="end"
+                    collisionPadding={8}
+                    className="flex w-[min(18rem,calc(100vw-1rem))] flex-col overflow-hidden rounded-3xl bg-popover p-0"
+                    style={{
+                      maxHeight:
+                        "min(36rem, var(--radix-popover-content-available-height))",
+                    }}
+                  >
+                    <div className="flex shrink-0 items-center justify-between px-4 py-3">
                       <span className="text-sm font-semibold">Filters</span>
                       {(pendingCategories.length > 0 || pendingStockModes.length > 0 || pendingScope !== "all") && (
                         <button
@@ -946,12 +952,12 @@ export default function InventoryPage() {
                       )}
                     </div>
 
-                    <div className="p-4 space-y-5">
+                    <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-4 py-3">
                       {/* Category */}
                       {availableCategories.length > 0 && (
                         <div className="space-y-2">
                           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Category</p>
-                          <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                          <div className="space-y-1.5">
                             {availableCategories.map((cat) => (
                               <label key={cat} className="flex items-center gap-2 cursor-pointer group">
                                 <Checkbox
@@ -964,8 +970,6 @@ export default function InventoryPage() {
                           </div>
                         </div>
                       )}
-
-                      <Separator />
 
                       {/* Stock Mode */}
                       <div className="space-y-2">
@@ -991,7 +995,6 @@ export default function InventoryPage() {
                           item is global, so global-vs-local filtering is noise. */}
                       {!isSingleLocation && (
                         <>
-                          <Separator />
                           <div className="space-y-2">
                             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Scope</p>
                             <div className="flex gap-2">
@@ -1000,10 +1003,10 @@ export default function InventoryPage() {
                                   key={s}
                                   onClick={() => setPendingScope(s)}
                                   className={cn(
-                                    "flex-1 py-1.5 text-xs rounded-md border transition-colors capitalize",
+                                    "flex-1 rounded-full border-0 py-1.5 text-xs capitalize transition-colors",
                                     pendingScope === s
-                                      ? "bg-primary text-primary-foreground border-primary"
-                                      : "border-border hover:bg-muted"
+                                      ? "bg-background text-foreground shadow-sm ring-1 ring-border"
+                                      : "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground"
                                   )}
                                 >
                                   {s}
@@ -1016,18 +1019,18 @@ export default function InventoryPage() {
                     </div>
 
                     {/* Apply / Cancel */}
-                    <div className="flex gap-2 px-4 py-3 border-t">
+                    <div className="flex shrink-0 gap-2 bg-popover px-4 pb-4 pt-3">
                       <Button
                         variant="outline"
                         size="sm"
-                        className="flex-1"
+                        className="flex-1 rounded-full"
                         onClick={cancelFilters}
                       >
                         Cancel
                       </Button>
                       <Button
                         size="sm"
-                        className="flex-1"
+                        className="flex-1 rounded-full"
                         onClick={applyFilters}
                       >
                         Apply Filters
@@ -1217,9 +1220,6 @@ export default function InventoryPage() {
                       className="group min-w-0 rounded-2xl border-0 bg-muted/45 p-4 transition-colors hover:bg-muted/65"
                     >
                       <div className="flex min-w-0 items-start gap-3">
-                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
-                          <Package className="h-4 w-4" />
-                        </div>
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-medium">
                             {item.name}
@@ -1234,6 +1234,11 @@ export default function InventoryPage() {
                           isAllLocations={isAllLocations}
                           onEdit={() => setEditingItem(item)}
                           onDelete={() => setDeleteItemTarget(item)}
+                          onEditStock={
+                            item.stock_mode === "stock_tracking"
+                              ? () => setStockUpdateItem(item)
+                              : undefined
+                          }
                           alwaysVisible
                         />
                       </div>
@@ -1281,6 +1286,7 @@ export default function InventoryPage() {
                                 reorderPoint={
                                   item.reorder_threshold ?? item.reorder_point
                                 }
+                                compact
                               />
                             )}
                           </dd>
@@ -1302,7 +1308,7 @@ export default function InventoryPage() {
                               Scope
                             </dt>
                             <dd className="mt-1">
-                              <ScopeBadge locationId={item.location_id} />
+                              <ScopeBadge locationId={item.location_id} compact />
                             </dd>
                           </div>
                         )}
@@ -1319,13 +1325,11 @@ export default function InventoryPage() {
               {isLoadingVendors ? (
                 <div className="grid gap-4 p-6 md:grid-cols-2 lg:grid-cols-3">
                   {[1, 2, 3].map((i) => (
-                    <Card key={i} className="border-0 bg-muted/40 shadow-none">
-                      <CardContent className="p-5">
+                    <div key={i} className="rounded-2xl border-0 bg-muted/40 p-5">
                         <Skeleton className="h-10 w-10 rounded-xl mb-4" />
                         <Skeleton className="h-5 w-32 mb-2" />
                         <Skeleton className="h-4 w-24" />
-                      </CardContent>
-                    </Card>
+                    </div>
                   ))}
                 </div>
               ) : filteredVendors.length === 0 ? (
@@ -1350,7 +1354,7 @@ export default function InventoryPage() {
               ) : (
                 <div className="grid gap-4 p-6 md:grid-cols-2 lg:grid-cols-3">
                   {filteredVendors.map((vendor) => (
-                    <Card
+                    <article
                       key={vendor.id}
                       className="group cursor-pointer rounded-2xl border-0 bg-muted/45 shadow-none transition-colors hover:bg-muted/65"
                       onClick={() => {
@@ -1358,7 +1362,7 @@ export default function InventoryPage() {
                         setIsDetailSheetOpen(true);
                       }}
                     >
-                      <CardContent className="p-5">
+                      <div className="p-5">
                         <div className="flex items-start justify-between mb-4">
                           <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-muted-foreground">
                             <Truck className="h-4 w-4" />
@@ -1419,7 +1423,7 @@ export default function InventoryPage() {
 
                         <div className="flex items-center justify-between pt-4">
                           <div>
-                            <p className="text-2xl font-bold">
+                            <p className="text-2xl font-medium tracking-[-0.02em] tabular-nums">
                               {vendor.total_orders}
                             </p>
                             <p className="text-xs text-muted-foreground">
@@ -1427,7 +1431,7 @@ export default function InventoryPage() {
                             </p>
                           </div>
                           <div className="text-right">
-                            <p className="text-2xl font-bold text-emerald-600">
+                            <p className="text-2xl font-medium tracking-[-0.02em] text-foreground tabular-nums">
                               ${vendor.total_spend.toLocaleString()}
                             </p>
                             <p className="text-xs text-muted-foreground">
@@ -1435,16 +1439,16 @@ export default function InventoryPage() {
                             </p>
                           </div>
                         </div>
-                      </CardContent>
-                    </Card>
+                      </div>
+                    </article>
                   ))}
 
                   {/* Add Vendor Card */}
-                  <Card
-                    className="cursor-pointer rounded-2xl border border-dashed bg-transparent shadow-none transition-colors hover:border-primary/40 hover:bg-muted/30"
+                  <button
+                    type="button"
+                    className="flex min-h-[200px] cursor-pointer flex-col items-center justify-center rounded-2xl border-0 bg-muted/30 p-5 text-center transition-colors hover:bg-muted/60"
                     onClick={() => setIsAddVendorOpen(true)}
                   >
-                    <CardContent className="p-5 flex flex-col items-center justify-center h-full min-h-[200px] text-center">
                       <div className="p-3 rounded-full bg-muted mb-3">
                         <Plus className="h-5 w-5 text-muted-foreground" />
                       </div>
@@ -1452,8 +1456,7 @@ export default function InventoryPage() {
                       <p className="text-sm text-muted-foreground">
                         Track your suppliers
                       </p>
-                    </CardContent>
-                  </Card>
+                  </button>
                 </div>
               )}
             </TabsContent>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -368,6 +368,24 @@ export function CustomerProfileSheet({
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [isOrderDetailOpen, setIsOrderDetailOpen] = useState(false);
   const [profileOpenedAt] = useState(Date.now);
+  const [activeSection, setActiveSection] = useState(initialTab);
+  const sectionRailRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const rail = sectionRailRef.current;
+    const trigger = rail?.querySelector<HTMLElement>('[data-state="active"]');
+    if (!rail || !trigger) return;
+
+    const railRect = rail.getBoundingClientRect();
+    const triggerRect = trigger.getBoundingClientRect();
+    const centeredOffset =
+      triggerRect.left - railRect.left - (railRect.width - triggerRect.width) / 2;
+
+    rail.scrollTo({
+      left: Math.max(0, rail.scrollLeft + centeredOffset),
+      behavior: "smooth",
+    });
+  }, [activeSection]);
 
   const { data: userInfo } = useUserInfo();
   const clerkOrgId =
@@ -507,7 +525,7 @@ export function CustomerProfileSheet({
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent
-          className="flex max-h-[90dvh] w-[calc(100vw-2rem)] max-w-6xl flex-col gap-0 overflow-hidden rounded-[28px] border-0 bg-white p-0 dark:bg-background max-sm:h-dvh max-sm:max-h-none max-sm:w-screen max-sm:max-w-none max-sm:overflow-hidden max-sm:rounded-none sm:max-w-6xl"
+          className="flex h-[90dvh] max-h-[90dvh] w-[calc(100vw-2rem)] max-w-6xl flex-col gap-0 overflow-hidden rounded-[28px] border-0 bg-white p-0 dark:bg-background max-sm:h-dvh max-sm:max-h-none max-sm:w-screen max-sm:max-w-none max-sm:overflow-hidden max-sm:rounded-none sm:max-w-6xl"
           // Keep the profile open when interacting with a nested overlay opened
           // from inside it (e.g. the order detail bottom sheet). Without this,
           // a click on the portaled order sheet counts as "outside" and
@@ -552,9 +570,10 @@ export function CustomerProfileSheet({
                     </Button>
                   </div>
                 </div>
+              </div>
 
-                <div className="flex min-w-0 w-full flex-col items-start gap-2.5 rounded-2xl border-0 bg-muted/60 p-4 text-sm sm:w-auto sm:max-w-md sm:items-end">
-                  <div className="flex min-w-0 w-full items-center gap-2.5 font-semibold text-foreground">
+              <div className="flex min-w-0 w-full flex-col items-start gap-2.5 rounded-2xl border-0 bg-muted/60 p-4 text-sm sm:flex-row sm:items-center sm:gap-6">
+                  <div className="flex min-w-0 w-full items-center gap-2.5 font-semibold text-foreground sm:flex-1">
                     <Phone className="h-4 w-4 text-primary" />
                     {customerData.phone ? (
                       <span className="min-w-0 truncate" title={formatPhoneForDisplay(customerData.phone)}>
@@ -562,19 +581,18 @@ export function CustomerProfileSheet({
                       </span>
                     ) : <span className="text-muted-foreground">No phone</span>}
                   </div>
-                  <div className="flex min-w-0 w-full items-center gap-2.5 font-semibold text-foreground">
+                  <div className="flex min-w-0 w-full items-center gap-2.5 font-semibold text-foreground sm:flex-1">
                     <Mail className="h-4 w-4 text-primary" />
                     {customerData.email ? (
                       <span className="min-w-0 truncate" title={customerData.email}>{customerData.email}</span>
                     ) : <span className="text-muted-foreground">No email</span>}
                   </div>
-                </div>
               </div>
             </DialogHeader>
 
             {/* Tab Configs with counts from top-level hooks */}
-            <Tabs defaultValue={initialTab} className="mt-8">
-              <div className="no-scrollbar w-full overflow-x-auto px-5 sm:px-8">
+            <Tabs value={activeSection} onValueChange={setActiveSection} className="mt-5">
+              <div ref={sectionRailRef} className="no-scrollbar w-full overflow-x-auto px-5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:px-8">
               <TabsList className="inline-flex h-auto w-max flex-nowrap gap-1 rounded-full bg-muted/70 p-1">
                 <TabsTrigger
                   value="overview"

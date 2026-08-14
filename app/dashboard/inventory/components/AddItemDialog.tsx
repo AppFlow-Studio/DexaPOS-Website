@@ -158,15 +158,15 @@ export function AddItemDialog({ open, onOpenChange }: AddItemDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="w-[calc(100%-1rem)] max-h-[90vh] overflow-hidden p-0 gap-0"
+        className="flex max-h-dvh w-full max-w-none flex-col gap-0 overflow-hidden rounded-none bg-card p-0 max-sm:h-auto max-sm:top-auto max-sm:translate-y-0 sm:h-[min(760px,calc(100dvh-1rem))] sm:w-[calc(100%-1rem)] sm:max-h-[90vh] sm:max-w-lg sm:rounded-3xl"
         overlayClassName="bg-black/35 backdrop-blur-md"
       >
-        <DialogHeader className="px-6 pt-6 pb-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-linear-to-br from-primary/20 to-primary/5 border border-primary/10">
-              <Package className="h-5 w-5 text-primary" />
+        <DialogHeader className="shrink-0 px-5 pb-4 pt-5 pr-14 sm:px-6 sm:pt-6 sm:pr-16">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted/60">
+              <Package className="h-4 w-4 text-muted-foreground" />
             </div>
-            <div className="flex-1">
+            <div className="min-w-0 flex-1">
               <DialogTitle>Add Inventory Item</DialogTitle>
               <DialogDescription>
                 Add a new ingredient or supply to your inventory catalog
@@ -177,13 +177,13 @@ export function AddItemDialog({ open, onOpenChange }: AddItemDialogProps) {
             {isSingleLocation ? null : isGlobalView ? (
               <Badge
                 variant="outline"
-                className="gap-1 text-emerald-600 border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30"
+                className="hidden shrink-0 gap-1 bg-muted/60 text-muted-foreground sm:inline-flex"
               >
                 <Globe className="h-3 w-3" />
                 Global
               </Badge>
             ) : (
-              <Badge variant="outline" className="gap-1">
+              <Badge variant="outline" className="hidden shrink-0 gap-1 sm:inline-flex">
                 <MapPin className="h-3 w-3" />
                 {selectedLocation?.name || "Location"}
               </Badge>
@@ -191,8 +191,8 @@ export function AddItemDialog({ open, onOpenChange }: AddItemDialogProps) {
           </div>
         </DialogHeader>
 
-        <form onSubmit={form.handleSubmit(onSubmit)} className="contents">
-          <div className="overflow-y-auto px-6 py-4 max-h-[calc(90vh-150px)]">
+        <form onSubmit={form.handleSubmit(onSubmit)} className="flex min-h-0 flex-1 flex-col">
+          <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto bg-card px-5 py-4 sm:px-6">
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="name">Item Name *</Label>
@@ -283,10 +283,10 @@ export function AddItemDialog({ open, onOpenChange }: AddItemDialogProps) {
                       type="button"
                       onClick={() => form.setValue("stock_mode", mode.value)}
                       className={cn(
-                        "p-3 rounded-lg border text-left transition-all",
+                        "rounded-2xl border-0 p-3 text-left transition-colors",
                         stockMode === mode.value
-                          ? "border-primary bg-primary/5 ring-1 ring-primary"
-                          : "border-muted hover:border-primary/50"
+                          ? "bg-background shadow-sm ring-1 ring-border"
+                          : "bg-muted/60 hover:bg-muted"
                       )}
                     >
                       <p className="font-medium text-sm">{mode.label}</p>
@@ -299,7 +299,7 @@ export function AddItemDialog({ open, onOpenChange }: AddItemDialogProps) {
               </div>
 
               {stockMode === "stock_tracking" && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-lg bg-muted/50 border">
+                <div className="grid grid-cols-1 gap-4 rounded-2xl border-0 bg-muted/60 p-4 sm:grid-cols-2">
                   <div className="space-y-2">
                     <Label htmlFor="current_stock">Current Stock</Label>
                     <Input
@@ -369,7 +369,7 @@ export function AddItemDialog({ open, onOpenChange }: AddItemDialogProps) {
             </div>
           </div>
 
-          <DialogFooter className="px-6 py-4 border-t">
+          <DialogFooter className="shrink-0 bg-card px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-4 sm:px-6">
             <Button
               type="button"
               variant="outline"

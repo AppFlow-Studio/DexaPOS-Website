@@ -114,8 +114,8 @@ export function EditVendorDialog({
       <DialogContent className="sm:max-w-[500px]" elevation="above-sheet">
         <DialogHeader>
           <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-gradient-to-br from-blue-500/20 to-blue-500/5 border border-blue-500/10">
-              <Truck className="h-5 w-5 text-blue-500" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted/60">
+              <Truck className="h-4 w-4 text-muted-foreground" />
             </div>
             <div className="flex-1">
               <DialogTitle>Edit Vendor</DialogTitle>
@@ -124,7 +124,7 @@ export function EditVendorDialog({
             {isSingleLocation ? null : isGlobal ? (
               <Badge
                 variant="outline"
-                className="gap-1 text-emerald-600 border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30"
+                className="gap-1 bg-muted/60 text-muted-foreground"
               >
                 <Globe className="h-3 w-3" />
                 Global

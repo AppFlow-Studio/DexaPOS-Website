@@ -17,8 +17,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { format } from "date-fns";
@@ -31,7 +29,6 @@ interface CustomerListProps {
   customers: CustomerListItem[];
   isLoading: boolean;
   onViewProfile?: (customer: CustomerListItem) => void;
-  onViewOrders?: (customer: CustomerListItem) => void;
 }
 
 /**
@@ -108,12 +105,10 @@ function CustomerTags({ customer }: { customer: CustomerListItem }) {
 function CustomerActions({
   customer,
   onViewProfile,
-  onViewOrders,
   alwaysVisible = false,
 }: {
   customer: CustomerListItem;
   onViewProfile?: (customer: CustomerListItem) => void;
-  onViewOrders?: (customer: CustomerListItem) => void;
   alwaysVisible?: boolean;
 }) {
   return (
@@ -133,7 +128,6 @@ function CustomerActions({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        <DropdownMenuLabel>Actions</DropdownMenuLabel>
         <DropdownMenuItem
           onClick={(event) => {
             event.stopPropagation();
@@ -142,15 +136,6 @@ function CustomerActions({
         >
           View Profile
         </DropdownMenuItem>
-        <DropdownMenuItem
-          onClick={(event) => {
-            event.stopPropagation();
-            onViewOrders?.(customer);
-          }}
-        >
-          View Orders
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
         <DropdownMenuItem className="text-destructive focus:text-destructive">
           Delete Customer
         </DropdownMenuItem>
@@ -163,7 +148,6 @@ export function CustomerList({
   customers,
   isLoading,
   onViewProfile,
-  onViewOrders,
 }: CustomerListProps) {
   if (isLoading) {
     return (
@@ -185,8 +169,8 @@ export function CustomerList({
 
   return (
     <div className="min-w-0">
-      <div className="hidden overflow-hidden rounded-2xl bg-muted/20 xl:block">
-        <Table className="min-w-[860px] [&_td]:px-4 [&_td]:py-3.5 [&_th]:px-4">
+      <div className="hidden overflow-hidden rounded-2xl bg-muted/20 md:block">
+        <Table className="min-w-[560px] [&_td]:px-4 [&_td]:py-3.5 [&_th]:px-4">
           <TableHeader className="bg-muted/50">
             <TableRow>
               <TableHead className="w-[34%]">Customer</TableHead>
@@ -241,7 +225,7 @@ export function CustomerList({
                   <CustomerActions
                     customer={customer}
                     onViewProfile={onViewProfile}
-                    onViewOrders={onViewOrders}
+                    alwaysVisible
                   />
                 </TableCell>
               </TableRow>
@@ -250,7 +234,7 @@ export function CustomerList({
         </Table>
       </div>
 
-      <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:hidden">
+      <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 md:hidden">
         {customers.map((customer) => {
           const phone = formatPhoneForDisplay(customer.phone);
 
@@ -270,17 +254,11 @@ export function CustomerList({
                     <span className="block truncate text-sm font-medium">
                       {getCustomerDisplayName(customer)}
                     </span>
-                    {customer.email ? (
-                      <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-                        {customer.email}
-                      </span>
-                    ) : null}
                   </span>
                 </button>
                 <CustomerActions
                   customer={customer}
                   onViewProfile={onViewProfile}
-                  onViewOrders={onViewOrders}
                   alwaysVisible
                 />
               </div>

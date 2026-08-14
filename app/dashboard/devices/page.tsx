@@ -11,7 +11,6 @@ import {
   Monitor,
   Search,
   ShieldAlert,
-  Wrench,
 } from 'lucide-react'
 
 import { useMerchantDeviceActivity, useMerchantDeviceInventory } from '@/app/dashboard/hooks/useDeviceRegistry'
@@ -49,7 +48,6 @@ import {
 } from '@/lib/device-registry/presentation'
 import {
   deviceLifecycleStatusLabel,
-  deviceLifecycleStatusStyle,
   deviceNeedsAttention,
   deviceWarrantyIsOnWatch,
   deviceWarrantyState,
@@ -107,14 +105,11 @@ function DeviceLifecycleBadge({
   status: DeviceLifecycleStatus
   className?: string
 }) {
-  const style = deviceLifecycleStatusStyle(status)
-
   return (
     <Badge
       variant="secondary"
-      className={cn('gap-1.5 border-0', style.bg, style.text, className)}
+      className={cn('gap-1.5 border-0 bg-muted text-muted-foreground', className)}
     >
-      <span className={cn('h-1.5 w-1.5 rounded-full', style.dot)} />
       {deviceLifecycleStatusLabel(status)}
     </Badge>
   )
@@ -321,9 +316,8 @@ function DeviceRow({
         </p>
         <Badge
           variant="secondary"
-          className={cn('mt-1 gap-1.5 border-0 lg:mt-0', warranty.style.bg, warranty.style.text)}
+          className="mt-1 gap-1.5 border-0 bg-muted text-muted-foreground lg:mt-0"
         >
-          <span className={cn('h-1.5 w-1.5 rounded-full', warranty.style.dot)} />
           {warranty.label}
         </Badge>
       </div>
@@ -340,9 +334,6 @@ function DeviceRow({
           <LifeBuoy className="h-4 w-4" />
           View support history
         </span>
-        {deviceNeedsAttention(device.status) ? (
-          <Wrench className="h-4 w-4 text-amber-700" />
-        ) : null}
         <ChevronRight className="h-4 w-4" />
       </div>
     </button>
@@ -456,7 +447,7 @@ export default function MerchantDevicesPage() {
       <Panel className="overflow-hidden">
         <section className="flex flex-col gap-4 px-4 py-5 sm:px-6 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <h2 className="font-semibold text-primary">Assigned hardware</h2>
+            <h2 className="text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]">Assigned hardware</h2>
             <p className="mt-1 text-sm text-muted-foreground">
               {filteredDevices.length} device{filteredDevices.length === 1 ? '' : 's'} in the current view.
             </p>

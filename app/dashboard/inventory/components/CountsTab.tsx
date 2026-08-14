@@ -13,23 +13,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Plus, ClipboardList, MapPin, ChevronRight } from "lucide-react";
-import { cn } from "@/lib/utils";
 import {
   useInventoryCounts,
   useCreateInventoryCount,
 } from "../hooks/useWasteAndCounts";
 import { CreateCountDialog, CountPickItem } from "./CreateCountDialog";
 import { CountDetailSheet } from "./CountDetailSheet";
-import { CountStatus } from "../../actions/inventory-counts";
-
-const STATUS_BADGE: Record<CountStatus, string> = {
-  draft: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
-  in_progress:
-    "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400",
-  completed: "bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400",
-  approved:
-    "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400",
-};
 
 interface CountsTabProps {
   items: CountPickItem[];
@@ -65,8 +54,8 @@ export function CountsTab({ items, isAllLocations }: CountsTabProps) {
   }
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-6 px-4 py-6 sm:px-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-sm text-muted-foreground">
             {counts.length} count {counts.length === 1 ? "session" : "sessions"}
@@ -95,15 +84,15 @@ export function CountsTab({ items, isAllLocations }: CountsTabProps) {
           </p>
         </div>
       ) : (
-        <div className="rounded-lg border">
+        <div className="-mx-2 overflow-x-auto px-2">
           <Table>
             <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Items</TableHead>
-                <TableHead>Assigned To</TableHead>
-                <TableHead>Created</TableHead>
+              <TableRow className="border-border/60 hover:bg-transparent">
+                <TableHead className="h-auto py-2.5 text-[0.8125rem] font-normal">Name</TableHead>
+                <TableHead className="h-auto py-2.5 text-[0.8125rem] font-normal">Status</TableHead>
+                <TableHead className="h-auto py-2.5 text-right text-[0.8125rem] font-normal">Items</TableHead>
+                <TableHead className="h-auto py-2.5 text-[0.8125rem] font-normal">Assigned To</TableHead>
+                <TableHead className="h-auto py-2.5 text-[0.8125rem] font-normal">Created</TableHead>
                 <TableHead className="w-10" />
               </TableRow>
             </TableHeader>
@@ -111,21 +100,18 @@ export function CountsTab({ items, isAllLocations }: CountsTabProps) {
               {counts.map((count) => (
                 <TableRow
                   key={count.id}
-                  className="cursor-pointer"
+                  className="cursor-pointer border-border/60 last:border-0 hover:bg-muted/50"
                   onClick={() => openCount(count.id)}
                 >
                   <TableCell className="font-medium">
                     {count.count_name}
                   </TableCell>
                   <TableCell>
-                    <Badge
-                      variant="secondary"
-                      className={cn("capitalize", STATUS_BADGE[count.status])}
-                    >
+                    <Badge variant="secondary" className="capitalize">
                       {count.status.replace("_", " ")}
                     </Badge>
                   </TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="text-right tabular-nums">
                     {count.items_count ?? 0}
                   </TableCell>
                   <TableCell className="text-muted-foreground">

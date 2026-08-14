@@ -137,11 +137,11 @@ export function CreateTransferDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-[560px] p-0 gap-0 overflow-hidden">
-        <DialogHeader className="space-y-0 border-b bg-gradient-to-br from-blue-500/10 via-background to-background px-6 py-5">
+      <DialogContent className="flex h-[min(760px,calc(100dvh-1rem))] max-h-[90vh] flex-col gap-0 overflow-hidden bg-card p-0 sm:max-w-[560px]">
+        <DialogHeader className="shrink-0 space-y-0 px-5 py-5 pr-14 sm:px-6 sm:pr-16">
           <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-500/15 ring-1 ring-blue-500/20">
-              <ArrowRightLeft className="h-5 w-5 text-blue-500" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted/60">
+              <ArrowRightLeft className="h-4 w-4 text-muted-foreground" />
             </div>
             <div>
               <DialogTitle className="text-lg">New Stock Transfer</DialogTitle>
@@ -155,7 +155,7 @@ export function CreateTransferDialog({
 
         <form
           onSubmit={handleSubmit}
-          className="max-h-[60vh] space-y-5 overflow-y-auto px-6 py-5"
+          className="thin-scrollbar min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-4 sm:px-6"
         >
           {/* Route */}
           <div className="grid grid-cols-[1fr_auto_1fr] items-end gap-3">
@@ -163,7 +163,7 @@ export function CreateTransferDialog({
               <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 From
               </Label>
-              <div className="flex h-11 items-center rounded-md border bg-muted/40 px-3 text-sm font-medium">
+              <div className="flex h-11 items-center rounded-full border-0 bg-muted/60 px-4 text-sm font-medium">
                 {fromLocationName}
               </div>
             </div>
@@ -245,7 +245,7 @@ export function CreateTransferDialog({
 
           {/* Lines */}
           {lines.length > 0 && (
-            <div className="space-y-2 rounded-lg border">
+            <div className="space-y-1 rounded-2xl border-0 bg-muted/40 p-2">
               {lines.map((line) => {
                 const item = itemMap.get(line.inventory_item_id);
                 const onHand = item?.current_stock ?? 0;
@@ -253,7 +253,7 @@ export function CreateTransferDialog({
                 return (
                   <div
                     key={line.inventory_item_id}
-                    className="flex items-center gap-3 border-b px-3 py-2.5 last:border-b-0"
+                    className="flex items-center gap-3 rounded-xl bg-background px-3 py-2.5"
                   >
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium">
@@ -324,7 +324,7 @@ export function CreateTransferDialog({
           </div>
         </form>
 
-        <DialogFooter className="border-t bg-muted/30 px-6 py-4">
+        <DialogFooter className="shrink-0 bg-card px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-4 sm:px-6">
           <Button
             type="button"
             variant="outline"

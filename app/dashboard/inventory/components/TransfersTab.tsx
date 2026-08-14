@@ -21,7 +21,7 @@ import {
   XCircle,
   Sparkles,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { StatRow, StatTile } from "@/components/dashboard/shell";
 import { useLocationStore, useSelectedLocation } from "@/stores/location-store";
 import {
   useTransfers,
@@ -36,16 +36,6 @@ import {
 import { CreateTransferDialog, TransferPickItem } from "./CreateTransferDialog";
 import { ReceiveTransferDialog } from "./ReceiveTransferDialog";
 import { TransferStatus } from "../../actions/transfers";
-
-const STATUS_STYLES: Record<TransferStatus, string> = {
-  draft: "bg-secondary text-secondary-foreground",
-  in_transit:
-    "border-blue-500/50 text-blue-600 bg-blue-50 dark:bg-blue-950/30",
-  received:
-    "border-emerald-500/50 text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30",
-  cancelled:
-    "border-rose-500/50 text-rose-600 bg-rose-50 dark:bg-rose-950/30",
-};
 
 const STATUS_LABELS: Record<TransferStatus, string> = {
   draft: "Draft",
@@ -101,23 +91,13 @@ export function TransfersTab({ items, isAllLocations }: TransfersTabProps) {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="space-y-6 px-4 py-6 sm:px-6">
       {/* Summary + actions */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex gap-4">
-          <div className="rounded-xl border bg-card px-5 py-3">
-            <p className="text-xs text-muted-foreground uppercase tracking-wide">
-              In Transit
-            </p>
-            <p className="text-2xl font-bold text-blue-600">{inTransitCount}</p>
-          </div>
-          <div className="rounded-xl border bg-card px-5 py-3">
-            <p className="text-xs text-muted-foreground uppercase tracking-wide">
-              Total Transfers
-            </p>
-            <p className="text-2xl font-bold">{transfers.length}</p>
-          </div>
-        </div>
+        <StatRow columns={2} className="flex-1">
+          <StatTile label="In transit" value={inTransitCount} meta="Currently moving" />
+          <StatTile label="Total transfers" value={transfers.length} meta="All transfer records" />
+        </StatRow>
         <Button className="gap-2" onClick={() => setCreateOpen(true)}>
           <Plus className="h-4 w-4" />
           New Transfer
@@ -126,13 +106,13 @@ export function TransfersTab({ items, isAllLocations }: TransfersTabProps) {
 
       {/* Par-level reorder suggestion */}
       {shortfalls.length > 0 && (
-        <div className="flex flex-col gap-3 rounded-xl border border-amber-500/30 bg-amber-50/60 px-5 py-4 dark:bg-amber-950/20 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-3 rounded-2xl border-0 bg-muted/60 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-start gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-500/15">
-              <Sparkles className="h-4 w-4 text-amber-600" />
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-background">
+              <Sparkles className="h-4 w-4 text-muted-foreground" />
             </div>
             <div>
-              <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+              <p className="text-sm font-semibold">
                 {shortfalls.length} item{shortfalls.length !== 1 ? "s" : ""}{" "}
                 below par level
               </p>
@@ -144,7 +124,7 @@ export function TransfersTab({ items, isAllLocations }: TransfersTabProps) {
           </div>
           <Button
             variant="outline"
-            className="gap-2 border-amber-500/40"
+            className="gap-2"
             disabled={generatePOs.isPending}
             onClick={() => generatePOs.mutate()}
           >
@@ -172,10 +152,10 @@ export function TransfersTab({ items, isAllLocations }: TransfersTabProps) {
           </p>
         </div>
       ) : (
-        <div className="rounded-lg border">
+        <div className="-mx-2 overflow-x-auto px-2">
           <Table>
             <TableHeader>
-              <TableRow>
+              <TableRow className="border-border/60 hover:bg-transparent">
                 <TableHead>Transfer #</TableHead>
                 <TableHead>Route</TableHead>
                 <TableHead>Status</TableHead>
@@ -190,7 +170,7 @@ export function TransfersTab({ items, isAllLocations }: TransfersTabProps) {
                   t.to_location_id === selectedLocationId;
                 const isSource = t.from_location_id === selectedLocationId;
                 return (
-                  <TableRow key={t.id}>
+                  <TableRow key={t.id} className="border-border/60 last:border-0 hover:bg-muted/50">
                     <TableCell className="font-mono font-medium">
                       {t.transfer_number}
                     </TableCell>
@@ -202,14 +182,11 @@ export function TransfersTab({ items, isAllLocations }: TransfersTabProps) {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge
-                        variant="outline"
-                        className={cn(STATUS_STYLES[t.status])}
-                      >
+                      <Badge variant="outline">
                         {STATUS_LABELS[t.status]}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="text-right tabular-nums">
                       {t.items_count ?? 0}
                     </TableCell>
                     <TableCell className="whitespace-nowrap text-muted-foreground">

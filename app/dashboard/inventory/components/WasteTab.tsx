@@ -16,6 +16,7 @@ import { Plus, Trash2, MapPin, AlertCircle } from "lucide-react";
 import { useWasteLogs, useLogWaste } from "../hooks/useWasteAndCounts";
 import { LogWasteDialog, WastePickItem } from "./LogWasteDialog";
 import { WasteReason } from "../../actions/waste";
+import { StatRow, StatTile } from "@/components/dashboard/shell";
 
 const REASON_LABELS: Record<WasteReason, string> = {
   spoilage: "Spoilage",
@@ -65,25 +66,13 @@ export function WasteTab({ items, isAllLocations }: WasteTabProps) {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="space-y-6 px-4 py-6 sm:px-6">
       {/* Summary + action */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex gap-4">
-          <div className="rounded-xl border bg-card px-5 py-3">
-            <p className="text-xs text-muted-foreground uppercase tracking-wide">
-              Today&apos;s Waste
-            </p>
-            <p className="text-2xl font-bold text-red-600">
-              ${todayCost.toFixed(2)}
-            </p>
-          </div>
-          <div className="rounded-xl border bg-card px-5 py-3">
-            <p className="text-xs text-muted-foreground uppercase tracking-wide">
-              Total Logged ({logs.length})
-            </p>
-            <p className="text-2xl font-bold">${periodCost.toFixed(2)}</p>
-          </div>
-        </div>
+        <StatRow columns={2} className="flex-1">
+          <StatTile label="Today’s waste" value={`$${todayCost.toFixed(2)}`} meta="Estimated cost today" />
+          <StatTile label="Total logged" value={`$${periodCost.toFixed(2)}`} meta={`${logs.length} entries`} />
+        </StatRow>
         <Button className="gap-2" onClick={() => setDialogOpen(true)}>
           <Plus className="h-4 w-4" />
           Log Waste
@@ -108,10 +97,10 @@ export function WasteTab({ items, isAllLocations }: WasteTabProps) {
           </p>
         </div>
       ) : (
-        <div className="rounded-lg border">
+        <div className="-mx-2 overflow-x-auto px-2">
           <Table>
             <TableHeader>
-              <TableRow>
+              <TableRow className="border-border/60 hover:bg-transparent">
                 <TableHead>Date</TableHead>
                 <TableHead>Item</TableHead>
                 <TableHead>Reason</TableHead>
@@ -123,7 +112,7 @@ export function WasteTab({ items, isAllLocations }: WasteTabProps) {
             </TableHeader>
             <TableBody>
               {logs.map((log) => (
-                <TableRow key={log.id}>
+                <TableRow key={log.id} className="border-border/60 last:border-0 hover:bg-muted/50">
                   <TableCell className="whitespace-nowrap">
                     {log.waste_date}
                   </TableCell>
@@ -135,10 +124,10 @@ export function WasteTab({ items, isAllLocations }: WasteTabProps) {
                       {REASON_LABELS[log.reason] ?? log.reason}
                     </Badge>
                   </TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="text-right tabular-nums">
                     {log.quantity} {log.inventory_item?.unit_type ?? ""}
                   </TableCell>
-                  <TableCell className="text-right font-medium text-red-600">
+                  <TableCell className="text-right font-medium tabular-nums">
                     ${(log.estimated_cost ?? 0).toFixed(2)}
                   </TableCell>
                   <TableCell className="text-muted-foreground">

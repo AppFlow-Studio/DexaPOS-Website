@@ -64,9 +64,7 @@ import { downloadSubscriptionInvoicePdf } from '@/lib/subscription-billing/invoi
 import { cn } from '@/lib/utils'
 import {
   invoiceStatusLabel,
-  invoiceStatusStyle,
   subscriptionStatusLabel,
-  subscriptionStatusStyle,
 } from '@/lib/constants/subscription-status'
 
 interface MerchantSubscriptionOverviewCardProps {
@@ -142,18 +140,15 @@ function formatLocationAddress(location: MerchantBillingLocationViewRecord): str
     .join(', ') || 'Address not set'
 }
 
-/** Soft-tint + dot badge, colours from the shared subscription/invoice status modules (DS-CTL-09). */
+/** Flat, uncoloured status badge — no per-status tint or dot. */
 function StatusBadge({
   label,
 }: {
-  style: { dot: string; text: string; bg: string }
+  style?: { dot: string; text: string; bg: string }
   label: string
 }) {
   return (
-    <span
-      className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground"
-    >
-      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-muted-foreground/60" />
+    <span className="inline-flex shrink-0 items-center rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
       {label}
     </span>
   )
@@ -202,54 +197,15 @@ function merchantTierHighlights(plan: MerchantTierPlanViewRecord): string[] {
   }
 }
 
-function usageTone(planStatus: MerchantPlanStatusView): {
-  label: string
-  style: { dot: string; text: string; bg: string }
-} {
+function usageLabel(planStatus: MerchantPlanStatusView): string {
   const maxLocations = planStatus.plan?.max_locations ?? null
   const count = planStatus.active_location_count
 
   if (maxLocations === null) {
-    return {
-      label: `${count} active locations`,
-      style: {
-        dot: 'bg-blue-500',
-        text: 'text-blue-700 dark:text-blue-400',
-        bg: 'bg-blue-50 dark:bg-blue-900/20',
-      },
-    }
+    return `${count} active locations`
   }
 
-  if (count > maxLocations) {
-    return {
-      label: `${count} of ${maxLocations} locations used`,
-      style: {
-        dot: 'bg-red-500',
-        text: 'text-red-700 dark:text-red-400',
-        bg: 'bg-red-50 dark:bg-red-900/20',
-      },
-    }
-  }
-
-  if (count === maxLocations) {
-    return {
-      label: `${count} of ${maxLocations} locations used`,
-      style: {
-        dot: 'bg-amber-500',
-        text: 'text-amber-700 dark:text-amber-400',
-        bg: 'bg-amber-50 dark:bg-amber-900/20',
-      },
-    }
-  }
-
-  return {
-    label: `${count} of ${maxLocations} locations used`,
-    style: {
-      dot: 'bg-emerald-500',
-      text: 'text-emerald-700 dark:text-emerald-400',
-      bg: 'bg-emerald-50 dark:bg-emerald-900/20',
-    },
-  }
+  return `${count} of ${maxLocations} locations used`
 }
 
 function SubscriptionSectionButton({
@@ -330,7 +286,7 @@ export function MerchantSubscriptionOverviewCard({
     [billingProfilesByLocationId, selectedLocation],
   )
 
-  const usage = useMemo(() => usageTone(merchantPlanStatus), [merchantPlanStatus])
+  const usage = useMemo(() => usageLabel(merchantPlanStatus), [merchantPlanStatus])
 
   const transactionSummary = useMemo(() => {
     const collected = selectedInvoices
@@ -541,10 +497,7 @@ export function MerchantSubscriptionOverviewCard({
                   {merchantPlanStatus.plan?.name || 'Plan not activated'}
                 </p>
                 {merchantPlanStatus.plan ? (
-                  <StatusBadge
-                    style={subscriptionStatusStyle(merchantPlanStatus.subscription_status)}
-                    label={subscriptionStatusLabel(merchantPlanStatus.subscription_status)}
-                  />
+                  <StatusBadge label={subscriptionStatusLabel(merchantPlanStatus.subscription_status)} />
                 ) : null}
               </div>
               <p className="mt-1 text-sm text-muted-foreground">
@@ -605,7 +558,7 @@ export function MerchantSubscriptionOverviewCard({
                     <div className="mt-6 space-y-3 text-sm text-muted-foreground">
                       {merchantTierHighlights(plan).map((line) => (
                         <div key={`${plan.id}-${line}`} className="flex items-start gap-2">
-                          <div className="mt-1 h-1.5 w-1.5 rounded-full bg-[#0C4FD1] dark:bg-[#6CA0FF]" />
+                          <div className="mt-1 h-1.5 w-1.5 rounded-full bg-muted-foreground/60" />
                           <span>{line}</span>
                         </div>
                       ))}
@@ -626,10 +579,7 @@ export function MerchantSubscriptionOverviewCard({
                   <div className="text-sm text-muted-foreground">Current Tier</div>
                   <div className="mt-3 flex flex-wrap items-center gap-2">
                     <div className="text-2xl font-semibold">{merchantPlanStatus.plan.name}</div>
-                    <StatusBadge
-                      style={subscriptionStatusStyle(merchantPlanStatus.subscription_status)}
-                      label={merchantPlanStatus.plan.code.replace('_', ' ')}
-                    />
+                    <StatusBadge label={merchantPlanStatus.plan.code.replace('_', ' ')} />
                   </div>
                   <div className="mt-3 text-sm text-muted-foreground">
                     {merchantPlanStatus.plan.description || 'No description available'}
@@ -639,7 +589,7 @@ export function MerchantSubscriptionOverviewCard({
                 <div className="rounded-2xl bg-muted/45 p-4">
                   <div className="text-sm text-muted-foreground">Location Coverage</div>
                   <div className="mt-3">
-                    <StatusBadge style={usage.style} label={usage.label} />
+                    <StatusBadge label={usage} />
                   </div>
                   <div className="mt-3 text-sm text-muted-foreground">
                     Status:{' '}
@@ -730,14 +680,7 @@ export function MerchantSubscriptionOverviewCard({
                         </TableCell>
                         <TableCell className="text-muted-foreground">{formatLocationAddress(location)}</TableCell>
                         <TableCell>
-                          <StatusBadge
-                            style={
-                              location.is_active
-                                ? { dot: 'bg-emerald-500', text: 'text-emerald-700 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-900/20' }
-                                : { dot: 'bg-slate-400', text: 'text-slate-600 dark:text-slate-400', bg: 'bg-slate-100 dark:bg-slate-800/40' }
-                            }
-                            label={location.is_active ? 'Active' : 'Inactive'}
-                          />
+                          <StatusBadge label={location.is_active ? 'Active' : 'Inactive'} />
                         </TableCell>
                         <TableCell className="text-right font-medium tabular-nums">{location.device_count}</TableCell>
                       </TableRow>
@@ -764,14 +707,7 @@ export function MerchantSubscriptionOverviewCard({
                           {formatLocationAddress(location)}
                         </span>
                       </span>
-                      <StatusBadge
-                        style={
-                          location.is_active
-                            ? { dot: 'bg-emerald-500', text: 'text-emerald-700 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-900/20' }
-                            : { dot: 'bg-slate-400', text: 'text-slate-600 dark:text-slate-400', bg: 'bg-slate-100 dark:bg-slate-800/40' }
-                        }
-                        label={location.is_active ? 'Active' : 'Inactive'}
-                      />
+                      <StatusBadge label={location.is_active ? 'Active' : 'Inactive'} />
                     </div>
                     <span className="mt-4 block text-center text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
                       Devices
@@ -996,7 +932,7 @@ export function MerchantSubscriptionOverviewCard({
                         <TableCell className="max-w-[300px] truncate text-muted-foreground">{reference}</TableCell>
                         <TableCell className="uppercase">{invoice.billing_method}</TableCell>
                         <TableCell>
-                          <StatusBadge style={invoiceStatusStyle(invoice.status)} label={invoiceStatusLabel(invoice.status)} />
+                          <StatusBadge label={invoiceStatusLabel(invoice.status)} />
                         </TableCell>
                         <TableCell className="font-medium">{invoice.invoice_number}</TableCell>
                         <TableCell className="text-right font-medium tabular-nums">{formatMoney(invoice.total_amount)}</TableCell>
@@ -1040,7 +976,7 @@ export function MerchantSubscriptionOverviewCard({
                     <TableCell>{formatDate(invoice.created_at)}</TableCell>
                     <TableCell className="font-medium">{invoice.invoice_number}</TableCell>
                     <TableCell>
-                      <StatusBadge style={invoiceStatusStyle(invoice.status)} label={invoiceStatusLabel(invoice.status)} />
+                      <StatusBadge label={invoiceStatusLabel(invoice.status)} />
                     </TableCell>
                     <TableCell>
                       Subscription billing for {selectedLocation?.name || 'selected location'}
