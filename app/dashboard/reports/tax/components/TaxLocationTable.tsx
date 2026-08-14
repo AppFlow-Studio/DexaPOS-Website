@@ -226,8 +226,8 @@ export function TaxLocationTable({ data, isLoading, dateFrom, dateTo }: TaxLocat
                     >
                       <TableCell className="pl-5 py-3.5">
                         <div className="flex items-center gap-2">
-                          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-50 dark:bg-indigo-950/40">
-                            <MapPin className="h-3.5 w-3.5 text-indigo-500" />
+                          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted/60">
+                            <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
                           </div>
                           <span className="text-sm font-medium">{row.locationName}</span>
                         </div>
@@ -245,13 +245,13 @@ export function TaxLocationTable({ data, isLoading, dateFrom, dateTo }: TaxLocat
                         {fmt(row.taxableSales)}
                       </TableCell>
                       <TableCell className="py-3.5 text-right">
-                        <span className="text-sm font-semibold text-emerald-600">
+                        <span className="text-sm font-semibold text-foreground">
                           {fmt(row.grossTax)}
                         </span>
                       </TableCell>
                       <TableCell className="py-3.5 text-right">
                         {row.taxRefunded > 0 ? (
-                          <span className="text-sm font-medium text-rose-500">
+                          <span className="text-sm font-medium text-foreground">
                             -{fmt(row.taxRefunded)}
                           </span>
                         ) : (
@@ -260,12 +260,12 @@ export function TaxLocationTable({ data, isLoading, dateFrom, dateTo }: TaxLocat
                       </TableCell>
                       <TableCell className="py-3.5 pr-5 text-right">
                         <div className="flex flex-col items-end gap-1">
-                          <span className="text-sm font-bold text-blue-600">
+                          <span className="text-sm font-semibold text-foreground">
                             {fmt(row.netLiability)}
                           </span>
                           <div className="w-20 h-1 bg-muted rounded-full overflow-hidden">
                             <div
-                              className="h-full rounded-full bg-blue-400"
+                              className="h-full rounded-full bg-foreground/35"
                               style={{ width: `${barPct}%` }}
                             />
                           </div>
@@ -285,13 +285,13 @@ export function TaxLocationTable({ data, isLoading, dateFrom, dateTo }: TaxLocat
                       {fmt(totals.taxableSales)}
                     </TableCell>
                     <TableCell className="py-3.5 text-right">
-                      <span className="text-sm font-bold text-emerald-600">
+                      <span className="text-sm font-bold text-foreground">
                         {fmt(totals.grossTax)}
                       </span>
                     </TableCell>
                     <TableCell className="py-3.5 text-right">
                       {totals.taxRefunded > 0 ? (
-                        <span className="text-sm font-bold text-rose-500">
+                        <span className="text-sm font-bold text-foreground">
                           -{fmt(totals.taxRefunded)}
                         </span>
                       ) : (
@@ -299,7 +299,7 @@ export function TaxLocationTable({ data, isLoading, dateFrom, dateTo }: TaxLocat
                       )}
                     </TableCell>
                     <TableCell className="py-3.5 pr-5 text-right">
-                      <span className="text-sm font-bold text-blue-600">
+                      <span className="text-sm font-bold text-foreground">
                         {fmt(totals.netLiability)}
                       </span>
                     </TableCell>

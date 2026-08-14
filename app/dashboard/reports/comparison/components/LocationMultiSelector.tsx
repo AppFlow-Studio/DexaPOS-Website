@@ -112,7 +112,7 @@ export function LocationMultiSelector({
                 <>
                   <Badge
                     variant="secondary"
-                    className="bg-[#0C4FD1]/10 text-[#0C4FD1] dark:text-[#6CA0FF]"
+                    className="text-muted-foreground"
                   >
                     {selectedIds.length} Selected
                   </Badge>

@@ -1,7 +1,6 @@
 "use client";
 
 import { format } from "date-fns";
-import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
@@ -32,12 +31,12 @@ export function ShiftCard({ shift }: ShiftCardProps) {
     shift.clockOutTime && !shift.tipsDeclaredAt;
 
   return (
-    <Card
+    <div
       className={cn(
-        "p-4 border-l-4 transition-colors",
+        "min-w-0 rounded-2xl border bg-card p-4 border-l-4 transition-colors",
         isStillWorking
           ? "border-l-teal-500"
-          : "border-l-gray-300 dark:border-l-gray-600"
+          : "border-l-border"
       )}
     >
       {/* Top row: avatar + name + role */}
@@ -55,7 +54,7 @@ export function ShiftCard({ shift }: ShiftCardProps) {
           </Badge>
         </div>
         {isStillWorking && (
-          <Badge className="bg-teal-500/10 text-teal-600 border-teal-500/30 text-[10px] shrink-0">
+          <Badge className="bg-teal-50 text-teal-700 dark:bg-teal-900/20 dark:text-teal-400 text-[10px] shrink-0">
             Working
           </Badge>
         )}
@@ -87,7 +86,7 @@ export function ShiftCard({ shift }: ShiftCardProps) {
           {clockedOutWithoutDeclaring ? (
             <Badge
               variant="outline"
-              className="text-[10px] border-amber-400/60 bg-amber-50 text-amber-700 dark:bg-amber-950/20 dark:text-amber-400"
+              className="text-[10px] border-0 bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400"
             >
               Not yet declared
             </Badge>
@@ -96,6 +95,6 @@ export function ShiftCard({ shift }: ShiftCardProps) {
           )}
         </div>
       </div>
-    </Card>
+    </div>
   );
 }

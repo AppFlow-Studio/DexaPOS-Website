@@ -1,11 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import {
-  Card,
-  CardContent,
-} from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Empty } from "@/components/ui/empty";
 import {
@@ -33,6 +28,12 @@ import { useSettlementBatches, useBatchPayments } from "../../hooks/useSettlemen
 import { usePayments } from "../../hooks/usePayments";
 import { PaymentFilters } from "@/types/payment";
 import { CardBrandIcon } from "./CardBrandIcon";
+import { cn } from "@/lib/utils";
+import { Panel, StatRow, StatTile } from "@/components/dashboard/shell";
+import {
+  getPaymentStatusLabel,
+  getPaymentStatusStyle,
+} from "@/lib/constants/payment-status";
 
 // ============================================================================
 // Helpers
@@ -80,44 +81,68 @@ function formatBatchLabel(
   return batch.batch_id;
 }
 
+/**
+ * Soft-tint badges for settlement-batch status (open/closed/submitted/settled/
+ * funded) — a distinct domain from `payment_status`, so it isn't covered by
+ * `lib/constants/payment-status.ts`. Follows the same `{dot,text,bg}` shape
+ * (DS-CTL-09).
+ */
+const BATCH_STATUS_STYLES: Record<
+  string,
+  { label: string; dot: string; text: string; bg: string }
+> = {
+  open: {
+    label: "Open",
+    dot: "bg-amber-500",
+    text: "text-amber-700 dark:text-amber-400",
+    bg: "bg-amber-50 dark:bg-amber-900/20",
+  },
+  closed: {
+    label: "Closed",
+    dot: "bg-blue-500",
+    text: "text-blue-700 dark:text-blue-400",
+    bg: "bg-blue-50 dark:bg-blue-900/20",
+  },
+  submitted: {
+    label: "Submitted",
+    dot: "bg-violet-500",
+    text: "text-violet-700 dark:text-violet-400",
+    bg: "bg-violet-50 dark:bg-violet-900/20",
+  },
+  settled: {
+    label: "Settled",
+    dot: "bg-emerald-500",
+    text: "text-emerald-700 dark:text-emerald-400",
+    bg: "bg-emerald-50 dark:bg-emerald-900/20",
+  },
+  funded: {
+    label: "Funded",
+    dot: "bg-emerald-500",
+    text: "text-emerald-700 dark:text-emerald-400",
+    bg: "bg-emerald-50 dark:bg-emerald-900/20",
+  },
+};
+
 function getStatusBadge(status: string) {
   const normalized = status.toLowerCase();
-  if (normalized === "open") {
-    return (
-      <Badge variant="outline" className="border-amber-300 bg-amber-100 text-amber-800">
-        Open
-      </Badge>
-    );
-  }
-  if (normalized === "closed") {
-    return (
-      <Badge variant="outline" className="border-blue-300 bg-blue-100 text-blue-800">
-        Closed
-      </Badge>
-    );
-  }
-  if (normalized === "submitted") {
-    return (
-      <Badge variant="outline" className="border-purple-300 bg-purple-100 text-purple-800">
-        Submitted
-      </Badge>
-    );
-  }
-  if (normalized === "settled") {
-    return (
-      <Badge variant="outline" className="border-emerald-300 bg-emerald-100 text-emerald-800">
-        Settled
-      </Badge>
-    );
-  }
-  if (normalized === "funded") {
-    return (
-      <Badge variant="outline" className="border-green-300 bg-green-100 text-green-800">
-        Funded
-      </Badge>
-    );
-  }
-  return <Badge variant="outline">{status}</Badge>;
+  const style = BATCH_STATUS_STYLES[normalized];
+  return (
+    <span
+      className={cn(
+        "inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium",
+        style ? style.bg : "bg-muted/60",
+        style ? style.text : "text-muted-foreground"
+      )}
+    >
+      <span
+        className={cn(
+          "h-1.5 w-1.5 shrink-0 rounded-full",
+          style ? style.dot : "bg-muted-foreground"
+        )}
+      />
+      {style ? style.label : status}
+    </span>
+  );
 }
 
 // ============================================================================
@@ -194,35 +219,35 @@ function BatchSummaryStats({
   batches: { count: number; settled: number; pending: number; avgSize: number };
   isLoading: boolean;
 }) {
-  const stats = [
-    { label: "Total Batches", value: batches.count, icon: Layers },
-    { label: "Settled Amount", value: formatCurrency(batches.settled), icon: CheckCircle2 },
-    { label: "Pending", value: formatCurrency(batches.pending), icon: Clock },
-    { label: "Avg Batch Size", value: formatCurrency(batches.avgSize), icon: DollarSign },
-  ];
-
   return (
-    <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-      {stats.map((stat) => (
-        <Card key={stat.label}>
-          <CardContent className="pt-4 pb-4">
-            {isLoading ? (
-              <Skeleton className="h-12 w-full" />
-            ) : (
-              <div className="flex items-center gap-3">
-                <div className="rounded-md bg-muted p-2">
-                  <stat.icon className="h-4 w-4 text-muted-foreground" />
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">{stat.label}</p>
-                  <p className="text-lg font-bold">{stat.value}</p>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      ))}
-    </div>
+    <Panel className="px-4 py-6 sm:px-6">
+      <StatRow columns={4}>
+        <StatTile
+          icon={<Layers />}
+          label="Total Batches"
+          value={batches.count}
+          isLoading={isLoading}
+        />
+        <StatTile
+          icon={<CheckCircle2 />}
+          label="Settled Amount"
+          value={formatCurrency(batches.settled)}
+          isLoading={isLoading}
+        />
+        <StatTile
+          icon={<Clock />}
+          label="Pending"
+          value={formatCurrency(batches.pending)}
+          isLoading={isLoading}
+        />
+        <StatTile
+          icon={<DollarSign />}
+          label="Avg Batch Size"
+          value={formatCurrency(batches.avgSize)}
+          isLoading={isLoading}
+        />
+      </StatRow>
+    </Panel>
   );
 }
 
@@ -271,8 +296,7 @@ function DbBatchCard({ batch }: { batch: SettlementBatchRecord }) {
 
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
-      <Card>
-        <CardContent className="p-4">
+      <Panel nested className="p-4">
           {/* Header row */}
           <CollapsibleTrigger asChild>
             <button className="w-full text-left cursor-pointer">
@@ -398,8 +422,7 @@ function DbBatchCard({ batch }: { batch: SettlementBatchRecord }) {
               />
             </div>
           </CollapsibleContent>
-        </CardContent>
-      </Card>
+      </Panel>
     </Collapsible>
   );
 }
@@ -413,8 +436,7 @@ function ComputedBatchCard({ batch }: { batch: ComputedBatch }) {
 
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
-      <Card>
-        <CardContent className="p-4">
+      <Panel nested className="p-4">
           <CollapsibleTrigger asChild>
             <button className="w-full text-left cursor-pointer">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -467,8 +489,7 @@ function ComputedBatchCard({ batch }: { batch: ComputedBatch }) {
               />
             </div>
           </CollapsibleContent>
-        </CardContent>
-      </Card>
+      </Panel>
     </Collapsible>
   );
 }
@@ -550,18 +571,18 @@ function BatchPaymentsTable({
 }
 
 function StatusBadgeMini({ status }: { status: string }) {
-  const configs: Record<string, { label: string; className: string }> = {
-    captured: { label: "Captured", className: "bg-green-100 text-green-800 border-green-300" },
-    paid: { label: "Paid", className: "bg-green-100 text-green-800 border-green-300" },
-    refunded: { label: "Refunded", className: "bg-red-100 text-red-800 border-red-300" },
-    partially_refunded: { label: "Partial Refund", className: "bg-amber-100 text-amber-800 border-amber-300" },
-    void: { label: "Void", className: "bg-gray-100 text-gray-800 border-gray-300" },
-  };
-  const config = configs[status] || { label: status, className: "" };
+  const style = getPaymentStatusStyle(status);
   return (
-    <Badge variant="outline" className={`text-[10px] ${config.className}`}>
-      {config.label}
-    </Badge>
+    <span
+      className={cn(
+        "inline-flex w-fit shrink-0 items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[10px] font-medium",
+        style.bg,
+        style.text
+      )}
+    >
+      <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", style.dot)} />
+      {getPaymentStatusLabel(status)}
+    </span>
   );
 }
 
@@ -643,15 +664,13 @@ export function BatchesView({ paymentFilters }: BatchesViewProps) {
           <Skeleton className="h-20 w-full" />
         </div>
       ) : !hasBatches ? (
-        <Card>
-          <CardContent className="py-12">
-            <Empty
-              icon={Layers}
-              title="No batches found"
-              description="No settlement batches found for the selected date range. Batches appear when card payments are processed through your terminal."
-            />
-          </CardContent>
-        </Card>
+        <Panel className="py-12">
+          <Empty
+            icon={Layers}
+            title="No batches found"
+            description="No settlement batches found for the selected date range. Batches appear when card payments are processed through your terminal."
+          />
+        </Panel>
       ) : (
         <div className="space-y-3">
           {hasDbBatches

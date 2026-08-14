@@ -810,12 +810,14 @@ export function KioskEditor({ initialData }: { initialData: KioskEditorData }) {
           <>
             <Select value={selectedProfileId} onValueChange={selectProfile}>
               <SelectTrigger className="h-9 w-full shadow-sm sm:w-56">
-                <SelectValue placeholder="Select profile" />
+                <SelectValue placeholder="Select profile">
+                  {draft.profile_name?.trim() || "Untitled profile"}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {data.profiles.map((profile) => (
                   <SelectItem key={profile.id} value={profile.id}>
-                    {profile.profile_name}
+                    {profile.profile_name?.trim() || "Untitled profile"}
                   </SelectItem>
                 ))}
                 <SelectItem value="new">Create new profile</SelectItem>

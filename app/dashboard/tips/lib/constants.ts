@@ -1,10 +1,10 @@
 export const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
-  draft:            { label: "Live",             className: "bg-gray-100 text-gray-700 border-gray-200" },
-  calculated:       { label: "Calculated",       className: "bg-blue-100 text-blue-700 border-blue-200" },
-  pending_approval: { label: "Pending Approval", className: "bg-amber-100 text-amber-700 border-amber-200" },
-  approved:         { label: "Approved",         className: "bg-green-100 text-green-700 border-green-200" },
-  exported:         { label: "Exported",         className: "bg-indigo-100 text-indigo-700 border-indigo-200" },
-  voided:           { label: "Voided",           className: "bg-red-100 text-red-700 border-red-200" },
+  draft:            { label: "Live",             className: "bg-muted text-muted-foreground" },
+  calculated:       { label: "Calculated",       className: "bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400" },
+  pending_approval: { label: "Pending Approval", className: "bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400" },
+  approved:         { label: "Approved",         className: "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400" },
+  exported:         { label: "Exported",         className: "bg-indigo-50 text-indigo-700 dark:bg-indigo-900/20 dark:text-indigo-400" },
+  voided:           { label: "Voided",           className: "bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400" },
 };
 
 export const SHIFT_LABELS: Record<string, string> = {

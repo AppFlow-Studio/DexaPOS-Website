@@ -2,7 +2,6 @@
 
 import { format } from "date-fns";
 import { DollarSign, CreditCard, Users, Clock } from "lucide-react";
-import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -102,12 +101,12 @@ export function TodayHeader({
       {/* 4 Stat Tiles */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {statTiles.map((tile) => (
-          <Card
+          <div
             key={tile.key}
-            className="p-4 bg-teal-50/50 border-teal-100 dark:bg-teal-950/20 dark:border-teal-900/30"
+            className="min-w-0 rounded-2xl border-0 bg-muted/60 p-4"
           >
             <div className="flex items-center gap-2 mb-1">
-              <tile.icon className="w-4 h-4 text-teal-600 dark:text-teal-400" />
+              <tile.icon className="w-4 h-4 text-muted-foreground" />
               <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                 {tile.label}
               </span>
@@ -115,11 +114,11 @@ export function TodayHeader({
             {isLoading || !summary ? (
               <Skeleton className="h-7 w-20 mt-1" />
             ) : (
-              <p className="text-xl font-bold text-foreground">
+              <p className="text-xl font-medium leading-tight tracking-[-0.02em] tabular-nums text-foreground">
                 {tile.getValue(summary)}
               </p>
             )}
-          </Card>
+          </div>
         ))}
       </div>
     </div>

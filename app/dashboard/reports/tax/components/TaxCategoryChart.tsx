@@ -284,7 +284,7 @@ export function TaxCategoryChart({ data, isLoading }: TaxCategoryChartProps) {
                     </TableCell>
                     <TableCell className="py-3.5 text-right">
                       <div className="flex flex-col items-end gap-1">
-                        <span className="text-sm font-semibold text-emerald-600">
+                        <span className="text-sm font-semibold text-foreground">
                           ${row.taxCollected.toFixed(2)}
                         </span>
                         <div className="w-16 h-1 bg-muted rounded-full overflow-hidden">
@@ -299,13 +299,7 @@ export function TaxCategoryChart({ data, isLoading }: TaxCategoryChartProps) {
                       {row.taxExemptCount > 0 ? row.taxExemptCount : "—"}
                     </TableCell>
                     <TableCell className="py-3.5 text-right pr-5">
-                      <span
-                        className="text-xs font-medium px-2 py-0.5 rounded-full"
-                        style={{
-                          backgroundColor: color + "1a",
-                          color,
-                        }}
-                      >
+                      <span className="rounded-full bg-muted/60 px-2 py-0.5 text-xs font-medium text-muted-foreground">
                         {row.effectiveRate.toFixed(2)}%
                       </span>
                     </TableCell>

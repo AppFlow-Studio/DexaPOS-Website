@@ -298,10 +298,10 @@ export default function FinancialsPage() {
                   </div>
 
                   <div className="flex justify-between items-center group">
-                    <span className="font-medium text-sm text-[#6366f1]">
+                    <span className="text-sm font-medium text-foreground">
                       Paid in total
                     </span>
-                    <span className="font-mono font-bold text-[#6366f1] text-base">
+                    <span className="font-mono text-base font-bold text-foreground">
                       {totalAmount.toLocaleString("en-US", {
                         style: "currency",
                         currency: "USD",
@@ -346,7 +346,7 @@ export default function FinancialsPage() {
                     <span className="text-sm text-muted-foreground">
                       Discounts
                     </span>
-                    <span className="font-mono font-bold text-red-500 text-base">
+                    <span className="font-mono text-base font-bold text-foreground">
                       -
                       {summary.discounts_total.toLocaleString("en-US", {
                         style: "currency",
@@ -403,7 +403,7 @@ export default function FinancialsPage() {
 
         {activeTab === "waterfall" && (
           <div className="relative flex min-h-[420px] w-full flex-col items-center justify-center rounded-3xl border bg-card p-8">
-            <FileSpreadsheet className="w-16 h-16 text-[#6366f1]/20 mb-4" />
+            <FileSpreadsheet className="mb-4 h-16 w-16 text-muted-foreground/25" />
             <h3 className="mb-2 text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]">
               Net Collected Statement
             </h3>

@@ -101,10 +101,7 @@ function fmtVariance(v: number | null | undefined): string {
 
 function varianceClass(v: number | null | undefined): string {
   if (v == null) return "text-muted-foreground";
-  const abs = Math.abs(v);
-  if (abs <= VARIANCE_WARNING) return "text-green-600 dark:text-green-400 font-medium";
-  if (abs <= VARIANCE_ALERT) return "text-yellow-600 dark:text-yellow-400 font-medium";
-  return "text-red-600 dark:text-red-400 font-medium";
+  return "font-medium text-foreground";
 }
 
 // ─── Delta Badge ──────────────────────────────────────────────────────────────
@@ -137,9 +134,8 @@ function DeltaBadge({
 
   return (
     <span
-      className={`inline-flex items-center gap-0.5 text-xs font-medium ${
-        isGood ? "text-green-600 dark:text-green-400" : "text-red-500 dark:text-red-400"
-      }`}
+      className="inline-flex items-center gap-0.5 text-xs font-medium text-muted-foreground"
+      title={isGood ? "Improved from the previous period" : "Declined from the previous period"}
     >
       {isDecrease ? <TrendingDown className="h-3 w-3" /> : <TrendingUp className="h-3 w-3" />}
       {isDecrease ? "-" : "+"}{absPct.toFixed(1)}% vs prev period
@@ -209,28 +205,19 @@ function LastRefreshed({
 function StatusBadge({ status }: { status: string | null }) {
   switch (status?.toLowerCase()) {
     case "open":
-      return <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 border-0">Open</Badge>;
+      return <Badge variant="secondary">Open</Badge>;
     case "closed":
       return <Badge variant="secondary">Closed</Badge>;
     case "reconciled":
-      return <Badge className="bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300 border-0">Reconciled</Badge>;
+      return <Badge variant="secondary">Reconciled</Badge>;
     default:
       return <Badge variant="outline">{status ?? "Unknown"}</Badge>;
   }
 }
 
 function OperationTypeBadge({ type }: { type: string }) {
-  const cfg: Record<string, string> = {
-    cash_sale: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300",
-    no_sale: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300",
-    cash_in: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300",
-    cash_out: "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300",
-    open: "bg-muted/60 text-muted-foreground",
-    close: "bg-muted/60 text-muted-foreground",
-  };
-  const cls = cfg[type] ?? "bg-muted/60 text-muted-foreground";
   const label = type.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-  return <Badge className={`${cls} border-0 capitalize`}>{label}</Badge>;
+  return <Badge variant="secondary" className="capitalize text-muted-foreground">{label}</Badge>;
 }
 
 // ─── Summary Cards ────────────────────────────────────────────────────────────
@@ -259,22 +246,21 @@ function SummaryCards({
     {
       title: "Total Cash Sales",
       value: fmt$(stats?.totalCashSales),
-      icon: <DollarSign className="h-4 w-4 text-green-600 dark:text-green-400" />,
+      icon: <DollarSign className="h-4 w-4 text-muted-foreground" />,
       delta: stats ? (
         <DeltaBadge current={stats.totalCashSales} prev={stats.prevPeriodTotalCashSales} />
       ) : null,
-      accent: "border-l-4 border-l-green-500",
     },
     {
       title: "Total Variance",
       value: fmtVariance(stats?.totalVariance),
       icon:
         Math.abs(stats?.totalVariance ?? 0) > VARIANCE_ALERT ? (
-          <AlertTriangle className="h-4 w-4 text-red-500" />
+          <AlertTriangle className="h-4 w-4 text-muted-foreground" />
         ) : (stats?.totalVariance ?? 0) === 0 ? (
-          <CheckCircle2 className="h-4 w-4 text-green-500" />
+          <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
         ) : (
-          <AlertTriangle className="h-4 w-4 text-yellow-500" />
+          <AlertTriangle className="h-4 w-4 text-muted-foreground" />
         ),
       delta: stats ? (
         <DeltaBadge
@@ -284,16 +270,14 @@ function SummaryCards({
         />
       ) : null,
       valueClass: varianceClass(stats?.totalVariance),
-      accent: "border-l-4 border-l-yellow-400",
     },
     {
       title: "No Sale Events",
       value: stats?.noSaleCount?.toString() ?? "—",
-      icon: <AlertOctagon className="h-4 w-4 text-amber-500" />,
+      icon: <AlertOctagon className="h-4 w-4 text-muted-foreground" />,
       delta: stats ? (
         <DeltaBadge current={stats.noSaleCount} prev={stats.prevPeriodNoSaleCount} inverse />
       ) : null,
-      accent: "border-l-4 border-l-amber-400",
       subtitle:
         stats && stats.noSaleCount > NO_SALE_THRESHOLD
           ? `⚠ Above threshold (${NO_SALE_THRESHOLD})`
@@ -306,7 +290,6 @@ function SummaryCards({
       delta: stats ? (
         <DeltaBadge current={stats.sessionsCount} prev={stats.prevPeriodSessionsCount} />
       ) : null,
-      accent: "border-l-4 border-l-slate-300 dark:border-l-slate-600",
     },
   ];
 
@@ -731,7 +714,7 @@ function NoSaleTab({ dateFrom, dateTo }: { dateFrom: Date; dateTo: Date }) {
           <CardHeader className="pb-3">
             <CardTitle className="text-base font-semibold">No Sales by Employee</CardTitle>
             {flaggedEmployees.size > 0 && (
-              <p className="text-xs text-red-500 dark:text-red-400 flex items-center gap-1 mt-1">
+              <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
                 <AlertTriangle className="h-3 w-3" />
                 {flaggedEmployees.size} employee{flaggedEmployees.size !== 1 ? "s" : ""} above threshold ({NO_SALE_THRESHOLD})
               </p>
@@ -910,13 +893,13 @@ function NoSaleTab({ dateFrom, dateTo }: { dateFrom: Date; dateTo: Date }) {
                         <span
                           className={
                             flaggedEmployees.has(op.performed_by_name)
-                              ? "text-red-600 dark:text-red-400 font-medium inline-flex items-center gap-1"
+                              ? "inline-flex items-center gap-1 font-medium text-foreground"
                               : ""
                           }
                         >
                           {op.performed_by_name}
                           {flaggedEmployees.has(op.performed_by_name) && (
-                            <AlertTriangle className="h-3 w-3 text-red-500" />
+                            <AlertTriangle className="h-3 w-3 text-muted-foreground" />
                           )}
                         </span>
                       </TableCell>
@@ -986,9 +969,7 @@ function VarianceTrendsTab({ dateFrom, dateTo }: { dateFrom: Date; dateTo: Date 
             <div>
               <CardTitle className="text-base font-semibold">Daily Variance Trend</CardTitle>
               <p className="text-xs text-muted-foreground mt-0.5">
-                <span className="inline-block w-2 h-2 rounded-sm bg-green-500/30 mr-1" />±${VARIANCE_WARNING} balanced ·{" "}
-                <span className="inline-block w-2 h-2 rounded-sm bg-yellow-500/30 mr-1" />±${VARIANCE_ALERT} warning ·{" "}
-                <span className="inline-block w-2 h-2 rounded-sm bg-red-500/30 mr-1" />beyond alert
+                ±${VARIANCE_WARNING} balanced · ±${VARIANCE_ALERT} warning · beyond alert
               </p>
             </div>
             <LastRefreshed updatedAt={dataUpdatedAt} onRefresh={refetch} isLoading={isLoading} />

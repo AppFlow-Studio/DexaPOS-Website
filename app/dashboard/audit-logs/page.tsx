@@ -9,7 +9,6 @@ import {
   Building2,
   CalendarDays,
   ChevronDown,
-  ChevronUp,
   Clock,
   CreditCard,
   DollarSign,
@@ -49,11 +48,12 @@ import {
   buildAuditSentence,
   formatRelativeTime,
   formatChangesForDisplay,
-  SEVERITY_BORDER_CLASS,
-  SEVERITY_ICON_BG,
-  SEVERITY_ICON_COLOR,
-  SEVERITY_CARD_BG,
 } from "@/lib/audit/sentence-templates";
+import {
+  auditSeverityBorder,
+  auditSeverityLabel,
+  auditSeverityStyle,
+} from "@/lib/constants/audit-severity";
 import type { AuditLogWithLocation } from "@/types/audit-log";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -79,6 +79,8 @@ import {
 } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { DateRange } from "react-day-picker";
+import { Empty } from "@/components/ui/empty";
+import { PageHeader, PageShell, Panel } from "@/components/dashboard/shell";
 
 // ─── Icon Registry ────────────────────────────────────────────────────────────
 
@@ -219,10 +221,8 @@ function AuditCard({
 }) {
   const { sentence, highlight, iconName } = buildAuditSentence(log);
   const severity = log.severity ?? "info";
-  const borderClass = SEVERITY_BORDER_CLASS[severity] ?? SEVERITY_BORDER_CLASS.info;
-  const cardBg = SEVERITY_CARD_BG[severity] ?? "";
-  const iconBg = SEVERITY_ICON_BG[severity] ?? SEVERITY_ICON_BG.info;
-  const iconColor = SEVERITY_ICON_COLOR[severity] ?? SEVERITY_ICON_COLOR.info;
+  const style = auditSeverityStyle(severity);
+  const borderClass = auditSeverityBorder(severity);
   const categoryLabel = getCategoryLabel(log);
   const relativeTime = formatRelativeTime(log.created_at);
 
@@ -231,29 +231,22 @@ function AuditCard({
       type="button"
       onClick={() => onOpen(log)}
       className={cn(
-        "w-full text-left group rounded-xl border border-l-4 p-4 transition-all",
-        "hover:shadow-md hover:border-border/80",
-        "bg-card",
-        borderClass,
-        cardBg,
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        "group w-full rounded-2xl border-0 border-l-4 bg-muted/45 p-4 text-left transition-colors",
+        "hover:bg-muted/65",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        borderClass
       )}
     >
       <div className="flex items-start gap-3">
-        {/* Icon */}
         <div
           className={cn(
             "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
-            iconBg
+            style.bg
           )}
         >
-          <DynamicIcon
-            name={iconName}
-            className={cn("h-4 w-4", iconColor)}
-          />
+          <DynamicIcon name={iconName} className={cn("h-4 w-4", style.text)} />
         </div>
 
-        {/* Content */}
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium leading-snug text-foreground">
             {sentence}
@@ -269,34 +262,25 @@ function AuditCard({
             <span>·</span>
             <span>{categoryLabel}</span>
             {severity !== "info" && (
-              <>
-                <span>·</span>
-                <Badge
-                  variant="secondary"
-                  className={cn(
-                    "h-4 px-1.5 text-[10px] border-none",
-                    severity === "warning" &&
-                      "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
-                    severity === "critical" &&
-                      "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
-                    severity === "error" &&
-                      "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300"
-                  )}
-                >
-                  {severity === "critical" ? (
-                    <AlertCircle className="mr-0.5 h-2.5 w-2.5 inline" />
-                  ) : (
-                    <AlertTriangle className="mr-0.5 h-2.5 w-2.5 inline" />
-                  )}
-                  {severity}
-                </Badge>
-              </>
+              <span
+                className={cn(
+                  "inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium",
+                  style.bg,
+                  style.text
+                )}
+              >
+                {severity === "critical" ? (
+                  <AlertCircle className="h-2.5 w-2.5" />
+                ) : (
+                  <AlertTriangle className="h-2.5 w-2.5" />
+                )}
+                {auditSeverityLabel(severity)}
+              </span>
             )}
           </div>
         </div>
 
-        {/* Expand hint */}
-        <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 mt-0.5" />
+        <ChevronDown className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
       </div>
     </button>
   );
@@ -317,26 +301,25 @@ function AuditDetailSheet({
 
   const { sentence, highlight, iconName } = buildAuditSentence(log);
   const severity = log.severity ?? "info";
-  const iconBg = SEVERITY_ICON_BG[severity] ?? SEVERITY_ICON_BG.info;
-  const iconColor = SEVERITY_ICON_COLOR[severity] ?? SEVERITY_ICON_COLOR.info;
+  const style = auditSeverityStyle(severity);
   const changes = formatChangesForDisplay(log.changes);
   const categoryLabel = getCategoryLabel(log);
 
   return (
     <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
-      <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+      <SheetContent className="w-full overflow-y-auto sm:max-w-lg">
         <SheetHeader className="pb-4">
           <div className="flex items-start gap-3">
             <div
               className={cn(
                 "flex h-9 w-9 shrink-0 items-center justify-center rounded-full",
-                iconBg
+                style.bg
               )}
             >
-              <DynamicIcon name={iconName} className={cn("h-4 w-4", iconColor)} />
+              <DynamicIcon name={iconName} className={cn("h-4 w-4", style.text)} />
             </div>
             <div className="min-w-0">
-              <SheetTitle className="text-base font-semibold leading-snug text-left">
+              <SheetTitle className="text-left text-base font-semibold leading-snug">
                 {sentence}
               </SheetTitle>
               {highlight && (
@@ -346,40 +329,39 @@ function AuditDetailSheet({
           </div>
         </SheetHeader>
 
-        {/* Meta info */}
         <div className="space-y-4 pt-2">
-          <div className="grid grid-cols-2 gap-3 rounded-lg border bg-muted/30 p-4 text-sm">
+          <div className="grid grid-cols-2 gap-3 rounded-2xl bg-muted/45 p-4 text-sm">
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
+              <p className="mb-0.5 text-[0.6875rem] font-medium uppercase tracking-[0.12em] text-muted-foreground">
                 Who
               </p>
               <p className="font-medium">{log.actor_name ?? "System"}</p>
               {log.actor_role && (
-                <p className="text-xs text-muted-foreground capitalize">
+                <p className="text-xs capitalize text-muted-foreground">
                   {log.actor_role}
                 </p>
               )}
             </div>
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
+              <p className="mb-0.5 text-[0.6875rem] font-medium uppercase tracking-[0.12em] text-muted-foreground">
                 When
               </p>
-              <p className="font-medium">
+              <p className="font-medium tabular-nums">
                 {format(new Date(log.created_at), "MMM d, yyyy")}
               </p>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs tabular-nums text-muted-foreground">
                 {format(new Date(log.created_at), "h:mm:ss a")}
               </p>
             </div>
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
+              <p className="mb-0.5 text-[0.6875rem] font-medium uppercase tracking-[0.12em] text-muted-foreground">
                 Category
               </p>
               <p className="font-medium">{categoryLabel}</p>
             </div>
             {log.location && (
               <div>
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
+                <p className="mb-0.5 text-[0.6875rem] font-medium uppercase tracking-[0.12em] text-muted-foreground">
                   Location
                 </p>
                 <p className="font-medium">{log.location.name}</p>
@@ -387,41 +369,39 @@ function AuditDetailSheet({
             )}
           </div>
 
-          {/* What changed */}
           {changes.length > 0 && (
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+              <p className="mb-3 text-sm text-muted-foreground">
                 What changed
               </p>
-              <div className="rounded-lg border overflow-hidden divide-y">
+              <div className="divide-y divide-border/60 overflow-hidden rounded-2xl bg-muted/20">
                 {changes.map((row, i) => (
-                  <div key={i} className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 px-4 py-2.5 text-sm bg-background">
-                    {/* Field name spans top on mobile */}
-                    <div className="col-span-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-0.5">
+                  <div
+                    key={i}
+                    className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 px-4 py-2.5 text-sm"
+                  >
+                    <div className="col-span-3 mb-0.5 text-[0.6875rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                       {row.field}
                     </div>
-                    {/* From */}
                     <div
                       className={cn(
-                        "rounded px-2 py-1 text-xs font-mono break-all",
+                        "break-all rounded-lg px-2 py-1 font-mono text-xs",
                         row.from !== null
                           ? "bg-red-50 text-red-800 dark:bg-red-950/20 dark:text-red-300"
-                          : "text-muted-foreground italic"
+                          : "italic text-muted-foreground"
                       )}
                     >
                       {row.from ?? "(new)"}
                     </div>
-                    {/* Arrow */}
-                    <div className="flex justify-center text-muted-foreground text-xs">
+                    <div className="flex justify-center text-xs text-muted-foreground">
                       →
                     </div>
-                    {/* To */}
                     <div
                       className={cn(
-                        "rounded px-2 py-1 text-xs font-mono break-all",
+                        "break-all rounded-lg px-2 py-1 font-mono text-xs",
                         row.to !== null
                           ? "bg-emerald-50 text-emerald-800 dark:bg-emerald-950/20 dark:text-emerald-300"
-                          : "text-muted-foreground italic"
+                          : "italic text-muted-foreground"
                       )}
                     >
                       {row.to ?? "(removed)"}
@@ -433,7 +413,7 @@ function AuditDetailSheet({
           )}
 
           {changes.length === 0 && (
-            <div className="rounded-lg border border-dashed py-8 text-center text-sm text-muted-foreground">
+            <div className="rounded-2xl bg-muted/30 py-8 text-center text-sm text-muted-foreground">
               No detailed change data recorded for this action.
             </div>
           )}
@@ -449,9 +429,9 @@ function TimelineSkeleton() {
   return (
     <div className="space-y-3">
       {Array.from({ length: 6 }).map((_, i) => (
-        <div key={i} className="rounded-xl border border-l-4 border-l-transparent p-4 bg-card">
+        <div key={i} className="rounded-2xl border-0 border-l-4 border-l-transparent bg-muted/45 p-4">
           <div className="flex items-start gap-3">
-            <Skeleton className="h-8 w-8 rounded-full shrink-0" />
+            <Skeleton className="h-8 w-8 shrink-0 rounded-full" />
             <div className="flex-1 space-y-2">
               <Skeleton className="h-4 w-3/4" />
               <Skeleton className="h-3.5 w-1/2" />
@@ -566,242 +546,243 @@ export default function AuditLogsPage() {
   }
 
   return (
-    <div className="space-y-5 animate-in fade-in duration-500">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Activity Log</h1>
-          <p className="text-muted-foreground text-sm mt-0.5">
-            A plain-English record of every change made in your shop
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Badge variant="outline" className="h-8 px-3 gap-1.5 font-normal">
-            <Activity className="h-3.5 w-3.5 text-emerald-500" />
-            {total.toLocaleString()} entries
-          </Badge>
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-8"
-            onClick={() => refetch()}
-            disabled={isFetching}
-          >
-            <RefreshCw
-              className={cn("h-3.5 w-3.5 mr-1.5", isFetching && "animate-spin")}
-            />
-            Refresh
-          </Button>
-        </div>
-      </div>
+    <PageShell>
+      <PageHeader
+        title="Activity Log"
+        subtitle="A plain-English record of every change made in your shop."
+        actions={
+          <>
+            <Badge variant="secondary" className="h-9 gap-1.5 rounded-full px-3 font-normal tabular-nums">
+              <Activity className="h-3.5 w-3.5 text-emerald-500" />
+              {total.toLocaleString()} entries
+            </Badge>
+            <Button
+              variant="outline"
+              className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+              onClick={() => refetch()}
+              disabled={isFetching}
+            >
+              <RefreshCw
+                className={cn("mr-1.5 h-4 w-4", isFetching && "animate-spin")}
+              />
+              Refresh
+            </Button>
+          </>
+        }
+      />
 
-      {/* Filters */}
-      <div className="space-y-3">
-        {/* Search + staff + location */}
-        <div className="flex flex-col sm:flex-row gap-2">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search what happened..."
-              className="pl-9 h-10"
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setPage(1);
-              }}
-            />
-          </div>
+      <Panel className="overflow-hidden">
+        <div className="space-y-4 px-4 py-5 sm:px-6">
+          {/* Search + staff + location */}
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <div className="relative flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
+              <Input
+                placeholder="Search what happened..."
+                className="h-10 pl-9 text-[0.8125rem]"
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setPage(1);
+                }}
+              />
+            </div>
 
-          {/* Staff filter */}
-          <Select
-            value={actorUserId || "all"}
-            onValueChange={(v) => {
-              setActorUserId(v === "all" ? "" : v);
-              setPage(1);
-            }}
-          >
-            <SelectTrigger className="h-10 w-full sm:w-44">
-              <div className="flex items-center gap-2">
-                <User className="h-3.5 w-3.5 text-muted-foreground" />
-                <SelectValue placeholder="All Staff" />
-              </div>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Staff</SelectItem>
-              {uniqueActors.map((a) => (
-                <SelectItem key={a.id} value={a.id}>
-                  {a.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          {/* Location filter (only if merchant has multiple locations) */}
-          {locations.length > 1 && (
+            {/* Staff filter */}
             <Select
-              value={locationId}
+              value={actorUserId || "all"}
               onValueChange={(v) => {
-                setLocationId(v);
+                setActorUserId(v === "all" ? "" : v);
                 setPage(1);
               }}
             >
               <SelectTrigger className="h-10 w-full sm:w-44">
                 <div className="flex items-center gap-2">
-                  <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
-                  <SelectValue placeholder="All Locations" />
+                  <User className="h-3.5 w-3.5 text-muted-foreground" />
+                  <SelectValue placeholder="All Staff" />
                 </div>
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Locations</SelectItem>
-                {locations.map((loc) => (
-                  <SelectItem key={loc.id} value={loc.id}>
-                    {loc.name}
+                <SelectItem value="all">All Staff</SelectItem>
+                {uniqueActors.map((a) => (
+                  <SelectItem key={a.id} value={a.id}>
+                    {a.name}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-          )}
-        </div>
 
-        {/* Date presets + custom picker */}
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs text-muted-foreground shrink-0">Showing:</span>
-          {DATE_PRESETS.map((preset) => (
-            <Button
-              key={preset.days}
-              variant={
-                !customRange && datePreset === preset.days ? "default" : "outline"
-              }
-              size="sm"
-              className="h-7 px-3 text-xs"
-              onClick={() => handlePreset(preset.days)}
-            >
-              {preset.label}
-            </Button>
-          ))}
-
-          {/* Custom date range */}
-          <Popover open={showCustomPicker} onOpenChange={setShowCustomPicker}>
-            <PopoverTrigger asChild>
-              <Button
-                variant={customRange ? "default" : "outline"}
-                size="sm"
-                className="h-7 px-3 text-xs"
-              >
-                {customRange?.from
-                  ? customRange.to
-                    ? `${format(customRange.from, "MMM d")} – ${format(customRange.to, "MMM d")}`
-                    : format(customRange.from, "MMM d")
-                  : "Custom..."}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto min-w-[280px] p-0" align="start">
-              <Calendar
-                initialFocus
-                mode="range"
-                selected={customRange}
-                onSelect={(range) => {
-                  setCustomRange(range);
+            {/* Location filter (only if merchant has multiple locations) */}
+            {locations.length > 1 && (
+              <Select
+                value={locationId}
+                onValueChange={(v) => {
+                  setLocationId(v);
                   setPage(1);
-                  if (range?.from && range.to) setShowCustomPicker(false);
                 }}
-                numberOfMonths={2}
-              />
-            </PopoverContent>
-          </Popover>
+              >
+                <SelectTrigger className="h-10 w-full sm:w-44">
+                  <div className="flex items-center gap-2">
+                    <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
+                    <SelectValue placeholder="All Locations" />
+                  </div>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Locations</SelectItem>
+                  {locations.map((loc) => (
+                    <SelectItem key={loc.id} value={loc.id}>
+                      {loc.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
 
-          {/* Clear filters */}
-          {hasActiveFilters && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 px-2 text-xs text-muted-foreground"
-              onClick={clearFilters}
-            >
-              <X className="h-3 w-3 mr-1" />
-              Clear
-            </Button>
+          {/* Date presets + custom picker */}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="shrink-0 text-xs text-muted-foreground">Showing:</span>
+            {DATE_PRESETS.map((preset) => (
+              <button
+                key={preset.days}
+                onClick={() => handlePreset(preset.days)}
+                className={cn(
+                  "rounded-full px-3 py-1 text-xs font-medium transition-colors",
+                  !customRange && datePreset === preset.days
+                    ? "bg-[#0C4FD1] text-white dark:bg-[#6CA0FF] dark:text-[#0b1220]"
+                    : "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground"
+                )}
+              >
+                {preset.label}
+              </button>
+            ))}
+
+            {/* Custom date range */}
+            <Popover open={showCustomPicker} onOpenChange={setShowCustomPicker}>
+              <PopoverTrigger asChild>
+                <button
+                  className={cn(
+                    "rounded-full px-3 py-1 text-xs font-medium transition-colors",
+                    customRange
+                      ? "bg-[#0C4FD1] text-white dark:bg-[#6CA0FF] dark:text-[#0b1220]"
+                      : "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground"
+                  )}
+                >
+                  {customRange?.from
+                    ? customRange.to
+                      ? `${format(customRange.from, "MMM d")} – ${format(customRange.to, "MMM d")}`
+                      : format(customRange.from, "MMM d")
+                    : "Custom..."}
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto min-w-[280px] rounded-2xl p-0" align="start">
+                <Calendar
+                  initialFocus
+                  mode="range"
+                  selected={customRange}
+                  onSelect={(range) => {
+                    setCustomRange(range);
+                    setPage(1);
+                    if (range?.from && range.to) setShowCustomPicker(false);
+                  }}
+                  numberOfMonths={2}
+                />
+              </PopoverContent>
+            </Popover>
+
+            {/* Clear filters */}
+            {hasActiveFilters && (
+              <button
+                onClick={clearFilters}
+                className="flex items-center gap-1 rounded-full px-2 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <X className="h-3 w-3" />
+                Clear
+              </button>
+            )}
+          </div>
+
+          {/* Category tabs */}
+          <div className="flex min-w-0 w-full overflow-x-auto pb-1">
+            <div className="flex flex-nowrap gap-1.5 rounded-full bg-muted/60 p-1">
+              {CATEGORY_TABS.map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => handleTabChange(tab.id as CategoryTabId)}
+                  className={cn(
+                    "shrink-0 whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-medium transition-colors",
+                    activeTab === tab.id
+                      ? "bg-background text-foreground shadow-sm ring-1 ring-border"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Timeline */}
+        <div className="border-t border-border/60 px-4 py-6 sm:px-6">
+          {isLoading ? (
+            <TimelineSkeleton />
+          ) : logs.length === 0 ? (
+            <Empty
+              icon={Activity}
+              title="All quiet!"
+              description="No changes were made during this period."
+              action={
+                hasActiveFilters ? (
+                  <Button variant="outline" size="sm" onClick={clearFilters} className="rounded-full">
+                    Clear filters
+                  </Button>
+                ) : undefined
+              }
+            />
+          ) : (
+            <div className="space-y-2.5">
+              {logs.map((log) => (
+                <AuditCard key={log.id} log={log} onOpen={openDetail} />
+              ))}
+            </div>
+          )}
+
+          {/* Pagination */}
+          {!isLoading && total > pageSize && (
+            <div className="mt-6 flex items-center justify-between gap-3 pt-4">
+              <p className="text-[0.8125rem] tabular-nums text-muted-foreground">
+                Showing{" "}
+                <span className="font-medium text-foreground">
+                  {Math.min((page - 1) * pageSize + 1, total)}–
+                  {Math.min(page * pageSize, total)}
+                </span>{" "}
+                of <span className="font-medium text-foreground">{total}</span>
+              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                  className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+                >
+                  Previous
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={page >= totalPages}
+                  className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
           )}
         </div>
-
-        {/* Category tabs */}
-        <div className="flex flex-wrap gap-1.5">
-          {CATEGORY_TABS.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => handleTabChange(tab.id as CategoryTabId)}
-              className={cn(
-                "rounded-full px-3 py-1 text-xs font-medium transition-colors",
-                activeTab === tab.id
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground"
-              )}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Timeline */}
-      {isLoading ? (
-        <TimelineSkeleton />
-      ) : logs.length === 0 ? (
-        <div className="flex flex-col items-center justify-center gap-3 py-20 text-center">
-          <div className="h-16 w-16 rounded-full bg-muted/50 flex items-center justify-center">
-            <Activity className="h-8 w-8 text-muted-foreground/30" />
-          </div>
-          <div>
-            <p className="font-semibold text-foreground">All quiet!</p>
-            <p className="text-sm text-muted-foreground mt-1">
-              No changes were made during this period.
-            </p>
-          </div>
-          {hasActiveFilters && (
-            <Button variant="outline" size="sm" onClick={clearFilters}>
-              Clear filters
-            </Button>
-          )}
-        </div>
-      ) : (
-        <div className="space-y-2.5">
-          {logs.map((log) => (
-            <AuditCard key={log.id} log={log} onOpen={openDetail} />
-          ))}
-        </div>
-      )}
-
-      {/* Pagination */}
-      {!isLoading && total > pageSize && (
-        <div className="flex items-center justify-between pt-2">
-          <p className="text-sm text-muted-foreground">
-            Showing{" "}
-            <span className="font-medium text-foreground">
-              {Math.min((page - 1) * pageSize + 1, total)}–
-              {Math.min(page * pageSize, total)}
-            </span>{" "}
-            of <span className="font-medium text-foreground">{total}</span>
-          </p>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page === 1}
-            >
-              Previous
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabled={page >= totalPages}
-            >
-              Next
-            </Button>
-          </div>
-        </div>
-      )}
+      </Panel>
 
       {/* Detail Sheet */}
       <AuditDetailSheet
@@ -809,6 +790,6 @@ export default function AuditLogsPage() {
         open={sheetOpen}
         onClose={() => setSheetOpen(false)}
       />
-    </div>
+    </PageShell>
   );
 }

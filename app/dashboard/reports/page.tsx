@@ -298,14 +298,7 @@ export default function ReportsPage() {
               meta={
                 <span className="inline-flex max-w-full items-center gap-1.5">
                   {kpi.trend !== null ? (
-                    <span
-                      className={cn(
-                        "inline-flex shrink-0 items-center gap-0.5 font-medium",
-                        kpi.trend >= 0
-                          ? "text-emerald-600"
-                          : "text-destructive"
-                      )}
-                    >
+                    <span className="inline-flex shrink-0 items-center gap-0.5 font-medium text-muted-foreground">
                       {kpi.trend >= 0 ? (
                         <ArrowUpRight className="h-3 w-3" />
                       ) : (

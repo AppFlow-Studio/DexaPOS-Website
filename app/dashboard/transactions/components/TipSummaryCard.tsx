@@ -1,6 +1,7 @@
 "use client";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Panel, PanelSection } from "@/components/dashboard/shell";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Tooltip,
   TooltipContent,
@@ -43,7 +44,7 @@ function MetricRow({
     <div
       className={cn(
         "flex items-center justify-between py-3",
-        isTotal && "border-t-2 border-foreground/10 pt-4 mt-2"
+        isTotal && "border-t border-border/60 pt-4 mt-2"
       )}
     >
       <div className="flex items-center gap-2">
@@ -72,7 +73,7 @@ function MetricRow({
         className={cn(
           "font-mono text-sm tabular-nums",
           isTotal && "font-bold text-base",
-          isNegative && "text-red-500"
+          isNegative && "text-rose-600 dark:text-rose-400"
         )}
       >
         {formatCurrency(value)}
@@ -87,49 +88,39 @@ export function TipSummaryCard({
   totalTips,
   isLoading,
 }: TipSummaryCardProps) {
-  if (isLoading) {
-    return (
-      <Card className="border-none shadow-sm bg-card/80 backdrop-blur">
-        <CardHeader className="pb-2">
-          <div className="h-5 w-28 bg-muted animate-pulse rounded" />
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="flex justify-between">
-              <div className="h-4 w-20 bg-muted animate-pulse rounded" />
-              <div className="h-4 w-16 bg-muted animate-pulse rounded" />
-            </div>
-          ))}
-        </CardContent>
-      </Card>
-    );
-  }
-
   return (
-    <Card className="border-border/60 shadow-none">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-base font-bold tracking-tight">
-          Tip Summary
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="pt-0">
-        <MetricRow
-          label="Tips collected"
-          value={tipsCollected}
-          info="Total tips added to orders"
-        />
-        <MetricRow
-          label="Tips refunded"
-          value={tipsRefunded}
-          info="Tips returned during refunds"
-        />
-        <MetricRow
-          label="Total tips"
-          value={totalTips}
-          isTotal
-          info="Net tips after refunds"
-        />
-      </CardContent>
-    </Card>
+    <Panel>
+      <PanelSection label="Tip Summary">
+        {isLoading ? (
+          <div className="space-y-3">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="flex justify-between">
+                <Skeleton className="h-4 w-20" />
+                <Skeleton className="h-4 w-16" />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <>
+            <MetricRow
+              label="Tips collected"
+              value={tipsCollected}
+              info="Total tips added to orders"
+            />
+            <MetricRow
+              label="Tips refunded"
+              value={tipsRefunded}
+              info="Tips returned during refunds"
+            />
+            <MetricRow
+              label="Total tips"
+              value={totalTips}
+              isTotal
+              info="Net tips after refunds"
+            />
+          </>
+        )}
+      </PanelSection>
+    </Panel>
   );
 }

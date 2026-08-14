@@ -56,6 +56,10 @@ import {
 } from "@/lib/payments/method-display";
 import { filterPayments } from "@/lib/payments/filter-payments";
 import { cn } from "@/lib/utils";
+import {
+  getPaymentStatusLabel,
+  getPaymentStatusStyle,
+} from "@/lib/constants/payment-status";
 
 // ============================================================================
 // Helpers
@@ -115,52 +119,6 @@ function getMethodLabel(method: string): string {
 
 function isCardMethod(method: string): boolean {
   return method === "card" || method.startsWith("card_");
-}
-
-function getStatusConfig(status: string) {
-  const configs: Record<string, { label: string; className: string }> = {
-    captured: {
-      label: "Captured",
-      className: "bg-green-100 text-green-800 border-green-300",
-    },
-    paid: {
-      label: "Paid",
-      className: "bg-green-100 text-green-800 border-green-300",
-    },
-    authorized: {
-      label: "Authorized",
-      className: "bg-blue-100 text-blue-800 border-blue-300",
-    },
-    pending: {
-      label: "Pending",
-      className: "bg-yellow-100 text-yellow-800 border-yellow-300",
-    },
-    processing: {
-      label: "Processing",
-      className: "bg-blue-100 text-blue-800 border-blue-300",
-    },
-    refunded: {
-      label: "Refunded",
-      className: "bg-red-100 text-red-800 border-red-300",
-    },
-    partially_refunded: {
-      label: "Partial Refund",
-      className: "bg-amber-100 text-amber-800 border-amber-300",
-    },
-    void: {
-      label: "Void",
-      className: "bg-gray-100 text-gray-800 border-gray-300",
-    },
-    failed: {
-      label: "Failed",
-      className: "bg-red-100 text-red-800 border-red-300",
-    },
-    declined: {
-      label: "Declined",
-      className: "bg-red-100 text-red-800 border-red-300",
-    },
-  };
-  return configs[status] || { label: status, className: "" };
 }
 
 function getEntryModeLabel(mode?: string): string {
@@ -908,11 +866,18 @@ export function PaymentsTable({ data, isLoading }: PaymentsTableProps) {
       accessorKey: "status",
       header: "Status",
       cell: ({ row }) => {
-        const config = getStatusConfig(row.original.status);
+        const style = getPaymentStatusStyle(row.original.status);
         return (
-          <Badge variant="outline" className={`text-xs ${config.className}`}>
-            {config.label}
-          </Badge>
+          <span
+            className={cn(
+              "inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium",
+              style.bg,
+              style.text
+            )}
+          >
+            <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", style.dot)} />
+            {getPaymentStatusLabel(row.original.status)}
+          </span>
         );
       },
       enableSorting: false,
@@ -927,12 +892,10 @@ export function PaymentsTable({ data, isLoading }: PaymentsTableProps) {
         if (p.is_settled) {
           return (
             <div className="flex flex-col gap-0.5">
-              <Badge
-                variant="outline"
-                className="text-[10px] bg-emerald-100 text-emerald-800 border-emerald-300"
-              >
+              <span className="inline-flex w-fit shrink-0 items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400">
+                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" />
                 Settled
-              </Badge>
+              </span>
               {batchNum && (
                 <span className="text-[10px] text-muted-foreground font-mono">
                   Batch {batchNum}
@@ -1043,13 +1006,19 @@ export function PaymentsTable({ data, isLoading }: PaymentsTableProps) {
       )}
 
       {/* Table */}
-      <div className="rounded-md border">
-        <Table>
+      <div className="-mx-2 overflow-x-auto px-2">
+        <Table className="min-w-max">
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
-              <TableRow key={headerGroup.id}>
+              <TableRow
+                key={headerGroup.id}
+                className="border-b border-border/60 hover:bg-transparent"
+              >
                 {headerGroup.headers.map((header) => (
-                  <TableHead key={header.id}>
+                  <TableHead
+                    key={header.id}
+                    className="h-auto py-2.5 text-[0.8125rem] font-normal text-muted-foreground"
+                  >
                     {header.isPlaceholder
                       ? null
                       : flexRender(
@@ -1063,10 +1032,10 @@ export function PaymentsTable({ data, isLoading }: PaymentsTableProps) {
           </TableHeader>
           <TableBody>
             {isLoading ? (
-              <TableRow>
+              <TableRow className="hover:bg-transparent">
                 <TableCell
                   colSpan={columns.length}
-                  className="h-24 text-center"
+                  className="h-24 text-center text-sm text-muted-foreground"
                 >
                   <div className="flex items-center justify-center">
                     <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary" />
@@ -1078,11 +1047,21 @@ export function PaymentsTable({ data, isLoading }: PaymentsTableProps) {
                 <React.Fragment key={row.id}>
                   <TableRow
                     data-state={row.getIsExpanded() && "expanded"}
-                    className="cursor-pointer"
+                    className="cursor-pointer border-b border-border/60 transition-colors last:border-0 hover:bg-muted/50"
                     onClick={() => row.toggleExpanded()}
                   >
                     {row.getVisibleCells().map((cell) => (
-                      <TableCell key={cell.id} className={cell.column.id === "amount" || cell.column.id === "tip_amount" || cell.column.id === "service_charge" || cell.column.id === "total_amount" ? "text-right" : undefined}>
+                      <TableCell
+                        key={cell.id}
+                        className={cn(
+                          "py-3 text-sm",
+                          (cell.column.id === "amount" ||
+                            cell.column.id === "tip_amount" ||
+                            cell.column.id === "service_charge" ||
+                            cell.column.id === "total_amount") &&
+                            "text-right tabular-nums"
+                        )}
+                      >
                         {flexRender(
                           cell.column.columnDef.cell,
                           cell.getContext()
@@ -1091,7 +1070,7 @@ export function PaymentsTable({ data, isLoading }: PaymentsTableProps) {
                     ))}
                   </TableRow>
                   {row.getIsExpanded() && (
-                    <TableRow>
+                    <TableRow className="border-b border-border/60 last:border-0 hover:bg-transparent">
                       <TableCell
                         colSpan={columns.length}
                         className="bg-muted/30 p-0"
@@ -1103,12 +1082,12 @@ export function PaymentsTable({ data, isLoading }: PaymentsTableProps) {
                 </React.Fragment>
               ))
             ) : (
-              <TableRow>
+              <TableRow className="hover:bg-transparent">
                 <TableCell
                   colSpan={columns.length}
-                  className="h-24 text-center"
+                  className="h-24 text-center text-sm text-muted-foreground"
                 >
-                  <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                  <div className="flex flex-col items-center gap-2">
                     <CreditCard className="h-8 w-8" />
                     <p>No payments found</p>
                   </div>
@@ -1120,53 +1099,51 @@ export function PaymentsTable({ data, isLoading }: PaymentsTableProps) {
       </div>
 
       {/* Pagination */}
-      <div className="flex items-center justify-between text-sm text-muted-foreground">
-        <div>
+      <div className="flex items-center justify-between gap-3 pt-1">
+        <p className="text-[0.8125rem] text-muted-foreground tabular-nums">
           Page {table.getState().pagination.pageIndex + 1} of{" "}
           {table.getPageCount()}
+        </p>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="icon"
+            className="hidden lg:flex"
+            onClick={() => table.setPageIndex(0)}
+            disabled={!table.getCanPreviousPage()}
+          >
+            <span className="sr-only">Go to first page</span>
+            <ChevronsLeft />
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => table.previousPage()}
+            disabled={!table.getCanPreviousPage()}
+          >
+            <span className="sr-only">Go to previous page</span>
+            <ChevronLeft />
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => table.nextPage()}
+            disabled={!table.getCanNextPage()}
+          >
+            <span className="sr-only">Go to next page</span>
+            <ChevronRight />
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            className="hidden lg:flex"
+            onClick={() => table.setPageIndex(table.getPageCount() - 1)}
+            disabled={!table.getCanNextPage()}
+          >
+            <span className="sr-only">Go to last page</span>
+            <ChevronsRight />
+          </Button>
         </div>
-      </div>
-      <div className="flex items-center space-x-2">
-        <Button
-          variant="outline"
-          size="icon"
-          className="hidden size-8 lg:flex"
-          onClick={() => table.setPageIndex(0)}
-          disabled={!table.getCanPreviousPage()}
-        >
-          <span className="sr-only">Go to first page</span>
-          <ChevronsLeft />
-        </Button>
-        <Button
-          variant="outline"
-          size="icon"
-          className="size-8"
-          onClick={() => table.previousPage()}
-          disabled={!table.getCanPreviousPage()}
-        >
-          <span className="sr-only">Go to previous page</span>
-          <ChevronLeft />
-        </Button>
-        <Button
-          variant="outline"
-          size="icon"
-          className="size-8"
-          onClick={() => table.nextPage()}
-          disabled={!table.getCanNextPage()}
-        >
-          <span className="sr-only">Go to next page</span>
-          <ChevronRight />
-        </Button>
-        <Button
-          variant="outline"
-          size="icon"
-          className="hidden size-8 lg:flex"
-          onClick={() => table.setPageIndex(table.getPageCount() - 1)}
-          disabled={!table.getCanNextPage()}
-        >
-          <span className="sr-only">Go to last page</span>
-          <ChevronsRight />
-        </Button>
       </div>
     </div>
   );

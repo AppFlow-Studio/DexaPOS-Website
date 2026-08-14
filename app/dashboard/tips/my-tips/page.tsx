@@ -2,8 +2,6 @@
 
 import { useState } from "react";
 import { ChevronRight, TrendingUp, Clock, DollarSign, ArrowUpDown } from "lucide-react";
-import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -20,6 +18,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PageShell, PageHeader, Panel, PanelSection, StatRow, StatTile, InsetTile } from "@/components/dashboard/shell";
 import { useClerkOrgId } from "@/app/dashboard/hooks/useLocationScoped";
 import { useLocationStore } from "@/stores/location-store";
 import { useMyTipHistory } from "../hooks/useTipDistribution";
@@ -51,52 +50,25 @@ function fmtDate(dateStr: string) {
   });
 }
 
-function SummaryCard({
-  label,
-  value,
-  icon: Icon,
-  sub,
-}: {
-  label: string;
-  value: string;
-  icon: React.ElementType;
-  sub?: string;
-}) {
-  return (
-    <Card className="p-4">
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-sm text-muted-foreground">{label}</p>
-          <p className="text-2xl font-bold mt-1">{value}</p>
-          {sub && <p className="text-xs text-muted-foreground mt-1">{sub}</p>}
-        </div>
-        <div className="w-9 h-9 rounded-lg bg-teal-50 flex items-center justify-center">
-          <Icon className="w-5 h-5 text-teal-600" />
-        </div>
-      </div>
-    </Card>
-  );
-}
-
 function DetailRow({ entry }: { entry: MyTipEntry }) {
   const [open, setOpen] = useState(false);
 
   return (
     <>
       <TableRow
-        className="cursor-pointer hover:bg-muted/40 transition-colors"
+        className="cursor-pointer border-b border-border/60 transition-colors last:border-0 hover:bg-muted/50"
         onClick={() => setOpen((v) => !v)}
       >
-        <TableCell className="font-medium text-sm">{fmtDate(entry.session_date)}</TableCell>
-        <TableCell className="text-sm text-muted-foreground">
+        <TableCell className="py-3 text-sm font-medium">{fmtDate(entry.session_date)}</TableCell>
+        <TableCell className="py-3 text-sm text-muted-foreground">
           {SHIFT_LABELS[entry.shift_period] ?? entry.shift_period}
         </TableCell>
-        <TableCell className="text-sm text-muted-foreground">{entry.role_code}</TableCell>
-        <TableCell className="text-right text-sm">{(entry.hours_worked || 0).toFixed(1)}h</TableCell>
-        <TableCell className="text-right text-sm font-semibold text-green-700">
+        <TableCell className="py-3 text-sm text-muted-foreground">{entry.role_code}</TableCell>
+        <TableCell className="py-3 text-right text-sm tabular-nums">{(entry.hours_worked || 0).toFixed(1)}h</TableCell>
+        <TableCell className="py-3 text-right text-sm font-semibold text-emerald-700 tabular-nums dark:text-emerald-400">
           {fmt(entry.net_tips)}
         </TableCell>
-        <TableCell>
+        <TableCell className="py-3">
           <ChevronRight
             className={`w-4 h-4 text-muted-foreground transition-transform ${open ? "rotate-90" : ""}`}
           />
@@ -104,34 +76,49 @@ function DetailRow({ entry }: { entry: MyTipEntry }) {
       </TableRow>
 
       {open && (
-        <TableRow className="bg-muted/20 hover:bg-muted/20">
+        <TableRow className="border-b border-border/60 bg-muted/20 last:border-0 hover:bg-muted/20">
           <TableCell colSpan={6} className="py-3 px-4">
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 text-sm">
               <div>
                 <p className="text-xs text-muted-foreground">Own Tips</p>
-                <p className="font-medium">{fmt(entry.individual_tips_earned)}</p>
+                <p className="font-medium tabular-nums">{fmt(entry.individual_tips_earned)}</p>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Pool Contributed</p>
-                <p className="font-medium text-red-600">−{fmt(entry.tip_pool_contributed)}</p>
+                <p className="font-medium text-rose-700 tabular-nums dark:text-rose-400">
+                  −{fmt(entry.tip_pool_contributed)}
+                </p>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Pool Received</p>
-                <p className="font-medium text-green-600">+{fmt(entry.tip_pool_received)}</p>
+                <p className="font-medium text-emerald-700 tabular-nums dark:text-emerald-400">
+                  +{fmt(entry.tip_pool_received)}
+                </p>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Tip-Out Given</p>
-                <p className="font-medium text-red-600">−{fmt(entry.tip_out_given)}</p>
+                <p className="font-medium text-rose-700 tabular-nums dark:text-rose-400">
+                  −{fmt(entry.tip_out_given)}
+                </p>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Tip-Out Received</p>
-                <p className="font-medium text-green-600">+{fmt(entry.tip_out_received)}</p>
+                <p className="font-medium text-emerald-700 tabular-nums dark:text-emerald-400">
+                  +{fmt(entry.tip_out_received)}
+                </p>
               </div>
               {entry.manual_adjustment !== 0 && (
                 <div>
                   <p className="text-xs text-muted-foreground">Adjustment</p>
-                  <p className={`font-medium ${entry.manual_adjustment > 0 ? "text-green-600" : "text-red-600"}`}>
-                    {entry.manual_adjustment > 0 ? "+" : ""}{fmt(entry.manual_adjustment)}
+                  <p
+                    className={`font-medium tabular-nums ${
+                      entry.manual_adjustment > 0
+                        ? "text-emerald-700 dark:text-emerald-400"
+                        : "text-rose-700 dark:text-rose-400"
+                    }`}
+                  >
+                    {entry.manual_adjustment > 0 ? "+" : ""}
+                    {fmt(entry.manual_adjustment)}
                   </p>
                 </div>
               )}
@@ -174,139 +161,126 @@ export default function MyTipsPage() {
     .slice(0, 4);
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <nav className="flex items-center gap-1.5 text-sm text-muted-foreground mb-2">
-            <span>Tips</span>
-            <ChevronRight className="w-3.5 h-3.5" />
-            <span className="text-foreground font-medium">My Tips</span>
-          </nav>
-          <h1 className="text-2xl font-bold">My Tip History</h1>
-          <p className="text-muted-foreground text-sm mt-1">
-            Your approved tip distributions
-          </p>
-        </div>
-
-        <Select value={String(limitDays)} onValueChange={(v) => setLimitDays(Number(v))}>
-          <SelectTrigger className="w-36 h-9 text-sm">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {RANGE_OPTIONS.map((o) => (
-              <SelectItem key={o.value} value={String(o.value)}>
-                {o.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+    <PageShell>
+      <PageHeader
+        title="My Tip History"
+        subtitle="Your approved tip distributions"
+        backHref="/dashboard/tips"
+        backLabel="Back to Tips"
+        actions={
+          <Select value={String(limitDays)} onValueChange={(v) => setLimitDays(Number(v))}>
+            <SelectTrigger className="w-36 h-9 text-sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {RANGE_OPTIONS.map((o) => (
+                <SelectItem key={o.value} value={String(o.value)}>
+                  {o.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        }
+      />
 
       {/* Summary cards */}
-      {isLoading ? (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {[...Array(4)].map((_, i) => (
-            <Card key={i} className="p-4">
-              <Skeleton className="h-4 w-24 mb-2" />
-              <Skeleton className="h-8 w-28" />
-            </Card>
-          ))}
+      <Panel>
+        <div className="px-6 py-6">
+          <StatRow columns={4}>
+            <StatTile
+              label="Net Tips"
+              value={fmt(totalNet)}
+              meta={`${entries.length} shifts`}
+              icon={<DollarSign />}
+              isLoading={isLoading}
+            />
+            <StatTile
+              label="Own Tips Earned"
+              value={fmt(totalOwn)}
+              icon={<TrendingUp />}
+              isLoading={isLoading}
+            />
+            <StatTile
+              label="Total Hours"
+              value={`${totalHours.toFixed(1)}h`}
+              icon={<Clock />}
+              isLoading={isLoading}
+            />
+            <StatTile
+              label="Avg / Shift"
+              value={fmt(avgPerShift)}
+              icon={<ArrowUpDown />}
+              isLoading={isLoading}
+            />
+          </StatRow>
         </div>
-      ) : (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <SummaryCard
-            label="Net Tips"
-            value={fmt(totalNet)}
-            icon={DollarSign}
-            sub={`${entries.length} shifts`}
-          />
-          <SummaryCard
-            label="Own Tips Earned"
-            value={fmt(totalOwn)}
-            icon={TrendingUp}
-          />
-          <SummaryCard
-            label="Total Hours"
-            value={`${totalHours.toFixed(1)}h`}
-            icon={Clock}
-          />
-          <SummaryCard
-            label="Avg / Shift"
-            value={fmt(avgPerShift)}
-            icon={ArrowUpDown}
-          />
-        </div>
-      )}
+      </Panel>
 
       {/* Weekly rollup */}
       {!isLoading && weeks.length > 0 && (
-        <Card className="p-4">
-          <p className="text-sm font-semibold mb-3">Weekly Rollup</p>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {weeks.map(([weekStart, total]) => (
-              <div key={weekStart} className="text-center p-3 bg-muted/30 rounded-lg">
-                <p className="text-xs text-muted-foreground">
-                  Week of {new Date(weekStart + "T00:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric" })}
-                </p>
-                <p className="text-lg font-bold mt-1">{fmt(total)}</p>
-              </div>
-            ))}
-          </div>
-        </Card>
+        <Panel>
+          <PanelSection label="Weekly Rollup">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {weeks.map(([weekStart, total]) => (
+                <InsetTile
+                  key={weekStart}
+                  label={`Week of ${new Date(weekStart + "T00:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric" })}`}
+                  value={fmt(total)}
+                />
+              ))}
+            </div>
+          </PanelSection>
+        </Panel>
       )}
 
       {/* Detail table */}
       {isLoading ? (
-        <div className="border rounded-lg overflow-hidden">
-          <div className="px-4 py-3 border-b bg-muted/20">
-            <Skeleton className="h-4 w-32" />
-          </div>
-          <div className="divide-y">
-            {[...Array(5)].map((_, i) => (
-              <div key={i} className="px-4 py-3 flex gap-4">
-                <Skeleton className="h-4 w-28" />
-                <Skeleton className="h-4 w-16" />
-                <Skeleton className="h-4 w-20 ml-auto" />
-              </div>
-            ))}
-          </div>
-        </div>
+        <Panel>
+          <PanelSection label="Shift Breakdown" caption="Click a row to see the full breakdown">
+            <div className="space-y-3">
+              {[...Array(5)].map((_, i) => (
+                <div key={i} className="flex gap-4">
+                  <Skeleton className="h-4 w-28" />
+                  <Skeleton className="h-4 w-16" />
+                  <Skeleton className="h-4 w-20 ml-auto" />
+                </div>
+              ))}
+            </div>
+          </PanelSection>
+        </Panel>
       ) : entries.length === 0 ? (
-        <Card className="p-12 text-center">
+        <Panel padded className="text-center py-12">
           <DollarSign className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
           <p className="text-muted-foreground font-medium">No approved tip records found</p>
           <p className="text-sm text-muted-foreground mt-1">
             Approved distributions will appear here once a manager calculates and approves tips.
           </p>
-        </Card>
+        </Panel>
       ) : (
-        <div className="border rounded-lg overflow-hidden">
-          <div className="px-4 py-3 border-b bg-muted/20">
-            <h3 className="font-semibold text-sm">Shift Breakdown</h3>
-            <p className="text-xs text-muted-foreground mt-0.5">Click a row to see the full breakdown</p>
-          </div>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-muted/10 hover:bg-muted/10">
-                  <TableHead>Date</TableHead>
-                  <TableHead>Shift</TableHead>
-                  <TableHead>Role</TableHead>
-                  <TableHead className="text-right">Hours</TableHead>
-                  <TableHead className="text-right">Net Tips</TableHead>
-                  <TableHead className="w-8" />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {entries.map((entry) => (
-                  <DetailRow key={entry.session_id} entry={entry} />
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        </div>
+        <Panel>
+          <PanelSection label="Shift Breakdown" caption="Click a row to see the full breakdown">
+            <div className="-mx-2 overflow-x-auto px-2">
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-b border-border/60 hover:bg-transparent">
+                    <TableHead className="h-auto py-2.5 text-[0.8125rem] font-normal text-muted-foreground">Date</TableHead>
+                    <TableHead className="h-auto py-2.5 text-[0.8125rem] font-normal text-muted-foreground">Shift</TableHead>
+                    <TableHead className="h-auto py-2.5 text-[0.8125rem] font-normal text-muted-foreground">Role</TableHead>
+                    <TableHead className="h-auto py-2.5 text-right text-[0.8125rem] font-normal text-muted-foreground">Hours</TableHead>
+                    <TableHead className="h-auto py-2.5 text-right text-[0.8125rem] font-normal text-muted-foreground">Net Tips</TableHead>
+                    <TableHead className="h-auto w-8 py-2.5" />
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {entries.map((entry) => (
+                    <DetailRow key={entry.session_id} entry={entry} />
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </PanelSection>
+        </Panel>
       )}
-    </div>
+    </PageShell>
   );
 }

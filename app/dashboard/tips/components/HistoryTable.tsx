@@ -198,7 +198,7 @@ export function HistoryTable({ clerkOrgId, locationId }: HistoryTableProps) {
           ))}
         </div>
       ) : sessions.length === 0 ? (
-        <div className="border rounded-lg p-10 text-center">
+        <div className="rounded-2xl border-0 bg-muted/60 p-10 text-center">
           <Search className="w-8 h-8 text-muted-foreground/40 mx-auto mb-2" />
           <p className="text-sm text-muted-foreground">
             No distribution records for the selected filters
@@ -206,156 +206,154 @@ export function HistoryTable({ clerkOrgId, locationId }: HistoryTableProps) {
         </div>
       ) : (
         <TooltipProvider>
-          <div className="border rounded-lg overflow-hidden">
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>
-                      <button className="flex items-center text-left" onClick={() => toggleSort("date")}>
-                        Date <SortIcon field="date" />
-                      </button>
-                    </TableHead>
-                    <TableHead>Shift</TableHead>
-                    <TableHead>
-                      <button className="flex items-center" onClick={() => toggleSort("status")}>
-                        Status <SortIcon field="status" />
-                      </button>
-                    </TableHead>
-                    <TableHead className="text-right">
-                      <button className="flex items-center ml-auto" onClick={() => toggleSort("collected")}>
-                        Collected <SortIcon field="collected" />
-                      </button>
-                    </TableHead>
-                    <TableHead className="text-right">
-                      <button className="flex items-center ml-auto" onClick={() => toggleSort("distributed")}>
-                        Distributed <SortIcon field="distributed" />
-                      </button>
-                    </TableHead>
-                    <TableHead className="text-right">
-                      <button className="flex items-center ml-auto" onClick={() => toggleSort("pooled")}>
-                        Pooled <SortIcon field="pooled" />
-                      </button>
-                    </TableHead>
-                    <TableHead>Config</TableHead>
-                    <TableHead></TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {sorted.map((session) => {
-                    const cfg = STATUS_CONFIG[session.status] ?? STATUS_CONFIG.draft;
-                    const poolSummary = getPoolSummary(session.config_snapshot);
-                    const ruleSummary = getRuleSummary(session.config_snapshot);
+          <div className="-mx-2 overflow-x-auto px-2">
+            <Table className="min-w-max">
+              <TableHeader>
+                <TableRow className="border-b border-border/60 hover:bg-transparent">
+                  <TableHead className="h-auto py-2.5 text-[0.8125rem] font-normal text-muted-foreground">
+                    <button className="flex items-center text-left" onClick={() => toggleSort("date")}>
+                      Date <SortIcon field="date" />
+                    </button>
+                  </TableHead>
+                  <TableHead className="h-auto py-2.5 text-[0.8125rem] font-normal text-muted-foreground">Shift</TableHead>
+                  <TableHead className="h-auto py-2.5 text-[0.8125rem] font-normal text-muted-foreground">
+                    <button className="flex items-center" onClick={() => toggleSort("status")}>
+                      Status <SortIcon field="status" />
+                    </button>
+                  </TableHead>
+                  <TableHead className="h-auto py-2.5 text-right text-[0.8125rem] font-normal text-muted-foreground">
+                    <button className="flex items-center ml-auto" onClick={() => toggleSort("collected")}>
+                      Collected <SortIcon field="collected" />
+                    </button>
+                  </TableHead>
+                  <TableHead className="h-auto py-2.5 text-right text-[0.8125rem] font-normal text-muted-foreground">
+                    <button className="flex items-center ml-auto" onClick={() => toggleSort("distributed")}>
+                      Distributed <SortIcon field="distributed" />
+                    </button>
+                  </TableHead>
+                  <TableHead className="h-auto py-2.5 text-right text-[0.8125rem] font-normal text-muted-foreground">
+                    <button className="flex items-center ml-auto" onClick={() => toggleSort("pooled")}>
+                      Pooled <SortIcon field="pooled" />
+                    </button>
+                  </TableHead>
+                  <TableHead className="h-auto py-2.5 text-[0.8125rem] font-normal text-muted-foreground">Config</TableHead>
+                  <TableHead className="h-auto py-2.5 text-[0.8125rem] font-normal text-muted-foreground"></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {sorted.map((session) => {
+                  const cfg = STATUS_CONFIG[session.status] ?? STATUS_CONFIG.draft;
+                  const poolSummary = getPoolSummary(session.config_snapshot);
+                  const ruleSummary = getRuleSummary(session.config_snapshot);
 
-                    return (
-                      <TableRow
-                        key={session.id}
-                        className="cursor-pointer hover:bg-muted/40"
-                        onClick={() => router.push(`/dashboard/tips/${session.id}`)}
-                      >
-                        {/* Date + sequence */}
-                        <TableCell className="font-medium">
-                          <div className="flex items-center gap-1.5">
-                            <span>{formatDate(session.session_date)}</span>
-                            {session.sequence_number > 1 && (
-                              <Badge variant="outline" className="text-[10px] font-mono">
-                                #{session.sequence_number}
-                              </Badge>
-                            )}
-                          </div>
-                          {session.data_start_after && session.data_cutoff_at && (
-                            <span className="text-[10px] text-muted-foreground">
-                              {format(new Date(session.data_start_after), "h:mm a")} —{" "}
-                              {format(new Date(session.data_cutoff_at), "h:mm a")}
-                            </span>
-                          )}
-                        </TableCell>
-
-                        {/* Shift */}
-                        <TableCell>
-                          <Badge variant="secondary" className="text-xs">
-                            {SHIFT_LABELS[session.shift_period] || session.shift_period}
-                          </Badge>
-                        </TableCell>
-
-                        {/* Status + timestamps */}
-                        <TableCell>
-                          <div className="space-y-0.5">
-                            <Badge
-                              variant="outline"
-                              className={cn("text-xs font-medium", cfg.className)}
-                            >
-                              {cfg.label}
+                  return (
+                    <TableRow
+                      key={session.id}
+                      className="cursor-pointer border-b border-border/60 transition-colors last:border-0 hover:bg-muted/50"
+                      onClick={() => router.push(`/dashboard/tips/${session.id}`)}
+                    >
+                      {/* Date + sequence */}
+                      <TableCell className="py-3 text-sm font-medium">
+                        <div className="flex items-center gap-1.5">
+                          <span>{formatDate(session.session_date)}</span>
+                          {session.sequence_number > 1 && (
+                            <Badge variant="outline" className="text-[10px] font-mono">
+                              #{session.sequence_number}
                             </Badge>
-                            {session.status === "voided" && session.void_reason && (
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <p className="text-[10px] text-red-500 truncate max-w-[120px]">
-                                    {session.void_reason}
-                                  </p>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  <p className="max-w-[250px]">{session.void_reason}</p>
-                                </TooltipContent>
-                              </Tooltip>
-                            )}
-                            {session.approved_at && (
-                              <p className="text-[10px] text-muted-foreground">
-                                {format(new Date(session.approved_at), "MMM d, h:mm a")}
-                              </p>
-                            )}
-                          </div>
-                        </TableCell>
+                          )}
+                        </div>
+                        {session.data_start_after && session.data_cutoff_at && (
+                          <span className="text-[10px] text-muted-foreground">
+                            {format(new Date(session.data_start_after), "h:mm a")} —{" "}
+                            {format(new Date(session.data_cutoff_at), "h:mm a")}
+                          </span>
+                        )}
+                      </TableCell>
 
-                        {/* Collected */}
-                        <TableCell className="text-right font-medium">
-                          {formatMoney(session.total_tips_collected)}
-                        </TableCell>
+                      {/* Shift */}
+                      <TableCell className="py-3 text-sm">
+                        <Badge variant="secondary" className="text-xs">
+                          {SHIFT_LABELS[session.shift_period] || session.shift_period}
+                        </Badge>
+                      </TableCell>
 
-                        {/* Distributed */}
-                        <TableCell className="text-right font-medium">
-                          {formatMoney(session.total_distributed)}
-                        </TableCell>
-
-                        {/* Pooled */}
-                        <TableCell className="text-right text-muted-foreground">
-                          {formatMoney(session.total_tips_pooled)}
-                        </TableCell>
-
-                        {/* Config snapshot summary */}
-                        <TableCell>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <div className="max-w-[150px]">
-                                <p className="text-xs truncate text-muted-foreground">
-                                  {poolSummary}
+                      {/* Status + timestamps */}
+                      <TableCell className="py-3 text-sm">
+                        <div className="space-y-0.5">
+                          <Badge
+                            variant="outline"
+                            className={cn("text-xs font-medium border-0", cfg.className)}
+                          >
+                            {cfg.label}
+                          </Badge>
+                          {session.status === "voided" && session.void_reason && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <p className="text-[10px] text-red-500 dark:text-red-400 truncate max-w-[120px]">
+                                  {session.void_reason}
                                 </p>
-                                {ruleSummary !== "No rules" && (
-                                  <p className="text-[10px] truncate text-muted-foreground/70">
-                                    {ruleSummary}
-                                  </p>
-                                )}
-                              </div>
-                            </TooltipTrigger>
-                            <TooltipContent side="left" className="max-w-[300px]">
-                              <p className="font-medium text-xs mb-1">Pools:</p>
-                              <p className="text-xs">{poolSummary}</p>
-                              <p className="font-medium text-xs mt-1.5 mb-0.5">Tip-Out Rules:</p>
-                              <p className="text-xs">{ruleSummary}</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </TableCell>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p className="max-w-[250px]">{session.void_reason}</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          )}
+                          {session.approved_at && (
+                            <p className="text-[10px] text-muted-foreground">
+                              {format(new Date(session.approved_at), "MMM d, h:mm a")}
+                            </p>
+                          )}
+                        </div>
+                      </TableCell>
 
-                        {/* Arrow */}
-                        <TableCell>
-                          <ChevronRight className="w-4 h-4 text-muted-foreground" />
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
+                      {/* Collected */}
+                      <TableCell className="py-3 text-right text-sm font-medium tabular-nums">
+                        {formatMoney(session.total_tips_collected)}
+                      </TableCell>
+
+                      {/* Distributed */}
+                      <TableCell className="py-3 text-right text-sm font-medium tabular-nums">
+                        {formatMoney(session.total_distributed)}
+                      </TableCell>
+
+                      {/* Pooled */}
+                      <TableCell className="py-3 text-right text-sm text-muted-foreground tabular-nums">
+                        {formatMoney(session.total_tips_pooled)}
+                      </TableCell>
+
+                      {/* Config snapshot summary */}
+                      <TableCell className="py-3 text-sm">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div className="max-w-[150px]">
+                              <p className="text-xs truncate text-muted-foreground">
+                                {poolSummary}
+                              </p>
+                              {ruleSummary !== "No rules" && (
+                                <p className="text-[10px] truncate text-muted-foreground/70">
+                                  {ruleSummary}
+                                </p>
+                              )}
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent side="left" className="max-w-[300px]">
+                            <p className="font-medium text-xs mb-1">Pools:</p>
+                            <p className="text-xs">{poolSummary}</p>
+                            <p className="font-medium text-xs mt-1.5 mb-0.5">Tip-Out Rules:</p>
+                            <p className="text-xs">{ruleSummary}</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TableCell>
+
+                      {/* Arrow */}
+                      <TableCell className="py-3 text-sm">
+                        <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
           </div>
         </TooltipProvider>
       )}

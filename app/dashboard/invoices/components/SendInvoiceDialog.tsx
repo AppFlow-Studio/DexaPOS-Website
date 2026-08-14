@@ -96,7 +96,7 @@ export function SendInvoiceDialog({
 
         <div className="space-y-4 py-1">
           {/* Email channel */}
-          <div className="rounded-lg border p-3 space-y-3">
+          <div className="rounded-2xl border p-3 space-y-3">
             <label className="flex items-center gap-2.5 cursor-pointer">
               <Checkbox
                 checked={emailOn}
@@ -127,7 +127,7 @@ export function SendInvoiceDialog({
           </div>
 
           {/* SMS channel */}
-          <div className="rounded-lg border p-3 space-y-3">
+          <div className="rounded-2xl border p-3 space-y-3">
             <label className="flex items-center gap-2.5 cursor-pointer">
               <Checkbox checked={smsOn} onCheckedChange={(v) => setSmsOn(!!v)} />
               <MessageSquare className="h-4 w-4 text-muted-foreground" />

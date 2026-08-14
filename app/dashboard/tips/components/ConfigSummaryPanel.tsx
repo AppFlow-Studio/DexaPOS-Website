@@ -45,7 +45,7 @@ export function ConfigSummaryPanel({
 
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
-      <div className="border rounded-lg">
+      <div className="min-w-0 rounded-2xl border bg-card">
         <CollapsibleTrigger asChild>
           <button className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-muted/30 transition-colors">
             <div className="flex items-center gap-2">
@@ -67,7 +67,7 @@ export function ConfigSummaryPanel({
         </CollapsibleTrigger>
 
         <CollapsibleContent>
-          <div className="px-4 pb-4 space-y-4 border-t pt-3">
+          <div className="px-4 pb-4 space-y-4 border-t border-border/60 pt-3">
             {/* Pools */}
             {activePools.length > 0 ? (
               <div className="space-y-2">
@@ -77,7 +77,7 @@ export function ConfigSummaryPanel({
                 {activePools.map((pool) => (
                   <div
                     key={pool.id}
-                    className="flex items-center justify-between rounded border px-3 py-2 text-sm"
+                    className="flex items-center justify-between rounded-2xl border-0 bg-muted/60 px-3 py-2 text-sm"
                   >
                     <div>
                       <span className="font-medium">{pool.name}</span>
@@ -104,7 +104,7 @@ export function ConfigSummaryPanel({
                 {activeRules.map((rule) => (
                   <div
                     key={rule.id}
-                    className="flex items-center justify-between rounded border px-3 py-2 text-sm"
+                    className="flex items-center justify-between rounded-2xl border-0 bg-muted/60 px-3 py-2 text-sm"
                   >
                     <div className="flex items-center gap-1.5">
                       <span className="font-medium">{rule.from_role_code}</span>
@@ -126,7 +126,7 @@ export function ConfigSummaryPanel({
 
             {/* Link to settings */}
             <Link href="/dashboard/settings/tips">
-              <Button variant="link" size="sm" className="p-0 h-auto text-teal-600">
+              <Button variant="link" size="sm" className="p-0 h-auto text-[#0C4FD1] dark:text-[#6CA0FF]">
                 Edit in Tip Configuration →
               </Button>
             </Link>

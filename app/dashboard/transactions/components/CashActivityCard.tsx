@@ -1,7 +1,8 @@
 "use client";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Panel, PanelSection } from "@/components/dashboard/shell";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Tooltip,
   TooltipContent,
@@ -53,7 +54,7 @@ function MetricRow({
       className={cn(
         "flex items-center justify-between py-2",
         isTotal &&
-          "border-t-2 border-foreground/10 pt-3 mt-2 bg-muted/30 -mx-4 px-4"
+          "border-t border-border/60 pt-3 mt-2 bg-muted/30 -mx-4 px-4 rounded-2xl"
       )}
     >
       <div className="flex items-center gap-2">
@@ -82,7 +83,7 @@ function MetricRow({
         className={cn(
           "font-mono text-sm tabular-nums",
           isTotal && "font-bold",
-          isNegative && "text-red-500"
+          isNegative && "text-rose-600 dark:text-rose-400"
         )}
       >
         {isNegative && value !== 0 ? "-" : ""}
@@ -105,24 +106,6 @@ export function CashActivityCard({
   isLoading,
   onViewCashActivity,
 }: CashActivityCardProps) {
-  if (isLoading) {
-    return (
-      <Card className="border-none shadow-sm bg-card/80 backdrop-blur">
-        <CardHeader className="pb-2">
-          <div className="h-5 w-28 bg-muted animate-pulse rounded" />
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => (
-            <div key={i} className="flex justify-between">
-              <div className="h-4 w-28 bg-muted animate-pulse rounded" />
-              <div className="h-4 w-14 bg-muted animate-pulse rounded" />
-            </div>
-          ))}
-        </CardContent>
-      </Card>
-    );
-  }
-
   // Calculate what percentage of cash payments are remaining as total cash
   const cashRetentionPercentage =
     totalCashPayments > 0
@@ -130,82 +113,94 @@ export function CashActivityCard({
       : 100;
 
   return (
-    <Card className="border-border/60 shadow-none">
-      <CardHeader className="pb-2 flex flex-row items-center justify-between">
-        <CardTitle className="text-base font-bold tracking-tight">
-          Cash Activity
-        </CardTitle>
-        {onViewCashActivity && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-xs text-primary h-7 px-2 hover:bg-primary/10"
-            onClick={onViewCashActivity}
-          >
-            Cash activity
-            <ChevronRight className="ml-1 h-3.5 w-3.5" />
-          </Button>
+    <Panel>
+      <PanelSection
+        label="Cash Activity"
+        action={
+          onViewCashActivity && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-xs text-[#0C4FD1] dark:text-[#6CA0FF] h-7 px-2 hover:bg-[#0C4FD1]/10"
+              onClick={onViewCashActivity}
+            >
+              Cash activity
+              <ChevronRight className="ml-1 h-3.5 w-3.5" />
+            </Button>
+          )
+        }
+      >
+        {isLoading ? (
+          <div className="space-y-3">
+            {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => (
+              <div key={i} className="flex justify-between">
+                <Skeleton className="h-4 w-28" />
+                <Skeleton className="h-4 w-14" />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <>
+            <MetricRow
+              label="Total cash payments"
+              value={totalCashPayments}
+              info="All payments made with cash"
+            />
+            <MetricRow
+              label="Cash adjustments"
+              value={cashAdjustments}
+              info="Manual adjustments to cash drawer"
+            />
+            <MetricRow
+              label="Cash refunds"
+              value={cashRefunds}
+              isNegative={cashRefunds > 0}
+              info="Refunds paid in cash"
+            />
+            <MetricRow
+              label="Cash before tipouts"
+              value={cashBeforeTipouts}
+              info="Cash available before distributing tips"
+            />
+            <MetricRow
+              label="Cash gratuity"
+              value={cashGratuity}
+              info="Gratuity received in cash"
+            />
+            <MetricRow
+              label="Credit/non-cash gratuity"
+              value={creditNonCashGratuity}
+              info="Gratuity received through cards"
+            />
+            <MetricRow
+              label="Credit/non-cash tips"
+              value={creditNonCashTips}
+              isNegative={creditNonCashTips > 0}
+              info="Tips paid out from card payments"
+            />
+            <MetricRow
+              label="Tipouts tips withheld"
+              value={tipoutsTipsWithheld}
+              info="Tips withheld for later distribution"
+            />
+
+            {/* Progress indicator */}
+            <div className="py-3">
+              <Progress
+                value={cashRetentionPercentage}
+                className="h-1.5 [&>div]:bg-[#0C4FD1] dark:[&>div]:bg-[#6CA0FF]"
+              />
+            </div>
+
+            <MetricRow
+              label="Total cash"
+              value={totalCash}
+              isTotal
+              info="Final cash amount after all activity"
+            />
+          </>
         )}
-      </CardHeader>
-      <CardContent className="pt-0 space-y-0">
-        <MetricRow
-          label="Total cash payments"
-          value={totalCashPayments}
-          info="All payments made with cash"
-        />
-        <MetricRow
-          label="Cash adjustments"
-          value={cashAdjustments}
-          info="Manual adjustments to cash drawer"
-        />
-        <MetricRow
-          label="Cash refunds"
-          value={cashRefunds}
-          isNegative={cashRefunds > 0}
-          info="Refunds paid in cash"
-        />
-        <MetricRow
-          label="Cash before tipouts"
-          value={cashBeforeTipouts}
-          info="Cash available before distributing tips"
-        />
-        <MetricRow
-          label="Cash gratuity"
-          value={cashGratuity}
-          info="Gratuity received in cash"
-        />
-        <MetricRow
-          label="Credit/non-cash gratuity"
-          value={creditNonCashGratuity}
-          info="Gratuity received through cards"
-        />
-        <MetricRow
-          label="Credit/non-cash tips"
-          value={creditNonCashTips}
-          isNegative={creditNonCashTips > 0}
-          info="Tips paid out from card payments"
-        />
-        <MetricRow
-          label="Tipouts tips withheld"
-          value={tipoutsTipsWithheld}
-          info="Tips withheld for later distribution"
-        />
-
-        {/* Progress indicator */}
-        <div className="py-3">
-          <Progress
-            value={cashRetentionPercentage}
-            className="h-1.5 [&>div]:bg-primary"
-          />
-        </div>
-
-        <MetricRow
-          label="Total cash"
-          value={totalCash}
-          isTotal
-          info="Final cash amount after all activity"
-        />
-      </CardContent>
-    </Card>
+      </PanelSection>
+    </Panel>
   );
 }

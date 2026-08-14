@@ -6,16 +6,19 @@ import {
   CreditCard,
   LayoutDashboard,
   Receipt,
-  RefreshCcw,
-  MapPin,
-  Globe,
 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  PageShell,
+  PageHeader,
+  LocationIndicator,
+  Panel,
+  StatRow,
+  StatTile,
+} from "@/components/dashboard/shell";
 import { useFinancialKPIs } from "../hooks/useOrderAnalytics";
 import { useOrders } from "../hooks/useOrder";
 import { FinancialHeroChart } from "./components/FinancialHeroChart";
-import { Skeleton } from "@/components/ui/skeleton";
 import { ReceiptModal } from "@/components/dashboard/orders/ReceiptModal";
 import { OrderResponse } from "@/types/order-management";
 import { useSelectedLocation, useIsAllLocations } from "@/stores/location-store";
@@ -172,105 +175,72 @@ export default function TransactionsPage() {
   }, [orders]);
 
   return (
-    <main className="space-y-6 animate-in fade-in duration-500">
-      {/* Header */}
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-semibold tracking-tight">
-              Financial Information
-            </h1>
-            {isAllLocations ? (
-              <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
-                <Globe className="h-3 w-3" />
-                All Locations
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
-                <MapPin className="h-3 w-3" />
-                {selectedLocation?.name}
-              </span>
-            )}
-          </div>
-          <p className="text-sm text-muted-foreground">
-            Revenue, transactions, and payment activity
-          </p>
-        </div>
-        <DateRangePicker
-          dateFrom={dateRange.from}
-          dateTo={dateRange.to}
-          onDateRangeChange={(from, to) => { if (from && to) setDateRange({ from, to }); }}
-          preset={preset}
-          onPresetChange={setPreset}
-          className="w-full sm:w-auto"
-        />
-      </div>
+    <PageShell>
+      <PageHeader
+        title="Financial Information"
+        subtitle="Revenue, transactions, and payment activity"
+        indicator={
+          <LocationIndicator
+            isAllLocations={isAllLocations}
+            locationName={
+              selectedLocation?.id && !Array.isArray(selectedLocation)
+                ? selectedLocation.name
+                : undefined
+            }
+          />
+        }
+        actions={
+          <DateRangePicker
+            dateFrom={dateRange.from}
+            dateTo={dateRange.to}
+            onDateRangeChange={(from, to) => { if (from && to) setDateRange({ from, to }); }}
+            preset={preset}
+            onPresetChange={setPreset}
+            className="w-full sm:w-auto"
+          />
+        }
+        stackActionsBelowIndicatorOnMobile
+      />
 
       {/* Hero Chart */}
-      <Card className="border-border/60 shadow-none overflow-hidden">
-        <CardContent className="p-0">
-          <div className="h-[460px] sm:h-[420px]">
-            <FinancialHeroChart
-              data={chartData}
-              isLoading={isLoadingChartKPIs}
-              defaultTimeRange={chartTimeRange}
-              onTimeRangeChange={setChartTimeRange}
-            />
-          </div>
-        </CardContent>
-      </Card>
+      <Panel>
+        <div className="h-[460px] sm:h-[420px]">
+          <FinancialHeroChart
+            data={chartData}
+            isLoading={isLoadingChartKPIs}
+            defaultTimeRange={chartTimeRange}
+            onTimeRangeChange={setChartTimeRange}
+          />
+        </div>
+      </Panel>
 
       {/* Quick Stats Row */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card className="border-border/60 shadow-none">
-          <CardContent className="p-5">
-            <span className="text-sm font-medium text-muted-foreground">Net Sales</span>
-            <div className="text-2xl font-semibold mt-1 tabular-nums">
-              {isLoading ? (
-                <Skeleton className="h-8 w-24" />
-              ) : (
-                `$${summary.net_sales.toFixed(2)}`
-              )}
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="border-border/60 shadow-none">
-          <CardContent className="p-5">
-            <span className="text-sm font-medium text-muted-foreground">Orders</span>
-            <div className="text-2xl font-semibold mt-1 tabular-nums">
-              {isLoading ? (
-                <Skeleton className="h-8 w-16" />
-              ) : (
-                summary.order_count
-              )}
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="border-border/60 shadow-none">
-          <CardContent className="p-5">
-            <span className="text-sm font-medium text-muted-foreground">Avg Ticket</span>
-            <div className="text-2xl font-semibold mt-1 tabular-nums">
-              {isLoading ? (
-                <Skeleton className="h-8 w-20" />
-              ) : (
-                `$${summary.avg_order_value.toFixed(2)}`
-              )}
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="border-border/60 shadow-none">
-          <CardContent className="p-5">
-            <span className="text-sm font-medium text-muted-foreground">Tips</span>
-            <div className="text-2xl font-semibold mt-1 tabular-nums">
-              {isLoading ? (
-                <Skeleton className="h-8 w-20" />
-              ) : (
-                `$${summary.tip_total.toFixed(2)}`
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <Panel>
+        <div className="px-4 py-6 sm:px-6">
+          <StatRow columns={4}>
+            <StatTile
+              label="Net Sales"
+              value={`$${summary.net_sales.toFixed(2)}`}
+              isLoading={isLoading}
+            />
+            <StatTile
+              label="Orders"
+              value={summary.order_count}
+              isLoading={isLoading}
+            />
+            <StatTile
+              label="Avg Ticket"
+              value={`$${summary.avg_order_value.toFixed(2)}`}
+              isLoading={isLoading}
+            />
+            <StatTile
+              label="Tips"
+              value={`$${summary.tip_total.toFixed(2)}`}
+              isLoading={isLoading}
+            />
+          </StatRow>
+        </div>
+      </Panel>
 
       {/* Tabs */}
       <Tabs
@@ -278,30 +248,30 @@ export default function TransactionsPage() {
         onValueChange={(v) => setActiveTab(v as TabType)}
         className="w-full"
       >
-        <div className="overflow-x-auto">
-        <TabsList className="bg-muted/50 p-1 h-auto rounded-lg w-max">
-          <TabsTrigger
-            value="overview"
-            className="rounded-md px-4 py-2 text-sm font-medium data-[state=active]:bg-background data-[state=active]:shadow-sm"
-          >
-            <LayoutDashboard className="w-4 h-4 mr-2" />
-            Overview
-          </TabsTrigger>
-          <TabsTrigger
-            value="transactions"
-            className="rounded-md px-4 py-2 text-sm font-medium data-[state=active]:bg-background data-[state=active]:shadow-sm"
-          >
-            <Receipt className="w-4 h-4 mr-2" />
-            Transactions
-          </TabsTrigger>
-          <TabsTrigger
-            value="payments"
-            className="rounded-md px-4 py-2 text-sm font-medium data-[state=active]:bg-background data-[state=active]:shadow-sm"
-          >
-            <CreditCard className="w-4 h-4 mr-2" />
-            Payments
-          </TabsTrigger>
-        </TabsList>
+        <div className="w-full min-w-0 overflow-x-auto pb-1">
+          <TabsList className="inline-flex h-auto w-max flex-nowrap gap-0.5 rounded-full bg-muted/70 p-1">
+            <TabsTrigger
+              value="overview"
+              className="shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-[0.8125rem] font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border"
+            >
+              <LayoutDashboard className="w-4 h-4 mr-2" />
+              Overview
+            </TabsTrigger>
+            <TabsTrigger
+              value="transactions"
+              className="shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-[0.8125rem] font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border"
+            >
+              <Receipt className="w-4 h-4 mr-2" />
+              Transactions
+            </TabsTrigger>
+            <TabsTrigger
+              value="payments"
+              className="shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-[0.8125rem] font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border"
+            >
+              <CreditCard className="w-4 h-4 mr-2" />
+              Payments
+            </TabsTrigger>
+          </TabsList>
         </div>
       </Tabs>
 
@@ -432,6 +402,6 @@ export default function TransactionsPage() {
           onOpenChange={(open) => !open && setSelectedOrder(null)}
         />
       )}
-    </main>
+    </PageShell>
   );
 }

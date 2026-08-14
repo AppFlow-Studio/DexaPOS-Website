@@ -121,18 +121,11 @@ export function LocationLeaderboard({
                 >
                   <TableCell className="pl-6 font-medium">
                     <div className="flex items-center gap-2">
-                      <span
-                        className={cn(
-                          "text-sm",
-                          location.rank === 1
-                            ? "font-bold text-amber-500"
-                            : "text-muted-foreground"
-                        )}
-                      >
+                      <span className={cn("text-sm text-muted-foreground", location.rank === 1 && "font-bold text-foreground")}>
                         #{location.rank}
                       </span>
                       {location.rank === 1 && (
-                        <Trophy className="h-4 w-4 text-amber-500 fill-amber-500/20" />
+                        <Trophy className="h-4 w-4 text-muted-foreground" />
                       )}
                     </div>
                   </TableCell>
@@ -154,28 +147,14 @@ export function LocationLeaderboard({
                   <TableCell className="text-right">
                     <Badge
                       variant="secondary"
-                      className={cn(
-                        "font-mono text-[10px] tabular-nums",
-                        location.metric_vs_avg_pct > 0
-                          ? "bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20"
-                          : location.metric_vs_avg_pct < 0
-                          ? "bg-rose-500/10 text-rose-500 hover:bg-rose-500/20"
-                          : "bg-muted text-muted-foreground"
-                      )}
+                      className="bg-muted/60 font-mono text-[10px] text-muted-foreground tabular-nums hover:bg-muted"
                     >
                       {formatPercent(location.metric_vs_avg_pct)}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right">
                     <div
-                      className={cn(
-                        "flex items-center justify-end gap-1 text-xs font-medium tabular-nums",
-                        location.trend_pct > 0
-                          ? "text-emerald-500"
-                          : location.trend_pct < 0
-                          ? "text-rose-500"
-                          : "text-muted-foreground"
-                      )}
+                      className="flex items-center justify-end gap-1 text-xs font-medium text-muted-foreground tabular-nums"
                     >
                       {location.trend_pct > 0 ? (
                         <ArrowUpRight className="h-3 w-3" />

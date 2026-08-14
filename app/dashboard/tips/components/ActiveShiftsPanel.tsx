@@ -33,7 +33,7 @@ export function ActiveShiftsPanel({ shifts, isLoading }: ActiveShiftsPanelProps)
           ))}
         </div>
       ) : shifts.length === 0 ? (
-        <div className="border rounded-lg p-8 text-center">
+        <div className="rounded-2xl border-0 bg-muted/60 p-8 text-center">
           <Users className="w-8 h-8 text-muted-foreground/40 mx-auto mb-2" />
           <p className="text-sm text-muted-foreground">
             No shifts recorded for today yet

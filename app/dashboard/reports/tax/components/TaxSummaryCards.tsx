@@ -28,8 +28,6 @@ const CARDS = [
     key: "grossTaxCollected" as const,
     title: "Gross Tax Collected",
     icon: DollarSign,
-    iconColor: "text-emerald-600",
-    iconBg: "bg-emerald-50",
     format: (s: TaxSummary) => fmt(s.grossTaxCollected),
     sub: (s: TaxSummary) => `${s.totalOrders} completed orders`,
   },
@@ -37,8 +35,6 @@ const CARDS = [
     key: "taxRefunded" as const,
     title: "Tax Refunded",
     icon: TrendingDown,
-    iconColor: "text-rose-500",
-    iconBg: "bg-rose-50",
     format: (s: TaxSummary) => fmt(s.taxRefunded),
     sub: (s: TaxSummary) => `${s.totalRefunds} refund transactions`,
   },
@@ -46,8 +42,6 @@ const CARDS = [
     key: "netTaxLiability" as const,
     title: "Net Tax Liability",
     icon: TrendingUp,
-    iconColor: "text-blue-600",
-    iconBg: "bg-blue-50",
     format: (s: TaxSummary) => fmt(s.netTaxLiability),
     sub: () => "Gross minus refunded",
   },
@@ -55,8 +49,6 @@ const CARDS = [
     key: "taxableSales" as const,
     title: "Taxable Sales",
     icon: Receipt,
-    iconColor: "text-indigo-500",
-    iconBg: "bg-indigo-50",
     format: (s: TaxSummary) => fmt(s.taxableSales),
     sub: () => "Non-exempt subtotals",
   },
@@ -64,8 +56,6 @@ const CARDS = [
     key: "taxExemptSales" as const,
     title: "Tax-Exempt Sales",
     icon: ShieldOff,
-    iconColor: "text-amber-500",
-    iconBg: "bg-amber-50",
     format: (s: TaxSummary) => fmt(s.taxExemptSales),
     sub: () => "Items marked exempt",
   },
@@ -73,8 +63,6 @@ const CARDS = [
     key: "effectiveTaxRate" as const,
     title: "Effective Tax Rate",
     icon: Percent,
-    iconColor: "text-teal-600",
-    iconBg: "bg-teal-50",
     format: (s: TaxSummary) => `${s.effectiveTaxRate.toFixed(2)}%`,
     sub: () => "Net tax ÷ taxable sales",
   },
@@ -113,7 +101,7 @@ export function TaxSummaryCards({ summary, isLoading, isError }: TaxSummaryCards
           label={card.title}
           value={isError ? "—" : card.format(s)}
           meta={isError ? "Failed to load" : card.sub(s)}
-          icon={<card.icon className={card.iconColor} />}
+          icon={<card.icon />}
         />
       ))}
       </StatRow>

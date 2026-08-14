@@ -77,13 +77,7 @@ const PAYMENT_METHODS = [
   { value: "card_dvpaylite", label: "Card (DVPay)" },
 ];
 
-const ORDER_TYPE_COLORS: Record<string, string> = {
-  dine_in:  { bg: "bg-indigo-50",  text: "text-indigo-600" },
-  takeout:  { bg: "bg-amber-50",   text: "text-amber-600" },
-  delivery: { bg: "bg-emerald-50", text: "text-emerald-600" },
-  online:   { bg: "bg-blue-50",    text: "text-blue-600" },
-  catering: { bg: "bg-rose-50",    text: "text-rose-600" },
-} as any;
+const ORDER_TYPE_STYLE = "bg-muted/60 text-muted-foreground";
 
 function fmt(value: number) {
   return `$${value.toFixed(2)}`;
@@ -392,11 +386,6 @@ export function TaxBreakdownTable({
               </TableRow>
             ) : (
               sorted.map((row) => {
-                const typeStyle =
-                  ORDER_TYPE_COLORS[row.orderType] ?? {
-                    bg: "bg-muted",
-                    text: "text-muted-foreground",
-                  };
                 return (
                   <TableRow
                     key={row.orderId}
@@ -412,8 +401,7 @@ export function TaxBreakdownTable({
                       <span
                         className={cn(
                           "inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium",
-                          typeStyle.bg,
-                          typeStyle.text
+                          ORDER_TYPE_STYLE
                         )}
                       >
                         {fmtOrderType(row.orderType)}
@@ -423,7 +411,7 @@ export function TaxBreakdownTable({
                       {fmt(row.subtotal)}
                     </TableCell>
                     <TableCell className="py-3.5 text-right">
-                      <span className="text-sm font-semibold text-emerald-600">
+                      <span className="text-sm font-semibold text-foreground">
                         {fmt(row.taxAmount)}
                       </span>
                     </TableCell>
@@ -438,9 +426,7 @@ export function TaxBreakdownTable({
                         <span
                           className={cn(
                             "inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium capitalize",
-                            row.pricingMode === "cash"
-                              ? "bg-amber-50 text-amber-600"
-                              : "bg-muted text-muted-foreground"
+                            "bg-muted/60 text-muted-foreground"
                           )}
                         >
                           {row.pricingMode}
@@ -451,7 +437,7 @@ export function TaxBreakdownTable({
                     </TableCell>
                     <TableCell className="py-3.5 text-right pr-5">
                       {row.taxRefunded > 0 ? (
-                        <span className="text-sm font-medium text-rose-500">
+                        <span className="text-sm font-medium text-foreground">
                           -{fmt(row.taxRefunded)}
                         </span>
                       ) : (

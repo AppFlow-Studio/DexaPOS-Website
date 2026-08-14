@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { AlertTriangle, Clock, CalendarX, ChevronDown, ChevronUp } from "lucide-react";
 import { format } from "date-fns";
-import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ForceClockOutDialog } from "./ForceClockOutDialog";
@@ -38,21 +37,21 @@ export function AttentionBanner({
 
   return (
     <>
-      <Card className="border-amber-300 bg-amber-50/80 dark:bg-amber-950/20 dark:border-amber-800/40">
+      <div className="rounded-2xl border-0 bg-amber-50 dark:bg-amber-900/20">
         <button
           className="w-full flex items-center justify-between px-4 py-3 text-left"
           onClick={() => setExpanded(!expanded)}
         >
           <div className="flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 text-amber-600" />
-            <span className="text-sm font-semibold text-amber-800 dark:text-amber-200">
+            <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+            <span className="text-sm font-semibold text-amber-800 dark:text-amber-400">
               {totalIssues} issue{totalIssues !== 1 ? "s" : ""} need attention
             </span>
           </div>
           {expanded ? (
-            <ChevronUp className="w-4 h-4 text-amber-600" />
+            <ChevronUp className="w-4 h-4 text-amber-600 dark:text-amber-400" />
           ) : (
-            <ChevronDown className="w-4 h-4 text-amber-600" />
+            <ChevronDown className="w-4 h-4 text-amber-600 dark:text-amber-400" />
           )}
         </button>
 
@@ -62,8 +61,8 @@ export function AttentionBanner({
             {orphanedShifts.length > 0 && (
               <div className="space-y-2">
                 <div className="flex items-center gap-1.5">
-                  <Clock className="w-3.5 h-3.5 text-red-500" />
-                  <span className="text-sm font-medium text-red-700 dark:text-red-300">
+                  <Clock className="w-3.5 h-3.5 text-red-500 dark:text-red-400" />
+                  <span className="text-sm font-medium text-red-700 dark:text-red-400">
                     {orphanedShifts.length} staff still clocked in from previous days
                   </span>
                 </div>
@@ -73,9 +72,9 @@ export function AttentionBanner({
                       key={shift.id}
                       className="flex items-center justify-between text-sm"
                     >
-                      <div className="text-amber-800 dark:text-amber-200">
+                      <div className="text-amber-800 dark:text-amber-400">
                         <span className="font-medium">{shift.staffName}</span>
-                        <span className="text-amber-600 dark:text-amber-400 ml-1.5">
+                        <span className="text-amber-600 dark:text-amber-400/80 ml-1.5">
                           — clocked in {format(new Date(shift.clockInTime), "EEE h:mm a")}
                           {" "}({Math.round(shift.hoursSinceClockIn)}h ago)
                         </span>
@@ -83,7 +82,7 @@ export function AttentionBanner({
                       <Button
                         size="sm"
                         variant="outline"
-                        className="h-7 text-xs border-amber-400 text-amber-700 hover:bg-amber-100"
+                        className="h-7 rounded-full text-xs border-0 bg-amber-500/15 text-amber-700 shadow-none hover:bg-amber-500/25 dark:text-amber-400"
                         onClick={() => setClockingOutShift(shift)}
                       >
                         Force Clock Out
@@ -98,8 +97,8 @@ export function AttentionBanner({
             {unclosedDays.length > 0 && (
               <div className="space-y-2">
                 <div className="flex items-center gap-1.5">
-                  <CalendarX className="w-3.5 h-3.5 text-amber-500" />
-                  <span className="text-sm font-medium text-amber-700 dark:text-amber-300">
+                  <CalendarX className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400" />
+                  <span className="text-sm font-medium text-amber-700 dark:text-amber-400">
                     {unclosedDays.length} day{unclosedDays.length !== 1 ? "s" : ""} need tip close-out
                   </span>
                 </div>
@@ -111,13 +110,13 @@ export function AttentionBanner({
                         key={day.date}
                         className="flex items-center justify-between text-sm"
                       >
-                        <div className="text-amber-800 dark:text-amber-200">
+                        <div className="text-amber-800 dark:text-amber-400">
                           <span className="font-medium">{formatDate(day.date)}</span>
-                          <span className="text-amber-600 dark:text-amber-400 ml-1.5">
+                          <span className="text-amber-600 dark:text-amber-400/80 ml-1.5">
                             — {day.orderCount} orders · {formatMoney(day.totalTips)} tips · {day.shiftCount} staff
                           </span>
                           {day.hasOrphanedShifts && (
-                            <Badge variant="outline" className="ml-1.5 text-[10px] border-red-300 text-red-600">
+                            <Badge variant="outline" className="ml-1.5 text-[10px] border-0 bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400">
                               has orphaned shifts
                             </Badge>
                           )}
@@ -125,7 +124,7 @@ export function AttentionBanner({
                         <Button
                           size="sm"
                           variant="outline"
-                          className="h-7 text-xs border-amber-400 text-amber-700 hover:bg-amber-100"
+                          className="h-7 rounded-full text-xs border-0 bg-amber-500/15 text-amber-700 shadow-none hover:bg-amber-500/25 dark:text-amber-400"
                           disabled={!isFirstUnclosed}
                           onClick={() => onCloseOutDay(day.date)}
                         >
@@ -143,7 +142,7 @@ export function AttentionBanner({
             )}
           </div>
         )}
-      </Card>
+      </div>
 
       <ForceClockOutDialog
         open={!!clockingOutShift}

@@ -84,7 +84,7 @@ function WaterfallRow({ item }: { item: WaterfallLineItem }) {
           className={cn(
             "font-mono tabular-nums text-sm",
             isTotal && "font-bold text-base",
-            isSubtract && item.amount > 0 && "text-red-500"
+            isSubtract && item.amount > 0 && "text-foreground"
           )}
         >
           {isSubtract && item.amount > 0 ? "-" : ""}
@@ -136,13 +136,13 @@ function ValidationBanner({
 }) {
   if (validation.is_balanced) {
     return (
-      <div className="flex items-center gap-3 p-4 rounded-xl bg-green-50 border border-green-200 dark:bg-green-950/20 dark:border-green-900">
-        <CheckCircle2 className="h-5 w-5 text-green-600 shrink-0" />
+      <div className="flex items-center gap-3 rounded-xl border border-border/70 bg-muted/35 p-4">
+        <CheckCircle2 className="h-5 w-5 shrink-0 text-muted-foreground" />
         <div>
-          <p className="text-sm font-medium text-green-800 dark:text-green-400">
+          <p className="text-sm font-medium text-foreground">
             Balanced
           </p>
-          <p className="text-xs text-green-600 dark:text-green-500">
+          <p className="text-xs text-muted-foreground">
             Net Collected ({formatCurrency(validation.net_collected)}) matches
             Payments Total ({formatCurrency(validation.payments_total)})
           </p>
@@ -152,13 +152,13 @@ function ValidationBanner({
   }
 
   return (
-    <div className="flex items-center gap-3 p-4 rounded-xl bg-amber-50 border border-amber-200 dark:bg-amber-950/20 dark:border-amber-900">
-      <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0" />
+    <div className="flex items-center gap-3 rounded-xl border border-border/70 bg-muted/35 p-4">
+      <AlertTriangle className="h-5 w-5 shrink-0 text-muted-foreground" />
       <div>
-        <p className="text-sm font-medium text-amber-800 dark:text-amber-400">
+        <p className="text-sm font-medium text-foreground">
           Discrepancy Detected
         </p>
-        <p className="text-xs text-amber-600 dark:text-amber-500">
+        <p className="text-xs text-muted-foreground">
           Net Collected ({formatCurrency(validation.net_collected)}) vs Payments
           Total ({formatCurrency(validation.payments_total)}) — Difference:{" "}
           {formatCurrency(validation.discrepancy)}

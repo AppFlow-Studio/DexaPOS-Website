@@ -52,29 +52,6 @@ type SortKey = keyof Pick<
 >;
 type SortDir = "asc" | "desc";
 
-const CATEGORY_COLORS: Record<string, string> = {
-  default: "#6366f1",
-};
-
-// Generate a stable color per category name
-function categoryColor(category: string): string {
-  const palette = [
-    "#6366f1", // indigo
-    "#f59e0b", // amber
-    "#10b981", // emerald
-    "#3b82f6", // blue
-    "#f43f5e", // rose
-    "#8b5cf6", // violet
-    "#06b6d4", // cyan
-    "#f97316", // orange
-  ];
-  let hash = 0;
-  for (let i = 0; i < category.length; i++) {
-    hash = category.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  return palette[Math.abs(hash) % palette.length];
-}
-
 const exportColumns: ExportColumn<SalesByItemReportItem>[] = [
   { key: "item_name", header: "Item Name" },
   { key: "category", header: "Category", format: (v: string | null) => v || "—" },
@@ -185,29 +162,21 @@ export default function SalesByItemsPage() {
       label: "Unique Items",
       value: isLoading ? null : isError ? "—" : summary.totalItems.toLocaleString(),
       icon: Package,
-      iconColor: "text-indigo-500",
-      iconBg: "bg-indigo-50",
     },
     {
       label: "Total Qty Sold",
       value: isLoading ? null : isError ? "—" : summary.totalQty.toLocaleString(),
       icon: ShoppingCart,
-      iconColor: "text-emerald-500",
-      iconBg: "bg-emerald-50",
     },
     {
       label: "Gross Sales",
       value: isLoading ? null : isError ? "—" : `$${summary.totalGross.toLocaleString("en-US", { minimumFractionDigits: 2 })}`,
       icon: DollarSign,
-      iconColor: "text-amber-500",
-      iconBg: "bg-amber-50",
     },
     {
       label: "Net Sales",
       value: isLoading ? null : isError ? "—" : `$${summary.totalNet.toLocaleString("en-US", { minimumFractionDigits: 2 })}`,
       icon: TrendingUp,
-      iconColor: "text-purple-500",
-      iconBg: "bg-purple-50",
     },
   ];
 
@@ -238,7 +207,7 @@ export default function SalesByItemsPage() {
             key={kpi.label}
             label={kpi.label}
             value={kpi.value ?? ""}
-            icon={<kpi.icon className={kpi.iconColor} />}
+            icon={<kpi.icon />}
             isLoading={kpi.value === null}
           />
         ))}
@@ -466,10 +435,6 @@ export default function SalesByItemsPage() {
                 processed.map((item, index) => {
                   const qtyPct = maxQty > 0 ? (item.quantity_sold / maxQty) * 100 : 0;
                   const netPct = maxNet > 0 ? (item.net_sales / maxNet) * 100 : 0;
-                  const color = item.category
-                    ? categoryColor(item.category)
-                    : "#94a3b8";
-
                   return (
                     <TableRow
                       key={index}
@@ -490,13 +455,7 @@ export default function SalesByItemsPage() {
                       {/* Category badge */}
                       <TableCell className="py-3.5">
                         {item.category ? (
-                          <span
-                            className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium"
-                            style={{
-                              backgroundColor: color + "1a",
-                              color: color,
-                            }}
-                          >
+                          <span className="inline-flex items-center rounded-full bg-muted/60 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
                             {item.category}
                           </span>
                         ) : (
@@ -514,7 +473,7 @@ export default function SalesByItemsPage() {
                           </span>
                           <div className="w-20 h-1 bg-muted rounded-full overflow-hidden">
                             <div
-                              className="h-full rounded-full bg-emerald-400"
+                              className="h-full rounded-full bg-foreground/35"
                               style={{ width: `${qtyPct}%` }}
                             />
                           </div>
@@ -542,7 +501,7 @@ export default function SalesByItemsPage() {
                           </span>
                           <div className="w-20 h-1 bg-muted rounded-full overflow-hidden">
                             <div
-                              className="h-full rounded-full bg-indigo-400"
+                              className="h-full rounded-full bg-foreground/35"
                               style={{ width: `${netPct}%` }}
                             />
                           </div>

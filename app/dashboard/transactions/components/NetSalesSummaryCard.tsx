@@ -1,6 +1,7 @@
 "use client";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Panel, PanelSection } from "@/components/dashboard/shell";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Tooltip,
   TooltipContent,
@@ -46,7 +47,7 @@ function MetricRow({
     <div
       className={cn(
         "flex items-center justify-between py-3",
-        isHighlighted && "bg-muted/50 -mx-4 px-4 rounded-lg border border-muted"
+        isHighlighted && "rounded-2xl border-0 bg-muted/60 shadow-none -mx-4 px-4"
       )}
     >
       <div className="flex items-center gap-2">
@@ -75,7 +76,7 @@ function MetricRow({
         className={cn(
           "font-mono text-sm tabular-nums",
           isHighlighted && "font-bold",
-          isNegative && "text-red-500"
+          isNegative && "text-rose-600 dark:text-rose-400"
         )}
       >
         {isNegative && value !== 0 ? "-" : ""}
@@ -94,32 +95,20 @@ export function NetSalesSummaryCard({
   isLoading,
   onDismissDeposit,
 }: NetSalesSummaryCardProps) {
-  if (isLoading) {
-    return (
-      <Card className="border-none shadow-sm bg-card/80 backdrop-blur">
-        <CardHeader className="pb-2">
-          <div className="h-5 w-36 bg-muted animate-pulse rounded" />
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="flex justify-between">
-              <div className="h-4 w-20 bg-muted animate-pulse rounded" />
-              <div className="h-4 w-16 bg-muted animate-pulse rounded" />
-            </div>
-          ))}
-        </CardContent>
-      </Card>
-    );
-  }
-
   return (
-    <Card className="border-border/60 shadow-none">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-base font-bold tracking-tight">
-          Net Sales Summary
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="pt-0 space-y-1">
+    <Panel>
+      <PanelSection label="Net Sales Summary">
+        {isLoading ? (
+          <div className="space-y-3">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="flex justify-between">
+                <Skeleton className="h-4 w-20" />
+                <Skeleton className="h-4 w-16" />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <>
         <MetricRow
           label="Gross sales"
           value={grossSales}
@@ -143,10 +132,12 @@ export function NetSalesSummaryCard({
           isHighlighted
           info="Gross sales minus discounts and refunds"
         />
+          </>
+        )}
 
         {/* Instant Deposit Banner */}
-        {instantDepositAvailable > 0 && (
-          <div className="mt-4 p-3 rounded-lg bg-gradient-to-r from-primary/10 to-primary/5 border border-primary/20 relative group">
+        {!isLoading && instantDepositAvailable > 0 && (
+          <div className="mt-4 p-3 rounded-2xl bg-gradient-to-r from-[#0C4FD1]/10 to-[#0C4FD1]/5 border border-[#0C4FD1]/20 relative group">
             {/* Close: filled, borderless, circular — the search-field
                 material. Visible at rest rather than fading in on hover, so
                 the dismiss affordance is discoverable without hunting. */}
@@ -158,16 +149,16 @@ export function NetSalesSummaryCard({
               <span className="sr-only">Dismiss</span>
             </button>
             <div className="flex items-start gap-3">
-              <div className="p-1.5 rounded-full bg-primary/20">
-                <Zap className="h-4 w-4 text-primary" />
+              <div className="p-1.5 rounded-full bg-[#0C4FD1]/20 dark:bg-[#6CA0FF]/20">
+                <Zap className="h-4 w-4 text-[#0C4FD1] dark:text-[#6CA0FF]" />
               </div>
               <div>
                 <p className="text-sm">
-                  <span className="font-bold text-primary">
+                  <span className="font-bold text-[#0C4FD1] dark:text-[#6CA0FF]">
                     {formatCurrency(instantDepositAvailable)}
                   </span>{" "}
                   is available to{" "}
-                  <button className="text-primary font-semibold hover:underline">
+                  <button className="text-[#0C4FD1] dark:text-[#6CA0FF] font-semibold hover:underline">
                     instant deposit
                   </button>
                   .
@@ -176,7 +167,7 @@ export function NetSalesSummaryCard({
             </div>
           </div>
         )}
-      </CardContent>
-    </Card>
+      </PanelSection>
+    </Panel>
   );
 }

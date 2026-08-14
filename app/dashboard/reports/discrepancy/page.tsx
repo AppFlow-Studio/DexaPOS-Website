@@ -72,8 +72,8 @@ function SortIcon({ col, active, dir }: { col: SortKey; active: SortKey; dir: So
 }
 
 const TYPE_CONFIG: Record<DiscrepancyType, { label: string; color: string; bg: string; icon: typeof AlertTriangle }> = {
-  void:   { label: "Void",   color: "text-rose-600",  bg: "bg-rose-50",  icon: AlertTriangle },
-  refund: { label: "Refund", color: "text-amber-600", bg: "bg-amber-50", icon: RefreshCcw },
+  void:   { label: "Void",   color: "text-foreground", bg: "bg-muted", icon: AlertTriangle },
+  refund: { label: "Refund", color: "text-foreground", bg: "bg-muted", icon: RefreshCcw },
 };
 
 const exportColumns = [
@@ -205,32 +205,24 @@ export default function DiscrepancyReportPage() {
       value: isLoading ? null : isError ? "—" : allRows.length.toLocaleString(),
       sub: isError ? "Failed to load" : `${discrepancyRate}% of all orders`,
       icon: ShieldAlert,
-      iconColor: "text-rose-500",
-      iconBg: "bg-rose-50",
     },
     {
       label: "Void Events",
       value: isLoading ? null : isError ? "—" : totalVoids.length.toLocaleString(),
       sub: isError ? "Failed to load" : `-$${totalVoidAmt.toFixed(2)} impact`,
       icon: AlertTriangle,
-      iconColor: "text-rose-500",
-      iconBg: "bg-rose-50",
     },
     {
       label: "Refund Events",
       value: isLoading ? null : isError ? "—" : totalRefunds.length.toLocaleString(),
       sub: isError ? "Failed to load" : `-$${totalRefundAmt.toFixed(2)} returned`,
       icon: RefreshCcw,
-      iconColor: "text-amber-500",
-      iconBg: "bg-amber-50",
     },
     {
       label: "Total Financial Impact",
       value: isLoading ? null : isError ? "—" : `-$${(totalVoidAmt + totalRefundAmt).toFixed(2)}`,
       sub: isError ? "Failed to load" : "Revenue lost to discrepancies",
       icon: DollarSign,
-      iconColor: "text-indigo-500",
-      iconBg: "bg-indigo-50",
     },
   ];
 
@@ -264,7 +256,7 @@ export default function DiscrepancyReportPage() {
             label={kpi.label}
             value={kpi.value ?? ""}
             meta={kpi.sub}
-            icon={<kpi.icon className={kpi.iconColor} />}
+            icon={<kpi.icon />}
             isLoading={kpi.value === null}
           />
         ))}
@@ -299,7 +291,7 @@ export default function DiscrepancyReportPage() {
                 <div className="flex items-center gap-3 shrink-0">
                   <div className="w-24 h-1.5 bg-muted rounded-full overflow-hidden">
                     <div
-                      className="h-full rounded-full bg-rose-400"
+                      className="h-full rounded-full bg-foreground/35"
                       style={{ width: `${(stats.count / maxStaffCount) * 100}%` }}
                     />
                   </div>
@@ -331,7 +323,7 @@ export default function DiscrepancyReportPage() {
                 <div className="flex items-center gap-3 shrink-0">
                   <div className="w-24 h-1.5 bg-muted rounded-full overflow-hidden">
                     <div
-                      className="h-full rounded-full bg-amber-400"
+                      className="h-full rounded-full bg-foreground/35"
                       style={{ width: `${(count / maxReasonCount) * 100}%` }}
                     />
                   </div>
@@ -475,7 +467,7 @@ export default function DiscrepancyReportPage() {
                       </TableCell>
                       <TableCell className="py-3.5 text-sm">{row.staff}</TableCell>
                       <TableCell className="py-3.5 text-right pr-5">
-                        <span className={cn("text-sm font-bold", row.type === "void" ? "text-rose-500" : "text-amber-500")}>
+                        <span className="text-sm font-semibold text-foreground">
                           -${row.amount.toFixed(2)}
                         </span>
                       </TableCell>

@@ -12,12 +12,7 @@ import {
   AreaChart,
   Area,
 } from "recharts";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Panel } from "@/components/dashboard/shell";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   ChartContainer,
@@ -127,14 +122,10 @@ export function PaymentCharts({ summary, isLoading }: PaymentChartsProps) {
     return (
       <div className="grid gap-4 md:grid-cols-3">
         {[1, 2, 3].map((i) => (
-          <Card key={i} className="min-w-0">
-            <CardHeader>
-              <Skeleton className="h-5 w-32" />
-            </CardHeader>
-            <CardContent>
-              <Skeleton className="h-[200px] w-full" />
-            </CardContent>
-          </Card>
+          <Panel key={i} nested className="min-w-0 px-4 py-4 sm:px-6">
+            <Skeleton className="h-5 w-32" />
+            <Skeleton className="mt-4 h-[200px] w-full" />
+          </Panel>
         ))}
       </div>
     );
@@ -143,13 +134,9 @@ export function PaymentCharts({ summary, isLoading }: PaymentChartsProps) {
   return (
     <div className="grid gap-4 md:grid-cols-3">
       {/* Payment Method Donut */}
-      <Card className="min-w-0">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium">
-            Payment Methods
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
+      <Panel nested className="min-w-0 px-4 py-4 sm:px-6">
+        <h3 className="text-sm font-medium">Payment Methods</h3>
+        <div className="mt-2">
           {methodData.length === 0 ? (
             <div className="flex h-[200px] items-center justify-center text-sm text-muted-foreground">
               No payments in this date range
@@ -218,17 +205,13 @@ export function PaymentCharts({ summary, isLoading }: PaymentChartsProps) {
               </ul>
             </>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </Panel>
 
       {/* Card Type Bar Chart */}
-      <Card className="min-w-0">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium">
-            Card Types
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
+      <Panel nested className="min-w-0 px-4 py-4 sm:px-6">
+        <h3 className="text-sm font-medium">Card Types</h3>
+        <div className="mt-2">
           {cardTypeData.length === 0 ? (
             <div className="flex h-[200px] items-center justify-center text-sm text-muted-foreground">
               No card payment data
@@ -258,17 +241,13 @@ export function PaymentCharts({ summary, isLoading }: PaymentChartsProps) {
               </BarChart>
             </ChartContainer>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </Panel>
 
       {/* Daily Volume Area Chart */}
-      <Card className="min-w-0">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium">
-            Daily Volume
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
+      <Panel nested className="min-w-0 px-4 py-4 sm:px-6">
+        <h3 className="text-sm font-medium">Daily Volume</h3>
+        <div className="mt-2">
           {dailyData.length === 0 ? (
             <div className="flex h-[200px] items-center justify-center text-sm text-muted-foreground">
               No daily data
@@ -318,8 +297,8 @@ export function PaymentCharts({ summary, isLoading }: PaymentChartsProps) {
               </AreaChart>
             </ChartContainer>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </Panel>
     </div>
   );
 }

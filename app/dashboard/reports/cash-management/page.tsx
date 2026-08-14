@@ -107,32 +107,24 @@ export default function CashManagementPage() {
       value: isLoading ? null : isError ? "—" : `$${totalCollected.toFixed(2)}`,
       sub: isError ? "Failed to load" : `${cashTransactions?.length ?? 0} transactions`,
       icon: Banknote,
-      iconColor: "text-emerald-600",
-      iconBg: "bg-emerald-50",
     },
     {
       label: "Net Sales (Cash)",
       value: isLoading ? null : isError ? "—" : `$${totalSales.toFixed(2)}`,
       sub: isError ? "Failed to load" : "Excluding tips",
       icon: DollarSign,
-      iconColor: "text-indigo-500",
-      iconBg: "bg-indigo-50",
     },
     {
       label: "Total Tips",
       value: isLoading ? null : isError ? "—" : `$${totalTips.toFixed(2)}`,
       sub: isError ? "Failed to load" : "Cash tips collected",
       icon: TrendingUp,
-      iconColor: "text-amber-500",
-      iconBg: "bg-amber-50",
     },
     {
       label: "Avg per Transaction",
       value: isLoading ? null : isError ? "—" : `$${avgPerTx.toFixed(2)}`,
       sub: isError ? "Failed to load" : "Per cash order",
       icon: ShoppingCart,
-      iconColor: "text-purple-500",
-      iconBg: "bg-purple-50",
     },
   ];
 
@@ -165,7 +157,7 @@ export default function CashManagementPage() {
             label={kpi.label}
             value={kpi.value ?? ""}
             meta={kpi.sub}
-            icon={<kpi.icon className={kpi.iconColor} />}
+            icon={<kpi.icon />}
             isLoading={kpi.value === null}
           />
         ))}
@@ -285,7 +277,7 @@ export default function CashManagementPage() {
                       </TableCell>
                       <TableCell className="py-3.5 text-right">
                         {item.tip_amount > 0 ? (
-                          <span className="text-xs font-medium px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-600">
+                          <span className="text-xs font-medium text-muted-foreground">
                             +${item.tip_amount.toFixed(2)}
                           </span>
                         ) : (
@@ -294,11 +286,11 @@ export default function CashManagementPage() {
                       </TableCell>
                       <TableCell className="py-3.5 pr-5 text-right">
                         <div className="flex flex-col items-end gap-1">
-                          <span className="text-sm font-bold text-emerald-600">
+                          <span className="text-sm font-semibold text-foreground">
                             ${item.total_amount.toFixed(2)}
                           </span>
                           <div className="w-20 h-1 bg-muted rounded-full overflow-hidden">
-                            <div className="h-full rounded-full bg-emerald-400" style={{ width: `${barPct}%` }} />
+                            <div className="h-full rounded-full bg-foreground/35" style={{ width: `${barPct}%` }} />
                           </div>
                         </div>
                       </TableCell>

@@ -235,7 +235,7 @@ function PlatformDetailCard({
           {summary.cancelledOrders > 0 && (
             <div className="flex gap-3 text-sm text-muted-foreground">
               <span className="flex items-center gap-1">
-                <Ban className="h-3.5 w-3.5 text-yellow-500" />
+                <Ban className="h-3.5 w-3.5 text-muted-foreground" />
                 {summary.cancelledOrders} cancelled
               </span>
             </div>

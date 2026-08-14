@@ -129,32 +129,24 @@ export default function VoidsReportPage() {
       value: isLoading ? null : isError ? "—" : (data?.voids.length ?? 0).toLocaleString(),
       sub: isError ? "Failed to load" : `-$${totalVoidAmount.toFixed(2)} lost`,
       icon: AlertTriangle,
-      iconColor: "text-rose-500",
-      iconBg: "bg-rose-50",
     },
     {
       label: "Total Void Amount",
       value: isLoading ? null : isError ? "—" : `$${totalVoidAmount.toFixed(2)}`,
       sub: isError ? "Failed to load" : "Cancelled item value",
       icon: TrendingDown,
-      iconColor: "text-rose-500",
-      iconBg: "bg-rose-50",
     },
     {
       label: "Refunded Orders",
       value: isLoading ? null : isError ? "—" : (data?.refunds.length ?? 0).toLocaleString(),
       sub: isError ? "Failed to load" : `-$${totalRefundAmount.toFixed(2)} returned`,
       icon: RefreshCcw,
-      iconColor: "text-amber-500",
-      iconBg: "bg-amber-50",
     },
     {
       label: "Total Net Impact",
       value: isLoading ? null : isError ? "—" : `-$${netImpact.toFixed(2)}`,
       sub: isError ? "Failed to load" : "Voids + refunds combined",
       icon: DollarSign,
-      iconColor: "text-indigo-500",
-      iconBg: "bg-indigo-50",
     },
   ];
 
@@ -186,7 +178,7 @@ export default function VoidsReportPage() {
             label={kpi.label}
             value={kpi.value ?? ""}
             meta={kpi.sub}
-            icon={<kpi.icon className={kpi.iconColor} />}
+            icon={<kpi.icon />}
             isLoading={kpi.value === null}
           />
         ))}
@@ -216,7 +208,7 @@ export default function VoidsReportPage() {
         <div className="flex items-center justify-between px-5 pb-4 pt-5">
           <div>
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <span className="h-2 w-2 rounded-full bg-rose-400" />
+              <span className="h-2 w-2 rounded-full bg-muted-foreground/50" />
               Voided Items Log
             </CardTitle>
             <p className="text-xs text-muted-foreground mt-0.5">
@@ -305,7 +297,7 @@ export default function VoidsReportPage() {
                       </div>
                     </TableCell>
                     <TableCell className="py-3.5 text-right pr-5">
-                      <span className="text-sm font-bold text-rose-500">-${item.amount.toFixed(2)}</span>
+                      <span className="text-sm font-semibold text-foreground">-${item.amount.toFixed(2)}</span>
                     </TableCell>
                   </TableRow>
                 ))
@@ -320,7 +312,7 @@ export default function VoidsReportPage() {
         <div className="flex items-center justify-between px-5 pb-4 pt-5">
           <div>
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <span className="h-2 w-2 rounded-full bg-amber-400" />
+              <span className="h-2 w-2 rounded-full bg-muted-foreground/50" />
               Refunds Log
             </CardTitle>
             <p className="text-xs text-muted-foreground mt-0.5">
@@ -398,7 +390,7 @@ export default function VoidsReportPage() {
                       </div>
                     </TableCell>
                     <TableCell className="py-3.5 text-right pr-5">
-                      <span className="text-sm font-bold text-amber-500">-${item.amount.toFixed(2)}</span>
+                      <span className="text-sm font-semibold text-foreground">-${item.amount.toFixed(2)}</span>
                     </TableCell>
                   </TableRow>
                 ))
