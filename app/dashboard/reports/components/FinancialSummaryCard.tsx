@@ -1,6 +1,5 @@
 "use client";
 
-import { Card, CardContent } from "@/components/ui/card";
 import { Info, ArrowUpRight, ArrowDownRight } from "lucide-react";
 import {
   Tooltip,
@@ -31,13 +30,13 @@ export function FinancialSummaryCard({
   className,
 }: FinancialSummaryCardProps) {
   return (
-    <Card
+    <div
       className={cn(
-        "overflow-hidden border-none shadow-sm bg-card/50 backdrop-blur-sm",
+        "min-w-0 rounded-2xl border-0 bg-muted/60 px-4 py-4 shadow-none",
         className
       )}
     >
-      <CardContent className="p-4">
+      <div>
         <div className="flex items-center justify-between mb-1">
           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
             {title}
@@ -57,14 +56,14 @@ export function FinancialSummaryCard({
         </div>
 
         <div className="flex items-baseline justify-between">
-          <h3 className="text-xl font-bold tracking-tight">
+          <p className="text-xl font-medium leading-tight tracking-[-0.02em] tabular-nums">
             {typeof value === "number"
               ? value.toLocaleString("en-US", {
                   style: "currency",
                   currency: "USD",
                 })
               : value}
-          </h3>
+          </p>
 
           {trend && (
             <div
@@ -90,7 +89,7 @@ export function FinancialSummaryCard({
             {description}
           </p>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }

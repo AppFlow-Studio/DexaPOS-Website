@@ -3,11 +3,11 @@
 import { useMemo, useState } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Cell } from "recharts";
 import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+  ReportPanel as Card,
+  ReportPanelContent as CardContent,
+  ReportPanelHeader as CardHeader,
+  ReportPanelTitle as CardTitle,
+} from "@/components/dashboard/reports/ReportPanel";
 import {
   ChartContainer,
   ChartTooltip,
@@ -112,7 +112,7 @@ export function TaxCategoryChart({ data, isLoading }: TaxCategoryChartProps) {
   if (isLoading) {
     return (
       <div className="space-y-4">
-        <Card className="border-none shadow-[0_2px_12px_rgba(0,0,0,0.06)] bg-card rounded-2xl">
+        <Card>
           <CardHeader className="px-5 pt-5 pb-3">
             <div className="h-4 w-40 bg-muted animate-pulse rounded" />
           </CardHeader>
@@ -120,7 +120,7 @@ export function TaxCategoryChart({ data, isLoading }: TaxCategoryChartProps) {
             <div className="h-64 bg-muted animate-pulse rounded-xl" />
           </CardContent>
         </Card>
-        <Card className="border-none shadow-[0_2px_12px_rgba(0,0,0,0.06)] bg-card rounded-2xl">
+        <Card>
           <CardContent className="p-5">
             <div className="space-y-3">
               {[1, 2, 3, 4].map((i) => (
@@ -135,7 +135,7 @@ export function TaxCategoryChart({ data, isLoading }: TaxCategoryChartProps) {
 
   if (!data?.length) {
     return (
-      <Card className="border-none shadow-[0_2px_12px_rgba(0,0,0,0.06)] bg-card rounded-2xl">
+      <Card>
         <CardHeader className="px-5 pt-5 pb-3">
           <CardTitle className="text-sm font-semibold">Tax by Category</CardTitle>
         </CardHeader>
@@ -149,7 +149,7 @@ export function TaxCategoryChart({ data, isLoading }: TaxCategoryChartProps) {
   return (
     <div className="space-y-4">
       {/* Bar Chart */}
-      <Card className="border-none shadow-[0_2px_12px_rgba(0,0,0,0.06)] bg-card rounded-2xl">
+      <Card>
         <CardHeader className="px-5 pt-5 pb-3">
           <CardTitle className="text-sm font-semibold">
             Tax Collected by Category
@@ -173,7 +173,7 @@ export function TaxCategoryChart({ data, isLoading }: TaxCategoryChartProps) {
                 dataKey="category"
                 tickLine={false}
                 axisLine={false}
-                tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
                 angle={-30}
                 textAnchor="end"
                 interval={0}
@@ -183,10 +183,10 @@ export function TaxCategoryChart({ data, isLoading }: TaxCategoryChartProps) {
                 tickLine={false}
                 axisLine={false}
                 tickFormatter={(v) => `$${v}`}
-                tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
               />
               <ChartTooltip
-                cursor={{ fill: "hsl(var(--muted))", opacity: 0.5 }}
+                cursor={{ fill: "var(--muted)", opacity: 0.5 }}
                 content={
                   <ChartTooltipContent
                     formatter={(value) => [
@@ -210,8 +210,8 @@ export function TaxCategoryChart({ data, isLoading }: TaxCategoryChartProps) {
       </Card>
 
       {/* Sortable detail table */}
-      <Card className="border-none shadow-[0_2px_12px_rgba(0,0,0,0.06)] bg-card rounded-2xl overflow-hidden">
-        <CardHeader className="px-5 pt-5 pb-3 border-b border-border/50">
+      <Card className="overflow-hidden">
+        <CardHeader className="px-5 pb-3 pt-5">
           <CardTitle className="text-sm font-semibold">Category Breakdown</CardTitle>
         </CardHeader>
         <CardContent className="p-0">

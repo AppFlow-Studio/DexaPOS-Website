@@ -10,7 +10,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ReportPanel as Card, ReportPanelContent as CardContent, ReportPanelHeader as CardHeader, ReportPanelTitle as CardTitle } from "@/components/dashboard/reports/ReportPanel";
 import {
   Download,
   Loader2,
@@ -105,9 +105,9 @@ export function TaxLocationTable({ data, isLoading, dateFrom, dateTo }: TaxLocat
   }
 
   return (
-    <Card className="border-none shadow-[0_2px_12px_rgba(0,0,0,0.06)] bg-card rounded-2xl overflow-hidden">
+    <Card className="overflow-hidden">
       {/* Toolbar */}
-      <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-border/50">
+      <div className="flex items-center justify-between px-5 pb-4 pt-5">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <MapPin className="h-4 w-4" />
           <span className="text-xs font-medium">
@@ -226,7 +226,7 @@ export function TaxLocationTable({ data, isLoading, dateFrom, dateTo }: TaxLocat
                     >
                       <TableCell className="pl-5 py-3.5">
                         <div className="flex items-center gap-2">
-                          <div className="h-7 w-7 rounded-lg bg-indigo-50 flex items-center justify-center shrink-0">
+                          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-50 dark:bg-indigo-950/40">
                             <MapPin className="h-3.5 w-3.5 text-indigo-500" />
                           </div>
                           <span className="text-sm font-medium">{row.locationName}</span>

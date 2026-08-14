@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useMemo, useState } from "react";
+import { ReportPanel as Card, ReportPanelContent as CardContent, ReportPanelHeader as CardHeader, ReportPanelTitle as CardTitle } from "@/components/dashboard/reports/ReportPanel";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Grid3X3, MapPin } from "lucide-react";
 import {
@@ -53,22 +53,18 @@ export function SalesHeatMap({
     locations[0]?.id || ""
   );
 
-  // Update selection if locations change
-  useEffect(() => {
-    if (
-      locations.length > 0 &&
-      !locations.find((l) => l.id === selectedLocationId)
-    ) {
-      setSelectedLocationId(locations[0].id);
-    }
-  }, [locations, selectedLocationId]);
+  const effectiveLocationId = locations.some(
+    (location) => location.id === selectedLocationId,
+  )
+    ? selectedLocationId
+    : locations[0]?.id || "";
 
   const heatmapData = useMemo(
-    () => transformToHeatmapData(data, selectedLocationId),
-    [data, selectedLocationId]
+    () => transformToHeatmapData(data, effectiveLocationId),
+    [data, effectiveLocationId]
   );
 
-  const selectedLocation = locations.find((l) => l.id === selectedLocationId);
+  const selectedLocation = locations.find((l) => l.id === effectiveLocationId);
 
   // Create grid lookup
   const cellMap = useMemo(() => {
@@ -81,7 +77,7 @@ export function SalesHeatMap({
 
   if (isLoading) {
     return (
-      <Card className="border-none shadow-sm bg-card/30 backdrop-blur-md ring-1 ring-white/5">
+      <Card>
         <CardHeader className="pb-2">
           <Skeleton className="h-6 w-48" />
         </CardHeader>
@@ -94,7 +90,7 @@ export function SalesHeatMap({
 
   if (locations.length === 0) {
     return (
-      <Card className="border-none shadow-sm bg-card/30 backdrop-blur-md ring-1 ring-white/5">
+      <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center gap-2">
             <Grid3X3 className="h-4 w-4 text-primary" />
@@ -111,7 +107,7 @@ export function SalesHeatMap({
   }
 
   return (
-    <Card className="border-none shadow-sm bg-card/30 backdrop-blur-md ring-1 ring-white/5 col-span-full">
+    <Card className="col-span-full">
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between flex-wrap gap-3">
           <CardTitle className="text-base flex items-center gap-2">
@@ -119,7 +115,7 @@ export function SalesHeatMap({
             Sales Heat Map
           </CardTitle>
           <Select
-            value={selectedLocationId}
+            value={effectiveLocationId}
             onValueChange={setSelectedLocationId}
           >
             <SelectTrigger className="w-full sm:w-[200px] h-9 bg-background/50 border-muted-foreground/20">
@@ -187,7 +183,7 @@ export function SalesHeatMap({
           ))}
 
           {/* Legend */}
-          <div className="flex items-center justify-end gap-2 mt-4 pt-3 border-t border-muted/20">
+          <div className="mt-4 flex items-center justify-end gap-2 pt-3">
             <span className="text-[10px] text-muted-foreground">Less</span>
             <div className="flex gap-0.5">
               <div className="w-4 h-3 rounded-sm bg-muted/20" />

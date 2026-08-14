@@ -7,7 +7,9 @@ import {
   DatePreset,
 } from "@/components/dashboard/orders/DateRangePicker";
 import { subDays, format } from "date-fns";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ReportPanel as Card, ReportPanelContent as CardContent, ReportPanelHeader as CardHeader, ReportPanelTitle as CardTitle } from "@/components/dashboard/reports/ReportPanel";
+import { ReportPageHeader } from "@/components/dashboard/reports/ReportPageHeader";
+import { PageShell, Panel, StatRow, StatTile } from "@/components/dashboard/shell";
 import {
   Table,
   TableBody,
@@ -125,52 +127,42 @@ export default function KitchenPerformancePage() {
   const dailyTrend = kitchen?.daily_trend ?? [];
 
   return (
-    <div className="space-y-6 pb-8">
-      {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Kitchen Performance</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {selectedLocation && !Array.isArray(selectedLocation)
-              ? selectedLocation.name
-              : "All Locations"}{" "}
-            · Ticket times, throughput & station efficiency
-          </p>
-        </div>
-        <DateRangePicker
-          dateFrom={dateRange.from}
-          dateTo={dateRange.to}
-          onDateRangeChange={(from, to) => { if (from && to) setDateRange({ from, to }); }}
-          preset={preset}
-          onPresetChange={setPreset}
-        />
-      </div>
+    <PageShell className="pb-8">
+      <ReportPageHeader
+        title="Kitchen Performance"
+        description="Ticket times, throughput and station efficiency"
+        locationName={selectedLocation && !Array.isArray(selectedLocation) ? selectedLocation.name : null}
+        actions={
+          <DateRangePicker
+            dateFrom={dateRange.from}
+            dateTo={dateRange.to}
+            onDateRangeChange={(from, to) => { if (from && to) setDateRange({ from, to }); }}
+            preset={preset}
+            onPresetChange={setPreset}
+          />
+        }
+      />
 
       {/* KPI Cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <Panel padded>
+        <StatRow columns={4}>
         {kpis.map((kpi) => (
-          <Card key={kpi.label} className="border-none shadow-[0_2px_12px_rgba(0,0,0,0.06)] bg-card rounded-2xl overflow-hidden">
-            <CardContent className="p-5">
-              <div className="flex items-center justify-between mb-4">
-                <div className={cn("p-2 rounded-xl", kpi.iconBg)}>
-                  <kpi.icon className={cn("h-4 w-4", kpi.iconColor)} />
-                </div>
-              </div>
-              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">{kpi.label}</p>
-              {kpi.value === null
-                ? <div className="h-7 w-24 bg-muted animate-pulse rounded mt-1.5" />
-                : <p className="text-2xl font-bold mt-1">{kpi.value}</p>
-              }
-              <p className="text-[11px] text-muted-foreground mt-1">{kpi.sub}</p>
-            </CardContent>
-          </Card>
+          <StatTile
+            key={kpi.label}
+            label={kpi.label}
+            value={kpi.value ?? ""}
+            meta={kpi.sub}
+            icon={<kpi.icon className={kpi.iconColor} />}
+            isLoading={kpi.value === null}
+          />
         ))}
-      </div>
+        </StatRow>
+      </Panel>
 
       {/* Rush vs Normal split + Auto-Bump row */}
       <div className="grid gap-4 lg:grid-cols-2">
         {/* Rush Stats */}
-        <Card className="border-none shadow-[0_2px_12px_rgba(0,0,0,0.06)] bg-card rounded-2xl">
+        <Card>
           <CardHeader className="px-5 pt-5 pb-3">
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
               <Zap className="h-4 w-4 text-amber-500" /> Rush vs Normal Orders
@@ -220,7 +212,7 @@ export default function KitchenPerformancePage() {
         </Card>
 
         {/* Daily Trend Chart */}
-        <Card className="border-none shadow-[0_2px_12px_rgba(0,0,0,0.06)] bg-card rounded-2xl">
+        <Card>
           <CardHeader className="px-5 pt-5 pb-3">
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
               <Activity className="h-4 w-4 text-indigo-500" /> Ticket Time Trend
@@ -284,8 +276,8 @@ export default function KitchenPerformancePage() {
       </div>
 
       {/* Station Breakdown Table */}
-      <Card className="border-none shadow-[0_2px_12px_rgba(0,0,0,0.06)] bg-card rounded-2xl overflow-hidden">
-        <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-border/50">
+      <Card className="overflow-hidden">
+        <div className="flex items-center justify-between px-5 pb-4 pt-5">
           <div>
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
               <ChefHat className="h-4 w-4 text-muted-foreground" /> Station Breakdown
@@ -403,6 +395,6 @@ export default function KitchenPerformancePage() {
           </Table>
         </CardContent>
       </Card>
-    </div>
+    </PageShell>
   );
 }

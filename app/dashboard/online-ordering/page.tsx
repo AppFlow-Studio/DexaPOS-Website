@@ -9,7 +9,6 @@ import {
 } from "./hooks/useOnlineOrderingSettings";
 import { useGatedLocationId, useGatedLocation } from "@/stores/location-store";
 import { useClerkOrgId } from "@/app/dashboard/hooks/useLocationScoped";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -85,6 +84,58 @@ function SettingsToggleRow({
         onCheckedChange={onCheckedChange}
         disabled={disabled}
       />
+    </div>
+  );
+}
+
+/**
+ * A colour swatch paired with its hex field.
+ *
+ * `type="color"` is one of the inputs the `Input` primitive legitimately cannot
+ * style (§11.1), so the swatch is a raw element — but it takes the tier-3 inset
+ * material rather than the browser's `rounded border`, and the native chrome is
+ * clipped away so only the colour shows.
+ *
+ * Written once instead of five times: the branding grid repeated this pair for
+ * primary, secondary, accent, background and text.
+ */
+function ColorField({
+  label,
+  value,
+  fallback,
+  placeholder,
+  onChange,
+}: {
+  label: string;
+  value: string | null | undefined;
+  /** Shown in the swatch when the value is unset (accent falls back to primary). */
+  fallback?: string;
+  placeholder?: string;
+  onChange: (value: string) => void;
+}) {
+  const swatch = value || fallback || "#000000";
+  return (
+    <div className="min-w-0 space-y-2">
+      <Label>{label}</Label>
+      <div className="flex min-w-0 items-center gap-2">
+        <span className="relative inline-flex size-9 shrink-0 overflow-hidden rounded-full ring-1 ring-border/60">
+          <input
+            type="color"
+            aria-label={`${label} colour picker`}
+            value={swatch}
+            onChange={(e) => onChange(e.target.value)}
+            // Scaled past its own box so the native swatch chrome (border and
+            // padding, which cannot be styled) is clipped by the parent.
+            className="absolute -inset-2 h-[calc(100%+1rem)] w-[calc(100%+1rem)] cursor-pointer appearance-none border-0 bg-transparent p-0"
+          />
+        </span>
+        <Input
+          value={value ?? ""}
+          placeholder={placeholder}
+          onChange={(e) => onChange(e.target.value)}
+          className="min-w-0 flex-1 font-mono text-[0.8125rem] uppercase"
+        />
+      </div>
     </div>
   );
 }
@@ -370,28 +421,31 @@ function CompletedSetupPanel({
       </Panel>
 
       <Tabs defaultValue="store" className="space-y-6">
-        <div className="overflow-x-auto pb-1">
-          <TabsList className="h-auto w-max min-w-full justify-start gap-1 rounded-full border bg-card p-1 sm:min-w-0">
-            <TabsTrigger value="store" className="gap-2 rounded-full px-4 data-[state=active]:bg-transparent data-[state=active]:text-[#0C4FD1] data-[state=active]:shadow-none dark:data-[state=active]:text-[#6CA0FF]">
-              <Store className="h-4 w-4" />
-              Store Info
-            </TabsTrigger>
-            <TabsTrigger value="branding" className="gap-2 rounded-full px-4 data-[state=active]:bg-transparent data-[state=active]:text-[#0C4FD1] data-[state=active]:shadow-none dark:data-[state=active]:text-[#6CA0FF]">
-              <Palette className="h-4 w-4" />
-              Branding
-            </TabsTrigger>
-            <TabsTrigger value="ordering" className="gap-2 rounded-full px-4 data-[state=active]:bg-transparent data-[state=active]:text-[#0C4FD1] data-[state=active]:shadow-none dark:data-[state=active]:text-[#6CA0FF]">
-              <Truck className="h-4 w-4" />
-              Ordering
-            </TabsTrigger>
-            <TabsTrigger value="orderout" className="gap-2 rounded-full px-4 data-[state=active]:bg-transparent data-[state=active]:text-[#0C4FD1] data-[state=active]:shadow-none dark:data-[state=active]:text-[#6CA0FF]">
-              <Plug className="h-4 w-4" />
-              OrderOut
-            </TabsTrigger>
-            <TabsTrigger value="notifications" className="gap-2 rounded-full px-4 data-[state=active]:bg-transparent data-[state=active]:text-[#0C4FD1] data-[state=active]:shadow-none dark:data-[state=active]:text-[#6CA0FF]">
-              <Bell className="h-4 w-4" />
-              Notifications
-            </TabsTrigger>
+        {/* Canonical pill rail (DS-CTL-05). The previous rail was a bordered
+            `bg-card` track whose active tab was carried by text colour alone —
+            on a card-coloured track that reads as a link, not a selected tab.
+            The active pill now lifts to `bg-background` with a hairline ring.
+            Classes are literal, not `{TOKEN}` — C7. */}
+        <div className="w-full min-w-0 overflow-x-auto pb-1">
+          <TabsList className="inline-flex h-auto w-max flex-nowrap gap-0.5 rounded-full bg-muted/70 p-1">
+            {(
+              [
+                { value: "store", label: "Store Info", Icon: Store },
+                { value: "branding", label: "Branding", Icon: Palette },
+                { value: "ordering", label: "Ordering", Icon: Truck },
+                { value: "orderout", label: "OrderOut", Icon: Plug },
+                { value: "notifications", label: "Notifications", Icon: Bell },
+              ] as const
+            ).map(({ value, label, Icon }) => (
+              <TabsTrigger
+                key={value}
+                value={value}
+                className="shrink-0 gap-2 whitespace-nowrap rounded-full px-4 py-2 text-[0.8125rem] font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border"
+              >
+                <Icon className="h-4 w-4 shrink-0" />
+                {label}
+              </TabsTrigger>
+            ))}
           </TabsList>
         </div>
 
@@ -468,17 +522,12 @@ function CompletedSetupPanel({
         <TabsContent value="branding" className="space-y-6">
 
           {/* Store Template */}
-          <Card>
-            <CardHeader>
-              <div className="flex items-center gap-3">
-                <LayoutTemplate className="h-5 w-5 text-muted-foreground" />
-                <div>
-                  <CardTitle>Store Template</CardTitle>
-                  <CardDescription>Choose the layout style for your online store</CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
+          <Panel>
+            <PanelSection
+              icon={LayoutTemplate}
+              label="Store Template"
+              caption="Choose the layout style for your online store"
+            >
               <div className="grid grid-cols-2 gap-4">
                 {([
                   {
@@ -703,44 +752,52 @@ function CompletedSetupPanel({
                     type="button"
                     onClick={() => onUpdate({ templateId: opt.value })}
                     className={cn(
-                      "relative rounded-xl border-2 text-left transition-all hover:border-primary/50 overflow-hidden group",
+                      // Tier-2 radius (§3.1) and a single-width border: `border-2`
+                      // made the unselected card heavier than the panel holding it.
+                      // Selection is carried by the brand accent, not `--primary`,
+                      // which is violet (C5).
+                      "group relative overflow-hidden rounded-2xl border text-left transition-colors",
                       settings.templateId === opt.value
-                        ? "border-primary ring-1 ring-primary/20"
-                        : "border-border bg-background"
+                        ? "border-[#0C4FD1] ring-1 ring-[#0C4FD1]/25 dark:border-[#6CA0FF] dark:ring-[#6CA0FF]/25"
+                        : "border-border/60 bg-card hover:border-[#0C4FD1]/40 dark:hover:border-[#6CA0FF]/40"
                     )}
+                    aria-pressed={settings.templateId === opt.value}
                   >
                     {/* thumbnail */}
                     <div
                       className={cn(
-                        "w-full aspect-video flex items-center justify-center overflow-hidden transition-colors",
-                        settings.templateId === opt.value ? "bg-primary/5" : "bg-muted/40 group-hover:bg-muted/60"
+                        "flex aspect-video w-full items-center justify-center overflow-hidden transition-colors",
+                        settings.templateId === opt.value
+                          ? "bg-[#0C4FD1]/5 dark:bg-[#6CA0FF]/10"
+                          : "bg-muted/40 group-hover:bg-muted/60"
                       )}
                     >
-                      <div className="w-full h-full">{opt.preview}</div>
+                      <div className="h-full w-full">{opt.preview}</div>
                     </div>
                     {/* label row */}
-                    <div className="px-3 py-2.5 relative">
+                    <div className="relative px-3 py-2.5">
                       {settings.templateId === opt.value && (
-                        <div className="absolute right-2.5 top-2.5 flex h-5 w-5 items-center justify-center rounded-full bg-primary">
-                          <Check className="h-3 w-3 text-white" />
+                        <div className="absolute right-2.5 top-2.5 flex h-5 w-5 items-center justify-center rounded-full bg-[#0C4FD1] dark:bg-[#6CA0FF]">
+                          <Check className="h-3 w-3 text-white dark:text-[#0b1220]" />
                         </div>
                       )}
-                      <p className="text-sm font-semibold pr-6">{opt.label}</p>
-                      <p className="mt-0.5 text-xs text-muted-foreground leading-snug">{opt.description}</p>
+                      <p className="pr-6 text-sm font-semibold">{opt.label}</p>
+                      <p className="mt-0.5 text-xs leading-snug text-muted-foreground">{opt.description}</p>
                     </div>
                   </button>
                 ))}
               </div>
-            </CardContent>
-          </Card>
+            </PanelSection>
+          </Panel>
 
           {/* Colors, Font & Images */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Branding</CardTitle>
-              <CardDescription>Colors, fonts, and store images.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
+          <Panel>
+            <PanelSection
+              icon={Palette}
+              label="Branding"
+              caption="Colors, fonts, and store images."
+            >
+              <div className="space-y-6">
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <div className="flex items-center gap-1.5">
@@ -751,101 +808,59 @@ function CompletedSetupPanel({
                       asButton
                     />
                   </div>
-                  <select
-                    id="merchant-online-store-font"
+                  {/* Was a raw `<select>` with browser chrome (§11.1) — the
+                      primitive brings the pill trigger and themed panel. */}
+                  <Select
                     value={settings.fontFamily || "DM Sans"}
-                    onChange={(e) => onUpdate({ fontFamily: e.target.value })}
-                    className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                    onValueChange={(value) => onUpdate({ fontFamily: value })}
                   >
-                    {Object.keys(FONT_GOOGLE_URLS).map((font) => (
-                      <option key={font} value={font}>
-                        {font}
-                      </option>
-                    ))}
-                  </select>
+                    <SelectTrigger
+                      id="merchant-online-store-font"
+                      className="w-full"
+                    >
+                      <SelectValue placeholder="Select a font" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.keys(FONT_GOOGLE_URLS).map((font) => (
+                        <SelectItem key={font} value={font}>
+                          {font}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>Primary Color</Label>
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="color"
-                      value={settings.primaryColor}
-                      onChange={(e) => onUpdate({ primaryColor: e.target.value })}
-                      className="h-10 w-14 rounded border"
-                    />
-                    <Input
-                      value={settings.primaryColor}
-                      onChange={(e) => onUpdate({ primaryColor: e.target.value })}
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label>Secondary Color</Label>
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="color"
-                      value={settings.secondaryColor}
-                      onChange={(e) => onUpdate({ secondaryColor: e.target.value })}
-                      className="h-10 w-14 rounded border"
-                    />
-                    <Input
-                      value={settings.secondaryColor}
-                      onChange={(e) => onUpdate({ secondaryColor: e.target.value })}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-3">
-                <div className="space-y-2">
-                  <Label>Accent Color</Label>
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="color"
-                      value={settings.accentColor || settings.primaryColor}
-                      onChange={(e) => onUpdate({ accentColor: e.target.value })}
-                      className="h-10 w-14 rounded border"
-                    />
-                    <Input
-                      value={settings.accentColor || ""}
-                      onChange={(e) => onUpdate({ accentColor: e.target.value })}
-                      placeholder="Optional"
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label>Background</Label>
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="color"
-                      value={settings.backgroundColor}
-                      onChange={(e) => onUpdate({ backgroundColor: e.target.value })}
-                      className="h-10 w-14 rounded border"
-                    />
-                    <Input
-                      value={settings.backgroundColor}
-                      onChange={(e) => onUpdate({ backgroundColor: e.target.value })}
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label>Text</Label>
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="color"
-                      value={settings.textColor}
-                      onChange={(e) => onUpdate({ textColor: e.target.value })}
-                      className="h-10 w-14 rounded border"
-                    />
-                    <Input
-                      value={settings.textColor}
-                      onChange={(e) => onUpdate({ textColor: e.target.value })}
-                    />
-                  </div>
-                </div>
+              {/* One grid for all five swatches — they were split across a
+                  2-up and a 3-up row, so the fields didn't line up. */}
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                <ColorField
+                  label="Primary Color"
+                  value={settings.primaryColor}
+                  onChange={(primaryColor) => onUpdate({ primaryColor })}
+                />
+                <ColorField
+                  label="Secondary Color"
+                  value={settings.secondaryColor}
+                  onChange={(secondaryColor) => onUpdate({ secondaryColor })}
+                />
+                <ColorField
+                  label="Accent Color"
+                  value={settings.accentColor}
+                  fallback={settings.primaryColor}
+                  placeholder="Optional"
+                  onChange={(accentColor) => onUpdate({ accentColor })}
+                />
+                <ColorField
+                  label="Background"
+                  value={settings.backgroundColor}
+                  onChange={(backgroundColor) => onUpdate({ backgroundColor })}
+                />
+                <ColorField
+                  label="Text"
+                  value={settings.textColor}
+                  onChange={(textColor) => onUpdate({ textColor })}
+                />
               </div>
 
               {/* Row 1: Logo, Favicon, OG Image — uniform 80×80 */}
@@ -859,12 +874,14 @@ function CompletedSetupPanel({
                 ).map(({ key, label, url, assetType }) => (
                   <div key={key} className="space-y-2">
                     <Label>{label}</Label>
+                    {/* Tier-3 inset (§3.1): borderless muted well, `rounded-2xl`.
+                        `rounded-lg` + `border` is off the radius scale. */}
                     {url ? (
-                      <div className="flex h-20 w-full sm:w-20 items-center justify-center overflow-hidden rounded-lg border bg-muted">
+                      <div className="flex h-20 w-full items-center justify-center overflow-hidden rounded-2xl border-0 bg-muted/60 shadow-none sm:w-20">
                         <img src={url} alt={`${label} preview`} className="h-full w-full object-contain" />
                       </div>
                     ) : (
-                      <div className="flex h-20 w-full sm:w-20 items-center justify-center rounded-lg border bg-muted text-xs text-muted-foreground">
+                      <div className="flex h-20 w-full items-center justify-center rounded-2xl border-0 bg-muted/60 text-xs text-muted-foreground shadow-none sm:w-20">
                         None
                       </div>
                     )}
@@ -884,11 +901,11 @@ function CompletedSetupPanel({
               <div className="space-y-2">
                 <Label>Hero Image</Label>
                 {settings.heroImageUrl ? (
-                  <div className="overflow-hidden rounded-lg border bg-muted">
+                  <div className="overflow-hidden rounded-2xl border-0 bg-muted/60 shadow-none">
                     <img src={settings.heroImageUrl} alt="Hero preview" className="h-48 w-full object-cover" />
                   </div>
                 ) : (
-                  <div className="flex h-48 items-center justify-center rounded-lg border bg-muted text-sm text-muted-foreground">
+                  <div className="flex h-48 items-center justify-center rounded-2xl border-0 bg-muted/60 text-sm text-muted-foreground shadow-none">
                     No hero image
                   </div>
                 )}
@@ -900,8 +917,9 @@ function CompletedSetupPanel({
                 />
                 {uploading.hero && <p className="text-xs text-muted-foreground">Uploading…</p>}
               </div>
-            </CardContent>
-          </Card>
+              </div>
+            </PanelSection>
+          </Panel>
         </TabsContent>
 
         <TabsContent value="ordering" className="space-y-6">

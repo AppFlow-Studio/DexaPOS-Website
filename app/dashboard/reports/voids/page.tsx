@@ -7,7 +7,9 @@ import {
   DatePreset,
 } from "@/components/dashboard/orders/DateRangePicker";
 import { subDays, format } from "date-fns";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ReportPanel as Card, ReportPanelContent as CardContent, ReportPanelHeader as CardHeader, ReportPanelTitle as CardTitle } from "@/components/dashboard/reports/ReportPanel";
+import { ReportPageHeader } from "@/components/dashboard/reports/ReportPageHeader";
+import { PageShell, Panel, StatRow, StatTile } from "@/components/dashboard/shell";
 import {
   Table,
   TableBody,
@@ -159,47 +161,37 @@ export default function VoidsReportPage() {
   const hasSearch = !!search.trim();
 
   return (
-    <div className="space-y-6 pb-8">
-      {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Voids & Refunds</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {selectedLocation && !Array.isArray(selectedLocation)
-              ? selectedLocation.name
-              : "All Locations"}{" "}
-            · Cancelled items and refunded orders
-          </p>
-        </div>
-        <DateRangePicker
-          dateFrom={dateRange.from}
-          dateTo={dateRange.to}
-          onDateRangeChange={(from, to) => { if (from && to) setDateRange({ from, to }); }}
-          preset={preset}
-          onPresetChange={setPreset}
-        />
-      </div>
+    <PageShell className="pb-8">
+      <ReportPageHeader
+        title="Voids & Refunds"
+        description="Cancelled items and refunded orders"
+        locationName={selectedLocation && !Array.isArray(selectedLocation) ? selectedLocation.name : null}
+        actions={
+          <DateRangePicker
+            dateFrom={dateRange.from}
+            dateTo={dateRange.to}
+            onDateRangeChange={(from, to) => { if (from && to) setDateRange({ from, to }); }}
+            preset={preset}
+            onPresetChange={setPreset}
+          />
+        }
+      />
 
       {/* KPI Cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <Panel padded>
+        <StatRow columns={4}>
         {kpis.map((kpi) => (
-          <Card key={kpi.label} className="border-none shadow-[0_2px_12px_rgba(0,0,0,0.06)] bg-card rounded-2xl overflow-hidden">
-            <CardContent className="p-5">
-              <div className="flex items-center justify-between mb-4">
-                <div className={cn("p-2 rounded-xl", kpi.iconBg)}>
-                  <kpi.icon className={cn("h-4 w-4", kpi.iconColor)} />
-                </div>
-              </div>
-              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">{kpi.label}</p>
-              {kpi.value === null
-                ? <div className="h-7 w-24 bg-muted animate-pulse rounded mt-1.5" />
-                : <p className="text-2xl font-bold mt-1">{kpi.value}</p>
-              }
-              <p className="text-[11px] text-muted-foreground mt-1">{kpi.sub}</p>
-            </CardContent>
-          </Card>
+          <StatTile
+            key={kpi.label}
+            label={kpi.label}
+            value={kpi.value ?? ""}
+            meta={kpi.sub}
+            icon={<kpi.icon className={kpi.iconColor} />}
+            isLoading={kpi.value === null}
+          />
         ))}
-      </div>
+        </StatRow>
+      </Panel>
 
       {/* Search toolbar */}
       <div className="flex items-center gap-3">
@@ -207,7 +199,7 @@ export default function VoidsReportPage() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
           <Input
             placeholder="Search item, staff, reason, order #..."
-            className="pl-9 h-9 text-sm rounded-lg bg-muted/40 focus-visible:ring-1"
+            className="h-9 pl-9 text-[0.8125rem]"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -220,8 +212,8 @@ export default function VoidsReportPage() {
       </div>
 
       {/* ── Voids Table ── */}
-      <Card className="border-none shadow-[0_2px_12px_rgba(0,0,0,0.06)] bg-card rounded-2xl overflow-hidden">
-        <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-border/50">
+      <Card className="overflow-hidden">
+        <div className="flex items-center justify-between px-5 pb-4 pt-5">
           <div>
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
               <span className="h-2 w-2 rounded-full bg-rose-400" />
@@ -290,7 +282,7 @@ export default function VoidsReportPage() {
                     </TableCell>
                     <TableCell className="py-3.5">
                       <div className="flex items-center gap-2">
-                        <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-muted text-[11px] font-semibold">
+                        <span className="inline-flex items-center rounded-full bg-muted px-1.5 py-0.5 text-[11px] font-semibold">
                           {item.quantity}×
                         </span>
                         <span className="text-sm font-medium">{item.item_name}</span>
@@ -324,8 +316,8 @@ export default function VoidsReportPage() {
       </Card>
 
       {/* ── Refunds Table ── */}
-      <Card className="border-none shadow-[0_2px_12px_rgba(0,0,0,0.06)] bg-card rounded-2xl overflow-hidden">
-        <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-border/50">
+      <Card className="overflow-hidden">
+        <div className="flex items-center justify-between px-5 pb-4 pt-5">
           <div>
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
               <span className="h-2 w-2 rounded-full bg-amber-400" />
@@ -415,6 +407,6 @@ export default function VoidsReportPage() {
           </Table>
         </CardContent>
       </Card>
-    </div>
+    </PageShell>
   );
 }

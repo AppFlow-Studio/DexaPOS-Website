@@ -3,7 +3,7 @@
 import { LocationRanking } from "@/app/dashboard/actions/location-analytics";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ReportPanel as Card, ReportPanelContent as CardContent, ReportPanelHeader as CardHeader, ReportPanelTitle as CardTitle } from "@/components/dashboard/reports/ReportPanel";
 import {
   Table,
   TableBody,
@@ -57,7 +57,7 @@ export function LocationLeaderboard({
 
   if (isLoading) {
     return (
-      <Card className="border-none shadow-sm bg-card/30 backdrop-blur-md ring-1 ring-white/5">
+      <Card>
         <CardHeader className="pb-2">
           <Skeleton className="h-6 w-48" />
         </CardHeader>
@@ -73,7 +73,7 @@ export function LocationLeaderboard({
   }
 
   return (
-    <Card className="border-none shadow-sm bg-card/30 backdrop-blur-md ring-1 ring-white/5">
+    <Card>
       <CardHeader className="flex flex-row items-center justify-between pb-4">
         <CardTitle className="text-base font-semibold">
           Location Rankings by Gross Sales
@@ -117,7 +117,7 @@ export function LocationLeaderboard({
               rankings.map((location) => (
                 <TableRow
                   key={location.location_id}
-                  className="hover:bg-white/5 border-white/5 transition-colors group"
+                  className="group transition-colors"
                 >
                   <TableCell className="pl-6 font-medium">
                     <div className="flex items-center gap-2">

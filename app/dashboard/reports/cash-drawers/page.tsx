@@ -23,7 +23,6 @@ import {
   ArrowUp,
   ArrowDown,
   InboxIcon,
-  ChevronRight as BreadcrumbSep,
 } from "lucide-react";
 import {
   LineChart,
@@ -41,7 +40,8 @@ import {
   Cell,
 } from "recharts";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ReportPanel as Card, ReportPanelContent as CardContent, ReportPanelHeader as CardHeader, ReportPanelTitle as CardTitle } from "@/components/dashboard/reports/ReportPanel";
+import { PageHeader, PageShell, Panel, StatRow, StatTile } from "@/components/dashboard/shell";
 import {
   Table,
   TableBody,
@@ -225,10 +225,10 @@ function OperationTypeBadge({ type }: { type: string }) {
     no_sale: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300",
     cash_in: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300",
     cash_out: "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300",
-    open: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
-    close: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
+    open: "bg-muted/60 text-muted-foreground",
+    close: "bg-muted/60 text-muted-foreground",
   };
-  const cls = cfg[type] ?? "bg-slate-100 text-slate-700";
+  const cls = cfg[type] ?? "bg-muted/60 text-muted-foreground";
   const label = type.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
   return <Badge className={`${cls} border-0 capitalize`}>{label}</Badge>;
 }
@@ -315,38 +315,20 @@ function SummaryCards({
       <div className="flex justify-end">
         <LastRefreshed updatedAt={updatedAt} onRefresh={onRefresh} isLoading={isLoading} />
       </div>
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <Panel padded>
+        <StatRow columns={4}>
         {cards.map((card) => (
-          <Card key={card.title} className={card.accent}>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                {card.title}
-              </CardTitle>
-              {card.icon}
-            </CardHeader>
-            <CardContent>
-              {isLoading ? (
-                <>
-                  <Skeleton className="h-7 w-24 mb-2" />
-                  <Skeleton className="h-3.5 w-32" />
-                </>
-              ) : (
-                <>
-                  <div className={`text-2xl font-bold tracking-tight ${card.valueClass ?? ""}`}>
-                    {card.value}
-                  </div>
-                  {card.subtitle && (
-                    <p className="text-xs text-amber-600 dark:text-amber-400 font-medium mt-0.5">
-                      {card.subtitle}
-                    </p>
-                  )}
-                  <div className="mt-1">{card.delta}</div>
-                </>
-              )}
-            </CardContent>
-          </Card>
+          <StatTile
+            key={card.title}
+            label={card.title}
+            value={<span className={card.valueClass}>{card.value}</span>}
+            meta={card.subtitle || card.delta}
+            icon={card.icon}
+            isLoading={isLoading}
+          />
         ))}
-      </div>
+        </StatRow>
+      </Panel>
     </div>
   );
 }
@@ -473,7 +455,7 @@ function SessionsTab({ dateFrom, dateTo }: { dateFrom: Date; dateTo: Date }) {
       </div>
 
       {/* Table */}
-      <div className="rounded-lg border overflow-x-auto">
+      <div className="-mx-2 overflow-x-auto px-2">
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/50">
@@ -771,7 +753,7 @@ function NoSaleTab({ dateFrom, dateTo }: { dateFrom: Date; dateTo: Date }) {
                   layout="vertical"
                   margin={{ top: 0, right: 24, left: 8, bottom: 0 }}
                 >
-                  <CartesianGrid horizontal={false} strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <CartesianGrid horizontal={false} strokeDasharray="3 3" stroke="var(--border)" />
                   <XAxis type="number" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} allowDecimals={false} />
                   <YAxis
                     type="category"
@@ -782,10 +764,10 @@ function NoSaleTab({ dateFrom, dateTo }: { dateFrom: Date; dateTo: Date }) {
                     axisLine={false}
                   />
                   <Tooltip
-                    cursor={{ fill: "hsl(var(--muted))" }}
+                    cursor={{ fill: "var(--muted)" }}
                     contentStyle={{
-                      background: "hsl(var(--popover))",
-                      border: "1px solid hsl(var(--border))",
+                      background: "var(--popover)",
+                      border: "1px solid var(--border)",
                       borderRadius: 8,
                       fontSize: 12,
                     }}
@@ -820,13 +802,13 @@ function NoSaleTab({ dateFrom, dateTo }: { dateFrom: Date; dateTo: Date }) {
             ) : (
               <ResponsiveContainer width="100%" height={168}>
                 <BarChart data={weeklyTrend} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
-                  <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="var(--border)" />
                   <XAxis dataKey="date" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
                   <YAxis tick={{ fontSize: 11 }} tickLine={false} axisLine={false} allowDecimals={false} />
                   <Tooltip
                     contentStyle={{
-                      background: "hsl(var(--popover))",
-                      border: "1px solid hsl(var(--border))",
+                      background: "var(--popover)",
+                      border: "1px solid var(--border)",
                       borderRadius: 8,
                       fontSize: 12,
                     }}
@@ -882,7 +864,7 @@ function NoSaleTab({ dateFrom, dateTo }: { dateFrom: Date; dateTo: Date }) {
           </div>
         </div>
 
-        <div className="rounded-lg border overflow-hidden">
+        <div className="-mx-2 overflow-x-auto px-2">
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/50">
@@ -1023,7 +1005,7 @@ function VarianceTrendsTab({ dateFrom, dateTo }: { dateFrom: Date; dateTo: Date 
           ) : (
             <ResponsiveContainer width="100%" height={300}>
               <LineChart data={chartData} margin={{ top: 8, right: 24, left: 4, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                 <XAxis
                   dataKey="date"
                   tick={{ fontSize: 11 }}
@@ -1041,8 +1023,8 @@ function VarianceTrendsTab({ dateFrom, dateTo }: { dateFrom: Date; dateTo: Date 
                 />
                 <Tooltip
                   contentStyle={{
-                    background: "hsl(var(--popover))",
-                    border: "1px solid hsl(var(--border))",
+                    background: "var(--popover)",
+                    border: "1px solid var(--border)",
                     borderRadius: 8,
                     fontSize: 12,
                   }}
@@ -1064,7 +1046,7 @@ function VarianceTrendsTab({ dateFrom, dateTo }: { dateFrom: Date; dateTo: Date 
                 <ReferenceArea y1={-dataAbsMax} y2={-VARIANCE_ALERT} fill="#ef4444" fillOpacity={0.09} />
 
                 {/* Zero line */}
-                <ReferenceLine y={0} stroke="hsl(var(--border))" strokeWidth={1.5} />
+                <ReferenceLine y={0} stroke="var(--border)" strokeWidth={1.5} />
 
                 {drawerKeys.map((drawer, idx) => (
                   <Line
@@ -1160,30 +1142,22 @@ export default function CashDrawerReportsPage() {
   }
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
-      {/* Breadcrumb */}
-      <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
-        <span>Reports</span>
-        <BreadcrumbSep className="h-3.5 w-3.5 text-muted-foreground/50" />
-        <span className="text-foreground font-medium">Cash Drawers</span>
-      </nav>
-
-      {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Cash Drawer Reports</h2>
-          <p className="text-muted-foreground">
-            Session history, variance trends, and No Sale audit logs
-          </p>
-        </div>
-        <DateRangePicker
-          dateFrom={dateRange.from}
-          dateTo={dateRange.to}
-          onDateRangeChange={handleDateRangeChange}
-          preset={preset}
-          onPresetChange={setPreset}
-        />
-      </div>
+    <PageShell>
+      <PageHeader
+        title="Cash Drawer Reports"
+        subtitle="Session history, variance trends, and No Sale audit logs"
+        backHref="/dashboard/reports"
+        backLabel="Back to Reports"
+        actions={
+          <DateRangePicker
+            dateFrom={dateRange.from}
+            dateTo={dateRange.to}
+            onDateRangeChange={handleDateRangeChange}
+            preset={preset}
+            onPresetChange={setPreset}
+          />
+        }
+      />
 
       {/* Summary cards */}
       <SummaryCards
@@ -1195,11 +1169,13 @@ export default function CashDrawerReportsPage() {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-3 lg:w-auto lg:inline-grid">
-          <TabsTrigger value="sessions">Sessions</TabsTrigger>
-          <TabsTrigger value="no-sale">No Sale Audit</TabsTrigger>
-          <TabsTrigger value="variance">Variance Trends</TabsTrigger>
-        </TabsList>
+        <div className="w-full min-w-0 overflow-x-auto pb-1">
+          <TabsList className="inline-flex h-auto w-max flex-nowrap gap-0.5 rounded-full bg-muted/70 p-1">
+            <TabsTrigger className="rounded-full px-4 py-2" value="sessions">Sessions</TabsTrigger>
+            <TabsTrigger className="rounded-full px-4 py-2" value="no-sale">No Sale Audit</TabsTrigger>
+            <TabsTrigger className="rounded-full px-4 py-2" value="variance">Variance Trends</TabsTrigger>
+          </TabsList>
+        </div>
 
         <TabsContent value="sessions" className="mt-6">
           <SessionsTab dateFrom={queryDateRange.from} dateTo={queryDateRange.to} />
@@ -1211,6 +1187,6 @@ export default function CashDrawerReportsPage() {
           <VarianceTrendsTab dateFrom={queryDateRange.from} dateTo={queryDateRange.to} />
         </TabsContent>
       </Tabs>
-    </div>
+    </PageShell>
   );
 }

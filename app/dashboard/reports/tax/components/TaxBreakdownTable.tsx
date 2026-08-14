@@ -17,7 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Card, CardContent } from "@/components/ui/card";
+import { ReportPanel as Card, ReportPanelContent as CardContent } from "@/components/dashboard/reports/ReportPanel";
 import {
   ChevronLeft,
   ChevronRight,
@@ -200,12 +200,12 @@ export function TaxBreakdownTable({
   }
 
   return (
-    <Card className="border-none shadow-[0_2px_12px_rgba(0,0,0,0.06)] bg-card rounded-2xl overflow-hidden">
+    <Card className="overflow-hidden">
       {/* Toolbar */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center justify-between px-5 pt-5 pb-4 border-b border-border/50">
+      <div className="flex flex-col justify-between gap-3 px-5 pb-4 pt-5 sm:flex-row sm:items-center">
         <div className="flex flex-wrap gap-2">
           <Select value={filterOrderType} onValueChange={onFilterOrderType}>
-            <SelectTrigger className="h-9 w-44 text-sm rounded-lg bg-muted/40 border-0 focus:ring-1">
+            <SelectTrigger className="h-9 w-44 border-0 bg-muted/60 text-[0.8125rem] shadow-none">
               <SelectValue placeholder="Order type" />
             </SelectTrigger>
             <SelectContent>
@@ -221,7 +221,7 @@ export function TaxBreakdownTable({
             value={filterPaymentMethod}
             onValueChange={onFilterPaymentMethod}
           >
-            <SelectTrigger className="h-9 w-44 text-sm rounded-lg bg-muted/40 border-0 focus:ring-1">
+            <SelectTrigger className="h-9 w-44 border-0 bg-muted/60 text-[0.8125rem] shadow-none">
               <SelectValue placeholder="Payment method" />
             </SelectTrigger>
             <SelectContent>
@@ -468,7 +468,7 @@ export function TaxBreakdownTable({
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div className="flex items-center justify-between px-5 py-3.5 border-t border-border/50">
+        <div className="flex items-center justify-between px-5 py-3.5">
           <p className="text-xs text-muted-foreground">
             Page {page + 1} of {totalPages} · {count.toLocaleString()} orders
           </p>
@@ -476,7 +476,7 @@ export function TaxBreakdownTable({
             <Button
               variant="outline"
               size="sm"
-              className="h-8 w-8 p-0 rounded-lg"
+              className="h-8 w-8 p-0"
               onClick={() => onPageChange(page - 1)}
               disabled={page === 0}
             >
@@ -485,7 +485,7 @@ export function TaxBreakdownTable({
             <Button
               variant="outline"
               size="sm"
-              className="h-8 w-8 p-0 rounded-lg"
+              className="h-8 w-8 p-0"
               onClick={() => onPageChange(page + 1)}
               disabled={page >= totalPages - 1}
             >

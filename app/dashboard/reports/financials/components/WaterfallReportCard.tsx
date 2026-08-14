@@ -9,7 +9,7 @@ import {
   CheckCircle2,
   AlertTriangle,
 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ReportPanel as Card, ReportPanelContent as CardContent, ReportPanelHeader as CardHeader, ReportPanelTitle as CardTitle } from "@/components/dashboard/reports/ReportPanel";
 import {
   Collapsible,
   CollapsibleContent,
@@ -53,7 +53,7 @@ function WaterfallRow({ item }: { item: WaterfallLineItem }) {
           hasTransactions && "hover:bg-muted/50 cursor-pointer",
           !hasTransactions && "cursor-default",
           isTotal &&
-            "bg-muted/60 rounded-lg border border-border/50 mt-2 py-4"
+            "mt-2 rounded-2xl border-0 bg-muted/60 py-4"
         )}
         disabled={!hasTransactions}
       >
@@ -118,7 +118,7 @@ function WaterfallRow({ item }: { item: WaterfallLineItem }) {
                 </div>
               ))}
             </div>
-            <div className="text-xs text-muted-foreground pt-2 border-t border-muted mt-1">
+            <div className="mt-1 pt-2 text-xs text-muted-foreground">
               {item.transactions.length} transaction
               {item.transactions.length !== 1 ? "s" : ""}
             </div>
@@ -175,7 +175,7 @@ function ValidationBanner({
 function WaterfallSkeleton() {
   return (
     <div className="space-y-6">
-      <Card className="border-none shadow-sm bg-card/80 backdrop-blur">
+      <Card>
         <CardHeader className="pb-2">
           <Skeleton className="h-5 w-32" />
         </CardHeader>
@@ -188,7 +188,7 @@ function WaterfallSkeleton() {
           ))}
         </CardContent>
       </Card>
-      <Card className="border-none shadow-sm bg-card/80 backdrop-blur">
+      <Card>
         <CardHeader className="pb-2">
           <Skeleton className="h-5 w-36" />
         </CardHeader>
@@ -233,7 +233,7 @@ export function WaterfallReportCard({
   return (
     <div className="space-y-4 animate-in fade-in-50 duration-300">
       {/* Section 1: Revenue Logic */}
-      <Card className="border-none shadow-sm bg-card/80 backdrop-blur hover:shadow-md transition-shadow">
+      <Card>
         <CardHeader className="pb-1">
           <CardTitle className="text-base font-bold tracking-tight">
             Revenue
@@ -252,7 +252,7 @@ export function WaterfallReportCard({
       </Card>
 
       {/* Section 2: Collection Logic */}
-      <Card className="border-none shadow-sm bg-card/80 backdrop-blur hover:shadow-md transition-shadow">
+      <Card>
         <CardHeader className="pb-1">
           <CardTitle className="text-base font-bold tracking-tight">
             Collections

@@ -13,7 +13,12 @@ import {
 } from "../actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Panel, PanelSection } from "@/components/dashboard/shell";
+import {
+  Panel,
+  PanelSection,
+  StatRow,
+  StatTile,
+} from "@/components/dashboard/shell";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -434,15 +439,18 @@ export function QrTableManager({
         caption={`Generate, preview, export, regenerate, and revoke table QR codes for ${locationName}.`}
         action={
           <div className="flex min-w-0 flex-wrap gap-2">
-            <div className="inline-flex items-center rounded-md border border-border bg-background p-1 text-xs">
+            {/* Segmented control → the pill rail used for tabs (DS-CTL-05).
+                The active half was `bg-primary`, which is violet, not the
+                brand blue (C5). */}
+            <div className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-muted/70 p-1 text-xs">
               <button
                 type="button"
                 onClick={() => setBrandMode("merchant")}
                 aria-pressed={brandMode === "merchant"}
                 className={cn(
-                  "rounded px-2 py-1 transition-colors",
+                  "rounded-full px-3 py-1 font-medium transition-colors",
                   brandMode === "merchant"
-                    ? "bg-primary text-primary-foreground"
+                    ? "bg-background text-foreground shadow-sm ring-1 ring-border"
                     : "text-muted-foreground hover:text-foreground"
                 )}
               >
@@ -453,9 +461,9 @@ export function QrTableManager({
                 onClick={() => setBrandMode("dexa")}
                 aria-pressed={brandMode === "dexa"}
                 className={cn(
-                  "rounded px-2 py-1 transition-colors",
+                  "rounded-full px-3 py-1 font-medium transition-colors",
                   brandMode === "dexa"
-                    ? "bg-primary text-primary-foreground"
+                    ? "bg-background text-foreground shadow-sm ring-1 ring-border"
                     : "text-muted-foreground hover:text-foreground"
                 )}
               >
@@ -492,66 +500,47 @@ export function QrTableManager({
       >
         <div className="space-y-4">
 
-        <div className="grid gap-3 md:grid-cols-3">
-          <div className="rounded-2xl bg-muted/45 p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Tables
-            </p>
-            <p className="mt-2 text-2xl font-semibold">
-              {snapshot?.tables.length ?? 0}
-            </p>
-          </div>
-          <div className="rounded-2xl bg-muted/45 p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Generated
-            </p>
-            <p className="mt-2 text-2xl font-semibold">
-              {snapshot?.generatedCount ?? 0}
-            </p>
-          </div>
-          <div className="rounded-2xl bg-muted/45 p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Active
-            </p>
-            <p className="mt-2 text-2xl font-semibold">
-              {snapshot?.activeCount ?? 0}
-            </p>
-          </div>
-        </div>
+        {/* Three tinted wells → one hairline-separated StatRow (DS-CTL-07),
+            matching the figures on every other converted page. */}
+        <StatRow columns={3}>
+          <StatTile label="Tables" value={snapshot?.tables.length ?? 0} />
+          <StatTile label="Generated" value={snapshot?.generatedCount ?? 0} />
+          <StatTile label="Active" value={snapshot?.activeCount ?? 0} />
+        </StatRow>
 
         {!acceptsDineIn ? (
-          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <div className="rounded-2xl border-0 bg-amber-50 px-4 py-3 text-sm text-amber-900 shadow-none dark:bg-amber-900/20 dark:text-amber-200">
             QR scan handling is currently disabled for this store. You can still prepare codes here, but guests will not be allowed to order from scans until <span className="font-medium">Enable QR Table Ordering</span> is turned on above.
           </div>
         ) : null}
 
         {!storefrontEnabled ? (
-          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <div className="rounded-2xl border-0 bg-amber-50 px-4 py-3 text-sm text-amber-900 shadow-none dark:bg-amber-900/20 dark:text-amber-200">
             The main online store is currently disabled. QR preview and real guest scans will fail closed until <span className="font-medium">Enable Online Ordering</span> is turned on for this location.
           </div>
         ) : null}
 
         {!qrEntitled ? (
-          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <div className="rounded-2xl border-0 bg-amber-50 px-4 py-3 text-sm text-amber-900 shadow-none dark:bg-amber-900/20 dark:text-amber-200">
             {qrGateMessage ||
               "QR Table Ordering is not available for the current subscription tier."}
           </div>
         ) : null}
 
         {qrKillSwitch ? (
-          <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+          <div className="rounded-2xl border-0 bg-destructive/10 px-4 py-3 text-sm text-destructive shadow-none">
             QR kill switch is active. Existing codes remain visible here, but new guest scans should fail closed until the switch is turned off.
           </div>
         ) : null}
 
         {snapshot && !snapshot.success && snapshot.error ? (
-          <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+          <div className="rounded-2xl border-0 bg-destructive/10 px-4 py-3 text-sm text-destructive shadow-none">
             {snapshot.error}
           </div>
         ) : null}
         {isLoading ? (
           <div
-            className="flex items-center gap-2 rounded-lg border bg-background px-4 py-8 text-sm text-muted-foreground"
+            className="flex items-center gap-2 rounded-2xl border-0 bg-muted/60 px-4 py-8 text-sm text-muted-foreground shadow-none"
             role="status"
             aria-live="polite"
           >
@@ -561,25 +550,32 @@ export function QrTableManager({
         ) : null}
 
         {!isLoading && (snapshot?.tables.length ?? 0) === 0 ? (
-          <div className="rounded-lg border bg-background px-4 py-8 text-sm text-muted-foreground">
+          <div className="rounded-2xl border-0 bg-muted/60 px-4 py-8 text-sm text-muted-foreground shadow-none">
             No active tables or booths were found for this location. Add floor-plan tables first, then come back here to generate QR codes.
           </div>
         ) : null}
 
         {!isLoading &&
           groupedRows.map(([zoneName, rows]) => (
-            <div key={zoneName} className="space-y-3 rounded-xl border bg-background p-4">
-              <div className="flex items-center justify-between gap-3">
-                <div>
+            // Borderless: this bordered card sat inside the panel, and each of
+            // its table rows drew a third frame. With 236 tables that was a
+            // wall of nested boxes running thousands of pixels tall.
+            <div key={zoneName} className="min-w-0 space-y-3">
+              <div className="flex min-w-0 items-center justify-between gap-3">
+                <div className="min-w-0">
                   <h3 className="font-semibold">{zoneName}</h3>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-sm text-muted-foreground tabular-nums">
                     {rows.length} table{rows.length === 1 ? "" : "s"}
                   </p>
                 </div>
-                <Badge variant="outline">{rows.filter((row) => row.qrStatus === "active").length} active</Badge>
+                <Badge variant="outline" className="shrink-0 tabular-nums">
+                  {rows.filter((row) => row.qrStatus === "active").length} active
+                </Badge>
               </div>
 
-              <div className="space-y-3">
+              {/* Hairline-divided rows in a capped scroller: a zone with 236
+                  tables is now a fixed-height list instead of the page. */}
+              <div className="thin-scrollbar min-w-0 max-h-[32rem] divide-y divide-border/60 overflow-y-auto rounded-2xl border-0 bg-muted/40 px-3 shadow-none">
                 {rows.map((row) => {
                   const isBusy =
                     busyKey === `gen-${row.floorPlanObjectId}` ||
@@ -589,7 +585,7 @@ export function QrTableManager({
                   return (
                     <div
                       key={row.floorPlanObjectId}
-                      className="flex flex-col gap-4 rounded-lg border p-4 lg:flex-row lg:items-center lg:justify-between"
+                      className="flex min-w-0 flex-col gap-3 py-3 lg:flex-row lg:items-center lg:justify-between lg:gap-4"
                     >
                       <div className="space-y-2">
                         <div className="flex flex-wrap items-center gap-2">
@@ -731,12 +727,7 @@ export function QrTableManager({
             </div>
           ))}
 
-        <div
-          className={cn(
-            "rounded-lg border px-4 py-3 text-sm text-muted-foreground",
-            "bg-[#0C4FD1]/5 border-[#0C4FD1]/15"
-          )}
-        >
+        <div className="rounded-2xl border-0 bg-[#0C4FD1]/5 px-4 py-3 text-sm text-muted-foreground shadow-none dark:bg-[#6CA0FF]/10">
           <div className="flex items-start gap-2">
             <ShieldAlert className="mt-0.5 h-4 w-4 text-[#0C4FD1]" />
             <p>

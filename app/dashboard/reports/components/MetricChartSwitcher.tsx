@@ -11,12 +11,12 @@ import {
   Tooltip,
 } from "recharts";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+  ReportPanel as Card,
+  ReportPanelContent as CardContent,
+  ReportPanelDescription as CardDescription,
+  ReportPanelHeader as CardHeader,
+  ReportPanelTitle as CardTitle,
+} from "@/components/dashboard/reports/ReportPanel";
 import {
   Select,
   SelectContent,
@@ -42,15 +42,15 @@ interface MetricChartSwitcherProps {
 const chartConfig = {
   net_sales: {
     label: "Net Sales",
-    color: "hsl(var(--primary))",
+    color: "var(--primary)",
   },
   order_count: {
     label: "Orders",
-    color: "hsl(var(--secondary))",
+    color: "var(--secondary)",
   },
   guest_count: {
     label: "Guests",
-    color: "hsl(var(--secondary))",
+    color: "var(--secondary)",
   },
 };
 
@@ -70,7 +70,7 @@ export function MetricChartSwitcher({ data }: MetricChartSwitcherProps) {
   }
 
   return (
-    <Card className="col-span-full border-none shadow-sm bg-card/50 backdrop-blur-sm">
+    <Card className="col-span-full">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-7">
         <div className="space-y-1">
           <CardTitle className="text-base font-semibold">
@@ -145,7 +145,7 @@ export function MetricChartSwitcher({ data }: MetricChartSwitcherProps) {
             />
             <ChartTooltip
               cursor={{
-                stroke: "hsl(var(--muted-foreground))",
+                stroke: "var(--muted-foreground)",
                 strokeWidth: 1,
                 strokeDasharray: "4 4",
               }}

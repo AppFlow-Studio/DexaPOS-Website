@@ -11,7 +11,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ReportPanel as Card, ReportPanelContent as CardContent, ReportPanelHeader as CardHeader, ReportPanelTitle as CardTitle } from "@/components/dashboard/reports/ReportPanel";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Clock } from "lucide-react";
 import {
@@ -47,7 +47,7 @@ export function DaypartComparisonChart({
 
   if (isLoading) {
     return (
-      <Card className="border-none shadow-sm bg-card/30 backdrop-blur-md ring-1 ring-white/5">
+      <Card>
         <CardHeader className="pb-2">
           <Skeleton className="h-6 w-48" />
         </CardHeader>
@@ -60,7 +60,7 @@ export function DaypartComparisonChart({
 
   if (data.length === 0) {
     return (
-      <Card className="border-none shadow-sm bg-card/30 backdrop-blur-md ring-1 ring-white/5">
+      <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center gap-2">
             <Clock className="h-4 w-4 text-primary" />
@@ -77,7 +77,7 @@ export function DaypartComparisonChart({
   }
 
   return (
-    <Card className="border-none shadow-sm bg-card/30 backdrop-blur-md ring-1 ring-white/5">
+    <Card>
       <CardHeader className="pb-2">
         <CardTitle className="text-base flex items-center gap-2">
           <Clock className="h-4 w-4 text-primary" />
@@ -92,31 +92,31 @@ export function DaypartComparisonChart({
           >
             <CartesianGrid
               strokeDasharray="3 3"
-              stroke="hsl(var(--muted-foreground) / 0.1)"
+              stroke="var(--border)"
               vertical={false}
             />
             <XAxis
               dataKey="daypartLabel"
               tickLine={false}
               axisLine={false}
-              tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+              tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
               tickMargin={8}
             />
             <YAxis
               tickLine={false}
               axisLine={false}
-              tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+              tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
               tickFormatter={formatYAxis}
               width={60}
             />
             <Tooltip
               contentStyle={{
-                backgroundColor: "hsl(var(--card))",
-                border: "1px solid hsl(var(--border))",
+                backgroundColor: "var(--card)",
+                border: "1px solid var(--border)",
                 borderRadius: "12px",
                 boxShadow: "0 4px 20px rgba(0,0,0,0.2)",
               }}
-              labelStyle={{ color: "hsl(var(--foreground))", fontWeight: 600 }}
+              labelStyle={{ color: "var(--foreground)", fontWeight: 600 }}
               formatter={(value: number, name: string) => [
                 formatTooltip(value),
                 name,
@@ -128,7 +128,7 @@ export function DaypartComparisonChart({
               iconType="rect"
               iconSize={10}
               formatter={(value) => (
-                <span style={{ color: "hsl(var(--foreground))", fontSize: 12 }}>
+                <span style={{ color: "var(--foreground)", fontSize: 12 }}>
                   {value}
                 </span>
               )}

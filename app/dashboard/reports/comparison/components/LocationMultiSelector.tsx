@@ -95,7 +95,7 @@ export function LocationMultiSelector({
             variant="outline"
             role="combobox"
             aria-expanded={open}
-            className="w-full justify-between min-h-[44px] h-auto py-2 bg-background/50 backdrop-blur-sm border-muted-foreground/20 hover:border-primary/50 transition-all duration-200"
+            className="h-auto min-h-11 w-full justify-between border-0 bg-muted/60 py-2 shadow-none hover:bg-muted"
           >
             <div className="flex flex-wrap gap-1 items-center max-w-[90%]">
               {selectedIds.length === 0 ? (
@@ -112,7 +112,7 @@ export function LocationMultiSelector({
                 <>
                   <Badge
                     variant="secondary"
-                    className="bg-primary/10 text-primary border-primary/20 hover:bg-primary/20"
+                    className="bg-[#0C4FD1]/10 text-[#0C4FD1] dark:text-[#6CA0FF]"
                   >
                     {selectedIds.length} Selected
                   </Badge>
@@ -130,7 +130,7 @@ export function LocationMultiSelector({
             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-[300px] p-0" align="start">
+        <PopoverContent className="w-[300px] overflow-hidden rounded-2xl p-0" align="start">
           <Command>
             <CommandInput placeholder="Search locations..." />
             <CommandList>

@@ -13,12 +13,12 @@ import {
   YAxis,
 } from "recharts";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+  ReportPanel as Card,
+  ReportPanelContent as CardContent,
+  ReportPanelDescription as CardDescription,
+  ReportPanelHeader as CardHeader,
+  ReportPanelTitle as CardTitle,
+} from "@/components/dashboard/reports/ReportPanel";
 import {
   ChartContainer,
   ChartTooltip,
@@ -33,6 +33,7 @@ import {
 import { useOnlineOrderingAnalytics } from "../../hooks/useOrderAnalytics";
 import { useReportingQueryRange } from "@/app/dashboard/hooks/useReportingDateRange";
 import { DollarSign, ShoppingCart, TrendingUp, Truck, Ban } from "lucide-react";
+import { PageHeader, PageShell, Panel, StatRow, StatTile } from "@/components/dashboard/shell";
 import type { PlatformSummary } from "../../actions/online-ordering-analytics";
 import {
   getPlatformLabel,
@@ -96,25 +97,21 @@ function PlatformOverviewCards({
 }) {
   if (isLoading) {
     return (
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {[1, 2, 3, 4].map((i) => (
-          <div key={i} className="h-24 bg-muted animate-pulse rounded-lg" />
-        ))}
-      </div>
+      <Panel padded>
+        <StatRow columns={4}>
+          {[1, 2, 3, 4].map((i) => <StatTile key={i} label="Loading" value="" isLoading />)}
+        </StatRow>
+      </Panel>
     );
   }
 
   if (isError) {
     return (
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {[1, 2, 3, 4].map((i) => (
-          <Card key={i}>
-            <CardContent className="flex items-center justify-center h-24">
-              <p className="text-sm text-muted-foreground">Failed to load</p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <Panel padded>
+        <StatRow columns={4}>
+          {[1, 2, 3, 4].map((i) => <StatTile key={i} label="Unavailable" value="—" meta="Failed to load" />)}
+        </StatRow>
+      </Panel>
     );
   }
 
@@ -124,68 +121,19 @@ function PlatformOverviewCards({
     .sort((a, b) => b.totalRevenue - a.totalRevenue)[0];
 
   return (
-    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">
-            Online Revenue
-          </CardTitle>
-          <DollarSign className="h-4 w-4 text-muted-foreground" />
-        </CardHeader>
-        <CardContent>
-          <div className="text-2xl font-bold">
-            {formatCurrency(totalRevenue)}
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Across selected platforms
-          </p>
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">
-            Online Orders
-          </CardTitle>
-          <ShoppingCart className="h-4 w-4 text-muted-foreground" />
-        </CardHeader>
-        <CardContent>
-          <div className="text-2xl font-bold">{totalOrders}</div>
-          <p className="text-xs text-muted-foreground">
-            Total orders received
-          </p>
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">
-            Avg Order Value
-          </CardTitle>
-          <TrendingUp className="h-4 w-4 text-muted-foreground" />
-        </CardHeader>
-        <CardContent>
-          <div className="text-2xl font-bold">
-            {formatCurrency(avgOrderValue)}
-          </div>
-          <p className="text-xs text-muted-foreground">Per online order</p>
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">Top Platform</CardTitle>
-          <Truck className="h-4 w-4 text-muted-foreground" />
-        </CardHeader>
-        <CardContent>
-          <div className="text-2xl font-bold">
-            {topPlatform ? getPlatformLabel(topPlatform.platform) : "N/A"}
-          </div>
-          <p className="text-xs text-muted-foreground">
-            {topPlatform
-              ? `${formatCurrency(topPlatform.totalRevenue)} revenue`
-              : "No data yet"}
-          </p>
-        </CardContent>
-      </Card>
-    </div>
+    <Panel padded>
+      <StatRow columns={4}>
+        <StatTile label="Online Revenue" value={formatCurrency(totalRevenue)} meta="Across selected platforms" icon={<DollarSign />} />
+        <StatTile label="Online Orders" value={totalOrders.toLocaleString()} meta="Total orders received" icon={<ShoppingCart />} />
+        <StatTile label="Avg Order Value" value={formatCurrency(avgOrderValue)} meta="Per online order" icon={<TrendingUp />} />
+        <StatTile
+          label="Top Platform"
+          value={topPlatform ? getPlatformLabel(topPlatform.platform) : "N/A"}
+          meta={topPlatform ? `${formatCurrency(topPlatform.totalRevenue)} revenue` : "No data yet"}
+          icon={<Truck />}
+        />
+      </StatRow>
+    </Panel>
   );
 }
 
@@ -493,18 +441,13 @@ function OnlineOrderingReportsContent() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">
-            Online Ordering Channels
-          </h2>
-          <p className="text-muted-foreground">
-            Revenue and performance across DoorDash, Uber Eats, Grubhub, and
-            other delivery platforms
-          </p>
-        </div>
-        <div>
+    <PageShell>
+      <PageHeader
+        title="Online Ordering Channels"
+        subtitle="Revenue and performance across DoorDash, Uber Eats, Grubhub, and other delivery platforms"
+        backHref="/dashboard/reports"
+        backLabel="Back to Reports"
+        actions={
           <DateRangePicker
             dateFrom={dateRange.from}
             dateTo={dateRange.to}
@@ -512,8 +455,8 @@ function OnlineOrderingReportsContent() {
             preset={preset}
             onPresetChange={setPreset}
           />
-        </div>
-      </div>
+        }
+      />
 
       {/* Platform filter — fixed canonical tab set, re-scopes all figures
           below. Always rendered (once past the initial load) even with zero
@@ -527,14 +470,16 @@ function OnlineOrderingReportsContent() {
           onValueChange={setSelectedPlatform}
           className="w-full"
         >
-          <TabsList className="flex-wrap h-auto">
-            <TabsTrigger value={ALL_PLATFORMS}>All</TabsTrigger>
+          <div className="w-full min-w-0 overflow-x-auto pb-1">
+          <TabsList className="inline-flex h-auto w-max flex-nowrap gap-0.5 rounded-full bg-muted/70 p-1">
+            <TabsTrigger className="rounded-full px-4 py-2" value={ALL_PLATFORMS}>All</TabsTrigger>
             {PLATFORM_DISPLAY_ORDER.map((slug) => (
-              <TabsTrigger key={slug} value={slug}>
+              <TabsTrigger className="rounded-full px-4 py-2" key={slug} value={slug}>
                 {getPlatformLabel(slug)}
               </TabsTrigger>
             ))}
           </TabsList>
+          </div>
         </Tabs>
       )}
 
@@ -574,7 +519,7 @@ function OnlineOrderingReportsContent() {
           </Card>
         )}
       </div>
-    </div>
+    </PageShell>
   );
 }
 

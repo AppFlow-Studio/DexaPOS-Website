@@ -33,18 +33,18 @@ export function ComparisonToolbar({
   onShowComparisonChange,
 }: ComparisonToolbarProps) {
   return (
-    <div className="flex flex-col gap-3 p-4 rounded-2xl bg-card/50 backdrop-blur-sm border border-muted/30">
+    <div className="flex flex-col gap-4 rounded-2xl border-0 bg-muted/60 p-4">
       {/* Range Selectors */}
       <div className="overflow-x-auto">
-        <div className="flex items-center gap-1.5 p-1 bg-muted/40 rounded-xl w-fit min-w-full sm:min-w-0">
+        <div className="flex w-fit min-w-full items-center gap-0.5 rounded-full bg-background/70 p-1 sm:min-w-0">
           {presets.map((preset) => (
             <button
               key={preset.id}
               onClick={() => onRangeChange(preset.id)}
               className={cn(
-                "px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 whitespace-nowrap",
+                "whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium transition-colors",
                 activeRange === preset.id
-                  ? "bg-primary text-primary-foreground shadow-sm"
+                  ? "bg-background text-foreground shadow-sm ring-1 ring-border"
                   : "text-muted-foreground hover:bg-muted"
               )}
             >
@@ -65,7 +65,7 @@ export function ComparisonToolbar({
           />
           <Label
             htmlFor="show-comparison"
-            className="text-xs font-semibold uppercase tracking-wider text-muted-foreground cursor-pointer"
+            className="cursor-pointer text-sm font-medium text-muted-foreground"
           >
             Compare to
           </Label>
@@ -78,11 +78,11 @@ export function ComparisonToolbar({
             !showComparison ? "opacity-30 pointer-events-none" : "opacity-100"
           )}
         >
-          <div className="flex items-center gap-1 p-1 bg-muted/40 rounded-lg">
+          <div className="flex items-center gap-0.5 rounded-full bg-background/70 p-1">
             <button
               onClick={() => onCompareModeChange("previous")}
               className={cn(
-                "flex items-center gap-2 px-3 py-1 rounded-md text-[10px] font-bold uppercase tracking-tight transition-all whitespace-nowrap",
+                "flex items-center gap-2 whitespace-nowrap rounded-full px-3 py-1 text-xs font-medium transition-colors",
                 compareMode === "previous"
                   ? "bg-background text-foreground shadow-sm"
                   : "text-muted-foreground hover:bg-muted"
@@ -94,7 +94,7 @@ export function ComparisonToolbar({
             <button
               onClick={() => onCompareModeChange("year")}
               className={cn(
-                "flex items-center gap-2 px-3 py-1 rounded-md text-[10px] font-bold uppercase tracking-tight transition-all whitespace-nowrap",
+                "flex items-center gap-2 whitespace-nowrap rounded-full px-3 py-1 text-xs font-medium transition-colors",
                 compareMode === "year"
                   ? "bg-background text-foreground shadow-sm"
                   : "text-muted-foreground hover:bg-muted"
