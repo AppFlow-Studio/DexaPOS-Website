@@ -46,6 +46,11 @@ import { CardBrandIcon } from "./CardBrandIcon";
 import { PaymentFacetFilter, type FacetOption } from "./PaymentFacetFilter";
 import { PaymentAmountFilter, type AmountRange } from "./PaymentAmountFilter";
 import {
+  MobileColumnsButton,
+  initialHiddenColumns,
+  type ReportColumn,
+} from "@/components/dashboard/reports/MobileColumnsButton";
+import {
   getCardBrandLabel,
   getPaymentMethodLabel,
   normalizeCardBrand,
@@ -56,6 +61,7 @@ import {
 } from "@/lib/payments/method-display";
 import { filterPayments } from "@/lib/payments/filter-payments";
 import { cn } from "@/lib/utils";
+import { useIsMobile } from "@/hooks/use-mobile";
 import {
   getPaymentStatusLabel,
   getPaymentStatusStyle,
@@ -173,8 +179,8 @@ function PaymentDetailPanel({ payment }: { payment: PaymentRecord }) {
       emvData.tvr);
 
   return (
-    <div className="grid w-full max-w-full gap-6 p-4 md:grid-cols-2 xl:grid-cols-4">
-      <div className="space-y-4 min-w-0 md:col-span-1">
+    <div className="grid w-full max-w-full gap-6 p-4 md:grid-cols-2">
+      <div className="space-y-4 min-w-0">
         {/* Transaction Details */}
         <div className="space-y-2 min-w-0">
           <h4 className="text-sm font-semibold">Transaction Details</h4>
@@ -461,8 +467,8 @@ function PaymentDetailPanel({ payment }: { payment: PaymentRecord }) {
                 const overflowColumns = rows.slice(4);
 
                 return (
-                  <div className="mt-3 ml-auto w-full max-w-[500px] text-xs">
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
+                  <div className="mt-3 w-full text-xs">
+                    <div className="grid w-full grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-4 sm:gap-x-10">
                       {summaryColumns.map((r, i) => (
                         <div key={`${r.label}-${i}`} className="min-w-0">
                           <div
@@ -486,7 +492,7 @@ function PaymentDetailPanel({ payment }: { payment: PaymentRecord }) {
                     </div>
 
                     {overflowColumns.length > 0 && (
-                      <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
+                      <div className="mt-2 grid w-full grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-4 sm:gap-x-10">
                         {overflowColumns.map((r, i) => (
                           <div key={`${r.label}-extra-${i}`} className="min-w-0">
                             <div
@@ -576,12 +582,28 @@ interface PaymentsTableProps {
   isLoading?: boolean;
 }
 
+const PAYMENT_MOBILE_COLUMN_META: ReportColumn[] = [
+  { id: "order_number", label: "Order #", locked: true },
+  { id: "initiated_at", label: "Date/Time", defaultHidden: true },
+  { id: "payment_method", label: "Method", defaultHidden: true },
+  { id: "card_info", label: "Card", defaultHidden: true },
+  { id: "entry_mode", label: "Entry", defaultHidden: true },
+  { id: "tip_amount", label: "Tip", defaultHidden: true },
+  { id: "service_charge", label: "Service Charge", defaultHidden: true },
+  { id: "status", label: "Status", defaultHidden: true },
+  { id: "settlement", label: "Settlement", defaultHidden: true },
+];
+
 export function PaymentsTable({ data, isLoading }: PaymentsTableProps) {
+  const isMobile = useIsMobile();
   const [sorting, setSorting] = React.useState<SortingState>([
     { id: "initiated_at", desc: true },
   ]);
   const [globalFilter, setGlobalFilter] = React.useState("");
   const [expanded, setExpanded] = React.useState<ExpandedState>({});
+  const [mobileHiddenColumns, setMobileHiddenColumns] = React.useState<Set<string>>(() =>
+    initialHiddenColumns(PAYMENT_MOBILE_COLUMN_META)
+  );
 
   const [methodFilter, setMethodFilter] = React.useState<string[]>([]);
   const [brandFilter, setBrandFilter] = React.useState<string[]>([]);
@@ -665,48 +687,40 @@ export function PaymentsTable({ data, isLoading }: PaymentsTableProps) {
     [data, methodFilter, brandFilter, entryFilter, amountFilter]
   );
 
+  const isColumnVisible = React.useCallback(
+    (columnId: string) => {
+      if (columnId === "order_number") return true;
+      return !isMobile || !mobileHiddenColumns.has(columnId);
+    },
+    [isMobile, mobileHiddenColumns]
+  );
+
   const columns: ColumnDef<PaymentRecord>[] = [
     // Expand toggle
     {
       id: "expand",
       header: () => null,
-      cell: ({ row }) => (
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-6 w-6"
-          onClick={(e) => {
-            e.stopPropagation();
-            row.toggleExpanded();
-          }}
-        >
-          {row.getIsExpanded() ? (
-            <ChevronDown className="h-4 w-4" />
-          ) : (
-            <ChevronRight className="h-4 w-4" />
-          )}
-        </Button>
-      ),
+      cell: ({ row }) => {
+        if (isMobile) return null;
+        return (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6"
+            onClick={(e) => {
+              e.stopPropagation();
+              row.toggleExpanded();
+            }}
+          >
+            {row.getIsExpanded() ? (
+              <ChevronDown className="h-4 w-4" />
+            ) : (
+              <ChevronRight className="h-4 w-4" />
+            )}
+          </Button>
+        );
+      },
       enableSorting: false,
-    },
-    // Date/Time
-    {
-      accessorKey: "initiated_at",
-      header: ({ column }) => (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-          className="h-8 px-2"
-        >
-          Date/Time
-          <ArrowUpDown className="ml-2 h-3 w-3" />
-        </Button>
-      ),
-      cell: ({ row }) => (
-        <div className="text-sm text-muted-foreground whitespace-nowrap">
-          {formatDate(row.original.initiated_at)}
-        </div>
-      ),
     },
     // Order #
     {
@@ -745,6 +759,25 @@ export function PaymentsTable({ data, isLoading }: PaymentsTableProps) {
           </Link>
         );
       },
+    },
+    // Date/Time
+    {
+      accessorKey: "initiated_at",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          className="h-8 px-2"
+        >
+          Date/Time
+          <ArrowUpDown className="ml-2 h-3 w-3" />
+        </Button>
+      ),
+      cell: ({ row }) => (
+        <div className="text-sm text-muted-foreground whitespace-nowrap">
+          {formatDate(row.original.initiated_at)}
+        </div>
+      ),
     },
     // Method
     {
@@ -962,7 +995,7 @@ export function PaymentsTable({ data, isLoading }: PaymentsTableProps) {
     onSortingChange: setSorting,
     onGlobalFilterChange: setGlobalFilter,
     onExpandedChange: setExpanded,
-    getRowCanExpand: () => true,
+    getRowCanExpand: () => !isMobile,
     initialState: {
       pagination: { pageSize: 50 },
     },
@@ -996,6 +1029,11 @@ export function PaymentsTable({ data, isLoading }: PaymentsTableProps) {
           />
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <MobileColumnsButton
+            columns={PAYMENT_MOBILE_COLUMN_META}
+            hidden={mobileHiddenColumns}
+            onChange={setMobileHiddenColumns}
+          />
           <PaymentFacetFilter
             title="Method"
             options={methodOptions}
@@ -1048,19 +1086,23 @@ export function PaymentsTable({ data, isLoading }: PaymentsTableProps) {
                 key={headerGroup.id}
                 className="border-0 hover:bg-transparent"
               >
-                {headerGroup.headers.map((header) => (
-                  <TableHead
-                    key={header.id}
-                    className="h-auto py-2.5 text-[0.8125rem] font-normal text-muted-foreground"
-                  >
-                    {header.isPlaceholder
-                      ? null
-                      : flexRender(
-                          header.column.columnDef.header,
-                          header.getContext()
-                        )}
-                  </TableHead>
-                ))}
+                {headerGroup.headers
+                  .filter(
+                    (header) => !isMobile || isColumnVisible(header.column.id)
+                  )
+                  .map((header) => (
+                    <TableHead
+                      key={header.id}
+                      className="h-auto py-2.5 text-[0.8125rem] font-normal text-muted-foreground"
+                    >
+                      {header.isPlaceholder
+                        ? null
+                        : flexRender(
+                            header.column.columnDef.header,
+                            header.getContext()
+                          )}
+                    </TableHead>
+                  ))}
               </TableRow>
             ))}
           </TableHeader>
@@ -1081,29 +1123,37 @@ export function PaymentsTable({ data, isLoading }: PaymentsTableProps) {
                 <React.Fragment key={row.id}>
                   <TableRow
                     data-state={row.getIsExpanded() && "expanded"}
-                    className="cursor-pointer border-0 transition-colors"
-                    onClick={() => row.toggleExpanded()}
+                    className={cn(
+                      "border-0 transition-colors",
+                      !isMobile && "cursor-pointer"
+                    )}
+                    onClick={() => !isMobile && row.toggleExpanded()}
                   >
-                    {row.getVisibleCells().map((cell) => (
-                      <TableCell
-                        key={cell.id}
-                        className={cn(
-                          "py-3 text-sm",
-                          (cell.column.id === "amount" ||
-                            cell.column.id === "tip_amount" ||
-                            cell.column.id === "service_charge" ||
-                            cell.column.id === "total_amount") &&
-                            "text-right tabular-nums"
-                        )}
-                      >
-                        {flexRender(
-                          cell.column.columnDef.cell,
-                          cell.getContext()
-                        )}
-                      </TableCell>
-                    ))}
+                    {row
+                      .getVisibleCells()
+                      .filter(
+                        (cell) => !isMobile || isColumnVisible(cell.column.id)
+                      )
+                      .map((cell) => (
+                        <TableCell
+                          key={cell.id}
+                          className={cn(
+                            "py-3 text-sm",
+                            (cell.column.id === "amount" ||
+                              cell.column.id === "tip_amount" ||
+                              cell.column.id === "service_charge" ||
+                              cell.column.id === "total_amount") &&
+                              "text-right tabular-nums"
+                          )}
+                        >
+                          {flexRender(
+                            cell.column.columnDef.cell,
+                            cell.getContext()
+                          )}
+                        </TableCell>
+                      ))}
                   </TableRow>
-                  {row.getIsExpanded() && (
+                  {!isMobile && row.getIsExpanded() && (
                     <TableRow className="border-0 hover:bg-transparent">
                       <TableCell
                         colSpan={columns.length}

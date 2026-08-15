@@ -31,6 +31,14 @@ import { CardBrandIcon } from "./CardBrandIcon";
 import { cn } from "@/lib/utils";
 import { Panel, StatRow, StatTile } from "@/components/dashboard/shell";
 import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
   getPaymentStatusLabel,
   getPaymentStatusStyle,
 } from "@/lib/constants/payment-status";
@@ -111,15 +119,15 @@ const BATCH_STATUS_STYLES: Record<
   },
   settled: {
     label: "Settled",
-    dot: "bg-emerald-500",
-    text: "text-emerald-700 dark:text-emerald-400",
-    bg: "bg-emerald-50 dark:bg-emerald-900/20",
+    dot: "bg-muted-foreground",
+    text: "text-muted-foreground",
+    bg: "bg-muted/60",
   },
   funded: {
     label: "Funded",
-    dot: "bg-emerald-500",
-    text: "text-emerald-700 dark:text-emerald-400",
-    bg: "bg-emerald-50 dark:bg-emerald-900/20",
+    dot: "bg-muted-foreground",
+    text: "text-muted-foreground",
+    bg: "bg-muted/60",
   },
 };
 
@@ -338,18 +346,18 @@ function DbBatchCard({ batch }: { batch: SettlementBatchRecord }) {
                 </div>
 
                 {/* Financial summary */}
-                <div className="flex flex-shrink-0 flex-wrap items-center gap-x-6 gap-y-1 pl-7 text-sm sm:pl-0">
-                  <div className="flex items-center gap-1 text-green-700">
-                    <ArrowDownLeft className="h-3.5 w-3.5" />
+                <div className="flex flex-shrink-0 flex-wrap items-center gap-x-6 gap-y-1 pl-7 text-sm text-foreground sm:pl-0">
+                  <div className="flex items-center gap-1">
+                    <ArrowDownLeft className="h-3.5 w-3.5 text-muted-foreground" />
                     <span>{formatCurrency(batch.gross_amount)}</span>
                   </div>
                   {batch.refund_amount > 0 && (
-                    <div className="flex items-center gap-1 text-red-600">
-                      <ArrowUpRight className="h-3.5 w-3.5" />
+                    <div className="flex items-center gap-1">
+                      <ArrowUpRight className="h-3.5 w-3.5 text-muted-foreground" />
                       <span>{formatCurrency(batch.refund_amount)}</span>
                     </div>
                   )}
-                  <div className="font-bold">
+                  <div className="font-semibold">
                     {formatCurrency(batch.net_deposit)}
                   </div>
                 </div>
@@ -459,18 +467,18 @@ function ComputedBatchCard({ batch }: { batch: ComputedBatch }) {
                   </div>
                 </div>
 
-                <div className="flex flex-shrink-0 flex-wrap items-center gap-x-6 gap-y-1 pl-7 text-sm sm:pl-0">
-                  <div className="flex items-center gap-1 text-green-700">
-                    <ArrowDownLeft className="h-3.5 w-3.5" />
+                <div className="flex flex-shrink-0 flex-wrap items-center gap-x-6 gap-y-1 pl-7 text-sm text-foreground sm:pl-0">
+                  <div className="flex items-center gap-1">
+                    <ArrowDownLeft className="h-3.5 w-3.5 text-muted-foreground" />
                     <span>{formatCurrency(batch.gross_amount)}</span>
                   </div>
                   {batch.refund_amount > 0 && (
-                    <div className="flex items-center gap-1 text-red-600">
-                      <ArrowUpRight className="h-3.5 w-3.5" />
+                    <div className="flex items-center gap-1">
+                      <ArrowUpRight className="h-3.5 w-3.5 text-muted-foreground" />
                       <span>{formatCurrency(batch.refund_amount)}</span>
                     </div>
                   )}
-                  <div className="font-bold">{formatCurrency(batch.net_amount)}</div>
+                  <div className="font-semibold">{formatCurrency(batch.net_amount)}</div>
                 </div>
               </div>
             </button>
@@ -522,51 +530,49 @@ function BatchPaymentsTable({
   }
 
   return (
-    <div className="overflow-x-auto rounded border text-xs">
-      <table className="w-full min-w-[480px]">
-        <thead>
-          <tr className="border-b text-muted-foreground">
-            <th className="p-2 text-left font-medium">Order #</th>
-            <th className="p-2 text-left font-medium">Method</th>
-            <th className="p-2 text-left font-medium">Card</th>
-            <th className="p-2 text-right font-medium">Amount</th>
-            <th className="p-2 text-right font-medium">Tip</th>
-            <th className="p-2 text-right font-medium">Total</th>
-            <th className="p-2 text-left font-medium">Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          {payments.map((p) => (
-            <tr key={p.id} className="border-b last:border-0">
-              <td className="p-2 font-mono">
-                {p.orders?.order_number || p.orders?.display_number || "—"}
-              </td>
-              <td className="p-2">{getMethodLabel(p.payment_method)}</td>
-              <td className="p-2">
-                {p.card_last_four ? (
-                  <div className="flex items-center gap-1">
-                    <CardBrandIcon brand={p.card_type} className="h-4 w-auto" />
-                    <span className="font-mono">****{p.card_last_four}</span>
-                  </div>
-                ) : (
-                  "—"
-                )}
-              </td>
-              <td className="p-2 text-right font-mono">{formatCurrency(p.amount)}</td>
-              <td className="p-2 text-right font-mono text-muted-foreground">
-                {p.tip_amount ? formatCurrency(p.tip_amount) : "—"}
-              </td>
-              <td className="p-2 text-right font-mono font-semibold">
-                {formatCurrency(p.total_amount)}
-              </td>
-              <td className="p-2">
-                <StatusBadgeMini status={p.status} />
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <Table variant="data" className="min-w-[480px] text-xs">
+      <TableHeader className="[&_tr]:border-0">
+        <TableRow className="border-0 hover:bg-transparent">
+          <TableHead className="text-xs font-medium text-muted-foreground">Order #</TableHead>
+          <TableHead className="text-xs font-medium text-muted-foreground">Method</TableHead>
+          <TableHead className="text-xs font-medium text-muted-foreground">Card</TableHead>
+          <TableHead className="text-right text-xs font-medium text-muted-foreground">Amount</TableHead>
+          <TableHead className="text-right text-xs font-medium text-muted-foreground">Tip</TableHead>
+          <TableHead className="text-right text-xs font-medium text-muted-foreground">Total</TableHead>
+          <TableHead className="text-xs font-medium text-muted-foreground">Status</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {payments.map((p) => (
+          <TableRow key={p.id} className="border-0 bg-card/70 hover:bg-muted/40">
+            <TableCell className="font-mono text-xs">
+              {p.orders?.order_number || p.orders?.display_number || "—"}
+            </TableCell>
+            <TableCell className="text-xs">{getMethodLabel(p.payment_method)}</TableCell>
+            <TableCell className="text-xs">
+              {p.card_last_four ? (
+                <div className="flex items-center gap-1">
+                  <CardBrandIcon brand={p.card_type} className="h-4 w-auto" />
+                  <span className="font-mono">****{p.card_last_four}</span>
+                </div>
+              ) : (
+                "—"
+              )}
+            </TableCell>
+            <TableCell className="text-right font-mono text-xs">{formatCurrency(p.amount)}</TableCell>
+            <TableCell className="text-right font-mono text-xs text-muted-foreground">
+              {p.tip_amount ? formatCurrency(p.tip_amount) : "—"}
+            </TableCell>
+            <TableCell className="text-right font-mono text-xs font-semibold">
+              {formatCurrency(p.total_amount)}
+            </TableCell>
+            <TableCell className="text-xs">
+              <StatusBadgeMini status={p.status} />
+            </TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
   );
 }
 

@@ -66,7 +66,10 @@ export function MobileColumnsButton({
   const toggleable = columns.filter((c) => !c.locked);
   if (toggleable.length === 0) return null;
 
-  const visibleCount = toggleable.length - hidden.size;
+  const hiddenToggleableCount = [...hidden].filter((id) =>
+    toggleable.some((column) => column.id === id),
+  ).length;
+  const visibleCount = Math.max(0, toggleable.length - hiddenToggleableCount);
 
   const toggle = (id: string) => {
     const next = new Set(hidden);
