@@ -1,4 +1,5 @@
 import type { ResolvedMap } from "@/lib/site-builder/bindings/resolved";
+import { googleFontsHref } from "@/lib/site-builder/fonts";
 import type { PageDocument } from "@/lib/site-builder/page-document";
 import type { RenderContext, SectionRenderProps } from "@/lib/site-builder/render-context";
 import { themeToCssVars } from "@/lib/site-builder/render-context";
@@ -65,6 +66,10 @@ export function SiteChrome({
   children: React.ReactNode;
   className?: string;
 }) {
+  // Only the one or two families this theme actually uses. Loading the whole
+  // catalogue here would put ~16 font requests on every public restaurant page.
+  const fontsHref = googleFontsHref([ctx.theme.fontFamily, ctx.theme.headingFont]);
+
   return (
     <div
       style={{
@@ -73,15 +78,32 @@ export function SiteChrome({
         color: "var(--site-text)",
         fontFamily: "var(--site-font)",
       }}
-      className={`min-h-screen w-full ${className}`}
+      className={`site-shell min-h-screen w-full ${className}`}
       data-sb-site={ctx.site.siteId}
       data-sb-mode={ctx.mode}
     >
-      <style>{PROSE_STYLES}</style>
+      {/* React hoists this into <head>; `precedence` is what makes it do so. */}
+      {fontsHref && <link rel="stylesheet" href={fontsHref} precedence="site-fonts" />}
+      <style>{SHELL_STYLES}</style>
       {children}
     </div>
   );
 }
+
+/**
+ * Applies the headline typeface to every heading a section can emit.
+ *
+ * Done once here rather than per section: sections render plain `h1`–`h6` and
+ * inherit the body font from the shell, so one scoped rule gives the whole site
+ * a second typeface without touching a single renderer.
+ */
+const HEADING_STYLES = `
+.site-shell h1, .site-shell h2, .site-shell h3,
+.site-shell h4, .site-shell h5, .site-shell h6,
+.site-shell .site-prose h2, .site-shell .site-prose h3, .site-shell .site-prose h4 {
+  font-family: var(--site-heading-font, var(--site-font));
+}
+`;
 
 /**
  * Styling for sanitized merchant HTML.
@@ -105,3 +127,5 @@ const PROSE_STYLES = `
 .site-prose img { max-width: 100%; height: auto; border-radius: var(--site-radius); }
 .site-prose strong { font-weight: 600; }
 `;
+
+const SHELL_STYLES = `${HEADING_STYLES}${PROSE_STYLES}`;

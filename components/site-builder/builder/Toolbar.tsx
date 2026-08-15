@@ -84,23 +84,22 @@ export default function Toolbar({
   const future = store((s) => s.future.length);
 
   return (
-    <header className="flex h-14 shrink-0 items-center gap-2 border-b bg-background px-2 sm:px-3">
+    <header className="flex h-16 shrink-0 items-center gap-2 border-b bg-background px-3 sm:px-4">
       {/* ── identity ─────────────────────────────────────────────────────── */}
       <Tooltip>
         <TooltipTrigger asChild>
-          {/* `/dashboard/website` has no page — the only routes under it are
-              `builder` and `preview`, so the old target 404'd. The online-store
-              settings are the surface this builder is layered on (D1) and are
-              the honest place to go back to until an index page exists. */}
+          {/* The builder is a focused page-editing surface. Return merchants to
+              the Website overview, where status, preview and their next task
+              are visible before they decide what to edit next. */}
           <Link
-            href="/dashboard/online-ordering"
-            aria-label="Back to online store settings"
+            href="/dashboard/website"
+            aria-label="Back to Website overview"
             className="flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
           >
             <ArrowLeft className="size-4" />
           </Link>
         </TooltipTrigger>
-        <TooltipContent>Back to online store settings</TooltipContent>
+        <TooltipContent>Back to Website overview</TooltipContent>
       </Tooltip>
 
       <DropdownMenu>
@@ -108,7 +107,7 @@ export default function Toolbar({
           {/* Capped, not just truncated: an SEO title can run to 60 characters
               and would otherwise shove the device switcher off centre. */}
           <span className="min-w-0 max-w-36 sm:max-w-52">
-            <span className="block truncate text-[13px] font-semibold leading-tight">
+            <span className="block truncate text-sm font-semibold leading-tight">
               {doc.seo.title || "Home"}
             </span>
             {siteName && (
@@ -138,7 +137,7 @@ export default function Toolbar({
       <SaveIndicator store={store} />
 
       {/* ── device switcher, optically centred ───────────────────────────── */}
-      <div className="mx-auto hidden items-center gap-0.5 rounded-md bg-muted p-0.5 sm:flex">
+      <div className="mx-auto hidden items-center gap-0.5 rounded-lg border bg-muted/60 p-1 shadow-sm sm:flex">
         {DEVICES.map(({ mode, label, Icon }) => (
           <Tooltip key={mode}>
             <TooltipTrigger asChild>
@@ -148,7 +147,7 @@ export default function Toolbar({
                 aria-pressed={device === mode}
                 onClick={() => setDevice(mode)}
                 className={cn(
-                  "flex size-7 items-center justify-center rounded-sm transition-all",
+                  "flex size-7 items-center justify-center rounded-md transition-all",
                   device === mode
                     ? "bg-background text-foreground shadow-sm"
                     : "text-muted-foreground hover:text-foreground",
@@ -218,7 +217,7 @@ export default function Toolbar({
         )}
       </div>
 
-      <PublishButton store={store} />
+      <ChangesButton store={store} />
     </header>
   );
 }
@@ -255,17 +254,17 @@ function SaveIndicator({ store }: { store: BuilderStore }) {
 }
 
 function useRelativeTime(timestamp: number | null): string | null {
-  const [, setTick] = useState(0);
+  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
     if (!timestamp) return;
-    const timer = setInterval(() => setTick((t) => t + 1), 30_000);
+    const timer = setInterval(() => setNow(Date.now()), 30_000);
     return () => clearInterval(timer);
   }, [timestamp]);
 
   if (!timestamp) return null;
 
-  const seconds = Math.floor((Date.now() - timestamp) / 1000);
+  const seconds = Math.floor((now - timestamp) / 1000);
   if (seconds < 45) return "just now";
   const minutes = Math.round(seconds / 60);
   if (minutes < 60) return `${minutes}m ago`;
@@ -273,7 +272,7 @@ function useRelativeTime(timestamp: number | null): string | null {
 }
 
 /**
- * `Publish · 3` — the unpublished-change count on the button itself.
+ * A transparent review surface while the publish pipeline is not connected.
  *
  * The draft/published split is the single thing merchants most reliably
  * misunderstand about a site builder, and every other builder answers it only
@@ -281,7 +280,7 @@ function useRelativeTime(timestamp: number | null): string | null {
  * document (A1) and a version is an immutable row (A2), so the difference is a
  * local computation over two objects.
  */
-function PublishButton({ store }: { store: BuilderStore }) {
+function ChangesButton({ store }: { store: BuilderStore }) {
   const doc = store((s) => s.doc);
   const publishedDoc = store((s) => s.publishedDoc);
   const catalog = store((s) => s.catalog);
@@ -291,13 +290,11 @@ function PublishButton({ store }: { store: BuilderStore }) {
   const validation = useMemo(() => validatePage(doc), [doc]);
   const broken = useMemo(() => countBrokenBindings(doc, catalog), [doc, catalog]);
 
-  const blocked = validation.errors.length > 0;
-
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button size="sm" className="ml-1.5 shrink-0 gap-1.5">
-          Publish
+        <Button variant="outline" size="sm" className="ml-1.5 shrink-0 gap-1.5 shadow-sm">
+          Review
           {changes.length > 0 && (
             <span className="rounded-full bg-primary-foreground/20 px-1.5 text-[11px] tabular-nums">
               {changes.length}
@@ -308,11 +305,11 @@ function PublishButton({ store }: { store: BuilderStore }) {
 
       <PopoverContent align="end" className="w-80 p-0">
         <div className="border-b px-3 py-2.5">
-          <p className="text-sm font-semibold">Publish changes</p>
+          <p className="text-sm font-semibold">Draft review</p>
           <p className="mt-0.5 text-[11px] text-muted-foreground">
             {changes.length === 0
-              ? "Nothing has changed since your last publish."
-              : `${changes.length} change${changes.length === 1 ? "" : "s"} ready to go live.`}
+              ? "No changes in this browser session."
+              : `${changes.length} change${changes.length === 1 ? "" : "s"} in this draft.`}
           </p>
         </div>
 
@@ -375,21 +372,11 @@ function PublishButton({ store }: { store: BuilderStore }) {
           </ul>
         )}
 
-        <div className="flex items-center justify-end gap-2 px-3 py-2.5">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span>
-                <Button size="sm" disabled className="w-full">
-                  Publish
-                </Button>
-              </span>
-            </TooltipTrigger>
-            <TooltipContent className="max-w-56">
-              {blocked
-                ? "Fix the issues above first."
-                : "Publishing arrives with Stage 5 — it needs the site tables."}
-            </TooltipContent>
-          </Tooltip>
+        <div className="border-t bg-muted/30 px-3 py-2.5">
+          <p className="text-[11px] leading-relaxed text-muted-foreground">
+            Publishing is not connected yet. Review your page here; changes remain in this
+            browser session until saving is enabled.
+          </p>
         </div>
       </PopoverContent>
     </Popover>

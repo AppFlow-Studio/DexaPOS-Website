@@ -7,6 +7,7 @@
  */
 
 import type { ResolvedMap } from "./bindings/resolved";
+import { readableOn } from "./color";
 import type { SectionKind } from "./sections/kinds";
 import type { SectionOf } from "./sections/types";
 
@@ -25,7 +26,10 @@ export type RenderMode =
  * otherwise changing a brand colour would require re-rendering and re-publishing
  * every page instead of updating one value on the shell.
  */
-export interface ThemeTokens {
+// A type alias rather than an interface, deliberately: `merchant_sites.theme`
+// is typed `Record<string, unknown>`, and only aliases get the implicit index
+// signature that makes a theme assignable to it without a cast.
+export type ThemeTokens = {
   brand: string;
   /** Readable foreground on `brand`. Kept explicit so contrast stays intentional. */
   brandContrast: string;
@@ -37,9 +41,21 @@ export interface ThemeTokens {
   textOnDark: string;
   border: string;
   card: string;
+  /** Body copy typeface. A complete CSS `font-family` value, fallbacks included. */
   fontFamily: string;
+  /**
+   * Headline typeface, applied to `h1`–`h6` by `SiteChrome`.
+   *
+   * Split from `fontFamily` because the single strongest lever a restaurant has
+   * on how its site *feels* is a display face over readable body copy, and one
+   * font field cannot express that. Themes saved before this token existed have
+   * no value here — `resolveTheme` falls them back to `fontFamily` rather than
+   * to the default, so an existing site's typography does not change underneath
+   * the merchant.
+   */
+  headingFont: string;
   radius: string;
-}
+};
 
 export const DEFAULT_THEME: ThemeTokens = {
   brand: "#0C4FD1",
@@ -52,9 +68,40 @@ export const DEFAULT_THEME: ThemeTokens = {
   textOnDark: "#F9FAFB",
   border: "#E5E7EB",
   card: "#FFFFFF",
-  fontFamily: '"DM Sans", system-ui, -apple-system, sans-serif',
+  fontFamily: '"DM Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
+  headingFont: '"DM Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
   radius: "12px",
 };
+
+/**
+ * Completes a partially-stored theme.
+ *
+ * `merchant_sites.theme` is free-form jsonb written by whatever version of the
+ * workspace was deployed when the merchant last saved, so a row may be missing
+ * any key. Every reader goes through here so "missing" resolves the same way
+ * everywhere — in particular `headingFont`, which must inherit the merchant's
+ * chosen `fontFamily` rather than snap back to the DexaPOS default.
+ */
+export function resolveTheme(
+  stored: Partial<ThemeTokens> | null | undefined,
+  fallback: Partial<ThemeTokens> = {},
+): ThemeTokens {
+  const layers = [stored ?? {}, fallback, DEFAULT_THEME];
+  const merged = { ...DEFAULT_THEME, ...fallback, ...(stored ?? {}) };
+
+  // `brandContrast` is only meaningful beside the brand colour it was chosen
+  // for, so it is taken from whichever layer supplied `brand` — never inherited
+  // across layers. Without this, a merchant whose storefront `primary_color` is
+  // a light teal gets the default white button text on top of it: 1.9:1, and
+  // unreadable. Deriving it is strictly better than inheriting a stale one.
+  const brandLayer = layers.find((layer) => layer.brand !== undefined) ?? DEFAULT_THEME;
+
+  return {
+    ...merged,
+    brandContrast: brandLayer.brandContrast ?? readableOn(merged.brand),
+    headingFont: stored?.headingFont ?? fallback.headingFont ?? merged.fontFamily,
+  };
+}
 
 /** Site-level facts a section may display without binding to them. */
 export interface RenderSite {
@@ -168,6 +215,7 @@ export function themeToCssVars(theme: ThemeTokens): Record<string, string> {
     "--site-border": theme.border,
     "--site-card": theme.card,
     "--site-font": theme.fontFamily,
+    "--site-heading-font": theme.headingFont || theme.fontFamily,
     "--site-radius": theme.radius,
   };
 }

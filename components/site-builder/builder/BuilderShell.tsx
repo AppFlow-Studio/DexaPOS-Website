@@ -4,7 +4,7 @@ import { Layers, PanelRight, Square } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
-import { loadMenuCatalog } from "@/app/dashboard/website/builder/menu-catalog";
+import { loadMenuCatalog, type MenuCatalog } from "@/app/dashboard/website/builder/menu-catalog";
 import { renderCanvas } from "@/app/dashboard/website/builder/render-canvas";
 import type { PageDocument } from "@/lib/site-builder/page-document";
 import { cn } from "@/lib/utils";
@@ -13,6 +13,7 @@ import Canvas from "./Canvas";
 import SectionList from "./SectionList";
 import SettingsPanel from "./SettingsPanel";
 import Toolbar from "./Toolbar";
+import { getTextPreviewPatches } from "./preview-sync";
 import { createBuilderStore, noopSaveAdapter, type Pane, type SaveAdapter } from "./store";
 
 /**
@@ -35,6 +36,7 @@ export default function BuilderShell({
   initialCanvas = null,
   locationId,
   initialRevision = 0,
+  initialCatalog,
   saveAdapter = noopSaveAdapter,
   siteName,
   viewUrl,
@@ -48,6 +50,8 @@ export default function BuilderShell({
   initialCanvas?: React.ReactNode;
   locationId: string;
   initialRevision?: number;
+  /** Loaded on the server with the opening page; avoids a second menu request after hydration. */
+  initialCatalog?: MenuCatalog;
   saveAdapter?: SaveAdapter;
   siteName?: string;
   viewUrl?: string;
@@ -70,9 +74,17 @@ export default function BuilderShell({
    * After mount the store is the source of truth and later props are ignored;
    * `useState` guarantees that, where `useMemo` is only ever a hint.
    */
-  const [store] = useState(() =>
-    createBuilderStore({ doc: initialDoc, canvas: initialCanvas, revision: initialRevision }),
-  );
+  const [store] = useState(() => {
+    const next = createBuilderStore({ doc: initialDoc, canvas: initialCanvas, revision: initialRevision });
+    if (initialCatalog) {
+      next.getState().setCatalog(
+        initialCatalog.items,
+        initialCatalog.showPrices,
+        initialCatalog.error,
+      );
+    }
+    return next;
+  });
 
   const doc = store((s) => s.doc);
   const notice = store((s) => s.notice);
@@ -82,6 +94,7 @@ export default function BuilderShell({
   const clearNotice = store((s) => s.clearNotice);
   const setCanvas = store((s) => s.setCanvas);
   const setRendering = store((s) => s.setRendering);
+  const canvasRefreshRequest = store((s) => s.canvasRefreshRequest);
   const setPane = store((s) => s.setPane);
 
   const inspectorOpen = selectedId !== null || pageSettingsOpen;
@@ -94,19 +107,19 @@ export default function BuilderShell({
     clearNotice();
   }, [notice, clearNotice]);
 
-  useServerRender(doc, locationId, setCanvas, setRendering);
+  useServerRender(doc, locationId, canvasRefreshRequest, setCanvas, setRendering);
   useAutosave(store, saveAdapter);
   useKeyboardShortcuts(store);
-  useMenuCatalog(store, locationId);
+  useMenuCatalog(store, locationId, !!initialCatalog);
 
   return (
     // The dashboard chrome is a fixed 4rem header, and `#main-content` pads its
     // children (`p-4 sm:p-6 pb-20 sm:pb-6` — app/dashboard/layout.tsx). The
     // negative margins cancel that padding so the builder is full-bleed, which
-    // is both what an editor wants and what makes `100vh - 4rem` exactly right:
+    // is both what an editor wants and what makes `100dvh - 4rem` exactly right:
     // without them the shell overflowed by the padding, pushing the bottom pane
     // switcher off-screen at every breakpoint.
-    <div className="-m-4 -mb-20 flex h-[calc(100vh-4rem)] flex-col overflow-hidden bg-background sm:-m-6 sm:-mb-6">
+    <div className="-m-4 -mb-20 flex h-[calc(100dvh-4rem)] min-h-[36rem] flex-col overflow-hidden bg-background sm:-m-6 sm:-mb-6">
       <Toolbar store={store} siteName={siteName} viewUrl={viewUrl} />
 
       <div className="flex min-h-0 flex-1">
@@ -114,16 +127,16 @@ export default function BuilderShell({
           aria-label="Page structure"
           className={cn(
             "min-w-0 shrink-0 border-r",
-            // Below lg exactly one pane shows and it fills the width; at lg and
-            // above the rail is permanent.
-            "w-full lg:block lg:w-60",
+            // A 1024px laptop cannot honestly show three editor columns. Keep
+            // the focused, one-pane mode until there is room for a real canvas.
+            "w-full xl:block xl:w-60",
             pane === "structure" ? "block" : "hidden",
           )}
         >
           <SectionList store={store} />
         </aside>
 
-        <div className={cn("min-w-0 flex-1", pane === "canvas" ? "flex" : "hidden lg:flex")}>
+        <div className={cn("min-w-0 flex-1", pane === "canvas" ? "flex" : "hidden xl:flex")}>
           <Canvas store={store} />
         </div>
 
@@ -131,8 +144,8 @@ export default function BuilderShell({
           aria-label="Settings"
           className={cn(
             "min-w-0 shrink-0 border-l",
-            "w-full lg:w-85",
-            inspectorOpen ? (pane === "inspector" ? "block" : "hidden lg:block") : "hidden",
+            "w-full xl:w-[21rem] 2xl:w-[23rem]",
+            inspectorOpen ? (pane === "inspector" ? "block" : "hidden xl:block") : "hidden",
           )}
         >
           {inspectorOpen && <SettingsPanel store={store} />}
@@ -171,7 +184,7 @@ function MobilePaneSwitcher({
   return (
     <nav
       aria-label="Builder panes"
-      className="flex shrink-0 items-stretch border-t bg-background lg:hidden"
+      className="flex shrink-0 items-stretch border-t bg-background xl:hidden"
     >
       {tabs.map(({ id, label, Icon, disabled }) => (
         <button
@@ -194,20 +207,23 @@ function MobilePaneSwitcher({
 }
 
 /**
- * Re-renders the document on the server, debounced.
+ * Re-renders only changes which cannot be patched safely in the existing tree.
  *
- * 400 ms is the "slow path" from PLAN-06 §2.2. The keystroke-level fast path
- * (patching a text node directly by its `data-sb-field`) is deliberately not
- * built yet — it is an optimisation, and shipping the simple version first
- * means finding out whether it is actually needed.
+ * Marked, non-empty text fields are updated synchronously by Canvas. Structural
+ * changes, rich text and anything without a suitable marker still use this
+ * canonical server render, so the builder and public storefront keep one markup
+ * implementation.
  */
 function useServerRender(
   doc: PageDocument,
   locationId: string,
+  canvasRefreshRequest: number,
   setCanvas: (canvas: React.ReactNode) => void,
   setRendering: (rendering: boolean) => void,
 ) {
   const first = useRef(true);
+  const renderedDoc = useRef(doc);
+  const handledRefreshRequest = useRef(canvasRefreshRequest);
   // Monotonic token: a slow earlier render must never overwrite a newer one.
   const latest = useRef(0);
 
@@ -218,12 +234,23 @@ function useServerRender(
       return;
     }
 
+    const refreshRequested = canvasRefreshRequest !== handledRefreshRequest.current;
+    if (refreshRequested) handledRefreshRequest.current = canvasRefreshRequest;
+    const mustRender = refreshRequested || getTextPreviewPatches(renderedDoc.current, doc) === null;
+    if (!mustRender) return;
+
+    // Advance the token at scheduling time, not only when the timer fires. A
+    // newer edit must be able to invalidate an older in-flight server response.
+    const token = ++latest.current;
+    const snapshot = doc;
     const timer = setTimeout(async () => {
-      const token = ++latest.current;
       setRendering(true);
       try {
-        const node = await renderCanvas(doc, locationId);
-        if (token === latest.current) setCanvas(node);
+        const node = await renderCanvas(snapshot, locationId);
+        if (token === latest.current) {
+          renderedDoc.current = snapshot;
+          setCanvas(node);
+        }
       } catch (error) {
         console.error("[site-builder] canvas render failed:", error);
         toast.error("Could not update the preview.");
@@ -233,7 +260,7 @@ function useServerRender(
     }, 400);
 
     return () => clearTimeout(timer);
-  }, [doc, locationId, setCanvas, setRendering]);
+  }, [doc, locationId, canvasRefreshRequest, setCanvas, setRendering]);
 }
 
 /**
@@ -244,8 +271,13 @@ function useServerRender(
  * happens to mount first. A failure is not fatal: the picker explains itself and
  * the markers stay silent rather than claiming everything is fine.
  */
-function useMenuCatalog(store: ReturnType<typeof createBuilderStore>, locationId: string) {
+function useMenuCatalog(
+  store: ReturnType<typeof createBuilderStore>,
+  locationId: string,
+  alreadyLoaded: boolean,
+) {
   useEffect(() => {
+    if (alreadyLoaded) return;
     let cancelled = false;
 
     loadMenuCatalog(locationId)
@@ -262,7 +294,7 @@ function useMenuCatalog(store: ReturnType<typeof createBuilderStore>, locationId
     return () => {
       cancelled = true;
     };
-  }, [store, locationId]);
+  }, [store, locationId, alreadyLoaded]);
 }
 
 /**
@@ -276,32 +308,49 @@ function useMenuCatalog(store: ReturnType<typeof createBuilderStore>, locationId
 function useAutosave(store: ReturnType<typeof createBuilderStore>, adapter: SaveAdapter) {
   const doc = store((s) => s.doc);
   const saveState = store((s) => s.saveState);
+  const saving = useRef(false);
+  const queued = useRef(false);
 
   useEffect(() => {
     if (saveState !== "dirty") return;
 
     const flush = async () => {
-      const { revision, setSaveState, replaceDoc, markSaved } = store.getState();
+      if (saving.current) {
+        queued.current = true;
+        return;
+      }
+
+      const { doc: snapshot, revision, editGeneration, setSaveState, replaceDoc, markSaved } =
+        store.getState();
+      saving.current = true;
       setSaveState("saving");
 
-      const outcome = await adapter.save(doc, revision);
-      if (outcome.ok) {
-        markSaved(outcome.revision);
-        return;
+      try {
+        const outcome = await adapter.save(snapshot, revision);
+        if (outcome.ok) {
+          markSaved(outcome.revision, editGeneration);
+          return;
+        }
+        if (outcome.reason === "conflict") {
+          // Never silently merge and never silently clobber — PLAN-02 §5.
+          setSaveState("conflict");
+          toast.warning("This page was changed in another window.", {
+            action: {
+              label: "Load theirs",
+              onClick: () => replaceDoc(outcome.serverDoc, outcome.revision),
+            },
+          });
+          return;
+        }
+        setSaveState("error");
+        toast.error(outcome.message);
+      } finally {
+        saving.current = false;
+        if (queued.current) {
+          queued.current = false;
+          if (store.getState().saveState === "dirty") void flush();
+        }
       }
-      if (outcome.reason === "conflict") {
-        // Never silently merge and never silently clobber — PLAN-02 §5.
-        setSaveState("conflict");
-        toast.warning("This page was changed in another window.", {
-          action: {
-            label: "Load theirs",
-            onClick: () => replaceDoc(outcome.serverDoc, outcome.revision),
-          },
-        });
-        return;
-      }
-      setSaveState("error");
-      toast.error(outcome.message);
     };
 
     const timer = setTimeout(flush, 1500);

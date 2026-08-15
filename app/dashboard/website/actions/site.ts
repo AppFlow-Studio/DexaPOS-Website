@@ -196,5 +196,3 @@ export async function GetSitePageCount(siteId: string): Promise<number> {
     .neq("status", "archived");
   return count ?? 0;
 }
-
-export type { MerchantSiteRow, SitePageRow };

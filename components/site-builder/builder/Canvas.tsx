@@ -11,16 +11,20 @@ import {
   Plus,
   Trash2,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { PageDocument } from "@/lib/site-builder/page-document";
 import { SECTION_REGISTRY, sectionTitle } from "@/lib/site-builder/sections/registry";
 import { cn } from "@/lib/utils";
 import type { BuilderStore, DeviceMode } from "./store";
+import { applyTextPreviewPatches, getTextPreviewPatches } from "./preview-sync";
 
 const DEVICE_WIDTHS: Record<DeviceMode, string> = {
-  desktop: "100%",
+  // A desktop preview must keep a desktop layout even when the editor itself is
+  // narrow. The surrounding canvas scrolls rather than silently turning this
+  // into a tablet breakpoint.
+  desktop: "1120px",
   tablet: "834px",
   mobile: "390px",
 };
@@ -54,6 +58,7 @@ export default function Canvas({ store }: { store: BuilderStore }) {
   const selectedId = store((s) => s.selectedId);
   const isRendering = store((s) => s.isRendering);
   const inspectorEnabled = store((s) => s.inspectorEnabled);
+  const requestCanvasRefresh = store((s) => s.requestCanvasRefresh);
   const select = store((s) => s.select);
   const toggleInspector = store((s) => s.toggleInspector);
   const openAddSection = store((s) => s.openAddSection);
@@ -61,6 +66,36 @@ export default function Canvas({ store }: { store: BuilderStore }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [rects, setRects] = useState<Record<string, DOMRect>>({});
+  const canvasDoc = useRef(doc);
+  const previousCanvas = useRef(canvas);
+
+  // A new server tree is authoritative. From this point, later scalar edits can
+  // be patched locally without asking the server to recreate the entire page.
+  useLayoutEffect(() => {
+    if (previousCanvas.current === canvas) return;
+    previousCanvas.current = canvas;
+    canvasDoc.current = doc;
+  }, [canvas, doc]);
+
+  useLayoutEffect(() => {
+    const previous = canvasDoc.current;
+    if (previous === doc) return;
+
+    const patches = getTextPreviewPatches(previous, doc);
+    const host = hostRef.current;
+
+    // Structural and rich-text changes are already picked up by the server
+    // render hook. Only ask for a refresh here when a change *looked* safe but
+    // the current markup does not honour the marker contract.
+    if (patches === null) return;
+
+    if (!host || !applyTextPreviewPatches(host, patches)) {
+      requestCanvasRefresh();
+      return;
+    }
+
+    canvasDoc.current = doc;
+  }, [doc, requestCanvasRefresh]);
 
   /** Reads every section's box so the overlay can position itself. */
   const measure = useCallback(() => {
@@ -145,7 +180,7 @@ export default function Canvas({ store }: { store: BuilderStore }) {
   );
 
   return (
-    <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden bg-muted/40">
+    <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden bg-[#f4f5f7]">
       <StatusPill visible={isRendering}>
         <Loader2 className="size-3 animate-spin" />
         Updating preview
@@ -163,15 +198,15 @@ export default function Canvas({ store }: { store: BuilderStore }) {
         </button>
       </StatusPill>
 
-      <div className="flex-1 overflow-auto p-6">
+      <div className="flex-1 overflow-auto p-4 sm:p-8">
         <div
           className={cn(
             "relative mx-auto bg-white transition-[width,box-shadow] duration-300",
             device === "desktop"
-              ? "rounded-xl shadow-sm ring-1 ring-foreground/5"
+              ? "rounded-xl shadow-[0_18px_50px_-30px_rgb(0_0_0_/_0.45)] ring-1 ring-black/10"
               : "rounded-2xl shadow-xl ring-1 ring-foreground/10",
           )}
-          style={{ width: DEVICE_WIDTHS[device], maxWidth: "100%" }}
+          style={{ width: DEVICE_WIDTHS[device] }}
         >
           <div
             ref={hostRef}

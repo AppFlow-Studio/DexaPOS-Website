@@ -2,10 +2,11 @@ import { cache } from "react";
 
 import type { ResolverContext, ResolverSources } from "./bindings/resolve";
 import {
-  DEFAULT_THEME,
   createRenderContext,
+  resolveTheme,
   type RenderContext,
   type RenderMode,
+  type ThemeTokens,
 } from "./render-context";
 import { getRequestSupabase } from "./request-scope";
 
@@ -45,6 +46,8 @@ export interface SiteContext {
     card: string | null;
     fontFamily: string | null;
   };
+  /** Global Website-tab design settings. Storefront values remain the fallback. */
+  websiteTheme: Partial<ThemeTokens>;
 }
 
 type StoreConfigRow = Record<string, string | boolean | null>;
@@ -101,6 +104,18 @@ const fetchStoreConfigs = cache(async (merchantId: string): Promise<StoreConfigR
   return (data ?? []) as StoreConfigRow[];
 });
 
+/** Website-wide design is optional while the website migration rolls out. */
+const fetchWebsiteTheme = cache(async (merchantId: string): Promise<Partial<ThemeTokens>> => {
+  const { data, error } = await getRequestSupabase()
+    .from("merchant_sites")
+    .select("theme")
+    .eq("merchant_id", merchantId)
+    .maybeSingle();
+
+  if (error || !data?.theme || typeof data.theme !== "object") return {};
+  return pickThemeTokens(data.theme as Record<string, unknown>);
+});
+
 export async function loadSiteContext(
   clerkOrgId: string,
   locationId?: string,
@@ -108,7 +123,10 @@ export async function loadSiteContext(
   const merchantId = await fetchMerchantId(clerkOrgId);
   if (!merchantId) return null;
 
-  const configs = await fetchStoreConfigs(merchantId);
+  const [configs, websiteTheme] = await Promise.all([
+    fetchStoreConfigs(merchantId),
+    fetchWebsiteTheme(merchantId),
+  ]);
   const config = locationId
     ? configs.find((c) => c.location_id === locationId)
     : configs[0];
@@ -141,6 +159,7 @@ export async function loadSiteContext(
       card: nullableString(config.card_color),
       fontFamily: nullableString(config.font_family),
     },
+    websiteTheme,
   };
 }
 
@@ -166,18 +185,46 @@ export function buildRenderContext(site: SiteContext, mode: RenderMode): RenderC
       nav: [],
       pricingDisclosureText: site.pricingDisclosureText,
     },
-    theme: {
-      ...DEFAULT_THEME,
-      brand: site.colors.primary ?? DEFAULT_THEME.brand,
-      surface: site.colors.background ?? DEFAULT_THEME.surface,
-      text: site.colors.text ?? DEFAULT_THEME.text,
-      border: site.colors.border ?? DEFAULT_THEME.border,
-      card: site.colors.card ?? DEFAULT_THEME.card,
-      fontFamily: site.colors.fontFamily
-        ? `"${site.colors.fontFamily}", system-ui, sans-serif`
-        : DEFAULT_THEME.fontFamily,
-    },
+    // The website theme wins; anything it does not set falls back to the older
+    // storefront colours, then to the DexaPOS defaults. `resolveTheme` also
+    // carries `headingFont` back to `fontFamily` for sites saved before the
+    // heading typeface existed.
+    theme: resolveTheme(site.websiteTheme, legacyStorefrontTheme(site.colors)),
   });
+}
+
+/**
+ * The pre-builder storefront colours, expressed as theme tokens.
+ *
+ * `online_store_config` stores a bare family name (`"Poppins"`) rather than a
+ * CSS stack, so it is wrapped with the same system fallbacks the catalogue uses
+ * — a stack of one name renders as nothing if the file fails to load.
+ */
+function legacyStorefrontTheme(colors: SiteContext["colors"]): Partial<ThemeTokens> {
+  const fontFamily = colors.fontFamily
+    ? `"${colors.fontFamily}", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`
+    : null;
+
+  return Object.fromEntries(
+    (
+      [
+        ["brand", colors.primary],
+        ["surface", colors.background],
+        ["text", colors.text],
+        ["border", colors.border],
+        ["card", colors.card],
+        ["fontFamily", fontFamily],
+      ] as const
+    ).flatMap(([key, value]) => (value ? [[key, value]] : [])),
+  );
+}
+
+function pickThemeTokens(theme: Record<string, unknown>): Partial<ThemeTokens> {
+  const keys: (keyof ThemeTokens)[] = [
+    "brand", "brandContrast", "surface", "surfaceMuted", "surfaceDark", "text",
+    "textMuted", "textOnDark", "border", "card", "fontFamily", "headingFont", "radius",
+  ];
+  return Object.fromEntries(keys.flatMap((key) => typeof theme[key] === "string" ? [[key, theme[key]]] : [])) as Partial<ThemeTokens>;
 }
 
 /**

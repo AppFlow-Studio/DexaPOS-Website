@@ -1,7 +1,7 @@
 "use client";
 
 import { Copy, EyeOff, MoreHorizontal, Plus, RotateCcw, Trash2, X, Zap } from "lucide-react";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 import {
   DropdownMenu,
@@ -208,6 +208,7 @@ function ControlRow({
   store: BuilderStore;
   onChange: (value: unknown) => void;
 }) {
+  const [resetToken, setResetToken] = useState(0);
   // Bindings are excluded: their "default" is an empty list, so a reset would
   // read as "clear everything I chose" — a destructive action wearing the label
   // of a safe one.
@@ -219,10 +220,11 @@ function ControlRow({
   return (
     <div className="group/field">
       <Control
-        control={control}
-        value={value}
-        store={store}
-        onChange={onChange}
+          control={control}
+          value={value}
+          store={store}
+          resetToken={resetToken}
+          onChange={onChange}
         action={
           resettable && (
             <Tooltip>
@@ -230,7 +232,10 @@ function ControlRow({
                 <button
                   type="button"
                   aria-label={`Reset ${control.label.toLowerCase()}`}
-                  onClick={() => onChange(defaultValue)}
+                  onClick={() => {
+                    setResetToken((token) => token + 1);
+                    onChange(defaultValue);
+                  }}
                   className="flex size-5 items-center justify-center rounded text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus:outline-none focus-visible:opacity-100 focus-visible:ring-[3px] focus-visible:ring-ring/50 group-hover/field:opacity-100"
                 >
                   <RotateCcw className="size-3" />
@@ -271,12 +276,14 @@ function Control({
   control,
   value,
   store,
+  resetToken = 0,
   onChange,
   action,
 }: {
   control: FieldControl;
   value: unknown;
   store: BuilderStore;
+  resetToken?: number;
   onChange: (value: unknown) => void;
   action?: React.ReactNode;
 }) {
@@ -285,35 +292,14 @@ function Control({
   switch (control.kind) {
     case "text":
     case "richtext": {
-      // Rich text gets a plain textarea for now. TipTap
-      // (components/cms/TipTapEditor.tsx) is already in the repo and drops in
-      // here; the markup it produces passes through the same sanitizer either
-      // way, so this is a UI upgrade rather than a behavioural one.
-      const isLong = control.kind === "richtext" || control.max === Number.MAX_SAFE_INTEGER;
       return (
-        <label className="block">
-          {label}
-          {isLong ? (
-            <textarea
-              rows={control.kind === "richtext" ? 6 : 3}
-              value={String(value ?? "")}
-              onChange={(e) => onChange(e.target.value || undefined)}
-              className={cn(inputClass, "resize-y leading-relaxed")}
-            />
-          ) : (
-            <input
-              type="text"
-              value={String(value ?? "")}
-              onChange={(e) => onChange(e.target.value || undefined)}
-              className={inputClass}
-            />
-          )}
-          {control.kind === "richtext" && (
-            <span className="mt-1.5 block text-[11px] text-muted-foreground">
-              Basic HTML is allowed. Anything unsafe is removed automatically.
-            </span>
-          )}
-        </label>
+        <TextControl
+          key={`${control.name}:${resetToken}`}
+          control={control}
+          value={value}
+          label={label}
+          onChange={onChange}
+        />
       );
     }
 
@@ -432,9 +418,15 @@ function Control({
             <select
               aria-label={`${control.label} destination`}
               value={link.target?.kind ?? "order"}
-              onChange={(e) =>
-                onChange({ label: link.label ?? "Order Now", target: { kind: e.target.value } })
-              }
+                onChange={(e) =>
+                  onChange({
+                    label: link.label ?? "Order Now",
+                    // Keep a typed URL/phone around when the merchant tries a
+                    // different link type. Changing their mind should not
+                    // destroy work.
+                    target: { kind: e.target.value, value: link.target?.value },
+                  })
+                }
               className={inputClass}
             >
               <option value="order">Go to ordering</option>
@@ -535,6 +527,65 @@ function Control({
     default:
       return null;
   }
+}
+
+/**
+ * Keep a small local draft for text fields. The document is intentionally
+ * schema-valid at every mutation, but that must not make a required field feel
+ * frozen when someone selects its text and starts over. Empty intermediate
+ * input stays local; the next valid keystroke is committed normally.
+ */
+function TextControl({
+  control,
+  value,
+  label,
+  onChange,
+}: {
+  control: FieldControl;
+  value: unknown;
+  label: React.ReactNode;
+  onChange: (value: unknown) => void;
+}) {
+  const savedValue = String(value ?? "");
+  const [draft, setDraft] = useState(savedValue);
+  const isLong = control.kind === "richtext" || control.max === Number.MAX_SAFE_INTEGER;
+
+  const update = (next: string) => {
+    setDraft(next);
+    if (next || control.optional) onChange(next || undefined);
+  };
+
+  const resetEmptyDraft = () => {
+    if (!draft && !control.optional) setDraft(savedValue);
+  };
+
+  return (
+    <label className="block">
+      {label}
+      {isLong ? (
+        <textarea
+          rows={control.kind === "richtext" ? 6 : 3}
+          value={draft}
+          onChange={(e) => update(e.target.value)}
+          onBlur={resetEmptyDraft}
+          className={cn(inputClass, "resize-y leading-relaxed")}
+        />
+      ) : (
+        <input
+          type="text"
+          value={draft}
+          onChange={(e) => update(e.target.value)}
+          onBlur={resetEmptyDraft}
+          className={inputClass}
+        />
+      )}
+      {control.kind === "richtext" && (
+        <span className="mt-1.5 block text-[11px] text-muted-foreground">
+          Use simple formatting where needed. Unsafe HTML is removed automatically.
+        </span>
+      )}
+    </label>
+  );
 }
 
 /**

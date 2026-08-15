@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 
 import BuilderShell from "@/components/site-builder/builder/BuilderShell";
 import { renderCanvas } from "./render-canvas";
+import type { MenuCatalog } from "./menu-catalog";
 import { createDemoPage } from "@/lib/site-builder/fixtures/demo-page";
 import { normalizePage } from "@/lib/site-builder/normalize";
 import { getResolverSources } from "@/lib/site-builder/request-scope";
@@ -53,6 +54,33 @@ export default async function BuilderPage({
     merchantId: site.merchantId,
     locationId: site.locationId,
   });
+  const initialCatalog: MenuCatalog = await sources
+    .fetchMenuItems({
+      merchantId: site.merchantId,
+      locationId: site.locationId,
+      scoped: true,
+    })
+    .then((items) => ({
+      items: items
+        .map((item) => ({
+          id: item.id,
+          name: item.name,
+          description: item.description,
+          price: item.price,
+          image: item.image,
+          available: item.available,
+          isPopular: item.isPopular,
+        }))
+        .sort(
+          (a, b) =>
+            Number(b.available) - Number(a.available) || a.name.localeCompare(b.name),
+        ),
+      showPrices: true,
+    }))
+    .catch((error) => {
+      console.error("[site-builder] initial menu catalog failed:", error);
+      return { items: [], showPrices: false, error: "Could not load your menu." };
+    });
   const doc = normalizePage(createDemoPage({ locationId: site.locationId, menuItemIds }));
 
   // The first canvas is rendered here as a Server Component and handed down as
@@ -63,6 +91,7 @@ export default async function BuilderPage({
     <BuilderShell
       initialDoc={doc}
       initialCanvas={await renderCanvas(doc, site.locationId)}
+      initialCatalog={initialCatalog}
       locationId={site.locationId}
       siteName={site.name}
       // The ordering storefront, which is where a built site will eventually

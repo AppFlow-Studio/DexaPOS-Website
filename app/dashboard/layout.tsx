@@ -200,12 +200,12 @@ const navMain = [
         icon: Globe,
       },
       {
-        // Sits next to Online Ordering deliberately: a built site is layered on
-        // top of that storefront (decision D1) and reads its branding, location
-        // and menu. Points at the builder rather than a `/dashboard/website`
-        // index, which does not exist yet.
+        // Sits next to Online Ordering deliberately: the Website is the
+        // restaurant's marketing layer, while Online Ordering owns checkout
+        // and fulfilment. The overview is the merchant's re-entry point; the
+        // builder is a focused page-editing tool beneath it.
         title: "Website",
-        url: "/dashboard/website/builder",
+        url: "/dashboard/website",
         icon: PanelsTopLeft,
       },
       {

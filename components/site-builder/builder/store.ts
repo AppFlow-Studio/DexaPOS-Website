@@ -80,6 +80,8 @@ interface BuilderState {
   publishedDoc: PageDocument;
   /** Optimistic-concurrency token from the server. */
   revision: number;
+  /** Monotonic local edit token used to acknowledge the exact saved snapshot. */
+  editGeneration: number;
   selectedId: string | null;
   device: DeviceMode;
   saveState: SaveState;
@@ -130,6 +132,8 @@ interface BuilderState {
    */
   canvas: React.ReactNode;
   isRendering: boolean;
+  /** Increments when the local fast path cannot safely update the canvas. */
+  canvasRefreshRequest: number;
 
   // section mutations
   addSection: (kind: SectionKind, atIndex?: number) => void;
@@ -152,6 +156,7 @@ interface BuilderState {
   setDevice: (device: DeviceMode) => void;
   setCanvas: (canvas: React.ReactNode) => void;
   setRendering: (isRendering: boolean) => void;
+  requestCanvasRefresh: () => void;
   setSaveState: (state: SaveState) => void;
   clearNotice: () => void;
   toggleInspector: () => void;
@@ -161,8 +166,8 @@ interface BuilderState {
   openAddSection: (atIndex?: number | null) => void;
   closeAddSection: () => void;
   setCatalog: (catalog: CatalogItem[], showPrices: boolean, error?: string) => void;
-  /** Records a successful save so the toolbar can say when. */
-  markSaved: (revision: number) => void;
+  /** Records a successful save only when it matches the current document. */
+  markSaved: (revision: number, savedGeneration: number) => void;
   /** Resets the change baseline. Called by the publish pipeline at Stage 5. */
   markPublished: () => void;
 
@@ -195,6 +200,7 @@ export function createBuilderStore(init: BuilderInit) {
         past: [...past, doc].slice(-HISTORY_LIMIT),
         future: [],
         saveState: "dirty",
+        editGeneration: get().editGeneration + 1,
       });
     };
 
@@ -202,6 +208,7 @@ export function createBuilderStore(init: BuilderInit) {
       doc: init.doc,
       publishedDoc: init.doc,
       revision: init.revision ?? 0,
+      editGeneration: 0,
       selectedId: null,
       device: "desktop",
       saveState: "idle",
@@ -219,6 +226,7 @@ export function createBuilderStore(init: BuilderInit) {
       future: [],
       canvas: init.canvas,
       isRendering: false,
+      canvasRefreshRequest: 0,
 
       addSection: (kind, atIndex) => {
         const before = get().doc.sections.map((s) => s.id);
@@ -267,6 +275,7 @@ export function createBuilderStore(init: BuilderInit) {
           past: [...past, doc].slice(-HISTORY_LIMIT),
           future: [],
           saveState: "dirty",
+          editGeneration: get().editGeneration + 1,
         });
       },
 
@@ -279,6 +288,7 @@ export function createBuilderStore(init: BuilderInit) {
           past: past.slice(0, -1),
           future: [doc, ...future].slice(0, HISTORY_LIMIT),
           saveState: "dirty",
+          editGeneration: get().editGeneration + 1,
         });
       },
 
@@ -291,6 +301,7 @@ export function createBuilderStore(init: BuilderInit) {
           past: [...past, doc].slice(-HISTORY_LIMIT),
           future: future.slice(1),
           saveState: "dirty",
+          editGeneration: get().editGeneration + 1,
         });
       },
 
@@ -304,6 +315,8 @@ export function createBuilderStore(init: BuilderInit) {
       setDevice: (device) => set({ device }),
       setCanvas: (canvas) => set({ canvas }),
       setRendering: (isRendering) => set({ isRendering }),
+      requestCanvasRefresh: () =>
+        set((state) => ({ canvasRefreshRequest: state.canvasRefreshRequest + 1 })),
       setSaveState: (saveState) => set({ saveState }),
       clearNotice: () => set({ notice: null }),
 
@@ -329,7 +342,12 @@ export function createBuilderStore(init: BuilderInit) {
       setCatalog: (catalog, showPrices, error) =>
         set({ catalog, catalogShowPrices: showPrices, catalogError: error ?? null }),
 
-      markSaved: (revision) => set({ revision, saveState: "saved", savedAt: Date.now() }),
+      markSaved: (revision, savedGeneration) =>
+        set((state) => ({
+          revision,
+          saveState: state.editGeneration === savedGeneration ? "saved" : "dirty",
+          savedAt: state.editGeneration === savedGeneration ? Date.now() : state.savedAt,
+        })),
 
       markPublished: () => set((state) => ({ publishedDoc: state.doc })),
 
@@ -341,6 +359,7 @@ export function createBuilderStore(init: BuilderInit) {
           future: [],
           selectedId: null,
           saveState: "dirty",
+          editGeneration: state.editGeneration + 1,
         })),
     };
   });

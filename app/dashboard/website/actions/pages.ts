@@ -281,5 +281,3 @@ export async function GetHomePage(
 
   return { data: data as SitePageSummary };
 }
-
-export type { SitePageRow, SitePageSummary };

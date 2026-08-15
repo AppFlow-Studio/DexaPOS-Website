@@ -127,6 +127,8 @@ describe("renderer architecture", () => {
    * `"use client"` anywhere under the renderer breaks the canvas — so this test
    * covers the whole render tree, not just `sections/`.
    */
+  const CLIENT_UI_DIRS = new Set(["builder", "dashboard"]);
+
   it("has no client components anywhere in the render graph", () => {
     const renderRoot = join(process.cwd(), "components/site-builder");
     const offenders: string[] = [];
@@ -134,10 +136,13 @@ describe("renderer architecture", () => {
     const walk = (dir: string) => {
       for (const entry of readdirSync(dir, { withFileTypes: true })) {
         const path = join(dir, entry.name);
-        // `builder/` is the canvas UI and is legitimately client-side; it is
-        // never imported by PageRenderer.
+        // `builder/` (the canvas) and `dashboard/` (the merchant-facing
+        // overview and design workspace) are interactive dashboard UI. They are
+        // legitimately client-side and neither is reachable from PageRenderer,
+        // so the render-graph rule does not apply to them. Every *other*
+        // directory here is part of the render graph and must stay server-only.
         if (entry.isDirectory()) {
-          if (entry.name !== "builder") walk(path);
+          if (!CLIENT_UI_DIRS.has(entry.name)) walk(path);
           continue;
         }
         if (entry.name.endsWith(".tsx") || entry.name.endsWith(".ts")) {
